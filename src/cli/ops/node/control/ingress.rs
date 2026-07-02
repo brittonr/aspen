@@ -13,19 +13,18 @@ pub(crate) fn build(input: super::super::command::control::IngressBuild) -> molt
         evidence_refs,
     } = input;
     let request_value = super::super::core::read_preserves_file(&request)?;
-    let envelope =
-        molten::node_daemon::node_control_ingress_envelope(&molten::node_daemon::ControlIngressEnvelopeInput {
-            request_value: &request_value,
-            from_peer: &from_peer,
-            to_node: &to_node,
-            topic: &topic,
-            sequence,
-            peer_bootstrap_refs: &peer_bootstrap_refs,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &evidence_refs,
-        })?;
+    let envelope = molten::node_daemon::control_ingress_envelope(&molten::node_daemon::ControlIngressEnvelopeInput {
+        request_value: &request_value,
+        from_peer: &from_peer,
+        to_node: &to_node,
+        topic: &topic,
+        sequence,
+        peer_bootstrap_refs: &peer_bootstrap_refs,
+        authority_refs: &authority_refs,
+        policy_refs: &policy_refs,
+        resource_refs: &resource_refs,
+        evidence_refs: &evidence_refs,
+    })?;
     super::super::core::write_file(&out, &molten::preserves_rail::to_text(&envelope.value)?)?;
     println!(
         "node control ingress envelope={} request={} written to {}",
@@ -52,7 +51,7 @@ pub(crate) fn live_build(input: super::super::command::control::IngressLiveBuild
     } = input;
     let request_value = super::super::core::read_preserves_file(&request)?;
     let envelope =
-        molten::node_daemon::node_control_live_ingress_envelope(&molten::node_daemon::ControlIngressEnvelopeInput {
+        molten::node_daemon::control_live_ingress_envelope(&molten::node_daemon::ControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: &from_peer,
             to_node: &to_node,
@@ -95,7 +94,7 @@ pub(crate) fn live_loopback(input: super::super::command::control::IngressLiveLo
         .enable_all()
         .build()
         .map_err(molten::error::MoltenError::from)?;
-    let loopback = runtime.block_on(molten::node_daemon::node_control_live_iroh_loopback(
+    let loopback = runtime.block_on(molten::node_daemon::control_live_iroh_loopback(
         &molten::node_daemon::ControlLiveLoopbackInput {
             state_root: &state_root,
             request_value: &request_value,
@@ -229,11 +228,10 @@ pub(crate) fn publish(input: super::super::command::control::IngressPublish) -> 
         receipt_out,
     } = input;
     let envelope_value = super::super::core::read_preserves_file(&envelope)?;
-    let published =
-        molten::node_daemon::publish_node_control_ingress(&molten::node_daemon::ControlIngressPublishInput {
-            state_root: &state_root,
-            envelope_value: &envelope_value,
-        })?;
+    let published = molten::node_daemon::publish_control_ingress(&molten::node_daemon::ControlIngressPublishInput {
+        state_root: &state_root,
+        envelope_value: &envelope_value,
+    })?;
     super::super::core::emit_named_receipt(
         receipt_out.as_ref(),
         "node control ingress receipt",
@@ -255,12 +253,11 @@ pub(crate) fn deliver(input: super::super::command::control::IngressDeliver) -> 
         envelope_ref,
         receipt_out,
     } = input;
-    let delivered =
-        molten::node_daemon::deliver_node_control_ingress(&molten::node_daemon::ControlIngressDeliverInput {
-            state_root: &state_root,
-            topic: &topic,
-            envelope_ref: &envelope_ref,
-        })?;
+    let delivered = molten::node_daemon::deliver_control_ingress(&molten::node_daemon::ControlIngressDeliverInput {
+        state_root: &state_root,
+        topic: &topic,
+        envelope_ref: &envelope_ref,
+    })?;
     super::super::core::emit_named_receipt(
         receipt_out.as_ref(),
         "node control ingress receipt",

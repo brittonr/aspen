@@ -55,8 +55,8 @@ pub(crate) fn deny(input: super::command::control::Deny) -> molten::error::Resul
         receipt_out,
     } = input;
     let request_value = super::core::read_preserves_file(&request)?;
-    let request = molten::node_runtime::parse_node_control_request(&request_value)?;
-    let receipt = molten::node_runtime::node_control_deny_receipt_value(&request, &startup, &diagnostic)?;
+    let request = molten::node_runtime::parse_control_request(&request_value)?;
+    let receipt = molten::node_runtime::control_deny_receipt_value(&request, &startup, &diagnostic)?;
     super::core::emit_named_receipt(receipt_out.as_ref(), "node control receipt", &receipt)?;
     println!("node control deny receipt={}", molten::preserves_rail::canonical_hash(&receipt)?);
     Ok(())

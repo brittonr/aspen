@@ -105,7 +105,7 @@ fn emit_summary(
     summary: Summary<'_>,
 ) -> molten::error::Result<()> {
     let is_written_to_file = super::io::write_optional_preserves(path, receipt)?;
-    let diagnostics = molten::node_daemon::parse_node_control_live_send_receipt(receipt)?.diagnostics.len();
+    let diagnostics = molten::node_daemon::parse_control_live_send_receipt(receipt)?.diagnostics.len();
     super::io::print_or_log_summary(
         is_written_to_file,
         &format!(

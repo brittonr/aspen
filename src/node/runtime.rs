@@ -605,7 +605,7 @@ pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Resul
     ]))
 }
 
-pub fn node_control_request_value(input: &ControlRequestValueInput<'_>) -> Result<IoValue> {
+pub fn control_request_value(input: &ControlRequestValueInput<'_>) -> Result<IoValue> {
     validate_control_operation(input.operation)?;
     if let Some(target_ref) = input.target_ref {
         validate_ref(target_ref, "node control target ref")?;
@@ -666,7 +666,7 @@ pub fn legacy_node_control_request_value(input: &ControlRequestValueInput<'_>) -
     ]))
 }
 
-pub fn parse_node_control_request(value: &IoValue) -> Result<ControlRequest> {
+pub fn parse_control_request(value: &IoValue) -> Result<ControlRequest> {
     if let Some(fields) = value.collect_simple_record("node-control-request-v1", Some(10)) {
         require_schema(&fields[0], NODE_CONTROL_REQUEST_SCHEMA, "node control request")?;
         let operation = record_string(&fields[1], "operation")?;
@@ -702,7 +702,7 @@ pub fn parse_node_control_request(value: &IoValue) -> Result<ControlRequest> {
     })
 }
 
-pub fn node_control_receipt_value(input: &ControlReceiptValueInput<'_>) -> Result<IoValue> {
+pub fn control_receipt_value(input: &ControlReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_ref(input.startup_receipt_ref, "node control startup receipt ref")?;
     validate_refs(input.authority_receipt_refs, "node control authority receipt ref")?;
@@ -731,7 +731,7 @@ pub fn node_control_receipt_value(input: &ControlReceiptValueInput<'_>) -> Resul
     ]))
 }
 
-pub fn parse_node_control_receipt(value: &IoValue) -> Result<ControlReceipt> {
+pub fn parse_control_receipt(value: &IoValue) -> Result<ControlReceipt> {
     let fields = value
         .collect_simple_record("node-control-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-receipt-v1 ...>"))?;
@@ -752,13 +752,13 @@ pub fn parse_node_control_receipt(value: &IoValue) -> Result<ControlReceipt> {
     })
 }
 
-pub fn node_control_deny_receipt_value(
+pub fn control_deny_receipt_value(
     request: &ControlRequest,
     startup_receipt_ref: &str,
     diagnostic: &str,
 ) -> Result<IoValue> {
     let diagnostics = [diagnostic.to_string()];
-    node_control_receipt_value(&ControlReceiptValueInput {
+    control_receipt_value(&ControlReceiptValueInput {
         decision: "deny",
         request,
         startup_receipt_ref,
@@ -1389,7 +1389,7 @@ mod tests {
         let authority_refs = vec![test_ref("authority")];
         let policy_refs = vec![test_ref("policy")];
         let resource_refs = vec![test_ref("resource")];
-        let request_value = node_control_request_value(&ControlRequestValueInput {
+        let request_value = control_request_value(&ControlRequestValueInput {
             operation: "install",
             target_ref: Some(&target_ref),
             payload_ref: Some(&payload_ref),
@@ -1399,12 +1399,12 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("control request");
-        let request = parse_node_control_request(&request_value).expect("parse control request");
+        let request = parse_control_request(&request_value).expect("parse control request");
         let startup_ref = test_ref("startup");
         let authority_receipt_refs = vec![test_ref("authority-receipt")];
         let resource_receipt_refs = vec![test_ref("resource-receipt")];
         let subreceipt_refs = vec![test_ref("artifact-install-receipt")];
-        let receipt_value = node_control_receipt_value(&ControlReceiptValueInput {
+        let receipt_value = control_receipt_value(&ControlReceiptValueInput {
             decision: "pass",
             request: &request,
             startup_receipt_ref: &startup_ref,
@@ -1414,7 +1414,7 @@ mod tests {
             diagnostics: &[],
         })
         .expect("control receipt");
-        let receipt = parse_node_control_receipt(&receipt_value).expect("parse control receipt");
+        let receipt = parse_control_receipt(&receipt_value).expect("parse control receipt");
 
         assert_eq!(request.operation, "install");
         assert_eq!(receipt.decision, "pass");
@@ -1428,7 +1428,7 @@ mod tests {
         let authority_refs = vec![test_ref("authority")];
         let policy_refs = vec![test_ref("policy")];
         let resource_refs = vec![test_ref("resource")];
-        let error = node_control_request_value(&ControlRequestValueInput {
+        let error = control_request_value(&ControlRequestValueInput {
             operation: "install",
             target_ref: Some("blake3:target-fixture"),
             payload_ref: Some("blake3:payload-fixture"),
@@ -1445,7 +1445,7 @@ mod tests {
     #[test]
     fn control_denial_is_canonical_when_authority_or_resource_evidence_is_missing() {
         let payload_ref = test_ref("payload");
-        let request_value = node_control_request_value(&ControlRequestValueInput {
+        let request_value = control_request_value(&ControlRequestValueInput {
             operation: "gate",
             target_ref: None,
             payload_ref: Some(&payload_ref),
@@ -1455,11 +1455,11 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("request");
-        let request = parse_node_control_request(&request_value).expect("parse request");
+        let request = parse_control_request(&request_value).expect("parse request");
         let receipt_value =
-            node_control_deny_receipt_value(&request, &test_ref("startup"), "missing authority/resource evidence")
+            control_deny_receipt_value(&request, &test_ref("startup"), "missing authority/resource evidence")
                 .expect("deny receipt");
-        let receipt = parse_node_control_receipt(&receipt_value).expect("parse receipt");
+        let receipt = parse_control_receipt(&receipt_value).expect("parse receipt");
         let text = crate::preserves_rail::to_text(&receipt_value).expect("receipt text");
 
         assert_eq!(receipt.decision, "deny");

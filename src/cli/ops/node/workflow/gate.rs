@@ -17,7 +17,7 @@ pub(crate) fn run(input: super::super::command::live::Gate) -> molten::error::Re
     let bundle_value = super::super::core::read_preserves_file(&bundle)?;
     let verify_receipt_value =
         verify_receipt.as_ref().map(|path| super::super::core::read_preserves_file(path)).transpose()?;
-    let gated = molten::node_daemon::gate_node_control_live_workflow_bundle(
+    let gated = molten::node_daemon::gate_control_live_workflow_bundle(
         &molten::node_daemon::ControlLiveWorkflowBundleGateInput {
             bundle_value: &bundle_value,
             verify_receipt_value: verify_receipt_value.as_ref(),

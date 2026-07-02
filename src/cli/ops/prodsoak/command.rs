@@ -123,7 +123,7 @@ pub(crate) enum Command {
         #[arg(long = "peer-ticket-ref")]
         peer_ticket_refs: Vec<String>,
         #[arg(long = "node-control-ref")]
-        node_control_refs: Vec<String>,
+        control_refs: Vec<String>,
         #[arg(long = "remote-service-ref")]
         remote_service_refs: Vec<String>,
         #[arg(long = "job-ref")]

@@ -1410,7 +1410,7 @@ pub struct ControlAuthorityGrantImport {
     pub receipt_value: IoValue,
 }
 
-pub fn node_control_authority_grant_value(input: &ControlAuthorityGrantInput<'_>) -> Result<IoValue> {
+pub fn control_authority_grant_value(input: &ControlAuthorityGrantInput<'_>) -> Result<IoValue> {
     validate_node_id(input.peer_id)?;
     validate_node_id(input.node_id)?;
     validate_node_id(input.target_scope)?;
@@ -1467,7 +1467,7 @@ pub fn node_control_authority_grant_value(input: &ControlAuthorityGrantInput<'_>
     ]))
 }
 
-pub fn parse_node_control_authority_grant(value: &IoValue) -> Result<ControlAuthorityGrant> {
+pub fn parse_control_authority_grant(value: &IoValue) -> Result<ControlAuthorityGrant> {
     let fields = value
         .collect_simple_record("node-control-authority-grant-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-authority-grant-v1 ...>"))?;
@@ -1496,15 +1496,15 @@ pub fn parse_node_control_authority_grant(value: &IoValue) -> Result<ControlAuth
     })
 }
 
-pub fn import_node_control_authority_grant(state_root: &Path, grant_value: &IoValue) -> Result<ControlAuthorityGrant> {
+pub fn import_control_authority_grant(state_root: &Path, grant_value: &IoValue) -> Result<ControlAuthorityGrant> {
     validate_state_root(state_root)?;
     ensure_state_layout(state_root)?;
-    let grant = parse_node_control_authority_grant(grant_value)?;
+    let grant = parse_control_authority_grant(grant_value)?;
     import_node_artifact(state_root, grant_value)?;
     Ok(grant)
 }
 
-pub fn node_control_live_ticket_value(input: &ControlLiveTicketInput<'_>) -> Result<IoValue> {
+pub fn control_live_ticket_value(input: &ControlLiveTicketInput<'_>) -> Result<IoValue> {
     validate_node_id(input.node_id)?;
     validate_ingress_ref(input.node_identity_ref, "node control live ticket identity ref")?;
     validate_node_id(input.logical_endpoint_id)?;
@@ -1555,7 +1555,7 @@ pub fn node_control_live_ticket_value(input: &ControlLiveTicketInput<'_>) -> Res
     ]))
 }
 
-pub fn parse_node_control_live_ticket(value: &IoValue) -> Result<ControlLiveTicket> {
+pub fn parse_control_live_ticket(value: &IoValue) -> Result<ControlLiveTicket> {
     let fields = value
         .collect_simple_record("node-control-live-ticket-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-ticket-v1 ...>"))?;
@@ -1582,13 +1582,13 @@ pub fn parse_node_control_live_ticket(value: &IoValue) -> Result<ControlLiveTick
     })
 }
 
-pub fn export_node_control_live_ticket(input: &ControlLiveTicketExportInput<'_>) -> Result<ControlLiveTicket> {
+pub fn export_control_live_ticket(input: &ControlLiveTicketExportInput<'_>) -> Result<ControlLiveTicket> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     ensure_state_layout(input.state_root)?;
     let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let address_refs = Vec::new();
-    let value = node_control_live_ticket_value(&ControlLiveTicketInput {
+    let value = control_live_ticket_value(&ControlLiveTicketInput {
         node_id: &identity.node_id,
         node_identity_ref: &identity.identity_ref,
         logical_endpoint_id: &identity.endpoint_id,
@@ -1598,18 +1598,18 @@ pub fn export_node_control_live_ticket(input: &ControlLiveTicketExportInput<'_>)
         policy_refs: input.policy_refs,
         evidence_refs: input.evidence_refs,
     })?;
-    let ticket = parse_node_control_live_ticket(&value)?;
+    let ticket = parse_control_live_ticket(&value)?;
     import_node_artifact(input.state_root, &value)?;
     Ok(ticket)
 }
 
-pub fn admit_node_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<ControlLivePeerAdmission> {
+pub fn admit_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<ControlLivePeerAdmission> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.peer_id)?;
     validate_ingress_refs(input.policy_refs, "node control live peer admission policy ref")?;
     validate_ingress_refs(input.evidence_refs, "node control live peer admission evidence ref")?;
     ensure_state_layout(input.state_root)?;
-    let ticket = parse_node_control_live_ticket(input.ticket_value)?;
+    let ticket = parse_control_live_ticket(input.ticket_value)?;
     import_node_artifact(input.state_root, input.ticket_value)?;
     let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let mut diagnostics = Vec::new();
@@ -1630,7 +1630,7 @@ pub fn admit_node_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Re
         ));
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = node_control_live_peer_admission_value(&LivePeerAdmissionValueInput {
+    let value = control_live_peer_admission_value(&LivePeerAdmissionValueInput {
         decision,
         peer_id: input.peer_id,
         ticket: &ticket,
@@ -1640,12 +1640,12 @@ pub fn admit_node_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Re
         evidence_refs: input.evidence_refs,
         diagnostics: &diagnostics,
     })?;
-    let admission = parse_node_control_live_peer_admission(&value)?;
+    let admission = parse_control_live_peer_admission(&value)?;
     import_node_artifact(input.state_root, &value)?;
     Ok(admission)
 }
 
-fn node_control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_>) -> Result<IoValue> {
+fn control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(crate::preserves_rail::record("node-control-live-peer-admission-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA),
@@ -1690,7 +1690,7 @@ fn node_control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_
     ]))
 }
 
-pub fn parse_node_control_live_peer_admission(value: &IoValue) -> Result<ControlLivePeerAdmission> {
+pub fn parse_control_live_peer_admission(value: &IoValue) -> Result<ControlLivePeerAdmission> {
     let fields = value
         .collect_simple_record("node-control-live-peer-admission-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-peer-admission-v1 ...>"))?;
@@ -1715,7 +1715,7 @@ pub fn parse_node_control_live_peer_admission(value: &IoValue) -> Result<Control
     })
 }
 
-pub fn import_node_control_live_ticket(input: &ControlLiveTicketImportInput<'_>) -> Result<ControlLiveTicketImport> {
+pub fn import_control_live_ticket(input: &ControlLiveTicketImportInput<'_>) -> Result<ControlLiveTicketImport> {
     validate_state_root(input.state_root)?;
     ensure_state_layout(input.state_root)?;
     if let Some(node) = input.expected_node {
@@ -1730,8 +1730,8 @@ pub fn import_node_control_live_ticket(input: &ControlLiveTicketImportInput<'_>)
     if let Some(peer) = input.expected_peer {
         validate_node_id(peer)?;
     }
-    let ticket = parse_node_control_live_ticket(input.ticket_value)?;
-    let admission = input.peer_admission_value.map(parse_node_control_live_peer_admission).transpose()?;
+    let ticket = parse_control_live_ticket(input.ticket_value)?;
+    let admission = input.peer_admission_value.map(parse_control_live_peer_admission).transpose()?;
     let mut diagnostics = live_ticket_import_diagnostics(input, &ticket, admission.as_ref());
     if input.peer_admission_value.is_some() && admission.is_none() {
         diagnostics.push("node control live ticket import admission was not parsed".to_string());
@@ -1768,7 +1768,7 @@ pub fn import_node_control_live_ticket(input: &ControlLiveTicketImportInput<'_>)
     })
 }
 
-pub fn import_node_control_authority_grant_checked(
+pub fn import_control_authority_grant_checked(
     input: &ControlAuthorityGrantImportInput<'_>,
 ) -> Result<ControlAuthorityGrantImport> {
     validate_state_root(input.state_root)?;
@@ -1788,7 +1788,7 @@ pub fn import_node_control_authority_grant_checked(
     if let Some(scope) = input.expected_resource_scope {
         validate_node_id(scope)?;
     }
-    let grant = parse_node_control_authority_grant(input.grant_value)?;
+    let grant = parse_control_authority_grant(input.grant_value)?;
     let diagnostics = authority_grant_import_diagnostics(input, &grant);
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let mut imported_refs = Vec::with_capacity(1);
@@ -1815,12 +1815,12 @@ pub fn import_node_control_authority_grant_checked(
     })
 }
 
-pub fn export_node_control_live_workflow_bundle(
+pub fn export_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleExportInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleExport> {
-    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
-    let admission = parse_node_control_live_peer_admission(input.peer_admission_value)?;
-    let authority = parse_node_control_authority_grant(input.authority_grant_value)?;
+    let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
+    let admission = parse_control_live_peer_admission(input.peer_admission_value)?;
+    let authority = parse_control_authority_grant(input.authority_grant_value)?;
     let receipt_refs = live_workflow_bundle_receipt_refs(input.receipt_values)?;
     let mut diagnostics = live_workflow_bundle_binding_diagnostics(&ticket, &admission, &authority);
     diagnostics.extend(live_workflow_bundle_receipt_diagnostics(input.receipt_values));
@@ -1863,18 +1863,18 @@ pub fn export_node_control_live_workflow_bundle(
     })
 }
 
-pub fn verify_node_control_live_workflow_bundle(
+pub fn verify_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleVerifyInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleVerify> {
     validate_live_workflow_bundle_verify_input(input)?;
     let bundle_ref = crate::preserves_rail::canonical_hash(input.bundle_value)?;
     let expected = live_workflow_bundle_expected_input_from_verify(input);
-    let parsed = parse_node_control_live_workflow_bundle(input.bundle_value);
+    let parsed = parse_control_live_workflow_bundle(input.bundle_value);
     let (ticket_ref, peer_admission_ref, authority_grant_ref, receipt_refs, diagnostics) = match parsed {
         Ok(bundle) => {
-            let ticket = parse_node_control_live_ticket(&bundle.ticket_value)?;
-            let admission = parse_node_control_live_peer_admission(&bundle.peer_admission_value)?;
-            let authority = parse_node_control_authority_grant(&bundle.authority_grant_value)?;
+            let ticket = parse_control_live_ticket(&bundle.ticket_value)?;
+            let admission = parse_control_live_peer_admission(&bundle.peer_admission_value)?;
+            let authority = parse_control_authority_grant(&bundle.authority_grant_value)?;
             let receipt_value_refs = bundle.receipt_values.iter().collect::<Vec<_>>();
             let mut diagnostics = live_workflow_bundle_expected_diagnostics(&expected, &ticket, &admission, &authority);
             diagnostics.extend(live_workflow_bundle_receipt_diagnostics(&receipt_value_refs));
@@ -1915,15 +1915,15 @@ pub fn verify_node_control_live_workflow_bundle(
     })
 }
 
-pub fn gate_node_control_live_workflow_bundle(
+pub fn gate_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleGateInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleGate> {
     let verify_input = live_workflow_bundle_verify_input_from_gate(input);
-    let verified = verify_node_control_live_workflow_bundle(&verify_input)?;
+    let verified = verify_control_live_workflow_bundle(&verify_input)?;
     let expected = live_workflow_bundle_expected_input_from_verify(&verify_input);
     let mut diagnostics = verified.diagnostics.clone();
     let verify_receipt_ref = match input.verify_receipt_value {
-        Some(value) => match parse_node_control_live_workflow_bundle_verify_receipt(value) {
+        Some(value) => match parse_control_live_workflow_bundle_verify_receipt(value) {
             Ok(receipt) => {
                 if receipt.receipt_ref != verified.receipt_ref {
                     diagnostics.push(format!(
@@ -2019,7 +2019,7 @@ fn apply_gate_check(
 ) -> Result<GateCheck> {
     let mut diagnostics = Vec::new();
     let receipt_ref = match input.gate_receipt_value {
-        Some(value) => match parse_node_control_live_workflow_bundle_gate_receipt(value) {
+        Some(value) => match parse_control_live_workflow_bundle_gate_receipt(value) {
             Ok(receipt) => {
                 if receipt.decision != "pass" {
                     diagnostics.push(format!(
@@ -2061,7 +2061,7 @@ fn apply_gate_check(
 }
 
 fn apply_import_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) -> Result<ImportStep> {
-    let imported = import_node_control_live_workflow_bundle(&live_workflow_bundle_import_input_from_apply(input))?;
+    let imported = import_control_live_workflow_bundle(&live_workflow_bundle_import_input_from_apply(input))?;
     if imported.decision == "pass" {
         Ok(ImportStep {
             receipt_ref: Some(imported.receipt_ref),
@@ -2081,8 +2081,8 @@ async fn apply_transfer_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) ->
     let Some(request_value) = input.request_value else {
         return Ok(TransferStep::default());
     };
-    let bundle = parse_node_control_live_workflow_bundle(input.bundle_value)?;
-    let authority = parse_node_control_authority_grant(&bundle.authority_grant_value)?;
+    let bundle = parse_control_live_workflow_bundle(input.bundle_value)?;
+    let authority = parse_control_authority_grant(&bundle.authority_grant_value)?;
     let from_peer = input.from_peer.unwrap_or(&authority.peer_id);
     let peer_bootstrap_refs = if input.peer_bootstrap_refs.is_empty() {
         vec![bundle.peer_admission_ref.clone()]
@@ -2114,7 +2114,7 @@ async fn apply_transfer_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) ->
     };
     if input.should_send {
         let sent = send_node_control_live_ingress(&send_input).await?;
-        let send_receipt = parse_node_control_live_send_receipt(&sent.send_receipt_value)?;
+        let send_receipt = parse_control_live_send_receipt(&sent.send_receipt_value)?;
         let diagnostics = if send_receipt.decision == "pass" {
             Vec::new()
         } else {
@@ -2128,7 +2128,7 @@ async fn apply_transfer_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) ->
             diagnostics,
         })
     } else {
-        let preflight = preflight_node_control_live_send(&send_input)?;
+        let preflight = preflight_control_live_send(&send_input)?;
         let diagnostics = if preflight.decision == "pass" {
             Vec::new()
         } else {
@@ -2192,7 +2192,7 @@ pub async fn apply_node_control_live_workflow_bundle(
     validate_live_workflow_bundle_apply_input(input)?;
     ensure_state_layout(input.state_root)?;
     let verify_input = live_workflow_bundle_verify_input_from_apply(input);
-    let verified = verify_node_control_live_workflow_bundle(&verify_input)?;
+    let verified = verify_control_live_workflow_bundle(&verify_input)?;
     let expected = live_workflow_bundle_expected_input_from_verify(&verify_input);
     let GateCheck {
         receipt_ref: gate_receipt_ref,
@@ -2240,15 +2240,15 @@ pub async fn apply_node_control_live_workflow_bundle(
     })
 }
 
-pub fn reconcile_node_control_live_workflow_bundle(
+pub fn reconcile_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleReconcileInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleReconcile> {
     validate_live_workflow_bundle_reconcile_input(input)?;
-    let apply = parse_node_control_live_workflow_bundle_apply_receipt(input.apply_receipt_value)?;
-    let send = input.send_receipt_value.map(parse_node_control_live_send_receipt).transpose()?;
-    let ingress = input.ingress_receipt_value.map(parse_node_control_ingress_receipt).transpose()?;
-    let queue = input.queue_receipt_value.map(parse_node_control_queue_receipt).transpose()?;
-    let control = input.control_receipt_value.map(crate::node_runtime::parse_node_control_receipt).transpose()?;
+    let apply = parse_control_live_workflow_bundle_apply_receipt(input.apply_receipt_value)?;
+    let send = input.send_receipt_value.map(parse_control_live_send_receipt).transpose()?;
+    let ingress = input.ingress_receipt_value.map(parse_control_ingress_receipt).transpose()?;
+    let queue = input.queue_receipt_value.map(parse_control_queue_receipt).transpose()?;
+    let control = input.control_receipt_value.map(crate::node_runtime::parse_control_receipt).transpose()?;
     let artifacts = ReconcileArtifacts {
         apply: &apply,
         send: send.as_ref(),
@@ -2291,10 +2291,10 @@ pub fn reconcile_node_control_live_workflow_bundle(
     })
 }
 
-pub fn export_node_control_live_workflow_bundle_ack(
+pub fn export_control_live_workflow_bundle_ack(
     input: &ControlLiveWorkflowBundleAckExportInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleAckExport> {
-    let reconciled = reconcile_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
+    let reconciled = reconcile_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
         apply_receipt_value: input.apply_receipt_value,
         send_receipt_value: input.send_receipt_value,
         ingress_receipt_value: input.ingress_receipt_value,
@@ -2304,7 +2304,7 @@ pub fn export_node_control_live_workflow_bundle_ack(
         expected_operation_ref: None,
         expected_request_ref: None,
     })?;
-    let reconcile = parse_node_control_live_workflow_bundle_reconcile_receipt(input.reconcile_receipt_value)?;
+    let reconcile = parse_control_live_workflow_bundle_reconcile_receipt(input.reconcile_receipt_value)?;
     let mut diagnostics = live_workflow_bundle_ack_export_diagnostics(input, &reconciled, &reconcile)?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let ack_value = live_workflow_bundle_ack_value(&LiveWorkflowBundleAckValueInput {
@@ -2328,7 +2328,7 @@ pub fn export_node_control_live_workflow_bundle_ack(
         receiver_diagnostics: &reconcile.diagnostics,
         diagnostics: &diagnostics,
     })?;
-    let ack = parse_node_control_live_workflow_bundle_ack(&ack_value)?;
+    let ack = parse_control_live_workflow_bundle_ack(&ack_value)?;
     let receipt_value = live_workflow_bundle_ack_export_receipt_value(&LiveWorkflowBundleAckExportReceiptValueInput {
         decision,
         ack: &ack,
@@ -2346,12 +2346,12 @@ pub fn export_node_control_live_workflow_bundle_ack(
     })
 }
 
-pub fn import_node_control_live_workflow_bundle_ack(
+pub fn import_control_live_workflow_bundle_ack(
     input: &ControlLiveWorkflowBundleAckImportInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleAckImport> {
     validate_live_workflow_bundle_ack_import_input(input)?;
     ensure_state_layout(input.state_root)?;
-    let ack = parse_node_control_live_workflow_bundle_ack(input.ack_value)?;
+    let ack = parse_control_live_workflow_bundle_ack(input.ack_value)?;
     let mut diagnostics = live_workflow_bundle_ack_import_diagnostics(input, &ack)?;
     let mut imported_refs = Vec::with_capacity(8);
     if diagnostics.is_empty() {
@@ -2380,7 +2380,7 @@ pub fn import_node_control_live_workflow_bundle_ack(
     })
 }
 
-pub fn gate_node_control_live_workflow_protocol(
+pub fn gate_control_live_workflow_protocol(
     input: &ControlLiveWorkflowProtocolGateInput<'_>,
 ) -> Result<ControlLiveWorkflowProtocolGate> {
     validate_live_workflow_protocol_gate_input(input)?;
@@ -2792,19 +2792,19 @@ fn live_workflow_protocol_evidence(
     let reconcile_receipt_ref = crate::preserves_rail::canonical_hash(input.reconcile_receipt_value)?;
     let ack_ref = crate::preserves_rail::canonical_hash(input.ack_value)?;
     let bundle = parsed_or_note(&mut diagnostics, "node control live workflow protocol bundle", || {
-        parse_node_control_live_workflow_bundle(input.bundle_value)
+        parse_control_live_workflow_bundle(input.bundle_value)
     });
     let gate = parsed_or_note(&mut diagnostics, "node control live workflow protocol gate receipt", || {
-        parse_node_control_live_workflow_bundle_gate_receipt(input.gate_receipt_value)
+        parse_control_live_workflow_bundle_gate_receipt(input.gate_receipt_value)
     });
     let apply = parsed_or_note(&mut diagnostics, "node control live workflow protocol apply receipt", || {
-        parse_node_control_live_workflow_bundle_apply_receipt(input.apply_receipt_value)
+        parse_control_live_workflow_bundle_apply_receipt(input.apply_receipt_value)
     });
     let reconcile = parsed_or_note(&mut diagnostics, "node control live workflow protocol reconcile receipt", || {
-        parse_node_control_live_workflow_bundle_reconcile_receipt(input.reconcile_receipt_value)
+        parse_control_live_workflow_bundle_reconcile_receipt(input.reconcile_receipt_value)
     });
     let ack = parsed_or_note(&mut diagnostics, "node control live workflow protocol ack", || {
-        parse_node_control_live_workflow_bundle_ack(input.ack_value)
+        parse_control_live_workflow_bundle_ack(input.ack_value)
     });
     let refs = ReceiptRefs {
         bundle: &bundle_ref,
@@ -3161,7 +3161,7 @@ fn live_workflow_bundle_ack_export_diagnostics(
     if input.ingress_receipt_value.is_none() {
         diagnostics.push("node control live workflow bundle ack requires receiver ingress receipt".to_string());
     }
-    let ingress = input.ingress_receipt_value.map(parse_node_control_ingress_receipt).transpose()?;
+    let ingress = input.ingress_receipt_value.map(parse_control_ingress_receipt).transpose()?;
     if let Some(ingress) = ingress.as_ref() {
         if ingress.decision == "pass" && input.queue_receipt_value.is_none() {
             diagnostics.push(format!(
@@ -3201,7 +3201,7 @@ fn live_workflow_bundle_ack_import_diagnostics(
     input: &ControlLiveWorkflowBundleAckImportInput<'_>,
     ack: &ControlLiveWorkflowBundleAck,
 ) -> Result<Vec<String>> {
-    let recomputed = reconcile_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
+    let recomputed = reconcile_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
         apply_receipt_value: &ack.apply_receipt_value,
         send_receipt_value: ack.send_receipt_value.as_ref(),
         ingress_receipt_value: ack.ingress_receipt_value.as_ref(),
@@ -3222,7 +3222,7 @@ fn live_workflow_bundle_ack_import_diagnostics(
         diagnostics.push("node control live workflow bundle ack import requires receiver ingress receipt".to_string());
     }
     if let Some(ingress_value) = ack.ingress_receipt_value.as_ref() {
-        let ingress = parse_node_control_ingress_receipt(ingress_value)?;
+        let ingress = parse_control_ingress_receipt(ingress_value)?;
         if ingress.decision == "pass" && ack.queue_receipt_value.is_none() {
             diagnostics.push(format!(
                 "node control live workflow bundle ack import requires queue receipt {} from receiver ingress",
@@ -3291,7 +3291,7 @@ fn import_live_workflow_bundle_ack_members(
     Ok(imported_refs)
 }
 
-pub fn parse_node_control_live_workflow_bundle_apply_receipt(
+pub fn parse_control_live_workflow_bundle_apply_receipt(
     value: &IoValue,
 ) -> Result<ControlLiveWorkflowBundleApplyReceipt> {
     let fields = value
@@ -3329,7 +3329,7 @@ pub fn parse_node_control_live_workflow_bundle_apply_receipt(
     })
 }
 
-pub fn parse_node_control_live_workflow_bundle_reconcile_receipt(
+pub fn parse_control_live_workflow_bundle_reconcile_receipt(
     value: &IoValue,
 ) -> Result<ControlLiveWorkflowBundleReconcileReceipt> {
     let fields = value
@@ -3368,7 +3368,7 @@ pub fn parse_node_control_live_workflow_bundle_reconcile_receipt(
     })
 }
 
-pub fn parse_node_control_ingress_receipt(value: &IoValue) -> Result<ControlIngressReceipt> {
+pub fn parse_control_ingress_receipt(value: &IoValue) -> Result<ControlIngressReceipt> {
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
@@ -3400,7 +3400,7 @@ pub fn parse_node_control_ingress_receipt(value: &IoValue) -> Result<ControlIngr
     })
 }
 
-pub fn parse_node_control_queue_receipt(value: &IoValue) -> Result<ControlQueueReceipt> {
+pub fn parse_control_queue_receipt(value: &IoValue) -> Result<ControlQueueReceipt> {
     let fields = value
         .collect_simple_record("node-control-queue-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-queue-receipt-v1 ...>"))?;
@@ -3419,7 +3419,7 @@ pub fn parse_node_control_queue_receipt(value: &IoValue) -> Result<ControlQueueR
     })
 }
 
-pub fn parse_node_control_live_workflow_bundle_verify_receipt(
+pub fn parse_control_live_workflow_bundle_verify_receipt(
     value: &IoValue,
 ) -> Result<ControlLiveWorkflowBundleVerifyReceipt> {
     let fields = value
@@ -3460,7 +3460,7 @@ pub fn parse_node_control_live_workflow_bundle_verify_receipt(
     })
 }
 
-pub fn parse_node_control_live_workflow_bundle_gate_receipt(
+pub fn parse_control_live_workflow_bundle_gate_receipt(
     value: &IoValue,
 ) -> Result<ControlLiveWorkflowBundleGateReceipt> {
     let fields = value
@@ -3505,7 +3505,7 @@ pub fn parse_node_control_live_workflow_bundle_gate_receipt(
     })
 }
 
-pub fn parse_node_control_live_workflow_bundle(value: &IoValue) -> Result<ControlLiveWorkflowBundle> {
+pub fn parse_control_live_workflow_bundle(value: &IoValue) -> Result<ControlLiveWorkflowBundle> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-v1 ...>"))?;
@@ -3522,9 +3522,9 @@ pub fn parse_node_control_live_workflow_bundle(value: &IoValue) -> Result<Contro
     let peer_admission_ref = record_ref_string(&fields[6], "peer-admission-ref")?;
     let authority_grant_ref = record_ref_string(&fields[7], "authority-grant-ref")?;
     let receipt_refs = record_ref_strings(&fields[8], "receipt-refs")?;
-    let parsed_ticket = parse_node_control_live_ticket(&ticket_value)?;
-    let parsed_admission = parse_node_control_live_peer_admission(&peer_admission_value)?;
-    let parsed_authority = parse_node_control_authority_grant(&authority_grant_value)?;
+    let parsed_ticket = parse_control_live_ticket(&ticket_value)?;
+    let parsed_admission = parse_control_live_peer_admission(&peer_admission_value)?;
+    let parsed_authority = parse_control_authority_grant(&authority_grant_value)?;
     if parsed_ticket.ticket_ref != ticket_ref {
         return Err(MoltenError::invalid_harness("node control live workflow bundle ticket ref mismatch"));
     }
@@ -3603,19 +3603,19 @@ impl AckParts {
 }
 
 fn validate_ack_members(parts: &AckParts) -> Result<()> {
-    let apply = parse_node_control_live_workflow_bundle_apply_receipt(&parts.apply_receipt_value)?;
-    let reconcile = parse_node_control_live_workflow_bundle_reconcile_receipt(&parts.reconcile_receipt_value)?;
+    let apply = parse_control_live_workflow_bundle_apply_receipt(&parts.apply_receipt_value)?;
+    let reconcile = parse_control_live_workflow_bundle_reconcile_receipt(&parts.reconcile_receipt_value)?;
     if let Some(value) = parts.send_receipt_value.as_ref() {
-        parse_node_control_live_send_receipt(value)?;
+        parse_control_live_send_receipt(value)?;
     }
     if let Some(value) = parts.ingress_receipt_value.as_ref() {
-        parse_node_control_ingress_receipt(value)?;
+        parse_control_ingress_receipt(value)?;
     }
     if let Some(value) = parts.queue_receipt_value.as_ref() {
-        parse_node_control_queue_receipt(value)?;
+        parse_control_queue_receipt(value)?;
     }
     if let Some(value) = parts.control_receipt_value.as_ref() {
-        crate::node_runtime::parse_node_control_receipt(value)?;
+        crate::node_runtime::parse_control_receipt(value)?;
     }
     validate_member_ref(&apply.receipt_ref, &parts.apply_receipt_ref, "ack apply receipt")?;
     validate_member_ref(&reconcile.receipt_ref, &parts.reconcile_receipt_ref, "ack reconcile receipt")?;
@@ -3681,7 +3681,7 @@ fn validate_ack_reconcile(parts: &AckParts, reconcile: &ControlLiveWorkflowBundl
     Ok(())
 }
 
-pub fn parse_node_control_live_workflow_bundle_ack(value: &IoValue) -> Result<ControlLiveWorkflowBundleAck> {
+pub fn parse_control_live_workflow_bundle_ack(value: &IoValue) -> Result<ControlLiveWorkflowBundleAck> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-ack-v1", Some(22))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-ack-v1 ...>"))?;
@@ -3719,7 +3719,7 @@ pub fn parse_node_control_live_workflow_bundle_ack(value: &IoValue) -> Result<Co
     parts.into_ack(value)
 }
 
-pub fn import_node_control_live_workflow_bundle(
+pub fn import_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleImportInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleImport> {
     validate_state_root(input.state_root)?;
@@ -3745,10 +3745,10 @@ pub fn import_node_control_live_workflow_bundle(
     if let Some(scope) = input.expected_resource_scope {
         validate_node_id(scope)?;
     }
-    let bundle = parse_node_control_live_workflow_bundle(input.bundle_value)?;
-    let ticket = parse_node_control_live_ticket(&bundle.ticket_value)?;
-    let admission = parse_node_control_live_peer_admission(&bundle.peer_admission_value)?;
-    let authority = parse_node_control_authority_grant(&bundle.authority_grant_value)?;
+    let bundle = parse_control_live_workflow_bundle(input.bundle_value)?;
+    let ticket = parse_control_live_ticket(&bundle.ticket_value)?;
+    let admission = parse_control_live_peer_admission(&bundle.peer_admission_value)?;
+    let authority = parse_control_authority_grant(&bundle.authority_grant_value)?;
     let mut diagnostics = live_workflow_bundle_import_diagnostics(input, &ticket, &admission, &authority);
     let mut parts = ImportParts {
         imported_refs: Vec::with_capacity(bundle.receipt_values.len().saturating_add(5)),
@@ -3794,7 +3794,7 @@ fn import_parts(
         ticket_import_ref: None,
         authority_import_ref: None,
     };
-    let ticket_import = import_node_control_live_ticket(&ControlLiveTicketImportInput {
+    let ticket_import = import_control_live_ticket(&ControlLiveTicketImportInput {
         state_root: input.state_root,
         ticket_value: &bundle.ticket_value,
         peer_admission_value: Some(&bundle.peer_admission_value),
@@ -3804,7 +3804,7 @@ fn import_parts(
         expected_peer: input.expected_peer,
         as_of_sequence: input.as_of_sequence,
     })?;
-    let authority_import = import_node_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
+    let authority_import = import_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
         state_root: input.state_root,
         grant_value: &bundle.authority_grant_value,
         expected_peer: input.expected_peer,
@@ -4914,7 +4914,7 @@ fn live_workflow_bundle_import_receipt_value(input: &LiveWorkflowBundleImportRec
     ]))
 }
 
-pub fn node_control_supervisor_policy_value(input: &ControlSupervisorPolicyInput<'_>) -> Result<IoValue> {
+pub fn control_supervisor_policy_value(input: &ControlSupervisorPolicyInput<'_>) -> Result<IoValue> {
     validate_supervisor_policy_bounds(input.max_restarts, "max restarts")?;
     validate_supervisor_policy_bounds(input.restart_window_ticks, "restart window ticks")?;
     validate_supervisor_policy_bounds(input.heartbeat_timeout_ticks, "heartbeat timeout ticks")?;
@@ -4965,7 +4965,7 @@ pub fn node_control_supervisor_policy_value(input: &ControlSupervisorPolicyInput
     ]))
 }
 
-pub fn parse_node_control_supervisor_policy(value: &IoValue) -> Result<ControlSupervisorPolicy> {
+pub fn parse_control_supervisor_policy(value: &IoValue) -> Result<ControlSupervisorPolicy> {
     let fields = value
         .collect_simple_record("node-control-supervisor-policy-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-policy-v1 ...>"))?;
@@ -5004,18 +5004,15 @@ pub fn parse_node_control_supervisor_policy(value: &IoValue) -> Result<ControlSu
     })
 }
 
-pub fn import_node_control_supervisor_policy(
-    state_root: &Path,
-    policy_value: &IoValue,
-) -> Result<ControlSupervisorPolicy> {
+pub fn import_control_supervisor_policy(state_root: &Path, policy_value: &IoValue) -> Result<ControlSupervisorPolicy> {
     validate_state_root(state_root)?;
     ensure_state_layout(state_root)?;
-    let policy = parse_node_control_supervisor_policy(policy_value)?;
+    let policy = parse_control_supervisor_policy(policy_value)?;
     import_node_artifact(state_root, policy_value)?;
     Ok(policy)
 }
 
-fn parse_node_control_supervisor_receipt(value: &IoValue) -> Result<ControlSupervisorReceipt> {
+fn parse_control_supervisor_receipt(value: &IoValue) -> Result<ControlSupervisorReceipt> {
     let fields = value
         .collect_simple_record("node-control-supervisor-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-receipt-v1 ...>"))?;
@@ -5275,7 +5272,7 @@ fn stop_local_node_with_request(input: &StopInput<'_>, request: &crate::node_run
 pub fn submit_control_request(input: &ControlSubmitInput<'_>) -> Result<ControlSubmit> {
     validate_state_root(input.state_root)?;
     ensure_state_layout(input.state_root)?;
-    let request = crate::node_runtime::parse_node_control_request(input.request_value)?;
+    let request = crate::node_runtime::parse_control_request(input.request_value)?;
     import_node_artifact(input.state_root, input.request_value)?;
     let inbox_path = control_inbox_path(input.state_root, &request.request_ref);
     write_preserves(&inbox_path, input.request_value)?;
@@ -5308,7 +5305,7 @@ pub fn dispatch_control_request(input: &ControlDispatchInput<'_>) -> Result<Cont
         None => first_pending_control_request(input.state_root)?,
     };
     let request_value = read_preserves(&request_path)?;
-    let request = crate::node_runtime::parse_node_control_request(&request_value)?;
+    let request = crate::node_runtime::parse_control_request(&request_value)?;
     import_node_artifact(input.state_root, &request_value)?;
     if let Some(prior) = prior_dispatch_for_request(input.state_root, &request)? {
         archive_dispatched_request(input.state_root, &request_path, &request.value)?;
@@ -5362,7 +5359,7 @@ pub fn run_control_loop(input: &ControlLoopInput<'_>) -> Result<ControlLoop> {
             state_root: input.state_root,
             request_path: Some(&request_path),
         })?;
-        let control = crate::node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value)?;
+        let control = crate::node_runtime::parse_control_receipt(&dispatched.control_receipt_value)?;
         processed_request_refs.push(dispatched.request_ref.clone());
         dispatch_receipt_refs.push(dispatched.control_receipt_ref.clone());
         if dispatched.operation == "shutdown" && control.decision == "pass" {
@@ -5398,7 +5395,7 @@ pub fn run_control_loop(input: &ControlLoopInput<'_>) -> Result<ControlLoop> {
     })
 }
 
-pub fn serve_node_control(input: &ControlServeInput<'_>) -> Result<ControlServe> {
+pub fn serve_control(input: &ControlServeInput<'_>) -> Result<ControlServe> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     ensure_state_layout(input.state_root)?;
@@ -5406,7 +5403,7 @@ pub fn serve_node_control(input: &ControlServeInput<'_>) -> Result<ControlServe>
     let max_requests_per_tick = validate_loop_request_limit(input.max_requests_per_tick)?;
     let supervisor_policy = input
         .supervisor_policy_value
-        .map(|value| import_node_control_supervisor_policy(input.state_root, value))
+        .map(|value| import_control_supervisor_policy(input.state_root, value))
         .transpose()?;
     require_active_lock(input.state_root)?;
     let startup = current_startup_receipt(input.state_root)?;
@@ -5714,7 +5711,7 @@ fn deliver_service_ingress(input: &ServiceTickInput<'_>, run: &mut ServiceRunPar
         }
     };
     for envelope_ref in envelope_refs {
-        let delivered = match deliver_node_control_ingress(&ControlIngressDeliverInput {
+        let delivered = match deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: input.state_root,
             topic: input.topic,
             envelope_ref: &envelope_ref,
@@ -5916,7 +5913,7 @@ fn pending_ingress_envelope_refs(state_root: &Path, topic: &str) -> Result<Vec<S
     let mut envelope_refs = Vec::with_capacity(paths.len());
     for path in paths {
         let value = read_preserves(&path)?;
-        let envelope = parse_node_control_ingress_envelope(&value)?;
+        let envelope = parse_control_ingress_envelope(&value)?;
         if !control_ingress_receipt_path(state_root, &envelope.envelope_ref, "deliver").exists() {
             envelope_refs.push(envelope.envelope_ref);
         }
@@ -5955,20 +5952,20 @@ fn node_ingress_receipt_decision(value: &IoValue) -> Result<String> {
     record_string(&fields[1], "decision")
 }
 
-pub fn node_control_ingress_envelope(input: &ControlIngressEnvelopeInput<'_>) -> Result<ControlIngressEnvelope> {
-    node_control_ingress_envelope_for_transport(input, LOCAL_CONTROL_INGRESS_TRANSPORT, "iroh-local-ingress")
+pub fn control_ingress_envelope(input: &ControlIngressEnvelopeInput<'_>) -> Result<ControlIngressEnvelope> {
+    control_ingress_envelope_for_transport(input, LOCAL_CONTROL_INGRESS_TRANSPORT, "iroh-local-ingress")
 }
 
-pub fn node_control_live_ingress_envelope(input: &ControlIngressEnvelopeInput<'_>) -> Result<ControlIngressEnvelope> {
-    node_control_ingress_envelope_for_transport(input, LIVE_CONTROL_INGRESS_TRANSPORT, "live-iroh-gossip")
+pub fn control_live_ingress_envelope(input: &ControlIngressEnvelopeInput<'_>) -> Result<ControlIngressEnvelope> {
+    control_ingress_envelope_for_transport(input, LIVE_CONTROL_INGRESS_TRANSPORT, "live-iroh-gossip")
 }
 
-fn node_control_ingress_envelope_for_transport(
+fn control_ingress_envelope_for_transport(
     input: &ControlIngressEnvelopeInput<'_>,
     transport: &str,
     transport_check: &str,
 ) -> Result<ControlIngressEnvelope> {
-    let request = crate::node_runtime::parse_node_control_request(input.request_value)?;
+    let request = crate::node_runtime::parse_control_request(input.request_value)?;
     validate_node_id(input.from_peer)?;
     validate_node_id(input.to_node)?;
     validate_node_id(input.topic)?;
@@ -5989,14 +5986,14 @@ fn node_control_ingress_envelope_for_transport(
         policy_refs: input.policy_refs.to_vec(),
     })?;
     let value = ingress_envelope_value(input, &request, &operation.operation_ref, transport, transport_check)?;
-    parse_node_control_ingress_envelope(&value)
+    parse_control_ingress_envelope(&value)
 }
 
-pub async fn publish_node_control_live_ingress(
+pub async fn publish_control_live_ingress(
     input: &ControlLiveIngressPublishInput<'_>,
 ) -> Result<ControlLiveIngressPublish> {
     validate_node_id(input.node_id)?;
-    let envelope = parse_node_control_ingress_envelope(input.envelope_value)?;
+    let envelope = parse_control_ingress_envelope(input.envelope_value)?;
     let mut diagnostics = Vec::new();
     if envelope.transport != LIVE_CONTROL_INGRESS_TRANSPORT {
         diagnostics.push(format!(
@@ -6029,7 +6026,7 @@ pub async fn publish_node_control_live_ingress(
     })
 }
 
-pub fn receive_node_control_live_ingress_event(
+pub fn receive_control_live_ingress_event(
     state_root: &Path,
     event: &iroh_gossip::api::Event,
     topic: &str,
@@ -6037,7 +6034,7 @@ pub fn receive_node_control_live_ingress_event(
 ) -> Result<Option<ControlLiveIngressReceive>> {
     match event {
         iroh_gossip::api::Event::Received(message) => {
-            receive_node_control_live_ingress_bytes(&ControlLiveIngressReceiveBytesInput {
+            receive_control_live_ingress_bytes(&ControlLiveIngressReceiveBytesInput {
                 state_root,
                 topic,
                 receiver_node,
@@ -6052,7 +6049,7 @@ pub fn receive_node_control_live_ingress_event(
     }
 }
 
-pub fn receive_node_control_live_ingress_bytes(
+pub fn receive_control_live_ingress_bytes(
     input: &ControlLiveIngressReceiveBytesInput<'_>,
 ) -> Result<ControlLiveIngressReceive> {
     validate_state_root(input.state_root)?;
@@ -6061,12 +6058,12 @@ pub fn receive_node_control_live_ingress_bytes(
     validate_node_id(input.delivered_from)?;
     ensure_state_layout(input.state_root)?;
     let value = crate::preserves_rail::parse_canonical_bytes(input.bytes)?;
-    let envelope = parse_node_control_ingress_envelope(&value)?;
+    let envelope = parse_control_ingress_envelope(&value)?;
     let mut diagnostics = live_receive_diagnostics(input, &envelope);
     write_ingress_envelope_and_verify(input.state_root, input.topic, &envelope)?;
     import_node_artifact(input.state_root, &value)?;
     let delivered = if diagnostics.is_empty() {
-        deliver_node_control_ingress(&ControlIngressDeliverInput {
+        deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: input.state_root,
             topic: input.topic,
             envelope_ref: &envelope.envelope_ref,
@@ -6105,7 +6102,7 @@ pub fn receive_node_control_live_ingress_bytes(
 }
 
 fn envelope_for_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<ControlIngressEnvelope> {
-    node_control_live_ingress_envelope(&ControlIngressEnvelopeInput {
+    control_live_ingress_envelope(&ControlIngressEnvelopeInput {
         request_value: input.request_value,
         from_peer: input.from_peer,
         to_node: input.to_node,
@@ -6119,11 +6116,11 @@ fn envelope_for_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<Control
     })
 }
 
-pub async fn node_control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<ControlLiveLoopback> {
+pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<ControlLiveLoopback> {
     validate_state_root(input.state_root)?;
     ensure_state_layout(input.state_root)?;
     let envelope = envelope_for_loopback(input)?;
-    let topic_id = node_control_live_topic_id(input.topic);
+    let topic_id = control_live_topic_id(input.topic);
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let receiver_endpoint = live_gossip_endpoint(&lookup, None).await?;
     let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
@@ -6152,7 +6149,7 @@ pub async fn node_control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_
         .joined()
         .await
         .map_err(|error| MoltenError::invalid_harness(format!("live Iroh receiver join failed: {error}")))?;
-    let published = publish_node_control_live_ingress(&ControlLiveIngressPublishInput {
+    let published = publish_control_live_ingress(&ControlLiveIngressPublishInput {
         sender: &sender,
         envelope_value: &envelope.value,
         node_id: input.from_peer,
@@ -6183,7 +6180,7 @@ pub async fn node_control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_
     })
 }
 
-pub fn preflight_node_control_live_send(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSendPreflight> {
+pub fn preflight_control_live_send(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSendPreflight> {
     if let Some(state_root) = input.state_root {
         validate_state_root(state_root)?;
         ensure_state_layout(state_root)?;
@@ -6203,8 +6200,8 @@ pub fn preflight_node_control_live_send(input: &ControlLiveSendInput<'_>) -> Res
     if let Some(endpoint) = input.expected_endpoint {
         validate_node_id(endpoint)?;
     }
-    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
-    let envelope = node_control_live_ingress_envelope(&ControlIngressEnvelopeInput {
+    let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
+    let envelope = control_live_ingress_envelope(&ControlIngressEnvelopeInput {
         request_value: input.request_value,
         from_peer: input.from_peer,
         to_node: &ticket.node_id,
@@ -6251,7 +6248,7 @@ pub fn preflight_node_control_live_send(input: &ControlLiveSendInput<'_>) -> Res
 
 pub async fn send_node_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSend> {
     validate_send_input(input)?;
-    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
+    let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
     let envelope = send_envelope(input, &ticket)?;
     if let Some(operation_ref) = input.expected_operation_ref
         && operation_ref != envelope.operation_ref
@@ -6260,7 +6257,7 @@ pub async fn send_node_control_live_ingress(input: &ControlLiveSendInput<'_>) ->
             "node control live send operation-id {operation_ref} does not match derived {}",
             envelope.operation_ref
         )];
-        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+        return denied_control_live_send_with_diagnostics(DeniedLiveSendInput {
             input,
             ticket: &ticket,
             envelope,
@@ -6272,7 +6269,7 @@ pub async fn send_node_control_live_ingress(input: &ControlLiveSendInput<'_>) ->
     let receiver_addr = match send_receiver_addr(input, &ticket, &envelope)? {
         Ok(addr) => addr,
         Err(diagnostics) => {
-            return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+            return denied_control_live_send_with_diagnostics(DeniedLiveSendInput {
                 input,
                 ticket: &ticket,
                 envelope,
@@ -6283,13 +6280,13 @@ pub async fn send_node_control_live_ingress(input: &ControlLiveSendInput<'_>) ->
         }
     };
     if let Some(state_root) = input.state_root
-        && let Some(duplicate) = duplicate_node_control_live_send(input, state_root, &ticket, &envelope)?
+        && let Some(duplicate) = duplicate_control_live_send(input, state_root, &ticket, &envelope)?
     {
         return Ok(duplicate);
     }
     let retries = publish_with_retries(input, &receiver_addr, &ticket, &envelope).await?;
     let Some(published) = retries.published else {
-        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+        return denied_control_live_send_with_diagnostics(DeniedLiveSendInput {
             input,
             ticket: &ticket,
             envelope,
@@ -6350,7 +6347,7 @@ fn validate_send_input(input: &ControlLiveSendInput<'_>) -> Result<()> {
 }
 
 fn send_envelope(input: &ControlLiveSendInput<'_>, ticket: &ControlLiveTicket) -> Result<ControlIngressEnvelope> {
-    node_control_live_ingress_envelope(&ControlIngressEnvelopeInput {
+    control_live_ingress_envelope(&ControlIngressEnvelopeInput {
         request_value: input.request_value,
         from_peer: input.from_peer,
         to_node: &ticket.node_id,
@@ -6498,7 +6495,7 @@ async fn attempt_node_control_live_send(
     let sender_router = iroh::protocol::Router::builder(sender_endpoint)
         .accept(iroh_gossip::ALPN, sender_gossip.clone())
         .spawn();
-    let topic_id = node_control_live_topic_id(&envelope.topic);
+    let topic_id = control_live_topic_id(&envelope.topic);
     let join_timeout = std::time::Duration::from_millis(input.join_timeout_ms);
     let join_result =
         tokio::time::timeout(join_timeout, sender_gossip.subscribe_and_join(topic_id, vec![receiver_addr.id])).await;
@@ -6513,7 +6510,7 @@ async fn attempt_node_control_live_send(
         )),
         Ok(Ok(sender_topic)) => {
             let (sender, _receiver_unused) = sender_topic.split();
-            let published = publish_node_control_live_ingress(&ControlLiveIngressPublishInput {
+            let published = publish_control_live_ingress(&ControlLiveIngressPublishInput {
                 sender: &sender,
                 envelope_value: &envelope.value,
                 node_id: input.from_peer,
@@ -6535,7 +6532,7 @@ async fn attempt_node_control_live_send(
     Ok(result)
 }
 
-fn duplicate_node_control_live_send(
+fn duplicate_control_live_send(
     input: &ControlLiveSendInput<'_>,
     state_root: &Path,
     ticket: &ControlLiveTicket,
@@ -6565,7 +6562,7 @@ fn duplicate_node_control_live_send(
         return Ok(None);
     }
     let prior_send_value = read_preserves(&send_path)?;
-    let prior_send = parse_node_control_live_send_receipt(&prior_send_value)?;
+    let prior_send = parse_control_live_send_receipt(&prior_send_value)?;
     if prior_send.receipt_ref != send_receipt_ref {
         return Err(MoltenError::invalid_harness("node control live send prior receipt path is stale"));
     }
@@ -6606,7 +6603,7 @@ fn duplicate_node_control_live_send(
     }))
 }
 
-fn denied_node_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_>) -> Result<ControlLiveSend> {
+fn denied_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_>) -> Result<ControlLiveSend> {
     let send_receipt_value = live_send_receipt_value(&LiveSendReceiptValueInput {
         decision: "deny",
         from_peer: denied.input.from_peer,
@@ -6640,7 +6637,7 @@ fn denied_node_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_
     })
 }
 
-pub fn parse_node_control_live_send_receipt(value: &IoValue) -> Result<ControlLiveSendReceipt> {
+pub fn parse_control_live_send_receipt(value: &IoValue) -> Result<ControlLiveSendReceipt> {
     let fields = value
         .collect_simple_record("node-control-live-send-receipt-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-send-receipt-v1 ...>"))?;
@@ -6780,15 +6777,15 @@ fn import_flow_values(
     Ok(())
 }
 
-pub fn node_control_live_workflow_receipt(input: &ControlLiveWorkflowInput<'_>) -> Result<ControlLiveWorkflowReceipt> {
+pub fn control_live_workflow_receipt(input: &ControlLiveWorkflowInput<'_>) -> Result<ControlLiveWorkflowReceipt> {
     if let Some(state_root) = input.state_root {
         validate_state_root(state_root)?;
         ensure_state_layout(state_root)?;
     }
-    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
-    let admission = parse_node_control_live_peer_admission(input.peer_admission_value)?;
-    let authority = parse_node_control_authority_grant(input.authority_grant_value)?;
-    let send = parse_node_control_live_send_receipt(input.send_receipt_value)?;
+    let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
+    let admission = parse_control_live_peer_admission(input.peer_admission_value)?;
+    let authority = parse_control_authority_grant(input.authority_grant_value)?;
+    let send = parse_control_live_send_receipt(input.send_receipt_value)?;
     let service_receipt_ref = service_run_receipt_ref(input.service_receipt_value)?;
     let checks = FlowChecks {
         ticket: &ticket,
@@ -6891,7 +6888,7 @@ pub async fn serve_node_control_live_listener(input: &ControlLiveServeInput<'_>)
     let gossip = iroh_gossip::Gossip::builder().spawn(endpoint.clone());
     let router = iroh::protocol::Router::builder(endpoint).accept(iroh_gossip::ALPN, gossip.clone()).spawn();
     let mut topic = gossip
-        .subscribe(node_control_live_topic_id(input.topic), Vec::new())
+        .subscribe(control_live_topic_id(input.topic), Vec::new())
         .await
         .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve subscribe failed: {error}")))?;
     let served = serve_node_control_live_listener_with_topic(
@@ -6912,7 +6909,7 @@ pub async fn serve_node_control_live_listener(input: &ControlLiveServeInput<'_>)
     Ok(served)
 }
 
-pub async fn node_control_live_serve_listener_loopback(
+pub async fn control_live_serve_listener_loopback(
     input: &ControlLiveServeLoopbackInput<'_>,
 ) -> Result<ControlLiveServeLoopback> {
     validate_state_root(input.state_root)?;
@@ -6929,7 +6926,7 @@ pub async fn node_control_live_serve_listener_loopback(
         resource_refs: input.resource_refs,
         evidence_refs: input.evidence_refs,
     };
-    let envelope = node_control_live_ingress_envelope(&envelope_input)?;
+    let envelope = control_live_ingress_envelope(&envelope_input)?;
     let LoopbackPair {
         ticket_ref,
         ticket_value,
@@ -6941,7 +6938,7 @@ pub async fn node_control_live_serve_listener_loopback(
         node_id,
         endpoint_id,
     } = loopback_pair(input.state_root, input.topic).await?;
-    let published = publish_node_control_live_ingress(&ControlLiveIngressPublishInput {
+    let published = publish_control_live_ingress(&ControlLiveIngressPublishInput {
         sender: &sender,
         envelope_value: &envelope.value,
         node_id: input.from_peer,
@@ -7010,7 +7007,7 @@ async fn loopback_pair(state_root: &Path, topic: &str) -> Result<LoopbackPair> {
     let sender_router = iroh::protocol::Router::builder(sender_endpoint)
         .accept(iroh_gossip::ALPN, sender_gossip.clone())
         .spawn();
-    let topic_id = node_control_live_topic_id(topic);
+    let topic_id = control_live_topic_id(topic);
     let receiver_topic = receiver_gossip.subscribe(topic_id, vec![sender_id]).await.map_err(|error| {
         MoltenError::invalid_harness(format!("live Iroh listener receiver subscribe failed: {error}"))
     })?;
@@ -7072,7 +7069,7 @@ async fn scan_events(
             iroh_gossip::api::Event::Lagged => diagnostics.push("live Iroh serve listener lagged".to_string()),
             iroh_gossip::api::Event::Received(_) => {
                 if let Some(received) =
-                    receive_node_control_live_ingress_event(input.state_root, &event, input.topic, node_id)?
+                    receive_control_live_ingress_event(input.state_root, &event, input.topic, node_id)?
                 {
                     transport_receipt_refs.push(received.transport_receipt_ref);
                 }
@@ -7101,7 +7098,7 @@ async fn serve_node_control_live_listener_with_topic(
     validate_loop_request_limit(input.max_requests_per_tick)?;
     let startup = current_startup_receipt(input.state_root)?;
     let mut scan = scan_events(input, receiver, node_id).await?;
-    let service = serve_node_control(&ControlServeInput {
+    let service = serve_control(&ControlServeInput {
         state_root: input.state_root,
         topic: input.topic,
         max_ticks: 1,
@@ -7155,7 +7152,7 @@ async fn receive_first_live_ingress_event(
         };
         let event =
             event.map_err(|error| MoltenError::invalid_harness(format!("live Iroh receive failed: {error}")))?;
-        if let Some(received) = receive_node_control_live_ingress_event(state_root, &event, topic, receiver_node)? {
+        if let Some(received) = receive_control_live_ingress_event(state_root, &event, topic, receiver_node)? {
             return Ok(received);
         }
     }
@@ -7186,7 +7183,7 @@ fn live_ticket_for_bound_endpoint(
     addr: &iroh::EndpointAddr,
 ) -> Result<ControlLiveTicket> {
     let address_refs = live_ticket_address_refs(addr);
-    let value = node_control_live_ticket_value(&ControlLiveTicketInput {
+    let value = control_live_ticket_value(&ControlLiveTicketInput {
         node_id: &identity.node_id,
         node_identity_ref: &identity.identity_ref,
         logical_endpoint_id: &identity.endpoint_id,
@@ -7196,7 +7193,7 @@ fn live_ticket_for_bound_endpoint(
         policy_refs: &identity.policy_refs,
         evidence_refs: &identity.receipt_refs,
     })?;
-    let ticket = parse_node_control_live_ticket(&value)?;
+    let ticket = parse_control_live_ticket(&value)?;
     import_node_artifact(state_root, &value)?;
     Ok(ticket)
 }
@@ -7278,7 +7275,7 @@ fn live_send_authority_grant_diagnostics(state_root: &Path, envelope: &ControlIn
     {
         has_candidate_authority = true;
         match read_node_ledger_artifact(state_root, authority_ref) {
-            Ok(value) => match parse_node_control_authority_grant(&value) {
+            Ok(value) => match parse_control_authority_grant(&value) {
                 Ok(grant) => {
                     let grant_diagnostics = authority_grant_diagnostics(envelope, &grant);
                     if grant_diagnostics.is_empty() {
@@ -7353,7 +7350,7 @@ async fn live_gossip_endpoint(
         .map_err(|error| MoltenError::invalid_harness(format!("live Iroh endpoint bind failed: {error}")))
 }
 
-fn node_control_live_topic_id(topic: &str) -> iroh_gossip::TopicId {
+fn control_live_topic_id(topic: &str) -> iroh_gossip::TopicId {
     let digest = blake3::hash(format!("molten.node-control.live.topic.v1:{topic}").as_bytes());
     iroh_gossip::TopicId::from_bytes(*digest.as_bytes())
 }
@@ -7415,7 +7412,7 @@ fn live_receive_diagnostics(
     diagnostics
 }
 
-pub fn parse_node_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressEnvelope> {
+pub fn parse_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressEnvelope> {
     let fields = value
         .collect_simple_record("node-control-ingress-envelope-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-envelope-v1 ...>"))?;
@@ -7432,7 +7429,7 @@ pub fn parse_node_control_ingress_envelope(value: &IoValue) -> Result<ControlIng
     let operation_ref = record_ref_string(&fields[6], "operation")?;
     let request_ref = record_ref_string(&fields[7], "request-ref")?;
     let request_value = record_value(&fields[8], "request")?;
-    let request = crate::node_runtime::parse_node_control_request(&request_value)?;
+    let request = crate::node_runtime::parse_control_request(&request_value)?;
     if request.request_ref != request_ref {
         return Err(MoltenError::invalid_harness("node control ingress embedded request ref mismatch"));
     }
@@ -7473,10 +7470,10 @@ pub fn parse_node_control_ingress_envelope(value: &IoValue) -> Result<ControlIng
     })
 }
 
-pub fn publish_node_control_ingress(input: &ControlIngressPublishInput<'_>) -> Result<ControlIngressPublish> {
+pub fn publish_control_ingress(input: &ControlIngressPublishInput<'_>) -> Result<ControlIngressPublish> {
     validate_state_root(input.state_root)?;
     ensure_state_layout(input.state_root)?;
-    let envelope = parse_node_control_ingress_envelope(input.envelope_value)?;
+    let envelope = parse_control_ingress_envelope(input.envelope_value)?;
     let envelope_path = control_ingress_envelope_path(input.state_root, &envelope.topic, &envelope.envelope_ref);
     write_ingress_envelope_and_verify(input.state_root, &envelope.topic, &envelope)?;
     import_node_artifact(input.state_root, &envelope.value)?;
@@ -7561,14 +7558,14 @@ fn apply_ingress_enqueue(state_root: &Path, envelope: &ControlIngressEnvelope) -
     })
 }
 
-pub fn deliver_node_control_ingress(input: &ControlIngressDeliverInput<'_>) -> Result<ControlIngressDeliver> {
+pub fn deliver_control_ingress(input: &ControlIngressDeliverInput<'_>) -> Result<ControlIngressDeliver> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     validate_ingress_ref(input.envelope_ref, "node control ingress envelope ref")?;
     ensure_state_layout(input.state_root)?;
     let envelope_value =
         read_preserves(&control_ingress_envelope_path(input.state_root, input.topic, input.envelope_ref))?;
-    let envelope = parse_node_control_ingress_envelope(&envelope_value)?;
+    let envelope = parse_control_ingress_envelope(&envelope_value)?;
     if envelope.envelope_ref != input.envelope_ref {
         return Err(MoltenError::invalid_harness(format!(
             "node control ingress materialized envelope ref {} does not match requested {}",
@@ -7655,7 +7652,7 @@ fn evaluate_live_peer_bootstrap(state_root: &Path, envelope: &ControlIngressEnve
     let mut admitted_peer_ref = None;
     for peer_ref in envelope.peer_bootstrap_refs.iter() {
         match read_node_ledger_artifact(state_root, peer_ref) {
-            Ok(value) => match parse_node_control_live_peer_admission(&value) {
+            Ok(value) => match parse_control_live_peer_admission(&value) {
                 Ok(admission) => {
                     let admission_diagnostics = live_peer_admission_diagnostics(state_root, envelope, &admission)?;
                     if admission_diagnostics.is_empty() {
@@ -7707,7 +7704,7 @@ fn live_peer_admission_diagnostics(
         ));
     }
     match read_node_ledger_artifact(state_root, &admission.ticket_ref) {
-        Ok(value) => match parse_node_control_live_ticket(&value) {
+        Ok(value) => match parse_control_live_ticket(&value) {
             Ok(ticket) => {
                 if ticket.node_id != admission.node_id || ticket.topic != admission.topic {
                     diagnostics.push(format!(
@@ -7756,7 +7753,7 @@ fn evaluate_live_authority_delegation(state_root: &Path, envelope: &ControlIngre
     }
     for authority_ref in candidate_authority_refs {
         match read_node_ledger_artifact(state_root, authority_ref) {
-            Ok(value) => match parse_node_control_authority_grant(&value) {
+            Ok(value) => match parse_control_authority_grant(&value) {
                 Ok(grant) => {
                     let grant_diagnostics = authority_grant_diagnostics(envelope, &grant);
                     if grant_diagnostics.is_empty() {
@@ -7896,7 +7893,7 @@ fn prior_dispatch_for_request(
         }
     }
     let control_receipt_value = read_preserves(&receipt_path)?;
-    let control = crate::node_runtime::parse_node_control_receipt(&control_receipt_value)?;
+    let control = crate::node_runtime::parse_control_receipt(&control_receipt_value)?;
     if control.request_ref != request.request_ref {
         return Err(MoltenError::invalid_harness("node control duplicate receipt conflicts with request ref"));
     }
@@ -7972,9 +7969,7 @@ struct ControlProvenanceInput<'a> {
     subreceipt_kind: &'a str,
 }
 
-fn evaluate_node_control_provenance(
-    input: &ControlProvenanceInput<'_>,
-) -> Result<crate::provenance::ProvenanceEvaluation> {
+fn evaluate_control_provenance(input: &ControlProvenanceInput<'_>) -> Result<crate::provenance::ProvenanceEvaluation> {
     let mut provenance_diagnostics = Vec::with_capacity(input.request.evidence_refs.len().saturating_add(1));
     if input.request.evidence_refs.is_empty() {
         provenance_diagnostics.push("node control provenance evidence refs missing".to_string());
@@ -8134,7 +8129,7 @@ fn dispatch_install_request(
             return finish_install_dispatch(state_root, request, &startup.receipt_ref, &[], &diagnostics);
         }
     };
-    let provenance = evaluate_node_control_provenance(&ControlProvenanceInput {
+    let provenance = evaluate_control_provenance(&ControlProvenanceInput {
         state_root,
         request,
         artifact_ref: payload_ref,
@@ -8330,7 +8325,7 @@ fn dispatch_run_request(state_root: &Path, request: &crate::node_runtime::Contro
         Err(dispatch) => return Ok(*dispatch),
     };
     let mut diagnostics = start.diagnostics;
-    let provenance = evaluate_node_control_provenance(&ControlProvenanceInput {
+    let provenance = evaluate_control_provenance(&ControlProvenanceInput {
         state_root,
         request,
         artifact_ref: &start.prepared.job_ref,
@@ -8520,7 +8515,7 @@ fn control_receipt_for_request(
     } else {
         Vec::new()
     };
-    crate::node_runtime::node_control_receipt_value(&crate::node_runtime::ControlReceiptValueInput {
+    crate::node_runtime::control_receipt_value(&crate::node_runtime::ControlReceiptValueInput {
         decision: final_decision,
         request,
         startup_receipt_ref,
@@ -9345,13 +9340,13 @@ fn runtime_summary(value: &IoValue) -> Result<Option<String>> {
             startup.adapters.len()
         )));
     }
-    if let Ok(control) = crate::node_runtime::parse_node_control_receipt(value) {
+    if let Ok(control) = crate::node_runtime::parse_control_receipt(value) {
         return Ok(Some(format!(
             "node control decision={} receipt={} request={}",
             control.decision, control.receipt_ref, control.request_ref
         )));
     }
-    if let Ok(ingress) = parse_node_control_ingress_envelope(value) {
+    if let Ok(ingress) = parse_control_ingress_envelope(value) {
         return Ok(Some(format!(
             "node control ingress envelope ref={} topic={} from={} to={} request={}",
             ingress.envelope_ref, ingress.topic, ingress.from_peer, ingress.to_node, ingress.request.request_ref
@@ -9405,19 +9400,19 @@ fn import_summary(value: &IoValue) -> Result<Option<String>> {
 }
 
 fn access_summary(value: &IoValue) -> Result<Option<String>> {
-    if let Ok(ticket) = parse_node_control_live_ticket(value) {
+    if let Ok(ticket) = parse_control_live_ticket(value) {
         return Ok(Some(format!(
             "node control live ticket ref={} node={} topic={} endpoint={}",
             ticket.ticket_ref, ticket.node_id, ticket.topic, ticket.live_endpoint_id
         )));
     }
-    if let Ok(admission) = parse_node_control_live_peer_admission(value) {
+    if let Ok(admission) = parse_control_live_peer_admission(value) {
         return Ok(Some(format!(
             "node control live peer admission decision={} peer={} node={} topic={}",
             admission.decision, admission.peer_id, admission.node_id, admission.topic
         )));
     }
-    if let Ok(grant) = parse_node_control_authority_grant(value) {
+    if let Ok(grant) = parse_control_authority_grant(value) {
         return Ok(Some(format!(
             "node control authority grant ref={} peer={} node={} operations={}",
             grant.grant_ref,
@@ -9685,13 +9680,13 @@ fn state_summary(value: &IoValue) -> Result<Option<String>> {
 }
 
 fn supervisor_summary(value: &IoValue) -> Result<Option<String>> {
-    if let Ok(policy) = parse_node_control_supervisor_policy(value) {
+    if let Ok(policy) = parse_control_supervisor_policy(value) {
         return Ok(Some(format!(
             "node control supervisor policy ref={} restarts={} stale_lock_recovery={}",
             policy.policy_ref, policy.max_restarts, policy.stale_lock_recovery
         )));
     }
-    if let Ok(receipt) = parse_node_control_supervisor_receipt(value) {
+    if let Ok(receipt) = parse_control_supervisor_receipt(value) {
         return Ok(Some(format!(
             "node control supervisor decision={} operation={} policy={}",
             receipt.decision,
@@ -9962,7 +9957,7 @@ fn write_ingress_envelope_and_verify(state_root: &Path, topic: &str, envelope: &
     let path = control_ingress_envelope_path(state_root, topic, &envelope.envelope_ref);
     write_preserves(&path, &envelope.value)?;
     let read_value = read_preserves(&path)?;
-    let read_envelope = parse_node_control_ingress_envelope(&read_value)?;
+    let read_envelope = parse_control_ingress_envelope(&read_value)?;
     if read_envelope.envelope_ref != envelope.envelope_ref {
         return Err(MoltenError::invalid_harness(format!(
             "node control ingress materialized envelope ref {} does not match written {}",
@@ -10376,7 +10371,7 @@ fn control_request(operation: &str) -> Result<crate::node_runtime::ControlReques
     let authority_refs = vec![local_ref("node-control-authority", operation)?];
     let policy_refs = vec![local_ref("node-control-policy", operation)?];
     let resource_refs = vec![local_ref("node-control-resource", operation)?];
-    let value = crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+    let value = crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
         operation,
         target_ref: None,
         payload_ref: None,
@@ -10385,7 +10380,7 @@ fn control_request(operation: &str) -> Result<crate::node_runtime::ControlReques
         resource_refs: &resource_refs,
         evidence_refs: &[],
     })?;
-    crate::node_runtime::parse_node_control_request(&value)
+    crate::node_runtime::parse_control_request(&value)
 }
 
 #[cfg(test)]
@@ -10397,7 +10392,7 @@ fn test_live_authority_refs(
     policy_refs: &[String],
 ) -> Result<Vec<String>> {
     let operations = vec![operation.to_string()];
-    let grant_value = node_control_authority_grant_value(&ControlAuthorityGrantInput {
+    let grant_value = control_authority_grant_value(&ControlAuthorityGrantInput {
         peer_id,
         node_id,
         operations: &operations,
@@ -10409,7 +10404,7 @@ fn test_live_authority_refs(
         revocation_refs: &[],
         evidence_refs: &[],
     })?;
-    let grant = import_node_control_authority_grant(state_root, &grant_value)?;
+    let grant = import_control_authority_grant(state_root, &grant_value)?;
     Ok(vec![grant.grant_ref])
 }
 
@@ -10420,13 +10415,13 @@ fn test_live_peer_bootstrap_refs(
     topic: &str,
     policy_refs: &[String],
 ) -> Result<Vec<String>> {
-    let ticket = export_node_control_live_ticket(&ControlLiveTicketExportInput {
+    let ticket = export_control_live_ticket(&ControlLiveTicketExportInput {
         state_root,
         topic,
         policy_refs,
         evidence_refs: &[],
     })?;
-    let admission = admit_node_control_live_peer(&ControlLivePeerAdmitInput {
+    let admission = admit_control_live_peer(&ControlLivePeerAdmitInput {
         state_root,
         ticket_value: &ticket.value,
         peer_id,
@@ -10654,8 +10649,8 @@ mod tests {
         let request = status_request().expect("status request");
         let dispatched = submit_and_dispatch(root, &request.value);
         assert_eq!(dispatched.operation, "status");
-        let receipt = crate::node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value)
-            .expect("control receipt");
+        let receipt =
+            crate::node_runtime::parse_control_receipt(&dispatched.control_receipt_value).expect("control receipt");
         assert_eq!(receipt.decision, "pass");
         assert_eq!(receipt.request_ref, request.request_ref);
         assert_ledger_contains(root, &[
@@ -10681,7 +10676,7 @@ mod tests {
     fn assert_missing_payload_denied(root: &Path, status: &crate::node_runtime::ControlRequest) {
         let target_ref = local_ref("install-target", "fixture").expect("target ref");
         let install_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "install",
                 target_ref: Some(&target_ref),
                 payload_ref: None,
@@ -10693,14 +10688,14 @@ mod tests {
             .expect("install request");
         let dispatch = submit_and_dispatch(root, &install_value);
         let receipt =
-            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("install receipt");
+            crate::node_runtime::parse_control_receipt(&dispatch.control_receipt_value).expect("install receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("requires payload ref")));
     }
 
     fn assert_missing_authority_denied(root: &Path, status: &crate::node_runtime::ControlRequest) {
         let missing_authority =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -10712,7 +10707,7 @@ mod tests {
             .expect("missing authority request");
         let dispatch = submit_and_dispatch(root, &missing_authority);
         let receipt =
-            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("missing receipt");
+            crate::node_runtime::parse_control_receipt(&dispatch.control_receipt_value).expect("missing receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("authority refs missing")));
     }
@@ -10721,7 +10716,7 @@ mod tests {
         let request = shutdown_request().expect("shutdown request");
         let dispatch = submit_and_dispatch(root, &request.value);
         let receipt =
-            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("shutdown receipt");
+            crate::node_runtime::parse_control_receipt(&dispatch.control_receipt_value).expect("shutdown receipt");
         assert_eq!(receipt.decision, "pass");
         assert!(!root.join(CONTROL_LOCK_FILE).exists());
     }
@@ -10843,7 +10838,7 @@ mod tests {
     }
 
     #[test]
-    fn node_control_provenance_gate_denies_missing_and_tampered_evidence_before_side_effects() {
+    fn control_provenance_gate_denies_missing_and_tampered_evidence_before_side_effects() {
         let root = initialized_control_root("node-control-provenance", "node:provenance");
         let refs = case_refs("provenance");
 
@@ -10867,7 +10862,7 @@ mod tests {
     }
 
     fn request_value(payload_ref: &str, refs: &CaseRefs, evidence_refs: &[String]) -> IoValue {
-        crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+        crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
             payload_ref: Some(payload_ref),
@@ -10896,7 +10891,7 @@ mod tests {
         let request = request_value(&payload_ref, refs, &[]);
         let dispatch = submit_and_dispatch(root, &request);
         let receipt =
-            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("control receipt");
+            crate::node_runtime::parse_control_receipt(&dispatch.control_receipt_value).expect("control receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(
             receipt
@@ -10915,7 +10910,7 @@ mod tests {
             )]);
         let payload_ref = import_node_artifact(root, &payload).expect("import queued payload");
         let request = request_value(&payload_ref, refs, &[]);
-        let queued = crate::node_runtime::parse_node_control_request(&request).expect("queued request parse");
+        let queued = crate::node_runtime::parse_control_request(&request).expect("queued request parse");
         submit_control_request(&ControlSubmitInput {
             state_root: root,
             request_value: &request,
@@ -10929,7 +10924,7 @@ mod tests {
         assert_eq!(loop_result.processed_request_refs, vec![queued.request_ref.clone()]);
         let value =
             read_preserves(&control_outbox_receipt_path(root, &queued.request_ref)).expect("queued receipt value");
-        let receipt = crate::node_runtime::parse_node_control_receipt(&value).expect("queued receipt");
+        let receipt = crate::node_runtime::parse_control_receipt(&value).expect("queued receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing provenance evidence")));
     }
@@ -10948,14 +10943,14 @@ mod tests {
         let request = request_value(&payload_ref, refs, &evidence_refs);
         let dispatch = submit_and_dispatch(root, &request);
         let receipt =
-            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("tampered receipt");
+            crate::node_runtime::parse_control_receipt(&dispatch.control_receipt_value).expect("tampered receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("no provenance record matches")));
         assert_registry_empty(root);
     }
 
     #[test]
-    fn node_control_reproducible_provenance_requires_build_verification_binding() {
+    fn control_reproducible_provenance_requires_build_verification_binding() {
         let root = temp_dir("node-control-reproducible-provenance");
         init_local_node(&InitInput {
             state_root: &root,
@@ -11061,7 +11056,7 @@ mod tests {
     }
 
     fn install_request_for(case: &BuildCase) -> IoValue {
-        crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+        crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
             payload_ref: Some(&case.material.payload_ref),
@@ -11085,7 +11080,7 @@ mod tests {
             request_path: Some(&submitted.inbox_path),
         })
         .expect("dispatch reproducible request");
-        let receipt = crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value)
+        let receipt = crate::node_runtime::parse_control_receipt(&dispatch.control_receipt_value)
             .expect("reproducible control receipt");
         assert_eq!(receipt.decision, "pass");
         assert!(receipt.diagnostics.is_empty());
@@ -11097,7 +11092,7 @@ mod tests {
     }
 
     #[test]
-    fn node_control_ingress_enqueues_once_and_preserves_provenance_gate() {
+    fn control_ingress_enqueues_once_and_preserves_provenance_gate() {
         let root = temp_dir("node-control-ingress");
         init_local_node(&InitInput {
             state_root: &root,
@@ -11116,7 +11111,7 @@ mod tests {
             )]);
         let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "install",
                 target_ref: None,
                 payload_ref: Some(&payload_ref),
@@ -11126,7 +11121,7 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("install request");
-        let envelope = node_control_ingress_envelope(&ControlIngressEnvelopeInput {
+        let envelope = control_ingress_envelope(&ControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:operator",
             to_node: "node:ingress",
@@ -11143,13 +11138,13 @@ mod tests {
     }
 
     fn assert_enqueued_then_denied(root: &Path, envelope: &ControlIngressEnvelope) {
-        let published = publish_node_control_ingress(&ControlIngressPublishInput {
+        let published = publish_control_ingress(&ControlIngressPublishInput {
             state_root: root,
             envelope_value: &envelope.value,
         })
         .expect("publish ingress");
         assert_eq!(crate::ledger::artifact_kind(&published.receipt_value), "node-control-ingress-receipt");
-        let delivered = deliver_node_control_ingress(&ControlIngressDeliverInput {
+        let delivered = deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &envelope.envelope_ref,
@@ -11158,7 +11153,7 @@ mod tests {
         assert!(delivered.has_enqueued);
         assert!(delivered.queue_receipt_ref.is_some());
 
-        let duplicate = deliver_node_control_ingress(&ControlIngressDeliverInput {
+        let duplicate = deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &envelope.envelope_ref,
@@ -11175,15 +11170,15 @@ mod tests {
         assert_eq!(loop_result.processed_request_refs.len(), 1);
         let control_value = read_preserves(&control_outbox_receipt_path(root, &delivered.request_ref))
             .expect("read ingress dispatch receipt");
-        let control = crate::node_runtime::parse_node_control_receipt(&control_value).expect("parse control receipt");
+        let control = crate::node_runtime::parse_control_receipt(&control_value).expect("parse control receipt");
         assert_eq!(control.decision, "deny");
         assert!(control.diagnostics.iter().any(|diagnostic| diagnostic.contains("provenance evidence refs missing")));
     }
 
     #[test]
-    fn node_control_ingress_denies_tampered_materialized_envelope_ref() {
+    fn control_ingress_denies_tampered_materialized_envelope_ref() {
         let pair = materialized_ingress_pair();
-        publish_node_control_ingress(&ControlIngressPublishInput {
+        publish_control_ingress(&ControlIngressPublishInput {
             state_root: &pair.root,
             envelope_value: &pair.first.value,
         })
@@ -11193,7 +11188,7 @@ mod tests {
             &pair.second.value,
         )
         .expect("tamper materialized envelope");
-        let denied = deliver_node_control_ingress(&ControlIngressDeliverInput {
+        let denied = deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: &pair.root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &pair.first.envelope_ref,
@@ -11255,7 +11250,7 @@ mod tests {
                 "materialized",
             )]);
         let payload_ref = import_node_artifact(root, &payload_value).expect("import payload");
-        crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+        crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
             payload_ref: Some(&payload_ref),
@@ -11272,7 +11267,7 @@ mod tests {
         refs: &MaterializedIngressRefs,
         sequence: u64,
     ) -> ControlIngressEnvelope {
-        node_control_ingress_envelope(&ControlIngressEnvelopeInput {
+        control_ingress_envelope(&ControlIngressEnvelopeInput {
             request_value,
             from_peer: "peer:materialized",
             to_node: "node:ingress-materialized",
@@ -11288,7 +11283,7 @@ mod tests {
     }
 
     #[test]
-    fn node_control_live_workflow_bundle_reconcile_binds_receiver_evidence() {
+    fn control_live_workflow_bundle_reconcile_binds_receiver_evidence() {
         let case = reconcile_case();
         let reconciled = assert_reconcile_pass(&case);
         let denials = assert_reconcile_denials(&case);
@@ -11375,7 +11370,7 @@ mod tests {
 
     fn reconcile_request(seed: &ReconcileSeed) -> (IoValue, crate::node_runtime::ControlRequest) {
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -11385,7 +11380,7 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("status request");
-        let request = crate::node_runtime::parse_node_control_request(&request_value).expect("request");
+        let request = crate::node_runtime::parse_control_request(&request_value).expect("request");
         (request_value, request)
     }
 
@@ -11393,7 +11388,7 @@ mod tests {
         seed: &ReconcileSeed,
         request_value: &IoValue,
     ) -> (ControlIngressEnvelope, ControlIngressDeliver) {
-        let envelope = node_control_live_ingress_envelope(&ControlIngressEnvelopeInput {
+        let envelope = control_live_ingress_envelope(&ControlIngressEnvelopeInput {
             request_value,
             from_peer: "peer:reconcile",
             to_node: "node:reconcile",
@@ -11406,12 +11401,12 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("live envelope");
-        publish_node_control_ingress(&ControlIngressPublishInput {
+        publish_control_ingress(&ControlIngressPublishInput {
             state_root: &seed.root,
             envelope_value: &envelope.value,
         })
         .expect("publish envelope");
-        let delivered = deliver_node_control_ingress(&ControlIngressDeliverInput {
+        let delivered = deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: &seed.root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &envelope.envelope_ref,
@@ -11435,7 +11430,7 @@ mod tests {
             read_preserves(&queue_receipt_path(&seed.root, &delivered.request_ref)).expect("queue receipt");
         let control_value =
             read_preserves(&control_outbox_receipt_path(&seed.root, &delivered.request_ref)).expect("control receipt");
-        let control = crate::node_runtime::parse_node_control_receipt(&control_value).expect("parse control");
+        let control = crate::node_runtime::parse_control_receipt(&control_value).expect("parse control");
         assert_eq!(control.decision, "pass");
         (queue_value, control_value, control.receipt_ref)
     }
@@ -11459,14 +11454,14 @@ mod tests {
     }
 
     fn export_reconcile_bundle(delivery: &ReconcileDelivery) -> ControlLiveWorkflowBundleExport {
-        let ticket = export_node_control_live_ticket(&ControlLiveTicketExportInput {
+        let ticket = export_control_live_ticket(&ControlLiveTicketExportInput {
             state_root: &delivery.root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             policy_refs: &delivery.policy_refs,
             evidence_refs: &[],
         })
         .expect("export reconcile ticket");
-        let admission = admit_node_control_live_peer(&ControlLivePeerAdmitInput {
+        let admission = admit_control_live_peer(&ControlLivePeerAdmitInput {
             state_root: &delivery.root,
             ticket_value: &ticket.value,
             peer_id: "peer:reconcile",
@@ -11476,7 +11471,7 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("admit reconcile peer");
-        let authority_value = node_control_authority_grant_value(&ControlAuthorityGrantInput {
+        let authority_value = control_authority_grant_value(&ControlAuthorityGrantInput {
             peer_id: "peer:reconcile",
             node_id: "node:reconcile",
             operations: &delivery.operations,
@@ -11490,7 +11485,7 @@ mod tests {
         })
         .expect("reconcile authority value");
         let receipt_values: Vec<&IoValue> = Vec::new();
-        let exported = export_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleExportInput {
+        let exported = export_control_live_workflow_bundle(&ControlLiveWorkflowBundleExportInput {
             receiver_ticket_value: &ticket.value,
             peer_admission_value: &admission.value,
             authority_grant_value: &authority_value,
@@ -11505,7 +11500,7 @@ mod tests {
         exported: &ControlLiveWorkflowBundleExport,
         expected: &LiveWorkflowBundleExpectedInput<'_>,
     ) -> (ControlLiveWorkflowBundleVerify, ControlLiveWorkflowBundleGate) {
-        let verified = verify_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
+        let verified = verify_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
             bundle_value: &exported.bundle.bundle_value,
             expected_node: expected.expected_node,
             expected_topic: expected.expected_topic,
@@ -11519,7 +11514,7 @@ mod tests {
         })
         .expect("verify reconcile workflow bundle");
         assert_eq!(verified.decision, "pass");
-        let gated = gate_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
+        let gated = gate_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
             bundle_value: &exported.bundle.bundle_value,
             verify_receipt_value: Some(&verified.receipt_value),
             require_verify_receipt: true,
@@ -11581,7 +11576,7 @@ mod tests {
 
     fn assert_reconcile_pass(case: &ReconcileCase) -> ControlLiveWorkflowBundleReconcile {
         let delivery = &case.delivery;
-        let reconciled = reconcile_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
+        let reconciled = reconcile_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
             apply_receipt_value: &case.apply_receipt_value,
             send_receipt_value: None,
             ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
@@ -11599,7 +11594,7 @@ mod tests {
         );
         assert_eq!(reconciled.ingress_receipt_ref.as_deref(), Some(delivery.delivered.ingress_receipt_ref.as_str()));
         assert_eq!(reconciled.control_receipt_ref.as_deref(), Some(delivery.control_receipt_ref.as_str()));
-        assert!(parse_node_control_authority_grant(&reconciled.receipt_value).is_err());
+        assert!(parse_control_authority_grant(&reconciled.receipt_value).is_err());
         assert!(
             crate::preserves_rail::to_text(&reconciled.receipt_value)
                 .expect("reconcile text")
@@ -11613,7 +11608,7 @@ mod tests {
     fn assert_reconcile_not_authority(case: &ReconcileCase, reconciled: &ControlLiveWorkflowBundleReconcile) {
         let refs = vec![reconciled.receipt_ref.clone()];
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -11623,7 +11618,7 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("reconcile authority request");
-        let envelope = node_control_live_ingress_envelope(&ControlIngressEnvelopeInput {
+        let envelope = control_live_ingress_envelope(&ControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:reconcile",
             to_node: "node:reconcile",
@@ -11644,7 +11639,7 @@ mod tests {
 
     fn assert_reconcile_denials(case: &ReconcileCase) -> ReconcileDenials {
         let delivery = &case.delivery;
-        let missing_receiver = reconcile_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
+        let missing_receiver = reconcile_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
             apply_receipt_value: &case.apply_receipt_value,
             send_receipt_value: None,
             ingress_receipt_value: None,
@@ -11664,7 +11659,7 @@ mod tests {
         );
 
         let wrong_envelope = local_ref("node-control-envelope", "wrong-reconcile").expect("wrong envelope");
-        let wrong_reconcile = reconcile_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
+        let wrong_reconcile = reconcile_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
             apply_receipt_value: &case.apply_receipt_value,
             send_receipt_value: None,
             ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
@@ -11678,13 +11673,13 @@ mod tests {
         assert_eq!(wrong_reconcile.decision, "deny");
         assert!(wrong_reconcile.diagnostics.iter().any(|diagnostic| diagnostic.contains("does not match expected")));
 
-        let denied_control = crate::node_runtime::node_control_deny_receipt_value(
+        let denied_control = crate::node_runtime::control_deny_receipt_value(
             &delivery.request,
             &local_ref("node-startup", "reconcile-deny").expect("startup ref"),
             "receiver denial propagated",
         )
         .expect("denied control");
-        let denied_reconcile = reconcile_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
+        let denied_reconcile = reconcile_control_live_workflow_bundle(&ControlLiveWorkflowBundleReconcileInput {
             apply_receipt_value: &case.apply_receipt_value,
             send_receipt_value: None,
             ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
@@ -11717,7 +11712,7 @@ mod tests {
         wrong_envelope: &str,
     ) -> AckPass {
         let delivery = &case.delivery;
-        let ack_export = export_node_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckExportInput {
+        let ack_export = export_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckExportInput {
             apply_receipt_value: &case.apply_receipt_value,
             send_receipt_value: None,
             ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
@@ -11733,7 +11728,7 @@ mod tests {
             crate::ledger::artifact_kind(&ack_export.receipt_value),
             "node-control-live-workflow-bundle-ack-export-receipt"
         );
-        assert!(parse_node_control_authority_grant(&ack_export.ack.ack_value).is_err());
+        assert!(parse_control_authority_grant(&ack_export.ack.ack_value).is_err());
         assert!(
             crate::preserves_rail::to_text(&ack_export.ack.ack_value)
                 .expect("ack text")
@@ -11745,7 +11740,7 @@ mod tests {
             node_id: "node:ack-import",
         })
         .expect("init ack import root");
-        let ack_import = import_node_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckImportInput {
+        let ack_import = import_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckImportInput {
             state_root: &import_root,
             ack_value: &ack_export.ack.ack_value,
             expected_bundle_ref: Some(&case.exported.bundle.bundle_ref),
@@ -11768,7 +11763,7 @@ mod tests {
         read_node_ledger_artifact(&import_root, &ack_export.ack.ack_ref).expect("ack imported");
         read_node_ledger_artifact(&import_root, &reconciled.receipt_ref).expect("reconcile imported");
         assert_protocol_pass(case, reconciled, &ack_export.ack.ack_value);
-        let wrong_ack_import = import_node_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckImportInput {
+        let wrong_ack_import = import_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckImportInput {
             state_root: &import_root,
             ack_value: &ack_export.ack.ack_value,
             expected_bundle_ref: Some(&case.exported.bundle.bundle_ref),
@@ -11788,7 +11783,7 @@ mod tests {
         ack_value: &IoValue,
     ) {
         let delivery = &case.delivery;
-        let protocol_gate = gate_node_control_live_workflow_protocol(&ControlLiveWorkflowProtocolGateInput {
+        let protocol_gate = gate_control_live_workflow_protocol(&ControlLiveWorkflowProtocolGateInput {
             bundle_value: &case.exported.bundle.bundle_value,
             gate_receipt_value: &case.gated.receipt_value,
             apply_receipt_value: &case.apply_receipt_value,
@@ -11803,21 +11798,20 @@ mod tests {
         assert_eq!(protocol_gate.operation_count, 6);
         assert_eq!(protocol_gate.message_count, 3);
         assert_eq!(crate::ledger::artifact_kind(&protocol_gate.receipt_value), "protocol-session-gate-receipt");
-        assert!(parse_node_control_authority_grant(&protocol_gate.receipt_value).is_err());
+        assert!(parse_control_authority_grant(&protocol_gate.receipt_value).is_err());
     }
 
     fn assert_ack_denials(case: &ReconcileCase, denials: &ReconcileDenials, ack: &AckPass) {
         let delivery = &case.delivery;
-        let missing_ack_export =
-            export_node_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckExportInput {
-                apply_receipt_value: &case.apply_receipt_value,
-                send_receipt_value: None,
-                ingress_receipt_value: None,
-                queue_receipt_value: None,
-                control_receipt_value: None,
-                reconcile_receipt_value: &denials.missing_receiver.receipt_value,
-            })
-            .expect("missing ack export");
+        let missing_ack_export = export_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckExportInput {
+            apply_receipt_value: &case.apply_receipt_value,
+            send_receipt_value: None,
+            ingress_receipt_value: None,
+            queue_receipt_value: None,
+            control_receipt_value: None,
+            reconcile_receipt_value: &denials.missing_receiver.receipt_value,
+        })
+        .expect("missing ack export");
         assert_eq!(missing_ack_export.decision, "deny");
         assert!(
             missing_ack_export
@@ -11826,16 +11820,15 @@ mod tests {
                 .any(|diagnostic| diagnostic.contains("requires receiver ingress receipt"))
         );
 
-        let denied_ack_export =
-            export_node_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckExportInput {
-                apply_receipt_value: &case.apply_receipt_value,
-                send_receipt_value: None,
-                ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
-                queue_receipt_value: Some(&delivery.queue_value),
-                control_receipt_value: Some(&denials.denied_control),
-                reconcile_receipt_value: &denials.denied_reconcile.receipt_value,
-            })
-            .expect("denied ack export");
+        let denied_ack_export = export_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckExportInput {
+            apply_receipt_value: &case.apply_receipt_value,
+            send_receipt_value: None,
+            ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
+            queue_receipt_value: Some(&delivery.queue_value),
+            control_receipt_value: Some(&denials.denied_control),
+            reconcile_receipt_value: &denials.denied_reconcile.receipt_value,
+        })
+        .expect("denied ack export");
         assert_eq!(denied_ack_export.decision, "pass");
         assert_eq!(denied_ack_export.receiver_decision, "deny");
         assert!(
@@ -11845,19 +11838,18 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.contains("receiver denial propagated"))
         );
-        let denied_ack_import =
-            import_node_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckImportInput {
-                state_root: &ack.import_root,
-                ack_value: &denied_ack_export.ack.ack_value,
-                expected_bundle_ref: Some(&case.exported.bundle.bundle_ref),
-                expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
-                expected_operation_ref: Some(&delivery.envelope.operation_ref),
-                expected_request_ref: Some(&delivery.delivered.request_ref),
-            })
-            .expect("denied ack import");
+        let denied_ack_import = import_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckImportInput {
+            state_root: &ack.import_root,
+            ack_value: &denied_ack_export.ack.ack_value,
+            expected_bundle_ref: Some(&case.exported.bundle.bundle_ref),
+            expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+            expected_operation_ref: Some(&delivery.envelope.operation_ref),
+            expected_request_ref: Some(&delivery.delivered.request_ref),
+        })
+        .expect("denied ack import");
         assert_eq!(denied_ack_import.decision, "pass");
         assert_eq!(denied_ack_import.receiver_decision, "deny");
-        let denied_protocol_gate = gate_node_control_live_workflow_protocol(&ControlLiveWorkflowProtocolGateInput {
+        let denied_protocol_gate = gate_control_live_workflow_protocol(&ControlLiveWorkflowProtocolGateInput {
             bundle_value: &case.exported.bundle.bundle_value,
             gate_receipt_value: &case.gated.receipt_value,
             apply_receipt_value: &case.apply_receipt_value,
@@ -11878,7 +11870,7 @@ mod tests {
     }
 
     #[test]
-    fn node_control_ingress_denies_missing_authority_before_enqueue() {
+    fn control_ingress_denies_missing_authority_before_enqueue() {
         let root = temp_dir("node-control-ingress-deny");
         init_local_node(&InitInput {
             state_root: &root,
@@ -11890,7 +11882,7 @@ mod tests {
         let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:operator").expect("bootstrap ref")];
         let policy_refs = vec![local_ref("node-control-policy", "ingress-deny").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "ingress-deny").expect("resource ref")];
-        let envelope = node_control_ingress_envelope(&ControlIngressEnvelopeInput {
+        let envelope = control_ingress_envelope(&ControlIngressEnvelopeInput {
             request_value: &request.value,
             from_peer: "peer:operator",
             to_node: "node:ingress-deny",
@@ -11903,12 +11895,12 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("missing authority envelope");
-        publish_node_control_ingress(&ControlIngressPublishInput {
+        publish_control_ingress(&ControlIngressPublishInput {
             state_root: &root,
             envelope_value: &envelope.value,
         })
         .expect("publish denied ingress");
-        let delivered = deliver_node_control_ingress(&ControlIngressDeliverInput {
+        let delivered = deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &envelope.envelope_ref,
@@ -11934,7 +11926,7 @@ mod tests {
     }
 
     fn assert_peer_delivery(input: PeerDelivery<'_>) {
-        let envelope = node_control_live_ingress_envelope(&ControlIngressEnvelopeInput {
+        let envelope = control_live_ingress_envelope(&ControlIngressEnvelopeInput {
             request_value: input.request_value,
             from_peer: input.from_peer,
             to_node: input.to_node,
@@ -11947,12 +11939,12 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("live envelope");
-        publish_node_control_ingress(&ControlIngressPublishInput {
+        publish_control_ingress(&ControlIngressPublishInput {
             state_root: input.root,
             envelope_value: &envelope.value,
         })
         .expect("publish envelope");
-        let delivered = deliver_node_control_ingress(&ControlIngressDeliverInput {
+        let delivered = deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: input.root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &envelope.envelope_ref,
@@ -11966,7 +11958,7 @@ mod tests {
     }
 
     #[test]
-    fn node_control_live_peer_ticket_admission_gates_bootstrap() {
+    fn control_live_peer_ticket_admission_gates_bootstrap() {
         let root = temp_dir("node-control-live-peer-ticket");
         init_local_node(&InitInput {
             state_root: &root,
@@ -11982,7 +11974,7 @@ mod tests {
         let authority_refs = test_live_authority_refs(&root, "peer:ticket", "node:live-ticket", "status", &policy_refs)
             .expect("authority grant ref");
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -12040,14 +12032,14 @@ mod tests {
         })
         .expect("init sender");
         let policy_refs = vec![local_ref("node-control-policy", "live-import").expect("policy ref")];
-        let ticket = export_node_control_live_ticket(&ControlLiveTicketExportInput {
+        let ticket = export_control_live_ticket(&ControlLiveTicketExportInput {
             state_root: &receiver,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             policy_refs: &policy_refs,
             evidence_refs: &[],
         })
         .expect("export ticket");
-        let admission = admit_node_control_live_peer(&ControlLivePeerAdmitInput {
+        let admission = admit_control_live_peer(&ControlLivePeerAdmitInput {
             state_root: &receiver,
             ticket_value: &ticket.value,
             peer_id: "peer:live-import",
@@ -12066,7 +12058,7 @@ mod tests {
     }
 
     fn assert_ticket_imports(case: &ImportCase) {
-        let imported_ticket = import_node_control_live_ticket(&ControlLiveTicketImportInput {
+        let imported_ticket = import_control_live_ticket(&ControlLiveTicketImportInput {
             state_root: &case.sender,
             ticket_value: &case.ticket.value,
             peer_admission_value: Some(&case.admission.value),
@@ -12086,7 +12078,7 @@ mod tests {
         read_node_ledger_artifact(&case.sender, &case.ticket.ticket_ref).expect("ticket imported");
         read_node_ledger_artifact(&case.sender, &case.admission.admission_ref).expect("admission imported");
 
-        let stale_ticket = import_node_control_live_ticket(&ControlLiveTicketImportInput {
+        let stale_ticket = import_control_live_ticket(&ControlLiveTicketImportInput {
             state_root: &case.sender,
             ticket_value: &case.ticket.value,
             peer_admission_value: Some(&case.admission.value),
@@ -12104,7 +12096,7 @@ mod tests {
 
     fn assert_grant_imports(case: &ImportCase) {
         let operations = vec!["status".to_string()];
-        let grant_value = node_control_authority_grant_value(&ControlAuthorityGrantInput {
+        let grant_value = control_authority_grant_value(&ControlAuthorityGrantInput {
             peer_id: "peer:live-import",
             node_id: "node:live-import",
             operations: &operations,
@@ -12117,7 +12109,7 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("grant value");
-        let imported_grant = import_node_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
+        let imported_grant = import_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
             state_root: &case.sender,
             grant_value: &grant_value,
             expected_peer: Some("peer:live-import"),
@@ -12137,7 +12129,7 @@ mod tests {
         read_node_ledger_artifact(&case.sender, &imported_grant.grant_ref).expect("grant imported");
 
         let bad_operations = vec!["shutdown".to_string()];
-        let denied_grant = import_node_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
+        let denied_grant = import_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
             state_root: &case.sender,
             grant_value: &grant_value,
             expected_peer: Some("peer:live-import"),
@@ -12154,7 +12146,7 @@ mod tests {
     }
 
     #[test]
-    fn node_control_live_ticket_and_authority_import_receipts_gate_bindings() {
+    fn control_live_ticket_and_authority_import_receipts_gate_bindings() {
         let case = import_case();
         assert_ticket_imports(&case);
         assert_grant_imports(&case);
@@ -12214,7 +12206,7 @@ mod tests {
     }
 
     fn flow_ticket(root: &Path, policy_refs: &[String]) -> ControlLiveTicket {
-        export_node_control_live_ticket(&ControlLiveTicketExportInput {
+        export_control_live_ticket(&ControlLiveTicketExportInput {
             state_root: root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             policy_refs,
@@ -12224,7 +12216,7 @@ mod tests {
     }
 
     fn flow_admission(root: &Path, ticket: &ControlLiveTicket, policy_refs: &[String]) -> ControlLivePeerAdmission {
-        admit_node_control_live_peer(&ControlLivePeerAdmitInput {
+        admit_control_live_peer(&ControlLivePeerAdmitInput {
             state_root: root,
             ticket_value: &ticket.value,
             peer_id: "peer:live-bundle",
@@ -12237,7 +12229,7 @@ mod tests {
     }
 
     fn flow_authority_value(policy_refs: &[String], operations: &[String]) -> IoValue {
-        node_control_authority_grant_value(&ControlAuthorityGrantInput {
+        control_authority_grant_value(&ControlAuthorityGrantInput {
             peer_id: "peer:live-bundle",
             node_id: "node:live-bundle",
             operations,
@@ -12259,7 +12251,7 @@ mod tests {
         authority_value: &IoValue,
         operations: &[String],
     ) -> FlowImports {
-        let ticket_import = import_node_control_live_ticket(&ControlLiveTicketImportInput {
+        let ticket_import = import_control_live_ticket(&ControlLiveTicketImportInput {
             state_root: staging,
             ticket_value: &ticket.value,
             peer_admission_value: Some(&admission.value),
@@ -12270,7 +12262,7 @@ mod tests {
             as_of_sequence: 2,
         })
         .expect("ticket import");
-        let authority_import = import_node_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
+        let authority_import = import_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
             state_root: staging,
             grant_value: authority_value,
             expected_peer: Some("peer:live-bundle"),
@@ -12308,7 +12300,7 @@ mod tests {
 
     fn export_flow(seed: &FlowSeed) -> ControlLiveWorkflowBundleExport {
         let receipt_values = seed.receipt_values.iter().collect::<Vec<_>>();
-        export_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleExportInput {
+        export_control_live_workflow_bundle(&ControlLiveWorkflowBundleExportInput {
             receiver_ticket_value: &seed.ticket.value,
             peer_admission_value: &seed.admission.value,
             authority_grant_value: &seed.authority_value,
@@ -12318,7 +12310,7 @@ mod tests {
     }
 
     fn verify_flow(seed: &FlowSeed, exported: &ControlLiveWorkflowBundleExport) -> ControlLiveWorkflowBundleVerify {
-        verify_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
+        verify_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
             bundle_value: &exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
@@ -12338,7 +12330,7 @@ mod tests {
         exported: &ControlLiveWorkflowBundleExport,
         verified: &ControlLiveWorkflowBundleVerify,
     ) -> ControlLiveWorkflowBundleGate {
-        gate_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
+        gate_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
             bundle_value: &exported.bundle.bundle_value,
             verify_receipt_value: Some(&verified.receipt_value),
             require_verify_receipt: true,
@@ -12360,14 +12352,14 @@ mod tests {
         let exported = export_flow(&seed);
         assert_eq!(exported.decision, "pass");
         assert_eq!(crate::ledger::artifact_kind(&exported.bundle.bundle_value), "node-control-live-workflow-bundle");
-        assert!(parse_node_control_authority_grant(&exported.bundle.bundle_value).is_err());
+        assert!(parse_control_authority_grant(&exported.bundle.bundle_value).is_err());
         let verified = verify_flow(&seed, &exported);
         assert_eq!(verified.decision, "pass");
         assert_eq!(
             crate::ledger::artifact_kind(&verified.receipt_value),
             "node-control-live-workflow-bundle-verify-receipt"
         );
-        assert!(parse_node_control_authority_grant(&verified.receipt_value).is_err());
+        assert!(parse_control_authority_grant(&verified.receipt_value).is_err());
         assert!(
             crate::preserves_rail::to_text(&verified.receipt_value)
                 .expect("verify receipt text")
@@ -12380,7 +12372,7 @@ mod tests {
             "node-control-live-workflow-bundle-gate-receipt"
         );
         assert_eq!(gated.verify_receipt_ref.as_deref(), Some(verified.receipt_ref.as_str()));
-        assert!(parse_node_control_authority_grant(&gated.receipt_value).is_err());
+        assert!(parse_control_authority_grant(&gated.receipt_value).is_err());
         assert!(
             crate::preserves_rail::to_text(&gated.receipt_value)
                 .expect("gate receipt text")
@@ -12399,7 +12391,7 @@ mod tests {
     }
 
     fn assert_flow_gate_denials(case: &FlowCase) {
-        let missing_verify_gate = gate_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
+        let missing_verify_gate = gate_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
             bundle_value: &case.exported.bundle.bundle_value,
             verify_receipt_value: None,
             require_verify_receipt: true,
@@ -12421,7 +12413,7 @@ mod tests {
                 .iter()
                 .any(|value| value.contains("requires a current verify receipt"))
         );
-        let malformed_verify_gate = gate_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
+        let malformed_verify_gate = gate_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
             bundle_value: &case.exported.bundle.bundle_value,
             verify_receipt_value: Some(&case.exported.bundle.bundle_value),
             require_verify_receipt: true,
@@ -12492,7 +12484,7 @@ mod tests {
         );
         assert!(applied.import_receipt_ref.is_some());
         assert!(applied.imported_refs.iter().any(|reference| reference == &case.exported.bundle.bundle_ref));
-        assert!(parse_node_control_authority_grant(&applied.receipt_value).is_err());
+        assert!(parse_control_authority_grant(&applied.receipt_value).is_err());
         assert!(
             crate::preserves_rail::to_text(&applied.receipt_value)
                 .expect("apply receipt text")
@@ -12526,7 +12518,7 @@ mod tests {
         let root = init_flow_root("node-control-live-workflow-bundle-apply-send", "node:live-bundle-apply-send");
         let authority_refs = vec![case.exported.bundle.authority_grant_ref.clone()];
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -12552,7 +12544,7 @@ mod tests {
     }
 
     fn assert_flow_import_pass(case: &FlowCase) {
-        let imported = import_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
+        let imported = import_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
             state_root: &case.bundle_sender,
             bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
@@ -12572,7 +12564,7 @@ mod tests {
         read_node_ledger_artifact(&case.bundle_sender, &case.admission.admission_ref)
             .expect("bundle imported admission");
         read_node_ledger_artifact(&case.bundle_sender, &case.authority_import_ref).expect("bundle imported authority");
-        assert!(parse_node_control_authority_grant(&imported.receipt_value).is_err());
+        assert!(parse_control_authority_grant(&imported.receipt_value).is_err());
         assert!(
             crate::preserves_rail::to_text(&imported.receipt_value)
                 .expect("import receipt text")
@@ -12582,7 +12574,7 @@ mod tests {
 
     fn assert_flow_wrong_topic(case: &FlowCase) -> ControlLiveWorkflowBundleGate {
         let root = init_flow_root("node-control-live-workflow-bundle-wrong-topic", "node:live-bundle-wrong-topic");
-        let wrong_topic = import_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
+        let wrong_topic = import_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
             state_root: &root,
             bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
@@ -12600,7 +12592,7 @@ mod tests {
         assert!(wrong_topic.imported_refs.is_empty());
         assert!(wrong_topic.diagnostics.iter().any(|value| value.contains("wrong-topic")));
         assert!(read_node_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
-        let wrong_verify = verify_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
+        let wrong_verify = verify_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
             bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some("wrong-topic"),
@@ -12615,7 +12607,7 @@ mod tests {
         .expect("wrong topic verify receipt");
         assert_eq!(wrong_verify.decision, "deny");
         assert!(wrong_verify.diagnostics.iter().any(|value| value.contains("wrong-topic")));
-        let stale_gate = gate_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
+        let stale_gate = gate_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
             bundle_value: &case.exported.bundle.bundle_value,
             verify_receipt_value: Some(&wrong_verify.receipt_value),
             require_verify_receipt: true,
@@ -12658,7 +12650,7 @@ mod tests {
 
     fn assert_flow_wrong_peer(case: &FlowCase) {
         let root = init_flow_root("node-control-live-workflow-bundle-wrong-peer", "node:live-bundle-wrong-peer");
-        let wrong_peer = import_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
+        let wrong_peer = import_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
             state_root: &root,
             bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
@@ -12675,7 +12667,7 @@ mod tests {
         assert_eq!(wrong_peer.decision, "deny");
         assert!(wrong_peer.imported_refs.is_empty());
         assert!(wrong_peer.diagnostics.iter().any(|value| value.contains("peer:other-live-bundle")));
-        let wrong_verify = verify_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
+        let wrong_verify = verify_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
             bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
@@ -12696,7 +12688,7 @@ mod tests {
         let root =
             init_flow_root("node-control-live-workflow-bundle-wrong-operation", "node:live-bundle-wrong-operation");
         let wrong_operations = vec!["shutdown".to_string()];
-        let wrong_operation = import_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
+        let wrong_operation = import_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
             state_root: &root,
             bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
@@ -12713,7 +12705,7 @@ mod tests {
         assert_eq!(wrong_operation.decision, "deny");
         assert!(wrong_operation.imported_refs.is_empty());
         assert!(wrong_operation.diagnostics.iter().any(|value| value.contains("operation shutdown")));
-        let wrong_verify = verify_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
+        let wrong_verify = verify_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
             bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
@@ -12752,7 +12744,7 @@ mod tests {
             )]),
             crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(Vec::<IoValue>::new())]),
         ]);
-        let wrong_verify = verify_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
+        let wrong_verify = verify_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
             bundle_value: &wrong_bundle,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
@@ -12772,7 +12764,7 @@ mod tests {
     fn assert_ref_not_grant(root: &Path, authority_ref: &str, sequence: u64) {
         let authority_refs = vec![authority_ref.to_string()];
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -12782,7 +12774,7 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("authority request");
-        let envelope = node_control_live_ingress_envelope(&ControlIngressEnvelopeInput {
+        let envelope = control_live_ingress_envelope(&ControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:live-bundle",
             to_node: "node:live-bundle",
@@ -12815,7 +12807,7 @@ mod tests {
                 crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
             )]);
         assert!(
-            import_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
+            import_control_live_workflow_bundle(&ControlLiveWorkflowBundleImportInput {
                 state_root: &root,
                 bundle_value: &malformed,
                 expected_node: Some("node:live-bundle"),
@@ -12830,7 +12822,7 @@ mod tests {
             })
             .is_err()
         );
-        let malformed_verify = verify_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
+        let malformed_verify = verify_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
             bundle_value: &malformed,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
@@ -12845,7 +12837,7 @@ mod tests {
         .expect("malformed verify receipt");
         assert_eq!(malformed_verify.decision, "deny");
         assert!(malformed_verify.diagnostics.iter().any(|value| value.contains("parse failed")));
-        let malformed_gate = gate_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
+        let malformed_gate = gate_control_live_workflow_bundle(&ControlLiveWorkflowBundleGateInput {
             bundle_value: &malformed,
             verify_receipt_value: Some(&malformed_verify.receipt_value),
             require_verify_receipt: true,
@@ -12865,7 +12857,7 @@ mod tests {
     }
 
     #[test]
-    fn node_control_live_workflow_bundle_import_export_gates_bindings() {
+    fn control_live_workflow_bundle_import_export_gates_bindings() {
         let case = flow_case();
         assert_flow_gate_denials(&case);
         let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("apply runtime");
@@ -12887,7 +12879,7 @@ mod tests {
         assert!(sent.transport_receipt_ref.is_some());
         assert_eq!(
             sent.operation_ref,
-            parse_node_control_ingress_envelope(&sent.envelope_value).expect("envelope").operation_ref
+            parse_control_ingress_envelope(&sent.envelope_value).expect("envelope").operation_ref
         );
     }
 
@@ -12922,7 +12914,7 @@ mod tests {
             .map(|reference| read_node_ledger_artifact(case.root, reference).expect("receive receipt value"))
             .collect::<Vec<_>>();
         let receive_value_refs = receive_values.iter().collect::<Vec<_>>();
-        let workflow = node_control_live_workflow_receipt(&ControlLiveWorkflowInput {
+        let workflow = control_live_workflow_receipt(&ControlLiveWorkflowInput {
             state_root: Some(case.root),
             receiver_ticket_value: case.ticket_value,
             peer_admission_value: case.admission_value,
@@ -12963,7 +12955,7 @@ mod tests {
     fn send_material(root: &std::path::Path, ticket: &ControlLiveTicket) -> SendMaterial {
         let policy_refs = vec![local_ref("node-control-policy", "live-send").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "live-send").expect("resource ref")];
-        let admission = admit_node_control_live_peer(&ControlLivePeerAdmitInput {
+        let admission = admit_control_live_peer(&ControlLivePeerAdmitInput {
             state_root: root,
             ticket_value: &ticket.value,
             peer_id: "peer:external-send",
@@ -12978,7 +12970,7 @@ mod tests {
             test_live_authority_refs(root, "peer:external-send", "node:live-send", "status", &policy_refs)
                 .expect("authority grant ref");
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -13053,7 +13045,7 @@ mod tests {
                 .accept(iroh_gossip::ALPN, receiver_gossip.clone())
                 .spawn();
             let mut receiver_topic = receiver_gossip
-                .subscribe(node_control_live_topic_id(DEFAULT_CONTROL_INGRESS_TOPIC), Vec::new())
+                .subscribe(control_live_topic_id(DEFAULT_CONTROL_INGRESS_TOPIC), Vec::new())
                 .await
                 .expect("receiver subscribe");
             let material = send_material(&root, &live_ticket);
@@ -13220,7 +13212,7 @@ mod tests {
             } else {
                 Vec::new()
             };
-            let grant_value = node_control_authority_grant_value(&ControlAuthorityGrantInput {
+            let grant_value = control_authority_grant_value(&ControlAuthorityGrantInput {
                 peer_id: grant_peer,
                 node_id: case.grant_node,
                 operations: &operations,
@@ -13233,7 +13225,7 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("authority grant value");
-            vec![import_node_control_authority_grant(root, &grant_value).expect("import authority grant").grant_ref]
+            vec![import_control_authority_grant(root, &grant_value).expect("import authority grant").grant_ref]
         } else {
             vec![local_ref("node-control-authority", case.name).expect("authority ref")]
         };
@@ -13255,7 +13247,7 @@ mod tests {
         run_local_node(&RunInput { state_root: &root }).expect("run node");
         let refs = denied_case_refs(&root, case);
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: case.target_ref,
                 payload_ref: None,
@@ -13265,7 +13257,7 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("status request");
-        let envelope = node_control_live_ingress_envelope(&ControlIngressEnvelopeInput {
+        let envelope = control_live_ingress_envelope(&ControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:case",
             to_node: "node:live-authority",
@@ -13278,12 +13270,12 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("live envelope");
-        publish_node_control_ingress(&ControlIngressPublishInput {
+        publish_control_ingress(&ControlIngressPublishInput {
             state_root: &root,
             envelope_value: &envelope.value,
         })
         .expect("publish live envelope");
-        let delivered = deliver_node_control_ingress(&ControlIngressDeliverInput {
+        let delivered = deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &envelope.envelope_ref,
@@ -13296,14 +13288,14 @@ mod tests {
     }
 
     #[test]
-    fn node_control_live_authority_delegation_fails_closed() {
+    fn control_live_authority_delegation_fails_closed() {
         for case in DENY_CASES {
             assert_denied_case(case);
         }
     }
 
     #[tokio::test]
-    async fn node_control_live_serve_listener_loopback_dispatches_through_service() {
+    async fn control_live_serve_listener_loopback_dispatches_through_service() {
         let root = temp_dir("node-control-live-listener");
         init_local_node(&InitInput {
             state_root: &root,
@@ -13320,7 +13312,7 @@ mod tests {
             test_live_peer_bootstrap_refs(&root, "peer:listener", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
                 .expect("peer admission ref");
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -13331,7 +13323,7 @@ mod tests {
             })
             .expect("status request");
 
-        let loopback = node_control_live_serve_listener_loopback(&ControlLiveServeLoopbackInput {
+        let loopback = control_live_serve_listener_loopback(&ControlLiveServeLoopbackInput {
             state_root: &root,
             request_value: &request_value,
             from_peer: "peer:listener",
@@ -13358,7 +13350,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn node_control_live_iroh_loopback_delivers_to_durable_inbox() {
+    async fn control_live_iroh_loopback_delivers_to_durable_inbox() {
         let root = temp_dir("node-control-live-iroh");
         init_local_node(&InitInput {
             state_root: &root,
@@ -13374,7 +13366,7 @@ mod tests {
             test_live_peer_bootstrap_refs(&root, "peer:live", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
                 .expect("peer admission ref");
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -13385,7 +13377,7 @@ mod tests {
             })
             .expect("status request");
 
-        let live = node_control_live_iroh_loopback(&ControlLiveLoopbackInput {
+        let live = control_live_iroh_loopback(&ControlLiveLoopbackInput {
             state_root: &root,
             request_value: &request_value,
             from_peer: "peer:live",
@@ -13404,7 +13396,7 @@ mod tests {
         assert_eq!(crate::ledger::artifact_kind(&live.publish_receipt_value), "node-control-live-transport-receipt");
         assert_eq!(crate::ledger::artifact_kind(&live.receive_receipt_value), "node-control-live-transport-receipt");
 
-        let served = serve_node_control(&ControlServeInput {
+        let served = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 1,
@@ -13417,7 +13409,7 @@ mod tests {
     }
 
     #[test]
-    fn node_control_service_delivers_ingress_and_dispatches_through_loop() {
+    fn control_service_delivers_ingress_and_dispatches_through_loop() {
         let root = temp_dir("node-control-service-ingress");
         init_local_node(&InitInput {
             state_root: &root,
@@ -13430,7 +13422,7 @@ mod tests {
         let resource_refs = vec![local_ref("node-control-resource", "service-ingress").expect("resource ref")];
         let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:service").expect("bootstrap ref")];
         let request_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "status",
                 target_ref: None,
                 payload_ref: None,
@@ -13440,7 +13432,7 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("status request");
-        let envelope = node_control_ingress_envelope(&ControlIngressEnvelopeInput {
+        let envelope = control_ingress_envelope(&ControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:service",
             to_node: "node:service-ingress",
@@ -13453,13 +13445,13 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("ingress envelope");
-        publish_node_control_ingress(&ControlIngressPublishInput {
+        publish_control_ingress(&ControlIngressPublishInput {
             state_root: &root,
             envelope_value: &envelope.value,
         })
         .expect("publish ingress");
 
-        let served = serve_node_control(&ControlServeInput {
+        let served = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 1,
@@ -13475,12 +13467,12 @@ mod tests {
         assert_eq!(crate::ledger::artifact_kind(&served.service_receipt_value), "node-control-service-run-receipt");
         let control_value = read_preserves(&control_outbox_receipt_path(&root, &served.processed_request_refs[0]))
             .expect("read served control receipt");
-        let control = crate::node_runtime::parse_node_control_receipt(&control_value).expect("parse served control");
+        let control = crate::node_runtime::parse_control_receipt(&control_value).expect("parse served control");
         assert_eq!(control.decision, "pass");
     }
 
     #[test]
-    fn node_control_service_duplicate_lock_denies_before_side_effects() {
+    fn control_service_duplicate_lock_denies_before_side_effects() {
         let root = temp_dir("node-control-service-duplicate");
         init_local_node(&InitInput {
             state_root: &root,
@@ -13511,7 +13503,7 @@ mod tests {
         })
         .expect("submit pending request");
 
-        let served = serve_node_control(&ControlServeInput {
+        let served = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 1,
@@ -13528,13 +13520,13 @@ mod tests {
     }
 
     #[test]
-    fn node_control_supervisor_policy_recovers_stale_lock_and_bounds_shutdown() {
+    fn control_supervisor_policy_recovers_stale_lock_and_bounds_shutdown() {
         let root = initialized_control_root("node-control-supervisor-policy", "node:supervisor-policy");
         write_active_service_lock(&root, "stale");
         let policy_refs = vec![local_ref("node-control-supervisor-policy", "recover").expect("policy ref")];
         let recover_policy = recovering_policy(&policy_refs);
 
-        let recovered = serve_node_control(&ControlServeInput {
+        let recovered = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 1,
@@ -13546,7 +13538,7 @@ mod tests {
         assert_eq!(recovered.supervisor_receipt_refs.len(), 2);
         assert!(recovered.supervisor_policy_ref.is_some());
         assert!(!root.join(CONTROL_SERVICE_LOCK_FILE).exists());
-        let restart_once = serve_node_control(&ControlServeInput {
+        let restart_once = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 1,
@@ -13555,7 +13547,7 @@ mod tests {
         })
         .expect("allowed restart");
         assert_eq!(restart_once.decision, "pass");
-        let restart_denied = serve_node_control(&ControlServeInput {
+        let restart_denied = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 1,
@@ -13576,7 +13568,7 @@ mod tests {
         })
         .expect("submit shutdown");
         let tight_policy = bounded_shutdown_policy(&policy_refs);
-        let stopped = serve_node_control(&ControlServeInput {
+        let stopped = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 4,
@@ -13611,7 +13603,7 @@ mod tests {
     }
 
     fn recovering_policy(policy_refs: &[String]) -> IoValue {
-        node_control_supervisor_policy_value(&ControlSupervisorPolicyInput {
+        control_supervisor_policy_value(&ControlSupervisorPolicyInput {
             max_restarts: 1,
             restart_window_ticks: 1,
             heartbeat_timeout_ticks: 1,
@@ -13624,7 +13616,7 @@ mod tests {
     }
 
     fn bounded_shutdown_policy(policy_refs: &[String]) -> IoValue {
-        node_control_supervisor_policy_value(&ControlSupervisorPolicyInput {
+        control_supervisor_policy_value(&ControlSupervisorPolicyInput {
             max_restarts: 0,
             restart_window_ticks: 1,
             heartbeat_timeout_ticks: 1,
@@ -13637,7 +13629,7 @@ mod tests {
     }
 
     #[test]
-    fn node_control_service_heartbeats_continue_and_shutdown_stops() {
+    fn control_service_heartbeats_continue_and_shutdown_stops() {
         let root = temp_dir("node-control-service-shutdown");
         init_local_node(&InitInput {
             state_root: &root,
@@ -13645,7 +13637,7 @@ mod tests {
         })
         .expect("init node");
         run_local_node(&RunInput { state_root: &root }).expect("run node");
-        let idle = serve_node_control(&ControlServeInput {
+        let idle = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 2,
@@ -13664,7 +13656,7 @@ mod tests {
             request_value: &shutdown.value,
         })
         .expect("submit shutdown");
-        let stopped = serve_node_control(&ControlServeInput {
+        let stopped = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 4,
@@ -13722,7 +13714,7 @@ mod tests {
             request_path: Some(&submitted.inbox_path),
         })
         .expect("dispatch request");
-        crate::node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value).expect("control receipt")
+        crate::node_runtime::parse_control_receipt(&dispatched.control_receipt_value).expect("control receipt")
     }
 
     fn assert_install(case: &OpCase) {
@@ -13737,7 +13729,7 @@ mod tests {
             import_node_artifact(&case.root, &payload_provenance).expect("import payload provenance");
         let install_evidence_refs = vec![payload_provenance_ref];
         let install_value =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "install",
                 target_ref: None,
                 payload_ref: Some(&payload_ref),
@@ -13758,17 +13750,16 @@ mod tests {
         let gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("gate receipt");
         let gate_ref = import_node_artifact(&case.root, &gate_value).expect("import gate");
         let gate_target = local_ref("node-control-gate-target", "ops").expect("gate target");
-        let gate_request =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
-                operation: "gate",
-                target_ref: Some(&gate_target),
-                payload_ref: Some(&gate_ref),
-                authority_refs: &case.authority_refs,
-                policy_refs: &case.policy_refs,
-                resource_refs: &case.resource_refs,
-                evidence_refs: &[],
-            })
-            .expect("gate request");
+        let gate_request = crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            operation: "gate",
+            target_ref: Some(&gate_target),
+            payload_ref: Some(&gate_ref),
+            authority_refs: &case.authority_refs,
+            policy_refs: &case.policy_refs,
+            resource_refs: &case.resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("gate request");
         let gate_receipt = dispatch_value(case, &gate_request);
         assert_eq!(gate_receipt.decision, "pass");
         assert!(
@@ -13789,17 +13780,16 @@ mod tests {
             crate::provenance::synthetic_reviewed_provenance_record(&job_fixture.job_ref).expect("job provenance");
         let job_provenance_ref = import_node_artifact(&case.root, &job_provenance).expect("import job provenance");
         let run_evidence_refs = vec![job_provenance_ref];
-        let run_request =
-            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
-                operation: "run",
-                target_ref: Some(&admission_ref),
-                payload_ref: Some(&execution_request_ref),
-                authority_refs: &case.authority_refs,
-                policy_refs: &case.policy_refs,
-                resource_refs: &case.resource_refs,
-                evidence_refs: &run_evidence_refs,
-            })
-            .expect("run request");
+        let run_request = crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
+            operation: "run",
+            target_ref: Some(&admission_ref),
+            payload_ref: Some(&execution_request_ref),
+            authority_refs: &case.authority_refs,
+            policy_refs: &case.policy_refs,
+            resource_refs: &case.resource_refs,
+            evidence_refs: &run_evidence_refs,
+        })
+        .expect("run request");
         let run_receipt = dispatch_value(case, &run_request);
         assert_eq!(run_receipt.decision, "pass");
     }

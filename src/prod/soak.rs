@@ -60,7 +60,7 @@ pub struct ProdSoakRunInput<'a> {
     pub fault_profile: &'a str,
     pub node_evidence_refs: &'a [String],
     pub peer_ticket_refs: &'a [String],
-    pub node_control_refs: &'a [String],
+    pub control_refs: &'a [String],
     pub remote_service_refs: &'a [String],
     pub job_refs: &'a [String],
     pub coordination_refs: &'a [String],
@@ -154,7 +154,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IoValue> {
     validate_text_field("fault profile", input.fault_profile)?;
     validate_ref_slice("node evidence", input.node_evidence_refs)?;
     validate_ref_slice("peer ticket", input.peer_ticket_refs)?;
-    validate_ref_slice("node control", input.node_control_refs)?;
+    validate_ref_slice("node control", input.control_refs)?;
     validate_ref_slice("remote service", input.remote_service_refs)?;
     validate_ref_slice("job", input.job_refs)?;
     validate_ref_slice("coordination", input.coordination_refs)?;
@@ -166,7 +166,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IoValue> {
     validate_ref_slice("log", input.log_refs)?;
     validate_pass_category("node evidence", input.node_evidence_refs, input.decision)?;
     validate_pass_category("peer ticket", input.peer_ticket_refs, input.decision)?;
-    validate_pass_category("node control", input.node_control_refs, input.decision)?;
+    validate_pass_category("node control", input.control_refs, input.decision)?;
     validate_pass_category("remote service", input.remote_service_refs, input.decision)?;
     validate_pass_category("job", input.job_refs, input.decision)?;
     validate_pass_category("coordination", input.coordination_refs, input.decision)?;
@@ -181,7 +181,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IoValue> {
         record("fault-profile", vec![string(input.fault_profile)]),
         record("node-evidence", vec![sequence(ref_values(input.node_evidence_refs)?)]),
         record("peer-tickets", vec![sequence(ref_values(input.peer_ticket_refs)?)]),
-        record("node-control-workflows", vec![sequence(ref_values(input.node_control_refs)?)]),
+        record("node-control-workflows", vec![sequence(ref_values(input.control_refs)?)]),
         record("remote-service", vec![sequence(ref_values(input.remote_service_refs)?)]),
         record("job-workers", vec![sequence(ref_values(input.job_refs)?)]),
         record("coordination", vec![sequence(ref_values(input.coordination_refs)?)]),
@@ -588,7 +588,7 @@ mod tests {
             fault_profile: "none",
             node_evidence_refs: &node_evidence,
             peer_ticket_refs: &peer_ticket,
-            node_control_refs: &node_control,
+            control_refs: &node_control,
             remote_service_refs: &remote_service,
             job_refs: &job,
             coordination_refs: &coordination,
@@ -629,7 +629,7 @@ mod tests {
             fault_profile: "none",
             node_evidence_refs: &node_evidence,
             peer_ticket_refs: &peer_ticket,
-            node_control_refs: &node_control,
+            control_refs: &node_control,
             remote_service_refs: &remote_service,
             job_refs: &job,
             coordination_refs: &coordination,
@@ -658,7 +658,7 @@ mod tests {
             fault_profile: "none",
             node_evidence_refs: &[local_ref("node")],
             peer_ticket_refs: &[local_ref("ticket")],
-            node_control_refs: &[local_ref("control")],
+            control_refs: &[local_ref("control")],
             remote_service_refs: &[],
             job_refs: &[local_ref("job")],
             coordination_refs: &[local_ref("coordination")],

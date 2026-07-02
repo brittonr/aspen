@@ -9,7 +9,7 @@ pub(crate) fn control_request(input: super::command::authority::Request) -> molt
         resource_refs,
         evidence_refs,
     } = input;
-    let value = molten::node_runtime::node_control_request_value(&molten::node_runtime::ControlRequestValueInput {
+    let value = molten::node_runtime::control_request_value(&molten::node_runtime::ControlRequestValueInput {
         operation: &operation,
         target_ref: target.as_deref(),
         payload_ref: payload.as_deref(),
@@ -58,23 +58,22 @@ pub(crate) fn grant_fixture(input: super::command::authority::GrantFixture) -> m
     } else {
         operations
     };
-    let value =
-        molten::node_daemon::node_control_authority_grant_value(&molten::node_daemon::ControlAuthorityGrantInput {
-            peer_id: &peer,
-            node_id: &node,
-            operations: &operations,
-            target_scope: &target_scope,
-            resource_scope: &resource_scope,
-            epoch,
-            expires_at,
-            policy_refs: &policy_refs,
-            revocation_refs: &revocation_refs,
-            evidence_refs: &evidence_refs,
-        })?;
+    let value = molten::node_daemon::control_authority_grant_value(&molten::node_daemon::ControlAuthorityGrantInput {
+        peer_id: &peer,
+        node_id: &node,
+        operations: &operations,
+        target_scope: &target_scope,
+        resource_scope: &resource_scope,
+        epoch,
+        expires_at,
+        policy_refs: &policy_refs,
+        revocation_refs: &revocation_refs,
+        evidence_refs: &evidence_refs,
+    })?;
     let grant_ref = molten::preserves_rail::canonical_hash(&value)?;
     super::core::write_file(&out, &molten::preserves_rail::to_text(&value)?)?;
     if let Some(state_root) = state_root.as_ref() {
-        molten::node_daemon::import_node_control_authority_grant(state_root, &value)?;
+        molten::node_daemon::import_control_authority_grant(state_root, &value)?;
     }
     println!("node authority grant {} written to {}", grant_ref, out.display());
     Ok(())
@@ -93,7 +92,7 @@ pub(crate) fn grant_import(input: super::command::authority::GrantImport) -> mol
         receipt_out,
     } = input;
     let grant_value = super::core::read_preserves_file(&grant)?;
-    let imported = molten::node_daemon::import_node_control_authority_grant_checked(
+    let imported = molten::node_daemon::import_control_authority_grant_checked(
         &molten::node_daemon::ControlAuthorityGrantImportInput {
             state_root: &state_root,
             grant_value: &grant_value,
@@ -132,8 +131,8 @@ pub(crate) fn policy_fixture(input: super::command::authority::PolicyFixture) ->
         evidence_refs,
         out,
     } = input;
-    let value = molten::node_daemon::node_control_supervisor_policy_value(
-        &molten::node_daemon::ControlSupervisorPolicyInput {
+    let value =
+        molten::node_daemon::control_supervisor_policy_value(&molten::node_daemon::ControlSupervisorPolicyInput {
             max_restarts,
             restart_window_ticks,
             heartbeat_timeout_ticks,
@@ -141,12 +140,11 @@ pub(crate) fn policy_fixture(input: super::command::authority::PolicyFixture) ->
             stale_lock_recovery: allow_stale_lock_recovery,
             policy_refs: &policy_refs,
             evidence_refs: &evidence_refs,
-        },
-    )?;
+        })?;
     let policy_ref = molten::preserves_rail::canonical_hash(&value)?;
     super::core::write_file(&out, &molten::preserves_rail::to_text(&value)?)?;
     if let Some(state_root) = state_root.as_ref() {
-        molten::node_daemon::import_node_control_supervisor_policy(state_root, &value)?;
+        molten::node_daemon::import_control_supervisor_policy(state_root, &value)?;
     }
     println!("node supervisor policy {} written to {}", policy_ref, out.display());
     Ok(())
@@ -160,13 +158,12 @@ pub(crate) fn ticket_export(input: super::command::authority::TicketExport) -> m
         evidence_refs,
         out,
     } = input;
-    let ticket =
-        molten::node_daemon::export_node_control_live_ticket(&molten::node_daemon::ControlLiveTicketExportInput {
-            state_root: &state_root,
-            topic: &topic,
-            policy_refs: &policy_refs,
-            evidence_refs: &evidence_refs,
-        })?;
+    let ticket = molten::node_daemon::export_control_live_ticket(&molten::node_daemon::ControlLiveTicketExportInput {
+        state_root: &state_root,
+        topic: &topic,
+        policy_refs: &policy_refs,
+        evidence_refs: &evidence_refs,
+    })?;
     super::core::write_file(&out, &molten::preserves_rail::to_text(&ticket.value)?)?;
     println!("node live ticket {} written to {}", ticket.ticket_ref, out.display());
     Ok(())
@@ -188,7 +185,7 @@ pub(crate) fn ticket_import(input: super::command::authority::TicketImport) -> m
     let peer_admission_value =
         peer_admission.as_ref().map(|path| super::core::read_preserves_file(path)).transpose()?;
     let imported =
-        molten::node_daemon::import_node_control_live_ticket(&molten::node_daemon::ControlLiveTicketImportInput {
+        molten::node_daemon::import_control_live_ticket(&molten::node_daemon::ControlLiveTicketImportInput {
             state_root: &state_root,
             ticket_value: &ticket_value,
             peer_admission_value: peer_admission_value.as_ref(),
@@ -222,16 +219,15 @@ pub(crate) fn peer_admit(input: super::command::authority::PeerAdmit) -> molten:
         ticket,
     } = input;
     let ticket_value = super::core::read_preserves_file(&ticket)?;
-    let admission =
-        molten::node_daemon::admit_node_control_live_peer(&molten::node_daemon::ControlLivePeerAdmitInput {
-            state_root: &state_root,
-            ticket_value: &ticket_value,
-            peer_id: &peer,
-            sequence,
-            expires_at,
-            policy_refs: &policy_refs,
-            evidence_refs: &evidence_refs,
-        })?;
+    let admission = molten::node_daemon::admit_control_live_peer(&molten::node_daemon::ControlLivePeerAdmitInput {
+        state_root: &state_root,
+        ticket_value: &ticket_value,
+        peer_id: &peer,
+        sequence,
+        expires_at,
+        policy_refs: &policy_refs,
+        evidence_refs: &evidence_refs,
+    })?;
     super::core::emit_named_receipt(receipt_out.as_ref(), "node live peer admission", &admission.value)?;
     println!(
         "node live peer admit decision={} admission={} peer={} node={} topic={}",

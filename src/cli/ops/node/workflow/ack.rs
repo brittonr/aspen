@@ -15,7 +15,7 @@ pub(crate) fn reconcile(input: super::super::command::live::Reconcile) -> molten
     let ingress_receipt_value = read_optional(ingress_receipt.as_ref())?;
     let queue_receipt_value = read_optional(queue_receipt.as_ref())?;
     let control_receipt_value = read_optional(control_receipt.as_ref())?;
-    let reconciled = molten::node_daemon::reconcile_node_control_live_workflow_bundle(
+    let reconciled = molten::node_daemon::reconcile_control_live_workflow_bundle(
         &molten::node_daemon::ControlLiveWorkflowBundleReconcileInput {
             apply_receipt_value: &apply_receipt_value,
             send_receipt_value: send_receipt_value.as_ref(),
@@ -63,7 +63,7 @@ pub(crate) fn export(input: super::super::command::live::AckExport) -> molten::e
     let queue_receipt_value = read_optional(queue_receipt.as_ref())?;
     let control_receipt_value = read_optional(control_receipt.as_ref())?;
     let reconcile_receipt_value = super::super::core::read_preserves_file(&reconcile_receipt)?;
-    let exported = molten::node_daemon::export_node_control_live_workflow_bundle_ack(
+    let exported = molten::node_daemon::export_control_live_workflow_bundle_ack(
         &molten::node_daemon::ControlLiveWorkflowBundleAckExportInput {
             apply_receipt_value: &apply_receipt_value,
             send_receipt_value: send_receipt_value.as_ref(),
@@ -102,7 +102,7 @@ pub(crate) fn import(input: super::super::command::live::AckImport) -> molten::e
         receipt_out,
     } = input;
     let ack_value = super::super::core::read_preserves_file(&ack)?;
-    let imported = molten::node_daemon::import_node_control_live_workflow_bundle_ack(
+    let imported = molten::node_daemon::import_control_live_workflow_bundle_ack(
         &molten::node_daemon::ControlLiveWorkflowBundleAckImportInput {
             state_root: &state_root,
             ack_value: &ack_value,
@@ -147,7 +147,7 @@ pub(crate) fn protocol_gate(input: super::super::command::live::ProtocolGate) ->
     let apply_receipt_value = super::super::core::read_preserves_file(&apply_receipt)?;
     let reconcile_receipt_value = super::super::core::read_preserves_file(&reconcile_receipt)?;
     let ack_value = super::super::core::read_preserves_file(&ack)?;
-    let gated = molten::node_daemon::gate_node_control_live_workflow_protocol(
+    let gated = molten::node_daemon::gate_control_live_workflow_protocol(
         &molten::node_daemon::ControlLiveWorkflowProtocolGateInput {
             bundle_value: &bundle_value,
             gate_receipt_value: &gate_receipt_value,

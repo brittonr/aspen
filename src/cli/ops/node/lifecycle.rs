@@ -104,7 +104,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
             supervisor_policy_value.as_ref(),
         )
     } else {
-        let served = molten::node_daemon::serve_node_control(&molten::node_daemon::ControlServeInput {
+        let served = molten::node_daemon::serve_control(&molten::node_daemon::ControlServeInput {
             state_root: &state_root,
             topic: &topic,
             max_ticks,
