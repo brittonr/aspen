@@ -378,15 +378,15 @@ struct DerivedEvidence {
 }
 
 struct EvidenceInput<'a> {
-    status: Option<&'a OctetStatusArtifact>,
+    status: Option<&'a StatusArtifact>,
     status_file: Option<&'a GateFile>,
     summary: Option<&'a GateFile>,
-    object_corpus_receipt: Option<&'a OctetObjectCorpusReceipt>,
+    object_corpus_receipt: Option<&'a ObjectCorpusReceipt>,
     object_corpus: Option<&'a GateFile>,
 }
 
 struct OutcomeFacts<'a> {
-    status: Option<&'a OctetStatusArtifact>,
+    status: Option<&'a StatusArtifact>,
     counts: &'a FindingCounts,
     has_artifact_bindings: bool,
     has_structured_findings_ref: bool,
@@ -418,7 +418,7 @@ struct CurrentOctetRun {
     status_ref: String,
     summary_ref: String,
     object_corpus_ref: String,
-    status: OctetStatusArtifact,
+    status: StatusArtifact,
     findings: OrderedMap<String, FindingEntry>,
     unkeyed_findings: u64,
 }
@@ -463,10 +463,10 @@ struct ParsedReviewManifest {
 }
 
 #[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
-struct OctetStatusArtifact {
+struct StatusArtifact {
     status: String,
     exit_code: i64,
-    metadata: OctetMetadata,
+    metadata: Metadata,
     total_findings: u64,
     warning_findings: u64,
     error_findings: u64,
@@ -474,7 +474,7 @@ struct OctetStatusArtifact {
 }
 
 #[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
-struct OctetObjectCorpusReceipt {
+struct ObjectCorpusReceipt {
     schema: Option<String>,
     schema_version: Option<u64>,
     object_count: Option<u64>,
@@ -484,7 +484,7 @@ struct OctetObjectCorpusReceipt {
 }
 
 #[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
-struct OctetMetadata {
+struct Metadata {
     tool_name: String,
     tool_version: String,
     rustc_version: String,
@@ -1625,12 +1625,12 @@ fn parse_status(
     status_file: Option<&GateFile>,
     checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
-) -> Option<OctetStatusArtifact> {
+) -> Option<StatusArtifact> {
     let Some(status_file) = status_file else {
         push_check(checks, "status-json-parse", false);
         return None;
     };
-    match serde_json::from_str::<OctetStatusArtifact>(&status_file.text) {
+    match serde_json::from_str::<StatusArtifact>(&status_file.text) {
         Ok(status) => {
             let has_complete_metadata = status.metadata.tool_name == "cargo-octet"
                 && !status.metadata.tool_version.is_empty()
@@ -1714,7 +1714,7 @@ fn validate_object_corpus(
     object_corpus: Option<&GateFile>,
     checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
-) -> Option<OctetObjectCorpusReceipt> {
+) -> Option<ObjectCorpusReceipt> {
     let Some(object_corpus) = object_corpus else {
         push_check(checks, "object-corpus-json-parse", false);
         push_check(checks, "object-corpus-schema", false);
@@ -1723,7 +1723,7 @@ fn validate_object_corpus(
         push_check(checks, "object-corpus-critical-paths", false);
         return None;
     };
-    let parsed = serde_json::from_str::<OctetObjectCorpusReceipt>(&object_corpus.text);
+    let parsed = serde_json::from_str::<ObjectCorpusReceipt>(&object_corpus.text);
     let Ok(receipt) = parsed else {
         push_check(checks, "object-corpus-json-parse", false);
         push_check(checks, "object-corpus-schema", false);
@@ -1764,7 +1764,7 @@ fn validate_object_corpus(
     }
 }
 
-fn octet_fingerprint_evidence_value(object_corpus: &GateFile, receipt: &OctetObjectCorpusReceipt) -> Result<IoValue> {
+fn octet_fingerprint_evidence_value(object_corpus: &GateFile, receipt: &ObjectCorpusReceipt) -> Result<IoValue> {
     let object_set_hash = receipt
         .object_set_hash
         .as_deref()
@@ -1824,7 +1824,7 @@ fn validate_command(
 
 fn validate_metadata_binding(
     command: Option<&GateFile>,
-    status: Option<&OctetStatusArtifact>,
+    status: Option<&StatusArtifact>,
     checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> bool {
@@ -2222,7 +2222,7 @@ fn parse_warning_baseline(value: &IoValue) -> Result<ParsedWarningBaseline> {
 fn octet_structured_findings_value(
     status_file: &GateFile,
     summary: &GateFile,
-    status: &OctetStatusArtifact,
+    status: &StatusArtifact,
 ) -> (IoValue, u64) {
     let (findings, parsed_count) = parse_summary_findings(summary, status);
     let unkeyed_findings = status.total_findings.saturating_sub(parsed_count);
@@ -2255,7 +2255,7 @@ fn octet_structured_findings_value(
     (value, unkeyed_findings)
 }
 
-fn parse_summary_findings(summary: &GateFile, status: &OctetStatusArtifact) -> (OrderedMap<String, FindingEntry>, u64) {
+fn parse_summary_findings(summary: &GateFile, status: &StatusArtifact) -> (OrderedMap<String, FindingEntry>, u64) {
     let mut findings = OrderedMap::new();
     let mut parsed_count = 0u64;
     let mut is_parsing_index = false;
@@ -2467,7 +2467,7 @@ fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
-fn finding_counts(status: Option<&OctetStatusArtifact>, lint_counts: &OrderedMap<String, u64>) -> FindingCounts {
+fn finding_counts(status: Option<&StatusArtifact>, lint_counts: &OrderedMap<String, u64>) -> FindingCounts {
     let mut counts = FindingCounts::default();
     if let Some(status) = status {
         counts.total = status.total_findings;

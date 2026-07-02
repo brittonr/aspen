@@ -43,13 +43,11 @@ fn run_remediation(command: Remediation) -> Outcome<()> {
             focused_object_corpus,
             receipt_out,
         } => {
-            let plan = molten::octet_remediation::build_octet_remediation_plan(
-                &molten::octet_remediation::OctetRemediationPlanInput {
-                    artifacts_dir: artifacts,
-                    lib_artifacts_dir: lib_artifacts,
-                    focused_object_corpus,
-                },
-            )?;
+            let plan = molten::octet_remediation::build_plan(&molten::octet_remediation::PlanInput {
+                artifacts_dir: artifacts,
+                lib_artifacts_dir: lib_artifacts,
+                focused_object_corpus,
+            })?;
             super::io::emit_named_receipt(receipt_out.as_ref(), "octet remediation plan", &plan.value)?;
             println!("octet remediation plan receipt={}", plan.plan_ref);
             Ok(())

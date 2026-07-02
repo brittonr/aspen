@@ -92,14 +92,14 @@ const CRITICAL_LINTS: &[&str] = &[
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OctetRemediationPlanInput {
+pub struct PlanInput {
     pub artifacts_dir: PathBuf,
     pub lib_artifacts_dir: Option<PathBuf>,
     pub focused_object_corpus: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OctetRemediationPlan {
+pub struct Plan {
     pub plan_ref: String,
     pub value: IoValue,
     pub diagnostics: Vec<String>,
@@ -126,7 +126,7 @@ struct RunMetrics {
     status_ref: String,
     summary_ref: String,
     object_corpus_ref: Option<String>,
-    status: OctetStatusArtifact,
+    status: StatusArtifact,
     by_crate: Vec<MetricEntry>,
     by_effect: Vec<MetricEntry>,
     by_lint: Vec<MetricEntry>,
@@ -188,10 +188,10 @@ struct SourceScopeClassification {
 }
 
 #[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
-struct OctetStatusArtifact {
+struct StatusArtifact {
     status: String,
     exit_code: i64,
-    metadata: OctetMetadata,
+    metadata: Metadata,
     total_findings: u64,
     warning_findings: u64,
     error_findings: u64,
@@ -199,7 +199,7 @@ struct OctetStatusArtifact {
 }
 
 #[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
-struct OctetMetadata {
+struct Metadata {
     tool_name: String,
     tool_version: String,
     rustc_version: String,
@@ -210,14 +210,14 @@ struct OctetMetadata {
 }
 
 #[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
-struct OctetObjectCorpusReceipt {
+struct ObjectCorpusReceipt {
     object_count: Option<u64>,
     source_paths: Option<Vec<String>>,
     object_set_hash: Option<String>,
     pure_cache_blocked_count: Option<u64>,
 }
 
-pub fn build_octet_remediation_plan(input: &OctetRemediationPlanInput) -> Result<OctetRemediationPlan> {
+pub fn build_plan(input: &PlanInput) -> Result<Plan> {
     let mut diagnostics = Vec::new();
     let workspace = read_run_artifacts("workspace", &input.artifacts_dir, input.focused_object_corpus.is_none())?;
     let workspace_metrics = run_metrics(&workspace, &mut diagnostics)?;
@@ -245,7 +245,7 @@ pub fn build_octet_remediation_plan(input: &OctetRemediationPlanInput) -> Result
         checks: &checks,
     });
     let plan_ref = canonical_hash(&value)?;
-    Ok(OctetRemediationPlan {
+    Ok(Plan {
         plan_ref,
         value,
         diagnostics,
@@ -288,7 +288,7 @@ fn read_artifact_text(path: PathBuf, name: &str) -> Result<ArtifactText> {
 }
 
 fn run_metrics(artifacts: &RunArtifacts, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<RunMetrics> {
-    let status: OctetStatusArtifact = serde_json::from_str(&artifacts.status.text)
+    let status: StatusArtifact = serde_json::from_str(&artifacts.status.text)
         .map_err(|error| MoltenError::invalid_harness(format!("malformed {}: {error}", artifacts.status.name)))?;
     let summary = parse_summary_metrics(&artifacts.summary.text)?;
     if summary.parsed_findings != status.total_findings {
@@ -315,7 +315,7 @@ fn run_metrics(artifacts: &RunArtifacts, diagnostics: &mut impl crate::bounded::
 }
 
 fn read_focused_object_corpus(
-    input: &OctetRemediationPlanInput,
+    input: &PlanInput,
     workspace: &RunArtifacts,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Option<ObjectCorpusMetrics>> {
@@ -327,7 +327,7 @@ fn read_focused_object_corpus(
         push_diagnostic(diagnostics, "octet remediation has no focused object corpus artifact".to_string());
         return Ok(None);
     };
-    let parsed: OctetObjectCorpusReceipt = serde_json::from_str(&artifact.text)
+    let parsed: ObjectCorpusReceipt = serde_json::from_str(&artifact.text)
         .map_err(|error| MoltenError::invalid_harness(format!("malformed object corpus receipt: {error}")))?;
     let object_count = parsed
         .object_count
@@ -1159,7 +1159,7 @@ mod tests {
         write_artifacts(&workspace, status_json(2), summary_text(), object_corpus_json()).expect("write workspace");
         write_artifacts(&lib, status_json(2), summary_text(), object_corpus_json()).expect("write lib");
 
-        let plan = build_octet_remediation_plan(&OctetRemediationPlanInput {
+        let plan = build_plan(&PlanInput {
             artifacts_dir: workspace,
             lib_artifacts_dir: Some(lib),
             focused_object_corpus: None,
@@ -1179,7 +1179,7 @@ mod tests {
         let workspace = temp_dir("status-index-mismatch-workspace");
         write_artifacts(&workspace, status_json(3), summary_text(), object_corpus_json()).expect("write workspace");
 
-        let plan = build_octet_remediation_plan(&OctetRemediationPlanInput {
+        let plan = build_plan(&PlanInput {
             artifacts_dir: workspace,
             lib_artifacts_dir: None,
             focused_object_corpus: None,
