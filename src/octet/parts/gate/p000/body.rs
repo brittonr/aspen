@@ -79,6 +79,9 @@ const COMMAND_NAME: &str = "command.txt";
 const STATUS_NAME: &str = "status.json";
 const SUMMARY_NAME: &str = "summary.txt";
 const OCTET_OBJECT_CORPUS_SCHEMA: &str = "octet.function-object-corpus-receipt.v1";
+const BLAKE3_REF_PREFIX: &str = "blake3:";
+const B3_REF_PREFIX: &str = "b3:";
+const BLAKE3_HEX_LENGTH: usize = 64;
 const MAX_DIAGNOSTICS: usize = 64;
 const MAX_OCTET_ARTIFACT_VALUES: usize = 8;
 const MAX_OCTET_IMPORTED_REFS: usize = MAX_OCTET_ARTIFACT_VALUES;
@@ -88,11 +91,20 @@ const MAX_OCTET_FINDING_ENTRIES: usize = 100_000;
 const MAX_OCTET_STRING_SEQUENCE: usize = 100_000;
 const SUPPORTED_OCTET_TOOL_VERSION: &str = "0.1.0";
 const RUST_SOURCE_EXTENSION: &str = ".rs";
+const SOURCE_SCOPE_OBJECT_CORPUS_CHECK: &str = "object-corpus-source-scope";
 
 const _: () = assert!(MAX_OCTET_IMPORTED_REFS <= MAX_OCTET_ARTIFACT_VALUES);
 const _: () = assert!(MAX_OCTET_SUMMARY_LINTS > 0);
 const _: () = assert!(MAX_OCTET_COMMAND_TOKENS > 0);
 const REQUIRED_OBJECT_CORPUS_SOURCE_PATHS: &[&str] = &["src/job/dag.rs", "src/main.rs", "src/node/runtime.rs"];
+const SOURCE_GATE_SOURCE_SCOPE_PATHS: &[&str] = &[
+    "src/job/dag.rs",
+    "src/main.rs",
+    "src/node/daemon.rs",
+    "src/node/runtime.rs",
+    "src/octet/gate.rs",
+    "src/upgrades/mod.rs",
+];
 const DEFAULT_GATE_COMMAND: &str = "cargo octet check --artifact-dir target/octet";
 const SOURCE_GATE_CONSUMERS: &[&str] = &[
     "node-startup",
@@ -241,6 +253,7 @@ struct ValidationRefs {
 struct ReceiptCheckInput<'a> {
     parsed: Option<&'a ParsedOctetGateReceipt>,
     expected: Option<&'a ExpectedMetadata>,
+    source_scope: &'a [String],
 }
 
 struct SourceSetup {

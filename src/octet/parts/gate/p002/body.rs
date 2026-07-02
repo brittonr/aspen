@@ -188,15 +188,21 @@ pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IoValue> {
         profile: STRICT_PROFILE.to_string(),
     });
     let counts = FindingCounts::default();
+    let command_ref = canonical_hash(&record("octet-test-ref", vec![string("command")]))?;
+    let status_ref = canonical_hash(&record("octet-test-ref", vec![string("status")]))?;
+    let summary_ref = canonical_hash(&record("octet-test-ref", vec![string("summary")]))?;
+    let findings_ref = canonical_hash(&record("octet-test-ref", vec![string("findings")]))?;
+    let object_corpus_ref = canonical_hash(&record("octet-test-ref", vec![string("object-corpus")]))?;
+    let fingerprint_ref = canonical_hash(&record("octet-test-ref", vec![string("fingerprint")]))?;
     Ok(octet_gate_receipt_value(OctetGateReceiptInput {
         decision: "pass",
         policy_ref: &canonical_hash(&policy)?,
-        command_ref: Some("blake3:test-command"),
-        status_ref: Some("blake3:test-status"),
-        summary_ref: Some("blake3:test-summary"),
-        structured_findings_ref: Some("blake3:test-findings"),
-        object_corpus_ref: Some("blake3:test-object-corpus"),
-        fingerprint_evidence_ref: Some("blake3:test-fingerprint"),
+        command_ref: Some(&command_ref),
+        status_ref: Some(&status_ref),
+        summary_ref: Some(&summary_ref),
+        structured_findings_ref: Some(&findings_ref),
+        object_corpus_ref: Some(&object_corpus_ref),
+        fingerprint_evidence_ref: Some(&fingerprint_ref),
         config_hash: Some(&metadata.config_hash),
         profile_hash: Some(&metadata.profile_hash),
         toolchain: Some("nightly-test-toolchain"),

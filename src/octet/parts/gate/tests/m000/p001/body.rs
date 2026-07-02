@@ -136,12 +136,46 @@
         canonical_hash(&record("octet-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    fn write_artifacts(dir: &Path, status: impl AsRef<str>, summary: &str, object_corpus: &str) {
+    fn test_b3_ref(label: &str) -> String {
+        test_ref(label).replacen(BLAKE3_REF_PREFIX, B3_REF_PREFIX, 1)
+    }
+
+    fn clean_gate_receipt_with_checks(checks: &[Check]) -> IoValue {
+        let fingerprint_ref = test_ref("fingerprint");
+        clean_gate_receipt_with_fingerprint_ref(&fingerprint_ref, checks)
+    }
+
+    fn clean_gate_receipt_with_fingerprint_ref(fingerprint_ref: &str, checks: &[Check]) -> IoValue {
+        let metadata = current_metadata();
+        let policy = octet_gate_policy_value(&OctetGateInput {
+            artifacts_dir: PathBuf::from("target/octet"),
+            profile: STRICT_PROFILE.to_string(),
+        });
+        let counts = FindingCounts::default();
+        octet_gate_receipt_value(OctetGateReceiptInput {
+            decision: "pass",
+            policy_ref: &canonical_hash(&policy).expect("policy ref"),
+            command_ref: Some(&test_ref("command")),
+            status_ref: Some(&test_ref("status")),
+            summary_ref: Some(&test_ref("summary")),
+            structured_findings_ref: Some(&test_ref("findings")),
+            object_corpus_ref: Some(&test_ref("object-corpus")),
+            fingerprint_evidence_ref: Some(fingerprint_ref),
+            config_hash: Some(&metadata.config_hash),
+            profile_hash: Some(&metadata.profile_hash),
+            toolchain: Some("nightly-test-toolchain"),
+            counts: &counts,
+            diagnostics: &[],
+            checks,
+        })
+    }
+
+    fn write_artifacts(dir: &Path, status: impl AsRef<str>, summary: &str, object_corpus: impl AsRef<str>) {
         fs::create_dir_all(dir).expect("create temp dir");
         fs::write(dir.join(COMMAND_NAME), format!("{COMMAND_TEXT}\n")).expect("write command");
         fs::write(dir.join(STATUS_NAME), status.as_ref()).expect("write status");
         fs::write(dir.join(SUMMARY_NAME), summary).expect("write summary");
-        fs::write(dir.join(OBJECT_CORPUS_RECEIPT_NAME), object_corpus).expect("write object corpus");
+        fs::write(dir.join(OBJECT_CORPUS_RECEIPT_NAME), object_corpus.as_ref()).expect("write object corpus");
     }
 
     fn warning_status_json() -> String {
@@ -227,16 +261,29 @@
         "--- octet summary ---\nStatus: warning-only\nFindings: 1\nWarnings: 1\nErrors: 0\n\nBy lint:\n  no_unwrap 1\n\nIndex:\n  F1 no_unwrap molten src/example.rs:30\n"
     }
 
-    fn object_corpus_json() -> &'static str {
-        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":3,"source_paths":["src/job/dag.rs","src/main.rs","src/node/runtime.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":3}"#
+    fn object_corpus_json() -> String {
+        format!(
+            r#"{{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":6,"source_paths":["src/job/dag.rs","src/main.rs","src/node/daemon.rs","src/node/runtime.rs","src/octet/gate.rs","src/upgrades/mod.rs"],"object_set_hash":"{}","pure_cache_blocked_count":6}}"#,
+            test_b3_ref("object-set")
+        )
     }
 
-    fn object_corpus_with_replay_inventory_json() -> &'static str {
-        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":1,"source_paths":["src/main.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":1,"replay":{"command":"cargo octet object corpus receipt --output RECEIPT.json src/job/dag.rs src/main.rs src/node/runtime.rs"}}"#
+    fn object_corpus_with_replay_inventory_json() -> String {
+        format!(
+            r#"{{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":1,"source_paths":["src/main.rs"],"object_set_hash":"{}","pure_cache_blocked_count":1,"replay":{{"command":"cargo octet object corpus receipt --output RECEIPT.json src/job/dag.rs src/main.rs src/node/daemon.rs src/node/runtime.rs src/octet/gate.rs src/upgrades/mod.rs"}}}}"#,
+            test_b3_ref("object-set")
+        )
     }
 
-    fn object_corpus_without_critical_inventory_json() -> &'static str {
-        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":1,"source_paths":["src/main.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":1,"replay":{"command":"cargo octet object corpus receipt --output RECEIPT.json src/main.rs"}}"#
+    fn object_corpus_without_critical_inventory_json() -> String {
+        format!(
+            r#"{{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":1,"source_paths":["src/main.rs"],"object_set_hash":"{}","pure_cache_blocked_count":1,"replay":{{"command":"cargo octet object corpus receipt --output RECEIPT.json src/main.rs"}}}}"#,
+            test_b3_ref("object-set")
+        )
+    }
+
+    fn object_corpus_with_malformed_object_set_hash_json() -> &'static str {
+        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":6,"source_paths":["src/job/dag.rs","src/main.rs","src/node/daemon.rs","src/node/runtime.rs","src/octet/gate.rs","src/upgrades/mod.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":6}"#
     }
 
     fn temp_dir(label: &str) -> PathBuf {

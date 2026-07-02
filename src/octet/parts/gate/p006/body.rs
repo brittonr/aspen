@@ -99,6 +99,7 @@ fn validate_object_corpus(
         push_check(checks, "object-corpus-nonempty", false);
         push_check(checks, "object-corpus-fingerprint", false);
         push_check(checks, "object-corpus-critical-paths", false);
+        push_check(checks, SOURCE_SCOPE_OBJECT_CORPUS_CHECK, false);
         return None;
     };
     let parsed = serde_json::from_str::<ObjectCorpusReceipt>(&object_corpus.text);
@@ -108,6 +109,7 @@ fn validate_object_corpus(
         push_check(checks, "object-corpus-nonempty", false);
         push_check(checks, "object-corpus-fingerprint", false);
         push_check(checks, "object-corpus-critical-paths", false);
+        push_check(checks, SOURCE_SCOPE_OBJECT_CORPUS_CHECK, false);
         push_diagnostic(diagnostics, "malformed object corpus receipt JSON".to_string());
         return None;
     };
@@ -119,11 +121,15 @@ fn validate_object_corpus(
     let has_required_source_paths = coverage_paths.as_ref().is_some_and(|paths| {
         REQUIRED_OBJECT_CORPUS_SOURCE_PATHS.iter().all(|required| paths.iter().any(|path| path == required))
     });
+    let has_source_scope_paths = coverage_paths.as_ref().is_some_and(|paths| {
+        SOURCE_GATE_SOURCE_SCOPE_PATHS.iter().all(|required| paths.iter().any(|path| path == required))
+    });
     push_check(checks, "object-corpus-json-parse", true);
     push_check(checks, "object-corpus-schema", has_supported_schema);
     push_check(checks, "object-corpus-nonempty", has_objects);
     push_check(checks, "object-corpus-fingerprint", has_object_set_fingerprint);
     push_check(checks, "object-corpus-critical-paths", has_required_source_paths);
+    push_check(checks, SOURCE_SCOPE_OBJECT_CORPUS_CHECK, has_source_scope_paths);
     if !has_supported_schema {
         push_diagnostic(diagnostics, "object corpus receipt has missing or unsupported schema".to_string());
     }
@@ -136,7 +142,15 @@ fn validate_object_corpus(
     if !has_required_source_paths {
         push_diagnostic(diagnostics, "object corpus receipt does not cover required critical paths".to_string());
     }
-    if has_supported_schema && has_objects && has_object_set_fingerprint && has_required_source_paths {
+    if !has_source_scope_paths {
+        push_diagnostic(diagnostics, "object corpus receipt does not cover required source-gate scope paths".to_string());
+    }
+    if has_supported_schema
+        && has_objects
+        && has_object_set_fingerprint
+        && has_required_source_paths
+        && has_source_scope_paths
+    {
         Some(receipt)
     } else {
         None
@@ -187,7 +201,7 @@ fn object_corpus_coverage_paths(receipt: &ObjectCorpusReceipt) -> Option<Vec<Str
 }
 
 fn is_b3_ref(value: &str) -> bool {
-    value.starts_with("b3:") && value.len() > "b3:".len()
+    is_prefixed_blake3_hex_ref(value, B3_REF_PREFIX)
 }
 
 fn validate_command(

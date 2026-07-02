@@ -180,8 +180,15 @@ fn optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>
 }
 
 fn is_content_ref(value: &str) -> bool {
-    (value.starts_with("blake3:") || value.starts_with("b3:"))
-        && value.split_once(':').is_some_and(|(_, hash)| !hash.is_empty())
+    is_prefixed_blake3_hex_ref(value, BLAKE3_REF_PREFIX) || is_prefixed_blake3_hex_ref(value, B3_REF_PREFIX)
+}
+
+fn is_prefixed_blake3_hex_ref(value: &str, prefix: &str) -> bool {
+    value.strip_prefix(prefix).is_some_and(is_lowercase_blake3_hex)
+}
+
+fn is_lowercase_blake3_hex(value: &str) -> bool {
+    value.len() == BLAKE3_HEX_LENGTH && value.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 fn octet_raw_artifact_value(label: &'static str, schema: &str, name: &str, file: &GateFile) -> IoValue {

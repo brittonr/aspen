@@ -165,7 +165,7 @@ const OCTET_NONCRITICAL_SUMMARY_ONE: &str = "--- octet summary ---\nStatus: warn
 
 const OCTET_NONCRITICAL_SUMMARY_TWO: &str = "--- octet summary ---\nStatus: warning-only\nFindings: 2\nWarnings: 2\nErrors: 0\n\nBy lint:\n  function_length 1\n  bool_naming 1\n\nIndex:\n  F1 function_length molten src/example.rs:10\n  F2 bool_naming molten src/example.rs:20\n";
 
-const OCTET_OBJECT_CORPUS: &str = r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":3,"source_paths":["src/job/dag.rs","src/main.rs","src/node/runtime.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":3}"#;
+const OCTET_OBJECT_CORPUS: &str = r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":6,"source_paths":["src/job/dag.rs","src/main.rs","src/node/daemon.rs","src/node/runtime.rs","src/octet/gate.rs","src/upgrades/mod.rs"],"object_set_hash":"b3:0000000000000000000000000000000000000000000000000000000000000000","pure_cache_blocked_count":6}"#;
 
 fn molten_cmd() -> std::process::Command {
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_molten"));

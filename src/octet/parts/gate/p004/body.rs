@@ -16,6 +16,7 @@ pub fn validate_octet_source_gate(input: &OctetSourceGateValidationInput) -> Res
         ReceiptCheckInput {
             parsed: parsed.as_ref(),
             expected: setup.expected.as_ref(),
+            source_scope: &setup.source_scope,
         },
         &mut checks,
         &mut diagnostics,
@@ -77,6 +78,14 @@ fn prepare_source_validation(
     if !is_subject_ref_valid {
         push_diagnostic(diagnostics, format!("invalid octet source-gate subject ref {}", input.subject_ref));
     }
+    let is_source_scope_supported = source_scope_in_configured_inventory(&source_scope);
+    push_check(checks, "source-gate-source-scope-supported", is_source_scope_supported);
+    if !is_source_scope_supported {
+        push_diagnostic(
+            diagnostics,
+            format!("source scope is outside configured Octet source-gate coverage: {}", source_scope.join(", ")),
+        );
+    }
     let expected = expected_metadata_for_command(DEFAULT_GATE_COMMAND).ok();
     push_check(checks, "current-octet-metadata", expected.is_some());
     if expected.is_none() {
@@ -122,7 +131,7 @@ fn validate_source_receipt(
     };
     let refs = receipt_refs(parsed);
     check_receipt_basics(parsed, checks, diagnostics);
-    check_receipt_freshness(parsed, input.expected, checks, diagnostics);
+    check_receipt_freshness(parsed, input.expected, input.source_scope, checks, diagnostics);
     refs
 }
 
@@ -166,6 +175,17 @@ fn check_receipt_basics(
     if !has_required_artifact_refs {
         push_diagnostic(diagnostics, "octet gate receipt is missing required artifact refs".to_string());
     }
+    let has_canonical_artifact_refs = is_content_ref(&parsed.policy_ref)
+        && parsed.command_ref.as_deref().is_some_and(is_content_ref)
+        && parsed.status_ref.as_deref().is_some_and(is_content_ref)
+        && parsed.summary_ref.as_deref().is_some_and(is_content_ref)
+        && parsed.findings_ref.as_deref().is_some_and(is_content_ref)
+        && parsed.object_corpus_ref.as_deref().is_some_and(is_content_ref)
+        && parsed.fingerprint_ref.as_deref().is_some_and(is_content_ref);
+    push_check(checks, "canonical-artifact-refs", has_canonical_artifact_refs);
+    if !has_canonical_artifact_refs {
+        push_diagnostic(diagnostics, "octet gate receipt has malformed canonical artifact refs".to_string());
+    }
     let has_clean_finding_counts = parsed.counts.total == 0
         && parsed.counts.warnings == 0
         && parsed.counts.errors == 0
@@ -190,6 +210,7 @@ fn check_receipt_basics(
 fn check_receipt_freshness(
     parsed: &ParsedOctetGateReceipt,
     expected: Option<&ExpectedMetadata>,
+    source_scope: &[String],
     checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
@@ -209,8 +230,10 @@ fn check_receipt_freshness(
     }
     let has_scope_fingerprint_coverage = parsed.fingerprint_ref.as_deref().is_some_and(is_content_ref)
         && parsed.object_corpus_ref.as_deref().is_some_and(is_content_ref)
+        && source_scope_in_configured_inventory(source_scope)
         && parsed_check_pass(parsed, "fingerprint-evidence-bound")
         && parsed_check_pass(parsed, "object-corpus-critical-paths")
+        && parsed_check_pass(parsed, SOURCE_SCOPE_OBJECT_CORPUS_CHECK)
         && parsed_check_pass(parsed, "object-corpus-fingerprint");
     push_check(checks, "scope-fingerprint-coverage", has_scope_fingerprint_coverage);
     if !has_scope_fingerprint_coverage {
@@ -230,6 +253,7 @@ fn push_missing_receipt_checks(checks: &mut impl crate::bounded::VecSink<Check>)
     push_check(checks, "gate-receipt-pass", false);
     push_check(checks, "strict-profile-required", false);
     push_check(checks, "required-artifact-refs", false);
+    push_check(checks, "canonical-artifact-refs", false);
     push_check(checks, "no-uncovered-findings", false);
     push_check(checks, "current-config-ref", false);
     push_check(checks, "current-profile-ref", false);
@@ -262,20 +286,4 @@ fn octet_source_gate_requirement_value(
         record("freshness", vec![string("same-workspace-metadata")]),
         checks_value(checks),
     ])
-}
-
-pub fn default_source_scope(consumer: &str) -> Result<Vec<String>> {
-    let scope = match consumer {
-        "node-startup" => vec!["src/main.rs", "src/node/runtime.rs", "src/octet/gate.rs"],
-        "job-remote-admission" => vec!["src/job/dag.rs", "src/main.rs", "src/octet/gate.rs"],
-        "upgrade-plan" => vec!["src/main.rs", "src/octet/gate.rs", "src/upgrades/mod.rs"],
-        "node-control-gate" => vec![
-            "src/main.rs",
-            "src/node/daemon.rs",
-            "src/node/runtime.rs",
-            "src/octet/gate.rs",
-        ],
-        other => return Err(MoltenError::invalid_harness(format!("unsupported octet source-gate consumer {other}"))),
-    };
-    Ok(scope.into_iter().map(ToOwned::to_owned).collect())
 }

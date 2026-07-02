@@ -1,9 +1,5 @@
     use super::*;
 
-    fn parse_text(source: &str) -> Result<IoValue> {
-        crate::preserves_rail::parse_text(source)
-    }
-
     fn to_text(value: &IoValue) -> Result<String> {
         crate::preserves_rail::to_text(value)
     }
@@ -65,6 +61,65 @@
         assert_eq!(validation.decision, "pass");
         assert!(to_text(&validation.value).expect("validation text").contains("octet-source-gate-validation-v1"));
         assert_eq!(crate::ledger::artifact_kind(&validation.value), "octet-source-gate-validation");
+    }
+
+    #[test]
+    fn source_gate_validation_denies_receipt_without_source_scope_coverage_check() {
+        let legacy_checks = PASS_CHECKS
+            .iter()
+            .filter(|check| check.name != SOURCE_SCOPE_OBJECT_CORPUS_CHECK)
+            .cloned()
+            .collect::<Vec<_>>();
+        let gate = clean_gate_receipt_with_checks(&legacy_checks);
+        let validation = validate_octet_source_gate(&OctetSourceGateValidationInput {
+            consumer: "node-startup".to_string(),
+            subject_ref: test_ref("node-config"),
+            receipt_value: Some(gate),
+            source_scope: Vec::new(),
+        })
+        .expect("validate source gate");
+
+        assert_eq!(validation.decision, "deny");
+        assert!(validation
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("required source scope")));
+    }
+
+    #[test]
+    fn source_gate_validation_denies_unsupported_custom_source_scope() {
+        let gate = synthetic_clean_octet_gate_receipt_for_tests().expect("clean gate fixture");
+        let validation = validate_octet_source_gate(&OctetSourceGateValidationInput {
+            consumer: "node-startup".to_string(),
+            subject_ref: test_ref("node-config"),
+            receipt_value: Some(gate),
+            source_scope: vec!["src/not-covered.rs".to_string()],
+        })
+        .expect("validate source gate");
+
+        assert_eq!(validation.decision, "deny");
+        assert!(validation
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("outside configured Octet source-gate coverage")));
+    }
+
+    #[test]
+    fn source_gate_validation_denies_noncanonical_artifact_ref() {
+        let gate = clean_gate_receipt_with_fingerprint_ref("blake3:test-fingerprint", PASS_CHECKS);
+        let validation = validate_octet_source_gate(&OctetSourceGateValidationInput {
+            consumer: "node-startup".to_string(),
+            subject_ref: test_ref("node-config"),
+            receipt_value: Some(gate),
+            source_scope: Vec::new(),
+        })
+        .expect("validate source gate");
+
+        assert_eq!(validation.decision, "deny");
+        assert!(validation
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("malformed canonical artifact refs")));
     }
 
     #[test]
@@ -145,12 +200,7 @@
         assert_eq!(stale_validation.decision, "deny");
         assert!(stale_validation.diagnostics.iter().any(|diagnostic| diagnostic.contains("config hash")));
 
-        let tampered = parse_text(
-            &to_text(&synthetic_clean_octet_gate_receipt_for_tests().expect("clean fixture"))
-                .expect("clean text")
-                .replace("blake3:test-fingerprint", "not-a-ref"),
-        )
-        .expect("tampered parse");
+        let tampered = clean_gate_receipt_with_fingerprint_ref("not-a-ref", PASS_CHECKS);
         let tampered_validation = validate_octet_source_gate(&OctetSourceGateValidationInput {
             consumer: "node-startup".to_string(),
             subject_ref: test_ref("node"),
@@ -159,6 +209,10 @@
         })
         .expect("validate tampered gate");
         assert_eq!(tampered_validation.decision, "deny");
+        assert!(tampered_validation
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("malformed canonical artifact refs")));
     }
 
     #[test]
@@ -233,85 +287,4 @@
 
         assert_eq!(evaluation.decision, "deny");
         assert!(evaluation.diagnostics.iter().any(|diagnostic| diagnostic.contains("object corpus")));
-    }
-
-    #[test]
-    fn object_corpus_without_fingerprint_or_critical_paths_denies() {
-        let dir = temp_dir("incomplete-object-corpus");
-        write_artifacts(
-            &dir,
-            clean_status_json(),
-            clean_summary(),
-            r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":1}"#,
-        );
-        let evaluation = evaluate_octet_gate(&input(&dir)).expect("evaluate octet gate");
-
-        assert_eq!(evaluation.decision, "deny");
-        assert!(evaluation.diagnostics.iter().any(|diagnostic| diagnostic.contains("object_set_hash fingerprint")));
-        assert!(evaluation.diagnostics.iter().any(|diagnostic| diagnostic.contains("required critical paths")));
-    }
-
-    #[test]
-    fn noncanonical_command_denies() {
-        let dir = temp_dir("bad-command");
-        write_artifacts(&dir, clean_status_json(), clean_summary(), object_corpus_json());
-        fs::write(dir.join(COMMAND_NAME), "cargo check\n").expect("write bad command");
-        let evaluation = evaluate_octet_gate(&input(&dir)).expect("evaluate octet gate");
-
-        assert_eq!(evaluation.decision, "deny");
-        assert!(evaluation.diagnostics.iter().any(|diagnostic| diagnostic.contains("noncanonical")));
-    }
-
-    #[test]
-    fn imports_raw_octet_artifacts_and_derived_evidence_to_ledger() {
-        let dir = temp_dir("artifact-ledger-import");
-        let ledger_root = dir.join("ledger");
-        write_artifacts(&dir, noncritical_status_json(1), noncritical_summary_one(), object_corpus_json());
-        let imported = import_octet_artifacts_to_ledger(&OctetArtifactLedgerInput {
-            artifacts_dir: dir.clone(),
-            ledger_root: ledger_root.clone(),
-        })
-        .expect("import octet artifacts");
-
-        assert_eq!(imported.decision, "pass");
-        let kinds = crate::ledger::list_artifacts(&ledger_root)
-            .expect("list ledger")
-            .into_iter()
-            .map(|entry| {
-                let value =
-                    crate::ledger::read_artifact(&ledger_root, &entry.artifact_ref).expect("read ledger artifact");
-                crate::ledger::artifact_kind(&value).to_string()
-            })
-            .collect::<Vec<_>>();
-        assert!(kinds.iter().any(|kind| kind == "octet-command-artifact"));
-        assert!(kinds.iter().any(|kind| kind == "octet-status-artifact"));
-        assert!(kinds.iter().any(|kind| kind == "octet-summary-artifact"));
-        assert!(kinds.iter().any(|kind| kind == "octet-object-corpus-artifact"));
-        assert!(kinds.iter().any(|kind| kind == "octet-structured-findings"));
-        assert!(kinds.iter().any(|kind| kind == "octet-fingerprint-evidence"));
-    }
-
-    #[test]
-    fn gate_receipt_binds_structured_findings_ref_to_summary_index() {
-        let dir = temp_dir("structured-findings-ref");
-        write_artifacts(&dir, noncritical_status_json(1), noncritical_summary_one(), object_corpus_json());
-        let first = evaluate_octet_gate(&input(&dir)).expect("first gate");
-        let changed_summary = "--- octet summary ---\nStatus: warning-only\nFindings: 1\nWarnings: 1\nErrors: 0\n\nBy lint:\n  function_length 1\n\nIndex:\n  F1 function_length molten src/changed.rs:99\n";
-        write_artifacts(&dir, noncritical_status_json(1), changed_summary, object_corpus_json());
-        let second = evaluate_octet_gate(&input(&dir)).expect("second gate");
-
-        assert_ne!(receipt_findings_ref(&first.receipt_value), receipt_findings_ref(&second.receipt_value));
-    }
-
-    #[test]
-    fn baseline_check_passes_identical_noncritical_warning() {
-        let dir = temp_dir("baseline-pass");
-        write_artifacts(&dir, noncritical_status_json(1), noncritical_summary_one(), object_corpus_json());
-        let baseline =
-            build_octet_warning_baseline(&baseline_input(&dir, "9999-01-01T00:00:00Z")).expect("write baseline");
-        let evaluation =
-            check_octet_warning_baseline(&baseline_check_input(&dir, &baseline.baseline_value, "2026-05-31T00:00:00Z"))
-                .expect("check baseline");
-
-        assert_eq!(evaluation.decision, "pass");
     }

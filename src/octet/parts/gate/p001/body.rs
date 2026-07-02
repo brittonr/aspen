@@ -65,6 +65,10 @@ const PASS_CHECKS: &[Check] = &[
         status: "pass",
     },
     Check {
+        name: SOURCE_SCOPE_OBJECT_CORPUS_CHECK,
+        status: "pass",
+    },
+    Check {
         name: "command-shape",
         status: "pass",
     },
