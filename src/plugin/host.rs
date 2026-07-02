@@ -5,13 +5,11 @@
 //! executor evidence, and hostcalls are admitted only through declared refs.
 
 type IoValue = preserves::IOValue;
-use preserves::Value;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
-use crate::artifacts;
 use crate::bounded::VecSink;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::ledger;
 
 pub const PLUGIN_HOST_ABI_VERSION: &str = "molten.plugin.host-abi.v1";
 
@@ -315,7 +313,7 @@ pub fn parse_plugin_manifest(value: &IoValue) -> Result<PluginManifest> {
 pub fn install_plugin(registry_root: &std::path::Path, manifest_value: &IoValue) -> Result<PluginInstallReceipt> {
     let manifest = parse_plugin_manifest(manifest_value)?;
     let mut diagnostics = Vec::new();
-    let has_artifact = artifacts::read_artifact(registry_root, &manifest.artifact_ref).is_ok();
+    let has_artifact = crate::artifacts::read_artifact(registry_root, &manifest.artifact_ref).is_ok();
     if !has_artifact {
         diagnostics.push_limited(
             format!("plugin artifact {} is not present in registry", manifest.artifact_ref),
@@ -828,7 +826,7 @@ pub fn minimal_plugin_fixture(root: &std::path::Path) -> Result<PluginFixtureRun
         upgrade.value.clone(),
     ];
     for value in &evidence_values {
-        let _ = ledger::import_artifact(&ledger_root, value)?;
+        let _ = crate::ledger::import_artifact(&ledger_root, value)?;
     }
     let report_value = plugin_fixture_report_value(&PluginFixtureReportInput {
         manifest_ref: &manifest.manifest_ref,
@@ -902,7 +900,7 @@ fn seed_refs() -> Result<SeedRefs> {
 }
 
 fn executor_manifest(registry: &std::path::Path, seed: &SeedRefs, payload: &str) -> Result<IoValue> {
-    let installed = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+    let installed = crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {
         kind: "plugin-executor".to_string(),
         payload: record("reviewed-plugin-executor", vec![string(payload)]),
         schema_refs: vec![seed.schema_ref.clone()],
@@ -1463,12 +1461,17 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog;
-    use crate::catalog::CatalogListInput;
-    use crate::catalog::CatalogVisibilityInput;
-    use crate::catalog_mcp;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
+
+    type CatalogListInput = crate::catalog::CatalogListInput;
+    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+
+    fn parse_text(source: &str) -> Result<IoValue> {
+        crate::preserves_rail::parse_text(source)
+    }
+
+    fn to_text(value: &IoValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     fn test_ref(label: &str) -> String {
         crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
@@ -1522,7 +1525,7 @@ mod tests {
 
         let dir = temp_dir("plugin-deny");
         let registry = dir.join("registry");
-        let artifact = artifacts::install_artifact(&registry, &artifacts::ArtifactInstallInput {
+        let artifact = crate::artifacts::install_artifact(&registry, &crate::artifacts::ArtifactInstallInput {
             kind: "plugin-executor".to_string(),
             payload: record("plugin", vec![string("x")]),
             schema_refs: vec![test_ref("schema")],
@@ -1671,9 +1674,9 @@ mod tests {
             supply_chain_refs: &[test_ref("supply")],
         })
         .expect("manifest");
-        let imported = ledger::import_artifact(&ledger_root, &manifest).expect("ledger import");
+        let imported = crate::ledger::import_artifact(&ledger_root, &manifest).expect("ledger import");
         assert_eq!(imported.artifact_kind, "plugin-manifest");
-        let listed = catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
             kind: Some("plugin-manifest".to_string()),
             visibility: CatalogVisibilityInput::default(),
         })
@@ -1681,10 +1684,11 @@ mod tests {
         assert_eq!(listed.items.len(), 1);
         let rendered = to_text(&listed.value).expect("render catalog result");
         assert!(rendered.contains("ledger-kind:plugin-manifest"));
-        let request =
-            catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string("plugin-manifest")])])
-                .expect("MCP request");
-        let mcp = catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("MCP list plugin manifest");
+        let request = crate::catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string(
+            "plugin-manifest",
+        )])])
+        .expect("MCP request");
+        let mcp = crate::catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("MCP list plugin manifest");
         assert_eq!(mcp.decision, "pass");
         assert!(to_text(&mcp.response_value).expect("render MCP response").contains("plugin-manifest"));
     }
