@@ -8,8 +8,8 @@ type Result<T> = crate::error::Result<T>;
 
 const EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA;
 const EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
-const IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA: &str = crate::preserves_rail::IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA;
-const IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA: &str = crate::preserves_rail::IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA;
+const CHAIN_RECEIPT_SCHEMA: &str = crate::preserves_rail::IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA;
+const REPRO_RECEIPT_SCHEMA: &str = crate::preserves_rail::IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA;
 
 mod fs {
     pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
@@ -77,14 +77,14 @@ const _: () = assert!(MAX_CHAIN_BUNDLE_ARTIFACTS <= 1_000_000);
 const _: () = assert!(MAX_CHAIN_BUNDLE_CHECKPOINTS <= 100_000);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReproExchange {
+pub struct Repro {
     pub ticket: String,
     pub bundle_ref: String,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChainSegmentExchange {
+pub struct ChainSegment {
     pub ticket: String,
     pub bundle_ref: String,
     pub chain: crate::evidence_chain::ChainScope,
@@ -174,7 +174,7 @@ struct ValidateChainBundleInput<'a> {
     fork_policy: crate::evidence_chain::ChainForkPolicy,
 }
 
-struct ChainExchangeReceiptValueInput<'a> {
+struct ChainReceiptValueInput<'a> {
     operation: &'a str,
     decision: &'a str,
     node: &'a str,
@@ -185,7 +185,7 @@ struct ChainExchangeReceiptValueInput<'a> {
     checkpoint_refs: &'a [String],
 }
 
-struct ExchangeReceiptValueInput<'a> {
+struct ReceiptValueInput<'a> {
     operation: &'a str,
     decision: &'a str,
     node: &'a str,
@@ -195,7 +195,7 @@ struct ExchangeReceiptValueInput<'a> {
     verify_ref: Option<&'a str>,
 }
 
-pub fn publish_bundle(root: &Path, bundle: &IoValue, node: &str) -> Result<ReproExchange> {
+pub fn publish_bundle(root: &Path, bundle: &IoValue, node: &str) -> Result<Repro> {
     fs::create_dir_all(root.join("blobs")).map_err(MoltenError::from)?;
     let verify_receipt = crate::harness::repro_verify_receipt_value(bundle)?;
     let bundle_ref = canonical_hash(bundle)?;
@@ -207,7 +207,7 @@ pub fn publish_bundle(root: &Path, bundle: &IoValue, node: &str) -> Result<Repro
     fs::write(blob_path(root, &bundle_ref)?, bytes).map_err(MoltenError::from)?;
     let ticket = format!("iroh-local:{bundle_ref}");
     let verify_ref = canonical_hash(&verify_receipt)?;
-    let receipt_value = exchange_receipt_value(&ExchangeReceiptValueInput {
+    let receipt_value = receipt_value(&ReceiptValueInput {
         operation: "publish",
         decision: "pass",
         node,
@@ -216,14 +216,14 @@ pub fn publish_bundle(root: &Path, bundle: &IoValue, node: &str) -> Result<Repro
         bundle_ref: &bundle_ref,
         verify_ref: Some(&verify_ref),
     });
-    Ok(ReproExchange {
+    Ok(Repro {
         ticket,
         bundle_ref,
         receipt_value,
     })
 }
 
-pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<ReproExchange> {
+pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<Repro> {
     let advertised_ref = input.ticket.strip_prefix("iroh-local:").ok_or_else(|| {
         MoltenError::invalid_harness("unsupported Iroh repro ticket; expected iroh-local:<bundle-ref>")
     })?;
@@ -254,7 +254,7 @@ pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<ReproExchange> {
         crate::ledger::import_artifact(ledger_root, &verify_receipt)?;
     }
     let verify_ref = canonical_hash(&verify_receipt)?;
-    let receipt_value = exchange_receipt_value(&ExchangeReceiptValueInput {
+    let receipt_value = receipt_value(&ReceiptValueInput {
         operation: "fetch",
         decision: "pass",
         node: "local",
@@ -263,14 +263,14 @@ pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<ReproExchange> {
         bundle_ref: &bundle_ref,
         verify_ref: Some(&verify_ref),
     });
-    Ok(ReproExchange {
+    Ok(Repro {
         ticket: input.ticket.to_string(),
         bundle_ref,
         receipt_value,
     })
 }
 
-pub fn publish_chain_segment(input: &PublishChainSegmentInput<'_>) -> Result<ChainSegmentExchange> {
+pub fn publish_chain_segment(input: &PublishChainSegmentInput<'_>) -> Result<ChainSegment> {
     fs::create_dir_all(input.iroh_root.join("blobs")).map_err(MoltenError::from)?;
     let bundle = build_chain_segment_bundle_value(
         input.ledger_root,
@@ -287,7 +287,7 @@ pub fn publish_chain_segment(input: &PublishChainSegmentInput<'_>) -> Result<Cha
     }
     fs::write(blob_path(input.iroh_root, &parsed.bundle_ref)?, bytes).map_err(MoltenError::from)?;
     let ticket = format!("iroh-local-chain:{}", parsed.bundle_ref);
-    let receipt_value = chain_exchange_receipt_value(&ChainExchangeReceiptValueInput {
+    let receipt_value = chain_receipt_value(&ChainReceiptValueInput {
         operation: "publish",
         decision: "pass",
         node: input.node,
@@ -297,7 +297,7 @@ pub fn publish_chain_segment(input: &PublishChainSegmentInput<'_>) -> Result<Cha
         verify_receipt_refs: &parsed.verify_receipt_refs,
         checkpoint_refs: &parsed.checkpoint_refs,
     });
-    Ok(ChainSegmentExchange {
+    Ok(ChainSegment {
         ticket,
         bundle_ref: parsed.bundle_ref,
         chain: parsed.chain,
@@ -307,7 +307,7 @@ pub fn publish_chain_segment(input: &PublishChainSegmentInput<'_>) -> Result<Cha
     })
 }
 
-pub fn fetch_chain_segment(input: &FetchChainSegmentInput<'_>) -> Result<ChainSegmentExchange> {
+pub fn fetch_chain_segment(input: &FetchChainSegmentInput<'_>) -> Result<ChainSegment> {
     let advertised_ref = input.ticket.strip_prefix("iroh-local-chain:").ok_or_else(|| {
         MoltenError::invalid_harness("unsupported Iroh chain ticket; expected iroh-local-chain:<bundle-ref>")
     })?;
@@ -331,7 +331,7 @@ pub fn fetch_chain_segment(input: &FetchChainSegmentInput<'_>) -> Result<ChainSe
         crate::ledger::import_artifact(input.ledger_root, &artifact.value)?;
     }
     crate::ledger::import_artifact(input.ledger_root, &bundle)?;
-    let receipt_value = chain_exchange_receipt_value(&ChainExchangeReceiptValueInput {
+    let receipt_value = chain_receipt_value(&ChainReceiptValueInput {
         operation: "fetch",
         decision: "pass",
         node: "local",
@@ -342,7 +342,7 @@ pub fn fetch_chain_segment(input: &FetchChainSegmentInput<'_>) -> Result<ChainSe
         checkpoint_refs: &parsed.checkpoint_refs,
     });
     crate::ledger::import_artifact(input.ledger_root, &receipt_value)?;
-    Ok(ChainSegmentExchange {
+    Ok(ChainSegment {
         ticket: input.ticket.to_string(),
         bundle_ref: parsed.bundle_ref,
         chain: parsed.chain,
@@ -825,7 +825,7 @@ fn parse_diagnostic_kinds(value: &Value<IoValue>) -> Result<Vec<String>> {
         .collect()
 }
 
-fn chain_exchange_receipt_value(input: &ChainExchangeReceiptValueInput<'_>) -> IoValue {
+fn chain_receipt_value(input: &ChainReceiptValueInput<'_>) -> IoValue {
     let mut refs = vec![record("artifact-ref", vec![
         string("chain-segment-bundle"),
         string(input.bundle_ref),
@@ -843,7 +843,7 @@ fn chain_exchange_receipt_value(input: &ChainExchangeReceiptValueInput<'_>) -> I
             .map(|checkpoint_ref| record("artifact-ref", vec![string("chain-checkpoint"), string(checkpoint_ref)])),
     );
     record("iroh-chain-exchange-receipt-v1", vec![
-        string(IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA),
+        string(CHAIN_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("node", vec![string(input.node)]),
@@ -988,13 +988,13 @@ fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     Ok(reference)
 }
 
-fn exchange_receipt_value(input: &ExchangeReceiptValueInput<'_>) -> IoValue {
+fn receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
     let mut refs = vec![record("artifact-ref", vec![string("bundle"), string(input.bundle_ref)])];
     if let Some(verify_ref) = input.verify_ref {
         refs.push(record("artifact-ref", vec![string("verify-receipt"), string(verify_ref)]));
     }
     record("iroh-repro-exchange-receipt-v1", vec![
-        string(IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA),
+        string(REPRO_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("node", vec![string(input.node)]),
