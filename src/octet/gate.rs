@@ -1,5 +1,3 @@
-use std::fs;
-
 type IoValue = preserves::IOValue;
 
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
@@ -8,6 +6,31 @@ type PathBuf = std::path::PathBuf;
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
+
+mod fs {
+    #[cfg(test)]
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
+        std::fs::read(path)
+    }
+
+    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
+        std::fs::read_to_string(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path, contents)
+    }
+}
 
 const OCTET_GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
 const OCTET_REVIEW_MANIFEST_SCHEMA: &str = crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
