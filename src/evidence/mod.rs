@@ -1,5 +1,4 @@
-use preserves::IOValue;
-
+type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
@@ -9,27 +8,27 @@ const EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA: &str =
 const EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA: &str = crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA;
 const EVIDENCE_SIGNED_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value.as_ref())
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -93,7 +92,7 @@ struct SignedReceiptEnvelope {
 
 struct SubjectParts {
     subject_ref: String,
-    receipt_value: IOValue,
+    receipt_value: IoValue,
 }
 
 struct SignerParts {
@@ -103,7 +102,7 @@ struct SignerParts {
 }
 
 pub struct SignReceiptInput<'a> {
-    pub receipt: &'a IOValue,
+    pub receipt: &'a IoValue,
     pub signer: &'a str,
     pub purpose: &'a str,
     pub trust_root: &'a str,
@@ -145,7 +144,7 @@ pub struct VerifySignedReceiptKeyringPolicy<'a> {
     pub revocations: &'a [SignedReceiptKeyRevocation],
 }
 
-pub fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IOValue> {
+pub fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IoValue> {
     if input.signer.trim().is_empty() {
         return Err(MoltenError::invalid_harness("signer id must not be empty"));
     }
@@ -170,7 +169,7 @@ pub fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn signed_receipt_key_value(input: &SignedReceiptKeyInput<'_>) -> Result<IOValue> {
+pub fn signed_receipt_key_value(input: &SignedReceiptKeyInput<'_>) -> Result<IoValue> {
     require_non_empty(input.key_id, "signed receipt key id")?;
     require_non_empty(input.signer, "signed receipt key signer")?;
     require_non_empty(input.trust_root, "signed receipt key trust root")?;
@@ -189,7 +188,7 @@ pub fn signed_receipt_key_value(input: &SignedReceiptKeyInput<'_>) -> Result<IOV
     ]))
 }
 
-pub fn signed_receipt_key_revocation_value(input: &SignedReceiptKeyRevocationInput<'_>) -> Result<IOValue> {
+pub fn signed_receipt_key_revocation_value(input: &SignedReceiptKeyRevocationInput<'_>) -> Result<IoValue> {
     require_non_empty(input.reason, "signed receipt key revocation reason")?;
     Ok(record("signed-receipt-key-revocation-v1", vec![
         string(EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA),
@@ -209,7 +208,7 @@ pub fn signed_receipt_key_revocation_value(input: &SignedReceiptKeyRevocationInp
     ]))
 }
 
-pub fn parse_signed_receipt_key(value: &IOValue) -> Result<SignedReceiptKey> {
+pub fn parse_signed_receipt_key(value: &IoValue) -> Result<SignedReceiptKey> {
     let fields = value
         .collect_simple_record("signed-receipt-key-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-key-v1 ...>"))?;
@@ -257,7 +256,7 @@ pub fn parse_signed_receipt_key(value: &IOValue) -> Result<SignedReceiptKey> {
     })
 }
 
-pub fn parse_signed_receipt_key_revocation(value: &IOValue) -> Result<SignedReceiptKeyRevocation> {
+pub fn parse_signed_receipt_key_revocation(value: &IoValue) -> Result<SignedReceiptKeyRevocation> {
     let fields = value
         .collect_simple_record("signed-receipt-key-revocation-v1", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-key-revocation-v1 ...>"))?;
@@ -291,7 +290,7 @@ pub fn parse_signed_receipt_key_revocation(value: &IOValue) -> Result<SignedRece
 }
 
 pub fn verify_signed_receipt(
-    value: &IOValue,
+    value: &IoValue,
     required_purpose: &str,
     trust_root: &str,
     key: &str,
@@ -306,7 +305,7 @@ pub fn verify_signed_receipt(
 }
 
 pub fn verify_signed_receipt_with_policy(
-    value: &IOValue,
+    value: &IoValue,
     policy: &VerifySignedReceiptPolicy<'_>,
 ) -> Result<SignedReceipt> {
     let signed = value
@@ -380,7 +379,7 @@ pub fn verify_signed_receipt_with_policy(
 }
 
 pub fn verify_signed_receipt_with_keyring_policy(
-    value: &IOValue,
+    value: &IoValue,
     policy: &VerifySignedReceiptKeyringPolicy<'_>,
 ) -> Result<SignedReceiptWithKey> {
     let envelope = signed_receipt_envelope(value)?;
@@ -518,7 +517,7 @@ fn eligible_key<'a>(
     Ok(eligible[0])
 }
 
-pub fn signed_receipt_summary(value: &IOValue) -> Result<String> {
+pub fn signed_receipt_summary(value: &IoValue) -> Result<String> {
     let signed = value
         .collect_simple_record("signed-receipt-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-v1 ...>"))?;
@@ -542,7 +541,7 @@ pub fn signed_receipt_summary(value: &IOValue) -> Result<String> {
     ))
 }
 
-fn subject_parts(value: &preserves::Value<IOValue>) -> Result<SubjectParts> {
+fn subject_parts(value: &preserves::Value<IoValue>) -> Result<SubjectParts> {
     let subject = value_to_iovalue(value);
     let subject_record = subject
         .collect_simple_record("subject", Some(2))
@@ -561,7 +560,7 @@ fn subject_parts(value: &preserves::Value<IOValue>) -> Result<SubjectParts> {
     })
 }
 
-fn signer_parts(value: &preserves::Value<IOValue>) -> Result<SignerParts> {
+fn signer_parts(value: &preserves::Value<IoValue>) -> Result<SignerParts> {
     let signer_record_value = value_to_iovalue(value);
     let signer_record = signer_record_value
         .collect_simple_record("signer", Some(3))
@@ -573,7 +572,7 @@ fn signer_parts(value: &preserves::Value<IOValue>) -> Result<SignerParts> {
     })
 }
 
-fn parent_refs(value: &preserves::Value<IOValue>) -> Result<Vec<String>> {
+fn parent_refs(value: &preserves::Value<IoValue>) -> Result<Vec<String>> {
     let parents_value = value_to_iovalue(value);
     let parents_record = parents_value
         .collect_simple_record("parents", Some(1))
@@ -596,7 +595,7 @@ fn parent_refs(value: &preserves::Value<IOValue>) -> Result<Vec<String>> {
     Ok(parents)
 }
 
-fn signed_receipt_envelope(value: &IOValue) -> Result<SignedReceiptEnvelope> {
+fn signed_receipt_envelope(value: &IoValue) -> Result<SignedReceiptEnvelope> {
     let signed = value
         .collect_simple_record("signed-receipt-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-v1 ...>"))?;
@@ -616,7 +615,7 @@ fn signed_receipt_envelope(value: &IOValue) -> Result<SignedReceiptEnvelope> {
     })
 }
 
-fn parse_signed_checks(value: &preserves::Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_signed_checks(value: &preserves::Value<IoValue>) -> Result<Vec<(String, String)>> {
     let checks_value = value_to_iovalue(value);
     let checks_record = checks_value
         .collect_simple_record("checks", Some(1))
@@ -651,11 +650,11 @@ fn require_signed_check(checks: &[(String, String)], name: &str) -> Result<()> {
     }
 }
 
-fn optional_ref_value(reference: Option<&str>) -> IOValue {
+fn optional_ref_value(reference: Option<&str>) -> IoValue {
     reference.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_ref(value: &preserves::Value<IOValue>, field: &str) -> Result<Option<String>> {
+fn optional_ref(value: &preserves::Value<IoValue>, field: &str) -> Result<Option<String>> {
     let inner = value_to_iovalue(value);
     if inner.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
@@ -674,7 +673,7 @@ fn require_non_empty(value: &str, label: &str) -> Result<()> {
     }
 }
 
-fn required_u64(value: &preserves::Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &preserves::Value<IoValue>, field: &str) -> Result<u64> {
     let number = value.as_u64().ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?;
     number.map_err(|_| MoltenError::invalid_harness(format!("u64 out of range for {field}")))
 }
@@ -687,7 +686,7 @@ fn key_id_suffix(key_id: Option<&str>) -> String {
     key_id.map_or_else(String::new, |value| format!(" key-id {value}"))
 }
 
-fn signature_for(receipt: &IOValue, signer: &str, purpose: &str, trust_root: &str, key: &str) -> Result<String> {
+fn signature_for(receipt: &IoValue, signer: &str, purpose: &str, trust_root: &str, key: &str) -> Result<String> {
     let mut material = crate::preserves_rail::canonical_bytes(receipt)?;
     material.extend_from_slice(signer.as_bytes());
     material.push(0);
@@ -699,7 +698,7 @@ fn signature_for(receipt: &IOValue, signer: &str, purpose: &str, trust_root: &st
     Ok(crate::preserves_rail::content_ref_from_bytes(&material))
 }
 
-fn required_record_string(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+fn required_record_string(value: &Value<IoValue>, label: &str, field: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -719,7 +718,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     Ok(())
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
@@ -730,7 +729,7 @@ fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
 mod tests {
     use super::*;
 
-    fn receipt_value() -> IOValue {
+    fn receipt_value() -> IoValue {
         crate::preserves_rail::parse_text("<gate-receipt-placeholder \"ok\">").expect("parse receipt")
     }
 
