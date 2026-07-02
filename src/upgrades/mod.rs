@@ -1,8 +1,3 @@
-use crate::artifacts;
-use crate::ledger;
-use crate::octet_gate;
-use crate::protocol_session;
-
 type BtreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
@@ -319,7 +314,7 @@ pub fn name_move_plan_value_with_registry(
     validate_refs(&input.evidence_refs, "upgrade evidence ref")?;
     validate_ref(&input.initiator_ref, "upgrade initiator ref")?;
     let impact_refs = if let Some(registry_root) = registry_root {
-        artifacts::impact_refs(registry_root, std::slice::from_ref(&input.from_ref))?
+        crate::artifacts::impact_refs(registry_root, std::slice::from_ref(&input.from_ref))?
     } else {
         compute_impact_set(ledger_root, std::slice::from_ref(&input.from_ref))?
     };
@@ -422,8 +417,8 @@ pub fn compute_impact_set(ledger_root: &Path, seed_refs: &[String]) -> Result<Ve
     validate_refs(seed_refs, "impact seed ref")?;
     let mut impacted: BtreeSet<String> = seed_refs.iter().cloned().collect();
     let mut artifacts = Vec::new();
-    for entry in ledger::list_artifacts(ledger_root)? {
-        let value = ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
+    for entry in crate::ledger::list_artifacts(ledger_root)? {
+        let value = crate::ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
         let text = to_text(&value)?;
         push_bounded(&mut artifacts, (entry.artifact_ref, text), MAX_UPGRADE_REFS, "upgrade impact artifacts")?;
     }
@@ -716,15 +711,15 @@ pub fn cleanup_admission_with_registry(
         )?;
     }
     if let Some(registry_root) = registry_root {
-        for diagnostic in artifacts::reference_diagnostics(registry_root, artifact_ref)? {
+        for diagnostic in crate::artifacts::reference_diagnostics(registry_root, artifact_ref)? {
             push_bounded(&mut diagnostics, diagnostic, MAX_UPGRADE_DIAGNOSTICS, "upgrade cleanup diagnostics")?;
         }
     }
-    for entry in ledger::list_artifacts(ledger_root)? {
+    for entry in crate::ledger::list_artifacts(ledger_root)? {
         if entry.artifact_ref == artifact_ref {
             continue;
         }
-        let value = ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
+        let value = crate::ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
         if to_text(&value)?.contains(artifact_ref) {
             push_bounded(
                 &mut diagnostics,
@@ -788,14 +783,14 @@ impl DrainState {
     }
 
     fn inspect_ref(&mut self, ledger_root: &Path, evidence_ref: &str, expected_refs: &[String]) -> Result<()> {
-        let value = match ledger::read_artifact(ledger_root, evidence_ref) {
+        let value = match crate::ledger::read_artifact(ledger_root, evidence_ref) {
             Ok(value) => value,
             Err(error) => {
                 self.push(format!("protocol drain evidence {evidence_ref} is not readable from ledger: {error}"))?;
                 return Ok(());
             }
         };
-        let gate = match protocol_session::parse_protocol_session_gate_receipt(&value) {
+        let gate = match crate::protocol_session::parse_protocol_session_gate_receipt(&value) {
             Ok(gate) => gate,
             Err(error) => {
                 self.push(format!(
@@ -807,7 +802,11 @@ impl DrainState {
         self.observe(&gate, expected_refs)
     }
 
-    fn observe(&mut self, gate: &protocol_session::ProtocolSessionGateReceipt, expected_refs: &[String]) -> Result<()> {
+    fn observe(
+        &mut self,
+        gate: &crate::protocol_session::ProtocolSessionGateReceipt,
+        expected_refs: &[String],
+    ) -> Result<()> {
         self.has_gate = true;
         let facts = GateFacts {
             is_decision_pass: gate.decision == "pass",
@@ -824,7 +823,7 @@ impl DrainState {
 
     fn note_gate(
         &mut self,
-        gate: &protocol_session::ProtocolSessionGateReceipt,
+        gate: &crate::protocol_session::ProtocolSessionGateReceipt,
         expected_refs: &[String],
         facts: GateFacts,
     ) -> Result<()> {
@@ -971,12 +970,13 @@ fn validate_upgrade_source_gates(input: &UpgradePlanInput) -> Result<Vec<String>
     let mut validation_refs = Vec::new();
     let mut diagnostics = Vec::new();
     for value in &input.source_gate_receipt_values {
-        let validation = octet_gate::validate_octet_source_gate(&octet_gate::OctetSourceGateValidationInput {
-            consumer: "upgrade-plan".to_string(),
-            subject_ref: subject_ref.clone(),
-            gate_receipt_value: Some(value.clone()),
-            source_scope: Vec::new(),
-        })?;
+        let validation =
+            crate::octet_gate::validate_octet_source_gate(&crate::octet_gate::OctetSourceGateValidationInput {
+                consumer: "upgrade-plan".to_string(),
+                subject_ref: subject_ref.clone(),
+                gate_receipt_value: Some(value.clone()),
+                source_scope: Vec::new(),
+            })?;
         push_bounded(
             &mut validation_refs,
             validation.validation_ref.clone(),
@@ -1663,14 +1663,14 @@ mod tests {
         let root = temp_dir("upgrade-name-move");
         let ledger_root = root.join("ledger");
         let store = root.join("upgrades");
-        let old = ledger::import_artifact(&ledger_root, &parse_text("<module \"old\">").expect("old artifact"))
+        let old = crate::ledger::import_artifact(&ledger_root, &parse_text("<module \"old\">").expect("old artifact"))
             .expect("import old")
             .artifact_ref;
-        let new = ledger::import_artifact(&ledger_root, &parse_text("<module \"new\">").expect("new artifact"))
+        let new = crate::ledger::import_artifact(&ledger_root, &parse_text("<module \"new\">").expect("new artifact"))
             .expect("import new")
             .artifact_ref;
         let dependent =
-            ledger::import_artifact(&ledger_root, &record("dependent", vec![string(&old), string("uses old")]))
+            crate::ledger::import_artifact(&ledger_root, &record("dependent", vec![string(&old), string("uses old")]))
                 .expect("import dependent")
                 .artifact_ref;
         let plan_value = name_move_plan_value(&ledger_root, &NameMovePlanInput {
@@ -1708,16 +1708,16 @@ mod tests {
         let root = temp_dir("upgrade-registry-impact");
         let registry_root = root.join("registry");
         let ledger_root = root.join("ledger");
-        let old = artifacts::install_artifact(&registry_root, &artifact_input("schema", "old", &[]))
+        let old = crate::artifacts::install_artifact(&registry_root, &artifact_input("schema", "old", &[]))
             .expect("install old")
             .artifact_ref;
-        let dependent = artifacts::install_artifact(
+        let dependent = crate::artifacts::install_artifact(
             &registry_root,
             &artifact_input("steel", "dependent", std::slice::from_ref(&old)),
         )
         .expect("install dependent")
         .artifact_ref;
-        let new = artifacts::install_artifact(&registry_root, &artifact_input("schema", "new", &[]))
+        let new = crate::artifacts::install_artifact(&registry_root, &artifact_input("schema", "new", &[]))
             .expect("install new")
             .artifact_ref;
         let plan_value = name_move_plan_value_with_registry(Some(&registry_root), &ledger_root, &NameMovePlanInput {
@@ -1824,7 +1824,7 @@ mod tests {
         );
 
         let denied_gate = parse_text(
-            &to_text(&octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("source gate fixture"))
+            &to_text(&crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("source gate fixture"))
                 .expect("source gate text")
                 .replacen("<decision \"pass\">", "<decision \"deny\">", 1),
         )
@@ -1845,7 +1845,7 @@ mod tests {
         let ledger_root = root.join("ledger");
         let store = root.join("upgrades");
         let gate = protocol_drain_gate();
-        let gate_ref = ledger::import_artifact(&ledger_root, &gate.value).expect("import gate").artifact_ref;
+        let gate_ref = crate::ledger::import_artifact(&ledger_root, &gate.value).expect("import gate").artifact_ref;
         assert_eq!(gate_ref, gate.receipt_ref);
         let new_protocol_ref = test_ref("protocol-v2");
         let plan_value =
@@ -1877,8 +1877,9 @@ mod tests {
 
         let denied_store = root.join("denied-upgrades");
         let denied_gate = protocol_drain_gate_with_diagnostics(vec!["stale protocol lifecycle evidence".to_string()]);
-        let denied_gate_ref =
-            ledger::import_artifact(&ledger_root, &denied_gate.value).expect("import denied gate").artifact_ref;
+        let denied_gate_ref = crate::ledger::import_artifact(&ledger_root, &denied_gate.value)
+            .expect("import denied gate")
+            .artifact_ref;
         let denied_plan =
             protocol_drain_plan_value(&denied_gate_ref, &gate.protocol_ref, &new_protocol_ref).expect("denied plan");
         let denied_created = create_session(&denied_store, &denied_plan).expect("create denied session");
@@ -1888,7 +1889,8 @@ mod tests {
         assert!(to_text(&denied.receipt.value).expect("denied text").contains("denied with decision"));
 
         let mismatch_store = root.join("mismatch-upgrades");
-        let gate_ref = ledger::import_artifact(&ledger_root, &gate.value).expect("import pass gate").artifact_ref;
+        let gate_ref =
+            crate::ledger::import_artifact(&ledger_root, &gate.value).expect("import pass gate").artifact_ref;
         let wrong_protocol_ref = test_ref("wrong-protocol");
         let mismatch_plan =
             protocol_drain_plan_value(&gate_ref, &wrong_protocol_ref, &new_protocol_ref).expect("mismatch plan");
@@ -1904,9 +1906,10 @@ mod tests {
         let root = temp_dir("upgrade-cleanup");
         let ledger_root = root.join("ledger");
         let store = root.join("upgrades");
-        let artifact = ledger::import_artifact(&ledger_root, &parse_text("<module \"unused\">").expect("artifact"))
-            .expect("import artifact")
-            .artifact_ref;
+        let artifact =
+            crate::ledger::import_artifact(&ledger_root, &parse_text("<module \"unused\">").expect("artifact"))
+                .expect("import artifact")
+                .artifact_ref;
         let pass = cleanup_admission(&store, &ledger_root, &artifact).expect("cleanup pass");
         assert_eq!(pass.decision, "pass");
         set_name_pointer(&store, "unused", &artifact).expect("pin by name");
@@ -1919,18 +1922,20 @@ mod tests {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let root = temp_dir("upgrade-hegel");
         let ledger_root = root.join("ledger");
-        let base = ledger::import_artifact(&ledger_root, &record("artifact", vec![string(format!("base-{salt}"))]))
-            .expect("base")
-            .artifact_ref;
-        let dependent = ledger::import_artifact(
+        let base =
+            crate::ledger::import_artifact(&ledger_root, &record("artifact", vec![string(format!("base-{salt}"))]))
+                .expect("base")
+                .artifact_ref;
+        let dependent = crate::ledger::import_artifact(
             &ledger_root,
             &record("dependent", vec![string(&base), string(format!("dep-{salt}"))]),
         )
         .expect("dependent")
         .artifact_ref;
-        let other = ledger::import_artifact(&ledger_root, &record("other", vec![string(format!("other-{salt}"))]))
-            .expect("other")
-            .artifact_ref;
+        let other =
+            crate::ledger::import_artifact(&ledger_root, &record("other", vec![string(format!("other-{salt}"))]))
+                .expect("other")
+                .artifact_ref;
         let impact_one = compute_impact_set(&ledger_root, std::slice::from_ref(&base)).expect("impact one");
         let impact_two = compute_impact_set(&ledger_root, &[base.clone(), other.clone()]).expect("impact two");
         assert!(impact_one.contains(&base));
@@ -1961,14 +1966,16 @@ mod tests {
         assert!(plan.compatibility.new_refs.iter().all(|new_ref| !old.contains(new_ref)));
     }
 
-    fn protocol_drain_gate() -> protocol_session::ProtocolSessionGate {
+    fn protocol_drain_gate() -> crate::protocol_session::ProtocolSessionGate {
         protocol_drain_gate_with_diagnostics(Vec::new())
     }
 
-    fn protocol_drain_gate_with_diagnostics(extra_diagnostics: Vec<String>) -> protocol_session::ProtocolSessionGate {
-        let lifecycle = protocol_session::request_response_lifecycle().expect("protocol lifecycle");
-        protocol_session::gate_protocol_session_lifecycle_with_diagnostics(
-            protocol_session::ProtocolSessionGateInput {
+    fn protocol_drain_gate_with_diagnostics(
+        extra_diagnostics: Vec<String>,
+    ) -> crate::protocol_session::ProtocolSessionGate {
+        let lifecycle = crate::protocol_session::request_response_lifecycle().expect("protocol lifecycle");
+        crate::protocol_session::gate_protocol_session_lifecycle_with_diagnostics(
+            crate::protocol_session::ProtocolSessionGateInput {
                 install_receipt: lifecycle.install.value.clone(),
                 initial_states: lifecycle.initial_states.iter().map(|state| state.value.clone()).collect(),
                 operation_receipts: lifecycle
@@ -2024,8 +2031,8 @@ mod tests {
         })
     }
 
-    fn artifact_input(kind: &str, label: &str, dependency_refs: &[String]) -> artifacts::ArtifactInstallInput {
-        artifacts::ArtifactInstallInput {
+    fn artifact_input(kind: &str, label: &str, dependency_refs: &[String]) -> crate::artifacts::ArtifactInstallInput {
+        crate::artifacts::ArtifactInstallInput {
             kind: kind.to_string(),
             payload: record("upgrade-artifact-payload", vec![string(label)]),
             schema_refs: vec![test_ref(&format!("schema-{label}"))],
@@ -2043,7 +2050,7 @@ mod tests {
     }
 
     fn source_gate_values() -> Vec<IoValue> {
-        vec![octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("source gate fixture")]
+        vec![crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("source gate fixture")]
     }
 
     fn temp_dir(name: &str) -> PathBuf {
