@@ -41,17 +41,7 @@ mod fs {
 
 use n0_future::StreamExt;
 
-use crate::artifacts;
 use crate::bounded::VecSink;
-use crate::delivery_idempotency;
-use crate::job_dag;
-use crate::ledger;
-use crate::node_identity;
-use crate::node_runtime;
-use crate::octet_gate;
-use crate::preserves_rail;
-use crate::protocol_session;
-use crate::provenance;
 
 const CONFIG_FILE: &str = "config.preserves";
 const STARTUP_FILE: &str = "startup-receipt.preserves";
@@ -749,7 +739,7 @@ struct ReconcileArtifacts<'a> {
     send: Option<&'a NodeControlLiveSendReceipt>,
     ingress: Option<&'a NodeControlIngressReceipt>,
     queue: Option<&'a NodeControlQueueReceipt>,
-    control: Option<&'a node_runtime::NodeControlReceipt>,
+    control: Option<&'a crate::node_runtime::NodeControlReceipt>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -834,7 +824,7 @@ struct QueueReceiptValueInput<'a> {
 #[derive(Debug, Clone, Copy)]
 struct OperationReceiptValueInput<'a> {
     decision: &'a str,
-    request: &'a node_runtime::NodeControlRequest,
+    request: &'a crate::node_runtime::NodeControlRequest,
     diagnostics: &'a [String],
 }
 
@@ -862,7 +852,7 @@ struct LoopReceiptValueInput<'a> {
 #[derive(Debug, Clone, Copy)]
 struct OperationFinalizeInput<'a> {
     state_root: &'a Path,
-    request: &'a node_runtime::NodeControlRequest,
+    request: &'a crate::node_runtime::NodeControlRequest,
     startup_receipt_ref: &'a str,
     subreceipt_refs: &'a [String],
     diagnostics: &'a [String],
@@ -881,7 +871,7 @@ pub struct NodeDaemonInit {
 pub struct NodeDaemonRun {
     pub startup_ref: String,
     pub startup_value: IoValue,
-    pub adapter_receipt_refs: Vec<node_runtime::NodeAdapterReceiptRef>,
+    pub adapter_receipt_refs: Vec<crate::node_runtime::NodeAdapterReceiptRef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -977,7 +967,7 @@ pub struct NodeControlIngressEnvelope {
     pub to_node: String,
     pub sequence: u64,
     pub operation_ref: String,
-    pub request: node_runtime::NodeControlRequest,
+    pub request: crate::node_runtime::NodeControlRequest,
     pub peer_bootstrap_refs: Vec<String>,
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
@@ -1434,44 +1424,44 @@ pub fn node_control_authority_grant_value(input: &NodeControlAuthorityGrantInput
     validate_ingress_refs(input.policy_refs, "node control authority grant policy ref")?;
     validate_ingress_refs(input.revocation_refs, "node control authority grant revocation ref")?;
     validate_ingress_refs(input.evidence_refs, "node control authority grant evidence ref")?;
-    Ok(preserves_rail::record("node-control-authority-grant-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA),
-        preserves_rail::record("peer", vec![preserves_rail::string(input.peer_id)]),
-        preserves_rail::record("node", vec![preserves_rail::string(input.node_id)]),
-        preserves_rail::record("operations", vec![preserves_rail::sequence(
-            input.operations.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-authority-grant-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA),
+        crate::preserves_rail::record("peer", vec![crate::preserves_rail::string(input.peer_id)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(input.node_id)]),
+        crate::preserves_rail::record("operations", vec![crate::preserves_rail::sequence(
+            input.operations.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("target-scope", vec![preserves_rail::string(input.target_scope)]),
-        preserves_rail::record("resource-scope", vec![preserves_rail::string(input.resource_scope)]),
-        preserves_rail::record("epoch", vec![preserves_rail::string(input.epoch.to_string())]),
-        preserves_rail::record("expires-at", vec![optional_string(
+        crate::preserves_rail::record("target-scope", vec![crate::preserves_rail::string(input.target_scope)]),
+        crate::preserves_rail::record("resource-scope", vec![crate::preserves_rail::string(input.resource_scope)]),
+        crate::preserves_rail::record("epoch", vec![crate::preserves_rail::string(input.epoch.to_string())]),
+        crate::preserves_rail::record("expires-at", vec![optional_string(
             input.expires_at.map(|value| value.to_string()).as_deref(),
         )]),
-        preserves_rail::record("policy", vec![preserves_rail::sequence(
-            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("policy", vec![crate::preserves_rail::sequence(
+            input.policy_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("revocations", vec![preserves_rail::sequence(
-            input.revocation_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("revocations", vec![crate::preserves_rail::sequence(
+            input.revocation_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("evidence", vec![preserves_rail::sequence(
-            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("evidence", vec![crate::preserves_rail::sequence(
+            input.evidence_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("peer-node-bound"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("peer-node-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("operation-scope-bound"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("operation-scope-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("revocation-checked-at-ingress"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("revocation-checked-at-ingress"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("transport-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("transport-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -1481,13 +1471,17 @@ pub fn parse_node_control_authority_grant(value: &IoValue) -> Result<NodeControl
     let fields = value
         .collect_simple_record("node-control-authority-grant-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-authority-grant-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA, "node control authority grant")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA,
+        "node control authority grant",
+    )?;
     let operations = record_strings(&fields[3], "operations")?;
     if operations.is_empty() {
         return Err(MoltenError::invalid_harness("node control authority grant operations missing"));
     }
     Ok(NodeControlAuthorityGrant {
-        grant_ref: preserves_rail::canonical_hash(value)?,
+        grant_ref: crate::preserves_rail::canonical_hash(value)?,
         peer_id: record_string(&fields[1], "peer")?,
         node_id: record_string(&fields[2], "node")?,
         operations,
@@ -1521,42 +1515,44 @@ pub fn node_control_live_ticket_value(input: &NodeControlLiveTicketInput<'_>) ->
     validate_node_id(input.topic)?;
     validate_ingress_refs(input.policy_refs, "node control live ticket policy ref")?;
     validate_ingress_refs(input.evidence_refs, "node control live ticket evidence ref")?;
-    Ok(preserves_rail::record("node-control-live-ticket-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA),
-        preserves_rail::record("node", vec![
-            preserves_rail::record("id", vec![preserves_rail::string(input.node_id)]),
-            preserves_rail::record("identity", vec![preserves_rail::string(input.node_identity_ref)]),
-            preserves_rail::record("logical-endpoint", vec![preserves_rail::string(input.logical_endpoint_id)]),
-        ]),
-        preserves_rail::record("live", vec![
-            preserves_rail::record("endpoint-id", vec![preserves_rail::string(input.live_endpoint_id)]),
-            preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
-            preserves_rail::record("addresses", vec![preserves_rail::sequence(
-                input.address_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-ticket-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA),
+        crate::preserves_rail::record("node", vec![
+            crate::preserves_rail::record("id", vec![crate::preserves_rail::string(input.node_id)]),
+            crate::preserves_rail::record("identity", vec![crate::preserves_rail::string(input.node_identity_ref)]),
+            crate::preserves_rail::record("logical-endpoint", vec![crate::preserves_rail::string(
+                input.logical_endpoint_id,
             )]),
         ]),
-        preserves_rail::record("policy", vec![preserves_rail::sequence(
-            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("live", vec![
+            crate::preserves_rail::record("endpoint-id", vec![crate::preserves_rail::string(input.live_endpoint_id)]),
+            crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(input.topic)]),
+            crate::preserves_rail::record("addresses", vec![crate::preserves_rail::sequence(
+                input.address_refs.iter().map(crate::preserves_rail::string).collect(),
+            )]),
+        ]),
+        crate::preserves_rail::record("policy", vec![crate::preserves_rail::sequence(
+            input.policy_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("evidence", vec![preserves_rail::sequence(
-            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("evidence", vec![crate::preserves_rail::sequence(
+            input.evidence_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("node-identity-bound"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("node-identity-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("live-endpoint-bound"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("live-endpoint-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ticket-is-bootstrap-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ticket-is-bootstrap-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("authority-grant-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("authority-grant-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -1566,7 +1562,7 @@ pub fn parse_node_control_live_ticket(value: &IoValue) -> Result<NodeControlLive
     let fields = value
         .collect_simple_record("node-control-live-ticket-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-ticket-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA, "node control live ticket")?;
+    require_schema(&fields[0], crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA, "node control live ticket")?;
     let node = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let node_fields = node
         .collect_simple_record("node", Some(3))
@@ -1576,7 +1572,7 @@ pub fn parse_node_control_live_ticket(value: &IoValue) -> Result<NodeControlLive
         .collect_simple_record("live", Some(3))
         .ok_or_else(|| MoltenError::invalid_harness("node control live ticket missing live endpoint"))?;
     Ok(NodeControlLiveTicket {
-        ticket_ref: preserves_rail::canonical_hash(value)?,
+        ticket_ref: crate::preserves_rail::canonical_hash(value)?,
         node_id: record_string(&node_fields[0], "id")?,
         node_identity_ref: record_ref_string(&node_fields[1], "identity")?,
         logical_endpoint_id: record_string(&node_fields[2], "logical-endpoint")?,
@@ -1593,7 +1589,7 @@ pub fn export_node_control_live_ticket(input: &NodeControlLiveTicketExportInput<
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     ensure_state_layout(input.state_root)?;
-    let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let address_refs = Vec::new();
     let value = node_control_live_ticket_value(&NodeControlLiveTicketInput {
         node_id: &identity.node_id,
@@ -1618,7 +1614,7 @@ pub fn admit_node_control_live_peer(input: &NodeControlLivePeerAdmitInput<'_>) -
     ensure_state_layout(input.state_root)?;
     let ticket = parse_node_control_live_ticket(input.ticket_value)?;
     import_node_artifact(input.state_root, input.ticket_value)?;
-    let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let mut diagnostics = Vec::new();
     if ticket.node_id != identity.node_id {
         diagnostics.push(format!(
@@ -1654,42 +1650,44 @@ pub fn admit_node_control_live_peer(input: &NodeControlLivePeerAdmitInput<'_>) -
 
 fn node_control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-live-peer-admission-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("peer", vec![preserves_rail::string(input.peer_id)]),
-        preserves_rail::record("ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
-        preserves_rail::record("node", vec![preserves_rail::string(&input.ticket.node_id)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(&input.ticket.topic)]),
-        preserves_rail::record("sequence", vec![preserves_rail::string(input.admission_sequence.to_string())]),
-        preserves_rail::record("expires-at", vec![optional_string(
+    Ok(crate::preserves_rail::record("node-control-live-peer-admission-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("peer", vec![crate::preserves_rail::string(input.peer_id)]),
+        crate::preserves_rail::record("ticket", vec![crate::preserves_rail::string(&input.ticket.ticket_ref)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(&input.ticket.node_id)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(&input.ticket.topic)]),
+        crate::preserves_rail::record("sequence", vec![crate::preserves_rail::string(
+            input.admission_sequence.to_string(),
+        )]),
+        crate::preserves_rail::record("expires-at", vec![optional_string(
             input.expires_at.map(|value| value.to_string()).as_deref(),
         )]),
-        preserves_rail::record("policy", vec![preserves_rail::sequence(
-            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("policy", vec![crate::preserves_rail::sequence(
+            input.policy_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("evidence", vec![preserves_rail::sequence(
-            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("evidence", vec![crate::preserves_rail::sequence(
+            input.evidence_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ticket-bound"),
-                preserves_rail::string(if input.decision == "pass" { "pass" } else { "fail" }),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ticket-bound"),
+                crate::preserves_rail::string(if input.decision == "pass" { "pass" } else { "fail" }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("peer-topic-bound"),
-                preserves_rail::string(if input.decision == "pass" { "pass" } else { "fail" }),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("peer-topic-bound"),
+                crate::preserves_rail::string(if input.decision == "pass" { "pass" } else { "fail" }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bootstrap-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bootstrap-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("authority-grant-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("authority-grant-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -1701,11 +1699,11 @@ pub fn parse_node_control_live_peer_admission(value: &IoValue) -> Result<NodeCon
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-peer-admission-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA,
         "node control live peer admission",
     )?;
     Ok(NodeControlLivePeerAdmission {
-        admission_ref: preserves_rail::canonical_hash(value)?,
+        admission_ref: crate::preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         peer_id: record_string(&fields[2], "peer")?,
         ticket_ref: record_ref_string(&fields[3], "ticket")?,
@@ -1762,7 +1760,7 @@ pub fn import_node_control_live_ticket(
         imported_refs: &imported_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlLiveTicketImport {
         decision: decision.to_string(),
@@ -1810,7 +1808,7 @@ pub fn import_node_control_authority_grant_checked(
         imported_refs: &imported_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlAuthorityGrantImport {
         decision: decision.to_string(),
@@ -1841,7 +1839,7 @@ pub fn export_node_control_live_workflow_bundle(
         receipt_values: input.receipt_values,
         diagnostics: &diagnostics,
     })?;
-    let bundle_ref = preserves_rail::canonical_hash(&bundle_value)?;
+    let bundle_ref = crate::preserves_rail::canonical_hash(&bundle_value)?;
     let bundle = NodeControlLiveWorkflowBundle {
         bundle_ref,
         bundle_value,
@@ -1860,7 +1858,7 @@ pub fn export_node_control_live_workflow_bundle(
         bundle: &bundle,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleExport {
         bundle,
         receipt_ref,
@@ -1874,7 +1872,7 @@ pub fn verify_node_control_live_workflow_bundle(
     input: &NodeControlLiveWorkflowBundleVerifyInput<'_>,
 ) -> Result<NodeControlLiveWorkflowBundleVerify> {
     validate_live_workflow_bundle_verify_input(input)?;
-    let bundle_ref = preserves_rail::canonical_hash(input.bundle_value)?;
+    let bundle_ref = crate::preserves_rail::canonical_hash(input.bundle_value)?;
     let expected = live_workflow_bundle_expected_input_from_verify(input);
     let parsed = parse_node_control_live_workflow_bundle(input.bundle_value);
     let (ticket_ref, peer_admission_ref, authority_grant_ref, receipt_refs, diagnostics) = match parsed {
@@ -1908,7 +1906,7 @@ pub fn verify_node_control_live_workflow_bundle(
         expected: &expected,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleVerify {
         bundle_ref,
         ticket_ref,
@@ -1941,7 +1939,7 @@ pub fn gate_node_control_live_workflow_bundle(
                 Some(receipt.receipt_ref)
             }
             Err(error) => {
-                let receipt_ref = preserves_rail::canonical_hash(value)?;
+                let receipt_ref = crate::preserves_rail::canonical_hash(value)?;
                 diagnostics
                     .push(format!("node control live workflow bundle gate verify receipt parse failed: {error}"));
                 Some(receipt_ref)
@@ -1968,7 +1966,7 @@ pub fn gate_node_control_live_workflow_bundle(
         expected: &expected,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleGate {
         bundle_ref: verified.bundle_ref,
         verify_receipt_ref,
@@ -2049,7 +2047,7 @@ fn apply_gate_check(
                 Some(receipt.receipt_ref)
             }
             Err(error) => {
-                let receipt_ref = preserves_rail::canonical_hash(value)?;
+                let receipt_ref = crate::preserves_rail::canonical_hash(value)?;
                 diagnostics.push(format!("node control live workflow bundle apply gate receipt parse failed: {error}"));
                 Some(receipt_ref)
             }
@@ -2174,7 +2172,7 @@ fn finish_apply(input: FinishInput<'_>) -> Result<NodeControlLiveWorkflowBundleA
         expected: &input.expected,
         diagnostics: &input.diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.input.state_root, &receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleApply {
         bundle_ref: input.verified.bundle_ref,
@@ -2255,7 +2253,7 @@ pub fn reconcile_node_control_live_workflow_bundle(
     let send = input.send_receipt_value.map(parse_node_control_live_send_receipt).transpose()?;
     let ingress = input.ingress_receipt_value.map(parse_node_control_ingress_receipt).transpose()?;
     let queue = input.queue_receipt_value.map(parse_node_control_queue_receipt).transpose()?;
-    let control = input.control_receipt_value.map(node_runtime::parse_node_control_receipt).transpose()?;
+    let control = input.control_receipt_value.map(crate::node_runtime::parse_node_control_receipt).transpose()?;
     let artifacts = ReconcileArtifacts {
         apply: &apply,
         send: send.as_ref(),
@@ -2279,7 +2277,7 @@ pub fn reconcile_node_control_live_workflow_bundle(
         request_ref: bindings.request_ref,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(NodeControlLiveWorkflowBundleReconcile {
         bundle_ref: apply.bundle_ref.clone(),
@@ -2341,7 +2339,7 @@ pub fn export_node_control_live_workflow_bundle_ack(
         ack: &ack,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(NodeControlLiveWorkflowBundleAckExport {
         receiver_decision: ack.receiver_decision.clone(),
@@ -2372,7 +2370,7 @@ pub fn import_node_control_live_workflow_bundle_ack(
         imported_refs: &imported_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(NodeControlLiveWorkflowBundleAckImport {
@@ -2393,12 +2391,12 @@ pub fn gate_node_control_live_workflow_protocol(
     validate_live_workflow_protocol_gate_input(input)?;
     let (evidence, diagnostics) = live_workflow_protocol_evidence(input)?;
     let manifest_value = live_workflow_protocol_manifest_value()?;
-    let install = protocol_session::install_protocol_manifest_value(&manifest_value)?;
+    let install = crate::protocol_session::install_protocol_manifest_value(&manifest_value)?;
     let authority_refs = vec![evidence.authority_ref.clone()];
     let resource_refs = vec![evidence.resource_ref.clone()];
     let values = run_values(input, &install, &evidence, &authority_refs, &resource_refs)?;
-    let gate = protocol_session::gate_protocol_session_lifecycle_with_diagnostics(
-        protocol_session::ProtocolSessionGateInput {
+    let gate = crate::protocol_session::gate_protocol_session_lifecycle_with_diagnostics(
+        crate::protocol_session::ProtocolSessionGateInput {
             install_receipt: install.value.clone(),
             initial_states: values.initial_state_values.clone(),
             operation_receipts: values.operation_receipt_values.clone(),
@@ -2427,8 +2425,8 @@ pub fn gate_node_control_live_workflow_protocol(
 }
 
 struct RolePair {
-    sender: protocol_session::ProtocolSessionState,
-    receiver: protocol_session::ProtocolSessionState,
+    sender: crate::protocol_session::ProtocolSessionState,
+    receiver: crate::protocol_session::ProtocolSessionState,
 }
 
 struct LegInput<'a> {
@@ -2448,11 +2446,11 @@ struct LegInput<'a> {
 }
 
 struct LegOutput {
-    send: protocol_session::ProtocolOperationRun,
-    receive: protocol_session::ProtocolOperationRun,
-    message: protocol_session::ProtocolMessage,
-    origin_next: protocol_session::ProtocolSessionState,
-    target_next: protocol_session::ProtocolSessionState,
+    send: crate::protocol_session::ProtocolOperationRun,
+    receive: crate::protocol_session::ProtocolOperationRun,
+    message: crate::protocol_session::ProtocolMessage,
+    origin_next: crate::protocol_session::ProtocolSessionState,
+    target_next: crate::protocol_session::ProtocolSessionState,
 }
 
 struct RunValues {
@@ -2463,20 +2461,20 @@ struct RunValues {
 }
 
 fn start_pair(
-    install: &protocol_session::ProtocolInstallReceipt,
+    install: &crate::protocol_session::ProtocolInstallReceipt,
     session_id: &str,
     authority_refs: &[String],
     resource_refs: &[String],
 ) -> Result<RolePair> {
     Ok(RolePair {
-        sender: protocol_session::start_protocol_session(
+        sender: crate::protocol_session::start_protocol_session(
             install,
             "sender",
             session_id,
             authority_refs.to_vec(),
             resource_refs.to_vec(),
         )?,
-        receiver: protocol_session::start_protocol_session(
+        receiver: crate::protocol_session::start_protocol_session(
             install,
             "receiver",
             session_id,
@@ -2489,7 +2487,7 @@ fn start_pair(
 fn step_leg(input: LegInput<'_>) -> Result<LegOutput> {
     let authority_refs = input.authority_refs.to_vec();
     let resource_refs = input.resource_refs.to_vec();
-    let send = protocol_session::send_protocol_message(protocol_session::ProtocolSendInput {
+    let send = crate::protocol_session::send_protocol_message(crate::protocol_session::ProtocolSendInput {
         state: input.origin_state.clone(),
         to_role: input.target_role.to_string(),
         label: input.label.to_string(),
@@ -2500,7 +2498,7 @@ fn step_leg(input: LegInput<'_>) -> Result<LegOutput> {
         evidence_refs: input.evidence_refs,
     })?;
     let message = protocol_message(&send, input.message_label)?;
-    let receive = protocol_session::receive_protocol_message(protocol_session::ProtocolReceiveInput {
+    let receive = crate::protocol_session::receive_protocol_message(crate::protocol_session::ProtocolReceiveInput {
         state: input.target_state.clone(),
         message: message.value.clone(),
         authority_refs,
@@ -2518,7 +2516,7 @@ fn step_leg(input: LegInput<'_>) -> Result<LegOutput> {
 
 fn run_values(
     input: &NodeControlLiveWorkflowProtocolGateInput<'_>,
-    install: &protocol_session::ProtocolInstallReceipt,
+    install: &crate::protocol_session::ProtocolInstallReceipt,
     evidence: &LiveWorkflowProtocolEvidence,
     authority_refs: &[String],
     resource_refs: &[String],
@@ -2793,11 +2791,11 @@ fn live_workflow_protocol_evidence(
     input: &NodeControlLiveWorkflowProtocolGateInput<'_>,
 ) -> Result<(LiveWorkflowProtocolEvidence, Vec<String>)> {
     let mut diagnostics = Vec::with_capacity(16);
-    let bundle_ref = preserves_rail::canonical_hash(input.bundle_value)?;
-    let gate_receipt_ref = preserves_rail::canonical_hash(input.gate_receipt_value)?;
-    let apply_receipt_ref = preserves_rail::canonical_hash(input.apply_receipt_value)?;
-    let reconcile_receipt_ref = preserves_rail::canonical_hash(input.reconcile_receipt_value)?;
-    let ack_ref = preserves_rail::canonical_hash(input.ack_value)?;
+    let bundle_ref = crate::preserves_rail::canonical_hash(input.bundle_value)?;
+    let gate_receipt_ref = crate::preserves_rail::canonical_hash(input.gate_receipt_value)?;
+    let apply_receipt_ref = crate::preserves_rail::canonical_hash(input.apply_receipt_value)?;
+    let reconcile_receipt_ref = crate::preserves_rail::canonical_hash(input.reconcile_receipt_value)?;
+    let ack_ref = crate::preserves_rail::canonical_hash(input.ack_value)?;
     let bundle = parsed_or_note(&mut diagnostics, "node control live workflow protocol bundle", || {
         parse_node_control_live_workflow_bundle(input.bundle_value)
     });
@@ -2858,27 +2856,27 @@ fn live_workflow_protocol_evidence(
 }
 
 fn live_workflow_protocol_manifest_value() -> Result<IoValue> {
-    let global = protocol_session::protocol_global_script_value(&[
-        protocol_session::ProtocolCommInput {
+    let global = crate::protocol_session::protocol_global_script_value(&[
+        crate::protocol_session::ProtocolCommInput {
             from_role: "sender".to_string(),
             to_role: "receiver".to_string(),
             label: "bundle-handoff".to_string(),
             payload_tag: "workflow-bundle".to_string(),
         },
-        protocol_session::ProtocolCommInput {
+        crate::protocol_session::ProtocolCommInput {
             from_role: "sender".to_string(),
             to_role: "receiver".to_string(),
             label: "apply-evidence".to_string(),
             payload_tag: "apply-receipt".to_string(),
         },
-        protocol_session::ProtocolCommInput {
+        crate::protocol_session::ProtocolCommInput {
             from_role: "receiver".to_string(),
             to_role: "sender".to_string(),
             label: "ack-evidence".to_string(),
             payload_tag: "workflow-ack".to_string(),
         },
     ])?;
-    protocol_session::protocol_manifest_value(&protocol_session::ProtocolManifestInput {
+    crate::protocol_session::protocol_manifest_value(&crate::protocol_session::ProtocolManifestInput {
         protocol_id: LIVE_WORKFLOW_PROTOCOL_ID.to_string(),
         roles: vec!["sender".to_string(), "receiver".to_string()],
         labels: vec![
@@ -2887,15 +2885,15 @@ fn live_workflow_protocol_manifest_value() -> Result<IoValue> {
             "ack-evidence".to_string(),
         ],
         payloads: vec![
-            protocol_session::ProtocolPayloadInput {
+            crate::protocol_session::ProtocolPayloadInput {
                 tag: "workflow-bundle".to_string(),
                 schema_ref: local_ref("node-control-live-workflow-protocol-schema", "workflow-bundle")?,
             },
-            protocol_session::ProtocolPayloadInput {
+            crate::protocol_session::ProtocolPayloadInput {
                 tag: "apply-receipt".to_string(),
                 schema_ref: local_ref("node-control-live-workflow-protocol-schema", "apply-receipt")?,
             },
-            protocol_session::ProtocolPayloadInput {
+            crate::protocol_session::ProtocolPayloadInput {
                 tag: "workflow-ack".to_string(),
                 schema_ref: local_ref("node-control-live-workflow-protocol-schema", "workflow-ack")?,
             },
@@ -2908,18 +2906,18 @@ fn live_workflow_protocol_manifest_value() -> Result<IoValue> {
 }
 
 fn protocol_message(
-    run: &protocol_session::ProtocolOperationRun,
+    run: &crate::protocol_session::ProtocolOperationRun,
     label: &str,
-) -> Result<protocol_session::ProtocolMessage> {
+) -> Result<crate::protocol_session::ProtocolMessage> {
     run.message.clone().ok_or_else(|| {
         MoltenError::invalid_harness(format!("node control live workflow protocol missing {label} message"))
     })
 }
 
 fn protocol_next_state(
-    run: &protocol_session::ProtocolOperationRun,
+    run: &crate::protocol_session::ProtocolOperationRun,
     label: &str,
-) -> Result<protocol_session::ProtocolSessionState> {
+) -> Result<crate::protocol_session::ProtocolSessionState> {
     run.next_state.clone().ok_or_else(|| {
         MoltenError::invalid_harness(format!("node control live workflow protocol missing {label} next state"))
     })
@@ -3312,7 +3310,7 @@ pub fn parse_node_control_live_workflow_bundle_apply_receipt(
         })?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
         "node control live workflow bundle apply receipt",
     )?;
     let gate_receipt_ref = record_optional_ref_string(&fields[4], "gate-receipt")?;
@@ -3325,7 +3323,7 @@ pub fn parse_node_control_live_workflow_bundle_apply_receipt(
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlLiveWorkflowBundleApplyReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         bundle_ref: record_ref_string(&fields[3], "bundle")?,
         gate_receipt_ref,
@@ -3350,7 +3348,7 @@ pub fn parse_node_control_live_workflow_bundle_reconcile_receipt(
         })?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
         "node control live workflow bundle reconcile receipt",
     )?;
     let send_receipt_ref = record_optional_ref_string(&fields[4], "send-receipt")?;
@@ -3364,7 +3362,7 @@ pub fn parse_node_control_live_workflow_bundle_reconcile_receipt(
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlLiveWorkflowBundleReconcileReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         apply_receipt_ref: record_ref_string(&fields[2], "apply-receipt")?,
         bundle_ref: record_ref_string(&fields[3], "bundle")?,
@@ -3383,14 +3381,18 @@ pub fn parse_node_control_ingress_receipt(value: &IoValue) -> Result<NodeControl
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA, "node control ingress receipt")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA,
+        "node control ingress receipt",
+    )?;
     let idempotency_receipt_ref = record_optional_ref_string(&fields[11], "idempotency")?;
     let queue_receipt_ref = record_optional_ref_string(&fields[12], "queue")?;
     let _checks = record_sequence_len(&fields[14], "checks")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlIngressReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         phase: record_string(&fields[2], "phase")?,
         transport: record_string(&fields[3], "transport")?,
@@ -3411,12 +3413,12 @@ pub fn parse_node_control_queue_receipt(value: &IoValue) -> Result<NodeControlQu
     let fields = value
         .collect_simple_record("node-control-queue-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-queue-receipt-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA, "node control queue receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA, "node control queue receipt")?;
     let _checks = record_sequence_len(&fields[8], "checks")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlQueueReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         phase: record_string(&fields[2], "phase")?,
         operation: record_string(&fields[3], "operation")?,
@@ -3436,7 +3438,7 @@ pub fn parse_node_control_live_workflow_bundle_verify_receipt(
         })?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA,
         "node control live workflow bundle verify receipt",
     )?;
     let ticket_ref = record_optional_string(&fields[3], "ticket")?;
@@ -3456,7 +3458,7 @@ pub fn parse_node_control_live_workflow_bundle_verify_receipt(
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlLiveWorkflowBundleVerifyReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         bundle_ref: record_ref_string(&fields[2], "bundle")?,
         ticket_ref,
@@ -3477,7 +3479,7 @@ pub fn parse_node_control_live_workflow_bundle_gate_receipt(
         })?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA,
         "node control live workflow bundle gate receipt",
     )?;
     let verify_receipt_ref = record_optional_string(&fields[3], "verify-receipt")?;
@@ -3499,7 +3501,7 @@ pub fn parse_node_control_live_workflow_bundle_gate_receipt(
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlLiveWorkflowBundleGateReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         bundle_ref: record_ref_string(&fields[2], "bundle")?,
         verify_receipt_ref,
@@ -3518,7 +3520,7 @@ pub fn parse_node_control_live_workflow_bundle(value: &IoValue) -> Result<NodeCo
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
         "node control live workflow bundle",
     )?;
     let ticket_value = record_value(&fields[1], "ticket")?;
@@ -3546,7 +3548,7 @@ pub fn parse_node_control_live_workflow_bundle(value: &IoValue) -> Result<NodeCo
         return Err(MoltenError::invalid_harness("node control live workflow bundle receipt refs mismatch"));
     }
     Ok(NodeControlLiveWorkflowBundle {
-        bundle_ref: preserves_rail::canonical_hash(value)?,
+        bundle_ref: crate::preserves_rail::canonical_hash(value)?,
         bundle_value: value.clone(),
         ticket_ref,
         peer_admission_ref,
@@ -3584,7 +3586,7 @@ struct AckParts {
 impl AckParts {
     fn into_ack(self, value: &IoValue) -> Result<NodeControlLiveWorkflowBundleAck> {
         Ok(NodeControlLiveWorkflowBundleAck {
-            ack_ref: preserves_rail::canonical_hash(value)?,
+            ack_ref: crate::preserves_rail::canonical_hash(value)?,
             ack_value: value.clone(),
             apply_receipt_ref: self.apply_receipt_ref,
             send_receipt_ref: self.send_receipt_ref,
@@ -3622,7 +3624,7 @@ fn validate_ack_members(parts: &AckParts) -> Result<()> {
         parse_node_control_queue_receipt(value)?;
     }
     if let Some(value) = parts.control_receipt_value.as_ref() {
-        node_runtime::parse_node_control_receipt(value)?;
+        crate::node_runtime::parse_node_control_receipt(value)?;
     }
     validate_member_ref(&apply.receipt_ref, &parts.apply_receipt_ref, "ack apply receipt")?;
     validate_member_ref(&reconcile.receipt_ref, &parts.reconcile_receipt_ref, "ack reconcile receipt")?;
@@ -3694,7 +3696,7 @@ pub fn parse_node_control_live_workflow_bundle_ack(value: &IoValue) -> Result<No
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-ack-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA,
         "node control live workflow bundle ack",
     )?;
     let receiver_decision = record_string(&fields[17], "receiver-decision")?;
@@ -3777,7 +3779,7 @@ pub fn import_node_control_live_workflow_bundle(
         imported_refs: &parts.imported_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleImport {
         bundle_ref: bundle.bundle_ref,
@@ -4077,7 +4079,7 @@ fn live_workflow_bundle_receipt_refs(values: &[&IoValue]) -> Result<Vec<String>>
 fn live_workflow_bundle_receipt_refs_from_values(values: &[IoValue]) -> Result<Vec<String>> {
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
-        refs.push(preserves_rail::canonical_hash(value)?);
+        refs.push(crate::preserves_rail::canonical_hash(value)?);
     }
     Ok(refs)
 }
@@ -4085,7 +4087,7 @@ fn live_workflow_bundle_receipt_refs_from_values(values: &[IoValue]) -> Result<V
 fn live_workflow_bundle_receipt_diagnostics(values: &[&IoValue]) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(values.len());
     for value in values {
-        let kind = ledger::artifact_kind(value);
+        let kind = crate::ledger::artifact_kind(value);
         if !is_live_workflow_bundle_receipt_kind(kind) {
             diagnostics.push(format!("node control live workflow bundle unsupported receipt kind {kind}"));
         }
@@ -4262,43 +4264,47 @@ fn authority_grant_import_diagnostics(
 fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-live-ticket-import-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(input.state_root)?)]),
-        preserves_rail::record("ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
-        preserves_rail::record("node", vec![preserves_rail::string(&input.ticket.node_id)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(&input.ticket.topic)]),
-        preserves_rail::record("endpoint", vec![preserves_rail::string(&input.ticket.live_endpoint_id)]),
-        preserves_rail::record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
-        preserves_rail::record("peer", vec![optional_string(input.peer_id)]),
-        preserves_rail::record("as-of-sequence", vec![preserves_rail::string(input.as_of_sequence.to_string())]),
-        preserves_rail::record("imported", vec![preserves_rail::sequence(
-            input.imported_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-ticket-import-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(
+            input.state_root,
+        )?)]),
+        crate::preserves_rail::record("ticket", vec![crate::preserves_rail::string(&input.ticket.ticket_ref)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(&input.ticket.node_id)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(&input.ticket.topic)]),
+        crate::preserves_rail::record("endpoint", vec![crate::preserves_rail::string(&input.ticket.live_endpoint_id)]),
+        crate::preserves_rail::record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
+        crate::preserves_rail::record("peer", vec![optional_string(input.peer_id)]),
+        crate::preserves_rail::record("as-of-sequence", vec![crate::preserves_rail::string(
+            input.as_of_sequence.to_string(),
         )]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("imported", vec![crate::preserves_rail::sequence(
+            input.imported_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ticket-kind-version"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ticket-kind-version"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ticket-topic-endpoint-bound"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ticket-topic-endpoint-bound"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("peer-admission-kind-version"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("peer-admission-kind-version"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("import-receipt-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("import-receipt-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4307,45 +4313,51 @@ fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_
 fn authority_grant_import_receipt_value(input: &AuthorityGrantImportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-authority-grant-import-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(input.state_root)?)]),
-        preserves_rail::record("grant", vec![preserves_rail::string(&input.grant.grant_ref)]),
-        preserves_rail::record("peer", vec![preserves_rail::string(&input.grant.peer_id)]),
-        preserves_rail::record("node", vec![preserves_rail::string(&input.grant.node_id)]),
-        preserves_rail::record("operations", vec![preserves_rail::sequence(
-            input.grant.operations.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-authority-grant-import-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(
+            input.state_root,
+        )?)]),
+        crate::preserves_rail::record("grant", vec![crate::preserves_rail::string(&input.grant.grant_ref)]),
+        crate::preserves_rail::record("peer", vec![crate::preserves_rail::string(&input.grant.peer_id)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(&input.grant.node_id)]),
+        crate::preserves_rail::record("operations", vec![crate::preserves_rail::sequence(
+            input.grant.operations.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("target-scope", vec![preserves_rail::string(&input.grant.target_scope)]),
-        preserves_rail::record("resource-scope", vec![preserves_rail::string(&input.grant.resource_scope)]),
-        preserves_rail::record("as-of-epoch", vec![preserves_rail::string(input.as_of_epoch.to_string())]),
-        preserves_rail::record("imported", vec![preserves_rail::sequence(
-            input.imported_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("target-scope", vec![crate::preserves_rail::string(&input.grant.target_scope)]),
+        crate::preserves_rail::record("resource-scope", vec![crate::preserves_rail::string(
+            &input.grant.resource_scope,
         )]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("as-of-epoch", vec![crate::preserves_rail::string(
+            input.as_of_epoch.to_string(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("grant-kind-version"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("imported", vec![crate::preserves_rail::sequence(
+            input.imported_refs.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("grant-kind-version"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("peer-node-operation-scope-bound"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("peer-node-operation-scope-bound"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("grant-fresh-and-unrevoked"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("grant-fresh-and-unrevoked"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("import-receipt-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("import-receipt-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4354,48 +4366,52 @@ fn authority_grant_import_receipt_value(input: &AuthorityGrantImportReceiptValue
 fn live_workflow_bundle_value(input: &LiveWorkflowBundleValueInput<'_>) -> Result<IoValue> {
     let binding_status = if input.diagnostics.is_empty() { "pass" } else { "fail" };
     let receipt_refs = live_workflow_bundle_receipt_refs(input.receipt_values)?;
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
-        preserves_rail::record("ticket", vec![(*input.ticket_value).clone()]),
-        preserves_rail::record("peer-admission", vec![(*input.admission_value).clone()]),
-        preserves_rail::record("authority-grant", vec![(*input.authority_value).clone()]),
-        preserves_rail::record("receipts", vec![preserves_rail::sequence(
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
+        crate::preserves_rail::record("ticket", vec![(*input.ticket_value).clone()]),
+        crate::preserves_rail::record("peer-admission", vec![(*input.admission_value).clone()]),
+        crate::preserves_rail::record("authority-grant", vec![(*input.authority_value).clone()]),
+        crate::preserves_rail::record("receipts", vec![crate::preserves_rail::sequence(
             input.receipt_values.iter().map(|value| (**value).clone()).collect(),
         )]),
-        preserves_rail::record("ticket-ref", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
-        preserves_rail::record("peer-admission-ref", vec![preserves_rail::string(&input.admission.admission_ref)]),
-        preserves_rail::record("authority-grant-ref", vec![preserves_rail::string(&input.authority.grant_ref)]),
-        preserves_rail::record("receipt-refs", vec![preserves_rail::sequence(
-            receipt_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("ticket-ref", vec![crate::preserves_rail::string(&input.ticket.ticket_ref)]),
+        crate::preserves_rail::record("peer-admission-ref", vec![crate::preserves_rail::string(
+            &input.admission.admission_ref,
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ticket-kind-version"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("authority-grant-ref", vec![crate::preserves_rail::string(
+            &input.authority.grant_ref,
+        )]),
+        crate::preserves_rail::record("receipt-refs", vec![crate::preserves_rail::sequence(
+            receipt_refs.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ticket-kind-version"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("peer-admission-kind-version"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("peer-admission-kind-version"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("authority-grant-kind-version"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("authority-grant-kind-version"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ticket-admission-bound"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ticket-admission-bound"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("authority-grant-bound"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("authority-grant-bound"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4404,39 +4420,43 @@ fn live_workflow_bundle_value(input: &LiveWorkflowBundleValueInput<'_>) -> Resul
 fn live_workflow_bundle_export_receipt_value(input: &LiveWorkflowBundleExportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-export-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("bundle", vec![preserves_rail::string(&input.bundle.bundle_ref)]),
-        preserves_rail::record("ticket", vec![preserves_rail::string(&input.bundle.ticket_ref)]),
-        preserves_rail::record("peer-admission", vec![preserves_rail::string(&input.bundle.peer_admission_ref)]),
-        preserves_rail::record("authority-grant", vec![preserves_rail::string(&input.bundle.authority_grant_ref)]),
-        preserves_rail::record("receipts", vec![preserves_rail::sequence(
-            input.bundle.receipt_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-export-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(&input.bundle.bundle_ref)]),
+        crate::preserves_rail::record("ticket", vec![crate::preserves_rail::string(&input.bundle.ticket_ref)]),
+        crate::preserves_rail::record("peer-admission", vec![crate::preserves_rail::string(
+            &input.bundle.peer_admission_ref,
         )]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("authority-grant", vec![crate::preserves_rail::string(
+            &input.bundle.authority_grant_ref,
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-kind-version"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("receipts", vec![crate::preserves_rail::sequence(
+            input.bundle.receipt_refs.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-kind-version"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-member-bindings"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-member-bindings"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-receipt-kinds"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-receipt-kinds"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4445,44 +4465,44 @@ fn live_workflow_bundle_export_receipt_value(input: &LiveWorkflowBundleExportRec
 fn live_workflow_bundle_verify_receipt_value(input: &LiveWorkflowBundleVerifyReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-verify-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
-        preserves_rail::record("ticket", vec![optional_string(input.ticket_ref)]),
-        preserves_rail::record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
-        preserves_rail::record("authority-grant", vec![optional_string(input.authority_grant_ref)]),
-        preserves_rail::record("receipts", vec![preserves_rail::sequence(
-            input.receipt_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-verify-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(input.bundle_ref)]),
+        crate::preserves_rail::record("ticket", vec![optional_string(input.ticket_ref)]),
+        crate::preserves_rail::record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
+        crate::preserves_rail::record("authority-grant", vec![optional_string(input.authority_grant_ref)]),
+        crate::preserves_rail::record("receipts", vec![crate::preserves_rail::sequence(
+            input.receipt_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-kind-version"),
-                preserves_rail::string(binding_status),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-kind-version"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-member-bindings"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-member-bindings"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-receipt-kinds"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-receipt-kinds"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("expected-bindings"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("expected-bindings"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("verify-receipt-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("verify-receipt-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4491,46 +4511,48 @@ fn live_workflow_bundle_verify_receipt_value(input: &LiveWorkflowBundleVerifyRec
 fn live_workflow_bundle_gate_receipt_value(input: &LiveWorkflowBundleGateReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let gate_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-gate-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
-        preserves_rail::record("verify-receipt", vec![optional_string(input.verify_receipt_ref)]),
-        preserves_rail::record("recomputed-verify", vec![preserves_rail::string(input.recomputed_verify_receipt_ref)]),
-        preserves_rail::record("ticket", vec![optional_string(input.ticket_ref)]),
-        preserves_rail::record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
-        preserves_rail::record("authority-grant", vec![optional_string(input.authority_grant_ref)]),
-        preserves_rail::record("receipts", vec![preserves_rail::sequence(
-            input.receipt_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-gate-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(input.bundle_ref)]),
+        crate::preserves_rail::record("verify-receipt", vec![optional_string(input.verify_receipt_ref)]),
+        crate::preserves_rail::record("recomputed-verify", vec![crate::preserves_rail::string(
+            input.recomputed_verify_receipt_ref,
         )]),
-        preserves_rail::record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("ticket", vec![optional_string(input.ticket_ref)]),
+        crate::preserves_rail::record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
+        crate::preserves_rail::record("authority-grant", vec![optional_string(input.authority_grant_ref)]),
+        crate::preserves_rail::record("receipts", vec![crate::preserves_rail::sequence(
+            input.receipt_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-verification"),
-                preserves_rail::string(gate_status),
+        crate::preserves_rail::record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-verification"),
+                crate::preserves_rail::string(gate_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("verify-receipt-current"),
-                preserves_rail::string(gate_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("verify-receipt-current"),
+                crate::preserves_rail::string(gate_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("expected-bindings"),
-                preserves_rail::string(gate_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("expected-bindings"),
+                crate::preserves_rail::string(gate_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("gate-receipt-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("gate-receipt-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-import-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-import-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4539,49 +4561,53 @@ fn live_workflow_bundle_gate_receipt_value(input: &LiveWorkflowBundleGateReceipt
 fn live_workflow_bundle_apply_receipt_value(input: &LiveWorkflowBundleApplyReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let apply_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-apply-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("state-root", vec![preserves_rail::string(input.state_root.display().to_string())]),
-        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
-        preserves_rail::record("gate-receipt", vec![optional_string(input.gate_receipt_ref)]),
-        preserves_rail::record("recomputed-verify", vec![preserves_rail::string(input.recomputed_verify_receipt_ref)]),
-        preserves_rail::record("import-receipt", vec![optional_string(input.import_receipt_ref)]),
-        preserves_rail::record("imported", vec![preserves_rail::sequence(
-            input.imported_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-apply-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(
+            input.state_root.display().to_string(),
         )]),
-        preserves_rail::record("mode", vec![preserves_rail::string(input.mode)]),
-        preserves_rail::record("envelope", vec![optional_string(input.envelope_ref)]),
-        preserves_rail::record("operation", vec![optional_string(input.operation_ref)]),
-        preserves_rail::record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
-        preserves_rail::record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(input.bundle_ref)]),
+        crate::preserves_rail::record("gate-receipt", vec![optional_string(input.gate_receipt_ref)]),
+        crate::preserves_rail::record("recomputed-verify", vec![crate::preserves_rail::string(
+            input.recomputed_verify_receipt_ref,
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-verification"),
-                preserves_rail::string(apply_status),
+        crate::preserves_rail::record("import-receipt", vec![optional_string(input.import_receipt_ref)]),
+        crate::preserves_rail::record("imported", vec![crate::preserves_rail::sequence(
+            input.imported_refs.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("mode", vec![crate::preserves_rail::string(input.mode)]),
+        crate::preserves_rail::record("envelope", vec![optional_string(input.envelope_ref)]),
+        crate::preserves_rail::record("operation", vec![optional_string(input.operation_ref)]),
+        crate::preserves_rail::record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
+        crate::preserves_rail::record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-verification"),
+                crate::preserves_rail::string(apply_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("gate-receipt-current"),
-                preserves_rail::string(apply_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("gate-receipt-current"),
+                crate::preserves_rail::string(apply_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-imported"),
-                preserves_rail::string(apply_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-imported"),
+                crate::preserves_rail::string(apply_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("send-preflight-or-dispatch"),
-                preserves_rail::string(apply_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("send-preflight-or-dispatch"),
+                crate::preserves_rail::string(apply_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("apply-receipt-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("apply-receipt-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4592,49 +4618,51 @@ fn live_workflow_bundle_reconcile_receipt_value(
 ) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let reconcile_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-reconcile-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("apply-receipt", vec![preserves_rail::string(input.apply_receipt_ref)]),
-        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
-        preserves_rail::record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
-        preserves_rail::record("ingress-receipt", vec![optional_string(input.ingress_receipt_ref)]),
-        preserves_rail::record("queue-receipt", vec![optional_string(input.queue_receipt_ref)]),
-        preserves_rail::record("control-receipt", vec![optional_string(input.control_receipt_ref)]),
-        preserves_rail::record("envelope", vec![optional_string(input.envelope_ref)]),
-        preserves_rail::record("operation", vec![optional_string(input.operation_ref)]),
-        preserves_rail::record("request", vec![optional_string(input.request_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-reconcile-receipt-v1", vec![
+        crate::preserves_rail::string(
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
+        ),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("apply-receipt", vec![crate::preserves_rail::string(input.apply_receipt_ref)]),
+        crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(input.bundle_ref)]),
+        crate::preserves_rail::record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
+        crate::preserves_rail::record("ingress-receipt", vec![optional_string(input.ingress_receipt_ref)]),
+        crate::preserves_rail::record("queue-receipt", vec![optional_string(input.queue_receipt_ref)]),
+        crate::preserves_rail::record("control-receipt", vec![optional_string(input.control_receipt_ref)]),
+        crate::preserves_rail::record("envelope", vec![optional_string(input.envelope_ref)]),
+        crate::preserves_rail::record("operation", vec![optional_string(input.operation_ref)]),
+        crate::preserves_rail::record("request", vec![optional_string(input.request_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("apply-receipt-bound"),
-                preserves_rail::string(reconcile_status),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("apply-receipt-bound"),
+                crate::preserves_rail::string(reconcile_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("send-receipt-current"),
-                preserves_rail::string(reconcile_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("send-receipt-current"),
+                crate::preserves_rail::string(reconcile_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("receiver-ingress-bound"),
-                preserves_rail::string(reconcile_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("receiver-ingress-bound"),
+                crate::preserves_rail::string(reconcile_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("durable-enqueue-or-deny"),
-                preserves_rail::string(reconcile_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("durable-enqueue-or-deny"),
+                crate::preserves_rail::string(reconcile_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("control-dispatch-bound"),
-                preserves_rail::string(reconcile_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("control-dispatch-bound"),
+                crate::preserves_rail::string(reconcile_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("reconcile-receipt-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("reconcile-receipt-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4642,50 +4670,54 @@ fn live_workflow_bundle_reconcile_receipt_value(
 
 fn live_workflow_bundle_ack_value(input: &LiveWorkflowBundleAckValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.receiver_decision)?;
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-ack-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA),
-        preserves_rail::record("apply-receipt", vec![input.apply_receipt_value.clone()]),
-        preserves_rail::record("send-receipt", vec![optional_value(input.send_receipt_value)]),
-        preserves_rail::record("ingress-receipt", vec![optional_value(input.ingress_receipt_value)]),
-        preserves_rail::record("queue-receipt", vec![optional_value(input.queue_receipt_value)]),
-        preserves_rail::record("control-receipt", vec![optional_value(input.control_receipt_value)]),
-        preserves_rail::record("reconcile-receipt", vec![input.reconcile_receipt_value.clone()]),
-        preserves_rail::record("apply-ref", vec![preserves_rail::string(input.apply_receipt_ref)]),
-        preserves_rail::record("send-ref", vec![optional_string(input.send_receipt_ref)]),
-        preserves_rail::record("ingress-ref", vec![optional_string(input.ingress_receipt_ref)]),
-        preserves_rail::record("queue-ref", vec![optional_string(input.queue_receipt_ref)]),
-        preserves_rail::record("control-ref", vec![optional_string(input.control_receipt_ref)]),
-        preserves_rail::record("reconcile-ref", vec![preserves_rail::string(input.reconcile_receipt_ref)]),
-        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
-        preserves_rail::record("envelope", vec![optional_string(input.envelope_ref)]),
-        preserves_rail::record("operation", vec![optional_string(input.operation_ref)]),
-        preserves_rail::record("request", vec![optional_string(input.request_ref)]),
-        preserves_rail::record("receiver-decision", vec![preserves_rail::string(input.receiver_decision)]),
-        preserves_rail::record("receiver-diagnostics", vec![preserves_rail::sequence(
-            input.receiver_diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-ack-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA),
+        crate::preserves_rail::record("apply-receipt", vec![input.apply_receipt_value.clone()]),
+        crate::preserves_rail::record("send-receipt", vec![optional_value(input.send_receipt_value)]),
+        crate::preserves_rail::record("ingress-receipt", vec![optional_value(input.ingress_receipt_value)]),
+        crate::preserves_rail::record("queue-receipt", vec![optional_value(input.queue_receipt_value)]),
+        crate::preserves_rail::record("control-receipt", vec![optional_value(input.control_receipt_value)]),
+        crate::preserves_rail::record("reconcile-receipt", vec![input.reconcile_receipt_value.clone()]),
+        crate::preserves_rail::record("apply-ref", vec![crate::preserves_rail::string(input.apply_receipt_ref)]),
+        crate::preserves_rail::record("send-ref", vec![optional_string(input.send_receipt_ref)]),
+        crate::preserves_rail::record("ingress-ref", vec![optional_string(input.ingress_receipt_ref)]),
+        crate::preserves_rail::record("queue-ref", vec![optional_string(input.queue_receipt_ref)]),
+        crate::preserves_rail::record("control-ref", vec![optional_string(input.control_receipt_ref)]),
+        crate::preserves_rail::record("reconcile-ref", vec![crate::preserves_rail::string(
+            input.reconcile_receipt_ref,
         )]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(input.bundle_ref)]),
+        crate::preserves_rail::record("envelope", vec![optional_string(input.envelope_ref)]),
+        crate::preserves_rail::record("operation", vec![optional_string(input.operation_ref)]),
+        crate::preserves_rail::record("request", vec![optional_string(input.request_ref)]),
+        crate::preserves_rail::record("receiver-decision", vec![crate::preserves_rail::string(
+            input.receiver_decision,
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ack-member-refs-bound"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("receiver-diagnostics", vec![crate::preserves_rail::sequence(
+            input.receiver_diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ack-member-refs-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("receiver-outcome-recorded"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("receiver-outcome-recorded"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ack-bundle-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ack-bundle-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
-        preserves_rail::record("member-refs", vec![preserves_rail::sequence(
+        crate::preserves_rail::record("member-refs", vec![crate::preserves_rail::sequence(
             [
                 Some(input.apply_receipt_ref),
                 input.send_receipt_ref,
@@ -4696,7 +4728,7 @@ fn live_workflow_bundle_ack_value(input: &LiveWorkflowBundleAckValueInput<'_>) -
             ]
             .into_iter()
             .flatten()
-            .map(preserves_rail::string)
+            .map(crate::preserves_rail::string)
             .collect(),
         )]),
     ]))
@@ -4707,47 +4739,59 @@ fn live_workflow_bundle_ack_export_receipt_value(
 ) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let ack_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-ack-export-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_EXPORT_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("ack", vec![preserves_rail::string(&input.ack.ack_ref)]),
-        preserves_rail::record("bundle", vec![preserves_rail::string(&input.ack.bundle_ref)]),
-        preserves_rail::record("apply-receipt", vec![preserves_rail::string(&input.ack.apply_receipt_ref)]),
-        preserves_rail::record("send-receipt", vec![optional_string(input.ack.send_receipt_ref.as_deref())]),
-        preserves_rail::record("ingress-receipt", vec![optional_string(input.ack.ingress_receipt_ref.as_deref())]),
-        preserves_rail::record("queue-receipt", vec![optional_string(input.ack.queue_receipt_ref.as_deref())]),
-        preserves_rail::record("control-receipt", vec![optional_string(input.ack.control_receipt_ref.as_deref())]),
-        preserves_rail::record("reconcile-receipt", vec![preserves_rail::string(&input.ack.reconcile_receipt_ref)]),
-        preserves_rail::record("envelope", vec![optional_string(input.ack.envelope_ref.as_deref())]),
-        preserves_rail::record("operation", vec![optional_string(input.ack.operation_ref.as_deref())]),
-        preserves_rail::record("request", vec![optional_string(input.ack.request_ref.as_deref())]),
-        preserves_rail::record("receiver-decision", vec![preserves_rail::string(&input.ack.receiver_decision)]),
-        preserves_rail::record("receiver-diagnostics", vec![preserves_rail::sequence(
-            input.ack.receiver_diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-ack-export-receipt-v1", vec![
+        crate::preserves_rail::string(
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_EXPORT_RECEIPT_SCHEMA,
+        ),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("ack", vec![crate::preserves_rail::string(&input.ack.ack_ref)]),
+        crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(&input.ack.bundle_ref)]),
+        crate::preserves_rail::record("apply-receipt", vec![crate::preserves_rail::string(
+            &input.ack.apply_receipt_ref,
         )]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("send-receipt", vec![optional_string(input.ack.send_receipt_ref.as_deref())]),
+        crate::preserves_rail::record("ingress-receipt", vec![optional_string(
+            input.ack.ingress_receipt_ref.as_deref(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ack-bundle-kind-version"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("queue-receipt", vec![optional_string(input.ack.queue_receipt_ref.as_deref())]),
+        crate::preserves_rail::record("control-receipt", vec![optional_string(
+            input.ack.control_receipt_ref.as_deref(),
+        )]),
+        crate::preserves_rail::record("reconcile-receipt", vec![crate::preserves_rail::string(
+            &input.ack.reconcile_receipt_ref,
+        )]),
+        crate::preserves_rail::record("envelope", vec![optional_string(input.ack.envelope_ref.as_deref())]),
+        crate::preserves_rail::record("operation", vec![optional_string(input.ack.operation_ref.as_deref())]),
+        crate::preserves_rail::record("request", vec![optional_string(input.ack.request_ref.as_deref())]),
+        crate::preserves_rail::record("receiver-decision", vec![crate::preserves_rail::string(
+            &input.ack.receiver_decision,
+        )]),
+        crate::preserves_rail::record("receiver-diagnostics", vec![crate::preserves_rail::sequence(
+            input.ack.receiver_diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ack-bundle-kind-version"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("receiver-evidence-packaged"),
-                preserves_rail::string(ack_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("receiver-evidence-packaged"),
+                crate::preserves_rail::string(ack_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("reconcile-receipt-current"),
-                preserves_rail::string(ack_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("reconcile-receipt-current"),
+                crate::preserves_rail::string(ack_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ack-export-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ack-export-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4758,106 +4802,122 @@ fn live_workflow_bundle_ack_import_receipt_value(
 ) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let ack_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-ack-import-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_IMPORT_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("state-root", vec![preserves_rail::string(input.state_root.display().to_string())]),
-        preserves_rail::record("ack", vec![preserves_rail::string(&input.ack.ack_ref)]),
-        preserves_rail::record("bundle", vec![preserves_rail::string(&input.ack.bundle_ref)]),
-        preserves_rail::record("imported", vec![preserves_rail::sequence(
-            input.imported_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-ack-import-receipt-v1", vec![
+        crate::preserves_rail::string(
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_IMPORT_RECEIPT_SCHEMA,
+        ),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(
+            input.state_root.display().to_string(),
         )]),
-        preserves_rail::record("receiver-decision", vec![preserves_rail::string(&input.ack.receiver_decision)]),
-        preserves_rail::record("receiver-diagnostics", vec![preserves_rail::sequence(
-            input.ack.receiver_diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("ack", vec![crate::preserves_rail::string(&input.ack.ack_ref)]),
+        crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(&input.ack.bundle_ref)]),
+        crate::preserves_rail::record("imported", vec![crate::preserves_rail::sequence(
+            input.imported_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("receiver-decision", vec![crate::preserves_rail::string(
+            &input.ack.receiver_decision,
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ack-bundle-kind-version"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("receiver-diagnostics", vec![crate::preserves_rail::sequence(
+            input.ack.receiver_diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ack-bundle-kind-version"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ack-member-bindings"),
-                preserves_rail::string(ack_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ack-member-bindings"),
+                crate::preserves_rail::string(ack_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("sender-ledger-imported"),
-                preserves_rail::string(ack_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("sender-ledger-imported"),
+                crate::preserves_rail::string(ack_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ack-import-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ack-import-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
 }
 
 fn live_workflow_bundle_expected_value(input: &LiveWorkflowBundleExpectedInput<'_>) -> IoValue {
-    preserves_rail::record("expected", vec![preserves_rail::sequence(vec![
-        preserves_rail::record("node", vec![optional_string(input.expected_node)]),
-        preserves_rail::record("topic", vec![optional_string(input.expected_topic)]),
-        preserves_rail::record("endpoint", vec![optional_string(input.expected_endpoint)]),
-        preserves_rail::record("peer", vec![optional_string(input.expected_peer)]),
-        preserves_rail::record("operations", vec![preserves_rail::sequence(
-            input.expected_operations.iter().map(preserves_rail::string).collect(),
+    crate::preserves_rail::record("expected", vec![crate::preserves_rail::sequence(vec![
+        crate::preserves_rail::record("node", vec![optional_string(input.expected_node)]),
+        crate::preserves_rail::record("topic", vec![optional_string(input.expected_topic)]),
+        crate::preserves_rail::record("endpoint", vec![optional_string(input.expected_endpoint)]),
+        crate::preserves_rail::record("peer", vec![optional_string(input.expected_peer)]),
+        crate::preserves_rail::record("operations", vec![crate::preserves_rail::sequence(
+            input.expected_operations.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("target-scope", vec![optional_string(input.expected_target_scope)]),
-        preserves_rail::record("resource-scope", vec![optional_string(input.expected_resource_scope)]),
-        preserves_rail::record("as-of-sequence", vec![preserves_rail::string(input.as_of_sequence.to_string())]),
-        preserves_rail::record("as-of-epoch", vec![preserves_rail::string(input.as_of_epoch.to_string())]),
+        crate::preserves_rail::record("target-scope", vec![optional_string(input.expected_target_scope)]),
+        crate::preserves_rail::record("resource-scope", vec![optional_string(input.expected_resource_scope)]),
+        crate::preserves_rail::record("as-of-sequence", vec![crate::preserves_rail::string(
+            input.as_of_sequence.to_string(),
+        )]),
+        crate::preserves_rail::record("as-of-epoch", vec![crate::preserves_rail::string(
+            input.as_of_epoch.to_string(),
+        )]),
     ])])
 }
 
 fn live_workflow_bundle_import_receipt_value(input: &LiveWorkflowBundleImportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("node-control-live-workflow-bundle-import-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(input.state_root)?)]),
-        preserves_rail::record("bundle", vec![preserves_rail::string(&input.bundle.bundle_ref)]),
-        preserves_rail::record("ticket", vec![preserves_rail::string(&input.bundle.ticket_ref)]),
-        preserves_rail::record("peer-admission", vec![preserves_rail::string(&input.bundle.peer_admission_ref)]),
-        preserves_rail::record("authority-grant", vec![preserves_rail::string(&input.bundle.authority_grant_ref)]),
-        preserves_rail::record("ticket-import", vec![optional_string(input.ticket_import_ref)]),
-        preserves_rail::record("authority-import", vec![optional_string(input.authority_import_ref)]),
-        preserves_rail::record("imported", vec![preserves_rail::sequence(
-            input.imported_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-import-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(
+            input.state_root,
+        )?)]),
+        crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(&input.bundle.bundle_ref)]),
+        crate::preserves_rail::record("ticket", vec![crate::preserves_rail::string(&input.bundle.ticket_ref)]),
+        crate::preserves_rail::record("peer-admission", vec![crate::preserves_rail::string(
+            &input.bundle.peer_admission_ref,
         )]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("authority-grant", vec![crate::preserves_rail::string(
+            &input.bundle.authority_grant_ref,
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-kind-version"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("ticket-import", vec![optional_string(input.ticket_import_ref)]),
+        crate::preserves_rail::record("authority-import", vec![optional_string(input.authority_import_ref)]),
+        crate::preserves_rail::record("imported", vec![crate::preserves_rail::sequence(
+            input.imported_refs.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-kind-version"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ticket-admission-imported"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ticket-admission-imported"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("authority-grant-imported"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("authority-grant-imported"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-receipt-imported"),
-                preserves_rail::string(binding_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-receipt-imported"),
+                crate::preserves_rail::string(binding_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bundle-import-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bundle-import-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("provenance-still-required"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("provenance-still-required"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4870,45 +4930,45 @@ pub fn node_control_supervisor_policy_value(input: &NodeControlSupervisorPolicyI
     validate_supervisor_policy_bounds(input.shutdown_drain_ticks, "shutdown drain ticks")?;
     validate_ingress_refs(input.policy_refs, "node control supervisor policy ref")?;
     validate_ingress_refs(input.evidence_refs, "node control supervisor evidence ref")?;
-    Ok(preserves_rail::record("node-control-supervisor-policy-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA),
-        preserves_rail::record("max-restarts", vec![preserves_rail::string(input.max_restarts.to_string())]),
-        preserves_rail::record("restart-window-ticks", vec![preserves_rail::string(
+    Ok(crate::preserves_rail::record("node-control-supervisor-policy-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA),
+        crate::preserves_rail::record("max-restarts", vec![crate::preserves_rail::string(
+            input.max_restarts.to_string(),
+        )]),
+        crate::preserves_rail::record("restart-window-ticks", vec![crate::preserves_rail::string(
             input.restart_window_ticks.to_string(),
         )]),
-        preserves_rail::record("heartbeat-timeout-ticks", vec![preserves_rail::string(
+        crate::preserves_rail::record("heartbeat-timeout-ticks", vec![crate::preserves_rail::string(
             input.heartbeat_timeout_ticks.to_string(),
         )]),
-        preserves_rail::record("shutdown-drain-ticks", vec![preserves_rail::string(
+        crate::preserves_rail::record("shutdown-drain-ticks", vec![crate::preserves_rail::string(
             input.shutdown_drain_ticks.to_string(),
         )]),
-        preserves_rail::record("stale-lock-recovery", vec![preserves_rail::string(if input.stale_lock_recovery {
-            "allow"
-        } else {
-            "deny"
-        })]),
-        preserves_rail::record("policy", vec![preserves_rail::sequence(
-            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("stale-lock-recovery", vec![crate::preserves_rail::string(
+            if input.stale_lock_recovery { "allow" } else { "deny" },
         )]),
-        preserves_rail::record("evidence", vec![preserves_rail::sequence(
-            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("policy", vec![crate::preserves_rail::sequence(
+            input.policy_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bounded-restarts"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("evidence", vec![crate::preserves_rail::sequence(
+            input.evidence_refs.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bounded-restarts"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bounded-heartbeat-timeout"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bounded-heartbeat-timeout"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("explicit-stale-lock-policy"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("explicit-stale-lock-policy"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("shutdown-drain-bound"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("shutdown-drain-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -4920,7 +4980,7 @@ pub fn parse_node_control_supervisor_policy(value: &IoValue) -> Result<NodeContr
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-policy-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA,
         "node control supervisor policy",
     )?;
     let has_stale_lock_recovery = match record_string(&fields[5], "stale-lock-recovery")?.as_str() {
@@ -4941,7 +5001,7 @@ pub fn parse_node_control_supervisor_policy(value: &IoValue) -> Result<NodeContr
     validate_supervisor_policy_bounds(heartbeat_timeout_ticks, "heartbeat timeout ticks")?;
     validate_supervisor_policy_bounds(shutdown_drain_ticks, "shutdown drain ticks")?;
     Ok(NodeControlSupervisorPolicy {
-        policy_ref: preserves_rail::canonical_hash(value)?,
+        policy_ref: crate::preserves_rail::canonical_hash(value)?,
         max_restarts,
         restart_window_ticks,
         heartbeat_timeout_ticks,
@@ -4970,11 +5030,11 @@ fn parse_node_control_supervisor_receipt(value: &IoValue) -> Result<NodeControlS
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA,
         "node control supervisor receipt",
     )?;
     Ok(NodeControlSupervisorReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         operation: record_string(&fields[2], "operation")?,
         supervisor_policy_ref: record_optional_string(&fields[5], "policy")?,
@@ -5023,7 +5083,7 @@ pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit
     validate_node_id(input.node_id)?;
     ensure_state_layout(input.state_root)?;
     let policy_refs = vec![local_ref("node-policy", input.node_id)?];
-    let identity_config = node_identity::NodeIdentityConfig {
+    let identity_config = crate::node_identity::NodeIdentityConfig {
         node_id: input.node_id.to_string(),
         display_name: input.node_id.to_string(),
         data_dir: input.state_root.join("identity"),
@@ -5032,7 +5092,7 @@ pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit
         allow_rotation: false,
         policy_refs: policy_refs.clone(),
     };
-    let identity_resolution = node_identity::resolve_node_identity(&identity_config)?;
+    let identity_resolution = crate::node_identity::resolve_node_identity(&identity_config)?;
     let identity = identity_resolution
         .identity
         .ok_or_else(|| MoltenError::invalid_harness("node daemon identity resolution denied"))?;
@@ -5041,7 +5101,7 @@ pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit
     let resource_refs = vec![local_ref("node-resource", input.node_id)?];
     let effect_profile_refs = vec![local_ref("node-effect-profile", input.node_id)?];
     let state_root_ref = state_root_profile_ref(input.state_root)?;
-    let config_value = node_runtime::node_config_value(&node_runtime::ConfigValueInput {
+    let config_value = crate::node_runtime::node_config_value(&crate::node_runtime::ConfigValueInput {
         node_identity_ref: &identity.identity_ref,
         state_root_ref: &state_root_ref,
         adapters: &adapters,
@@ -5054,7 +5114,7 @@ pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit
     write_preserves(&input.state_root.join(IDENTITY_RECEIPT_FILE), &identity_resolution.receipt_value)?;
     write_preserves(&input.state_root.join(IDENTITY_FILE), &identity.value)?;
     Ok(NodeDaemonInit {
-        config_ref: preserves_rail::canonical_hash(&config_value)?,
+        config_ref: crate::preserves_rail::canonical_hash(&config_value)?,
         identity_ref: identity.identity_ref,
         identity_receipt_ref: identity_resolution.receipt_ref,
         config_value,
@@ -5067,14 +5127,14 @@ pub fn run_local_node(input: &NodeDaemonRunInput<'_>) -> Result<NodeDaemonRun> {
     verify_restart_state(input.state_root)?;
     let config_value = read_preserves(&input.state_root.join(CONFIG_FILE))?;
     let identity_receipt = read_preserves(&input.state_root.join(IDENTITY_RECEIPT_FILE))?;
-    let identity_receipt_ref = preserves_rail::canonical_hash(&identity_receipt)?;
+    let identity_receipt_ref = crate::preserves_rail::canonical_hash(&identity_receipt)?;
     let index_receipt_refs = index_receipt_refs(input.state_root)?;
     let resource_receipt_refs = resource_receipt_refs(input.state_root)?;
     let capability_receipt_refs = capability_receipt_refs(input.state_root)?;
     let version_refs = vec![local_ref("molten-binary-version", env!("CARGO_PKG_VERSION"))?];
-    let source_gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
-    let source_gate_ref = preserves_rail::canonical_hash(&source_gate_value)?;
-    let run = node_runtime::start_node_runtime(&node_runtime::NodeRuntimeStartInput {
+    let source_gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
+    let source_gate_ref = crate::preserves_rail::canonical_hash(&source_gate_value)?;
+    let run = crate::node_runtime::start_node_runtime(&crate::node_runtime::NodeRuntimeStartInput {
         config_value,
         identity_receipt_ref,
         index_receipt_refs,
@@ -5114,17 +5174,17 @@ pub fn status_local_node(input: &NodeDaemonStatusInput<'_>) -> Result<NodeDaemon
 
 fn status_local_node_with_request(
     input: &NodeDaemonStatusInput<'_>,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
 ) -> Result<NodeDaemonStatus> {
     let startup_value = read_preserves(&input.state_root.join(STARTUP_FILE))?;
-    let startup = node_runtime::parse_node_startup_receipt(&startup_value)?;
+    let startup = crate::node_runtime::parse_node_startup_receipt(&startup_value)?;
     let shutdown_ref = if input.state_root.join(SHUTDOWN_FILE).exists() {
-        Some(preserves_rail::canonical_hash(&read_preserves(&input.state_root.join(SHUTDOWN_FILE))?)?)
+        Some(crate::preserves_rail::canonical_hash(&read_preserves(&input.state_root.join(SHUTDOWN_FILE))?)?)
     } else {
         None
     };
     let status = if shutdown_ref.is_some() { "stopped" } else { "running" }.to_string();
-    let health_value = node_runtime::node_health_receipt_value(&node_runtime::HealthReceiptValueInput {
+    let health_value = crate::node_runtime::node_health_receipt_value(&crate::node_runtime::HealthReceiptValueInput {
         decision: "pass",
         startup_receipt_ref: &startup.receipt_ref,
         shutdown_receipt_ref: shutdown_ref.as_deref(),
@@ -5135,7 +5195,7 @@ fn status_local_node_with_request(
         replay_is_eligible: shutdown_ref.is_some(),
         diagnostics: &[],
     })?;
-    let health_ref = preserves_rail::canonical_hash(&health_value)?;
+    let health_ref = crate::preserves_rail::canonical_hash(&health_value)?;
     write_preserves(&input.state_root.join(HEALTH_FILE), &health_value)?;
     import_node_artifact(input.state_root, &health_value)?;
     let control_receipt_value = control_receipt_for_request(
@@ -5145,7 +5205,7 @@ fn status_local_node_with_request(
         std::slice::from_ref(&health_ref),
         &[],
     )?;
-    let control_receipt_ref = preserves_rail::canonical_hash(&control_receipt_value)?;
+    let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt_value)?;
     write_preserves(&input.state_root.join(CONTROL_STATUS_FILE), &control_receipt_value)?;
     import_node_artifact(input.state_root, &control_receipt_value)?;
     Ok(NodeDaemonStatus {
@@ -5164,42 +5224,45 @@ pub fn stop_local_node(input: &NodeDaemonStopInput<'_>) -> Result<NodeDaemonStop
 
 fn stop_local_node_with_request(
     input: &NodeDaemonStopInput<'_>,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
 ) -> Result<NodeDaemonStop> {
     let startup_value = read_preserves(&input.state_root.join(STARTUP_FILE))?;
-    let startup = node_runtime::parse_node_startup_receipt(&startup_value)?;
+    let startup = crate::node_runtime::parse_node_startup_receipt(&startup_value)?;
     let mut shutdown_adapters = Vec::with_capacity(startup.adapters.len());
     for adapter in startup.adapters.iter().rev() {
-        let binding = node_runtime::node_adapter_binding(&adapter.name, &adapter.receipt_ref)?;
-        let value = node_runtime::node_adapter_lifecycle_receipt_value(&node_runtime::AdapterLifecycleReceiptInput {
-            operation: "shutdown",
-            decision: "pass",
-            adapter: &binding,
-            index_receipt_refs: &index_receipt_refs(input.state_root)?,
-            resource_receipt_refs: &resource_receipt_refs(input.state_root)?,
-            diagnostics: &[],
-        })?;
-        let receipt_ref = preserves_rail::canonical_hash(&value)?;
+        let binding = crate::node_runtime::node_adapter_binding(&adapter.name, &adapter.receipt_ref)?;
+        let value = crate::node_runtime::node_adapter_lifecycle_receipt_value(
+            &crate::node_runtime::AdapterLifecycleReceiptInput {
+                operation: "shutdown",
+                decision: "pass",
+                adapter: &binding,
+                index_receipt_refs: &index_receipt_refs(input.state_root)?,
+                resource_receipt_refs: &resource_receipt_refs(input.state_root)?,
+                diagnostics: &[],
+            },
+        )?;
+        let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
         write_preserves(
             &input.state_root.join("receipts").join(format!("adapter-shutdown-{}.preserves", adapter.name)),
             &value,
         )?;
         import_node_artifact(input.state_root, &value)?;
-        shutdown_adapters.push(node_runtime::NodeAdapterReceiptRef {
+        shutdown_adapters.push(crate::node_runtime::NodeAdapterReceiptRef {
             name: adapter.name.clone(),
             receipt_ref,
         });
     }
     let index_refs = index_receipt_refs(input.state_root)?;
-    let shutdown_value = node_runtime::node_shutdown_receipt_value(&node_runtime::ShutdownReceiptValueInput {
-        decision: "pass",
-        startup_receipt_ref: &startup.receipt_ref,
-        adapter_receipts: &shutdown_adapters,
-        drained_job_refs: &[],
-        index_receipt_refs: &index_refs,
-        diagnostics: &[],
-    })?;
-    let shutdown_ref = preserves_rail::canonical_hash(&shutdown_value)?;
+    let shutdown_value =
+        crate::node_runtime::node_shutdown_receipt_value(&crate::node_runtime::ShutdownReceiptValueInput {
+            decision: "pass",
+            startup_receipt_ref: &startup.receipt_ref,
+            adapter_receipts: &shutdown_adapters,
+            drained_job_refs: &[],
+            index_receipt_refs: &index_refs,
+            diagnostics: &[],
+        })?;
+    let shutdown_ref = crate::preserves_rail::canonical_hash(&shutdown_value)?;
     write_preserves(&input.state_root.join(SHUTDOWN_FILE), &shutdown_value)?;
     import_node_artifact(input.state_root, &shutdown_value)?;
     let control_receipt_value = control_receipt_for_request(
@@ -5209,7 +5272,7 @@ fn stop_local_node_with_request(
         std::slice::from_ref(&shutdown_ref),
         &[],
     )?;
-    let control_receipt_ref = preserves_rail::canonical_hash(&control_receipt_value)?;
+    let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt_value)?;
     write_preserves(&input.state_root.join(CONTROL_STOP_FILE), &control_receipt_value)?;
     import_node_artifact(input.state_root, &control_receipt_value)?;
     remove_active_lock(input.state_root)?;
@@ -5224,7 +5287,7 @@ fn stop_local_node_with_request(
 pub fn submit_control_request(input: &NodeControlSubmitInput<'_>) -> Result<NodeControlSubmit> {
     validate_state_root(input.state_root)?;
     ensure_state_layout(input.state_root)?;
-    let request = node_runtime::parse_node_control_request(input.request_value)?;
+    let request = crate::node_runtime::parse_node_control_request(input.request_value)?;
     import_node_artifact(input.state_root, input.request_value)?;
     let inbox_path = control_inbox_path(input.state_root, &request.request_ref);
     write_preserves(&inbox_path, input.request_value)?;
@@ -5237,7 +5300,7 @@ pub fn submit_control_request(input: &NodeControlSubmitInput<'_>) -> Result<Node
         location_ref: &location_ref,
         diagnostics: &[],
     })?;
-    let queue_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let queue_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&queue_receipt_path(input.state_root, &request.request_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlSubmit {
@@ -5257,7 +5320,7 @@ pub fn dispatch_control_request(input: &NodeControlDispatchInput<'_>) -> Result<
         None => first_pending_control_request(input.state_root)?,
     };
     let request_value = read_preserves(&request_path)?;
-    let request = node_runtime::parse_node_control_request(&request_value)?;
+    let request = crate::node_runtime::parse_node_control_request(&request_value)?;
     import_node_artifact(input.state_root, &request_value)?;
     if let Some(prior) = prior_dispatch_for_request(input.state_root, &request)? {
         archive_dispatched_request(input.state_root, &request_path, &request.value)?;
@@ -5286,7 +5349,7 @@ pub fn run_control_loop(input: &NodeControlLoopInput<'_>) -> Result<NodeControlL
     require_active_lock(input.state_root)?;
     let startup = current_startup_receipt(input.state_root)?;
     let lock_value = read_preserves(&input.state_root.join(CONTROL_LOCK_FILE))?;
-    let lock_ref = preserves_rail::canonical_hash(&lock_value)?;
+    let lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
     let initial_diagnostics = Vec::new();
     let heartbeat_value = heartbeat_receipt_value(&HeartbeatReceiptValueInput {
         startup_receipt_ref: &startup.receipt_ref,
@@ -5295,7 +5358,7 @@ pub fn run_control_loop(input: &NodeControlLoopInput<'_>) -> Result<NodeControlL
         processed_count: 0,
         diagnostics: &initial_diagnostics,
     })?;
-    let heartbeat_receipt_ref = preserves_rail::canonical_hash(&heartbeat_value)?;
+    let heartbeat_receipt_ref = crate::preserves_rail::canonical_hash(&heartbeat_value)?;
     write_preserves(&control_heartbeat_receipt_path(input.state_root, &heartbeat_receipt_ref), &heartbeat_value)?;
     import_node_artifact(input.state_root, &heartbeat_value)?;
 
@@ -5311,7 +5374,7 @@ pub fn run_control_loop(input: &NodeControlLoopInput<'_>) -> Result<NodeControlL
             state_root: input.state_root,
             request_path: Some(&request_path),
         })?;
-        let control = node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value)?;
+        let control = crate::node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value)?;
         processed_request_refs.push(dispatched.request_ref.clone());
         dispatch_receipt_refs.push(dispatched.control_receipt_ref.clone());
         if dispatched.operation == "shutdown" && control.decision == "pass" {
@@ -5333,7 +5396,7 @@ pub fn run_control_loop(input: &NodeControlLoopInput<'_>) -> Result<NodeControlL
         has_stopped,
         diagnostics: &diagnostics,
     })?;
-    let loop_receipt_ref = preserves_rail::canonical_hash(&loop_value)?;
+    let loop_receipt_ref = crate::preserves_rail::canonical_hash(&loop_value)?;
     write_preserves(&control_loop_receipt_path(input.state_root, &loop_receipt_ref), &loop_value)?;
     import_node_artifact(input.state_root, &loop_value)?;
     Ok(NodeControlLoop {
@@ -5465,7 +5528,7 @@ struct FinishServiceInput<'a> {
 
 fn handle_existing_service_lock(
     input: &NodeControlServeInput<'_>,
-    startup: &node_runtime::NodeStartupReceipt,
+    startup: &crate::node_runtime::NodeStartupReceipt,
     supervisor_policy: Option<&NodeControlSupervisorPolicy>,
     mut supervisor_receipt_refs: Vec<String>,
 ) -> Result<ExistingServiceLock> {
@@ -5479,7 +5542,7 @@ fn handle_existing_service_lock(
         && policy.stale_lock_recovery
     {
         let lock_value = read_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE))?;
-        let stale_lock_ref = preserves_rail::canonical_hash(&lock_value)?;
+        let stale_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
         let diagnostics = vec!["node control stale service lock recovered by supervisor policy".to_string()];
         let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
             decision: "pass",
@@ -5506,7 +5569,7 @@ fn handle_existing_service_lock(
 
 fn denied_restart_attempt(
     input: &NodeControlServeInput<'_>,
-    startup: &node_runtime::NodeStartupReceipt,
+    startup: &crate::node_runtime::NodeStartupReceipt,
     policy: &NodeControlSupervisorPolicy,
     prior_runs: u64,
     inherited_supervisor_receipt_refs: &[String],
@@ -5543,7 +5606,7 @@ fn denied_restart_attempt(
         supervisor_receipt_refs: &supervisor_receipt_refs,
         diagnostics: &diagnostics,
     })?;
-    let service_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let service_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlServe {
@@ -5564,11 +5627,11 @@ fn denied_restart_attempt(
 
 fn start_service_run(
     input: &NodeControlServeInput<'_>,
-    startup: &node_runtime::NodeStartupReceipt,
+    startup: &crate::node_runtime::NodeStartupReceipt,
     supervisor_policy: Option<&NodeControlSupervisorPolicy>,
     mut supervisor_receipt_refs: Vec<String>,
 ) -> Result<ServiceStart> {
-    let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let service_run_id = local_ref(
         "node-control-service-run",
         &format!("{}:{}:{}:{}", startup.receipt_ref, input.topic, input.max_ticks, input.max_requests_per_tick),
@@ -5582,7 +5645,7 @@ fn start_service_run(
         max_requests_per_tick: input.max_requests_per_tick,
         service_run_ref: &service_run_id,
     })?;
-    let service_lock_ref = preserves_rail::canonical_hash(&lock_value)?;
+    let service_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
     write_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value)?;
     import_node_artifact(input.state_root, &lock_value)?;
     if let Some(policy) = supervisor_policy {
@@ -5647,7 +5710,7 @@ fn write_service_heartbeat(input: &ServiceTickInput<'_>, run: &mut ServiceRunPar
         processed_count: run.processed_request_refs.len() as u64,
         diagnostics: &run.diagnostics,
     })?;
-    let heartbeat_ref = preserves_rail::canonical_hash(&heartbeat_value)?;
+    let heartbeat_ref = crate::preserves_rail::canonical_hash(&heartbeat_value)?;
     write_preserves(&control_service_heartbeat_path(input.state_root, &heartbeat_ref), &heartbeat_value)?;
     import_node_artifact(input.state_root, &heartbeat_value)?;
     run.heartbeat_receipt_refs.push(heartbeat_ref);
@@ -5768,7 +5831,7 @@ fn finish_service_run(input: FinishServiceInput<'_>) -> Result<NodeControlServe>
         supervisor_receipt_refs: &input.supervisor_receipt_refs,
         diagnostics: &input.run.diagnostics,
     })?;
-    let service_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let service_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlServe {
@@ -5789,12 +5852,12 @@ fn finish_service_run(input: FinishServiceInput<'_>) -> Result<NodeControlServe>
 
 fn denied_duplicate_service_run(
     input: &NodeControlServeInput<'_>,
-    startup: &node_runtime::NodeStartupReceipt,
+    startup: &crate::node_runtime::NodeStartupReceipt,
     supervisor_policy: Option<&NodeControlSupervisorPolicy>,
     inherited_supervisor_receipt_refs: &[String],
 ) -> Result<NodeControlServe> {
     let lock_value = read_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE))?;
-    let service_lock_ref = preserves_rail::canonical_hash(&lock_value)?;
+    let service_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
     let diagnostics = vec!["node control service runner already active".to_string()];
     let mut supervisor_receipt_refs = inherited_supervisor_receipt_refs.to_vec();
     if let Some(policy) = supervisor_policy {
@@ -5826,7 +5889,7 @@ fn denied_duplicate_service_run(
         supervisor_receipt_refs: &supervisor_receipt_refs,
         diagnostics: &diagnostics,
     })?;
-    let service_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let service_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlServe {
@@ -5885,7 +5948,7 @@ fn remove_service_lock(state_root: &Path, service_lock_ref: &str) -> Result<()> 
     if !path.exists() {
         return Ok(());
     }
-    let current_ref = preserves_rail::canonical_hash(&read_preserves(&path)?)?;
+    let current_ref = crate::preserves_rail::canonical_hash(&read_preserves(&path)?)?;
     if current_ref != service_lock_ref {
         return Err(MoltenError::invalid_harness("node control service lock changed during serve"));
     }
@@ -5896,7 +5959,11 @@ fn node_ingress_receipt_decision(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA, "node control ingress receipt")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA,
+        "node control ingress receipt",
+    )?;
     record_string(&fields[1], "decision")
 }
 
@@ -5917,7 +5984,7 @@ fn node_control_ingress_envelope_for_transport(
     transport: &str,
     transport_check: &str,
 ) -> Result<NodeControlIngressEnvelope> {
-    let request = node_runtime::parse_node_control_request(input.request_value)?;
+    let request = crate::node_runtime::parse_node_control_request(input.request_value)?;
     validate_node_id(input.from_peer)?;
     validate_node_id(input.to_node)?;
     validate_node_id(input.topic)?;
@@ -5927,8 +5994,8 @@ fn node_control_ingress_envelope_for_transport(
     validate_ingress_refs(input.policy_refs, "node control ingress policy ref")?;
     validate_ingress_refs(input.resource_refs, "node control ingress resource ref")?;
     validate_ingress_refs(input.evidence_refs, "node control ingress evidence ref")?;
-    let scope_ref = delivery_idempotency::remote_topic_scope_ref(input.topic, input.to_node)?;
-    let operation = delivery_idempotency::derive_operation_id(delivery_idempotency::OperationIdInput {
+    let scope_ref = crate::delivery_idempotency::remote_topic_scope_ref(input.topic, input.to_node)?;
+    let operation = crate::delivery_idempotency::derive_operation_id(crate::delivery_idempotency::OperationIdInput {
         scope_ref,
         producer: input.from_peer.to_string(),
         consumer: input.to_node.to_string(),
@@ -5957,7 +6024,7 @@ pub async fn publish_node_control_live_ingress(
     if diagnostics.is_empty() {
         input
             .sender
-            .broadcast(preserves_rail::canonical_bytes(&envelope.value)?.into())
+            .broadcast(crate::preserves_rail::canonical_bytes(&envelope.value)?.into())
             .await
             .map_err(|error| MoltenError::invalid_harness(format!("live Iroh node control publish failed: {error}")))?;
     }
@@ -5970,7 +6037,7 @@ pub async fn publish_node_control_live_ingress(
         ingress_receipt_ref: None,
         diagnostics: &diagnostics,
     })?;
-    let transport_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let transport_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     Ok(NodeControlLiveIngressPublish {
         envelope_ref: envelope.envelope_ref,
         transport_receipt_ref,
@@ -6009,7 +6076,7 @@ pub fn receive_node_control_live_ingress_bytes(
     validate_node_id(input.receiver_node)?;
     validate_node_id(input.delivered_from)?;
     ensure_state_layout(input.state_root)?;
-    let value = preserves_rail::parse_canonical_bytes(input.bytes)?;
+    let value = crate::preserves_rail::parse_canonical_bytes(input.bytes)?;
     let envelope = parse_node_control_ingress_envelope(&value)?;
     let mut diagnostics = live_receive_diagnostics(input, &envelope);
     write_ingress_envelope_and_verify(input.state_root, input.topic, &envelope)?;
@@ -6037,7 +6104,7 @@ pub fn receive_node_control_live_ingress_bytes(
         ingress_receipt_ref: Some(&delivered.ingress_receipt_ref),
         diagnostics: &diagnostics,
     })?;
-    let transport_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let transport_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(
         &control_live_transport_receipt_path(input.state_root, &envelope.envelope_ref, "receive"),
         &receipt_value,
@@ -6379,7 +6446,7 @@ async fn publish_with_retries(
                     envelope,
                     diagnostics: &attempt_diagnostics,
                 })?;
-                let retry_ref = preserves_rail::canonical_hash(&retry_value)?;
+                let retry_ref = crate::preserves_rail::canonical_hash(&retry_value)?;
                 if let Some(state_root) = input.state_root {
                     write_preserves(&control_live_send_retry_receipt_path(state_root, &retry_ref), &retry_value)?;
                     import_node_artifact(state_root, &retry_value)?;
@@ -6406,7 +6473,7 @@ fn finish_send(input: FinishSendInput<'_>) -> Result<NodeControlLiveSend> {
         transport_receipt_ref: Some(&input.published.transport_receipt_ref),
         diagnostics: &[],
     })?;
-    let send_receipt_ref = preserves_rail::canonical_hash(&send_receipt_value)?;
+    let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
     if let Some(state_root) = input.input.state_root {
         import_node_artifact(state_root, input.input.receiver_ticket_value)?;
         write_ingress_envelope_and_verify(state_root, &input.ticket.topic, &input.envelope)?;
@@ -6504,7 +6571,7 @@ fn duplicate_node_control_live_send(
         ingress_receipt_ref: None,
         diagnostics: &[],
     })?;
-    let transport_receipt_ref = preserves_rail::canonical_hash(&transport_receipt_value)?;
+    let transport_receipt_ref = crate::preserves_rail::canonical_hash(&transport_receipt_value)?;
     let send_receipt_value = live_send_receipt_value(&LiveSendReceiptValueInput {
         decision: "pass",
         from_peer: input.from_peer,
@@ -6513,7 +6580,7 @@ fn duplicate_node_control_live_send(
         transport_receipt_ref: Some(&transport_receipt_ref),
         diagnostics: &[],
     })?;
-    let send_receipt_ref = preserves_rail::canonical_hash(&send_receipt_value)?;
+    let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
     let send_path = control_live_send_receipt_path(state_root, &send_receipt_ref);
     if !send_path.exists() {
         return Ok(None);
@@ -6537,7 +6604,7 @@ fn duplicate_node_control_live_send(
         prior_send_receipt_ref: &send_receipt_ref,
         diagnostics: &diagnostics,
     })?;
-    let duplicate_receipt_ref = preserves_rail::canonical_hash(&duplicate_receipt_value)?;
+    let duplicate_receipt_ref = crate::preserves_rail::canonical_hash(&duplicate_receipt_value)?;
     write_preserves(
         &control_live_send_duplicate_receipt_path(state_root, &duplicate_receipt_ref),
         &duplicate_receipt_value,
@@ -6569,7 +6636,7 @@ fn denied_node_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_
         transport_receipt_ref: None,
         diagnostics: &denied.diagnostics,
     })?;
-    let send_receipt_ref = preserves_rail::canonical_hash(&send_receipt_value)?;
+    let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
     if let Some(state_root) = denied.input.state_root {
         import_node_artifact(state_root, denied.input.receiver_ticket_value)?;
         write_ingress_envelope_and_verify(state_root, &denied.ticket.topic, &denied.envelope)?;
@@ -6600,7 +6667,7 @@ pub fn parse_node_control_live_send_receipt(value: &IoValue) -> Result<NodeContr
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-send-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA,
         "node control live send receipt",
     )?;
     let transport_receipt_ref = record_optional_string(&fields[10], "transport-receipt")?;
@@ -6608,7 +6675,7 @@ pub fn parse_node_control_live_send_receipt(value: &IoValue) -> Result<NodeContr
         validate_ingress_ref(reference, "node control live send transport receipt ref")?;
     }
     Ok(NodeControlLiveSendReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         topic: record_string(&fields[3], "topic")?,
         from_peer: record_string(&fields[4], "from-peer")?,
@@ -6768,7 +6835,7 @@ pub fn node_control_live_workflow_receipt(
         service_receipt_ref: &service_receipt_ref,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     if let Some(state_root) = input.state_root {
         import_flow_values(state_root, input, &receipt_ref, &receipt_value)?;
     }
@@ -6784,18 +6851,18 @@ fn service_run_receipt_ref(value: &IoValue) -> Result<String> {
     if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(17)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA,
             "node control service run receipt",
         )?;
-        return preserves_rail::canonical_hash(value);
+        return crate::preserves_rail::canonical_hash(value);
     }
     if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(15)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA,
             "node control service run receipt",
         )?;
-        return preserves_rail::canonical_hash(value);
+        return crate::preserves_rail::canonical_hash(value);
     }
     Err(MoltenError::invalid_harness("expected <node-control-service-run-receipt-v1 ...>"))
 }
@@ -6806,11 +6873,11 @@ fn live_transport_receipt_ref(value: &IoValue) -> Result<(String, String, String
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,
         "node control live transport receipt",
     )?;
     Ok((
-        preserves_rail::canonical_hash(value)?,
+        crate::preserves_rail::canonical_hash(value)?,
         record_string(&fields[1], "operation")?,
         record_ref_string(&fields[7], "envelope")?,
     ))
@@ -6822,11 +6889,11 @@ fn live_listener_receipt_refs(value: &IoValue) -> Result<(String, Vec<String>, S
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-listener-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA,
+        crate::preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA,
         "node control live listener receipt",
     )?;
     Ok((
-        preserves_rail::canonical_hash(value)?,
+        crate::preserves_rail::canonical_hash(value)?,
         record_ref_strings(&fields[9], "transport-receipts")?,
         record_ref_string(&fields[11], "service-run")?,
     ))
@@ -6838,7 +6905,7 @@ pub async fn serve_node_control_live_listener(input: &NodeControlLiveServeInput<
     validate_listener_event_limit(input.max_events)?;
     validate_loop_request_limit(input.max_requests_per_tick)?;
     ensure_state_layout(input.state_root)?;
-    let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
     let bound_endpoint_id = format!("iroh:{}", endpoint.id());
@@ -6948,7 +7015,7 @@ struct LoopbackPair {
 }
 
 async fn loopback_pair(state_root: &Path, topic: &str) -> Result<LoopbackPair> {
-    let identity = node_identity::parse_node_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_node_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
     let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
@@ -7083,7 +7150,7 @@ async fn serve_node_control_live_listener_with_topic(
         service_receipt_ref: &service.service_receipt_ref,
         diagnostics: &scan.diagnostics,
     })?;
-    let listener_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let listener_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_live_listener_receipt_path(input.state_root, &listener_receipt_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlLiveServe {
@@ -7120,14 +7187,14 @@ async fn receive_first_live_ingress_event(
     ))
 }
 
-fn stable_live_endpoint_secret(identity: &node_identity::NodeIdentity) -> iroh::SecretKey {
+fn stable_live_endpoint_secret(identity: &crate::node_identity::NodeIdentity) -> iroh::SecretKey {
     let seed = blake3::hash(
         format!("molten.node-control.live.endpoint.v1:{}:{}", identity.node_id, identity.endpoint_id).as_bytes(),
     );
     iroh::SecretKey::from_bytes(seed.as_bytes())
 }
 
-fn stable_live_endpoint_id(identity: &node_identity::NodeIdentity) -> String {
+fn stable_live_endpoint_id(identity: &crate::node_identity::NodeIdentity) -> String {
     format!("iroh:{}", stable_live_endpoint_secret(identity).public())
 }
 
@@ -7137,7 +7204,7 @@ fn live_ticket_address_refs(addr: &iroh::EndpointAddr) -> Vec<String> {
 
 fn live_ticket_for_bound_endpoint(
     state_root: &Path,
-    identity: &node_identity::NodeIdentity,
+    identity: &crate::node_identity::NodeIdentity,
     topic: &str,
     addr: &iroh::EndpointAddr,
 ) -> Result<NodeControlLiveTicket> {
@@ -7331,7 +7398,7 @@ fn denied_live_ingress_delivery(
         queue_receipt_ref: None,
         diagnostics,
     })?;
-    let ingress_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let ingress_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_ingress_receipt_path(state_root, &envelope.envelope_ref, "deliver"), &receipt_value)?;
     import_node_artifact(state_root, &receipt_value)?;
     Ok(NodeControlIngressDeliver {
@@ -7378,7 +7445,11 @@ pub fn parse_node_control_ingress_envelope(value: &IoValue) -> Result<NodeContro
     let fields = value
         .collect_simple_record("node-control-ingress-envelope-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-envelope-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA, "node control ingress envelope")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA,
+        "node control ingress envelope",
+    )?;
     let transport = record_string(&fields[1], "transport")?;
     let topic = record_string(&fields[2], "topic")?;
     let from_peer = record_string(&fields[3], "from-peer")?;
@@ -7387,7 +7458,7 @@ pub fn parse_node_control_ingress_envelope(value: &IoValue) -> Result<NodeContro
     let operation_ref = record_ref_string(&fields[6], "operation")?;
     let request_ref = record_ref_string(&fields[7], "request-ref")?;
     let request_value = record_value(&fields[8], "request")?;
-    let request = node_runtime::parse_node_control_request(&request_value)?;
+    let request = crate::node_runtime::parse_node_control_request(&request_value)?;
     if request.request_ref != request_ref {
         return Err(MoltenError::invalid_harness("node control ingress embedded request ref mismatch"));
     }
@@ -7396,21 +7467,22 @@ pub fn parse_node_control_ingress_envelope(value: &IoValue) -> Result<NodeContro
     let policy_refs = record_ref_strings(&fields[11], "policy")?;
     let resource_refs = record_ref_strings(&fields[12], "resource")?;
     let evidence_refs = record_ref_strings(&fields[13], "evidence")?;
-    let expected_scope = delivery_idempotency::remote_topic_scope_ref(&topic, &to_node)?;
-    let expected_operation = delivery_idempotency::derive_operation_id(delivery_idempotency::OperationIdInput {
-        scope_ref: expected_scope,
-        producer: from_peer.clone(),
-        consumer: to_node.clone(),
-        sequence,
-        intent: "node-control-ingress".to_string(),
-        payload_ref: request.request_ref.clone(),
-        policy_refs: policy_refs.clone(),
-    })?;
+    let expected_scope = crate::delivery_idempotency::remote_topic_scope_ref(&topic, &to_node)?;
+    let expected_operation =
+        crate::delivery_idempotency::derive_operation_id(crate::delivery_idempotency::OperationIdInput {
+            scope_ref: expected_scope,
+            producer: from_peer.clone(),
+            consumer: to_node.clone(),
+            sequence,
+            intent: "node-control-ingress".to_string(),
+            payload_ref: request.request_ref.clone(),
+            policy_refs: policy_refs.clone(),
+        })?;
     if expected_operation.operation_ref != operation_ref {
         return Err(MoltenError::invalid_harness("node control ingress operation ref mismatch"));
     }
     Ok(NodeControlIngressEnvelope {
-        envelope_ref: preserves_rail::canonical_hash(value)?,
+        envelope_ref: crate::preserves_rail::canonical_hash(value)?,
         transport,
         topic,
         from_peer,
@@ -7444,7 +7516,7 @@ pub fn publish_node_control_ingress(input: &NodeControlIngressPublishInput<'_>) 
         queue_receipt_ref: None,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(
         &control_ingress_receipt_path(input.state_root, &envelope.envelope_ref, "publish"),
         &receipt_value,
@@ -7468,10 +7540,10 @@ struct EnqueueOutcome {
 
 fn apply_ingress_enqueue(state_root: &Path, envelope: &NodeControlIngressEnvelope) -> Result<EnqueueOutcome> {
     let idempotency_evidence_refs = ingress_idempotency_evidence_refs(envelope);
-    let scope_ref = delivery_idempotency::remote_topic_scope_ref(&envelope.topic, &envelope.to_node)?;
-    let delivery = delivery_idempotency::check_delivery(delivery_idempotency::DeliveryCheckInput {
+    let scope_ref = crate::delivery_idempotency::remote_topic_scope_ref(&envelope.topic, &envelope.to_node)?;
+    let delivery = crate::delivery_idempotency::check_delivery(crate::delivery_idempotency::DeliveryCheckInput {
         root: &state_root.join(CONTROL_IDEMPOTENCY_DIR),
-        scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC,
+        scope_profile: crate::delivery_idempotency::SCOPE_REMOTE_TOPIC,
         scope_ref: &scope_ref,
         producer: &envelope.from_peer,
         consumer: &envelope.to_node,
@@ -7481,7 +7553,7 @@ fn apply_ingress_enqueue(state_root: &Path, envelope: &NodeControlIngressEnvelop
         policy_refs: &envelope.policy_refs,
         evidence_refs: &idempotency_evidence_refs,
         semantic_result_ref: Some(&envelope.request.request_ref),
-        gap_policy: delivery_idempotency::GapPolicy::Deny,
+        gap_policy: crate::delivery_idempotency::GapPolicy::Deny,
     })?;
     let idempotency_receipt_ref = Some(delivery.receipt.receipt_ref.clone());
     import_node_artifact(state_root, &delivery.receipt.value)?;
@@ -7549,7 +7621,7 @@ pub fn deliver_node_control_ingress(input: &NodeControlIngressDeliverInput<'_>) 
         queue_receipt_ref: enqueue.queue_receipt_ref.as_deref(),
         diagnostics: &diagnostics,
     })?;
-    let ingress_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let ingress_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(
         &control_ingress_receipt_path(input.state_root, &envelope.envelope_ref, "deliver"),
         &receipt_value,
@@ -7578,7 +7650,7 @@ fn ingress_pre_enqueue_diagnostics(
     if envelope.topic != topic {
         diagnostics.push(format!("node control ingress topic {} does not match requested {topic}", envelope.topic));
     }
-    let identity = node_identity::parse_node_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_node_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
     if envelope.to_node != identity.node_id {
         diagnostics
             .push(format!("node control ingress target {} does not match node {}", envelope.to_node, identity.node_id));
@@ -7736,7 +7808,7 @@ fn evaluate_live_authority_delegation(state_root: &Path, envelope: &NodeControlI
         grant_ref: admitted_grant_ref.as_deref(),
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_authority_receipt_path(state_root, &envelope.envelope_ref), &receipt_value)?;
     import_node_artifact(state_root, &receipt_value)?;
     if decision == "deny" {
@@ -7831,12 +7903,12 @@ fn ingress_idempotency_evidence_refs(envelope: &NodeControlIngressEnvelope) -> V
 
 fn prior_queue_receipt_ref(state_root: &Path, request_ref: &str) -> Result<String> {
     let receipt = read_preserves(&queue_receipt_path(state_root, request_ref))?;
-    preserves_rail::canonical_hash(&receipt)
+    crate::preserves_rail::canonical_hash(&receipt)
 }
 
 fn prior_dispatch_for_request(
     state_root: &Path,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
 ) -> Result<Option<NodeControlDispatch>> {
     let receipt_path = control_outbox_receipt_path(state_root, &request.request_ref);
     if !receipt_path.exists() {
@@ -7845,7 +7917,7 @@ fn prior_dispatch_for_request(
     let archived_path = control_outbox_request_path(state_root, &request.request_ref);
     if archived_path.exists() {
         let archived_value = read_preserves(&archived_path)?;
-        let archived_ref = preserves_rail::canonical_hash(&archived_value)?;
+        let archived_ref = crate::preserves_rail::canonical_hash(&archived_value)?;
         if archived_ref != request.request_ref {
             return Err(MoltenError::invalid_harness(
                 "node control duplicate request conflicts with archived request evidence",
@@ -7853,7 +7925,7 @@ fn prior_dispatch_for_request(
         }
     }
     let control_receipt_value = read_preserves(&receipt_path)?;
-    let control = node_runtime::parse_node_control_receipt(&control_receipt_value)?;
+    let control = crate::node_runtime::parse_node_control_receipt(&control_receipt_value)?;
     if control.request_ref != request.request_ref {
         return Err(MoltenError::invalid_harness("node control duplicate receipt conflicts with request ref"));
     }
@@ -7868,7 +7940,7 @@ fn prior_dispatch_for_request(
 
 fn write_dispatch_queue_receipt(
     state_root: &Path,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
     phase: &str,
 ) -> Result<String> {
     let location_ref = local_ref(
@@ -7884,7 +7956,7 @@ fn write_dispatch_queue_receipt(
         location_ref: &location_ref,
         diagnostics: &diagnostics,
     })?;
-    let queue_receipt_ref = preserves_rail::canonical_hash(&queue_receipt)?;
+    let queue_receipt_ref = crate::preserves_rail::canonical_hash(&queue_receipt)?;
     write_preserves(&dispatch_receipt_path(state_root, &request.request_ref), &queue_receipt)?;
     import_node_artifact(state_root, &queue_receipt)?;
     Ok(queue_receipt_ref)
@@ -7892,7 +7964,7 @@ fn write_dispatch_queue_receipt(
 
 fn dispatch_status_request(
     state_root: &Path,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
 ) -> Result<NodeControlDispatch> {
     let status = status_local_node_with_request(&NodeDaemonStatusInput { state_root }, request)?;
     write_preserves(&control_outbox_receipt_path(state_root, &request.request_ref), &status.control_receipt_value)?;
@@ -7907,7 +7979,7 @@ fn dispatch_status_request(
 
 fn dispatch_shutdown_request(
     state_root: &Path,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
 ) -> Result<NodeControlDispatch> {
     let stop = stop_local_node_with_request(&NodeDaemonStopInput { state_root }, request)?;
     write_preserves(&control_outbox_receipt_path(state_root, &request.request_ref), &stop.control_receipt_value)?;
@@ -7923,7 +7995,7 @@ fn dispatch_shutdown_request(
 #[derive(Debug, Clone, Copy)]
 struct NodeControlProvenanceInput<'a> {
     state_root: &'a Path,
-    request: &'a node_runtime::NodeControlRequest,
+    request: &'a crate::node_runtime::NodeControlRequest,
     artifact_ref: &'a str,
     operation: &'a str,
     subreceipt_kind: &'a str,
@@ -7931,7 +8003,7 @@ struct NodeControlProvenanceInput<'a> {
 
 fn evaluate_node_control_provenance(
     input: &NodeControlProvenanceInput<'_>,
-) -> Result<provenance::ProvenanceEvaluation> {
+) -> Result<crate::provenance::ProvenanceEvaluation> {
     let mut provenance_diagnostics = Vec::with_capacity(input.request.evidence_refs.len().saturating_add(1));
     if input.request.evidence_refs.is_empty() {
         provenance_diagnostics.push("node control provenance evidence refs missing".to_string());
@@ -7941,7 +8013,7 @@ fn evaluate_node_control_provenance(
     for evidence_ref in &input.request.evidence_refs {
         match read_node_ledger_artifact(input.state_root, evidence_ref) {
             Ok(value) => {
-                if provenance::parse_provenance_build_verification_receipt(&value).is_ok() {
+                if crate::provenance::parse_provenance_build_verification_receipt(&value).is_ok() {
                     build_verification_values.push(value);
                 } else {
                     provenance_values.push(value);
@@ -7951,7 +8023,7 @@ fn evaluate_node_control_provenance(
                 .push(format!("node control provenance evidence {evidence_ref} not found in node ledger: {error}")),
         }
     }
-    let evaluation = provenance::evaluate_provenance(&provenance::ProvenanceEvaluationInput {
+    let evaluation = crate::provenance::evaluate_provenance(&crate::provenance::ProvenanceEvaluationInput {
         operation: input.operation,
         profile: "node-control",
         artifact_ref: input.artifact_ref,
@@ -7974,17 +8046,17 @@ struct InstallRefs {
 
 struct InstallFinishInput<'a> {
     state_root: &'a Path,
-    request: &'a node_runtime::NodeControlRequest,
+    request: &'a crate::node_runtime::NodeControlRequest,
     startup_receipt_ref: &'a str,
     payload_ref: &'a str,
     payload_value: IoValue,
-    provenance: provenance::ProvenanceEvaluation,
+    provenance: crate::provenance::ProvenanceEvaluation,
     diagnostics: Vec<String>,
 }
 
 fn finish_install_dispatch(
     state_root: &Path,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
     startup_receipt_ref: &str,
     subreceipt_refs: &[String],
     diagnostics: &[String],
@@ -7999,7 +8071,7 @@ fn finish_install_dispatch(
 }
 
 fn install_refs(
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
     payload_ref: &str,
     provenance_receipt_ref: &str,
 ) -> Result<InstallRefs> {
@@ -8027,8 +8099,9 @@ fn finish_install(input: InstallFinishInput<'_>) -> Result<NodeControlDispatch> 
     let mut diagnostics = input.diagnostics;
     let provenance_receipt_refs = [input.provenance.receipt_ref.clone()];
     let refs = install_refs(input.request, input.payload_ref, &provenance_receipt_refs[0])?;
-    let install =
-        match artifacts::install_artifact(&input.state_root.join("registry"), &artifacts::ArtifactInstallInput {
+    let install = match crate::artifacts::install_artifact(
+        &input.state_root.join("registry"),
+        &crate::artifacts::ArtifactInstallInput {
             kind: "node-control-artifact".to_string(),
             payload: input.payload_value,
             schema_refs: refs.schema_refs,
@@ -8038,20 +8111,21 @@ fn finish_install(input: InstallFinishInput<'_>) -> Result<NodeControlDispatch> 
             evidence_refs: refs.evidence_refs,
             installer_ref: input.request.request_ref.clone(),
             capability_refs: input.request.authority_refs.clone(),
-        }) {
-            Ok(install) => install,
-            Err(error) => {
-                diagnostics.push(format!("node control artifact install failed: {error}"));
-                return finish_install_dispatch(
-                    input.state_root,
-                    input.request,
-                    input.startup_receipt_ref,
-                    &provenance_receipt_refs,
-                    &diagnostics,
-                );
-            }
-        };
-    let install_receipt_ref = preserves_rail::canonical_hash(&install.receipt_value)?;
+        },
+    ) {
+        Ok(install) => install,
+        Err(error) => {
+            diagnostics.push(format!("node control artifact install failed: {error}"));
+            return finish_install_dispatch(
+                input.state_root,
+                input.request,
+                input.startup_receipt_ref,
+                &provenance_receipt_refs,
+                &diagnostics,
+            );
+        }
+    };
+    let install_receipt_ref = crate::preserves_rail::canonical_hash(&install.receipt_value)?;
     write_preserves(
         &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "artifact-install"),
         &install.receipt_value,
@@ -8071,7 +8145,7 @@ fn finish_install(input: InstallFinishInput<'_>) -> Result<NodeControlDispatch> 
 
 fn dispatch_install_request(
     state_root: &Path,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
 ) -> Result<NodeControlDispatch> {
     let startup = current_startup_receipt(state_root)?;
     let mut diagnostics = side_effect_preflight_diagnostics(request);
@@ -8131,10 +8205,10 @@ struct RunStart {
 
 struct CompleteRunInput<'a> {
     state_root: &'a Path,
-    request: &'a node_runtime::NodeControlRequest,
+    request: &'a crate::node_runtime::NodeControlRequest,
     startup_receipt_ref: &'a str,
     prepared: PreparedRun,
-    provenance: provenance::ProvenanceEvaluation,
+    provenance: crate::provenance::ProvenanceEvaluation,
     diagnostics: Vec<String>,
 }
 
@@ -8142,7 +8216,7 @@ type RunStartResult = std::result::Result<RunStart, Box<NodeControlDispatch>>;
 
 struct RunDenyInput<'a> {
     state_root: &'a Path,
-    request: &'a node_runtime::NodeControlRequest,
+    request: &'a crate::node_runtime::NodeControlRequest,
     startup_receipt_ref: &'a str,
     diagnostics: Vec<String>,
 }
@@ -8160,7 +8234,7 @@ fn deny_run_start(input: RunDenyInput<'_>) -> Result<RunStartResult> {
 
 fn prepare_run(
     state_root: &Path,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
     startup_receipt_ref: &str,
 ) -> Result<RunStartResult> {
     let mut diagnostics = side_effect_preflight_diagnostics(request);
@@ -8202,7 +8276,7 @@ fn prepare_run(
             });
         }
     };
-    let execution_request = match job_dag::parse_job_execution_request_value(&execution_request_value) {
+    let execution_request = match crate::job_dag::parse_job_execution_request_value(&execution_request_value) {
         Ok(execution_request) => execution_request,
         Err(error) => {
             diagnostics.push(format!("node control run execution request malformed: {error}"));
@@ -8240,7 +8314,7 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<NodeControlDispatch> {
             });
         }
     };
-    let execution = job_dag::execution_loopback(job_dag::ExecutionLoopbackInput {
+    let execution = crate::job_dag::execution_loopback(crate::job_dag::ExecutionLoopbackInput {
         target_registry: &input.state_root.join("registry"),
         storage_root: &input.state_root.join("storage"),
         cache_root: &input.state_root.join("cache"),
@@ -8257,7 +8331,7 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<NodeControlDispatch> {
     subreceipt_refs.push(input.provenance.receipt_ref);
     subreceipt_refs.push(execution.receipt_ref.clone());
     if let Some(run) = execution.run.as_ref() {
-        let run_ref = preserves_rail::canonical_hash(&run.receipt_value)?;
+        let run_ref = crate::preserves_rail::canonical_hash(&run.receipt_value)?;
         write_preserves(
             &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "job-run"),
             &run.receipt_value,
@@ -8278,7 +8352,10 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<NodeControlDispatch> {
     })
 }
 
-fn dispatch_run_request(state_root: &Path, request: &node_runtime::NodeControlRequest) -> Result<NodeControlDispatch> {
+fn dispatch_run_request(
+    state_root: &Path,
+    request: &crate::node_runtime::NodeControlRequest,
+) -> Result<NodeControlDispatch> {
     let startup = current_startup_receipt(state_root)?;
     let start = match prepare_run(state_root, request, &startup.receipt_ref)? {
         Ok(start) => start,
@@ -8313,7 +8390,10 @@ fn dispatch_run_request(state_root: &Path, request: &node_runtime::NodeControlRe
     })
 }
 
-fn dispatch_gate_request(state_root: &Path, request: &node_runtime::NodeControlRequest) -> Result<NodeControlDispatch> {
+fn dispatch_gate_request(
+    state_root: &Path,
+    request: &crate::node_runtime::NodeControlRequest,
+) -> Result<NodeControlDispatch> {
     let startup = current_startup_receipt(state_root)?;
     let mut diagnostics = side_effect_preflight_diagnostics(request);
     let Some(subject_ref) = request.target_ref.as_deref() else {
@@ -8358,12 +8438,13 @@ fn dispatch_gate_request(state_root: &Path, request: &node_runtime::NodeControlR
             });
         }
     };
-    let validation = octet_gate::validate_octet_source_gate(&octet_gate::OctetSourceGateValidationInput {
-        consumer: "node-control-gate".to_string(),
-        subject_ref: subject_ref.to_string(),
-        gate_receipt_value: Some(gate_value),
-        source_scope: octet_gate::default_source_scope("node-control-gate")?,
-    })?;
+    let validation =
+        crate::octet_gate::validate_octet_source_gate(&crate::octet_gate::OctetSourceGateValidationInput {
+            consumer: "node-control-gate".to_string(),
+            subject_ref: subject_ref.to_string(),
+            gate_receipt_value: Some(gate_value),
+            source_scope: crate::octet_gate::default_source_scope("node-control-gate")?,
+        })?;
     write_preserves(
         &control_operation_subreceipt_path(state_root, &request.request_ref, "octet-source-gate"),
         &validation.value,
@@ -8389,7 +8470,7 @@ fn finalize_operation_dispatch(input: &OperationFinalizeInput<'_>) -> Result<Nod
         request: input.request,
         diagnostics: input.diagnostics,
     })?;
-    let operation_receipt_ref = preserves_rail::canonical_hash(&operation_receipt)?;
+    let operation_receipt_ref = crate::preserves_rail::canonical_hash(&operation_receipt)?;
     write_preserves(&control_operation_receipt_path(input.state_root, &input.request.request_ref), &operation_receipt)?;
     import_node_artifact(input.state_root, &operation_receipt)?;
     let mut all_subreceipt_refs = Vec::with_capacity(input.subreceipt_refs.len() + 1);
@@ -8402,7 +8483,7 @@ fn finalize_operation_dispatch(input: &OperationFinalizeInput<'_>) -> Result<Nod
         &all_subreceipt_refs,
         input.diagnostics,
     )?;
-    let control_receipt_ref = preserves_rail::canonical_hash(&control_receipt)?;
+    let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt)?;
     write_preserves(&control_outbox_receipt_path(input.state_root, &input.request.request_ref), &control_receipt)?;
     import_node_artifact(input.state_root, &control_receipt)?;
     Ok(NodeControlDispatch {
@@ -8414,7 +8495,7 @@ fn finalize_operation_dispatch(input: &OperationFinalizeInput<'_>) -> Result<Nod
     })
 }
 
-fn side_effect_preflight_diagnostics(request: &node_runtime::NodeControlRequest) -> Vec<String> {
+fn side_effect_preflight_diagnostics(request: &crate::node_runtime::NodeControlRequest) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(3);
     if request.authority_refs.is_empty() {
         diagnostics.push("node control authority refs missing".to_string());
@@ -8429,12 +8510,12 @@ fn side_effect_preflight_diagnostics(request: &node_runtime::NodeControlRequest)
 }
 
 fn read_node_ledger_artifact(state_root: &Path, artifact_ref: &str) -> Result<IoValue> {
-    ledger::read_artifact(&state_root.join("ledger"), artifact_ref)
+    crate::ledger::read_artifact(&state_root.join("ledger"), artifact_ref)
 }
 
 fn control_receipt_for_request(
     state_root: &Path,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
     startup_receipt_ref: &str,
     subreceipt_refs: &[String],
     diagnostics: &[String],
@@ -8474,7 +8555,7 @@ fn control_receipt_for_request(
     } else {
         Vec::new()
     };
-    node_runtime::node_control_receipt_value(&node_runtime::ControlReceiptValueInput {
+    crate::node_runtime::node_control_receipt_value(&crate::node_runtime::ControlReceiptValueInput {
         decision: final_decision,
         request,
         startup_receipt_ref,
@@ -8487,34 +8568,38 @@ fn control_receipt_for_request(
 
 fn authority_receipt_value(input: &AuthorityReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-authority-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&input.envelope.request.request_ref)]),
-        preserves_rail::record("from-peer", vec![preserves_rail::string(&input.envelope.from_peer)]),
-        preserves_rail::record("to-node", vec![preserves_rail::string(&input.envelope.to_node)]),
-        preserves_rail::record("operation", vec![preserves_rail::string(&input.envelope.request.operation)]),
-        preserves_rail::record("grant", vec![optional_string(input.grant_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-authority-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("envelope", vec![crate::preserves_rail::string(&input.envelope.envelope_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(
+            &input.envelope.request.request_ref,
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("peer-node-bound"),
-                preserves_rail::string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
+        crate::preserves_rail::record("from-peer", vec![crate::preserves_rail::string(&input.envelope.from_peer)]),
+        crate::preserves_rail::record("to-node", vec![crate::preserves_rail::string(&input.envelope.to_node)]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(
+            &input.envelope.request.operation,
+        )]),
+        crate::preserves_rail::record("grant", vec![optional_string(input.grant_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("peer-node-bound"),
+                crate::preserves_rail::string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("operation-scope-bound"),
-                preserves_rail::string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("operation-scope-bound"),
+                crate::preserves_rail::string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("revocation-checked-at-ingress"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("revocation-checked-at-ingress"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("transport-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("transport-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -8522,46 +8607,50 @@ fn authority_receipt_value(input: &AuthorityReceiptValueInput<'_>) -> Result<IoV
 
 fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-live-listener-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
-        preserves_rail::record("node", vec![preserves_rail::string(input.node_id)]),
-        preserves_rail::record("logical-endpoint", vec![preserves_rail::string(input.logical_endpoint_id)]),
-        preserves_rail::record("bound-endpoint", vec![preserves_rail::string(input.bound_endpoint_id)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
-        preserves_rail::record("max-events", vec![preserves_rail::string(input.max_events.to_string())]),
-        preserves_rail::record("observed-events", vec![preserves_rail::string(input.observed_events.to_string())]),
-        preserves_rail::record("transport-receipts", vec![preserves_rail::sequence(
-            input.transport_receipt_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-listener-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(input.startup_receipt_ref)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(input.node_id)]),
+        crate::preserves_rail::record("logical-endpoint", vec![crate::preserves_rail::string(
+            input.logical_endpoint_id,
         )]),
-        preserves_rail::record("neighbor-events", vec![preserves_rail::sequence(
-            input.neighbor_events.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("bound-endpoint", vec![crate::preserves_rail::string(input.bound_endpoint_id)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(input.topic)]),
+        crate::preserves_rail::record("max-events", vec![crate::preserves_rail::string(input.max_events.to_string())]),
+        crate::preserves_rail::record("observed-events", vec![crate::preserves_rail::string(
+            input.observed_events.to_string(),
         )]),
-        preserves_rail::record("service-run", vec![preserves_rail::string(input.service_receipt_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("transport-receipts", vec![crate::preserves_rail::sequence(
+            input.transport_receipt_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("live-iroh-listener"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("neighbor-events", vec![crate::preserves_rail::sequence(
+            input.neighbor_events.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("service-run", vec![crate::preserves_rail::string(input.service_receipt_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("live-iroh-listener"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("receive-before-drain"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("receive-before-drain"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("session-evidence-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("session-evidence-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bounded-listener"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bounded-listener"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("durable-inbox-boundary"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("durable-inbox-boundary"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -8570,39 +8659,39 @@ fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<
 fn live_transport_receipt_value(input: &LiveTransportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let has_peer_bootstrap = !input.envelope.peer_bootstrap_refs.is_empty();
-    Ok(preserves_rail::record("node-control-live-transport-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("transport", vec![preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
-        preserves_rail::record("node", vec![preserves_rail::string(input.node_id)]),
-        preserves_rail::record("delivered-from", vec![optional_string(input.delivered_from)]),
-        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
-        preserves_rail::record("ingress-receipt", vec![optional_string(input.ingress_receipt_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-transport-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(input.operation)]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("transport", vec![crate::preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(&input.envelope.topic)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(input.node_id)]),
+        crate::preserves_rail::record("delivered-from", vec![optional_string(input.delivered_from)]),
+        crate::preserves_rail::record("envelope", vec![crate::preserves_rail::string(&input.envelope.envelope_ref)]),
+        crate::preserves_rail::record("ingress-receipt", vec![optional_string(input.ingress_receipt_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("canonical-envelope-ref"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("canonical-envelope-ref"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("live-iroh-gossip"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("live-iroh-gossip"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("peer-bootstrap-before-enqueue"),
-                preserves_rail::string(if has_peer_bootstrap { "pass" } else { "fail" }),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("peer-bootstrap-before-enqueue"),
+                crate::preserves_rail::string(if has_peer_bootstrap { "pass" } else { "fail" }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("transport-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("transport-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("durable-inbox-boundary"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("durable-inbox-boundary"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -8610,36 +8699,40 @@ fn live_transport_receipt_value(input: &LiveTransportReceiptValueInput<'_>) -> R
 
 fn live_workflow_receipt_value(input: &LiveWorkflowReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-live-workflow-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(&input.ticket.topic)]),
-        preserves_rail::record("peer", vec![preserves_rail::string(&input.admission.peer_id)]),
-        preserves_rail::record("node", vec![preserves_rail::string(&input.ticket.node_id)]),
-        preserves_rail::record("receiver-ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
-        preserves_rail::record("peer-admission", vec![preserves_rail::string(&input.admission.admission_ref)]),
-        preserves_rail::record("authority-grant", vec![preserves_rail::string(&input.authority.grant_ref)]),
-        preserves_rail::record("send-receipt", vec![preserves_rail::string(&input.send.receipt_ref)]),
-        preserves_rail::record("receive-receipts", vec![preserves_rail::sequence(
-            input.receive_receipt_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-workflow-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(&input.ticket.topic)]),
+        crate::preserves_rail::record("peer", vec![crate::preserves_rail::string(&input.admission.peer_id)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(&input.ticket.node_id)]),
+        crate::preserves_rail::record("receiver-ticket", vec![crate::preserves_rail::string(&input.ticket.ticket_ref)]),
+        crate::preserves_rail::record("peer-admission", vec![crate::preserves_rail::string(
+            &input.admission.admission_ref,
         )]),
-        preserves_rail::record("listener-receipt", vec![optional_string(input.listener_receipt_ref)]),
-        preserves_rail::record("service-run", vec![preserves_rail::string(input.service_receipt_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("authority-grant", vec![crate::preserves_rail::string(
+            &input.authority.grant_ref,
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("ticket-admission-bound"),
-                preserves_rail::string(if input.admission.ticket_ref == input.ticket.ticket_ref {
+        crate::preserves_rail::record("send-receipt", vec![crate::preserves_rail::string(&input.send.receipt_ref)]),
+        crate::preserves_rail::record("receive-receipts", vec![crate::preserves_rail::sequence(
+            input.receive_receipt_refs.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("listener-receipt", vec![optional_string(input.listener_receipt_ref)]),
+        crate::preserves_rail::record("service-run", vec![crate::preserves_rail::string(input.service_receipt_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("ticket-admission-bound"),
+                crate::preserves_rail::string(if input.admission.ticket_ref == input.ticket.ticket_ref {
                     "pass"
                 } else {
                     "fail"
                 }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("authority-grant-bound"),
-                preserves_rail::string(
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("authority-grant-bound"),
+                crate::preserves_rail::string(
                     if input.authority.peer_id == input.admission.peer_id
                         && input.authority.node_id == input.ticket.node_id
                     {
@@ -8649,29 +8742,29 @@ fn live_workflow_receipt_value(input: &LiveWorkflowReceiptValueInput<'_>) -> Res
                     },
                 ),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("send-ticket-bound"),
-                preserves_rail::string(if input.send.receiver_ticket_ref == input.ticket.ticket_ref {
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("send-ticket-bound"),
+                crate::preserves_rail::string(if input.send.receiver_ticket_ref == input.ticket.ticket_ref {
                     "pass"
                 } else {
                     "fail"
                 }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("receive-before-service"),
-                preserves_rail::string(if input.receive_receipt_refs.is_empty() {
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("receive-before-service"),
+                crate::preserves_rail::string(if input.receive_receipt_refs.is_empty() {
                     "fail"
                 } else {
                     "pass"
                 }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("transport-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("transport-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("durable-inbox-boundary"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("durable-inbox-boundary"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -8695,7 +8788,10 @@ fn fail_if(condition: bool) -> &'static str {
 }
 
 fn receipt_check_value(name: &str, status: &str) -> IoValue {
-    preserves_rail::record("check", vec![preserves_rail::string(name), preserves_rail::string(status)])
+    crate::preserves_rail::record("check", vec![
+        crate::preserves_rail::string(name),
+        crate::preserves_rail::string(status),
+    ])
 }
 
 fn live_send_receipt_checks(input: &LiveSendReceiptValueInput<'_>) -> LiveSendReceiptChecks {
@@ -8719,7 +8815,7 @@ fn live_send_receipt_checks(input: &LiveSendReceiptValueInput<'_>) -> LiveSendRe
 }
 
 fn live_send_check_sequence(checks: &LiveSendReceiptChecks) -> IoValue {
-    preserves_rail::sequence(vec![
+    crate::preserves_rail::sequence(vec![
         receipt_check_value("receiver-ticket-bound", "pass"),
         receipt_check_value("receiver-address-bound", pass_if(checks.has_addresses)),
         receipt_check_value("receiver-address-supported", pass_if(checks.has_supported_addresses)),
@@ -8737,161 +8833,177 @@ fn live_send_check_sequence(checks: &LiveSendReceiptChecks) -> IoValue {
 fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let checks = live_send_receipt_checks(input);
-    Ok(preserves_rail::record("node-control-live-send-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("transport", vec![preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
-        preserves_rail::record("from-peer", vec![preserves_rail::string(input.from_peer)]),
-        preserves_rail::record("to-node", vec![preserves_rail::string(&input.ticket.node_id)]),
-        preserves_rail::record("receiver-ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
-        preserves_rail::record("receiver-endpoint", vec![preserves_rail::string(&input.ticket.live_endpoint_id)]),
-        preserves_rail::record("receiver-addresses", vec![preserves_rail::sequence(
-            input.ticket.address_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-send-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("transport", vec![crate::preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(&input.envelope.topic)]),
+        crate::preserves_rail::record("from-peer", vec![crate::preserves_rail::string(input.from_peer)]),
+        crate::preserves_rail::record("to-node", vec![crate::preserves_rail::string(&input.ticket.node_id)]),
+        crate::preserves_rail::record("receiver-ticket", vec![crate::preserves_rail::string(&input.ticket.ticket_ref)]),
+        crate::preserves_rail::record("receiver-endpoint", vec![crate::preserves_rail::string(
+            &input.ticket.live_endpoint_id,
         )]),
-        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
-        preserves_rail::record("transport-receipt", vec![optional_string(input.transport_receipt_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("receiver-addresses", vec![crate::preserves_rail::sequence(
+            input.ticket.address_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![live_send_check_sequence(&checks)]),
+        crate::preserves_rail::record("envelope", vec![crate::preserves_rail::string(&input.envelope.envelope_ref)]),
+        crate::preserves_rail::record("transport-receipt", vec![optional_string(input.transport_receipt_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![live_send_check_sequence(&checks)]),
     ]))
 }
 
 fn live_send_retry_receipt_value(input: &LiveSendRetryReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-live-send-retry-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("attempt", vec![preserves_rail::string(input.attempt.to_string())]),
-        preserves_rail::record("max-attempts", vec![preserves_rail::string(input.max_attempts.to_string())]),
-        preserves_rail::record("transport", vec![preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
-        preserves_rail::record("from-peer", vec![preserves_rail::string(input.from_peer)]),
-        preserves_rail::record("to-node", vec![preserves_rail::string(&input.ticket.node_id)]),
-        preserves_rail::record("receiver-ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
-        preserves_rail::record("receiver-endpoint", vec![preserves_rail::string(&input.ticket.live_endpoint_id)]),
-        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
-        preserves_rail::record("operation", vec![preserves_rail::string(&input.envelope.operation_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-send-retry-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("attempt", vec![crate::preserves_rail::string(input.attempt.to_string())]),
+        crate::preserves_rail::record("max-attempts", vec![crate::preserves_rail::string(
+            input.max_attempts.to_string(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bounded-retry"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("transport", vec![crate::preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(&input.envelope.topic)]),
+        crate::preserves_rail::record("from-peer", vec![crate::preserves_rail::string(input.from_peer)]),
+        crate::preserves_rail::record("to-node", vec![crate::preserves_rail::string(&input.ticket.node_id)]),
+        crate::preserves_rail::record("receiver-ticket", vec![crate::preserves_rail::string(&input.ticket.ticket_ref)]),
+        crate::preserves_rail::record("receiver-endpoint", vec![crate::preserves_rail::string(
+            &input.ticket.live_endpoint_id,
+        )]),
+        crate::preserves_rail::record("envelope", vec![crate::preserves_rail::string(&input.envelope.envelope_ref)]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(&input.envelope.operation_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bounded-retry"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("operation-id-bound"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("operation-id-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("transport-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("transport-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
 }
 
 fn live_send_duplicate_receipt_value(input: &LiveSendDuplicateReceiptValueInput<'_>) -> Result<IoValue> {
-    Ok(preserves_rail::record("node-control-live-send-duplicate-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string("pass")]),
-        preserves_rail::record("transport", vec![preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
-        preserves_rail::record("from-peer", vec![preserves_rail::string(input.from_peer)]),
-        preserves_rail::record("to-node", vec![preserves_rail::string(&input.ticket.node_id)]),
-        preserves_rail::record("receiver-ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
-        preserves_rail::record("receiver-endpoint", vec![preserves_rail::string(&input.ticket.live_endpoint_id)]),
-        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
-        preserves_rail::record("operation", vec![preserves_rail::string(&input.envelope.operation_ref)]),
-        preserves_rail::record("prior-send-receipt", vec![preserves_rail::string(input.prior_send_receipt_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-live-send-duplicate-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string("pass")]),
+        crate::preserves_rail::record("transport", vec![crate::preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(&input.envelope.topic)]),
+        crate::preserves_rail::record("from-peer", vec![crate::preserves_rail::string(input.from_peer)]),
+        crate::preserves_rail::record("to-node", vec![crate::preserves_rail::string(&input.ticket.node_id)]),
+        crate::preserves_rail::record("receiver-ticket", vec![crate::preserves_rail::string(&input.ticket.ticket_ref)]),
+        crate::preserves_rail::record("receiver-endpoint", vec![crate::preserves_rail::string(
+            &input.ticket.live_endpoint_id,
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("duplicate-side-effect-suppressed"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("envelope", vec![crate::preserves_rail::string(&input.envelope.envelope_ref)]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(&input.envelope.operation_ref)]),
+        crate::preserves_rail::record("prior-send-receipt", vec![crate::preserves_rail::string(
+            input.prior_send_receipt_ref,
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("duplicate-side-effect-suppressed"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("operation-id-bound"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("operation-id-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("prior-send-receipt-bound"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("prior-send-receipt-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("transport-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("transport-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
 }
 
 fn service_lock_value(input: &ServiceLockValueInput<'_>) -> Result<IoValue> {
-    Ok(preserves_rail::record("node-control-service-lock-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_SERVICE_LOCK_SCHEMA),
-        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(input.state_root)?)]),
-        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
-        preserves_rail::record("node", vec![preserves_rail::string(input.node_id)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
-        preserves_rail::record("max-ticks", vec![preserves_rail::string(input.max_ticks.to_string())]),
-        preserves_rail::record("max-requests-per-tick", vec![preserves_rail::string(
+    Ok(crate::preserves_rail::record("node-control-service-lock-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_SERVICE_LOCK_SCHEMA),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(
+            input.state_root,
+        )?)]),
+        crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(input.startup_receipt_ref)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(input.node_id)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(input.topic)]),
+        crate::preserves_rail::record("max-ticks", vec![crate::preserves_rail::string(input.max_ticks.to_string())]),
+        crate::preserves_rail::record("max-requests-per-tick", vec![crate::preserves_rail::string(
             input.max_requests_per_tick.to_string(),
         )]),
-        preserves_rail::record("service-run", vec![preserves_rail::string(input.service_run_ref)]),
-        preserves_rail::record("profile", vec![preserves_rail::string("local-supervised-node-control-v1")]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("startup-bound"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("service-run", vec![crate::preserves_rail::string(input.service_run_ref)]),
+        crate::preserves_rail::record("profile", vec![crate::preserves_rail::string(
+            "local-supervised-node-control-v1",
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("startup-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("single-active-service"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("single-active-service"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bounded-ticks"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bounded-ticks"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("not-authority-token"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("not-authority-token"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
 }
 
 fn service_heartbeat_receipt_value(input: &ServiceHeartbeatValueInput<'_>) -> Result<IoValue> {
-    Ok(preserves_rail::record("node-control-service-heartbeat-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_SERVICE_HEARTBEAT_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(if input.diagnostics.is_empty() {
-            "pass"
-        } else {
-            "deny"
-        })]),
-        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
-        preserves_rail::record("service-lock", vec![preserves_rail::string(input.service_lock_ref)]),
-        preserves_rail::record("tick", vec![preserves_rail::string(input.tick.to_string())]),
-        preserves_rail::record("delivered-count", vec![preserves_rail::string(input.delivered_count.to_string())]),
-        preserves_rail::record("processed-count", vec![preserves_rail::string(input.processed_count.to_string())]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-service-heartbeat-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_SERVICE_HEARTBEAT_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(
+            if input.diagnostics.is_empty() { "pass" } else { "deny" },
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("service-lock-bound"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(input.startup_receipt_ref)]),
+        crate::preserves_rail::record("service-lock", vec![crate::preserves_rail::string(input.service_lock_ref)]),
+        crate::preserves_rail::record("tick", vec![crate::preserves_rail::string(input.tick.to_string())]),
+        crate::preserves_rail::record("delivered-count", vec![crate::preserves_rail::string(
+            input.delivered_count.to_string(),
+        )]),
+        crate::preserves_rail::record("processed-count", vec![crate::preserves_rail::string(
+            input.processed_count.to_string(),
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("service-lock-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("startup-bound"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("startup-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("monotonic-tick"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("monotonic-tick"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -8899,37 +9011,37 @@ fn service_heartbeat_receipt_value(input: &ServiceHeartbeatValueInput<'_>) -> Re
 
 fn supervisor_receipt_value(input: &SupervisorReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-supervisor-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
-        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
-        preserves_rail::record("service-lock", vec![optional_string(input.service_lock_ref)]),
-        preserves_rail::record("policy", vec![optional_string(input.supervisor_policy_ref)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-supervisor-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(input.operation)]),
+        crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(input.startup_receipt_ref)]),
+        crate::preserves_rail::record("service-lock", vec![optional_string(input.service_lock_ref)]),
+        crate::preserves_rail::record("policy", vec![optional_string(input.supervisor_policy_ref)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(input.topic)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("supervisor-policy-bound"),
-                preserves_rail::string(if input.supervisor_policy_ref.is_some() {
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("supervisor-policy-bound"),
+                crate::preserves_rail::string(if input.supervisor_policy_ref.is_some() {
                     "pass"
                 } else {
                     "fail"
                 }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("single-active-service"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("single-active-service"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bounded-restart-policy"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bounded-restart-policy"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("shutdown-drain-bound"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("shutdown-drain-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -8938,7 +9050,7 @@ fn supervisor_receipt_value(input: &SupervisorReceiptValueInput<'_>) -> Result<I
 fn service_run_check_sequence(input: &ServiceRunReceiptValueInput<'_>) -> IoValue {
     let has_supervisor_policy_binding =
         input.supervisor_policy_ref.is_none() || !input.supervisor_receipt_refs.is_empty();
-    preserves_rail::sequence(vec![
+    crate::preserves_rail::sequence(vec![
         receipt_check_value("single-active-service", pass_if(input.service_lock_ref.is_some())),
         receipt_check_value("ingress-before-loop", "pass"),
         receipt_check_value("loop-reuse", "pass"),
@@ -8950,93 +9062,93 @@ fn service_run_check_sequence(input: &ServiceRunReceiptValueInput<'_>) -> IoValu
 
 fn service_run_receipt_value(input: &ServiceRunReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-service-run-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
-        preserves_rail::record("service-lock", vec![optional_string(input.service_lock_ref)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
-        preserves_rail::record("max-ticks", vec![preserves_rail::string(input.max_ticks.to_string())]),
-        preserves_rail::record("max-requests-per-tick", vec![preserves_rail::string(
+    Ok(crate::preserves_rail::record("node-control-service-run-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(input.startup_receipt_ref)]),
+        crate::preserves_rail::record("service-lock", vec![optional_string(input.service_lock_ref)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(input.topic)]),
+        crate::preserves_rail::record("max-ticks", vec![crate::preserves_rail::string(input.max_ticks.to_string())]),
+        crate::preserves_rail::record("max-requests-per-tick", vec![crate::preserves_rail::string(
             input.max_requests_per_tick.to_string(),
         )]),
-        preserves_rail::record("ticks", vec![preserves_rail::string(input.ticks.to_string())]),
-        preserves_rail::record("heartbeats", vec![preserves_rail::sequence(
-            input.heartbeat_receipt_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("ticks", vec![crate::preserves_rail::string(input.ticks.to_string())]),
+        crate::preserves_rail::record("heartbeats", vec![crate::preserves_rail::sequence(
+            input.heartbeat_receipt_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("ingress-receipts", vec![preserves_rail::sequence(
-            input.ingress_receipt_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("ingress-receipts", vec![crate::preserves_rail::sequence(
+            input.ingress_receipt_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("loop-receipts", vec![preserves_rail::sequence(
-            input.loop_receipt_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("loop-receipts", vec![crate::preserves_rail::sequence(
+            input.loop_receipt_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("processed-requests", vec![preserves_rail::sequence(
-            input.processed_request_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("processed-requests", vec![crate::preserves_rail::sequence(
+            input.processed_request_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("stopped", vec![preserves_rail::string(if input.has_stopped {
+        crate::preserves_rail::record("stopped", vec![crate::preserves_rail::string(if input.has_stopped {
             "true"
         } else {
             "false"
         })]),
-        preserves_rail::record("supervisor-policy", vec![optional_string(input.supervisor_policy_ref)]),
-        preserves_rail::record("supervisor-receipts", vec![preserves_rail::sequence(
-            input.supervisor_receipt_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("supervisor-policy", vec![optional_string(input.supervisor_policy_ref)]),
+        crate::preserves_rail::record("supervisor-receipts", vec![crate::preserves_rail::sequence(
+            input.supervisor_receipt_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![service_run_check_sequence(input)]),
+        crate::preserves_rail::record("checks", vec![service_run_check_sequence(input)]),
     ]))
 }
 
 fn ingress_envelope_value(
     input: &NodeControlIngressEnvelopeInput<'_>,
-    request: &node_runtime::NodeControlRequest,
+    request: &crate::node_runtime::NodeControlRequest,
     operation_ref: &str,
     transport: &str,
     transport_check: &str,
 ) -> Result<IoValue> {
-    Ok(preserves_rail::record("node-control-ingress-envelope-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA),
-        preserves_rail::record("transport", vec![preserves_rail::string(transport)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
-        preserves_rail::record("from-peer", vec![preserves_rail::string(input.from_peer)]),
-        preserves_rail::record("to-node", vec![preserves_rail::string(input.to_node)]),
-        preserves_rail::record("sequence", vec![preserves_rail::string(input.sequence.to_string())]),
-        preserves_rail::record("operation", vec![preserves_rail::string(operation_ref)]),
-        preserves_rail::record("request-ref", vec![preserves_rail::string(&request.request_ref)]),
-        preserves_rail::record("request", vec![request.value.clone()]),
-        preserves_rail::record("peer-bootstrap", vec![preserves_rail::sequence(
-            input.peer_bootstrap_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-ingress-envelope-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA),
+        crate::preserves_rail::record("transport", vec![crate::preserves_rail::string(transport)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(input.topic)]),
+        crate::preserves_rail::record("from-peer", vec![crate::preserves_rail::string(input.from_peer)]),
+        crate::preserves_rail::record("to-node", vec![crate::preserves_rail::string(input.to_node)]),
+        crate::preserves_rail::record("sequence", vec![crate::preserves_rail::string(input.sequence.to_string())]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(operation_ref)]),
+        crate::preserves_rail::record("request-ref", vec![crate::preserves_rail::string(&request.request_ref)]),
+        crate::preserves_rail::record("request", vec![request.value.clone()]),
+        crate::preserves_rail::record("peer-bootstrap", vec![crate::preserves_rail::sequence(
+            input.peer_bootstrap_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("authority", vec![preserves_rail::sequence(
-            input.authority_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("authority", vec![crate::preserves_rail::sequence(
+            input.authority_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("policy", vec![preserves_rail::sequence(
-            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("policy", vec![crate::preserves_rail::sequence(
+            input.policy_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("resource", vec![preserves_rail::sequence(
-            input.resource_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("resource", vec![crate::preserves_rail::sequence(
+            input.resource_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("evidence", vec![preserves_rail::sequence(
-            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("evidence", vec![crate::preserves_rail::sequence(
+            input.evidence_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("canonical-request-ref"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("canonical-request-ref"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("operation-id-bound"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("operation-id-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string(transport_check),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string(transport_check),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("transport-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("transport-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -9048,35 +9160,39 @@ fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IoValue
     let has_authority = !input.envelope.authority_refs.is_empty() && !input.envelope.request.authority_refs.is_empty();
     let has_policy = !input.envelope.policy_refs.is_empty() && !input.envelope.request.policy_refs.is_empty();
     let has_resource = !input.envelope.resource_refs.is_empty() && !input.envelope.request.resource_refs.is_empty();
-    Ok(preserves_rail::record("node-control-ingress-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("phase", vec![preserves_rail::string(input.phase)]),
-        preserves_rail::record("transport", vec![preserves_rail::string(input.transport)]),
-        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
-        preserves_rail::record("from-peer", vec![preserves_rail::string(&input.envelope.from_peer)]),
-        preserves_rail::record("to-node", vec![preserves_rail::string(&input.envelope.to_node)]),
-        preserves_rail::record("sequence", vec![preserves_rail::string(input.envelope.sequence.to_string())]),
-        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
-        preserves_rail::record("operation", vec![preserves_rail::string(&input.envelope.operation_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&input.envelope.request.request_ref)]),
-        preserves_rail::record("idempotency", vec![optional_string(input.idempotency_receipt_ref)]),
-        preserves_rail::record("queue", vec![optional_string(input.queue_receipt_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-ingress-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("phase", vec![crate::preserves_rail::string(input.phase)]),
+        crate::preserves_rail::record("transport", vec![crate::preserves_rail::string(input.transport)]),
+        crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(&input.envelope.topic)]),
+        crate::preserves_rail::record("from-peer", vec![crate::preserves_rail::string(&input.envelope.from_peer)]),
+        crate::preserves_rail::record("to-node", vec![crate::preserves_rail::string(&input.envelope.to_node)]),
+        crate::preserves_rail::record("sequence", vec![crate::preserves_rail::string(
+            input.envelope.sequence.to_string(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("peer-bootstrap-bound"),
-                preserves_rail::string(if has_peer_bootstrap { "pass" } else { "fail" }),
+        crate::preserves_rail::record("envelope", vec![crate::preserves_rail::string(&input.envelope.envelope_ref)]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(&input.envelope.operation_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(
+            &input.envelope.request.request_ref,
+        )]),
+        crate::preserves_rail::record("idempotency", vec![optional_string(input.idempotency_receipt_ref)]),
+        crate::preserves_rail::record("queue", vec![optional_string(input.queue_receipt_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("peer-bootstrap-bound"),
+                crate::preserves_rail::string(if has_peer_bootstrap { "pass" } else { "fail" }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("authority-before-enqueue"),
-                preserves_rail::string(if has_authority { "pass" } else { "fail" }),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("authority-before-enqueue"),
+                crate::preserves_rail::string(if has_authority { "pass" } else { "fail" }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("authority-delegation-before-enqueue"),
-                preserves_rail::string(
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("authority-delegation-before-enqueue"),
+                crate::preserves_rail::string(
                     if input.envelope.transport != LIVE_CONTROL_INGRESS_TRANSPORT || input.decision == "pass" {
                         "pass"
                     } else {
@@ -9084,17 +9200,17 @@ fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IoValue
                     },
                 ),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("policy-before-enqueue"),
-                preserves_rail::string(if has_policy { "pass" } else { "fail" }),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("policy-before-enqueue"),
+                crate::preserves_rail::string(if has_policy { "pass" } else { "fail" }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("resource-before-enqueue"),
-                preserves_rail::string(if has_resource { "pass" } else { "fail" }),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("resource-before-enqueue"),
+                crate::preserves_rail::string(if has_resource { "pass" } else { "fail" }),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("delivery-idempotency-before-enqueue"),
-                preserves_rail::string(
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("delivery-idempotency-before-enqueue"),
+                crate::preserves_rail::string(
                     if input.phase == "publish" || input.idempotency_receipt_ref.is_some() || input.decision == "deny" {
                         "pass"
                     } else {
@@ -9102,9 +9218,9 @@ fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IoValue
                     },
                 ),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("durable-inbox-boundary"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("durable-inbox-boundary"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -9112,29 +9228,31 @@ fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IoValue
 
 fn queue_receipt_value(input: &QueueReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-queue-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("phase", vec![preserves_rail::string(input.phase)]),
-        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
-        preserves_rail::record("request", vec![preserves_rail::string(input.request_ref)]),
-        preserves_rail::record("profile", vec![preserves_rail::string("local-preserves-control-file-v1")]),
-        preserves_rail::record("location", vec![preserves_rail::string(input.location_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-queue-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("phase", vec![crate::preserves_rail::string(input.phase)]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(input.operation)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(input.request_ref)]),
+        crate::preserves_rail::record("profile", vec![crate::preserves_rail::string(
+            "local-preserves-control-file-v1",
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("canonical-request-ref"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("location", vec![crate::preserves_rail::string(input.location_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("canonical-request-ref"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("durable-control-profile"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("durable-control-profile"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("explicit-state-root"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("explicit-state-root"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -9142,61 +9260,65 @@ fn queue_receipt_value(input: &QueueReceiptValueInput<'_>) -> Result<IoValue> {
 
 fn operation_receipt_value(input: &OperationReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-operation-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_OPERATION_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("operation", vec![preserves_rail::string(&input.request.operation)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
-        preserves_rail::record("target", vec![optional_string(input.request.target_ref.as_deref())]),
-        preserves_rail::record("payload", vec![optional_string(input.request.payload_ref.as_deref())]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-operation-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_OPERATION_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(&input.request.operation)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&input.request.request_ref)]),
+        crate::preserves_rail::record("target", vec![optional_string(input.request.target_ref.as_deref())]),
+        crate::preserves_rail::record("payload", vec![optional_string(input.request.payload_ref.as_deref())]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("operation-dispatch-explicit"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("operation-dispatch-explicit"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("side-effects-receipted"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("side-effects-receipted"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("canonical-receipt"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("canonical-receipt"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
 }
 
 fn heartbeat_receipt_value(input: &HeartbeatReceiptValueInput<'_>) -> Result<IoValue> {
-    Ok(preserves_rail::record("node-control-heartbeat-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(if input.diagnostics.is_empty() {
-            "pass"
-        } else {
-            "deny"
-        })]),
-        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
-        preserves_rail::record("lock", vec![preserves_rail::string(input.lock_ref)]),
-        preserves_rail::record("loop-sequence", vec![preserves_rail::string(input.loop_sequence.to_string())]),
-        preserves_rail::record("processed-count", vec![preserves_rail::string(input.processed_count.to_string())]),
-        preserves_rail::record("profile", vec![preserves_rail::string("local-preserves-control-loop-v1")]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-heartbeat-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(
+            if input.diagnostics.is_empty() { "pass" } else { "deny" },
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("active-lock-bound"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(input.startup_receipt_ref)]),
+        crate::preserves_rail::record("lock", vec![crate::preserves_rail::string(input.lock_ref)]),
+        crate::preserves_rail::record("loop-sequence", vec![crate::preserves_rail::string(
+            input.loop_sequence.to_string(),
+        )]),
+        crate::preserves_rail::record("processed-count", vec![crate::preserves_rail::string(
+            input.processed_count.to_string(),
+        )]),
+        crate::preserves_rail::record("profile", vec![crate::preserves_rail::string(
+            "local-preserves-control-loop-v1",
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("active-lock-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("heartbeat-is-receipted"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("heartbeat-is-receipted"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("no-ambient-socket-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("no-ambient-socket-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -9204,39 +9326,47 @@ fn heartbeat_receipt_value(input: &HeartbeatReceiptValueInput<'_>) -> Result<IoV
 
 fn loop_receipt_value(input: &LoopReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    Ok(preserves_rail::record("node-control-loop-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LOOP_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
-        preserves_rail::record("heartbeat", vec![preserves_rail::string(input.heartbeat_receipt_ref)]),
-        preserves_rail::record("max-requests", vec![preserves_rail::string(input.max_requests.to_string())]),
-        preserves_rail::record("processed-requests", vec![preserves_rail::sequence(
-            input.processed_request_refs.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("node-control-loop-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LOOP_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(input.startup_receipt_ref)]),
+        crate::preserves_rail::record("heartbeat", vec![crate::preserves_rail::string(input.heartbeat_receipt_ref)]),
+        crate::preserves_rail::record("max-requests", vec![crate::preserves_rail::string(
+            input.max_requests.to_string(),
         )]),
-        preserves_rail::record("dispatch-receipts", vec![preserves_rail::sequence(
-            input.dispatch_receipt_refs.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("processed-requests", vec![crate::preserves_rail::sequence(
+            input.processed_request_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("stopped", vec![preserves_rail::string(if input.has_stopped { "yes" } else { "no" })]),
-        preserves_rail::record("profile", vec![preserves_rail::string("local-preserves-control-loop-v1")]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("dispatch-receipts", vec![crate::preserves_rail::sequence(
+            input.dispatch_receipt_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("bounded-request-loop"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("stopped", vec![crate::preserves_rail::string(if input.has_stopped {
+            "yes"
+        } else {
+            "no"
+        })]),
+        crate::preserves_rail::record("profile", vec![crate::preserves_rail::string(
+            "local-preserves-control-loop-v1",
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("bounded-request-loop"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("deterministic-inbox-order"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("deterministic-inbox-order"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("idempotent-request-dispatch"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("idempotent-request-dispatch"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("shutdown-stops-loop"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("shutdown-stops-loop"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -9276,17 +9406,17 @@ pub fn node_daemon_summary(value: &IoValue) -> Result<String> {
     if let Some(summary) = control_summary(value)? {
         return Ok(summary);
     }
-    if let Ok(summary) = protocol_session::protocol_summary(value) {
+    if let Ok(summary) = crate::protocol_session::protocol_summary(value) {
         return Ok(summary);
     }
-    if let Ok(summary) = provenance::provenance_summary(value) {
+    if let Ok(summary) = crate::provenance::provenance_summary(value) {
         return Ok(summary);
     }
     Err(MoltenError::invalid_harness("unsupported node daemon artifact for show"))
 }
 
 fn runtime_summary(value: &IoValue) -> Result<Option<String>> {
-    if let Ok(config) = node_runtime::parse_node_config(value) {
+    if let Ok(config) = crate::node_runtime::parse_node_config(value) {
         return Ok(Some(format!(
             "node config ref={} identity={} adapters={}",
             config.config_ref,
@@ -9294,7 +9424,7 @@ fn runtime_summary(value: &IoValue) -> Result<Option<String>> {
             config.adapters.len()
         )));
     }
-    if let Ok(startup) = node_runtime::parse_node_startup_receipt(value) {
+    if let Ok(startup) = crate::node_runtime::parse_node_startup_receipt(value) {
         return Ok(Some(format!(
             "node startup decision={} receipt={} adapters={}",
             startup.decision,
@@ -9302,7 +9432,7 @@ fn runtime_summary(value: &IoValue) -> Result<Option<String>> {
             startup.adapters.len()
         )));
     }
-    if let Ok(control) = node_runtime::parse_node_control_receipt(value) {
+    if let Ok(control) = crate::node_runtime::parse_node_control_receipt(value) {
         return Ok(Some(format!(
             "node control decision={} receipt={} request={}",
             control.decision, control.receipt_ref, control.request_ref
@@ -9317,7 +9447,7 @@ fn runtime_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-ingress-receipt-v1", Some(15)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA,
             "node control ingress receipt",
         )?;
         return Ok(Some(format!(
@@ -9335,7 +9465,7 @@ fn import_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-ticket-import-receipt-v1", Some(13)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA,
             "node control live ticket import receipt",
         )?;
         return Ok(Some(format!(
@@ -9348,7 +9478,7 @@ fn import_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-authority-grant-import-receipt-v1", Some(13)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA,
             "node control authority grant import receipt",
         )?;
         return Ok(Some(format!(
@@ -9386,7 +9516,7 @@ fn access_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-authority-receipt-v1", Some(10)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA,
             "node control authority receipt",
         )?;
         return Ok(Some(format!(
@@ -9404,7 +9534,7 @@ fn flow_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-listener-receipt-v1", Some(14)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA,
             "node control live listener receipt",
         )?;
         return Ok(Some(format!(
@@ -9418,7 +9548,7 @@ fn flow_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-receipt-v1", Some(14)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA,
             "node control live workflow receipt",
         )?;
         return Ok(Some(format!(
@@ -9437,7 +9567,7 @@ fn bundle_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-v1", Some(10)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
             "node control live workflow bundle",
         )?;
         return Ok(Some(format!(
@@ -9451,7 +9581,7 @@ fn bundle_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-export-receipt-v1", Some(9)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA,
             "node control live workflow bundle export receipt",
         )?;
         return Ok(Some(format!(
@@ -9464,7 +9594,7 @@ fn bundle_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-import-receipt-v1", Some(12)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA,
             "node control live workflow bundle import receipt",
         )?;
         return Ok(Some(format!(
@@ -9481,7 +9611,7 @@ fn gate_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-verify-receipt-v1", Some(10)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA,
             "node control live workflow bundle verify receipt",
         )?;
         return Ok(Some(format!(
@@ -9494,7 +9624,7 @@ fn gate_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-gate-receipt-v1", Some(12)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA,
             "node control live workflow bundle gate receipt",
         )?;
         return Ok(Some(format!(
@@ -9511,7 +9641,7 @@ fn apply_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
             "node control live workflow bundle apply receipt",
         )?;
         return Ok(Some(format!(
@@ -9527,7 +9657,7 @@ fn apply_summary(value: &IoValue) -> Result<Option<String>> {
     {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
             "node control live workflow bundle reconcile receipt",
         )?;
         return Ok(Some(format!(
@@ -9545,7 +9675,7 @@ fn send_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-send-retry-receipt-v1", Some(14)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA,
             "node control live send retry receipt",
         )?;
         return Ok(Some(format!(
@@ -9559,7 +9689,7 @@ fn send_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-send-duplicate-receipt-v1", Some(13)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA,
             "node control live send duplicate receipt",
         )?;
         return Ok(Some(format!(
@@ -9571,7 +9701,7 @@ fn send_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-send-receipt-v1", Some(13)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA,
             "node control live send receipt",
         )?;
         return Ok(Some(format!(
@@ -9586,7 +9716,7 @@ fn send_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-transport-receipt-v1", Some(11)) {
         require_schema(
             &fields[0],
-            preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,
+            crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,
             "node control live transport receipt",
         )?;
         return Ok(Some(format!(
@@ -9601,13 +9731,13 @@ fn send_summary(value: &IoValue) -> Result<Option<String>> {
 }
 
 fn state_summary(value: &IoValue) -> Result<Option<String>> {
-    if let Ok(health) = node_runtime::parse_node_health_receipt(value) {
+    if let Ok(health) = crate::node_runtime::parse_node_health_receipt(value) {
         return Ok(Some(format!(
             "node health decision={} receipt={} replay={}",
             health.decision, health.receipt_ref, health.replay_status
         )));
     }
-    if let Ok(shutdown) = node_runtime::parse_node_shutdown_receipt(value) {
+    if let Ok(shutdown) = crate::node_runtime::parse_node_shutdown_receipt(value) {
         return Ok(Some(format!(
             "node shutdown decision={} receipt={} adapters={}",
             shutdown.decision,
@@ -9714,9 +9844,9 @@ fn control_summary(value: &IoValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn current_startup_receipt(state_root: &Path) -> Result<node_runtime::NodeStartupReceipt> {
+fn current_startup_receipt(state_root: &Path) -> Result<crate::node_runtime::NodeStartupReceipt> {
     let startup_value = read_preserves(&state_root.join(STARTUP_FILE))?;
-    node_runtime::parse_node_startup_receipt(&startup_value)
+    crate::node_runtime::parse_node_startup_receipt(&startup_value)
 }
 
 fn write_active_lock(state_root: &Path, startup_receipt_ref: &str) -> Result<()> {
@@ -9735,7 +9865,7 @@ fn require_active_lock(state_root: &Path) -> Result<()> {
     let fields = lock_value
         .collect_simple_record("node-control-lock-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-lock-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::NODE_CONTROL_LOCK_SCHEMA, "node control lock")?;
+    require_schema(&fields[0], crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA, "node control lock")?;
     let locked_startup = record_string(&fields[2], "startup")?;
     let startup = current_startup_receipt(state_root)?;
     if locked_startup != startup.receipt_ref {
@@ -9753,34 +9883,38 @@ fn remove_active_lock(state_root: &Path) -> Result<()> {
 }
 
 fn active_lock_value(state_root: &Path, startup_receipt_ref: &str) -> Result<IoValue> {
-    Ok(preserves_rail::record("node-control-lock-v1", vec![
-        preserves_rail::string(preserves_rail::NODE_CONTROL_LOCK_SCHEMA),
-        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(state_root)?)]),
-        preserves_rail::record("startup", vec![preserves_rail::string(startup_receipt_ref)]),
-        preserves_rail::record("owner", vec![preserves_rail::string(&local_ref(
+    Ok(crate::preserves_rail::record("node-control-lock-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(
+            state_root,
+        )?)]),
+        crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(startup_receipt_ref)]),
+        crate::preserves_rail::record("owner", vec![crate::preserves_rail::string(&local_ref(
             "node-control-owner",
             startup_receipt_ref,
         )?)]),
-        preserves_rail::record("profile", vec![preserves_rail::string("local-preserves-control-file-v1")]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("startup-bound"),
-                preserves_rail::string("pass"),
+        crate::preserves_rail::record("profile", vec![crate::preserves_rail::string(
+            "local-preserves-control-file-v1",
+        )]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("startup-bound"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("not-authority-token"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("not-authority-token"),
+                crate::preserves_rail::string("pass"),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("explicit-state-root"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("explicit-state-root"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
 }
 
 fn import_node_artifact(state_root: &Path, value: &IoValue) -> Result<String> {
-    let imported = ledger::import_artifact(&state_root.join("ledger"), value)?;
+    let imported = crate::ledger::import_artifact(&state_root.join("ledger"), value)?;
     let receipt_path = state_root
         .join("receipts")
         .join(format!("ledger-import-{}.preserves", ref_file_stem(&imported.artifact_ref)));
@@ -9817,7 +9951,7 @@ fn pending_control_request_paths(state_root: &Path) -> Result<Vec<PathBuf>> {
 }
 
 fn archive_dispatched_request(state_root: &Path, request_path: &Path, request_value: &IoValue) -> Result<()> {
-    let request_ref = preserves_rail::canonical_hash(request_value)?;
+    let request_ref = crate::preserves_rail::canonical_hash(request_value)?;
     let archived = control_outbox_request_path(state_root, &request_ref);
     write_preserves(&archived, request_value)?;
     if request_path.starts_with(state_root.join(CONTROL_INBOX_DIR)) && request_path.exists() {
@@ -9898,7 +10032,7 @@ fn control_supervisor_receipt_path(state_root: &Path, receipt_ref: &str) -> Path
 
 fn write_supervisor_receipt(state_root: &Path, input: &SupervisorReceiptValueInput<'_>) -> Result<String> {
     let value = supervisor_receipt_value(input)?;
-    let receipt_ref = preserves_rail::canonical_hash(&value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
     write_preserves(&control_supervisor_receipt_path(state_root, &receipt_ref), &value)?;
     import_node_artifact(state_root, &value)?;
     Ok(receipt_ref)
@@ -9992,15 +10126,15 @@ fn ref_file_stem(value_ref: &str) -> String {
 
 fn optional_string(value: Option<&str>) -> IoValue {
     match value {
-        Some(value) => preserves_rail::record("some", vec![preserves_rail::string(value)]),
-        None => preserves_rail::record("none", Vec::new()),
+        Some(value) => crate::preserves_rail::record("some", vec![crate::preserves_rail::string(value)]),
+        None => crate::preserves_rail::record("none", Vec::new()),
     }
 }
 
 fn optional_value(value: Option<&IoValue>) -> IoValue {
     match value {
-        Some(value) => preserves_rail::record("some", vec![value.clone()]),
-        None => preserves_rail::record("none", Vec::new()),
+        Some(value) => crate::preserves_rail::record("some", vec![value.clone()]),
+        None => crate::preserves_rail::record("none", Vec::new()),
     }
 }
 
@@ -10236,7 +10370,7 @@ fn validate_ingress_refs(refs: &[String], label: &str) -> Result<()> {
 }
 
 fn validate_ingress_ref(reference: &str, label: &str) -> Result<()> {
-    preserves_rail::validate_content_ref(reference).map_err(|error| {
+    crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!("{label} must be a canonical blake3 content ref: {error}"))
     })
 }
@@ -10251,7 +10385,9 @@ fn validate_member_ref(actual: &str, expected: &str, label: &str) -> Result<()> 
 
 fn validate_optional_member_ref(value: Option<&IoValue>, expected_ref: Option<&str>, label: &str) -> Result<()> {
     match (value, expected_ref) {
-        (Some(value), Some(expected)) => validate_member_ref(&preserves_rail::canonical_hash(value)?, expected, label),
+        (Some(value), Some(expected)) => {
+            validate_member_ref(&crate::preserves_rail::canonical_hash(value)?, expected, label)
+        }
         (Some(_), None) => Err(MoltenError::invalid_harness(format!("{label} value present without ref"))),
         (None, Some(expected)) => {
             Err(MoltenError::invalid_harness(format!("{label} ref {expected} present without value")))
@@ -10283,19 +10419,20 @@ fn verify_restart_state(state_root: &Path) -> Result<()> {
             ));
         }
         let startup_value = read_preserves(&startup_path)?;
-        let startup = node_runtime::parse_node_startup_receipt(&startup_value)?;
-        let shutdown_ref = preserves_rail::canonical_hash(&read_preserves(&shutdown_path)?)?;
+        let startup = crate::node_runtime::parse_node_startup_receipt(&startup_value)?;
+        let shutdown_ref = crate::preserves_rail::canonical_hash(&read_preserves(&shutdown_path)?)?;
         let head_refs = vec![startup.receipt_ref.clone()];
-        let health_value =
-            node_runtime::node_restart_health_receipt_value(&node_runtime::RestartHealthReceiptValueInput {
+        let health_value = crate::node_runtime::node_restart_health_receipt_value(
+            &crate::node_runtime::RestartHealthReceiptValueInput {
                 startup_receipt: &startup,
                 shutdown_receipt_ref: Some(&shutdown_ref),
                 index_receipt_refs: &index_receipt_refs(state_root)?,
                 head_refs: &head_refs,
                 open_job_refs: &[],
                 diagnostics: &[],
-            })?;
-        let health = node_runtime::parse_node_health_receipt(&health_value)?;
+            },
+        )?;
+        let health = crate::node_runtime::parse_node_health_receipt(&health_value)?;
         write_preserves(&state_root.join(HEALTH_FILE), &health_value)?;
         if health.decision != "pass" {
             return Err(MoltenError::invalid_harness(format!(
@@ -10308,29 +10445,29 @@ fn verify_restart_state(state_root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn default_adapter_bindings(state_root: &Path) -> Result<Vec<node_runtime::NodeAdapterBinding>> {
-    let mut adapters = Vec::with_capacity(node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
-    for name in node_runtime::REQUIRED_RUNTIME_ADAPTERS {
+fn default_adapter_bindings(state_root: &Path) -> Result<Vec<crate::node_runtime::NodeAdapterBinding>> {
+    let mut adapters = Vec::with_capacity(crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
+    for name in crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS {
         let profile_ref =
             local_ref("node-adapter-profile", &format!("{}:{name}", state_root_profile_ref(state_root)?))?;
-        adapters.push(node_runtime::node_adapter_binding(name, &profile_ref)?);
+        adapters.push(crate::node_runtime::node_adapter_binding(name, &profile_ref)?);
     }
     Ok(adapters)
 }
 
-fn status_request() -> Result<node_runtime::NodeControlRequest> {
+fn status_request() -> Result<crate::node_runtime::NodeControlRequest> {
     control_request("status")
 }
 
-fn shutdown_request() -> Result<node_runtime::NodeControlRequest> {
+fn shutdown_request() -> Result<crate::node_runtime::NodeControlRequest> {
     control_request("shutdown")
 }
 
-fn control_request(operation: &str) -> Result<node_runtime::NodeControlRequest> {
+fn control_request(operation: &str) -> Result<crate::node_runtime::NodeControlRequest> {
     let authority_refs = vec![local_ref("node-control-authority", operation)?];
     let policy_refs = vec![local_ref("node-control-policy", operation)?];
     let resource_refs = vec![local_ref("node-control-resource", operation)?];
-    let value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+    let value = crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
         operation,
         target_ref: None,
         payload_ref: None,
@@ -10339,7 +10476,7 @@ fn control_request(operation: &str) -> Result<node_runtime::NodeControlRequest> 
         resource_refs: &resource_refs,
         evidence_refs: &[],
     })?;
-    node_runtime::parse_node_control_request(&value)
+    crate::node_runtime::parse_node_control_request(&value)
 }
 
 #[cfg(test)]
@@ -10394,8 +10531,8 @@ fn test_live_peer_bootstrap_refs(
 
 fn index_receipt_refs(state_root: &Path) -> Result<Vec<String>> {
     let root_ref = state_root_profile_ref(state_root)?;
-    let mut refs = Vec::with_capacity(node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
-    for name in node_runtime::REQUIRED_RUNTIME_ADAPTERS {
+    let mut refs = Vec::with_capacity(crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
+    for name in crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS {
         refs.push(local_ref("node-index-verify", &format!("{root_ref}:{name}"))?);
     }
     Ok(refs)
@@ -10420,9 +10557,9 @@ fn state_root_profile_ref(state_root: &Path) -> Result<String> {
 }
 
 fn local_ref(kind: &str, label: &str) -> Result<String> {
-    preserves_rail::canonical_hash(&preserves_rail::record("node-daemon-local-ref-v1", vec![
-        preserves_rail::string(kind),
-        preserves_rail::string(label),
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("node-daemon-local-ref-v1", vec![
+        crate::preserves_rail::string(kind),
+        crate::preserves_rail::string(label),
     ]))
 }
 
@@ -10476,12 +10613,12 @@ fn write_preserves(path: &Path, value: &IoValue) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(MoltenError::from)?;
     }
-    fs::write(path, preserves_rail::to_text(value)?).map_err(MoltenError::from)
+    fs::write(path, crate::preserves_rail::to_text(value)?).map_err(MoltenError::from)
 }
 
 fn read_preserves(path: &Path) -> Result<IoValue> {
     let text = fs::read_to_string(path).map_err(MoltenError::from)?;
-    preserves_rail::parse_text(&text)
+    crate::preserves_rail::parse_text(&text)
 }
 
 pub fn config_path(state_root: &Path) -> PathBuf {
@@ -10523,7 +10660,7 @@ mod tests {
         crate::preserves_rail::validate_content_ref(&init.config_ref).expect("config ref is canonical");
         let run = run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
         crate::preserves_rail::validate_content_ref(&run.startup_ref).expect("startup ref is canonical");
-        assert_eq!(run.adapter_receipt_refs.len(), node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
+        assert_eq!(run.adapter_receipt_refs.len(), crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
         let status = status_local_node(&NodeDaemonStatusInput { state_root: &root }).expect("status node");
         assert_eq!(status.status, "running");
         let stop = stop_local_node(&NodeDaemonStopInput { state_root: &root }).expect("stop node");
@@ -10537,17 +10674,19 @@ mod tests {
         assert_eq!(restarted_status.status, "running");
         let stale = run_local_node(&NodeDaemonRunInput { state_root: &root }).expect_err("stale running state denied");
         assert!(stale.to_string().contains("previous startup has no clean shutdown receipt"));
-        let startup = node_runtime::parse_node_startup_receipt(&run.startup_value).expect("startup parse");
-        let restart = node_runtime::node_restart_health_receipt_value(&node_runtime::RestartHealthReceiptValueInput {
-            startup_receipt: &startup,
-            shutdown_receipt_ref: Some(&stop.shutdown_ref),
-            index_receipt_refs: &index_receipt_refs(&root).expect("index refs"),
-            head_refs: std::slice::from_ref(&run.startup_ref),
-            open_job_refs: &[],
-            diagnostics: &[],
-        })
+        let startup = crate::node_runtime::parse_node_startup_receipt(&run.startup_value).expect("startup parse");
+        let restart = crate::node_runtime::node_restart_health_receipt_value(
+            &crate::node_runtime::RestartHealthReceiptValueInput {
+                startup_receipt: &startup,
+                shutdown_receipt_ref: Some(&stop.shutdown_ref),
+                index_receipt_refs: &index_receipt_refs(&root).expect("index refs"),
+                head_refs: std::slice::from_ref(&run.startup_ref),
+                open_job_refs: &[],
+                diagnostics: &[],
+            },
+        )
         .expect("restart health");
-        let restart_health = node_runtime::parse_node_health_receipt(&restart).expect("parse health");
+        let restart_health = crate::node_runtime::parse_node_health_receipt(&restart).expect("parse health");
         assert_eq!(restart_health.decision, "pass");
     }
 
@@ -10603,12 +10742,12 @@ mod tests {
         .expect("dispatch request")
     }
 
-    fn assert_status_dispatch(root: &Path) -> node_runtime::NodeControlRequest {
+    fn assert_status_dispatch(root: &Path) -> crate::node_runtime::NodeControlRequest {
         let request = status_request().expect("status request");
         let dispatched = submit_and_dispatch(root, &request.value);
         assert_eq!(dispatched.operation, "status");
-        let receipt =
-            node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value).expect("control receipt");
+        let receipt = crate::node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value)
+            .expect("control receipt");
         assert_eq!(receipt.decision, "pass");
         assert_eq!(receipt.request_ref, request.request_ref);
         assert_ledger_contains(root, &[
@@ -10621,7 +10760,7 @@ mod tests {
     }
 
     fn assert_ledger_contains(root: &Path, expected: &[&str]) {
-        let kinds = ledger::list_artifacts(&root.join("ledger"))
+        let kinds = crate::ledger::list_artifacts(&root.join("ledger"))
             .expect("list ledger")
             .into_iter()
             .map(|entry| entry.artifact_kind)
@@ -10631,39 +10770,41 @@ mod tests {
         }
     }
 
-    fn assert_missing_payload_denied(root: &Path, status: &node_runtime::NodeControlRequest) {
+    fn assert_missing_payload_denied(root: &Path, status: &crate::node_runtime::NodeControlRequest) {
         let target_ref = local_ref("install-target", "fixture").expect("target ref");
-        let install_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "install",
-            target_ref: Some(&target_ref),
-            payload_ref: None,
-            authority_refs: &status.authority_refs,
-            policy_refs: &status.policy_refs,
-            resource_refs: &status.resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("install request");
+        let install_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "install",
+                target_ref: Some(&target_ref),
+                payload_ref: None,
+                authority_refs: &status.authority_refs,
+                policy_refs: &status.policy_refs,
+                resource_refs: &status.resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("install request");
         let dispatch = submit_and_dispatch(root, &install_value);
         let receipt =
-            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("install receipt");
+            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("install receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("requires payload ref")));
     }
 
-    fn assert_missing_authority_denied(root: &Path, status: &node_runtime::NodeControlRequest) {
-        let missing_authority = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &[],
-            policy_refs: &status.policy_refs,
-            resource_refs: &status.resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("missing authority request");
+    fn assert_missing_authority_denied(root: &Path, status: &crate::node_runtime::NodeControlRequest) {
+        let missing_authority =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &[],
+                policy_refs: &status.policy_refs,
+                resource_refs: &status.resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("missing authority request");
         let dispatch = submit_and_dispatch(root, &missing_authority);
         let receipt =
-            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("missing receipt");
+            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("missing receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("authority refs missing")));
     }
@@ -10672,7 +10813,7 @@ mod tests {
         let request = shutdown_request().expect("shutdown request");
         let dispatch = submit_and_dispatch(root, &request.value);
         let receipt =
-            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("shutdown receipt");
+            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("shutdown receipt");
         assert_eq!(receipt.decision, "pass");
         assert!(!root.join(CONTROL_LOCK_FILE).exists());
     }
@@ -10708,8 +10849,8 @@ mod tests {
         .expect("run one status request");
         assert_eq!(first_loop.processed_request_refs, vec![status_request.request_ref.clone()]);
         assert!(!first_loop.has_stopped);
-        assert_eq!(ledger::artifact_kind(&first_loop.loop_receipt_value), "node-control-loop-receipt");
-        assert_eq!(ledger::artifact_kind(&first_loop.heartbeat_receipt_value), "node-control-heartbeat-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&first_loop.loop_receipt_value), "node-control-loop-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&first_loop.heartbeat_receipt_value), "node-control-heartbeat-receipt");
 
         submit_control_request(&NodeControlSubmitInput {
             state_root: &root,
@@ -10744,7 +10885,7 @@ mod tests {
         .expect_err("stopped node loop denied");
         assert!(after_stop.to_string().contains("active node lock"));
 
-        let kinds = ledger::list_artifacts(&root.join("ledger"))
+        let kinds = crate::ledger::list_artifacts(&root.join("ledger"))
             .expect("list loop ledger")
             .into_iter()
             .map(|entry| entry.artifact_kind)
@@ -10775,7 +10916,9 @@ mod tests {
         .expect("dispatch status");
         write_preserves(
             &control_outbox_request_path(&root, &status_request.request_ref),
-            &preserves_rail::record("tampered-node-control-request", vec![preserves_rail::string("conflict")]),
+            &crate::preserves_rail::record("tampered-node-control-request", vec![crate::preserves_rail::string(
+                "conflict",
+            )]),
         )
         .expect("tamper archived request");
         let duplicate = submit_control_request(&NodeControlSubmitInput {
@@ -10816,7 +10959,7 @@ mod tests {
     }
 
     fn request_value(payload_ref: &str, refs: &CaseRefs, evidence_refs: &[String]) -> IoValue {
-        node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+        crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
             payload_ref: Some(payload_ref),
@@ -10830,7 +10973,7 @@ mod tests {
 
     fn assert_registry_empty(root: &Path) {
         assert!(
-            artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
+            crate::artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
                 .expect("list registry")
                 .is_empty()
         );
@@ -10838,12 +10981,14 @@ mod tests {
 
     fn assert_missing_case(root: &Path, refs: &CaseRefs) {
         let payload_value =
-            preserves_rail::record("node-control-install-payload", vec![preserves_rail::string("missing-provenance")]);
+            crate::preserves_rail::record("node-control-install-payload", vec![crate::preserves_rail::string(
+                "missing-provenance",
+            )]);
         let payload_ref = import_node_artifact(root, &payload_value).expect("import payload");
         let request = request_value(&payload_ref, refs, &[]);
         let dispatch = submit_and_dispatch(root, &request);
         let receipt =
-            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("control receipt");
+            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("control receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(
             receipt
@@ -10856,12 +11001,13 @@ mod tests {
     }
 
     fn assert_queued_case(root: &Path, refs: &CaseRefs) {
-        let payload = preserves_rail::record("node-control-install-payload", vec![preserves_rail::string(
-            "queued-missing-provenance",
-        )]);
+        let payload =
+            crate::preserves_rail::record("node-control-install-payload", vec![crate::preserves_rail::string(
+                "queued-missing-provenance",
+            )]);
         let payload_ref = import_node_artifact(root, &payload).expect("import queued payload");
         let request = request_value(&payload_ref, refs, &[]);
-        let queued = node_runtime::parse_node_control_request(&request).expect("queued request parse");
+        let queued = crate::node_runtime::parse_node_control_request(&request).expect("queued request parse");
         submit_control_request(&NodeControlSubmitInput {
             state_root: root,
             request_value: &request,
@@ -10875,24 +11021,26 @@ mod tests {
         assert_eq!(loop_result.processed_request_refs, vec![queued.request_ref.clone()]);
         let value =
             read_preserves(&control_outbox_receipt_path(root, &queued.request_ref)).expect("queued receipt value");
-        let receipt = node_runtime::parse_node_control_receipt(&value).expect("queued receipt");
+        let receipt = crate::node_runtime::parse_node_control_receipt(&value).expect("queued receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing provenance evidence")));
     }
 
     fn assert_tampered_case(root: &Path, refs: &CaseRefs) {
         let payload =
-            preserves_rail::record("node-control-install-payload", vec![preserves_rail::string("tampered-provenance")]);
+            crate::preserves_rail::record("node-control-install-payload", vec![crate::preserves_rail::string(
+                "tampered-provenance",
+            )]);
         let payload_ref = import_node_artifact(root, &payload).expect("import tampered payload");
         let wrong_artifact_ref = local_ref("node-control-wrong-provenance-artifact", "tampered").expect("wrong ref");
         let wrong_provenance =
-            provenance::synthetic_reviewed_provenance_record(&wrong_artifact_ref).expect("wrong provenance");
+            crate::provenance::synthetic_reviewed_provenance_record(&wrong_artifact_ref).expect("wrong provenance");
         let wrong_ref = import_node_artifact(root, &wrong_provenance).expect("import wrong provenance");
         let evidence_refs = vec![wrong_ref];
         let request = request_value(&payload_ref, refs, &evidence_refs);
         let dispatch = submit_and_dispatch(root, &request);
         let receipt =
-            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("tampered receipt");
+            crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("tampered receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("no provenance record matches")));
         assert_registry_empty(root);
@@ -10938,9 +11086,10 @@ mod tests {
     }
 
     fn build_material(root: &Path) -> BuildMaterial {
-        let payload_value = preserves_rail::record("node-control-install-payload", vec![preserves_rail::string(
-            "reproducible-provenance",
-        )]);
+        let payload_value =
+            crate::preserves_rail::record("node-control-install-payload", vec![crate::preserves_rail::string(
+                "reproducible-provenance",
+            )]);
         BuildMaterial {
             authority_refs: vec![local_ref("node-control-authority", "reproducible").expect("authority ref")],
             policy_refs: vec![local_ref("node-control-policy", "reproducible").expect("policy ref")],
@@ -10954,7 +11103,7 @@ mod tests {
     }
 
     fn build_record_for(material: &BuildMaterial) -> IoValue {
-        provenance::provenance_build_record_value(&provenance::ProvenanceBuildRecordInput {
+        crate::provenance::provenance_build_record_value(&crate::provenance::ProvenanceBuildRecordInput {
             expected_artifact_ref: &material.payload_ref,
             source_refs: &material.source_refs,
             dependency_closure_ref: &material.dependency_ref,
@@ -10969,9 +11118,9 @@ mod tests {
     }
 
     fn provenance_record_for(material: &BuildMaterial, build_record_refs: &[String]) -> IoValue {
-        provenance::provenance_record_value(&provenance::ProvenanceRecordInput {
+        crate::provenance::provenance_record_value(&crate::provenance::ProvenanceRecordInput {
             artifact_ref: &material.payload_ref,
-            trust_state: provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED,
+            trust_state: crate::provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED,
             source_refs: &material.source_refs,
             dependency_closure_ref: &material.dependency_ref,
             toolchain_refs: &material.toolchain_refs,
@@ -10988,12 +11137,13 @@ mod tests {
     fn verified_refs(root: &Path, material: &BuildMaterial) -> Vec<String> {
         let build_record = build_record_for(material);
         let build_record_ref = import_node_artifact(root, &build_record).expect("import build record");
-        let build_verification = provenance::verify_provenance_build(&provenance::ProvenanceBuildVerificationInput {
-            build_record_value: &build_record,
-            actual_artifact_ref: &material.payload_ref,
-            prior_diagnostics: &[],
-        })
-        .expect("verify build");
+        let build_verification =
+            crate::provenance::verify_provenance_build(&crate::provenance::ProvenanceBuildVerificationInput {
+                build_record_value: &build_record,
+                actual_artifact_ref: &material.payload_ref,
+                prior_diagnostics: &[],
+            })
+            .expect("verify build");
         let build_verification_ref =
             import_node_artifact(root, &build_verification.receipt_value).expect("import build verification");
         let build_record_refs = vec![build_record_ref];
@@ -11003,7 +11153,7 @@ mod tests {
     }
 
     fn install_request_for(case: &BuildCase) -> IoValue {
-        node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+        crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
             payload_ref: Some(&case.material.payload_ref),
@@ -11027,12 +11177,12 @@ mod tests {
             request_path: Some(&submitted.inbox_path),
         })
         .expect("dispatch reproducible request");
-        let receipt = node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value)
+        let receipt = crate::node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value)
             .expect("reproducible control receipt");
         assert_eq!(receipt.decision, "pass");
         assert!(receipt.diagnostics.is_empty());
         assert!(
-            !artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
+            !crate::artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
                 .expect("list registry")
                 .is_empty()
         );
@@ -11053,18 +11203,21 @@ mod tests {
         let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:operator").expect("bootstrap ref")];
 
         let payload_value =
-            preserves_rail::record("node-control-ingress-payload", vec![preserves_rail::string("missing-provenance")]);
+            crate::preserves_rail::record("node-control-ingress-payload", vec![crate::preserves_rail::string(
+                "missing-provenance",
+            )]);
         let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "install",
-            target_ref: None,
-            payload_ref: Some(&payload_ref),
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("install request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "install",
+                target_ref: None,
+                payload_ref: Some(&payload_ref),
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("install request");
         let envelope = node_control_ingress_envelope(&NodeControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:operator",
@@ -11087,7 +11240,7 @@ mod tests {
             envelope_value: &envelope.value,
         })
         .expect("publish ingress");
-        assert_eq!(ledger::artifact_kind(&published.receipt_value), "node-control-ingress-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&published.receipt_value), "node-control-ingress-receipt");
         let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
             state_root: root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
@@ -11114,7 +11267,7 @@ mod tests {
         assert_eq!(loop_result.processed_request_refs.len(), 1);
         let control_value = read_preserves(&control_outbox_receipt_path(root, &delivered.request_ref))
             .expect("read ingress dispatch receipt");
-        let control = node_runtime::parse_node_control_receipt(&control_value).expect("parse control receipt");
+        let control = crate::node_runtime::parse_node_control_receipt(&control_value).expect("parse control receipt");
         assert_eq!(control.decision, "deny");
         assert!(control.diagnostics.iter().any(|diagnostic| diagnostic.contains("provenance evidence refs missing")));
     }
@@ -11190,9 +11343,11 @@ mod tests {
 
     fn materialized_request_value(root: &Path, refs: &MaterializedIngressRefs) -> IoValue {
         let payload_value =
-            preserves_rail::record("node-control-ingress-payload", vec![preserves_rail::string("materialized")]);
+            crate::preserves_rail::record("node-control-ingress-payload", vec![crate::preserves_rail::string(
+                "materialized",
+            )]);
         let payload_ref = import_node_artifact(root, &payload_value).expect("import payload");
-        node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+        crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
             payload_ref: Some(&payload_ref),
@@ -11243,7 +11398,7 @@ mod tests {
 
     struct ReconcileDelivery {
         root: PathBuf,
-        request: node_runtime::NodeControlRequest,
+        request: crate::node_runtime::NodeControlRequest,
         envelope: NodeControlIngressEnvelope,
         delivered: NodeControlIngressDeliver,
         queue_value: IoValue,
@@ -11310,18 +11465,19 @@ mod tests {
         }
     }
 
-    fn reconcile_request(seed: &ReconcileSeed) -> (IoValue, node_runtime::NodeControlRequest) {
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &seed.authority_refs,
-            policy_refs: &seed.policy_refs,
-            resource_refs: &seed.resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("status request");
-        let request = node_runtime::parse_node_control_request(&request_value).expect("request");
+    fn reconcile_request(seed: &ReconcileSeed) -> (IoValue, crate::node_runtime::NodeControlRequest) {
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &seed.authority_refs,
+                policy_refs: &seed.policy_refs,
+                resource_refs: &seed.resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("status request");
+        let request = crate::node_runtime::parse_node_control_request(&request_value).expect("request");
         (request_value, request)
     }
 
@@ -11356,7 +11512,7 @@ mod tests {
         assert!(
             delivered.has_enqueued,
             "{}",
-            preserves_rail::to_text(&delivered.ingress_receipt_value).expect("ingress receipt text")
+            crate::preserves_rail::to_text(&delivered.ingress_receipt_value).expect("ingress receipt text")
         );
         (envelope, delivered)
     }
@@ -11371,7 +11527,7 @@ mod tests {
             read_preserves(&queue_receipt_path(&seed.root, &delivered.request_ref)).expect("queue receipt");
         let control_value =
             read_preserves(&control_outbox_receipt_path(&seed.root, &delivered.request_ref)).expect("control receipt");
-        let control = node_runtime::parse_node_control_receipt(&control_value).expect("parse control");
+        let control = crate::node_runtime::parse_node_control_receipt(&control_value).expect("parse control");
         assert_eq!(control.decision, "pass");
         (queue_value, control_value, control.receipt_ref)
     }
@@ -11530,14 +11686,14 @@ mod tests {
         .expect("reconcile");
         assert_eq!(reconciled.decision, "pass");
         assert_eq!(
-            ledger::artifact_kind(&reconciled.receipt_value),
+            crate::ledger::artifact_kind(&reconciled.receipt_value),
             "node-control-live-workflow-bundle-reconcile-receipt"
         );
         assert_eq!(reconciled.ingress_receipt_ref.as_deref(), Some(delivery.delivered.ingress_receipt_ref.as_str()));
         assert_eq!(reconciled.control_receipt_ref.as_deref(), Some(delivery.control_receipt_ref.as_str()));
         assert!(parse_node_control_authority_grant(&reconciled.receipt_value).is_err());
         assert!(
-            preserves_rail::to_text(&reconciled.receipt_value)
+            crate::preserves_rail::to_text(&reconciled.receipt_value)
                 .expect("reconcile text")
                 .contains("reconcile-receipt-is-not-authority")
         );
@@ -11548,16 +11704,17 @@ mod tests {
 
     fn assert_reconcile_not_authority(case: &ReconcileCase, reconciled: &NodeControlLiveWorkflowBundleReconcile) {
         let refs = vec![reconciled.receipt_ref.clone()];
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &refs,
-            policy_refs: &[],
-            resource_refs: &[],
-            evidence_refs: &[],
-        })
-        .expect("reconcile authority request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &refs,
+                policy_refs: &[],
+                resource_refs: &[],
+                evidence_refs: &[],
+            })
+            .expect("reconcile authority request");
         let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:reconcile",
@@ -11615,7 +11772,7 @@ mod tests {
         assert_eq!(wrong_reconcile.decision, "deny");
         assert!(wrong_reconcile.diagnostics.iter().any(|diagnostic| diagnostic.contains("does not match expected")));
 
-        let denied_control = node_runtime::node_control_deny_receipt_value(
+        let denied_control = crate::node_runtime::node_control_deny_receipt_value(
             &delivery.request,
             &local_ref("node-startup", "reconcile-deny").expect("startup ref"),
             "receiver denial propagated",
@@ -11666,14 +11823,14 @@ mod tests {
         .expect("ack export");
         assert_eq!(ack_export.decision, "pass");
         assert_eq!(ack_export.receiver_decision, "pass");
-        assert_eq!(ledger::artifact_kind(&ack_export.ack.ack_value), "node-control-live-workflow-bundle-ack");
+        assert_eq!(crate::ledger::artifact_kind(&ack_export.ack.ack_value), "node-control-live-workflow-bundle-ack");
         assert_eq!(
-            ledger::artifact_kind(&ack_export.receipt_value),
+            crate::ledger::artifact_kind(&ack_export.receipt_value),
             "node-control-live-workflow-bundle-ack-export-receipt"
         );
         assert!(parse_node_control_authority_grant(&ack_export.ack.ack_value).is_err());
         assert!(
-            preserves_rail::to_text(&ack_export.ack.ack_value)
+            crate::preserves_rail::to_text(&ack_export.ack.ack_value)
                 .expect("ack text")
                 .contains("ack-bundle-is-not-authority")
         );
@@ -11695,11 +11852,11 @@ mod tests {
         assert_eq!(ack_import.decision, "pass");
         assert!(ack_import.imported_refs.iter().any(|reference| reference == &ack_export.ack.ack_ref));
         assert_eq!(
-            ledger::artifact_kind(&ack_import.receipt_value),
+            crate::ledger::artifact_kind(&ack_import.receipt_value),
             "node-control-live-workflow-bundle-ack-import-receipt"
         );
         assert!(
-            preserves_rail::to_text(&ack_import.receipt_value)
+            crate::preserves_rail::to_text(&ack_import.receipt_value)
                 .expect("ack import text")
                 .contains("ack-import-is-not-authority")
         );
@@ -11741,7 +11898,7 @@ mod tests {
         assert_eq!(protocol_gate.decision, "pass");
         assert_eq!(protocol_gate.operation_count, 6);
         assert_eq!(protocol_gate.message_count, 3);
-        assert_eq!(ledger::artifact_kind(&protocol_gate.receipt_value), "protocol-session-gate-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&protocol_gate.receipt_value), "protocol-session-gate-receipt");
         assert!(parse_node_control_authority_grant(&protocol_gate.receipt_value).is_err());
     }
 
@@ -11855,7 +12012,7 @@ mod tests {
         })
         .expect("deliver denied ingress");
         assert!(!delivered.has_enqueued);
-        let receipt_text = preserves_rail::to_text(&delivered.ingress_receipt_value).expect("receipt text");
+        let receipt_text = crate::preserves_rail::to_text(&delivered.ingress_receipt_value).expect("receipt text");
         assert!(receipt_text.contains("authority refs missing"));
         assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
     }
@@ -11900,7 +12057,7 @@ mod tests {
         .expect("deliver envelope");
         assert_eq!(delivered.has_enqueued, input.is_expected_enqueued);
         if let Some(expected_note) = input.expected_note {
-            let receipt_text = preserves_rail::to_text(&delivered.ingress_receipt_value).expect("receipt text");
+            let receipt_text = crate::preserves_rail::to_text(&delivered.ingress_receipt_value).expect("receipt text");
             assert!(receipt_text.contains(expected_note));
         }
     }
@@ -11921,16 +12078,17 @@ mod tests {
                 .expect("peer admission ref");
         let authority_refs = test_live_authority_refs(&root, "peer:ticket", "node:live-ticket", "status", &policy_refs)
             .expect("authority grant ref");
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("status request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("status request");
         assert_peer_delivery(PeerDelivery {
             root: &root,
             request_value: &request_value,
@@ -12018,7 +12176,10 @@ mod tests {
         .expect("import ticket");
         assert_eq!(imported_ticket.decision, "pass");
         assert_eq!(imported_ticket.imported_refs.len(), 2);
-        assert_eq!(ledger::artifact_kind(&imported_ticket.receipt_value), "node-control-live-ticket-import-receipt");
+        assert_eq!(
+            crate::ledger::artifact_kind(&imported_ticket.receipt_value),
+            "node-control-live-ticket-import-receipt"
+        );
         read_node_ledger_artifact(&case.sender, &case.ticket.ticket_ref).expect("ticket imported");
         read_node_ledger_artifact(&case.sender, &case.admission.admission_ref).expect("admission imported");
 
@@ -12066,7 +12227,10 @@ mod tests {
         .expect("import grant");
         assert_eq!(imported_grant.decision, "pass");
         assert_eq!(imported_grant.imported_refs.len(), 1);
-        assert_eq!(ledger::artifact_kind(&imported_grant.receipt_value), "node-control-authority-grant-import-receipt");
+        assert_eq!(
+            crate::ledger::artifact_kind(&imported_grant.receipt_value),
+            "node-control-authority-grant-import-receipt"
+        );
         read_node_ledger_artifact(&case.sender, &imported_grant.grant_ref).expect("grant imported");
 
         let bad_operations = vec!["shutdown".to_string()];
@@ -12299,24 +12463,30 @@ mod tests {
         let seed = flow_seed();
         let exported = export_flow(&seed);
         assert_eq!(exported.decision, "pass");
-        assert_eq!(ledger::artifact_kind(&exported.bundle.bundle_value), "node-control-live-workflow-bundle");
+        assert_eq!(crate::ledger::artifact_kind(&exported.bundle.bundle_value), "node-control-live-workflow-bundle");
         assert!(parse_node_control_authority_grant(&exported.bundle.bundle_value).is_err());
         let verified = verify_flow(&seed, &exported);
         assert_eq!(verified.decision, "pass");
-        assert_eq!(ledger::artifact_kind(&verified.receipt_value), "node-control-live-workflow-bundle-verify-receipt");
+        assert_eq!(
+            crate::ledger::artifact_kind(&verified.receipt_value),
+            "node-control-live-workflow-bundle-verify-receipt"
+        );
         assert!(parse_node_control_authority_grant(&verified.receipt_value).is_err());
         assert!(
-            preserves_rail::to_text(&verified.receipt_value)
+            crate::preserves_rail::to_text(&verified.receipt_value)
                 .expect("verify receipt text")
                 .contains("verify-receipt-is-not-authority")
         );
         let gated = gate_flow(&seed, &exported, &verified);
         assert_eq!(gated.decision, "pass");
-        assert_eq!(ledger::artifact_kind(&gated.receipt_value), "node-control-live-workflow-bundle-gate-receipt");
+        assert_eq!(
+            crate::ledger::artifact_kind(&gated.receipt_value),
+            "node-control-live-workflow-bundle-gate-receipt"
+        );
         assert_eq!(gated.verify_receipt_ref.as_deref(), Some(verified.receipt_ref.as_str()));
         assert!(parse_node_control_authority_grant(&gated.receipt_value).is_err());
         assert!(
-            preserves_rail::to_text(&gated.receipt_value)
+            crate::preserves_rail::to_text(&gated.receipt_value)
                 .expect("gate receipt text")
                 .contains("gate-receipt-is-not-authority")
         );
@@ -12423,12 +12593,15 @@ mod tests {
             expect_message: "apply bundle",
         });
         assert_eq!(applied.decision, "pass");
-        assert_eq!(ledger::artifact_kind(&applied.receipt_value), "node-control-live-workflow-bundle-apply-receipt");
+        assert_eq!(
+            crate::ledger::artifact_kind(&applied.receipt_value),
+            "node-control-live-workflow-bundle-apply-receipt"
+        );
         assert!(applied.import_receipt_ref.is_some());
         assert!(applied.imported_refs.iter().any(|reference| reference == &case.exported.bundle.bundle_ref));
         assert!(parse_node_control_authority_grant(&applied.receipt_value).is_err());
         assert!(
-            preserves_rail::to_text(&applied.receipt_value)
+            crate::preserves_rail::to_text(&applied.receipt_value)
                 .expect("apply receipt text")
                 .contains("apply-receipt-is-not-authority")
         );
@@ -12459,16 +12632,17 @@ mod tests {
     fn assert_flow_send_denial(case: &FlowCase, runtime: &tokio::runtime::Runtime) {
         let root = init_flow_root("node-control-live-workflow-bundle-apply-send", "node:live-bundle-apply-send");
         let authority_refs = vec![case.exported.bundle.authority_grant_ref.clone()];
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &authority_refs,
-            policy_refs: &[],
-            resource_refs: &[],
-            evidence_refs: &[],
-        })
-        .expect("apply send request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &authority_refs,
+                policy_refs: &[],
+                resource_refs: &[],
+                evidence_refs: &[],
+            })
+            .expect("apply send request");
         let receipt = run_flow_apply(runtime, case, FlowApplyInput {
             state_root: &root,
             gate_receipt_value: Some(&case.gated.receipt_value),
@@ -12507,7 +12681,7 @@ mod tests {
         read_node_ledger_artifact(&case.bundle_sender, &case.authority_import_ref).expect("bundle imported authority");
         assert!(parse_node_control_authority_grant(&imported.receipt_value).is_err());
         assert!(
-            preserves_rail::to_text(&imported.receipt_value)
+            crate::preserves_rail::to_text(&imported.receipt_value)
                 .expect("import receipt text")
                 .contains("bundle-import-is-not-authority")
         );
@@ -12665,23 +12839,25 @@ mod tests {
 
     fn assert_flow_wrong_grant(case: &FlowCase) {
         let wrong_grant_ref = local_ref("authority-grant", "wrong-live-bundle").expect("wrong grant ref");
-        let wrong_bundle = preserves_rail::record("node-control-live-workflow-bundle-v1", vec![
-            preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
-            preserves_rail::record("ticket", vec![case.exported.bundle.ticket_value.clone()]),
-            preserves_rail::record("peer-admission", vec![case.exported.bundle.peer_admission_value.clone()]),
-            preserves_rail::record("authority-grant", vec![case.exported.bundle.authority_grant_value.clone()]),
-            preserves_rail::record("receipts", vec![preserves_rail::sequence(
+        let wrong_bundle = crate::preserves_rail::record("node-control-live-workflow-bundle-v1", vec![
+            crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
+            crate::preserves_rail::record("ticket", vec![case.exported.bundle.ticket_value.clone()]),
+            crate::preserves_rail::record("peer-admission", vec![case.exported.bundle.peer_admission_value.clone()]),
+            crate::preserves_rail::record("authority-grant", vec![case.exported.bundle.authority_grant_value.clone()]),
+            crate::preserves_rail::record("receipts", vec![crate::preserves_rail::sequence(
                 case.exported.bundle.receipt_values.clone(),
             )]),
-            preserves_rail::record("ticket-ref", vec![preserves_rail::string(&case.exported.bundle.ticket_ref)]),
-            preserves_rail::record("peer-admission-ref", vec![preserves_rail::string(
+            crate::preserves_rail::record("ticket-ref", vec![crate::preserves_rail::string(
+                &case.exported.bundle.ticket_ref,
+            )]),
+            crate::preserves_rail::record("peer-admission-ref", vec![crate::preserves_rail::string(
                 &case.exported.bundle.peer_admission_ref,
             )]),
-            preserves_rail::record("authority-grant-ref", vec![preserves_rail::string(&wrong_grant_ref)]),
-            preserves_rail::record("receipt-refs", vec![preserves_rail::sequence(
-                case.exported.bundle.receipt_refs.iter().map(preserves_rail::string).collect(),
+            crate::preserves_rail::record("authority-grant-ref", vec![crate::preserves_rail::string(&wrong_grant_ref)]),
+            crate::preserves_rail::record("receipt-refs", vec![crate::preserves_rail::sequence(
+                case.exported.bundle.receipt_refs.iter().map(crate::preserves_rail::string).collect(),
             )]),
-            preserves_rail::record("checks", vec![preserves_rail::sequence(Vec::<IoValue>::new())]),
+            crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(Vec::<IoValue>::new())]),
         ]);
         let wrong_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
             bundle_value: &wrong_bundle,
@@ -12702,16 +12878,17 @@ mod tests {
 
     fn assert_ref_not_grant(root: &Path, authority_ref: &str, sequence: u64) {
         let authority_refs = vec![authority_ref.to_string()];
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &authority_refs,
-            policy_refs: &[],
-            resource_refs: &[],
-            evidence_refs: &[],
-        })
-        .expect("authority request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &authority_refs,
+                policy_refs: &[],
+                resource_refs: &[],
+                evidence_refs: &[],
+            })
+            .expect("authority request");
         let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:live-bundle",
@@ -12740,9 +12917,10 @@ mod tests {
 
     fn assert_flow_malformed(case: &FlowCase) {
         let root = init_flow_root("node-control-live-workflow-bundle-malformed", "node:live-bundle-malformed");
-        let malformed = preserves_rail::record("node-control-live-workflow-bundle-v1", vec![preserves_rail::string(
-            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
-        )]);
+        let malformed =
+            crate::preserves_rail::record("node-control-live-workflow-bundle-v1", vec![crate::preserves_rail::string(
+                crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
+            )]);
         assert!(
             import_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleImportInput {
                 state_root: &root,
@@ -12812,7 +12990,7 @@ mod tests {
     }
 
     fn assert_sent(sent: &NodeControlLiveSend) {
-        assert_eq!(ledger::artifact_kind(&sent.send_receipt_value), "node-control-live-send-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&sent.send_receipt_value), "node-control-live-send-receipt");
         assert!(sent.transport_receipt_ref.is_some());
         assert_eq!(
             sent.operation_ref,
@@ -12824,7 +13002,7 @@ mod tests {
         assert_eq!(duplicate.send_receipt_ref, first.send_receipt_ref);
         assert!(duplicate.duplicate_receipt_ref.is_some());
         assert_eq!(
-            ledger::artifact_kind(duplicate.duplicate_receipt_value.as_ref().expect("duplicate receipt")),
+            crate::ledger::artifact_kind(duplicate.duplicate_receipt_value.as_ref().expect("duplicate receipt")),
             "node-control-live-send-duplicate-receipt"
         );
     }
@@ -12863,7 +13041,7 @@ mod tests {
         })
         .expect("workflow receipt");
         assert_eq!(workflow.decision, "pass");
-        assert_eq!(ledger::artifact_kind(&workflow.receipt_value), "node-control-live-workflow-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&workflow.receipt_value), "node-control-live-workflow-receipt");
     }
 
     struct SendMaterial {
@@ -12875,7 +13053,7 @@ mod tests {
         request_value: IoValue,
     }
 
-    fn init_send_case() -> (std::path::PathBuf, node_identity::NodeIdentity) {
+    fn init_send_case() -> (std::path::PathBuf, crate::node_identity::NodeIdentity) {
         let root = temp_dir("node-control-live-send");
         init_local_node(&NodeDaemonInitInput {
             state_root: &root,
@@ -12884,7 +13062,7 @@ mod tests {
         .expect("init node");
         run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
         let identity =
-            node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
+            crate::node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
                 .expect("parse identity");
         (root, identity)
     }
@@ -12906,16 +13084,17 @@ mod tests {
         let authority_refs =
             test_live_authority_refs(root, "peer:external-send", "node:live-send", "status", &policy_refs)
                 .expect("authority grant ref");
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("status request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("status request");
         SendMaterial {
             policy_refs,
             resource_refs,
@@ -13182,16 +13361,17 @@ mod tests {
         .expect("init node");
         run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
         let refs = denied_case_refs(&root, case);
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: case.target_ref,
-            payload_ref: None,
-            authority_refs: &refs.authority_refs,
-            policy_refs: &refs.policy_refs,
-            resource_refs: &refs.resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("status request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: case.target_ref,
+                payload_ref: None,
+                authority_refs: &refs.authority_refs,
+                policy_refs: &refs.policy_refs,
+                resource_refs: &refs.resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("status request");
         let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:case",
@@ -13217,7 +13397,7 @@ mod tests {
         })
         .expect("deliver live envelope");
         assert!(!delivered.has_enqueued, "{} enqueued", case.name);
-        let receipt_text = preserves_rail::to_text(&delivered.ingress_receipt_value).expect("receipt text");
+        let receipt_text = crate::preserves_rail::to_text(&delivered.ingress_receipt_value).expect("receipt text");
         assert!(receipt_text.contains(case.expected), "{} receipt: {receipt_text}", case.name);
         assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
     }
@@ -13246,16 +13426,17 @@ mod tests {
         let peer_bootstrap_refs =
             test_live_peer_bootstrap_refs(&root, "peer:listener", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
                 .expect("peer admission ref");
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("status request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("status request");
 
         let loopback = node_control_live_serve_listener_loopback(&NodeControlLiveServeLoopbackInput {
             state_root: &root,
@@ -13274,7 +13455,7 @@ mod tests {
         .await
         .expect("live listener loopback");
         assert_eq!(
-            ledger::artifact_kind(&loopback.listener.listener_receipt_value),
+            crate::ledger::artifact_kind(&loopback.listener.listener_receipt_value),
             "node-control-live-listener-receipt"
         );
         assert_eq!(loopback.listener.service.decision, "pass");
@@ -13299,16 +13480,17 @@ mod tests {
         let peer_bootstrap_refs =
             test_live_peer_bootstrap_refs(&root, "peer:live", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
                 .expect("peer admission ref");
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("status request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("status request");
 
         let live = node_control_live_iroh_loopback(&NodeControlLiveLoopbackInput {
             state_root: &root,
@@ -13326,8 +13508,8 @@ mod tests {
         .await
         .expect("live loopback");
         assert!(live.has_enqueued);
-        assert_eq!(ledger::artifact_kind(&live.publish_receipt_value), "node-control-live-transport-receipt");
-        assert_eq!(ledger::artifact_kind(&live.receive_receipt_value), "node-control-live-transport-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&live.publish_receipt_value), "node-control-live-transport-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&live.receive_receipt_value), "node-control-live-transport-receipt");
 
         let served = serve_node_control(&NodeControlServeInput {
             state_root: &root,
@@ -13354,16 +13536,17 @@ mod tests {
         let policy_refs = vec![local_ref("node-control-policy", "service-ingress").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "service-ingress").expect("resource ref")];
         let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:service").expect("bootstrap ref")];
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "status",
-            target_ref: None,
-            payload_ref: None,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("status request");
+        let request_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("status request");
         let envelope = node_control_ingress_envelope(&NodeControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: "peer:service",
@@ -13396,10 +13579,10 @@ mod tests {
         assert_eq!(served.ingress_receipt_refs.len(), 1);
         assert_eq!(served.loop_receipt_refs.len(), 1);
         assert_eq!(served.processed_request_refs.len(), 1);
-        assert_eq!(ledger::artifact_kind(&served.service_receipt_value), "node-control-service-run-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&served.service_receipt_value), "node-control-service-run-receipt");
         let control_value = read_preserves(&control_outbox_receipt_path(&root, &served.processed_request_refs[0]))
             .expect("read served control receipt");
-        let control = node_runtime::parse_node_control_receipt(&control_value).expect("parse served control");
+        let control = crate::node_runtime::parse_node_control_receipt(&control_value).expect("parse served control");
         assert_eq!(control.decision, "pass");
     }
 
@@ -13414,7 +13597,7 @@ mod tests {
         run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
         let startup = current_startup_receipt(&root).expect("startup");
         let identity =
-            node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
+            crate::node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
                 .expect("parse identity");
         let service_run_ref = local_ref("node-control-service-run", "already-active").expect("service run ref");
         let lock_value = service_lock_value(&ServiceLockValueInput {
@@ -13447,7 +13630,7 @@ mod tests {
         assert_eq!(served.ticks, 0);
         assert!(served.processed_request_refs.is_empty());
         assert!(next_pending_control_request(&root).expect("pending scan").is_some());
-        let text = preserves_rail::to_text(&served.service_receipt_value).expect("service receipt text");
+        let text = crate::preserves_rail::to_text(&served.service_receipt_value).expect("service receipt text");
         assert!(text.contains("already active"));
     }
 
@@ -13490,7 +13673,7 @@ mod tests {
         assert_eq!(restart_denied.decision, "deny");
         assert_eq!(restart_denied.ticks, 0);
         let restart_denied_text =
-            preserves_rail::to_text(&restart_denied.service_receipt_value).expect("restart denial receipt text");
+            crate::preserves_rail::to_text(&restart_denied.service_receipt_value).expect("restart denial receipt text");
         assert!(restart_denied_text.contains("restart attempts"));
 
         let shutdown = shutdown_request().expect("shutdown request");
@@ -13511,14 +13694,14 @@ mod tests {
         assert_eq!(stopped.decision, "deny");
         assert!(stopped.has_stopped);
         assert_eq!(stopped.supervisor_receipt_refs.len(), 2);
-        let text = preserves_rail::to_text(&stopped.service_receipt_value).expect("service receipt text");
+        let text = crate::preserves_rail::to_text(&stopped.service_receipt_value).expect("service receipt text");
         assert!(text.contains("exceeded supervisor bound"));
     }
 
     fn write_active_service_lock(root: &Path, service_suffix: &str) {
         let startup = current_startup_receipt(root).expect("startup");
         let identity =
-            node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
+            crate::node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
                 .expect("parse identity");
         let service_run_ref = local_ref("node-control-service-run", service_suffix).expect("service run ref");
         let lock_value = service_lock_value(&ServiceLockValueInput {
@@ -13635,7 +13818,7 @@ mod tests {
         }
     }
 
-    fn dispatch_value(case: &OpCase, value: &IoValue) -> node_runtime::NodeControlReceipt {
+    fn dispatch_value(case: &OpCase, value: &IoValue) -> crate::node_runtime::NodeControlReceipt {
         let submitted = submit_control_request(&NodeControlSubmitInput {
             state_root: &case.root,
             request_value: value,
@@ -13646,49 +13829,53 @@ mod tests {
             request_path: Some(&submitted.inbox_path),
         })
         .expect("dispatch request");
-        node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value).expect("control receipt")
+        crate::node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value).expect("control receipt")
     }
 
     fn assert_install(case: &OpCase) {
         let payload_value =
-            preserves_rail::record("node-control-install-payload", vec![preserves_rail::string("payload")]);
+            crate::preserves_rail::record("node-control-install-payload", vec![crate::preserves_rail::string(
+                "payload",
+            )]);
         let payload_ref = import_node_artifact(&case.root, &payload_value).expect("import payload");
         let payload_provenance =
-            provenance::synthetic_reviewed_provenance_record(&payload_ref).expect("payload provenance");
+            crate::provenance::synthetic_reviewed_provenance_record(&payload_ref).expect("payload provenance");
         let payload_provenance_ref =
             import_node_artifact(&case.root, &payload_provenance).expect("import payload provenance");
         let install_evidence_refs = vec![payload_provenance_ref];
-        let install_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "install",
-            target_ref: None,
-            payload_ref: Some(&payload_ref),
-            authority_refs: &case.authority_refs,
-            policy_refs: &case.policy_refs,
-            resource_refs: &case.resource_refs,
-            evidence_refs: &install_evidence_refs,
-        })
-        .expect("install request");
+        let install_value =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "install",
+                target_ref: None,
+                payload_ref: Some(&payload_ref),
+                authority_refs: &case.authority_refs,
+                policy_refs: &case.policy_refs,
+                resource_refs: &case.resource_refs,
+                evidence_refs: &install_evidence_refs,
+            })
+            .expect("install request");
         let install_receipt = dispatch_value(case, &install_value);
         assert_eq!(install_receipt.decision, "pass");
-        let installed = artifacts::list_artifacts(&case.root.join("registry"), Some("node-control-artifact"))
+        let installed = crate::artifacts::list_artifacts(&case.root.join("registry"), Some("node-control-artifact"))
             .expect("list installed artifacts");
         assert_eq!(installed.len(), 1);
     }
 
     fn assert_gate(case: &OpCase) {
-        let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("gate receipt");
+        let gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("gate receipt");
         let gate_ref = import_node_artifact(&case.root, &gate_value).expect("import gate");
         let gate_target = local_ref("node-control-gate-target", "ops").expect("gate target");
-        let gate_request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "gate",
-            target_ref: Some(&gate_target),
-            payload_ref: Some(&gate_ref),
-            authority_refs: &case.authority_refs,
-            policy_refs: &case.policy_refs,
-            resource_refs: &case.resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("gate request");
+        let gate_request =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "gate",
+                target_ref: Some(&gate_target),
+                payload_ref: Some(&gate_ref),
+                authority_refs: &case.authority_refs,
+                policy_refs: &case.policy_refs,
+                resource_refs: &case.resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("gate request");
         let gate_receipt = dispatch_value(case, &gate_request);
         assert_eq!(gate_receipt.decision, "pass");
         assert!(
@@ -13706,25 +13893,26 @@ mod tests {
         let admission_ref =
             import_node_artifact(&case.root, &job_fixture.admission_receipt).expect("import admission receipt");
         let job_provenance =
-            provenance::synthetic_reviewed_provenance_record(&job_fixture.job_ref).expect("job provenance");
+            crate::provenance::synthetic_reviewed_provenance_record(&job_fixture.job_ref).expect("job provenance");
         let job_provenance_ref = import_node_artifact(&case.root, &job_provenance).expect("import job provenance");
         let run_evidence_refs = vec![job_provenance_ref];
-        let run_request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "run",
-            target_ref: Some(&admission_ref),
-            payload_ref: Some(&execution_request_ref),
-            authority_refs: &case.authority_refs,
-            policy_refs: &case.policy_refs,
-            resource_refs: &case.resource_refs,
-            evidence_refs: &run_evidence_refs,
-        })
-        .expect("run request");
+        let run_request =
+            crate::node_runtime::node_control_request_value(&crate::node_runtime::ControlRequestValueInput {
+                operation: "run",
+                target_ref: Some(&admission_ref),
+                payload_ref: Some(&execution_request_ref),
+                authority_refs: &case.authority_refs,
+                policy_refs: &case.policy_refs,
+                resource_refs: &case.resource_refs,
+                evidence_refs: &run_evidence_refs,
+            })
+            .expect("run request");
         let run_receipt = dispatch_value(case, &run_request);
         assert_eq!(run_receipt.decision, "pass");
     }
 
     fn assert_ledger(root: &Path) {
-        let kinds = ledger::list_artifacts(&root.join("ledger"))
+        let kinds = crate::ledger::list_artifacts(&root.join("ledger"))
             .expect("list operation ledger")
             .into_iter()
             .map(|entry| entry.artifact_kind)
@@ -13761,7 +13949,7 @@ mod tests {
         let registry = root.join("registry");
         let stages = install_stage_pair(&registry);
         let dag_value = graph_value(&stages);
-        let installed = job_dag::install_job_dag(&registry, &dag_value).expect("install job dag");
+        let installed = crate::job_dag::install_job_dag(&registry, &dag_value).expect("install job dag");
         let admission = admit_graph(&registry, &installed.job_ref);
         let execution_request = execution_request_value(&installed.job_ref, &admission);
         NodeJobFixture {
@@ -13777,9 +13965,9 @@ mod tests {
         let stage_evidence = local_ref("node-job-stage-evidence", "ops").expect("stage evidence");
         let stage_installer = local_ref("node-job-stage-installer", "ops").expect("stage installer");
         let stage_capability = local_ref("node-job-stage-capability", "ops").expect("stage capability");
-        let source_stage = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let source_stage = crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {
             kind: "stage".to_string(),
-            payload: job_dag::builtin_stage_operation_value("source").expect("source operation"),
+            payload: crate::job_dag::builtin_stage_operation_value("source").expect("source operation"),
             schema_refs: vec![stage_schema.clone()],
             dependency_refs: Vec::new(),
             effect_manifest_ref: None,
@@ -13789,9 +13977,9 @@ mod tests {
             capability_refs: vec![stage_capability.clone()],
         })
         .expect("install source stage");
-        let map_stage = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let map_stage = crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {
             kind: "stage".to_string(),
-            payload: job_dag::builtin_stage_operation_value("identity").expect("identity operation"),
+            payload: crate::job_dag::builtin_stage_operation_value("identity").expect("identity operation"),
             schema_refs: vec![stage_schema],
             dependency_refs: Vec::new(),
             effect_manifest_ref: None,
@@ -13808,14 +13996,14 @@ mod tests {
     }
 
     fn source_vertex_value(stage_ref: &str) -> IoValue {
-        job_dag::job_node_value(job_dag::NodeValueInput {
+        crate::job_dag::job_node_value(crate::job_dag::NodeValueInput {
             id: "source",
             kind: "source",
             stage_artifact_ref: Some(stage_ref),
             input_ports: &[],
             output_ports: &["out".to_string()],
-            config: preserves_rail::record("source", vec![preserves_rail::record("values", vec![
-                preserves_rail::sequence(vec![preserves_rail::string("node-job")]),
+            config: crate::preserves_rail::record("source", vec![crate::preserves_rail::record("values", vec![
+                crate::preserves_rail::sequence(vec![crate::preserves_rail::string("node-job")]),
             ])]),
             effect_manifest_refs: &[],
             policy_refs: &[],
@@ -13825,13 +14013,13 @@ mod tests {
     }
 
     fn map_vertex_value(stage_ref: &str) -> IoValue {
-        job_dag::job_node_value(job_dag::NodeValueInput {
+        crate::job_dag::job_node_value(crate::job_dag::NodeValueInput {
             id: "map",
             kind: "map",
             stage_artifact_ref: Some(stage_ref),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
-            config: preserves_rail::record("op", vec![preserves_rail::string("identity")]),
+            config: crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
@@ -13840,7 +14028,7 @@ mod tests {
     }
 
     fn fixture_edge_value() -> IoValue {
-        job_dag::job_edge_value(job_dag::EdgeValueInput {
+        crate::job_dag::job_edge_value(crate::job_dag::EdgeValueInput {
             from_node: "source",
             from_port: "out",
             to_node: "map",
@@ -13853,7 +14041,7 @@ mod tests {
     }
 
     fn graph_value(stages: &StagePair) -> IoValue {
-        job_dag::job_dag_value(job_dag::DagValueInput {
+        crate::job_dag::job_dag_value(crate::job_dag::DagValueInput {
             nodes: vec![
                 source_vertex_value(&stages.source_ref),
                 map_vertex_value(&stages.map_ref),
@@ -13876,21 +14064,22 @@ mod tests {
         let policy_refs = vec![local_ref("node-job-policy", graph_ref).expect("policy ref")];
         let capability_refs = vec![authority_ref];
         let evidence_refs = vec![sync_ref.clone(), gate_ref];
-        let admission_request = job_dag::job_admission_request_value(job_dag::AdmissionRequestValueInput {
-            job_ref: graph_ref,
-            sync_ref: &sync_ref,
-            stage_ids: &[],
-            target_peer: "node:ops",
-            policy_refs: &policy_refs,
-            capability_refs: &capability_refs,
-            evidence_refs: &evidence_refs,
-            resource_refs: &resource_refs,
-        })
-        .expect("admission request");
-        let admission = job_dag::admission_loopback(registry, &admission_request).expect("admission loopback");
+        let admission_request =
+            crate::job_dag::job_admission_request_value(crate::job_dag::AdmissionRequestValueInput {
+                job_ref: graph_ref,
+                sync_ref: &sync_ref,
+                stage_ids: &[],
+                target_peer: "node:ops",
+                policy_refs: &policy_refs,
+                capability_refs: &capability_refs,
+                evidence_refs: &evidence_refs,
+                resource_refs: &resource_refs,
+            })
+            .expect("admission request");
+        let admission = crate::job_dag::admission_loopback(registry, &admission_request).expect("admission loopback");
         assert_eq!(admission.plan.decision, "pass");
         AdmissionParts {
-            receipt_ref: preserves_rail::canonical_hash(&admission.receipt_value).expect("admission ref"),
+            receipt_ref: crate::preserves_rail::canonical_hash(&admission.receipt_value).expect("admission ref"),
             receipt_value: admission.receipt_value,
             stage_order: admission.plan.stage_order,
             policy_refs,
@@ -13900,7 +14089,7 @@ mod tests {
     }
 
     fn execution_request_value(graph_ref: &str, admission: &AdmissionParts) -> IoValue {
-        job_dag::job_execution_request_value(job_dag::ExecutionRequestValueInput {
+        crate::job_dag::job_execution_request_value(crate::job_dag::ExecutionRequestValueInput {
             job_ref: graph_ref,
             admission_ref: &admission.receipt_ref,
             stage_ids: &admission.stage_order,
@@ -13935,8 +14124,8 @@ mod tests {
             evidence_refs: std::slice::from_ref(&evidence_ref),
         })
         .expect("authority context");
-        let context_ref = preserves_rail::canonical_hash(&context_value).expect("authority context ref");
-        let install = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let context_ref = crate::preserves_rail::canonical_hash(&context_value).expect("authority context ref");
+        let install = crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {
             kind: "authority-context".to_string(),
             payload: context_value,
             schema_refs: Vec::new(),
@@ -13953,9 +14142,9 @@ mod tests {
     }
 
     fn install_node_clean_gate(registry: &Path) -> String {
-        let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean gate");
-        let gate_ref = preserves_rail::canonical_hash(&gate_value).expect("gate ref");
-        let install = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean gate");
+        let gate_ref = crate::preserves_rail::canonical_hash(&gate_value).expect("gate ref");
+        let install = crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {
             kind: "octet-gate-receipt".to_string(),
             payload: gate_value,
             schema_refs: Vec::new(),
