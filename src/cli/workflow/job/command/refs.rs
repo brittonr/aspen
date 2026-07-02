@@ -19,7 +19,7 @@ pub(crate) struct Submit {
     #[arg(long, default_value = "local-echo-v1")]
     pub(crate) handler_profile: String,
     #[arg(long)]
-    pub(crate) authority_context_ref: String,
+    pub(crate) context_ref: String,
     #[arg(long = "policy-ref")]
     pub(crate) policy_refs: Vec<String>,
     #[arg(long = "provenance-ref")]

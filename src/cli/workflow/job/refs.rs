@@ -15,7 +15,7 @@ pub(crate) fn submit(args: super::command::refs::Submit) -> molten::error::Resul
         output_schema_refs: &args.output_schema_refs,
         effect_manifest_refs: &args.effect_manifest_refs,
         handler_profile: &args.handler_profile,
-        authority_context_ref: &args.authority_context_ref,
+        context_ref: &args.context_ref,
         policy_refs: &args.policy_refs,
         provenance_refs: &args.provenance_refs,
         evidence_refs: &args.evidence_refs,

@@ -4540,9 +4540,9 @@ fn install_job_execute_authority_context(
     capability_refs: &[String],
 ) -> Result<String> {
     let subject_ref = dogfood_ref("target-peer-subject")?;
-    let context_value = crate::authority::authority_context_value(crate::authority::ContextValueInput {
+    let context_value = crate::authority::context_value(crate::authority::ContextValueInput {
         subject_ref: &subject_ref,
-        capabilities: &[crate::authority::AuthorityCapability {
+        capabilities: &[crate::authority::Capability {
             capability: "job:execute".to_string(),
             scope: job_ref.to_string(),
             attenuation: "scoped".to_string(),

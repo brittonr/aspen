@@ -15,7 +15,7 @@
         sync_ref: String,
         source_gate_ref: String,
         admission_policy_ref: String,
-        authority_context_ref: String,
+        context_ref: String,
         worker_resource_refs: Vec<String>,
     }
 

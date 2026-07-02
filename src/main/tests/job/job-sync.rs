@@ -79,7 +79,7 @@
             sync_ref,
             source_gate_ref: install_cli_clean_octet_gate(&setup.target_registry),
             admission_policy_ref: cli_synthetic_ref("job-worker-admission-policy").expect("policy ref"),
-            authority_context_ref: install_cli_job_execute_authority_context(&setup.target_registry, &setup.dag.job_ref),
+            context_ref: install_cli_job_execute_authority_context(&setup.target_registry, &setup.dag.job_ref),
             worker_resource_refs: vec![
                 cli_synthetic_ref("job-worker-resource-a").expect("resource a"),
                 cli_synthetic_ref("job-worker-resource-b").expect("resource b"),

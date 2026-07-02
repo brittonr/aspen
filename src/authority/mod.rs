@@ -32,7 +32,7 @@ type RuntimeAssertion = crate::runtime::RuntimeAssertion;
 type RuntimeValue = crate::runtime::RuntimeValue;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthorityIdentity {
+pub struct Identity {
     pub identity_ref: String,
     pub identity_type: String,
     pub id: String,
@@ -44,17 +44,17 @@ pub struct AuthorityIdentity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthorityCapability {
+pub struct Capability {
     pub capability: String,
     pub scope: String,
     pub attenuation: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthorityContext {
+pub struct Context {
     pub context_ref: String,
     pub subject_ref: String,
-    pub capabilities: Vec<AuthorityCapability>,
+    pub capabilities: Vec<Capability>,
     pub delegation_refs: Vec<String>,
     pub not_before: Option<u64>,
     pub expires_at: Option<u64>,
@@ -66,7 +66,7 @@ pub struct AuthorityContext {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthorityRevocation {
+pub struct Revocation {
     pub revocation_ref: String,
     pub target_kind: String,
     pub target_ref: String,
@@ -78,24 +78,24 @@ pub struct AuthorityRevocation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthorityReceipt {
+pub struct Receipt {
     pub receipt_ref: String,
     pub operation: String,
     pub decision: String,
-    pub authority_context_ref: Option<String>,
+    pub context_ref: Option<String>,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthorityAdmission {
+pub struct Admission {
     pub decision: String,
-    pub receipt: AuthorityReceipt,
+    pub receipt: Receipt,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthorityLiveRef {
+pub struct LiveRef {
     pub live_ref: String,
-    pub authority_context_ref: String,
+    pub context_ref: String,
     pub scope: String,
     pub attenuation: String,
     pub expires_at: Option<u64>,
@@ -116,7 +116,7 @@ pub struct IdentityValueInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct ContextValueInput<'a> {
     pub subject_ref: &'a str,
-    pub capabilities: &'a [AuthorityCapability],
+    pub capabilities: &'a [Capability],
     pub delegation_refs: &'a [String],
     pub not_before: Option<u64>,
     pub expires_at: Option<u64>,
@@ -140,14 +140,14 @@ pub struct RevocationValueInput<'a> {
 pub struct ReceiptValueInput<'a> {
     pub operation: &'a str,
     pub decision: &'a str,
-    pub authority_context_ref: Option<&'a str>,
+    pub context_ref: Option<&'a str>,
     pub capability: &'a str,
     pub scope: &'a str,
     pub logical_time: u64,
     pub diagnostics: &'a [&'a str],
 }
 
-pub fn authority_identity_value(input: IdentityValueInput<'_>) -> Result<IoValue> {
+pub fn identity_value(input: IdentityValueInput<'_>) -> Result<IoValue> {
     validate_identity_type(input.identity_type)?;
     validate_non_empty(input.id, "authority identity id")?;
     validate_non_empty(input.display_name, "authority identity display name")?;
@@ -171,7 +171,7 @@ pub fn authority_identity_value(input: IdentityValueInput<'_>) -> Result<IoValue
     ]))
 }
 
-pub fn parse_authority_identity(value: &IoValue) -> Result<AuthorityIdentity> {
+pub fn parse_identity(value: &IoValue) -> Result<Identity> {
     let fields = value
         .collect_simple_record("authority-identity-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <authority-identity-v1 ...>"))?;
@@ -182,7 +182,7 @@ pub fn parse_authority_identity(value: &IoValue) -> Result<AuthorityIdentity> {
         .ok_or_else(|| MoltenError::invalid_harness("authority identity missing identity field"))?;
     let checks = parse_checks(&fields[5])?;
     require_check(&checks, "identity-alone-grants-no-authority")?;
-    Ok(AuthorityIdentity {
+    Ok(Identity {
         identity_ref: canonical_hash(value)?,
         identity_type: record_string(&identity_fields[0], "type")?,
         id: record_string(&identity_fields[1], "id")?,
@@ -194,7 +194,7 @@ pub fn parse_authority_identity(value: &IoValue) -> Result<AuthorityIdentity> {
     })
 }
 
-pub fn authority_context_value(input: ContextValueInput<'_>) -> Result<IoValue> {
+pub fn context_value(input: ContextValueInput<'_>) -> Result<IoValue> {
     require_ref(input.subject_ref, "authority context subject ref")?;
     for capability in input.capabilities {
         validate_capability(capability)?;
@@ -225,7 +225,7 @@ pub fn authority_context_value(input: ContextValueInput<'_>) -> Result<IoValue> 
     ]))
 }
 
-pub fn parse_authority_context(value: &IoValue) -> Result<AuthorityContext> {
+pub fn parse_context(value: &IoValue) -> Result<Context> {
     let fields = value
         .collect_simple_record("authority-context-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <authority-context-v1 ...>"))?;
@@ -236,7 +236,7 @@ pub fn parse_authority_context(value: &IoValue) -> Result<AuthorityContext> {
         .ok_or_else(|| MoltenError::invalid_harness("authority context missing validity"))?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "revocation-checked-at-admission")?;
-    Ok(AuthorityContext {
+    Ok(Context {
         context_ref: canonical_hash(value)?,
         subject_ref: record_string(&fields[1], "subject")?,
         capabilities: parse_capability_sequence(&fields[2], "capabilities")?,
@@ -274,7 +274,7 @@ pub fn revocation_value(input: RevocationValueInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-pub fn parse_revocation(value: &IoValue) -> Result<AuthorityRevocation> {
+pub fn parse_revocation(value: &IoValue) -> Result<Revocation> {
     let fields = value
         .collect_simple_record("authority-revocation-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <authority-revocation-v1 ...>"))?;
@@ -285,7 +285,7 @@ pub fn parse_revocation(value: &IoValue) -> Result<AuthorityRevocation> {
         .ok_or_else(|| MoltenError::invalid_harness("authority revocation missing target"))?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "authority-cleanup-required")?;
-    Ok(AuthorityRevocation {
+    Ok(Revocation {
         revocation_ref: canonical_hash(value)?,
         target_kind: record_string(&target_fields[0], "kind")?,
         target_ref: record_string(&target_fields[1], "ref")?,
@@ -303,8 +303,8 @@ pub fn admit_authority(
     requested_scope: &str,
     logical_time: u64,
     revocation_values: &[IoValue],
-) -> Result<AuthorityAdmission> {
-    let context = parse_authority_context(context_value)?;
+) -> Result<Admission> {
+    let context = parse_context(context_value)?;
     let has_revocation_hit = revocation_values
         .iter()
         .map(parse_revocation)
@@ -346,22 +346,22 @@ pub fn admit_authority(
     if !has_matching_capability {
         diagnostics.push("capability-denied");
     }
-    let receipt_value = authority_receipt_value(ReceiptValueInput {
+    let receipt_value = receipt_value(ReceiptValueInput {
         operation: "admission",
         decision,
-        authority_context_ref: Some(&context.context_ref),
+        context_ref: Some(&context.context_ref),
         capability: requested_capability,
         scope: requested_scope,
         logical_time,
         diagnostics: &diagnostics,
     });
-    Ok(AuthorityAdmission {
+    Ok(Admission {
         decision: decision.to_string(),
-        receipt: AuthorityReceipt {
+        receipt: Receipt {
             receipt_ref: canonical_hash(&receipt_value)?,
             operation: "admission".to_string(),
             decision: decision.to_string(),
-            authority_context_ref: Some(context.context_ref),
+            context_ref: Some(context.context_ref),
             value: receipt_value,
         },
     })
@@ -373,12 +373,12 @@ pub fn gatekeeper_resolve_live_ref(
     requested_capability: &str,
     logical_time: u64,
     revocation_values: &[IoValue],
-) -> Result<AuthorityLiveRef> {
+) -> Result<LiveRef> {
     let admission = admit_authority(context_value, requested_capability, scope, logical_time, revocation_values)?;
     if admission.decision != "pass" {
         return Err(MoltenError::invalid_harness("gatekeeper resolution denied by authority context"));
     }
-    let context = parse_authority_context(context_value)?;
+    let context = parse_context(context_value)?;
     let expires_at = context.expires_at;
     let evidence_refs = vec![admission.receipt.receipt_ref];
     let value = record("authority-live-ref-v1", vec![
@@ -395,9 +395,9 @@ pub fn gatekeeper_resolve_live_ref(
             record("check", vec![string("expiry-bound"), string("pass")]),
         ])]),
     ]);
-    Ok(AuthorityLiveRef {
+    Ok(LiveRef {
         live_ref: canonical_hash(&value)?,
-        authority_context_ref: context.context_ref,
+        context_ref: context.context_ref,
         scope: scope.to_string(),
         attenuation: "scoped".to_string(),
         expires_at,
@@ -410,7 +410,7 @@ pub fn cleanup_for_revocation(
     assertions: &[RuntimeAssertion],
     revocation_value: &IoValue,
     logical_time: u64,
-) -> Result<(Vec<RuntimeAssertion>, AuthorityReceipt)> {
+) -> Result<(Vec<RuntimeAssertion>, Receipt)> {
     let revocation = parse_revocation(revocation_value)?;
     let remaining = assertions
         .iter()
@@ -429,38 +429,38 @@ pub fn cleanup_for_revocation(
     let removed = assertions.len().saturating_sub(remaining.len());
     let diagnostic = format!("cleanup-removed:{removed}");
     let diagnostics = [diagnostic.as_str()];
-    let receipt_value = authority_receipt_value(ReceiptValueInput {
+    let receipt_value = receipt_value(ReceiptValueInput {
         operation: "cleanup",
         decision: "pass",
-        authority_context_ref: Some(&revocation.target_ref),
+        context_ref: Some(&revocation.target_ref),
         capability: "cleanup",
         scope: &revocation.target_kind,
         logical_time,
         diagnostics: &diagnostics,
     });
-    Ok((remaining, AuthorityReceipt {
+    Ok((remaining, Receipt {
         receipt_ref: canonical_hash(&receipt_value)?,
         operation: "cleanup".to_string(),
         decision: "pass".to_string(),
-        authority_context_ref: Some(revocation.target_ref),
+        context_ref: Some(revocation.target_ref),
         value: receipt_value,
     }))
 }
 
-pub fn replay_verify_authority_receipt(receipt: &AuthorityReceipt, context_value: &IoValue) -> Result<()> {
-    let context = parse_authority_context(context_value)?;
-    if receipt.authority_context_ref.as_deref() != Some(context.context_ref.as_str()) {
+pub fn replay_verify_receipt(receipt: &Receipt, context_value: &IoValue) -> Result<()> {
+    let context = parse_context(context_value)?;
+    if receipt.context_ref.as_deref() != Some(context.context_ref.as_str()) {
         return Err(MoltenError::invalid_harness("replay authority receipt does not bind recorded context"));
     }
     Ok(())
 }
 
-pub fn authority_receipt_value(input: ReceiptValueInput<'_>) -> IoValue {
+pub fn receipt_value(input: ReceiptValueInput<'_>) -> IoValue {
     record("authority-receipt-v1", vec![
         string(crate::preserves_rail::AUTHORITY_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
-        record("authority-context", vec![optional_ref_value(input.authority_context_ref)]),
+        record("authority-context", vec![optional_ref_value(input.context_ref)]),
         record("request", vec![
             record("capability", vec![string(input.capability)]),
             record("scope", vec![string(input.scope)]),
@@ -476,7 +476,7 @@ pub fn authority_receipt_value(input: ReceiptValueInput<'_>) -> IoValue {
     ])
 }
 
-fn capability_value(capability: &AuthorityCapability) -> IoValue {
+fn capability_value(capability: &Capability) -> IoValue {
     record("capability", vec![
         record("name", vec![string(&capability.capability)]),
         record("scope", vec![string(&capability.scope)]),
@@ -484,11 +484,11 @@ fn capability_value(capability: &AuthorityCapability) -> IoValue {
     ])
 }
 
-fn parse_capability(value: &IoValue) -> Result<AuthorityCapability> {
+fn parse_capability(value: &IoValue) -> Result<Capability> {
     let fields = value
         .collect_simple_record("capability", Some(3))
         .ok_or_else(|| MoltenError::invalid_harness("expected authority capability"))?;
-    let capability = AuthorityCapability {
+    let capability = Capability {
         capability: record_string(&fields[0], "name")?,
         scope: record_string(&fields[1], "scope")?,
         attenuation: record_string(&fields[2], "attenuation")?,
@@ -497,18 +497,18 @@ fn parse_capability(value: &IoValue) -> Result<AuthorityCapability> {
     Ok(capability)
 }
 
-fn parse_capability_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<AuthorityCapability>> {
+fn parse_capability_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Capability>> {
     let values = field_sequence(value, label)?;
     values.iter().map(|value| parse_capability(&value_to_iovalue(value))).collect()
 }
 
-fn capability_allows(capability: &AuthorityCapability, requested_capability: &str, requested_scope: &str) -> bool {
+fn capability_allows(capability: &Capability, requested_capability: &str, requested_scope: &str) -> bool {
     capability.capability == requested_capability
         && (capability.scope == requested_scope || capability.scope == "*")
         && capability.attenuation != "deny"
 }
 
-fn capability_ref(subject_ref: &str, capability: &AuthorityCapability) -> Result<String> {
+fn capability_ref(subject_ref: &str, capability: &Capability) -> Result<String> {
     canonical_hash(&record("authority-capability-ref", vec![string(subject_ref), capability_value(capability)]))
 }
 
@@ -527,7 +527,7 @@ fn validate_revocation_target(target_kind: &str) -> Result<()> {
     }
 }
 
-fn validate_capability(capability: &AuthorityCapability) -> Result<()> {
+fn validate_capability(capability: &Capability) -> Result<()> {
     validate_non_empty(&capability.capability, "authority capability")?;
     validate_non_empty(&capability.scope, "authority capability scope")?;
     validate_non_empty(&capability.attenuation, "authority capability attenuation")
@@ -662,7 +662,7 @@ mod tests {
 
     #[test]
     fn identity_records_do_not_grant_without_context() {
-        let identity_value = authority_identity_value(IdentityValueInput {
+        let identity_value = identity_value(IdentityValueInput {
             identity_type: "principal",
             id: "alice",
             display_name: "Alice",
@@ -671,11 +671,11 @@ mod tests {
             metadata_refs: &[],
         })
         .expect("identity");
-        let identity = parse_authority_identity(&identity_value).expect("parse identity");
-        let receipt = authority_receipt_value(ReceiptValueInput {
+        let identity = parse_identity(&identity_value).expect("parse identity");
+        let receipt = receipt_value(ReceiptValueInput {
             operation: "identity-check",
             decision: "fail",
-            authority_context_ref: None,
+            context_ref: None,
             capability: "read",
             scope: "store",
             logical_time: 0,
@@ -691,11 +691,11 @@ mod tests {
     }
 
     #[test]
-    fn authority_context_admits_scoped_capability_and_denies_attenuation_mismatch() {
+    fn context_admits_scoped_capability_and_denies_attenuation_mismatch() {
         let subject = ref_for("principal");
-        let context_value = authority_context_value(ContextValueInput {
+        let context_value = context_value(ContextValueInput {
             subject_ref: &subject,
-            capabilities: &[AuthorityCapability {
+            capabilities: &[Capability {
                 capability: "read".to_string(),
                 scope: "catalog:public".to_string(),
                 attenuation: "scoped".to_string(),
@@ -718,9 +718,9 @@ mod tests {
     #[test]
     fn revocation_retracts_dependent_assertions_and_denies_future_effects() {
         let subject = ref_for("principal");
-        let context_value = authority_context_value(ContextValueInput {
+        let context_value = context_value(ContextValueInput {
             subject_ref: &subject,
-            capabilities: &[AuthorityCapability {
+            capabilities: &[Capability {
                 capability: "effect:clock".to_string(),
                 scope: "actor:a".to_string(),
                 attenuation: "scoped".to_string(),
@@ -734,7 +734,7 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("context");
-        let context = parse_authority_context(&context_value).expect("parse context");
+        let context = parse_context(&context_value).expect("parse context");
         let revocation_value = revocation_value(RevocationValueInput {
             target_kind: "authority-context",
             target_ref: &context.context_ref,
@@ -766,9 +766,9 @@ mod tests {
     #[test]
     fn expiry_and_gatekeeper_live_refs_are_enforced() {
         let subject = ref_for("principal");
-        let context_value = authority_context_value(ContextValueInput {
+        let context_value = context_value(ContextValueInput {
             subject_ref: &subject,
-            capabilities: &[AuthorityCapability {
+            capabilities: &[Capability {
                 capability: "resolve".to_string(),
                 scope: "service:db".to_string(),
                 attenuation: "scoped".to_string(),
@@ -795,9 +795,9 @@ mod tests {
         let subject = ref_for("principal");
         let old_key = ref_for("old-key");
         let new_key = ref_for("new-key");
-        let context_value = authority_context_value(ContextValueInput {
+        let context_value = context_value(ContextValueInput {
             subject_ref: &subject,
-            capabilities: &[AuthorityCapability {
+            capabilities: &[Capability {
                 capability: "sign".to_string(),
                 scope: "receipt".to_string(),
                 attenuation: "scoped".to_string(),
@@ -811,9 +811,9 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("old context");
-        let context = parse_authority_context(&context_value).expect("context");
+        let context = parse_context(&context_value).expect("context");
         let historical = admit_authority(&context_value, "sign", "receipt", 1, &[]).expect("historical admission");
-        replay_verify_authority_receipt(&historical.receipt, &context_value).expect("historical replay");
+        replay_verify_receipt(&historical.receipt, &context_value).expect("historical replay");
         let new_key_refs = [new_key];
         let revoke_old_key = revocation_value(RevocationValueInput {
             target_kind: "key",
@@ -826,26 +826,26 @@ mod tests {
         .expect("rotate");
         let current = admit_authority(&context_value, "sign", "receipt", 2, &[revoke_old_key]).expect("current denied");
         assert_eq!(current.decision, "fail");
-        assert_eq!(historical.receipt.authority_context_ref.as_deref(), Some(context.context_ref.as_str()));
+        assert_eq!(historical.receipt.context_ref.as_deref(), Some(context.context_ref.as_str()));
     }
 
     #[test]
     fn storage_remote_catalog_contexts_share_admission_path() {
         let subject = ref_for("principal");
-        let context_value = authority_context_value(ContextValueInput {
+        let context_value = context_value(ContextValueInput {
             subject_ref: &subject,
             capabilities: &[
-                AuthorityCapability {
+                Capability {
                     capability: "storage:read".to_string(),
                     scope: "store:typed".to_string(),
                     attenuation: "scoped".to_string(),
                 },
-                AuthorityCapability {
+                Capability {
                     capability: "remote-sync:pull".to_string(),
                     scope: "catalog:public".to_string(),
                     attenuation: "scoped".to_string(),
                 },
-                AuthorityCapability {
+                Capability {
                     capability: "catalog:visible".to_string(),
                     scope: "catalog:public".to_string(),
                     attenuation: "scoped".to_string(),
@@ -883,7 +883,7 @@ mod tests {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let subject = ref_for(&format!("principal-{salt}"));
         let identity_id = format!("p-{salt}");
-        let identity_value = authority_identity_value(IdentityValueInput {
+        let identity_value = identity_value(IdentityValueInput {
             identity_type: "principal",
             id: &identity_id,
             display_name: "principal",
@@ -892,11 +892,11 @@ mod tests {
             metadata_refs: &[],
         })
         .expect("identity");
-        parse_authority_identity(&identity_value).expect("identity parses");
-        let no_context_receipt = authority_receipt_value(ReceiptValueInput {
+        parse_identity(&identity_value).expect("identity parses");
+        let no_context_receipt = receipt_value(ReceiptValueInput {
             operation: "identity-only",
             decision: "fail",
-            authority_context_ref: None,
+            context_ref: None,
             capability: "read",
             scope: "scope",
             logical_time: salt,
@@ -905,9 +905,9 @@ mod tests {
         assert!(crate::preserves_rail::to_text(&no_context_receipt).expect("receipt text").contains("fail"));
 
         let scope = format!("scope:{salt}");
-        let context_value = authority_context_value(ContextValueInput {
+        let context_value = context_value(ContextValueInput {
             subject_ref: &subject,
-            capabilities: &[AuthorityCapability {
+            capabilities: &[Capability {
                 capability: "read".to_string(),
                 scope: scope.clone(),
                 attenuation: "scoped".to_string(),
@@ -926,7 +926,7 @@ mod tests {
             admit_authority(&context_value, "read", "other-scope", salt, &[]).expect("other scope").decision,
             "fail"
         );
-        let context = parse_authority_context(&context_value).expect("context");
+        let context = parse_context(&context_value).expect("context");
         let revocation = revocation_value(RevocationValueInput {
             target_kind: "authority-context",
             target_ref: &context.context_ref,

@@ -22,7 +22,7 @@
             from_peer: "peer:source".to_string(),
             from_actor: "source-worker".to_string(),
             topic: "molten.job.worker".to_string(),
-            coordination_authority_refs: vec![sync.authority_context_ref.clone()],
+            coordination_authority_refs: vec![sync.context_ref.clone()],
             coordination_resource_refs: sync.worker_resource_refs.clone(),
             coordination_policy_refs: vec![cli_synthetic_ref("job-worker-stale-policy").expect("stale policy")],
             ledger: None,

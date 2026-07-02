@@ -7773,7 +7773,7 @@ fn evaluate_live_authority_delegation(state_root: &Path, envelope: &ControlIngre
         diagnostics.push("node control live authority delegation missing admitted grant".to_string());
     }
     let decision = if admitted_grant_ref.is_some() { "pass" } else { "deny" };
-    let receipt_value = authority_receipt_value(&AuthorityReceiptValueInput {
+    let receipt_value = receipt_value(&AuthorityReceiptValueInput {
         decision,
         envelope,
         grant_ref: admitted_grant_ref.as_deref(),
@@ -8526,7 +8526,7 @@ fn control_receipt_for_request(
     })
 }
 
-fn authority_receipt_value(input: &AuthorityReceiptValueInput<'_>) -> Result<IoValue> {
+fn receipt_value(input: &AuthorityReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(crate::preserves_rail::record("node-control-authority-receipt-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA),
@@ -13988,9 +13988,9 @@ mod tests {
         let subject_ref = local_ref("node-job-authority-subject", job_ref).expect("authority subject");
         let policy_ref = local_ref("node-job-authority-policy", job_ref).expect("authority policy");
         let evidence_ref = local_ref("node-job-authority-evidence", job_ref).expect("authority evidence");
-        let context_value = crate::authority::authority_context_value(crate::authority::ContextValueInput {
+        let context_value = crate::authority::context_value(crate::authority::ContextValueInput {
             subject_ref: &subject_ref,
-            capabilities: &[crate::authority::AuthorityCapability {
+            capabilities: &[crate::authority::Capability {
                 capability: "job:execute".to_string(),
                 scope: job_ref.to_string(),
                 attenuation: "scoped".to_string(),

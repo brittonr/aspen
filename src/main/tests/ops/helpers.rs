@@ -210,9 +210,9 @@
 
     fn install_cli_job_execute_authority_context(registry: &Path, job_ref: &str) -> String {
         let subject_ref = cli_synthetic_ref("job-worker-target-subject").expect("subject");
-        let context_value = molten::authority::authority_context_value(molten::authority::ContextValueInput {
+        let context_value = molten::authority::context_value(molten::authority::ContextValueInput {
             subject_ref: &subject_ref,
-            capabilities: &[molten::authority::AuthorityCapability {
+            capabilities: &[molten::authority::Capability {
                 capability: "job:execute".to_string(),
                 scope: job_ref.to_string(),
                 attenuation: "scoped".to_string(),

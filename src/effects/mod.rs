@@ -209,7 +209,7 @@ pub struct HandlerBindingInput {
     pub executor_preflight_ref: Option<String>,
     pub policy_ref: String,
     pub capability_context_ref: String,
-    pub authority_context_ref: Option<String>,
+    pub context_ref: Option<String>,
     pub resource_refs: Vec<String>,
     pub operations: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -225,7 +225,7 @@ pub struct HandlerBinding {
     pub executor_preflight_ref: Option<String>,
     pub policy_ref: String,
     pub capability_context_ref: String,
-    pub authority_context_ref: Option<String>,
+    pub context_ref: Option<String>,
     pub resource_refs: Vec<String>,
     pub operations: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -240,7 +240,7 @@ pub struct EffectHandleInput {
     pub handler_binding_ref: String,
     pub operations: Vec<String>,
     pub capability_context_ref: String,
-    pub authority_context_ref: Option<String>,
+    pub context_ref: Option<String>,
     pub resource_refs: Vec<String>,
     pub not_before: Option<u64>,
     pub expires_at: Option<u64>,
@@ -258,7 +258,7 @@ pub struct EffectHandle {
     pub handler_binding_ref: String,
     pub operations: Vec<String>,
     pub capability_context_ref: String,
-    pub authority_context_ref: Option<String>,
+    pub context_ref: Option<String>,
     pub resource_refs: Vec<String>,
     pub not_before: Option<u64>,
     pub expires_at: Option<u64>,
@@ -280,7 +280,7 @@ pub struct EffectHandleRequest<'a> {
     pub turn_ref: Option<&'a str>,
     pub policy_ref: &'a str,
     pub capability_context_ref: &'a str,
-    pub authority_context_ref: Option<&'a str>,
+    pub context_ref: Option<&'a str>,
     pub resource_refs: &'a [String],
     pub logical_time: u64,
     pub remote_use: bool,
@@ -302,7 +302,7 @@ pub struct CompoundHandlerProfileInput {
     pub child_handle_refs: Vec<String>,
     pub policy_ref: String,
     pub capability_context_ref: String,
-    pub authority_context_ref: Option<String>,
+    pub context_ref: Option<String>,
     pub resource_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
@@ -316,7 +316,7 @@ pub struct CompoundHandlerProfile {
     pub child_handle_refs: Vec<String>,
     pub policy_ref: String,
     pub capability_context_ref: String,
-    pub authority_context_ref: Option<String>,
+    pub context_ref: Option<String>,
     pub resource_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
@@ -668,8 +668,8 @@ pub fn handler_binding_value(input: &HandlerBindingInput) -> Result<IoValue> {
     }
     require_ref(&input.policy_ref, "handler policy ref")?;
     require_ref(&input.capability_context_ref, "handler capability context ref")?;
-    if let Some(authority_context_ref) = input.authority_context_ref.as_deref() {
-        require_ref(authority_context_ref, "handler authority context ref")?;
+    if let Some(context_ref) = input.context_ref.as_deref() {
+        require_ref(context_ref, "handler authority context ref")?;
     }
     validate_scope(&input.scope)?;
     validate_refs(&input.resource_refs, "handler resource ref")?;
@@ -687,7 +687,7 @@ pub fn handler_binding_value(input: &HandlerBindingInput) -> Result<IoValue> {
         record("policy", vec![
             string(&input.policy_ref),
             string(&input.capability_context_ref),
-            optional_ref_value(input.authority_context_ref.as_deref()),
+            optional_ref_value(input.context_ref.as_deref()),
         ]),
         refs_record("resources", &input.resource_refs),
         operations_record(&input.operations),
@@ -707,8 +707,8 @@ pub fn effect_handle_value(input: &EffectHandleInput) -> Result<IoValue> {
     require_ref(&input.handler_binding_ref, "effect handle handler binding ref")?;
     validate_operations(&input.operations)?;
     require_ref(&input.capability_context_ref, "effect handle capability context ref")?;
-    if let Some(authority_context_ref) = input.authority_context_ref.as_deref() {
-        require_ref(authority_context_ref, "effect handle authority context ref")?;
+    if let Some(context_ref) = input.context_ref.as_deref() {
+        require_ref(context_ref, "effect handle authority context ref")?;
     }
     validate_refs(&input.resource_refs, "effect handle resource ref")?;
     if let (Some(not_before), Some(expires_at)) = (input.not_before, input.expires_at)
@@ -730,7 +730,7 @@ pub fn effect_handle_value(input: &EffectHandleInput) -> Result<IoValue> {
         operations_record(&input.operations),
         record("authority", vec![
             string(&input.capability_context_ref),
-            optional_ref_value(input.authority_context_ref.as_deref()),
+            optional_ref_value(input.context_ref.as_deref()),
         ]),
         refs_record("resources", &input.resource_refs),
         record("validity", vec![
@@ -769,7 +769,7 @@ pub fn parse_handler_binding(value: &IoValue) -> Result<HandlerBinding> {
         executor_preflight_ref: parse_optional_ref_value(&implementation[2])?,
         policy_ref: required_ref(&policy[0], "handler policy ref")?,
         capability_context_ref: required_ref(&policy[1], "handler capability context ref")?,
-        authority_context_ref: parse_optional_ref_value(&policy[2])?,
+        context_ref: parse_optional_ref_value(&policy[2])?,
         resource_refs: parse_ref_sequence_record(&binding[5], "resources")?,
         operations: parse_string_sequence_record(&binding[6], "operations")?,
         evidence_refs: parse_ref_sequence_record(&binding[7], "evidence")?,
@@ -809,7 +809,7 @@ pub fn parse_effect_handle(value: &IoValue) -> Result<EffectHandle> {
         handler_binding_ref: required_record_ref(&handle[3], "handler", "effect handle handler ref")?,
         operations: parse_string_sequence_record(&handle[4], "operations")?,
         capability_context_ref: required_ref(&authority[0], "effect handle capability context ref")?,
-        authority_context_ref: parse_optional_ref_value(&authority[1])?,
+        context_ref: parse_optional_ref_value(&authority[1])?,
         resource_refs: parse_ref_sequence_record(&handle[6], "resources")?,
         not_before,
         expires_at,
@@ -844,8 +844,8 @@ pub fn compound_handler_profile_value(input: &CompoundHandlerProfileInput) -> Re
     }
     require_ref(&input.policy_ref, "compound handler policy ref")?;
     require_ref(&input.capability_context_ref, "compound handler capability context ref")?;
-    if let Some(authority_context_ref) = input.authority_context_ref.as_deref() {
-        require_ref(authority_context_ref, "compound handler authority context ref")?;
+    if let Some(context_ref) = input.context_ref.as_deref() {
+        require_ref(context_ref, "compound handler authority context ref")?;
     }
     validate_refs(&input.resource_refs, "compound handler resource ref")?;
     validate_refs(&input.evidence_refs, "compound handler evidence ref")?;
@@ -858,7 +858,7 @@ pub fn compound_handler_profile_value(input: &CompoundHandlerProfileInput) -> Re
         record("policy", vec![
             string(&input.policy_ref),
             string(&input.capability_context_ref),
-            optional_ref_value(input.authority_context_ref.as_deref()),
+            optional_ref_value(input.context_ref.as_deref()),
         ]),
         refs_record("resources", &input.resource_refs),
         refs_record("evidence", &input.evidence_refs),
@@ -894,7 +894,7 @@ pub fn parse_compound_handler_profile(value: &IoValue) -> Result<CompoundHandler
         child_handle_refs,
         policy_ref: required_ref(&policy[0], "compound handler policy ref")?,
         capability_context_ref: required_ref(&policy[1], "compound handler capability context ref")?,
-        authority_context_ref: parse_optional_ref_value(&policy[2])?,
+        context_ref: parse_optional_ref_value(&policy[2])?,
         resource_refs: parse_ref_sequence_record(&profile[6], "resources")?,
         evidence_refs: parse_ref_sequence_record(&profile[7], "evidence")?,
         checks,
@@ -974,7 +974,7 @@ pub fn attenuated_handle_value(parent_handle_value: &IoValue, input: &HandleAtte
         handler_binding_ref: parent.handler_binding_ref,
         operations: input.operations.clone(),
         capability_context_ref: parent.capability_context_ref,
-        authority_context_ref: parent.authority_context_ref,
+        context_ref: parent.context_ref,
         resource_refs: parent.resource_refs,
         not_before: parent.not_before,
         expires_at: input.expires_at.or(parent.expires_at),
@@ -1086,9 +1086,7 @@ fn require_context_match(
     {
         return Err(MoltenError::invalid_harness("effect handle capability context ref does not match request"));
     }
-    if handler.authority_context_ref.as_deref() != request.authority_context_ref
-        || handle.authority_context_ref.as_deref() != request.authority_context_ref
-    {
+    if handler.context_ref.as_deref() != request.context_ref || handle.context_ref.as_deref() != request.context_ref {
         return Err(MoltenError::invalid_harness("effect handle authority context ref does not match request"));
     }
     if handler.resource_refs != request.resource_refs || handle.resource_refs != request.resource_refs {
@@ -1632,7 +1630,7 @@ mod tests {
             executor_preflight_ref: Some(fake_ref("executor-preflight")),
             policy_ref: policy_ref.clone(),
             capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             operations: vec![operation.to_string()],
             evidence_refs: vec![fake_ref("evidence")],
@@ -1645,7 +1643,7 @@ mod tests {
             handler_binding_ref: binding_ref,
             operations: vec![operation.to_string()],
             capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             not_before: Some(0),
             expires_at: Some(10),
@@ -1673,7 +1671,7 @@ mod tests {
             executor_preflight_ref: None,
             policy_ref: policy_ref.to_string(),
             capability_context_ref: capability_ref.to_string(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             operations: vec!["read".to_string()],
             evidence_refs: vec![fake_ref(&format!("evidence-{suffix}"))],
@@ -1685,7 +1683,7 @@ mod tests {
             handler_binding_ref: canonical_hash(&binding).expect("storage binding ref"),
             operations: vec!["read".to_string()],
             capability_context_ref: capability_ref.to_string(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             not_before: None,
             expires_at: None,
@@ -1787,7 +1785,7 @@ mod tests {
             turn_ref: scope.turn_ref.as_deref(),
             policy_ref: &policy_ref,
             capability_context_ref: &capability_ref,
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: &resource_refs,
             logical_time: 1,
             remote_use: false,
@@ -1812,7 +1810,7 @@ mod tests {
             turn_ref: scope.turn_ref.as_deref(),
             policy_ref: &policy_ref,
             capability_context_ref: &capability_ref,
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: &resource_refs,
             logical_time: 1,
             remote_use: false,
@@ -1840,7 +1838,7 @@ mod tests {
             turn_ref: scope.turn_ref.as_deref(),
             policy_ref: &policy_ref,
             capability_context_ref: &capability_ref,
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: &resource_a,
             logical_time: 0,
             remote_use: false,
@@ -1887,7 +1885,7 @@ mod tests {
             executor_preflight_ref: None,
             policy_ref: policy_ref.clone(),
             capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             operations: vec!["read".to_string(), "write".to_string()],
             evidence_refs: vec![fake_ref("binding-evidence")],
@@ -1910,7 +1908,7 @@ mod tests {
             handler_binding_ref: seed.binding_ref.clone(),
             operations: vec!["read".to_string(), "write".to_string()],
             capability_context_ref: seed.capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: seed.resource_refs.clone(),
             not_before: Some(0),
             expires_at: Some(10),
@@ -1951,7 +1949,7 @@ mod tests {
             ],
             policy_ref: bundle.seed.policy_ref.clone(),
             capability_context_ref: bundle.seed.capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: bundle.seed.resource_refs.clone(),
             evidence_refs: vec![fake_ref("profile-evidence")],
         })
@@ -2020,7 +2018,7 @@ mod tests {
             executor_preflight_ref: None,
             policy_ref: policy_ref.clone(),
             capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             operations: operations.clone(),
             evidence_refs: vec![fake_ref(&format!(
@@ -2064,7 +2062,7 @@ mod tests {
             handler_binding_ref: material.binding_ref.clone(),
             operations: material.operations.clone(),
             capability_context_ref: material.capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: material.resource_refs.clone(),
             not_before: None,
             expires_at: None,
@@ -2090,7 +2088,7 @@ mod tests {
                 turn_ref: material.scope.turn_ref.as_deref(),
                 policy_ref: &material.policy_ref,
                 capability_context_ref: &material.capability_ref,
-                authority_context_ref: None,
+                context_ref: None,
                 resource_refs: &material.resource_refs,
                 logical_time: 0,
                 remote_use: false,
@@ -2171,7 +2169,7 @@ mod tests {
             executor_preflight_ref: None,
             policy_ref: env.policy_ref.clone(),
             capability_context_ref: env.capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: env.resource_refs.clone(),
             operations: vec!["delay".to_string(), "partition".to_string(), "reorder".to_string()],
             evidence_refs: vec![fake_ref("chaos-schedule-evidence")],
@@ -2186,7 +2184,7 @@ mod tests {
             handler_binding_ref: binding_ref,
             operations: vec!["delay".to_string(), "partition".to_string(), "reorder".to_string()],
             capability_context_ref: env.capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: env.resource_refs.clone(),
             not_before: Some(0),
             expires_at: Some(100),
@@ -2221,7 +2219,7 @@ mod tests {
             turn_ref: env.scope.turn_ref.as_deref(),
             policy_ref: &env.policy_ref,
             capability_context_ref: &env.capability_ref,
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: &env.resource_refs,
             logical_time: 50,
             remote_use: false,
@@ -2239,7 +2237,7 @@ mod tests {
             executor_preflight_ref: None,
             policy_ref: env.policy_ref.clone(),
             capability_context_ref: env.capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: env.resource_refs.clone(),
             operations: vec!["count".to_string(), "payload-bytes".to_string()],
             evidence_refs: vec![fake_ref("profiling-evidence")],
@@ -2305,7 +2303,7 @@ mod tests {
                 executor_preflight_ref: None,
                 policy_ref: policy_ref.clone(),
                 capability_context_ref: capability_ref.clone(),
-                authority_context_ref: None,
+                context_ref: None,
                 resource_refs: resource_refs.clone(),
                 operations: vec!["open".to_string()],
                 evidence_refs: vec![fake_ref(&format!("evidence-{kind}"))],
@@ -2317,7 +2315,7 @@ mod tests {
                 handler_binding_ref: canonical_hash(&binding).expect("binding ref"),
                 operations: vec!["open".to_string()],
                 capability_context_ref: capability_ref.clone(),
-                authority_context_ref: None,
+                context_ref: None,
                 resource_refs: resource_refs.clone(),
                 not_before: None,
                 expires_at: None,
@@ -2336,7 +2334,7 @@ mod tests {
                 turn_ref: scope.turn_ref.as_deref(),
                 policy_ref: &policy_ref,
                 capability_context_ref: &capability_ref,
-                authority_context_ref: None,
+                context_ref: None,
                 resource_refs: &resource_refs,
                 logical_time: 0,
                 remote_use: false,
@@ -2361,7 +2359,7 @@ mod tests {
             executor_preflight_ref: None,
             policy_ref: policy_ref.clone(),
             capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             operations: vec!["sync".to_string()],
             evidence_refs: vec![
@@ -2377,7 +2375,7 @@ mod tests {
             handler_binding_ref: canonical_hash(&binding).expect("binding ref"),
             operations: vec!["sync".to_string()],
             capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             not_before: Some(0),
             expires_at: Some(5),
@@ -2400,7 +2398,7 @@ mod tests {
             turn_ref: scope.turn_ref.as_deref(),
             policy_ref: &policy_ref,
             capability_context_ref: &capability_ref,
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: &resource_refs,
             logical_time: 1,
             remote_use: true,
@@ -2422,7 +2420,7 @@ mod tests {
             turn_ref: scope.turn_ref.as_deref(),
             policy_ref: &policy_ref,
             capability_context_ref: &capability_ref,
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: &parsed.resource_refs,
             logical_time: 1,
             remote_use: false,
@@ -2490,7 +2488,7 @@ mod tests {
             turn_ref: scope.turn_ref.as_deref(),
             policy_ref: &policy_ref,
             capability_context_ref: &capability_ref,
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: &resource_refs,
             logical_time: 1,
             remote_use: true,
@@ -2523,7 +2521,7 @@ mod tests {
             executor_preflight_ref: None,
             policy_ref: policy_ref.clone(),
             capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             operations: vec!["read".to_string(), "write".to_string()],
             evidence_refs: vec![fake_ref(&format!("evidence-{salt}"))],
@@ -2535,7 +2533,7 @@ mod tests {
             handler_binding_ref: canonical_hash(&binding).expect("binding ref"),
             operations: vec!["read".to_string(), "write".to_string()],
             capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             not_before: Some(0),
             expires_at: Some(10),
@@ -2551,7 +2549,7 @@ mod tests {
             handler_binding_ref: canonical_hash(&binding).expect("binding ref again"),
             operations: vec!["read".to_string(), "write".to_string()],
             capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: resource_refs.clone(),
             not_before: Some(0),
             expires_at: Some(10),
@@ -2579,7 +2577,7 @@ mod tests {
             turn_ref: scope.turn_ref.as_deref(),
             policy_ref: &policy_ref,
             capability_context_ref: &capability_ref,
-            authority_context_ref: None,
+            context_ref: None,
             resource_refs: &resource_refs,
             logical_time: 1,
             remote_use: false,
@@ -2597,7 +2595,7 @@ mod tests {
                 turn_ref: scope.turn_ref.as_deref(),
                 policy_ref: &policy_ref,
                 capability_context_ref: &capability_ref,
-                authority_context_ref: None,
+                context_ref: None,
                 resource_refs: &resource_refs,
                 logical_time: 1,
                 remote_use: false,

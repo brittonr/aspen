@@ -331,7 +331,7 @@ pub struct BlobRefJobSubmission {
     pub output_schema_refs: Vec<String>,
     pub effect_manifest_refs: Vec<String>,
     pub handler_profile: String,
-    pub authority_context_ref: String,
+    pub context_ref: String,
     pub policy_refs: Vec<String>,
     pub provenance_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -360,7 +360,7 @@ pub struct BlobRefJobSubmissionValueInput<'a> {
     pub output_schema_refs: &'a [String],
     pub effect_manifest_refs: &'a [String],
     pub handler_profile: &'a str,
-    pub authority_context_ref: &'a str,
+    pub context_ref: &'a str,
     pub policy_refs: &'a [String],
     pub provenance_refs: &'a [String],
     pub evidence_refs: &'a [String],
@@ -1013,7 +1013,7 @@ pub fn job_ref_submission_value(input: BlobRefJobSubmissionValueInput<'_>) -> Re
         crate::preserves_rail::record("output-schemas", vec![refs_sequence(&sorted_unique(input.output_schema_refs))]),
         crate::preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
         crate::preserves_rail::record("handler-profile", vec![crate::preserves_rail::string(input.handler_profile)]),
-        crate::preserves_rail::record("authority", vec![crate::preserves_rail::string(input.authority_context_ref)]),
+        crate::preserves_rail::record("authority", vec![crate::preserves_rail::string(input.context_ref)]),
         crate::preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
         crate::preserves_rail::record("provenance", vec![refs_sequence(&sorted_unique(input.provenance_refs))]),
         crate::preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
@@ -1058,7 +1058,7 @@ pub fn parse_job_ref_submission_value(value: &IoValue) -> Result<BlobRefJobSubmi
         output_schema_refs: record_ref_sequence(&fields[7], "output-schemas")?,
         effect_manifest_refs: record_ref_sequence(&fields[8], "effects")?,
         handler_profile: record_string(&fields[9], "handler-profile")?,
-        authority_context_ref: record_ref(&fields[10], "authority")?,
+        context_ref: record_ref(&fields[10], "authority")?,
         policy_refs: record_ref_sequence(&fields[11], "policy")?,
         provenance_refs: record_ref_sequence(&fields[12], "provenance")?,
         evidence_refs: record_ref_sequence(&fields[13], "evidence")?,
@@ -3202,7 +3202,7 @@ fn authority_context_value_for_ref(target_registry: &FilePath, context_ref: &str
     validate_ref(context_ref, "job admission authority context ref")?;
     for artifact in crate::artifacts::list_artifacts(target_registry, None)? {
         let payload = crate::artifacts::read_payload(target_registry, &artifact.artifact_ref)?;
-        if let Ok(context) = crate::authority::parse_authority_context(&payload)
+        if let Ok(context) = crate::authority::parse_context(&payload)
             && context.context_ref == context_ref
         {
             return Ok(Some(payload));
@@ -3952,7 +3952,7 @@ fn blob_ref_job_receipt_value(input: BlobRefReceiptValueInput<'_>) -> Result<IoV
         input.submission.submission_ref.clone(),
         input.submission.operation_id.clone(),
         input.submission.executable.content_ref.clone(),
-        input.submission.authority_context_ref.clone(),
+        input.submission.context_ref.clone(),
     ];
     for content in &input.submission.inputs {
         push_bounded(&mut refs, content.content_ref.clone(), MAX_JOB_REFS, "job ref receipt refs")?;
@@ -5969,7 +5969,7 @@ fn validate_blob_ref_submission_input(input: &BlobRefJobSubmissionValueInput<'_>
     }
     validate_output_mode(input.output_mode)?;
     validate_blob_ref_handler_profile(input.handler_profile)?;
-    validate_ref(input.authority_context_ref, "job ref authority context ref")?;
+    validate_ref(input.context_ref, "job ref authority context ref")?;
     validate_refs(input.input_schema_refs, "job ref input schema ref")?;
     validate_refs(input.output_schema_refs, "job ref output schema ref")?;
     validate_refs(input.effect_manifest_refs, "job ref effect manifest ref")?;
@@ -5989,7 +5989,7 @@ fn validate_blob_ref_submission(submission: &BlobRefJobSubmission) -> Result<()>
     }
     validate_output_mode(&submission.output_mode)?;
     validate_blob_ref_handler_profile(&submission.handler_profile)?;
-    validate_ref(&submission.authority_context_ref, "job ref authority context ref")?;
+    validate_ref(&submission.context_ref, "job ref authority context ref")?;
     validate_refs(&submission.input_schema_refs, "job ref input schema ref")?;
     validate_refs(&submission.output_schema_refs, "job ref output schema ref")?;
     validate_refs(&submission.effect_manifest_refs, "job ref effect manifest ref")?;
@@ -6404,7 +6404,7 @@ mod tests {
             output_schema_refs: &[],
             effect_manifest_refs: std::slice::from_ref(&effect_ref),
             handler_profile: "local-echo-v1",
-            authority_context_ref: &authority_ref,
+            context_ref: &authority_ref,
             policy_refs: std::slice::from_ref(&policy_ref),
             provenance_refs: std::slice::from_ref(&provenance_ref),
             evidence_refs: &[],
@@ -6465,7 +6465,7 @@ mod tests {
             output_schema_refs: &[],
             effect_manifest_refs: std::slice::from_ref(&effect_ref),
             handler_profile: "local-echo-v1",
-            authority_context_ref: &authority_ref,
+            context_ref: &authority_ref,
             policy_refs: std::slice::from_ref(&policy_ref),
             provenance_refs: std::slice::from_ref(&provenance_ref),
             evidence_refs: &[],
@@ -6508,7 +6508,7 @@ mod tests {
                 output_schema_refs: &[],
                 effect_manifest_refs: &[],
                 handler_profile: "local-echo-v1",
-                authority_context_ref: &authority_ref,
+                context_ref: &authority_ref,
                 policy_refs: &[],
                 provenance_refs: &[],
                 evidence_refs: &[],
@@ -6654,7 +6654,7 @@ mod tests {
     struct CopyFlow {
         sync_ref: String,
         source_gate_ref: String,
-        authority_context_ref: String,
+        context_ref: String,
         admission: JobAdmissionLoopback,
         admission_ref: String,
     }
@@ -6824,7 +6824,7 @@ mod tests {
     }
 
     fn passing_flow(case: &CopyCase, sync_ref: String) -> CopyFlow {
-        let authority_context_ref = install_job_execute_authority_context(&case.target, &case.installed_job.job_ref);
+        let context_ref = install_job_execute_authority_context(&case.target, &case.installed_job.job_ref);
         let source_gate_ref = install_clean_octet_gate(&case.target);
         let admission_request = job_admission_request_value(AdmissionRequestValueInput {
             job_ref: &case.installed_job.job_ref,
@@ -6832,7 +6832,7 @@ mod tests {
             stage_ids: &[],
             target_peer: "peer:loopback",
             policy_refs: &[test_ref("admit-policy")],
-            capability_refs: std::slice::from_ref(&authority_context_ref),
+            capability_refs: std::slice::from_ref(&context_ref),
             evidence_refs: &[sync_ref.clone(), source_gate_ref.clone()],
             resource_refs: &[test_ref("resource-1"), test_ref("resource-2")],
         })
@@ -6848,7 +6848,7 @@ mod tests {
         CopyFlow {
             sync_ref,
             source_gate_ref,
-            authority_context_ref,
+            context_ref,
             admission,
             admission_ref,
         }
@@ -6864,7 +6864,7 @@ mod tests {
             cache_profile_ref: &test_ref("cache-profile"),
             chunk_profile_ref: &test_ref("chunk-profile"),
             policy_refs: &[test_ref("admit-policy")],
-            capability_refs: std::slice::from_ref(&flow.authority_context_ref),
+            capability_refs: std::slice::from_ref(&flow.context_ref),
             resource_refs: &[test_ref("resource-1"), test_ref("resource-2")],
         })
         .expect("execution request");
@@ -6923,7 +6923,7 @@ mod tests {
             cache_profile_ref: &test_ref("cache-profile"),
             chunk_profile_ref: &test_ref("chunk-profile"),
             policy_refs: &[test_ref("admit-policy")],
-            capability_refs: std::slice::from_ref(&flow.authority_context_ref),
+            capability_refs: std::slice::from_ref(&flow.context_ref),
             resource_refs: &[test_ref("resource-1"), test_ref("resource-2")],
         })
         .expect("wrong peer request");
@@ -7062,7 +7062,7 @@ mod tests {
             stage_ids: &["map".to_string()],
             target_peer: "peer:loopback",
             policy_refs: &[test_ref("admit-policy")],
-            capability_refs: std::slice::from_ref(&flow.authority_context_ref),
+            capability_refs: std::slice::from_ref(&flow.context_ref),
             evidence_refs: &[flow.sync_ref.clone(), flow.source_gate_ref.clone()],
             resource_refs: &[test_ref("resource-1")],
         })
@@ -7185,7 +7185,7 @@ mod tests {
             sync_ref: &fixture.sync_ref,
             admission_ref: &missing_admission_ref,
             execution_request_ref: &fixture.execution_request_ref,
-            authority_refs: std::slice::from_ref(&fixture.authority_context_ref),
+            authority_refs: std::slice::from_ref(&fixture.context_ref),
             resource_refs: &fixture.resource_refs,
             peer_bootstrap_refs: std::slice::from_ref(&fixture.peer_bootstrap_ref),
             node_identity_refs: std::slice::from_ref(&fixture.node_identity_ref),
@@ -7291,7 +7291,7 @@ mod tests {
             sync_ref: &stale_sync,
             admission_ref: &fixture.admission_ref,
             execution_request_ref: &fixture.execution_request_ref,
-            authority_refs: std::slice::from_ref(&fixture.authority_context_ref),
+            authority_refs: std::slice::from_ref(&fixture.context_ref),
             resource_refs: &fixture.resource_refs,
             peer_bootstrap_refs: std::slice::from_ref(&fixture.peer_bootstrap_ref),
             node_identity_refs: std::slice::from_ref(&fixture.node_identity_ref),
@@ -7330,7 +7330,7 @@ mod tests {
             operation: crate::remote_dataspace::Operation::Message,
             payload: fixture.worker_request.clone(),
             content_refs: Vec::new(),
-            capability_refs: vec![fixture.authority_context_ref.clone()],
+            capability_refs: vec![fixture.context_ref.clone()],
             evidence_refs: fixture.evidence_refs.clone(),
         })
         .expect("target mismatch envelope");
@@ -7507,7 +7507,7 @@ mod tests {
             output_schema_refs: &[],
             effect_manifest_refs: std::slice::from_ref(&effect_ref),
             handler_profile: "local-echo-v1",
-            authority_context_ref: &authority_ref,
+            context_ref: &authority_ref,
             policy_refs: std::slice::from_ref(&policy_ref),
             provenance_refs: std::slice::from_ref(&provenance_ref),
             evidence_refs: &[],
@@ -7768,9 +7768,9 @@ mod tests {
 
     fn install_job_execute_authority_context(registry: &FilePath, job_ref: &str) -> String {
         let subject_ref = test_ref("target-peer-subject");
-        let context_value = crate::authority::authority_context_value(crate::authority::ContextValueInput {
+        let context_value = crate::authority::context_value(crate::authority::ContextValueInput {
             subject_ref: &subject_ref,
-            capabilities: &[crate::authority::AuthorityCapability {
+            capabilities: &[crate::authority::Capability {
                 capability: "job:execute".to_string(),
                 scope: job_ref.to_string(),
                 attenuation: "scoped".to_string(),
@@ -7812,7 +7812,7 @@ mod tests {
         admission_ref: String,
         execution_request_ref: String,
         execution_request: IoValue,
-        authority_context_ref: String,
+        context_ref: String,
         resource_refs: Vec<String>,
         peer_bootstrap_ref: String,
         node_identity_ref: String,
@@ -7829,7 +7829,7 @@ mod tests {
     }
 
     struct FlowParts {
-        authority_context_ref: String,
+        context_ref: String,
         resource_refs: Vec<String>,
         admission: JobAdmissionLoopback,
         admission_ref: String,
@@ -7949,7 +7949,7 @@ mod tests {
     }
 
     fn flow_parts(target: &FilePath, installed: &JobInstall, sync_ref: &str) -> FlowParts {
-        let authority_context_ref = install_job_execute_authority_context(target, &installed.job_ref);
+        let context_ref = install_job_execute_authority_context(target, &installed.job_ref);
         let source_gate_ref = install_clean_octet_gate(target);
         let resource_refs = vec![test_ref("worker-resource-a"), test_ref("worker-resource-b")];
         let admission_request = job_admission_request_value(AdmissionRequestValueInput {
@@ -7958,7 +7958,7 @@ mod tests {
             stage_ids: &[],
             target_peer: "peer:b",
             policy_refs: &[test_ref("worker-admission-policy")],
-            capability_refs: std::slice::from_ref(&authority_context_ref),
+            capability_refs: std::slice::from_ref(&context_ref),
             evidence_refs: &[sync_ref.to_string(), source_gate_ref],
             resource_refs: &resource_refs,
         })
@@ -7976,14 +7976,14 @@ mod tests {
             cache_profile_ref: &test_ref("worker-cache-profile"),
             chunk_profile_ref: &test_ref("worker-chunk-profile"),
             policy_refs: &[test_ref("worker-admission-policy")],
-            capability_refs: std::slice::from_ref(&authority_context_ref),
+            capability_refs: std::slice::from_ref(&context_ref),
             resource_refs: &resource_refs,
         })
         .expect("worker execution request");
         let execution_request_ref =
             crate::preserves_rail::canonical_hash(&execution_request).expect("worker execution request ref");
         FlowParts {
-            authority_context_ref,
+            context_ref,
             resource_refs,
             admission,
             admission_ref,
@@ -8009,7 +8009,7 @@ mod tests {
             sync_ref,
             admission_ref: &flow.admission_ref,
             execution_request_ref: &flow.execution_request_ref,
-            authority_refs: std::slice::from_ref(&flow.authority_context_ref),
+            authority_refs: std::slice::from_ref(&flow.context_ref),
             resource_refs: &flow.resource_refs,
             peer_bootstrap_refs: std::slice::from_ref(&peer_bootstrap_ref),
             node_identity_refs: std::slice::from_ref(&node_identity_ref),
@@ -8037,7 +8037,7 @@ mod tests {
         let (delivery, delivery_log) =
             deliver_worker_request(&root.join("transport"), &request.worker_request, "peer:b", true);
         let FlowParts {
-            authority_context_ref,
+            context_ref,
             resource_refs,
             admission,
             admission_ref,
@@ -8061,7 +8061,7 @@ mod tests {
             admission_ref,
             execution_request_ref,
             execution_request,
-            authority_context_ref,
+            context_ref,
             resource_refs,
             peer_bootstrap_ref,
             node_identity_ref,
