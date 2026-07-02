@@ -1,31 +1,6 @@
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::process::Command;
-use std::process::Output;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
-
-use molten::error::MoltenError;
-use molten::harness::failure_value;
-use molten::harness::gate_receipt_summary;
-use molten::harness::parse_failure;
-use molten::harness::parse_gate_receipt;
-use molten::harness::parse_repro_bundle;
-use molten::harness::parse_repro_verify_receipt;
-use molten::harness::report_summary;
-use molten::preserves_rail::canonical_hash;
-use molten::preserves_rail::parse_text;
-use molten::preserves_rail::record;
-use molten::preserves_rail::string;
-use molten::preserves_rail::to_text;
-use molten::retention;
-use molten::secrets::RevealReceiptInput;
-use molten::secrets::reveal_receipt_value;
-
 type CliResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+static TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[test]
 fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
@@ -38,7 +13,7 @@ fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
     assert!(stdout(&run).contains("report blake3:"));
 
     let report_value = read_preserves(&report)?;
-    let summary = report_summary(&report_value)?;
+    let summary = molten::harness::report_summary(&report_value)?;
     assert!(summary.contains("status=pass"));
     assert!(summary.contains("replay_status=deterministic"));
 
@@ -52,19 +27,19 @@ fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
 
     let gate = molten_cmd().args(["test", "gate", "check"]).arg(&report).output()?;
     assert_success(&gate, "test gate check");
-    let receipt_value = parse_text(&stdout(&gate))?;
-    let receipt = parse_gate_receipt(&receipt_value)?;
+    let receipt_value = molten::preserves_rail::parse_text(&stdout(&gate))?;
+    let receipt = molten::harness::parse_gate_receipt(&receipt_value)?;
     assert_eq!(receipt.decision, "pass");
     assert_eq!(receipt.artifact_kind, "report");
-    assert!(gate_receipt_summary(&receipt_value)?.contains("decision=pass"));
+    assert!(molten::harness::gate_receipt_summary(&receipt_value)?.contains("decision=pass"));
 
     assert_report_repro_flow(&dir, &report, &report_value, &receipt.report_ref)?;
     Ok(())
 }
 
 fn assert_report_repro_flow(
-    dir: &Path,
-    report: &Path,
+    dir: &std::path::Path,
+    report: &std::path::Path,
     report_value: &preserves::IOValue,
     report_ref: &str,
 ) -> CliResult<()> {
@@ -74,16 +49,17 @@ fn assert_report_repro_flow(
     assert!(stdout(&export).contains("repro bundle written"));
 
     let bundle = read_preserves(&repro.join("refs.preserves"))?;
-    let parsed_bundle = parse_repro_bundle(&bundle)?;
+    let parsed_bundle = molten::harness::parse_repro_bundle(&bundle)?;
     assert_eq!(parsed_bundle.kind, molten::harness::HarnessReproBundleKind::Report);
     assert!(parsed_bundle.gate_receipt_ref.is_some());
     let embedded_value = parsed_bundle
         .gate_receipt_value
         .as_ref()
         .ok_or_else(|| test_error("sealed repro bundle missing embedded report gate receipt"))?;
-    let embedded_receipt = parse_gate_receipt(embedded_value)?;
+    let embedded_receipt = molten::harness::parse_gate_receipt(embedded_value)?;
     assert_eq!(embedded_receipt.artifact_kind, "report");
-    let exported_receipt = parse_gate_receipt(&read_preserves(&repro.join("gate-receipt.preserves"))?)?;
+    let exported_receipt =
+        molten::harness::parse_gate_receipt(&read_preserves(&repro.join("gate-receipt.preserves"))?)?;
     assert_eq!(exported_receipt.receipt_ref, embedded_receipt.receipt_ref);
 
     let verify_receipt = dir.join("verify-receipt.preserves");
@@ -95,7 +71,7 @@ fn assert_report_repro_flow(
         .output()?;
     assert_success(&verify_bundle, "test repro verify");
     assert!(stdout(&verify_bundle).contains("repro verify receipt blake3:"));
-    let verify = parse_repro_verify_receipt(&read_preserves(&verify_receipt)?)?;
+    let verify = molten::harness::parse_repro_verify_receipt(&read_preserves(&verify_receipt)?)?;
     assert_eq!(verify.decision, "pass");
     assert_eq!(verify.report_ref, report_ref);
 
@@ -112,7 +88,7 @@ fn assert_report_repro_flow(
         molten::preserves_rail::canonical_hash(&read_preserves(&unpacked.join("report.preserves"))?)?,
         molten::preserves_rail::canonical_hash(report_value)?
     );
-    parse_repro_verify_receipt(&read_preserves(&unpacked.join("verify-receipt.preserves"))?)?;
+    molten::harness::parse_repro_verify_receipt(&read_preserves(&unpacked.join("verify-receipt.preserves"))?)?;
 
     let bundle_receipt = dir.join("bundle.gate-receipt.preserves");
     let gate_bundle = molten_cmd()
@@ -123,7 +99,7 @@ fn assert_report_repro_flow(
         .output()?;
     assert_success(&gate_bundle, "test gate check repro bundle");
     assert!(stdout(&gate_bundle).contains("gate receipt blake3:"));
-    let receipt = parse_gate_receipt(&read_preserves(&bundle_receipt)?)?;
+    let receipt = molten::harness::parse_gate_receipt(&read_preserves(&bundle_receipt)?)?;
     assert_eq!(receipt.artifact_kind, "repro-bundle");
     Ok(())
 }
@@ -133,7 +109,7 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
     let dir = temp_dir("cli-repro-profiles")?;
     let suite = dir.join("secret-suite.preserves");
     let report = dir.join("report.preserves");
-    fs::write(
+    std::fs::write(
         &suite,
         r#"<harness-suite-v1 "molten.harness.suite.v1" "secret-cli" 1
           <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
@@ -151,7 +127,7 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
     Ok(())
 }
 
-fn assert_default_denial(dir: &Path, report: &Path) -> CliResult<()> {
+fn assert_default_denial(dir: &std::path::Path, report: &std::path::Path) -> CliResult<()> {
     let denied_out = dir.join("default-repro");
     let denied = molten_cmd()
         .args(["test", "repro", "export"])
@@ -164,7 +140,7 @@ fn assert_default_denial(dir: &Path, report: &Path) -> CliResult<()> {
     Ok(())
 }
 
-fn assert_diagnostic_case(dir: &Path, report: &Path) -> CliResult<()> {
+fn assert_diagnostic_case(dir: &std::path::Path, report: &std::path::Path) -> CliResult<()> {
     let diagnostic_out = dir.join("diagnostic-repro");
     let diagnostic = molten_cmd()
         .args(["test", "repro", "export"])
@@ -175,7 +151,7 @@ fn assert_diagnostic_case(dir: &Path, report: &Path) -> CliResult<()> {
         .output()?;
     assert_success(&diagnostic, "redacted diagnostic export");
     let diagnostic_bundle = read_preserves(&diagnostic_out.join("refs.preserves"))?;
-    let parsed_diagnostic = parse_repro_bundle(&diagnostic_bundle)?;
+    let parsed_diagnostic = molten::harness::parse_repro_bundle(&diagnostic_bundle)?;
     assert_eq!(parsed_diagnostic.export_profile.as_deref(), Some("redacted-diagnostic"));
     assert_eq!(parsed_diagnostic.loss_classification.as_deref(), Some("diagnostic-only"));
     assert!(diagnostic_out.join("redaction-transform-receipt.preserves").exists());
@@ -194,7 +170,10 @@ fn assert_diagnostic_case(dir: &Path, report: &Path) -> CliResult<()> {
     Ok(())
 }
 
-fn prepare_private_case(dir: &Path, report: &Path) -> CliResult<(PathBuf, Vec<String>)> {
+fn prepare_private_case(
+    dir: &std::path::Path,
+    report: &std::path::Path,
+) -> CliResult<(std::path::PathBuf, Vec<String>)> {
     let encrypted_out = dir.join("encrypted-repro");
     let encrypted = molten_cmd()
         .args(["test", "repro", "export"])
@@ -205,7 +184,7 @@ fn prepare_private_case(dir: &Path, report: &Path) -> CliResult<(PathBuf, Vec<St
         .output()?;
     assert_success(&encrypted, "encrypted private export");
     let encrypted_bundle = read_preserves(&encrypted_out.join("refs.preserves"))?;
-    let parsed_encrypted = parse_repro_bundle(&encrypted_bundle)?;
+    let parsed_encrypted = molten::harness::parse_repro_bundle(&encrypted_bundle)?;
     assert_eq!(parsed_encrypted.loss_classification.as_deref(), Some("requires-reveal"));
     let denied_unpack = molten_cmd()
         .args(["test", "repro", "unpack"])
@@ -221,7 +200,11 @@ fn prepare_private_case(dir: &Path, report: &Path) -> CliResult<(PathBuf, Vec<St
     Ok((encrypted_out, parsed_encrypted.encrypted_refs))
 }
 
-fn assert_reveal_cases(dir: &Path, encrypted_out: &Path, encrypted_refs: &[String]) -> CliResult<()> {
+fn assert_reveal_cases(
+    dir: &std::path::Path,
+    encrypted_out: &std::path::Path,
+    encrypted_refs: &[String],
+) -> CliResult<()> {
     let first_ref = encrypted_refs
         .first()
         .ok_or_else(|| test_error("encrypted profile did not expose encrypted refs"))?;
@@ -238,7 +221,8 @@ fn assert_reveal_cases(dir: &Path, encrypted_out: &Path, encrypted_refs: &[Strin
     assert_failure(&legacy_unpack, "encrypted unpack with legacy reveal ref");
     assert!(stderr(&legacy_unpack).contains("does not bind an encrypted repro reference"));
 
-    let wrong_reveal_ref = canonical_hash(&string("wrong-encrypted-ref"))?;
+    let wrong_reveal_ref =
+        molten::preserves_rail::canonical_hash(&molten::preserves_rail::string("wrong-encrypted-ref"))?;
     let stale_reveal_path = write_reveal_case(
         dir,
         "stale-reveal.preserves",
@@ -282,27 +266,35 @@ fn assert_reveal_cases(dir: &Path, encrypted_out: &Path, encrypted_refs: &[Strin
 }
 
 fn write_reveal_case(
-    dir: &Path,
+    dir: &std::path::Path,
     name: &str,
     secret_ref: &str,
     encrypted_ref: Option<&str>,
     plaintext: &str,
-) -> CliResult<PathBuf> {
-    let reveal = reveal_receipt_value(&RevealReceiptInput {
+) -> CliResult<std::path::PathBuf> {
+    let reveal = molten::secrets::reveal_receipt_value(&molten::secrets::RevealReceiptInput {
         secret_ref: secret_ref.to_string(),
         encrypted_ref: encrypted_ref.map(|ref_value| ref_value.to_string()),
-        requester_ref: canonical_hash(&string("cli-requester"))?,
+        requester_ref: molten::preserves_rail::canonical_hash(&molten::preserves_rail::string("cli-requester"))?,
         purpose: "export".to_string(),
-        plaintext_ref: Some(canonical_hash(&string(plaintext))?),
+        plaintext_ref: Some(molten::preserves_rail::canonical_hash(&molten::preserves_rail::string(plaintext))?),
         commitment_ref: secret_ref.to_string(),
-        authority_refs: vec![canonical_hash(&string("reveal-authority"))?],
-        policy_refs: vec![canonical_hash(&string("reveal-policy"))?],
-        resource_refs: vec![canonical_hash(&string("reveal-resource"))?],
-        effect_handle_refs: vec![canonical_hash(&string("reveal-effect-handle"))?],
+        authority_refs: vec![molten::preserves_rail::canonical_hash(
+            &molten::preserves_rail::string("reveal-authority"),
+        )?],
+        policy_refs: vec![molten::preserves_rail::canonical_hash(
+            &molten::preserves_rail::string("reveal-policy"),
+        )?],
+        resource_refs: vec![molten::preserves_rail::canonical_hash(
+            &molten::preserves_rail::string("reveal-resource"),
+        )?],
+        effect_handle_refs: vec![molten::preserves_rail::canonical_hash(
+            &molten::preserves_rail::string("reveal-effect-handle"),
+        )?],
         revocation_refs: Vec::new(),
     })?;
     let reveal_path = dir.join(name);
-    fs::write(&reveal_path, to_text(&reveal)?)?;
+    std::fs::write(&reveal_path, molten::preserves_rail::to_text(&reveal)?)?;
     Ok(reveal_path)
 }
 
@@ -311,7 +303,7 @@ fn cli_failure_paths_write_canonical_failure_artifacts_to_files() -> CliResult<(
     let dir = temp_dir("cli-failure-files")?;
     let bad_suite = dir.join("bad-suite.preserves");
     let run_failure = dir.join("run.failure.preserves");
-    fs::write(
+    std::fs::write(
         &bad_suite,
         r#"<harness-suite-v1 "molten.harness.suite.v1" "bad" 1
           <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
@@ -326,7 +318,7 @@ fn cli_failure_paths_write_canonical_failure_artifacts_to_files() -> CliResult<(
         .arg(&run_failure)
         .output()?;
     assert_failure(&failed_run, "failing test run");
-    let failure = parse_failure(&read_preserves(&run_failure)?)?;
+    let failure = molten::harness::parse_failure(&read_preserves(&run_failure)?)?;
     assert_eq!(failure.phase, "preflight");
     assert_eq!(failure.kind, "invalid-harness");
     assert!(failure.message.contains("unknown actor missing"));
@@ -337,8 +329,8 @@ fn cli_failure_paths_write_canonical_failure_artifacts_to_files() -> CliResult<(
     assert_success(&good_run, "setup test run");
 
     let tampered_report = dir.join("tampered.report.preserves");
-    let report_text = fs::read_to_string(&good_report)?;
-    fs::write(&tampered_report, report_text.replacen("message-delivered", "message-tampered", 1))?;
+    let report_text = std::fs::read_to_string(&good_report)?;
+    std::fs::write(&tampered_report, report_text.replacen("message-delivered", "message-tampered", 1))?;
 
     let replay_failure = dir.join("replay.failure.preserves");
     let failed_replay = molten_cmd()
@@ -348,12 +340,12 @@ fn cli_failure_paths_write_canonical_failure_artifacts_to_files() -> CliResult<(
         .arg(&replay_failure)
         .output()?;
     assert_failure(&failed_replay, "failing test replay");
-    let failure = parse_failure(&read_preserves(&replay_failure)?)?;
+    let failure = molten::harness::parse_failure(&read_preserves(&replay_failure)?)?;
     assert_eq!(failure.phase, "replay");
     assert_eq!(failure.kind, "trace");
 
     let invalid_report = dir.join("invalid.report.preserves");
-    fs::write(&invalid_report, "<not-a-harness-report>\n")?;
+    std::fs::write(&invalid_report, "<not-a-harness-report>\n")?;
 
     let validate_failure = dir.join("validate.failure.preserves");
     let failed_validate = molten_cmd()
@@ -363,7 +355,7 @@ fn cli_failure_paths_write_canonical_failure_artifacts_to_files() -> CliResult<(
         .arg(&validate_failure)
         .output()?;
     assert_failure(&failed_validate, "failing test report validate");
-    let failure = parse_failure(&read_preserves(&validate_failure)?)?;
+    let failure = molten::harness::parse_failure(&read_preserves(&validate_failure)?)?;
     assert_eq!(failure.phase, "validate");
     assert_eq!(failure.kind, "invalid-harness");
     assert!(failure.message.contains("expected <harness-report-v1"));
@@ -378,7 +370,7 @@ fn cli_failure_paths_write_canonical_failure_artifacts_to_files() -> CliResult<(
         .arg(&export_failure)
         .output()?;
     assert_failure(&failed_export, "failing test repro export");
-    let failure = parse_failure(&read_preserves(&export_failure)?)?;
+    let failure = molten::harness::parse_failure(&read_preserves(&export_failure)?)?;
     assert_eq!(failure.phase, "export");
     assert_eq!(failure.kind, "invalid-harness");
     Ok(())
@@ -404,35 +396,35 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
 }
 
 struct BaseOutputs {
-    ledger: PathBuf,
-    report: PathBuf,
-    gate: PathBuf,
-    replay_verify: PathBuf,
-    replay_index: PathBuf,
-    nix_evidence: PathBuf,
-    nix_verify: PathBuf,
-    bundle: PathBuf,
+    ledger: std::path::PathBuf,
+    report: std::path::PathBuf,
+    gate: std::path::PathBuf,
+    replay_verify: std::path::PathBuf,
+    replay_index: std::path::PathBuf,
+    nix_evidence: std::path::PathBuf,
+    nix_verify: std::path::PathBuf,
+    bundle: std::path::PathBuf,
     report_ref: String,
     gate_ref: String,
 }
 
 struct Keys {
-    ledger: PathBuf,
+    ledger: std::path::PathBuf,
     key_ref: String,
 }
 
 struct MemberFiles {
-    report: PathBuf,
-    gate: PathBuf,
-    replay_verify: PathBuf,
-    replay_index: PathBuf,
-    nix_evidence: PathBuf,
-    nix_verify: PathBuf,
+    report: std::path::PathBuf,
+    gate: std::path::PathBuf,
+    replay_verify: std::path::PathBuf,
+    replay_index: std::path::PathBuf,
+    nix_evidence: std::path::PathBuf,
+    nix_verify: std::path::PathBuf,
 }
 
 struct BundleChecks {
-    path: PathBuf,
-    keyring_verify: PathBuf,
+    path: std::path::PathBuf,
+    keyring_verify: std::path::PathBuf,
 }
 
 struct PromotionSummary {
@@ -445,11 +437,11 @@ struct PromotionRefs {
 }
 
 struct ArchiveCase {
-    manifest: PathBuf,
+    manifest: std::path::PathBuf,
     member_refs: Vec<(String, String)>,
 }
 
-fn base_outputs(dir: &Path) -> CliResult<BaseOutputs> {
+fn base_outputs(dir: &std::path::Path) -> CliResult<BaseOutputs> {
     let state_root = dir.join("state");
     let report = dir.join("dogfood-report.preserves");
     let gate = dir.join("release-gate.preserves");
@@ -473,9 +465,9 @@ fn base_outputs(dir: &Path) -> CliResult<BaseOutputs> {
     let report_value = read_preserves(&report)?;
     let parsed_report = molten::operator_dogfood::parse_dogfood_report(&report_value)?;
     assert_eq!(parsed_report.decision, "pass");
-    let gate_ref = canonical_hash(&read_preserves(&gate)?)?;
-    assert!(fs::read_to_string(&replay_verify)?.contains("deterministic-replay-verify-v1"));
-    assert!(fs::read_to_string(&replay_index)?.contains("deterministic-replay-index-v1"));
+    let gate_ref = molten::preserves_rail::canonical_hash(&read_preserves(&gate)?)?;
+    assert!(std::fs::read_to_string(&replay_verify)?.contains("deterministic-replay-verify-v1"));
+    assert!(std::fs::read_to_string(&replay_index)?.contains("deterministic-replay-index-v1"));
     Ok(BaseOutputs {
         ledger: state_root.join("ledger"),
         report,
@@ -525,16 +517,16 @@ fn receipt_ops(base: &BaseOutputs) -> CliResult<()> {
         .output()?;
     assert_success(&export, "receipts export");
     assert!(stdout(&export).contains("redaction=pass"));
-    assert_eq!(canonical_hash(&read_preserves(&exported)?)?, base.report_ref);
+    assert_eq!(molten::preserves_rail::canonical_hash(&read_preserves(&exported)?)?, base.report_ref);
     Ok(())
 }
 
-fn nix_bundle(dir: &Path, base: &BaseOutputs) -> CliResult<()> {
-    fs::write(
+fn nix_bundle(dir: &std::path::Path, base: &BaseOutputs) -> CliResult<()> {
+    std::fs::write(
         dir.join("dogfood-summary.txt"),
         format!("dogfood local-node decision=pass report={} release-gate={}\n", base.report_ref, base.gate_ref),
     )?;
-    fs::write(dir.join("after-nextest.txt"), "/nix/store/test-molten-nextest\n")?;
+    std::fs::write(dir.join("after-nextest.txt"), "/nix/store/test-molten-nextest\n")?;
     let export_nix = molten_cmd()
         .args(["dogfood", "nix-release-export", "--output-path"])
         .arg(dir)
@@ -551,7 +543,7 @@ fn nix_bundle(dir: &Path, base: &BaseOutputs) -> CliResult<()> {
         .arg(&base.nix_verify)
         .output()?;
     assert_success(&verify_nix, "dogfood nix-release-verify");
-    fs::write(dir.join("nix-dogfood-verify.txt"), stdout(&verify_nix))?;
+    std::fs::write(dir.join("nix-dogfood-verify.txt"), stdout(&verify_nix))?;
     let verify_receipt =
         molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&read_preserves(&base.nix_verify)?)?;
     assert_eq!(verify_receipt.decision, "pass");
@@ -573,14 +565,14 @@ fn nix_bundle(dir: &Path, base: &BaseOutputs) -> CliResult<()> {
         .arg(&bundle_verify)
         .output()?;
     assert_success(&verify_bundle, "dogfood release-bundle-verify");
-    fs::write(dir.join("release-evidence-bundle-verify.txt"), stdout(&verify_bundle))?;
+    std::fs::write(dir.join("release-evidence-bundle-verify.txt"), stdout(&verify_bundle))?;
     let parsed =
         molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(&read_preserves(&bundle_verify)?)?;
     assert_eq!(parsed.decision, "pass");
     Ok(())
 }
 
-fn key_set(dir: &Path) -> CliResult<Keys> {
+fn key_set(dir: &std::path::Path) -> CliResult<Keys> {
     let ledger = dir.join("signed-keyring");
     let key_import = molten_cmd()
         .args(["receipts", "key", "import", "--ledger"])
@@ -598,7 +590,7 @@ fn key_set(dir: &Path) -> CliResult<Keys> {
         .output()?;
     assert_success(&key_import, "receipts key import");
     let key_import_stdout = stdout(&key_import);
-    fs::write(dir.join("signed-keyring-import.txt"), &key_import_stdout)?;
+    std::fs::write(dir.join("signed-keyring-import.txt"), &key_import_stdout)?;
     let key_ref = key_import_stdout
         .split_whitespace()
         .find_map(|field| field.strip_prefix("key="))
@@ -619,7 +611,7 @@ fn key_set(dir: &Path) -> CliResult<Keys> {
     Ok(Keys { ledger, key_ref })
 }
 
-fn rotate_seed_key(ledger: &Path) -> CliResult<()> {
+fn rotate_seed_key(ledger: &std::path::Path) -> CliResult<()> {
     let rotate_seed = molten_cmd()
         .args(["receipts", "key", "import", "--ledger"])
         .arg(ledger)
@@ -652,7 +644,7 @@ fn rotate_seed_key(ledger: &Path) -> CliResult<()> {
     Ok(())
 }
 
-fn member_files(dir: &Path, base: &BaseOutputs, keys: &Keys) -> CliResult<MemberFiles> {
+fn member_files(dir: &std::path::Path, base: &BaseOutputs, keys: &Keys) -> CliResult<MemberFiles> {
     let members = MemberFiles {
         report: dir.join("dogfood-report.signed.preserves"),
         gate: dir.join("release-gate.signed.preserves"),
@@ -691,7 +683,7 @@ fn member_files(dir: &Path, base: &BaseOutputs, keys: &Keys) -> CliResult<Member
     Ok(members)
 }
 
-fn verify_member_file(base: &BaseOutputs, keys: &Keys, signed_report: &Path) -> CliResult<()> {
+fn verify_member_file(base: &BaseOutputs, keys: &Keys, signed_report: &std::path::Path) -> CliResult<()> {
     let verify_signed = molten_cmd()
         .args(["receipts", "verify-signed"])
         .arg(signed_report)
@@ -735,7 +727,12 @@ fn verify_member_file(base: &BaseOutputs, keys: &Keys, signed_report: &Path) -> 
     Ok(())
 }
 
-fn bundle_checks(dir: &Path, base: &BaseOutputs, keys: &Keys, members: &MemberFiles) -> CliResult<BundleChecks> {
+fn bundle_checks(
+    dir: &std::path::Path,
+    base: &BaseOutputs,
+    keys: &Keys,
+    members: &MemberFiles,
+) -> CliResult<BundleChecks> {
     let direct = dir.join("release-evidence-bundle-verify-signed.preserves");
     let mut verify_direct = molten_cmd();
     verify_direct
@@ -796,7 +793,7 @@ fn bundle_checks(dir: &Path, base: &BaseOutputs, keys: &Keys, members: &MemberFi
     })
 }
 
-fn add_member_args(command: &mut Command, members: &MemberFiles) {
+fn add_member_args(command: &mut std::process::Command, members: &MemberFiles) {
     for signed_path in [
         &members.report,
         &members.gate,
@@ -809,7 +806,7 @@ fn add_member_args(command: &mut Command, members: &MemberFiles) {
     }
 }
 
-fn promotion_summary(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> CliResult<PromotionSummary> {
+fn promotion_summary(dir: &std::path::Path, keys: &Keys, bundles: &BundleChecks) -> CliResult<PromotionSummary> {
     let promotion_receipt_path = dir.join("release-promotion-gate.preserves");
     let promotion = molten_cmd()
         .args(["dogfood", "release-promote", "--output-path"])
@@ -837,7 +834,7 @@ fn promotion_summary(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> CliResu
         .output()?;
     assert_success(&promotion, "dogfood release-promote");
     assert!(stdout(&promotion).contains("decision=pass"));
-    fs::write(dir.join("release-promotion-gate.txt"), stdout(&promotion))?;
+    std::fs::write(dir.join("release-promotion-gate.txt"), stdout(&promotion))?;
     let promotion_receipt =
         molten::operator_dogfood::parse_release_promotion_gate_receipt(&read_preserves(&promotion_receipt_path)?)?;
     assert_eq!(promotion_receipt.decision, "pass");
@@ -855,7 +852,12 @@ fn promotion_summary(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> CliResu
     })
 }
 
-fn sign_and_verify_promotion(dir: &Path, keys: &Keys, receipt_path: &Path, receipt_ref: &str) -> CliResult<()> {
+fn sign_and_verify_promotion(
+    dir: &std::path::Path,
+    keys: &Keys,
+    receipt_path: &std::path::Path,
+    receipt_ref: &str,
+) -> CliResult<()> {
     let signed_path = dir.join("release-promotion-gate.signed.preserves");
     let sign_promotion = molten_cmd()
         .args(["receipts", "sign"])
@@ -891,12 +893,12 @@ fn sign_and_verify_promotion(dir: &Path, keys: &Keys, receipt_path: &Path, recei
         .arg(receipt_ref)
         .output()?;
     assert_success(&verify_signed_promotion, "verify signed release promotion receipt");
-    fs::write(dir.join("release-promotion-gate-signed-verify.txt"), stdout(&verify_signed_promotion))?;
+    std::fs::write(dir.join("release-promotion-gate-signed-verify.txt"), stdout(&verify_signed_promotion))?;
     Ok(())
 }
 
 fn write_promotion_summary(
-    dir: &Path,
+    dir: &std::path::Path,
     keys: &Keys,
     name: &str,
     stdout_name: Option<&str>,
@@ -921,7 +923,7 @@ fn write_promotion_summary(
         .output()?;
     assert_success(&summary, "dogfood release-promotion-summary");
     if let Some(stdout_name) = stdout_name {
-        fs::write(dir.join(stdout_name), stdout(&summary))?;
+        std::fs::write(dir.join(stdout_name), stdout(&summary))?;
     }
     let parsed = molten::operator_dogfood::parse_release_promotion_summary(&read_preserves(&summary_path)?)?;
     assert_eq!(parsed.decision, expected_decision);
@@ -931,16 +933,16 @@ fn write_promotion_summary(
     })
 }
 
-fn missing_member_summary(dir: &Path, keys: &Keys) -> CliResult<()> {
+fn missing_member_summary(dir: &std::path::Path, keys: &Keys) -> CliResult<()> {
     let signed_path = dir.join("release-promotion-gate.signed.preserves");
     let missing_path = dir.join("release-promotion-gate.signed.missing");
-    fs::rename(&signed_path, &missing_path)?;
+    std::fs::rename(&signed_path, &missing_path)?;
     let _refs = write_promotion_summary(dir, keys, "release-promotion-summary-missing-signed.preserves", None, "deny")?;
-    fs::rename(&missing_path, &signed_path)?;
+    std::fs::rename(&missing_path, &signed_path)?;
     Ok(())
 }
 
-fn archive_case(dir: &Path, promotion: &PromotionSummary) -> CliResult<ArchiveCase> {
+fn archive_case(dir: &std::path::Path, promotion: &PromotionSummary) -> CliResult<ArchiveCase> {
     let archive_path = dir.join("release-evidence.tar.zst");
     let manifest = dir.join("release-export-manifest.preserves");
     let release_export = molten_cmd()
@@ -973,7 +975,7 @@ fn archive_case(dir: &Path, promotion: &PromotionSummary) -> CliResult<ArchiveCa
     })
 }
 
-fn archive_denials(dir: &Path, archive: &ArchiveCase) -> CliResult<()> {
+fn archive_denials(dir: &std::path::Path, archive: &ArchiveCase) -> CliResult<()> {
     let missing_manifest = dir.join("release-evidence-missing-manifest.tar.zst");
     write_release_export_test_archive(dir, &missing_manifest, None, &archive.member_refs)?;
     verify_archive_deny(dir, &missing_manifest, "release-export-verify-missing-manifest.preserves")?;
@@ -1001,7 +1003,7 @@ fn archive_denials(dir: &Path, archive: &ArchiveCase) -> CliResult<()> {
     Ok(())
 }
 
-fn verify_archive_deny(dir: &Path, archive_path: &Path, receipt_name: &str) -> CliResult<()> {
+fn verify_archive_deny(dir: &std::path::Path, archive_path: &std::path::Path, receipt_name: &str) -> CliResult<()> {
     let receipt_path = dir.join(receipt_name);
     let verify = molten_cmd()
         .args(["dogfood", "release-export-verify", "--bundle"])
@@ -1015,7 +1017,7 @@ fn verify_archive_deny(dir: &Path, archive_path: &Path, receipt_name: &str) -> C
     Ok(())
 }
 
-fn wrong_signer_denial(dir: &Path, base: &BaseOutputs, members: &MemberFiles) -> CliResult<()> {
+fn wrong_signer_denial(dir: &std::path::Path, base: &BaseOutputs, members: &MemberFiles) -> CliResult<()> {
     let receipt_path = dir.join("release-evidence-bundle-verify-wrong-signer.preserves");
     let mut verify = molten_cmd();
     verify
@@ -1046,7 +1048,7 @@ fn wrong_signer_denial(dir: &Path, base: &BaseOutputs, members: &MemberFiles) ->
     Ok(())
 }
 
-fn revoked_key_denial(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> CliResult<()> {
+fn revoked_key_denial(dir: &std::path::Path, keys: &Keys, bundles: &BundleChecks) -> CliResult<()> {
     let revoke_key = molten_cmd()
         .args(["receipts", "key", "revoke"])
         .arg(&keys.key_ref)
@@ -1084,7 +1086,7 @@ fn revoked_key_denial(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> CliRes
     Ok(())
 }
 
-fn revoked_promotion_denial(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> CliResult<()> {
+fn revoked_promotion_denial(dir: &std::path::Path, keys: &Keys, bundles: &BundleChecks) -> CliResult<()> {
     let receipt_path = dir.join("release-promotion-gate-revoked.preserves");
     let revoked_promotion = molten_cmd()
         .args(["dogfood", "release-promote", "--output-path"])
@@ -1116,8 +1118,8 @@ fn revoked_promotion_denial(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> 
     Ok(())
 }
 
-fn stale_marker_denial(dir: &Path, base: &BaseOutputs, bundles: &BundleChecks) -> CliResult<()> {
-    fs::write(dir.join("after-nextest.txt"), "/nix/store/stale-molten-nextest\n")?;
+fn stale_marker_denial(dir: &std::path::Path, base: &BaseOutputs, bundles: &BundleChecks) -> CliResult<()> {
+    std::fs::write(dir.join("after-nextest.txt"), "/nix/store/stale-molten-nextest\n")?;
     let stale_verify = dir.join("nix-dogfood-verify-stale.preserves");
     let verify_stale = molten_cmd()
         .args(["dogfood", "nix-release-verify", "--output-path"])
@@ -1159,7 +1161,7 @@ fn stale_marker_denial(dir: &Path, base: &BaseOutputs, bundles: &BundleChecks) -
     Ok(())
 }
 
-fn manifest_arg(root: &Path, name: &str, bytes: &[u8], kind: &str) -> CliResult<String> {
+fn manifest_arg(root: &std::path::Path, name: &str, bytes: &[u8], kind: &str) -> CliResult<String> {
     let stored = molten::chunk_store::put_bytes(root, name, bytes, molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE)?;
     Ok(format!("{}@{}@{}", stored.manifest_ref, stored.total_len, kind))
 }
@@ -1243,14 +1245,18 @@ fn cli_blob_ref_job_submit_execute_status_and_receipt_show() -> CliResult<()> {
 fn cli_gate_rejection_emits_canonical_failure_to_stdout_without_failure_out() -> CliResult<()> {
     let dir = temp_dir("cli-failure-stdout")?;
     let failure_artifact = dir.join("diagnostic.failure.preserves");
-    let diagnostic = failure_value("preflight", &MoltenError::invalid_harness("synthetic diagnostic"), Vec::new());
-    fs::write(&failure_artifact, to_text(&diagnostic)?)?;
+    let diagnostic = molten::harness::failure_value(
+        "preflight",
+        &molten::error::MoltenError::invalid_harness("synthetic diagnostic"),
+        Vec::new(),
+    );
+    std::fs::write(&failure_artifact, molten::preserves_rail::to_text(&diagnostic)?)?;
 
     let failed_gate = molten_cmd().args(["test", "gate", "check"]).arg(&failure_artifact).output()?;
     assert_failure(&failed_gate, "failing test gate check");
 
-    let stdout_failure = parse_text(&stdout(&failed_gate))?;
-    let failure = parse_failure(&stdout_failure)?;
+    let stdout_failure = molten::preserves_rail::parse_text(&stdout(&failed_gate))?;
+    let failure = molten::harness::parse_failure(&stdout_failure)?;
     assert_eq!(failure.phase, "validate");
     assert_eq!(failure.kind, "invalid-harness");
     assert!(failure.message.contains("cannot satisfy pass evidence gate"));
@@ -1301,7 +1307,7 @@ fn cli_octet_baseline_allows_identical_noncritical_warning_and_denies_new_warnin
         .arg(&deny_receipt)
         .output()?;
     assert_failure(&deny, "octet baseline check deny");
-    let deny_text = to_text(&read_preserves(&deny_receipt)?)?;
+    let deny_text = molten::preserves_rail::to_text(&read_preserves(&deny_receipt)?)?;
     assert!(deny_text.contains("<decision \"deny\">"));
     assert!(deny_text.contains("new or increased octet findings"));
     Ok(())
@@ -1313,8 +1319,8 @@ fn cli_octet_remediation_plan_writes_baseline_receipt() -> CliResult<()> {
     let workspace = dir.join("workspace");
     let lib = dir.join("lib");
     let receipt = dir.join("remediation-plan.preserves");
-    fs::create_dir_all(&workspace)?;
-    fs::create_dir_all(&lib)?;
+    std::fs::create_dir_all(&workspace)?;
+    std::fs::create_dir_all(&lib)?;
     write_octet_artifacts_with(&workspace, octet_noncritical_status(1), OCTET_NONCRITICAL_SUMMARY_ONE)?;
     write_octet_artifacts_with(&lib, octet_noncritical_status(1), OCTET_NONCRITICAL_SUMMARY_ONE)?;
 
@@ -1331,7 +1337,7 @@ fn cli_octet_remediation_plan_writes_baseline_receipt() -> CliResult<()> {
     assert!(stdout(&plan).contains("octet remediation plan receipt=blake3:"));
     let receipt_value = read_preserves(&receipt)?;
     assert_eq!(molten::ledger::artifact_kind(&receipt_value), "octet-remediation-plan");
-    let text = to_text(&receipt_value)?;
+    let text = molten::preserves_rail::to_text(&receipt_value)?;
     assert!(text.contains("critical-deny-classes"));
     assert!(text.contains("no-suppression-policy"));
     Ok(())
@@ -1430,7 +1436,7 @@ fn cli_node_control_request_and_deny_receipt_work() -> CliResult<()> {
     assert_success(&deny, "node control deny");
     let receipt_value = read_preserves(&receipt)?;
     assert_eq!(molten::ledger::artifact_kind(&receipt_value), "node-control-receipt");
-    let text = to_text(&receipt_value)?;
+    let text = molten::preserves_rail::to_text(&receipt_value)?;
     assert!(text.contains("missing authority/resource"));
     Ok(())
 }
@@ -1579,29 +1585,29 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
 }
 
 struct LiveImportCase<'a> {
-    receiver_root: &'a Path,
-    sender_root: &'a Path,
-    bundle_sender_root: &'a Path,
-    bundle_apply_root: &'a Path,
-    authority_grant: &'a Path,
-    live_ticket: &'a Path,
-    peer_admission: &'a Path,
-    missing_import_request: &'a Path,
-    missing_import_send_receipt: &'a Path,
-    workflow_bundle: &'a Path,
-    bundle_export: &'a Path,
-    bundle_verify: &'a Path,
-    bundle_gate: &'a Path,
-    bundle_apply: &'a Path,
-    bundle_reconcile: &'a Path,
-    bundle_ack: &'a Path,
-    bundle_ack_export: &'a Path,
-    bundle_ack_import: &'a Path,
-    bundle_protocol_gate: &'a Path,
-    bundle_import: &'a Path,
-    bundle_import_send_receipt: &'a Path,
-    ticket_import: &'a Path,
-    grant_import: &'a Path,
+    receiver_root: &'a std::path::Path,
+    sender_root: &'a std::path::Path,
+    bundle_sender_root: &'a std::path::Path,
+    bundle_apply_root: &'a std::path::Path,
+    authority_grant: &'a std::path::Path,
+    live_ticket: &'a std::path::Path,
+    peer_admission: &'a std::path::Path,
+    missing_import_request: &'a std::path::Path,
+    missing_import_send_receipt: &'a std::path::Path,
+    workflow_bundle: &'a std::path::Path,
+    bundle_export: &'a std::path::Path,
+    bundle_verify: &'a std::path::Path,
+    bundle_gate: &'a std::path::Path,
+    bundle_apply: &'a std::path::Path,
+    bundle_reconcile: &'a std::path::Path,
+    bundle_ack: &'a std::path::Path,
+    bundle_ack_export: &'a std::path::Path,
+    bundle_ack_import: &'a std::path::Path,
+    bundle_protocol_gate: &'a std::path::Path,
+    bundle_import: &'a std::path::Path,
+    bundle_import_send_receipt: &'a std::path::Path,
+    ticket_import: &'a std::path::Path,
+    grant_import: &'a std::path::Path,
     policy_ref: &'a str,
     resource_ref: &'a str,
 }
@@ -1611,7 +1617,7 @@ struct LiveImportRefs {
     bootstrap_ref: String,
 }
 
-fn init_node(root: &Path, node_id: &str, label: &str) -> CliResult<()> {
+fn init_node(root: &std::path::Path, node_id: &str, label: &str) -> CliResult<()> {
     assert_success(
         &molten_cmd()
             .args(["test", "node", "init", "--state-root"])
@@ -1682,7 +1688,7 @@ fn expect_missing_imports(case: &LiveImportCase<'_>, refs: &LiveImportRefs) -> C
         .arg(case.missing_import_send_receipt)
         .output()?;
     assert_success(&output, "live send missing imports deny receipt");
-    let text = to_text(&read_preserves(case.missing_import_send_receipt)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(case.missing_import_send_receipt)?)?;
     assert!(text.contains("live-ticket-import"));
     assert!(text.contains("authority-grant-import"));
     assert!(text.contains("ticket topic node-control does not match expected wrong-topic"));
@@ -1739,7 +1745,7 @@ fn export_and_verify_case(case: &LiveImportCase<'_>) -> CliResult<()> {
         molten::ledger::artifact_kind(&read_preserves(case.bundle_verify)?),
         "node-control-live-workflow-bundle-verify-receipt"
     );
-    let text = to_text(&read_preserves(case.bundle_verify)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(case.bundle_verify)?)?;
     assert!(text.contains("verify-receipt-is-not-authority"));
     Ok(())
 }
@@ -1771,7 +1777,7 @@ fn gate_and_apply_case(case: &LiveImportCase<'_>) -> CliResult<()> {
         molten::ledger::artifact_kind(&read_preserves(case.bundle_gate)?),
         "node-control-live-workflow-bundle-gate-receipt"
     );
-    let gate_text = to_text(&read_preserves(case.bundle_gate)?)?;
+    let gate_text = molten::preserves_rail::to_text(&read_preserves(case.bundle_gate)?)?;
     assert!(gate_text.contains("gate-receipt-is-not-authority"));
 
     let applied = molten_cmd()
@@ -1801,7 +1807,7 @@ fn gate_and_apply_case(case: &LiveImportCase<'_>) -> CliResult<()> {
         molten::ledger::artifact_kind(&read_preserves(case.bundle_apply)?),
         "node-control-live-workflow-bundle-apply-receipt"
     );
-    let apply_text = to_text(&read_preserves(case.bundle_apply)?)?;
+    let apply_text = molten::preserves_rail::to_text(&read_preserves(case.bundle_apply)?)?;
     assert!(apply_text.contains("apply-receipt-is-not-authority"));
     Ok(())
 }
@@ -1828,7 +1834,7 @@ fn reconcile_missing_receiver(case: &LiveImportCase<'_>) -> CliResult<()> {
         molten::ledger::artifact_kind(&read_preserves(case.bundle_reconcile)?),
         "node-control-live-workflow-bundle-reconcile-receipt"
     );
-    let text = to_text(&read_preserves(case.bundle_reconcile)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(case.bundle_reconcile)?)?;
     assert!(text.contains("reconcile-receipt-is-not-authority"));
     Ok(())
 }
@@ -1855,7 +1861,7 @@ fn export_missing_ack(case: &LiveImportCase<'_>) -> CliResult<()> {
         molten::ledger::artifact_kind(&read_preserves(case.bundle_ack_export)?),
         "node-control-live-workflow-bundle-ack-export-receipt"
     );
-    let text = to_text(&read_preserves(case.bundle_ack)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(case.bundle_ack)?)?;
     assert!(text.contains("ack-bundle-is-not-authority"));
     Ok(())
 }
@@ -1874,7 +1880,7 @@ fn import_missing_ack(case: &LiveImportCase<'_>) -> CliResult<()> {
         molten::ledger::artifact_kind(&read_preserves(case.bundle_ack_import)?),
         "node-control-live-workflow-bundle-ack-import-receipt"
     );
-    let text = to_text(&read_preserves(case.bundle_ack_import)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(case.bundle_ack_import)?)?;
     assert!(text.contains("ack-import-is-not-authority"));
     Ok(())
 }
@@ -1900,7 +1906,7 @@ fn gate_missing_protocol(case: &LiveImportCase<'_>) -> CliResult<()> {
         molten::ledger::artifact_kind(&read_preserves(case.bundle_protocol_gate)?),
         "protocol-session-gate-receipt"
     );
-    let text = to_text(&read_preserves(case.bundle_protocol_gate)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(case.bundle_protocol_gate)?)?;
     assert!(text.contains("ack receiver decision deny"));
     assert!(text.contains("protocol-session-gate-is-not-authority"));
     Ok(())
@@ -1954,7 +1960,7 @@ fn import_case_and_retry(case: &LiveImportCase<'_>, refs: &LiveImportRefs) -> Cl
         .arg(case.bundle_import_send_receipt)
         .output()?;
     assert_success(&sent, "live send after workflow bundle import");
-    let text = to_text(&read_preserves(case.bundle_import_send_receipt)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(case.bundle_import_send_receipt)?)?;
     assert!(text.contains("ticket has no endpoint addresses"));
     assert!(!text.contains("authority-grant-import"));
     assert!(!text.contains("peer admission unavailable in sender state root"));
@@ -2177,7 +2183,7 @@ fn cli_node_supervisor_policy_fixture_and_serve_receipt() -> CliResult<()> {
     assert_success(&served, "node supervisor serve");
     let service_value = read_preserves(&service_receipt)?;
     assert_eq!(molten::ledger::artifact_kind(&service_value), "node-control-service-run-receipt");
-    let service_text = to_text(&service_value)?;
+    let service_text = molten::preserves_rail::to_text(&service_value)?;
     assert!(service_text.contains("supervisor-policy"));
     assert!(service_text.contains("supervisor-receipts"));
     Ok(())
@@ -2258,7 +2264,7 @@ fn cli_octet_artifacts_imports_raw_artifacts_to_ledger() -> CliResult<()> {
     let artifacts = dir.join("artifacts");
     let ledger_root = dir.join("ledger");
     let receipt = dir.join("octet-artifact-ledger.preserves");
-    fs::create_dir_all(&artifacts)?;
+    std::fs::create_dir_all(&artifacts)?;
     write_octet_artifacts(&artifacts)?;
 
     let imported = molten_cmd()
@@ -2302,7 +2308,7 @@ fn cli_octet_gate_writes_canonical_deny_receipt_for_warning_only() -> CliResult<
     assert!(stderr(&denied).contains("octet gate denied"));
     let receipt_value = read_preserves(&receipt)?;
     assert_eq!(molten::ledger::artifact_kind(&receipt_value), "octet-gate-receipt");
-    let receipt_text = to_text(&receipt_value)?;
+    let receipt_text = molten::preserves_rail::to_text(&receipt_value)?;
     assert!(receipt_text.contains("<decision \"deny\">"));
     assert!(receipt_text.contains("warning-only"));
     Ok(())
@@ -2341,7 +2347,7 @@ struct Refs {
     clearance: String,
 }
 
-fn build_refs(root: &Path) -> CliResult<Refs> {
+fn build_refs(root: &std::path::Path) -> CliResult<Refs> {
     let mut refs = Refs {
         requester: test_ref("retention-plan-requester")?,
         object: test_ref("retention-plan-object")?,
@@ -2354,15 +2360,17 @@ fn build_refs(root: &Path) -> CliResult<Refs> {
         remote_gc: String::new(),
         clearance: String::new(),
     };
-    refs.policy = admission(root, &refs, retention::ADMISSION_KIND_POLICY, "retention-plan-policy", &[])?;
-    refs.authority = admission(root, &refs, retention::ADMISSION_KIND_AUTHORITY, "retention-plan-authority", &[])?;
+    refs.policy = admission(root, &refs, molten::retention::ADMISSION_KIND_POLICY, "retention-plan-policy", &[])?;
+    refs.authority =
+        admission(root, &refs, molten::retention::ADMISSION_KIND_AUTHORITY, "retention-plan-authority", &[])?;
     refs.support =
-        admission(root, &refs, retention::ADMISSION_KIND_SUPPORTING_EVIDENCE, "retention-plan-support", &[])?;
-    refs.index = admission(root, &refs, retention::ADMISSION_KIND_REFERENCE_INDEX, "retention-plan-index", &[])?;
+        admission(root, &refs, molten::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE, "retention-plan-support", &[])?;
+    refs.index =
+        admission(root, &refs, molten::retention::ADMISSION_KIND_REFERENCE_INDEX, "retention-plan-index", &[])?;
     refs.remote_gc = admission(
         root,
         &refs,
-        retention::ADMISSION_KIND_REMOTE_GC,
+        molten::retention::ADMISSION_KIND_REMOTE_GC,
         "retention-plan-remote-gc",
         std::slice::from_ref(&refs.remote),
     )?;
@@ -2370,48 +2378,64 @@ fn build_refs(root: &Path) -> CliResult<Refs> {
     Ok(refs)
 }
 
-fn admission(root: &Path, refs: &Refs, kind: &str, label: &str, remote_refs: &[String]) -> CliResult<String> {
-    Ok(retention::store_retention_evidence_admission(root, &retention::RetentionEvidenceAdmissionInput {
-        kind,
-        decision: "pass",
-        requester_ref: &refs.requester,
-        object_ref: &refs.object,
-        object_kind: "chunk",
-        retention_class: retention::CLASS_DURABLE_VALUE,
-        action: retention::ACTION_DELETE,
-        bound_refs: &[test_ref(label)?],
-        retained_refs: &[],
-        remote_refs,
-        is_reference_index_complete: true,
-        is_current: true,
-        revoked_refs: &[],
-        diagnostics: &[],
-    })?
+fn admission(
+    root: &std::path::Path,
+    refs: &Refs,
+    kind: &str,
+    label: &str,
+    remote_refs: &[String],
+) -> CliResult<String> {
+    Ok(molten::retention::store_retention_evidence_admission(
+        root,
+        &molten::retention::RetentionEvidenceAdmissionInput {
+            kind,
+            decision: "pass",
+            requester_ref: &refs.requester,
+            object_ref: &refs.object,
+            object_kind: "chunk",
+            retention_class: molten::retention::CLASS_DURABLE_VALUE,
+            action: molten::retention::ACTION_DELETE,
+            bound_refs: &[test_ref(label)?],
+            retained_refs: &[],
+            remote_refs,
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        },
+    )?
     .admission_ref)
 }
 
-fn clearance(root: &Path, refs: &Refs) -> CliResult<String> {
-    Ok(retention::store_retention_remote_gc_clearance(root, &retention::RetentionRemoteGcClearanceInput {
-        decision: "pass",
-        requester_ref: &refs.requester,
-        peer_ref: &refs.peer,
-        object_ref: &refs.object,
-        object_kind: "chunk",
-        retention_class: retention::CLASS_DURABLE_VALUE,
-        action: retention::ACTION_DELETE,
-        remote_ref: &refs.remote,
-        policy_ref: &refs.policy,
-        authority_ref: &refs.authority,
-        evidence_refs: std::slice::from_ref(&refs.support),
-        retained_refs: &[],
-        is_current: true,
-        revoked_refs: &[],
-        diagnostics: &[],
-    })?
+fn clearance(root: &std::path::Path, refs: &Refs) -> CliResult<String> {
+    Ok(molten::retention::store_retention_remote_gc_clearance(
+        root,
+        &molten::retention::RetentionRemoteGcClearanceInput {
+            decision: "pass",
+            requester_ref: &refs.requester,
+            peer_ref: &refs.peer,
+            object_ref: &refs.object,
+            object_kind: "chunk",
+            retention_class: molten::retention::CLASS_DURABLE_VALUE,
+            action: molten::retention::ACTION_DELETE,
+            remote_ref: &refs.remote,
+            policy_ref: &refs.policy,
+            authority_ref: &refs.authority,
+            evidence_refs: std::slice::from_ref(&refs.support),
+            retained_refs: &[],
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        },
+    )?
     .clearance_ref)
 }
 
-fn run_plan(root: &Path, refs: &Refs, out: &Path) -> CliResult<retention::RetentionGcPlan> {
+fn run_plan(
+    root: &std::path::Path,
+    refs: &Refs,
+    out: &std::path::Path,
+) -> CliResult<molten::retention::RetentionGcPlan> {
     let mut command = molten_cmd();
     command
         .args(["test", "retention", "gc-plan", "--root"])
@@ -2422,7 +2446,7 @@ fn run_plan(root: &Path, refs: &Refs, out: &Path) -> CliResult<retention::Retent
             "--object-kind",
             "chunk",
             "--retention-class",
-            retention::CLASS_DURABLE_VALUE,
+            molten::retention::CLASS_DURABLE_VALUE,
             "--action",
             "delete",
         ]);
@@ -2433,13 +2457,13 @@ fn run_plan(root: &Path, refs: &Refs, out: &Path) -> CliResult<retention::Retent
     assert!(stdout(&output).contains("retention gc plan ref="));
     let value = read_preserves(out)?;
     assert_eq!(molten::ledger::artifact_kind(&value), "retention-gc-plan");
-    let plan = retention::parse_retention_gc_plan(&value)?;
+    let plan = molten::retention::parse_retention_gc_plan(&value)?;
     assert_eq!(plan.decision, "pass");
     assert!(plan.gates.iter().any(|gate| gate.name == "remote-clearance" && gate.decision == "pass"));
     Ok(plan)
 }
 
-fn add_refs(command: &mut Command, refs: &Refs) {
+fn add_refs(command: &mut std::process::Command, refs: &Refs) {
     command
         .args(["--retention-requester"])
         .arg(&refs.requester)
@@ -2462,7 +2486,11 @@ fn add_refs(command: &mut Command, refs: &Refs) {
         .args(["--retention-reference-index-complete"]);
 }
 
-fn run_apply(root: &Path, plan: &retention::RetentionGcPlan, out: &Path) -> CliResult<retention::RetentionGcApply> {
+fn run_apply(
+    root: &std::path::Path,
+    plan: &molten::retention::RetentionGcPlan,
+    out: &std::path::Path,
+) -> CliResult<molten::retention::RetentionGcApply> {
     let output = molten_cmd()
         .args(["test", "retention", "gc-apply-plan", "--root"])
         .arg(root)
@@ -2475,7 +2503,7 @@ fn run_apply(root: &Path, plan: &retention::RetentionGcPlan, out: &Path) -> CliR
     assert!(stdout(&output).contains("retention gc apply ref="));
     let value = read_preserves(out)?;
     assert_eq!(molten::ledger::artifact_kind(&value), "retention-gc-apply");
-    let apply = retention::parse_retention_gc_apply(&value)?;
+    let apply = molten::retention::parse_retention_gc_apply(&value)?;
     assert_eq!(apply.decision, "pass");
     Ok(apply)
 }
@@ -2491,7 +2519,7 @@ fn cli_retention_gc_negative_regression_matrix() -> CliResult<()> {
     Ok(())
 }
 
-fn missing_plan_case(dir: &Path) -> CliResult<()> {
+fn missing_plan_case(dir: &std::path::Path) -> CliResult<()> {
     let root = dir.join("missing-plan-root");
     let missing_plan_ref = test_ref("retention-missing-plan")?;
     let output = molten_cmd()
@@ -2506,22 +2534,22 @@ fn missing_plan_case(dir: &Path) -> CliResult<()> {
     Ok(())
 }
 
-fn stale_plan_case(dir: &Path) -> CliResult<()> {
+fn stale_plan_case(dir: &std::path::Path) -> CliResult<()> {
     let root = dir.join("stale-plan-root");
     let candidate = setup_retention_cli_candidate(RetentionCandidateInput {
         root: &root,
         label: "stale-plan",
         object_ref: test_ref("retention-stale-object")?,
         object_kind: "artifact",
-        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
-        action: retention::ACTION_DELETE,
+        retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
+        action: molten::retention::ACTION_DELETE,
     })?;
     let plan = run_retention_gc_plan_cli(&candidate, "ledger-gc", &dir.join("stale-plan.preserves"))?;
-    retention::pin_object(&root, retention::RetentionPinInput {
+    molten::retention::pin_object(&root, molten::retention::RetentionPinInput {
         object_ref: candidate.object_ref.clone(),
         object_kind: candidate.object_kind.clone(),
         retention_class: candidate.retention_class.clone(),
-        source: retention::SOURCE_OPERATOR_HOLD.to_string(),
+        source: molten::retention::SOURCE_OPERATOR_HOLD.to_string(),
         reason: "negative CLI stale plan".to_string(),
         owner_ref: candidate.requester_ref.clone(),
         expiry_ref: None,
@@ -2539,7 +2567,7 @@ fn stale_plan_case(dir: &Path) -> CliResult<()> {
         .arg(&apply_path)
         .output()?;
     assert_success(&output, "retention apply stale plan ref");
-    let receipt = retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
+    let receipt = molten::retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
     assert_eq!(receipt.decision, "deny");
     assert!(receipt.retention_receipt_ref.is_none());
     assert!(receipt.tombstone_ref.is_none());
@@ -2548,16 +2576,17 @@ fn stale_plan_case(dir: &Path) -> CliResult<()> {
     Ok(())
 }
 
-fn missing_apply_case(dir: &Path) -> CliResult<()> {
+fn missing_apply_case(dir: &std::path::Path) -> CliResult<()> {
     let root = dir.join("missing-apply-ledger");
-    let artifact = molten::ledger::import_artifact(&root, &parse_text("<artifact \"missing-apply\">")?)?;
+    let artifact =
+        molten::ledger::import_artifact(&root, &molten::preserves_rail::parse_text("<artifact \"missing-apply\">")?)?;
     let candidate = setup_retention_cli_candidate(RetentionCandidateInput {
         root: &root,
         label: "missing-apply",
         object_ref: artifact.artifact_ref.clone(),
         object_kind: &artifact.artifact_kind,
-        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
-        action: retention::ACTION_DELETE,
+        retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
+        action: molten::retention::ACTION_DELETE,
     })?;
     let receipt = dir.join("missing-apply-ledger-gc.preserves");
     let mut command = molten_cmd();
@@ -2566,22 +2595,23 @@ fn missing_apply_case(dir: &Path) -> CliResult<()> {
     let output = command.output()?;
     assert_success(&output, "ledger gc missing apply ref");
     assert!(stdout(&output).contains("decision=deny"));
-    let receipt_text = fs::read_to_string(&receipt)?;
+    let receipt_text = std::fs::read_to_string(&receipt)?;
     assert!(receipt_text.contains("retention-gc-execute-apply-missing"));
     molten::ledger::read_artifact(&root, &candidate.object_ref)?;
     Ok(())
 }
 
-fn wrong_apply_case(dir: &Path) -> CliResult<()> {
+fn wrong_apply_case(dir: &std::path::Path) -> CliResult<()> {
     let root = dir.join("wrong-apply-ledger");
-    let artifact = molten::ledger::import_artifact(&root, &parse_text("<artifact \"wrong-apply\">")?)?;
+    let artifact =
+        molten::ledger::import_artifact(&root, &molten::preserves_rail::parse_text("<artifact \"wrong-apply\">")?)?;
     let candidate = setup_retention_cli_candidate(RetentionCandidateInput {
         root: &root,
         label: "wrong-apply",
         object_ref: artifact.artifact_ref.clone(),
         object_kind: &artifact.artifact_kind,
-        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
-        action: retention::ACTION_DELETE,
+        retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
+        action: molten::retention::ACTION_DELETE,
     })?;
     let plan = run_retention_gc_plan_cli(&candidate, "chunk-gc", &dir.join("wrong-plan.preserves"))?;
     let apply_path = dir.join("wrong-apply.preserves");
@@ -2594,7 +2624,7 @@ fn wrong_apply_case(dir: &Path) -> CliResult<()> {
         .arg(&apply_path)
         .output()?;
     assert_success(&apply_output, "retention apply wrong subsystem plan");
-    let apply = retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
+    let apply = molten::retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
     assert_eq!(apply.decision, "pass");
     let receipt = dir.join("wrong-apply-ledger-gc.preserves");
     let mut command = molten_cmd();
@@ -2609,13 +2639,13 @@ fn wrong_apply_case(dir: &Path) -> CliResult<()> {
     let output = command.output()?;
     assert_success(&output, "ledger gc wrong apply ref");
     assert!(stdout(&output).contains("decision=deny"));
-    let receipt_text = fs::read_to_string(&receipt)?;
+    let receipt_text = std::fs::read_to_string(&receipt)?;
     assert!(receipt_text.contains("retention-gc-execute-apply-scope-mismatch"));
     molten::ledger::read_artifact(&root, &candidate.object_ref)?;
     Ok(())
 }
 
-fn audit_case(dir: &Path) -> CliResult<()> {
+fn audit_case(dir: &std::path::Path) -> CliResult<()> {
     let root = dir.join("audit-root");
     let missing = molten_cmd()
         .args(["test", "retention", "gc-audit", "--root"])
@@ -2626,15 +2656,16 @@ fn audit_case(dir: &Path) -> CliResult<()> {
         .arg(dir.join("missing-execution-audit.preserves"))
         .output()?;
     assert_failure(&missing, "retention audit missing execution ref");
-    let execution = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
-        root: &root,
-        subsystem: "ledger-gc",
-        action: retention::ACTION_DELETE,
-        object_ref: &test_ref("denied-execution-object")?,
-        object_kind: "artifact",
-        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
-        apply_ref: None,
-    })?;
+    let execution =
+        molten::retention::store_retention_gc_execution_gate(molten::retention::RetentionGcExecutionGateInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            action: molten::retention::ACTION_DELETE,
+            object_ref: &test_ref("denied-execution-object")?,
+            object_kind: "artifact",
+            retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
+            apply_ref: None,
+        })?;
     let audit_path = dir.join("denied-execution-audit.preserves");
     let output = molten_cmd()
         .args(["test", "retention", "gc-audit", "--root"])
@@ -2645,7 +2676,7 @@ fn audit_case(dir: &Path) -> CliResult<()> {
         .arg(&audit_path)
         .output()?;
     assert_success(&output, "retention audit denied execution ref");
-    let audit = retention::parse_retention_gc_audit(&read_preserves(&audit_path)?)?;
+    let audit = molten::retention::parse_retention_gc_audit(&read_preserves(&audit_path)?)?;
     assert_eq!(audit.decision, "deny");
     assert!(audit.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-audit-apply-missing"));
     assert!(audit.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-audit-plan-missing"));
@@ -2663,8 +2694,8 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
         label: "catalog-audit",
         object_ref: test_ref("retention-catalog-audit-object")?,
         object_kind: "artifact",
-        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
-        action: retention::ACTION_DELETE,
+        retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
+        action: molten::retention::ACTION_DELETE,
     })?;
     let fixture = setup_retention_gc_catalog_fixture(&candidate, "ledger-gc", &dir)?;
 
@@ -2678,7 +2709,11 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     Ok(())
 }
 
-fn run_explain(retention_root: &Path, dir: &Path, fixture: &RetentionGcCatalogFixture) -> CliResult<(PathBuf, String)> {
+fn run_explain(
+    retention_root: &std::path::Path,
+    dir: &std::path::Path,
+    fixture: &RetentionGcCatalogFixture,
+) -> CliResult<(std::path::PathBuf, String)> {
     let explain_path = dir.join("retention-explain.preserves");
     let explain_output = molten_cmd()
         .args(["test", "retention", "explain", "--root"])
@@ -2689,9 +2724,9 @@ fn run_explain(retention_root: &Path, dir: &Path, fixture: &RetentionGcCatalogFi
             "--object-kind",
             "artifact",
             "--retention-class",
-            retention::CLASS_PUBLIC_ARTIFACT,
+            molten::retention::CLASS_PUBLIC_ARTIFACT,
             "--action",
-            retention::ACTION_DELETE,
+            molten::retention::ACTION_DELETE,
             "--subsystem",
             "ledger-gc",
             "--out",
@@ -2700,7 +2735,7 @@ fn run_explain(retention_root: &Path, dir: &Path, fixture: &RetentionGcCatalogFi
         .output()?;
     assert_success(&explain_output, "retention explain candidate");
     assert!(stdout(&explain_output).contains("retention explain ref="));
-    let explain = retention::parse_retention_candidate_explain(&read_preserves(&explain_path)?)?;
+    let explain = molten::retention::parse_retention_candidate_explain(&read_preserves(&explain_path)?)?;
     assert_eq!(explain.object_ref, fixture.object_ref);
     assert_eq!(explain.admission_refs.len(), 4);
     assert_eq!(explain.gc_plan_refs, vec![fixture.plan_ref.clone()]);
@@ -2712,11 +2747,11 @@ fn run_explain(retention_root: &Path, dir: &Path, fixture: &RetentionGcCatalogFi
 }
 
 fn run_bundle(
-    retention_root: &Path,
-    dir: &Path,
-    explain_path: &Path,
+    retention_root: &std::path::Path,
+    dir: &std::path::Path,
+    explain_path: &std::path::Path,
     explain_ref: &str,
-) -> CliResult<(PathBuf, String)> {
+) -> CliResult<(std::path::PathBuf, String)> {
     let bundle_dir = dir.join("retention-bundle");
     let bundle_output = molten_cmd()
         .args(["test", "retention", "bundle-export", "--root"])
@@ -2730,7 +2765,7 @@ fn run_bundle(
     assert_success(&bundle_output, "retention bundle export");
     assert!(stderr(&bundle_output).contains("retention bundle ref="));
     let bundle_value = read_preserves(&bundle_dir.join("bundle.preserves"))?;
-    let bundle = retention::parse_retention_candidate_bundle(&bundle_value)?;
+    let bundle = molten::retention::parse_retention_candidate_bundle(&bundle_value)?;
     assert_eq!(molten::ledger::artifact_kind(&bundle_value), "retention-candidate-bundle");
     assert_eq!(bundle.explain_ref, explain_ref);
     assert_eq!(bundle.artifact_refs.len(), 6);
@@ -2741,8 +2776,12 @@ fn run_bundle(
     Ok((bundle_dir, bundle.bundle_ref))
 }
 
-fn check_profile(registry: &Path, ledger_root: &Path, bundle_dir: &Path) -> CliResult<()> {
-    let bundle_profile = retention::parse_retention_candidate_bundle_profile(&read_preserves(
+fn check_profile(
+    registry: &std::path::Path,
+    ledger_root: &std::path::Path,
+    bundle_dir: &std::path::Path,
+) -> CliResult<()> {
+    let bundle_profile = molten::retention::parse_retention_candidate_bundle_profile(&read_preserves(
         &bundle_dir.join("bundle-profile.preserves"),
     )?)?;
     assert_eq!(bundle_profile.profile, "public");
@@ -2773,7 +2812,13 @@ fn check_profile(registry: &Path, ledger_root: &Path, bundle_dir: &Path) -> CliR
     Ok(())
 }
 
-fn run_verify(registry: &Path, ledger_root: &Path, dir: &Path, bundle_dir: &Path, bundle_ref: &str) -> CliResult<()> {
+fn run_verify(
+    registry: &std::path::Path,
+    ledger_root: &std::path::Path,
+    dir: &std::path::Path,
+    bundle_dir: &std::path::Path,
+    bundle_ref: &str,
+) -> CliResult<()> {
     let verify_path = dir.join("retention-bundle-verify.preserves");
     let verify_output = molten_cmd()
         .args(["test", "retention", "bundle-verify", "--bundle"])
@@ -2784,7 +2829,7 @@ fn run_verify(registry: &Path, ledger_root: &Path, dir: &Path, bundle_dir: &Path
     assert_success(&verify_output, "retention bundle verify");
     assert!(stderr(&verify_output).contains("retention bundle verify ref="));
     let verify_value = read_preserves(&verify_path)?;
-    let verify = retention::parse_retention_candidate_bundle_verify(&verify_value)?;
+    let verify = molten::retention::parse_retention_candidate_bundle_verify(&verify_value)?;
     assert_eq!(molten::ledger::artifact_kind(&verify_value), "retention-candidate-bundle-verify");
     assert_eq!(verify.decision, "pass");
     assert_eq!(verify.bundle_ref, bundle_ref);
@@ -2816,11 +2861,20 @@ fn run_verify(registry: &Path, ledger_root: &Path, dir: &Path, bundle_dir: &Path
     Ok(())
 }
 
-fn run_tamper(dir: &Path, bundle_dir: &Path, fixture: &RetentionGcCatalogFixture) -> CliResult<()> {
+fn run_tamper(
+    dir: &std::path::Path,
+    bundle_dir: &std::path::Path,
+    fixture: &RetentionGcCatalogFixture,
+) -> CliResult<()> {
     let tampered_plan_path = bundle_dir
         .join("artifacts/gc-plans")
         .join(format!("{}.preserves", fixture.plan_ref.replace(':', "_")));
-    fs::write(&tampered_plan_path, to_text(&record("tampered", vec![string("plan")]))?)?;
+    std::fs::write(
+        &tampered_plan_path,
+        molten::preserves_rail::to_text(&molten::preserves_rail::record("tampered", vec![
+            molten::preserves_rail::string("plan"),
+        ]))?,
+    )?;
     let tampered_path = dir.join("retention-bundle-verify-tampered.preserves");
     let tampered_output = molten_cmd()
         .args(["test", "retention", "bundle-verify", "--bundle"])
@@ -2829,7 +2883,7 @@ fn run_tamper(dir: &Path, bundle_dir: &Path, fixture: &RetentionGcCatalogFixture
         .arg(&tampered_path)
         .output()?;
     assert_success(&tampered_output, "retention bundle verify tampered");
-    let tampered = retention::parse_retention_candidate_bundle_verify(&read_preserves(&tampered_path)?)?;
+    let tampered = molten::retention::parse_retention_candidate_bundle_verify(&read_preserves(&tampered_path)?)?;
     assert_eq!(tampered.decision, "deny");
     assert!(
         tampered
@@ -2840,7 +2894,12 @@ fn run_tamper(dir: &Path, bundle_dir: &Path, fixture: &RetentionGcCatalogFixture
     Ok(())
 }
 
-fn run_search(dir: &Path, registry: &Path, ledger_root: &Path, fixture: &RetentionGcCatalogFixture) -> CliResult<()> {
+fn run_search(
+    dir: &std::path::Path,
+    registry: &std::path::Path,
+    ledger_root: &std::path::Path,
+    fixture: &RetentionGcCatalogFixture,
+) -> CliResult<()> {
     let search_receipt = dir.join("catalog-search-receipt.preserves");
     let search_output = molten_cmd()
         .args(["test", "catalog", "search", "--registry"])
@@ -2877,17 +2936,22 @@ fn run_search(dir: &Path, registry: &Path, ledger_root: &Path, fixture: &Retenti
     Ok(())
 }
 
-fn run_mcp(dir: &Path, registry: &Path, ledger_root: &Path, fixture: &RetentionGcCatalogFixture) -> CliResult<()> {
+fn run_mcp(
+    dir: &std::path::Path,
+    registry: &std::path::Path,
+    ledger_root: &std::path::Path,
+    fixture: &RetentionGcCatalogFixture,
+) -> CliResult<()> {
     let mcp_request_path = dir.join("retention-gc-search-request.preserves");
     let mcp_response_path = dir.join("retention-gc-search-response.preserves");
     let mcp_receipt_path = dir.join("retention-gc-search-mcp-receipt.preserves");
     let mcp_request = molten::catalog_mcp::mcp_request_value("search_retention_gc", vec![
-        record("stage", vec![string("audit")]),
-        record("object-ref", vec![string(&fixture.object_ref)]),
-        record("subsystem", vec![string("ledger-gc")]),
-        record("execution-ref", vec![string(&fixture.execution_ref)]),
+        molten::preserves_rail::record("stage", vec![molten::preserves_rail::string("audit")]),
+        molten::preserves_rail::record("object-ref", vec![molten::preserves_rail::string(&fixture.object_ref)]),
+        molten::preserves_rail::record("subsystem", vec![molten::preserves_rail::string("ledger-gc")]),
+        molten::preserves_rail::record("execution-ref", vec![molten::preserves_rail::string(&fixture.execution_ref)]),
     ])?;
-    fs::write(&mcp_request_path, to_text(&mcp_request)?)?;
+    std::fs::write(&mcp_request_path, molten::preserves_rail::to_text(&mcp_request)?)?;
     let mcp_output = molten_cmd()
         .args(["test", "catalog", "mcp-call"])
         .arg(&mcp_request_path)
@@ -2901,7 +2965,7 @@ fn run_mcp(dir: &Path, registry: &Path, ledger_root: &Path, fixture: &RetentionG
         .arg(&mcp_receipt_path)
         .output()?;
     assert_success(&mcp_output, "catalog MCP search_retention_gc");
-    let mcp_response = fs::read_to_string(&mcp_response_path)?;
+    let mcp_response = std::fs::read_to_string(&mcp_response_path)?;
     assert!(mcp_response.contains("retention-gc:audit"));
     assert!(mcp_response.contains(&fixture.execution_ref));
     let mcp_receipt = molten::catalog_mcp::parse_mcp_receipt(&read_preserves(&mcp_receipt_path)?)?;
@@ -2911,7 +2975,7 @@ fn run_mcp(dir: &Path, registry: &Path, ledger_root: &Path, fixture: &RetentionG
 }
 
 struct RetentionCandidateInput<'a> {
-    root: &'a Path,
+    root: &'a std::path::Path,
     label: &'a str,
     object_ref: String,
     object_kind: &'a str,
@@ -2920,7 +2984,7 @@ struct RetentionCandidateInput<'a> {
 }
 
 struct RetentionCliCandidate {
-    root: PathBuf,
+    root: std::path::PathBuf,
     object_ref: String,
     object_kind: String,
     retention_class: String,
@@ -2949,7 +3013,7 @@ struct RetentionGcCatalogFixture {
 fn setup_retention_gc_catalog_fixture(
     candidate: &RetentionCliCandidate,
     subsystem: &str,
-    dir: &Path,
+    dir: &std::path::Path,
 ) -> CliResult<RetentionGcCatalogFixture> {
     let plan_path = dir.join("catalog-retention-plan.preserves");
     let plan = run_retention_gc_plan_cli(candidate, subsystem, &plan_path)?;
@@ -2963,27 +3027,28 @@ fn setup_retention_gc_catalog_fixture(
         .arg(&apply_path)
         .output()?;
     assert_success(&apply_output, "retention gc-apply-plan catalog fixture");
-    let apply = retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
+    let apply = molten::retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
     assert_eq!(apply.decision, "pass");
-    let execution = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
-        root: &candidate.root,
-        subsystem,
-        action: &candidate.action,
-        object_ref: &candidate.object_ref,
-        object_kind: &candidate.object_kind,
-        retention_class: &candidate.retention_class,
-        apply_ref: Some(&apply.apply_ref),
-    })?;
+    let execution =
+        molten::retention::store_retention_gc_execution_gate(molten::retention::RetentionGcExecutionGateInput {
+            root: &candidate.root,
+            subsystem,
+            action: &candidate.action,
+            object_ref: &candidate.object_ref,
+            object_kind: &candidate.object_kind,
+            retention_class: &candidate.retention_class,
+            apply_ref: Some(&apply.apply_ref),
+        })?;
     assert_eq!(execution.decision, "pass");
     let execution_path = dir.join("catalog-retention-execution.preserves");
-    fs::write(&execution_path, to_text(&execution.value)?)?;
-    let audit = retention::audit_retention_gc_execution(retention::RetentionGcAuditInput {
+    std::fs::write(&execution_path, molten::preserves_rail::to_text(&execution.value)?)?;
+    let audit = molten::retention::audit_retention_gc_execution(molten::retention::RetentionGcAuditInput {
         root: &candidate.root,
         execution_ref: &execution.execution_ref,
     })?;
     assert_eq!(audit.decision, "pass");
     let audit_path = dir.join("catalog-retention-audit.preserves");
-    fs::write(&audit_path, to_text(&audit.value)?)?;
+    std::fs::write(&audit_path, molten::preserves_rail::to_text(&audit.value)?)?;
     let ledger_root = dir.join("ledger");
     for artifact in [&plan_path, &apply_path, &execution_path, &audit_path] {
         let output = molten_cmd()
@@ -3019,31 +3084,31 @@ fn setup_retention_cli_candidate(input: RetentionCandidateInput<'_>) -> CliResul
     };
     candidate.policy_ref = store_retention_cli_admission(RetentionAdmissionInput {
         candidate: &candidate,
-        kind: retention::ADMISSION_KIND_POLICY,
+        kind: molten::retention::ADMISSION_KIND_POLICY,
         label: "policy",
     })?;
     candidate.authority_ref = store_retention_cli_admission(RetentionAdmissionInput {
         candidate: &candidate,
-        kind: retention::ADMISSION_KIND_AUTHORITY,
+        kind: molten::retention::ADMISSION_KIND_AUTHORITY,
         label: "authority",
     })?;
     candidate.support_ref = store_retention_cli_admission(RetentionAdmissionInput {
         candidate: &candidate,
-        kind: retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+        kind: molten::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
         label: "support",
     })?;
     candidate.index_ref = store_retention_cli_admission(RetentionAdmissionInput {
         candidate: &candidate,
-        kind: retention::ADMISSION_KIND_REFERENCE_INDEX,
+        kind: molten::retention::ADMISSION_KIND_REFERENCE_INDEX,
         label: "index",
     })?;
     Ok(candidate)
 }
 
 fn store_retention_cli_admission(input: RetentionAdmissionInput<'_>) -> CliResult<String> {
-    Ok(retention::store_retention_evidence_admission(
+    Ok(molten::retention::store_retention_evidence_admission(
         &input.candidate.root,
-        &retention::RetentionEvidenceAdmissionInput {
+        &molten::retention::RetentionEvidenceAdmissionInput {
             kind: input.kind,
             decision: "pass",
             requester_ref: &input.candidate.requester_ref,
@@ -3066,8 +3131,8 @@ fn store_retention_cli_admission(input: RetentionAdmissionInput<'_>) -> CliResul
 fn run_retention_gc_plan_cli(
     candidate: &RetentionCliCandidate,
     subsystem: &str,
-    out: &Path,
-) -> CliResult<retention::RetentionGcPlan> {
+    out: &std::path::Path,
+) -> CliResult<molten::retention::RetentionGcPlan> {
     let mut command = molten_cmd();
     command
         .args(["test", "retention", "gc-plan", "--root"])
@@ -3085,12 +3150,12 @@ fn run_retention_gc_plan_cli(
     add_retention_args(&mut command, candidate);
     let output = command.output()?;
     assert_success(&output, "retention gc-plan regression fixture");
-    let plan = retention::parse_retention_gc_plan(&read_preserves(out)?)?;
+    let plan = molten::retention::parse_retention_gc_plan(&read_preserves(out)?)?;
     assert_eq!(plan.decision, "pass");
     Ok(plan)
 }
 
-fn add_retention_args(command: &mut Command, candidate: &RetentionCliCandidate) {
+fn add_retention_args(command: &mut std::process::Command, candidate: &RetentionCliCandidate) {
     command
         .args(["--retention-requester"])
         .arg(&candidate.requester_ref)
@@ -3105,15 +3170,15 @@ fn add_retention_args(command: &mut Command, candidate: &RetentionCliCandidate) 
         .args(["--retention-reference-index-complete"]);
 }
 
-fn write_octet_artifacts(dir: &Path) -> CliResult<()> {
+fn write_octet_artifacts(dir: &std::path::Path) -> CliResult<()> {
     write_octet_artifacts_with(dir, OCTET_WARNING_STATUS, OCTET_WARNING_SUMMARY)
 }
 
-fn write_octet_artifacts_with(dir: &Path, status: impl AsRef<str>, summary: &str) -> CliResult<()> {
-    fs::write(dir.join("command.txt"), "cargo octet check --artifact-dir target/octet\n")?;
-    fs::write(dir.join("status.json"), status.as_ref())?;
-    fs::write(dir.join("summary.txt"), summary)?;
-    fs::write(dir.join("object-corpus-receipt.json"), OCTET_OBJECT_CORPUS)?;
+fn write_octet_artifacts_with(dir: &std::path::Path, status: impl AsRef<str>, summary: &str) -> CliResult<()> {
+    std::fs::write(dir.join("command.txt"), "cargo octet check --artifact-dir target/octet\n")?;
+    std::fs::write(dir.join("status.json"), status.as_ref())?;
+    std::fs::write(dir.join("summary.txt"), summary)?;
+    std::fs::write(dir.join("object-corpus-receipt.json"), OCTET_OBJECT_CORPUS)?;
     Ok(())
 }
 
@@ -3188,8 +3253,8 @@ fn current_octet_hashes() -> (String, String) {
     (config_hash, profile_hash)
 }
 
-fn file_hash(path: &Path) -> Option<String> {
-    fs::read(path).ok().map(|bytes| format!("b3:{}", blake3::hash(&bytes).to_hex()))
+fn file_hash(path: &std::path::Path) -> Option<String> {
+    std::fs::read(path).ok().map(|bytes| format!("b3:{}", blake3::hash(&bytes).to_hex()))
 }
 
 fn b3_full_hash(input: &str) -> String {
@@ -3208,16 +3273,16 @@ const OCTET_NONCRITICAL_SUMMARY_TWO: &str = "--- octet summary ---\nStatus: warn
 
 const OCTET_OBJECT_CORPUS: &str = r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":3,"source_paths":["src/job/dag.rs","src/main.rs","src/node/runtime.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":3}"#;
 
-fn molten_cmd() -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_molten"));
+fn molten_cmd() -> std::process::Command {
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_molten"));
     command.current_dir(manifest_dir());
     command
 }
 
 struct StartArgs<'a> {
-    root: &'a Path,
-    config: &'a Path,
-    startup: &'a Path,
+    root: &'a std::path::Path,
+    config: &'a std::path::Path,
+    startup: &'a std::path::Path,
 }
 
 fn start_case(args: StartArgs<'_>) -> CliResult<()> {
@@ -3243,7 +3308,7 @@ fn start_case(args: StartArgs<'_>) -> CliResult<()> {
 
 struct OpArgs<'a> {
     name: &'a str,
-    out: &'a Path,
+    out: &'a std::path::Path,
     authority_ref: &'a str,
     policy_ref: &'a str,
     resource_ref: &'a str,
@@ -3267,7 +3332,12 @@ fn write_op(args: OpArgs<'_>) -> CliResult<()> {
     Ok(())
 }
 
-fn submit_op(root: &Path, request: &Path, receipt: &Path, label: &str) -> CliResult<()> {
+fn submit_op(
+    root: &std::path::Path,
+    request: &std::path::Path,
+    receipt: &std::path::Path,
+    label: &str,
+) -> CliResult<()> {
     let output = molten_cmd()
         .args(["node", "control-submit", "--state-root"])
         .arg(root)
@@ -3279,7 +3349,7 @@ fn submit_op(root: &Path, request: &Path, receipt: &Path, label: &str) -> CliRes
     Ok(())
 }
 
-fn dispatch_op(root: &Path, receipt: &Path, label: &str) -> CliResult<()> {
+fn dispatch_op(root: &std::path::Path, receipt: &std::path::Path, label: &str) -> CliResult<()> {
     let output = molten_cmd()
         .args(["node", "control-dispatch", "--state-root"])
         .arg(root)
@@ -3291,7 +3361,7 @@ fn dispatch_op(root: &Path, receipt: &Path, label: &str) -> CliResult<()> {
     Ok(())
 }
 
-fn expect_running(root: &Path, health: &Path, receipt: &Path) -> CliResult<()> {
+fn expect_running(root: &std::path::Path, health: &std::path::Path, receipt: &std::path::Path) -> CliResult<()> {
     let output = molten_cmd()
         .args(["node", "status", "--state-root"])
         .arg(root)
@@ -3307,7 +3377,7 @@ fn expect_running(root: &Path, health: &Path, receipt: &Path) -> CliResult<()> {
     Ok(())
 }
 
-fn expect_stop_loop(root: &Path, shutdown: &Path, receipt: &Path) -> CliResult<()> {
+fn expect_stop_loop(root: &std::path::Path, shutdown: &std::path::Path, receipt: &std::path::Path) -> CliResult<()> {
     let output = molten_cmd()
         .args(["node", "run-loop", "--state-root"])
         .arg(root)
@@ -3320,7 +3390,7 @@ fn expect_stop_loop(root: &Path, shutdown: &Path, receipt: &Path) -> CliResult<(
     Ok(())
 }
 
-fn start_state(root: &Path, node_id: &str, init_label: &str, run_label: &str) -> CliResult<()> {
+fn start_state(root: &std::path::Path, node_id: &str, init_label: &str, run_label: &str) -> CliResult<()> {
     assert_success(
         &molten_cmd()
             .args(["test", "node", "init", "--state-root"])
@@ -3334,7 +3404,7 @@ fn start_state(root: &Path, node_id: &str, init_label: &str, run_label: &str) ->
 }
 
 fn write_status_request(
-    path: &Path,
+    path: &std::path::Path,
     authority_ref: &str,
     policy_ref: &str,
     resource_ref: &str,
@@ -3364,8 +3434,8 @@ fn write_status_request(
 }
 
 struct GrantArgs<'a> {
-    root: &'a Path,
-    grant: &'a Path,
+    root: &'a std::path::Path,
+    grant: &'a std::path::Path,
     peer: &'a str,
     node: &'a str,
     policy_ref: &'a str,
@@ -3395,7 +3465,7 @@ fn grant_fixture(args: GrantArgs<'_>) -> CliResult<String> {
     Ok(molten::preserves_rail::canonical_hash(&read_preserves(args.grant)?)?)
 }
 
-fn ticket_export(root: &Path, ticket: &Path, policy_ref: &str, label: &str) -> CliResult<()> {
+fn ticket_export(root: &std::path::Path, ticket: &std::path::Path, policy_ref: &str, label: &str) -> CliResult<()> {
     assert_success(
         &molten_cmd()
             .args(["test", "node", "live-ticket-export", "--state-root"])
@@ -3411,11 +3481,11 @@ fn ticket_export(root: &Path, ticket: &Path, policy_ref: &str, label: &str) -> C
 }
 
 struct AdmitArgs<'a> {
-    root: &'a Path,
-    receipt: &'a Path,
+    root: &'a std::path::Path,
+    receipt: &'a std::path::Path,
     peer: &'a str,
     policy_ref: &'a str,
-    ticket: &'a Path,
+    ticket: &'a std::path::Path,
     label: &'a str,
 }
 
@@ -3436,9 +3506,9 @@ fn peer_admit(args: AdmitArgs<'_>) -> CliResult<String> {
 }
 
 struct SendArgs<'a> {
-    root: &'a Path,
-    request: &'a Path,
-    ticket: &'a Path,
+    root: &'a std::path::Path,
+    request: &'a std::path::Path,
+    ticket: &'a std::path::Path,
     peer: &'a str,
     bootstrap_ref: &'a str,
     authority_ref: &'a str,
@@ -3446,7 +3516,7 @@ struct SendArgs<'a> {
     resource_ref: &'a str,
 }
 
-fn send_cmd(args: &SendArgs<'_>) -> Command {
+fn send_cmd(args: &SendArgs<'_>) -> std::process::Command {
     let mut command = molten_cmd();
     command
         .args(["test", "node", "control-ingress-live-send", "--state-root"])
@@ -3464,7 +3534,11 @@ fn send_cmd(args: &SendArgs<'_>) -> Command {
     command
 }
 
-fn expect_no_address(args: &SendArgs<'_>, transport_receipt: &Path, receipt: &Path) -> CliResult<()> {
+fn expect_no_address(
+    args: &SendArgs<'_>,
+    transport_receipt: &std::path::Path,
+    receipt: &std::path::Path,
+) -> CliResult<()> {
     let sent = send_cmd(args)
         .args(["--transport-receipt-out"])
         .arg(transport_receipt)
@@ -3475,12 +3549,12 @@ fn expect_no_address(args: &SendArgs<'_>, transport_receipt: &Path, receipt: &Pa
     assert!(stdout(&sent).contains("transport_receipt=none"));
     assert_eq!(molten::ledger::artifact_kind(&read_preserves(receipt)?), "node-control-live-send-receipt");
     assert!(!transport_receipt.exists());
-    let text = to_text(&read_preserves(receipt)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(receipt)?)?;
     assert!(text.contains("ticket has no endpoint addresses"));
     Ok(())
 }
 
-fn expect_mismatch(args: &SendArgs<'_>, operation_ref: &str, receipt: &Path) -> CliResult<()> {
+fn expect_mismatch(args: &SendArgs<'_>, operation_ref: &str, receipt: &std::path::Path) -> CliResult<()> {
     let output = send_cmd(args)
         .args(["--operation-id"])
         .arg(operation_ref)
@@ -3488,19 +3562,19 @@ fn expect_mismatch(args: &SendArgs<'_>, operation_ref: &str, receipt: &Path) -> 
         .arg(receipt)
         .output()?;
     assert_success(&output, "node live send deny operation mismatch");
-    let text = to_text(&read_preserves(receipt)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(receipt)?)?;
     assert!(text.contains("operation-id"));
     Ok(())
 }
 
 struct BundleArgs<'a> {
-    root: &'a Path,
-    ticket: &'a Path,
-    peer_admission: &'a Path,
-    authority_grant: &'a Path,
-    send_receipt: &'a Path,
-    service_receipt: &'a Path,
-    receipt: &'a Path,
+    root: &'a std::path::Path,
+    ticket: &'a std::path::Path,
+    peer_admission: &'a std::path::Path,
+    authority_grant: &'a std::path::Path,
+    send_receipt: &'a std::path::Path,
+    service_receipt: &'a std::path::Path,
+    receipt: &'a std::path::Path,
 }
 
 fn expect_missing_receive(args: BundleArgs<'_>) -> CliResult<()> {
@@ -3523,16 +3597,16 @@ fn expect_missing_receive(args: BundleArgs<'_>) -> CliResult<()> {
     assert_success(&output, "node live workflow bundle deny");
     assert!(stdout(&output).contains("decision=deny"));
     assert_eq!(molten::ledger::artifact_kind(&read_preserves(args.receipt)?), "node-control-live-workflow-receipt");
-    let text = to_text(&read_preserves(args.receipt)?)?;
+    let text = molten::preserves_rail::to_text(&read_preserves(args.receipt)?)?;
     assert!(text.contains("missing receive receipt"));
     Ok(())
 }
 
 struct LoopbackArgs<'a> {
-    root: &'a Path,
-    request: &'a Path,
-    publish: &'a Path,
-    receive: &'a Path,
+    root: &'a std::path::Path,
+    request: &'a std::path::Path,
+    publish: &'a std::path::Path,
+    receive: &'a std::path::Path,
     bootstrap_ref: &'a str,
     authority_ref: &'a str,
     policy_ref: &'a str,
@@ -3571,8 +3645,8 @@ fn run_loopback(args: LoopbackArgs<'_>) -> CliResult<()> {
 }
 
 struct EnvelopeArgs<'a> {
-    path: &'a Path,
-    request: &'a Path,
+    path: &'a std::path::Path,
+    request: &'a std::path::Path,
     bootstrap_ref: &'a str,
     authority_ref: &'a str,
     policy_ref: &'a str,
@@ -3611,7 +3685,12 @@ fn write_envelope(args: EnvelopeArgs<'_>) -> CliResult<String> {
     Ok(molten::preserves_rail::canonical_hash(&value)?)
 }
 
-fn publish_envelope(root: &Path, envelope: &Path, receipt: &Path, label: &str) -> CliResult<()> {
+fn publish_envelope(
+    root: &std::path::Path,
+    envelope: &std::path::Path,
+    receipt: &std::path::Path,
+    label: &str,
+) -> CliResult<()> {
     assert_success(
         &molten_cmd()
             .args(["test", "node", "control-ingress-publish", "--state-root"])
@@ -3626,7 +3705,12 @@ fn publish_envelope(root: &Path, envelope: &Path, receipt: &Path, label: &str) -
     Ok(())
 }
 
-fn deliver_envelope(root: &Path, envelope_ref: &str, receipt: &Path, label: &str) -> CliResult<()> {
+fn deliver_envelope(
+    root: &std::path::Path,
+    envelope_ref: &str,
+    receipt: &std::path::Path,
+    label: &str,
+) -> CliResult<()> {
     assert_success(
         &molten_cmd()
             .args(["test", "node", "control-ingress-deliver", "--state-root"])
@@ -3641,7 +3725,7 @@ fn deliver_envelope(root: &Path, envelope_ref: &str, receipt: &Path, label: &str
     Ok(())
 }
 
-fn run_once(root: &Path, receipt: &Path, label: &str) -> CliResult<Output> {
+fn run_once(root: &std::path::Path, receipt: &std::path::Path, label: &str) -> CliResult<std::process::Output> {
     let output = molten_cmd()
         .args(["test", "node", "run-loop", "--state-root"])
         .arg(root)
@@ -3652,14 +3736,14 @@ fn run_once(root: &Path, receipt: &Path, label: &str) -> CliResult<Output> {
     Ok(output)
 }
 
-fn manifest_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+fn manifest_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 fn cleanup_stale_molten_temp_dirs() {
     static CLEAN_STALE_TEMP_DIRS: std::sync::Once = std::sync::Once::new();
     CLEAN_STALE_TEMP_DIRS.call_once(|| {
-        let Ok(entries) = fs::read_dir(std::env::temp_dir()) else {
+        let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
             return;
         };
         for entry_result in entries {
@@ -3675,7 +3759,7 @@ fn cleanup_stale_molten_temp_dirs() {
                     continue;
                 };
                 if is_stale_molten_temp_dir(name) {
-                    let remove_result = fs::remove_dir_all(entry.path());
+                    let remove_result = std::fs::remove_dir_all(entry.path());
                     if remove_result.is_err() {
                         continue;
                     }
@@ -3698,22 +3782,26 @@ fn live_process_token_count(name: &str) -> usize {
 }
 
 fn write_release_export_test_archive(
-    output_dir: &Path,
-    archive_path: &Path,
-    manifest_path: Option<&Path>,
+    output_dir: &std::path::Path,
+    archive_path: &std::path::Path,
+    manifest_path: Option<&std::path::Path>,
     member_refs: &[(String, String)],
 ) -> CliResult<()> {
     if let Some(parent) = archive_path.parent() {
-        fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)?;
     }
-    let archive_file = fs::File::create(archive_path)?;
+    let archive_file = std::fs::File::create(archive_path)?;
     let encoder = zstd::stream::write::Encoder::new(archive_file, 0)?;
     let mut builder = tar::Builder::new(encoder);
     if let Some(manifest_path) = manifest_path {
-        append_release_export_test_bytes(&mut builder, "release-export-manifest.preserves", &fs::read(manifest_path)?)?;
+        append_release_export_test_bytes(
+            &mut builder,
+            "release-export-manifest.preserves",
+            &std::fs::read(manifest_path)?,
+        )?;
     }
     for (name, _) in member_refs {
-        append_release_export_test_bytes(&mut builder, name, &fs::read(output_dir.join(name))?)?;
+        append_release_export_test_bytes(&mut builder, name, &std::fs::read(output_dir.join(name))?)?;
     }
     let encoder = builder.into_inner()?;
     encoder.finish()?;
@@ -3726,21 +3814,25 @@ struct ExtraArchiveMember<'a> {
 }
 
 fn write_release_export_test_archive_with_extra(
-    output_dir: &Path,
-    archive_path: &Path,
-    manifest_path: &Path,
+    output_dir: &std::path::Path,
+    archive_path: &std::path::Path,
+    manifest_path: &std::path::Path,
     member_refs: &[(String, String)],
     extra: ExtraArchiveMember<'_>,
 ) -> CliResult<()> {
     if let Some(parent) = archive_path.parent() {
-        fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)?;
     }
-    let archive_file = fs::File::create(archive_path)?;
+    let archive_file = std::fs::File::create(archive_path)?;
     let encoder = zstd::stream::write::Encoder::new(archive_file, 0)?;
     let mut builder = tar::Builder::new(encoder);
-    append_release_export_test_bytes(&mut builder, "release-export-manifest.preserves", &fs::read(manifest_path)?)?;
+    append_release_export_test_bytes(
+        &mut builder,
+        "release-export-manifest.preserves",
+        &std::fs::read(manifest_path)?,
+    )?;
     for (name, _) in member_refs {
-        append_release_export_test_bytes(&mut builder, name, &fs::read(output_dir.join(name))?)?;
+        append_release_export_test_bytes(&mut builder, name, &std::fs::read(output_dir.join(name))?)?;
     }
     append_release_export_test_bytes(&mut builder, extra.name, extra.bytes)?;
     let encoder = builder.into_inner()?;
@@ -3749,24 +3841,28 @@ fn write_release_export_test_archive_with_extra(
 }
 
 fn write_release_export_test_archive_with_tamper(
-    output_dir: &Path,
-    archive_path: &Path,
-    manifest_path: &Path,
+    output_dir: &std::path::Path,
+    archive_path: &std::path::Path,
+    manifest_path: &std::path::Path,
     member_refs: &[(String, String)],
 ) -> CliResult<()> {
     let first = member_refs.first().ok_or_else(|| test_error("release export test needs a member"))?;
     if let Some(parent) = archive_path.parent() {
-        fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)?;
     }
-    let archive_file = fs::File::create(archive_path)?;
+    let archive_file = std::fs::File::create(archive_path)?;
     let encoder = zstd::stream::write::Encoder::new(archive_file, 0)?;
     let mut builder = tar::Builder::new(encoder);
-    append_release_export_test_bytes(&mut builder, "release-export-manifest.preserves", &fs::read(manifest_path)?)?;
+    append_release_export_test_bytes(
+        &mut builder,
+        "release-export-manifest.preserves",
+        &std::fs::read(manifest_path)?,
+    )?;
     for (name, _) in member_refs {
         if name == &first.0 {
             append_release_export_test_bytes(&mut builder, name, b"tampered release evidence")?;
         } else {
-            append_release_export_test_bytes(&mut builder, name, &fs::read(output_dir.join(name))?)?;
+            append_release_export_test_bytes(&mut builder, name, &std::fs::read(output_dir.join(name))?)?;
         }
     }
     let encoder = builder.into_inner()?;
@@ -3775,23 +3871,27 @@ fn write_release_export_test_archive_with_tamper(
 }
 
 fn write_release_export_test_archive_with_duplicate(
-    output_dir: &Path,
-    archive_path: &Path,
-    manifest_path: &Path,
+    output_dir: &std::path::Path,
+    archive_path: &std::path::Path,
+    manifest_path: &std::path::Path,
     member_refs: &[(String, String)],
 ) -> CliResult<()> {
     let first = member_refs.first().ok_or_else(|| test_error("release export test needs a member"))?;
     if let Some(parent) = archive_path.parent() {
-        fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)?;
     }
-    let archive_file = fs::File::create(archive_path)?;
+    let archive_file = std::fs::File::create(archive_path)?;
     let encoder = zstd::stream::write::Encoder::new(archive_file, 0)?;
     let mut builder = tar::Builder::new(encoder);
-    append_release_export_test_bytes(&mut builder, "release-export-manifest.preserves", &fs::read(manifest_path)?)?;
+    append_release_export_test_bytes(
+        &mut builder,
+        "release-export-manifest.preserves",
+        &std::fs::read(manifest_path)?,
+    )?;
     for (name, _) in member_refs {
-        append_release_export_test_bytes(&mut builder, name, &fs::read(output_dir.join(name))?)?;
+        append_release_export_test_bytes(&mut builder, name, &std::fs::read(output_dir.join(name))?)?;
     }
-    append_release_export_test_bytes(&mut builder, &first.0, &fs::read(output_dir.join(&first.0))?)?;
+    append_release_export_test_bytes(&mut builder, &first.0, &std::fs::read(output_dir.join(&first.0))?)?;
     let encoder = builder.into_inner()?;
     encoder.finish()?;
     Ok(())
@@ -3813,22 +3913,22 @@ fn append_release_export_test_bytes<W: std::io::Write>(
     Ok(())
 }
 
-fn temp_dir(label: &str) -> CliResult<PathBuf> {
+fn temp_dir(label: &str) -> CliResult<std::path::PathBuf> {
     cleanup_stale_molten_temp_dirs();
-    let nonce = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nonce = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!("molten-{label}-{}-{nonce}", std::process::id()));
     if dir.exists() {
-        fs::remove_dir_all(&dir)?;
+        std::fs::remove_dir_all(&dir)?;
     }
-    fs::create_dir_all(&dir)?;
+    std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
 
-fn read_preserves(path: &Path) -> CliResult<preserves::IOValue> {
-    Ok(parse_text(&fs::read_to_string(path)?)?)
+fn read_preserves(path: &std::path::Path) -> CliResult<preserves::IOValue> {
+    Ok(molten::preserves_rail::parse_text(&std::fs::read_to_string(path)?)?)
 }
 
-fn assert_success(output: &Output, label: &str) {
+fn assert_success(output: &std::process::Output, label: &str) {
     assert!(
         output.status.success(),
         "{label} failed\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
@@ -3838,7 +3938,7 @@ fn assert_success(output: &Output, label: &str) {
     );
 }
 
-fn assert_failure(output: &Output, label: &str) {
+fn assert_failure(output: &std::process::Output, label: &str) {
     assert!(
         !output.status.success(),
         "{label} unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
@@ -3847,11 +3947,11 @@ fn assert_failure(output: &Output, label: &str) {
     );
 }
 
-fn stdout(output: &Output) -> String {
+fn stdout(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-fn stderr(output: &Output) -> String {
+fn stderr(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
