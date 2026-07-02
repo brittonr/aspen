@@ -2,8 +2,6 @@ use redb::ReadableDatabase;
 use redb::ReadableTable;
 use redb::ReadableTableMetadata;
 
-use crate::retention;
-
 type BtreeSet<T> = std::collections::BTreeSet<T>;
 type Database = redb::Database;
 type IoValue = preserves::IOValue;
@@ -250,7 +248,7 @@ pub struct EvalCacheInvalidateInput {
     pub revocation_ref: Option<String>,
     pub operation: Option<String>,
     pub reason: String,
-    pub retention_evidence: retention::DestructiveRetentionEvidence,
+    pub retention_evidence: crate::retention::DestructiveRetentionEvidence,
     pub apply_refs: Vec<String>,
 }
 
@@ -573,7 +571,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
     validate_invalidate_input(input)?;
     let selected_key_refs = selected_keys(root, input)?;
     let reason = invalidation_reason(input);
-    let requester_ref = retention::destructive_retention_requester_ref(
+    let requester_ref = crate::retention::destructive_retention_requester_ref(
         &input.retention_evidence,
         "eval-cache-invalidate-missing-requester",
     )?;
@@ -749,20 +747,21 @@ fn evaluate_invalidate_key(
     requester_ref: &str,
     key_ref: &str,
 ) -> Result<InvalStep> {
-    let admission = retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
+    let admission =
+        crate::retention::admit_destructive_retention_evidence(crate::retention::DestructiveRetentionAdmissionInput {
+            root,
+            evidence: &input.retention_evidence,
+            object_ref: key_ref,
+            object_kind: "eval-cache-key",
+            retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
+            action: crate::retention::ACTION_TOMBSTONE,
+        })?;
+    let evaluation = crate::retention::evaluate_retention(crate::retention::RetentionEvaluationInput {
         root,
-        evidence: &input.retention_evidence,
         object_ref: key_ref,
         object_kind: "eval-cache-key",
-        retention_class: retention::CLASS_EPHEMERAL_CACHE,
-        action: retention::ACTION_TOMBSTONE,
-    })?;
-    let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
-        root,
-        object_ref: key_ref,
-        object_kind: "eval-cache-key",
-        retention_class: retention::CLASS_EPHEMERAL_CACHE,
-        action: retention::ACTION_TOMBSTONE,
+        retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
+        action: crate::retention::ACTION_TOMBSTONE,
         requester_ref,
         is_reference_index_complete: input.retention_evidence.is_reference_index_complete,
         retained_refs: &input.retention_evidence.retained_refs,
@@ -776,18 +775,18 @@ fn evaluate_invalidate_key(
         root,
         apply_refs: &input.apply_refs,
         subsystem: "eval-cache-invalidate",
-        action: retention::ACTION_TOMBSTONE,
+        action: crate::retention::ACTION_TOMBSTONE,
         object_ref: key_ref,
         object_kind: "eval-cache-key",
-        retention_class: retention::CLASS_EPHEMERAL_CACHE,
+        retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
     });
-    let gate = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+    let gate = crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
         root,
         subsystem: "eval-cache-invalidate",
-        action: retention::ACTION_TOMBSTONE,
+        action: crate::retention::ACTION_TOMBSTONE,
         object_ref: key_ref,
         object_kind: "eval-cache-key",
-        retention_class: retention::CLASS_EPHEMERAL_CACHE,
+        retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
         apply_ref,
     })?;
     let is_gate_denied = gate.decision != "pass";
@@ -1545,7 +1544,7 @@ fn validate_invalidate_input(input: &EvalCacheInvalidateInput) -> Result<()> {
         validate_operation(operation)?;
     }
     validate_refs(&input.apply_refs, "invalidate apply ref")?;
-    retention::validate_destructive_retention_evidence(&input.retention_evidence)?;
+    crate::retention::validate_destructive_retention_evidence(&input.retention_evidence)?;
     Ok(())
 }
 
@@ -1857,7 +1856,7 @@ struct ApplyRefMatchInput<'a> {
 fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
     let mut fallback_ref = None;
     for apply_ref in input.apply_refs {
-        let Ok(apply) = retention::read_retention_gc_apply(input.root, apply_ref) else {
+        let Ok(apply) = crate::retention::read_retention_gc_apply(input.root, apply_ref) else {
             if fallback_ref.is_none() {
                 fallback_ref = Some(apply_ref.as_str());
             }
@@ -2020,11 +2019,11 @@ mod tests {
         let output = record("fingerprint", vec![string("retained")]);
         let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[]))
             .expect("put retained cache value");
-        retention::pin_object(&root, retention::RetentionPinInput {
+        crate::retention::pin_object(&root, crate::retention::RetentionPinInput {
             object_ref: put.key.key_ref.clone(),
             object_kind: "eval-cache-key".to_string(),
-            retention_class: retention::CLASS_EPHEMERAL_CACHE.to_string(),
-            source: retention::SOURCE_EVALUATION_CACHE.to_string(),
+            retention_class: crate::retention::CLASS_EPHEMERAL_CACHE.to_string(),
+            source: crate::retention::SOURCE_EVALUATION_CACHE.to_string(),
             reason: "cache hold".to_string(),
             owner_ref: test_ref("retention-owner"),
             expiry_ref: None,
@@ -2220,19 +2219,19 @@ mod tests {
     fn eval_cache_apply_ref(
         root: &std::path::Path,
         key_ref: &str,
-        evidence: &retention::DestructiveRetentionEvidence,
+        evidence: &crate::retention::DestructiveRetentionEvidence,
     ) -> String {
-        let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+        let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
             root,
             subsystem: "eval-cache-invalidate",
             object_ref: key_ref,
             object_kind: "eval-cache-key",
-            retention_class: retention::CLASS_EPHEMERAL_CACHE,
-            action: retention::ACTION_TOMBSTONE,
+            retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
+            action: crate::retention::ACTION_TOMBSTONE,
             evidence,
         })
         .expect("store cache invalidation plan");
-        retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+        crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
             root,
             plan_ref: &plan.plan_ref,
         })
@@ -2240,7 +2239,7 @@ mod tests {
         .apply_ref
     }
 
-    fn retention_evidence(root: &std::path::Path, label: &str) -> retention::DestructiveRetentionEvidence {
+    fn retention_evidence(root: &std::path::Path, label: &str) -> crate::retention::DestructiveRetentionEvidence {
         let requester_ref = test_ref(&format!("retention-requester-{label}"));
         let summaries = list(root, &EvalCacheListFilter::default()).expect("list cache for retention evidence");
         let mut policy_refs = Vec::with_capacity(summaries.len());
@@ -2250,7 +2249,7 @@ mod tests {
         for summary in summaries {
             policy_refs.push(store_admission(
                 root,
-                retention::ADMISSION_KIND_POLICY,
+                crate::retention::ADMISSION_KIND_POLICY,
                 label,
                 &requester_ref,
                 &summary.key_ref,
@@ -2259,7 +2258,7 @@ mod tests {
             ));
             authority_refs.push(store_admission(
                 root,
-                retention::ADMISSION_KIND_AUTHORITY,
+                crate::retention::ADMISSION_KIND_AUTHORITY,
                 label,
                 &requester_ref,
                 &summary.key_ref,
@@ -2268,7 +2267,7 @@ mod tests {
             ));
             evidence_refs.push(store_admission(
                 root,
-                retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+                crate::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
                 label,
                 &requester_ref,
                 &summary.key_ref,
@@ -2277,7 +2276,7 @@ mod tests {
             ));
             reference_index_refs.push(store_admission(
                 root,
-                retention::ADMISSION_KIND_REFERENCE_INDEX,
+                crate::retention::ADMISSION_KIND_REFERENCE_INDEX,
                 label,
                 &requester_ref,
                 &summary.key_ref,
@@ -2285,7 +2284,7 @@ mod tests {
                 true,
             ));
         }
-        retention::DestructiveRetentionEvidence {
+        crate::retention::DestructiveRetentionEvidence {
             requester_ref: Some(requester_ref),
             policy_refs,
             authority_refs,
@@ -2309,14 +2308,14 @@ mod tests {
         remote_refs: &[String],
         is_reference_index_complete: bool,
     ) -> String {
-        retention::store_retention_evidence_admission(root, &retention::RetentionEvidenceAdmissionInput {
+        crate::retention::store_retention_evidence_admission(root, &crate::retention::RetentionEvidenceAdmissionInput {
             kind,
             decision: "pass",
             requester_ref,
             object_ref: key_ref,
             object_kind: "eval-cache-key",
-            retention_class: retention::CLASS_EPHEMERAL_CACHE,
-            action: retention::ACTION_TOMBSTONE,
+            retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
+            action: crate::retention::ACTION_TOMBSTONE,
             bound_refs: &[test_ref(&format!("{kind}-{label}"))],
             retained_refs: &[],
             remote_refs,
