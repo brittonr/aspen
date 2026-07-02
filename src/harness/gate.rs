@@ -1,7 +1,3 @@
-use super::replay;
-use super::schema;
-use crate::evidence_chain;
-
 type Cow<'a, T> = std::borrow::Cow<'a, T>;
 type IoValue = preserves::IOValue;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
@@ -180,8 +176,8 @@ pub struct GateCheck {
     pub redaction_policy_ref: Option<String>,
     pub redaction_gate_ref: Option<String>,
     pub observations: u64,
-    pub actors: Vec<schema::ActorDecl>,
-    pub budget: schema::BudgetEvidence,
+    pub actors: Vec<super::schema::ActorDecl>,
+    pub budget: super::schema::BudgetEvidence,
     pub chain_evidence: GateChainEvidence,
     pub turn_journals: TurnJournalEvidence,
 }
@@ -244,7 +240,7 @@ pub struct ReproVerifyReceipt {
 
 pub fn gate_check_value(value: &IoValue) -> Result<GateCheck> {
     if value.collect_simple_record("harness-failure-v1", None).is_some() {
-        let failure = schema::parse_failure(value)?;
+        let failure = super::schema::parse_failure(value)?;
         return Err(MoltenError::invalid_harness(format!(
             "harness failure artifact {} phase={} kind={} cannot satisfy pass evidence gate",
             failure.failure_ref, failure.phase, failure.kind
@@ -256,9 +252,9 @@ pub fn gate_check_value(value: &IoValue) -> Result<GateCheck> {
     }
 
     if value.collect_simple_record("harness-repro-bundle-v1", None).is_some() {
-        let bundle = schema::parse_repro_bundle(value)?;
+        let bundle = super::schema::parse_repro_bundle(value)?;
         return match bundle.kind {
-            schema::HarnessReproBundleKind::Report => {
+            super::schema::HarnessReproBundleKind::Report => {
                 if let Some(loss_classification) = bundle.loss_classification.as_deref()
                     && loss_classification != "gate-preserving"
                 {
@@ -278,7 +274,7 @@ pub fn gate_check_value(value: &IoValue) -> Result<GateCheck> {
                 check.redaction_gate_ref = bundle.redaction_gate_ref;
                 Ok(check)
             }
-            schema::HarnessReproBundleKind::Failure => Err(MoltenError::invalid_harness(format!(
+            super::schema::HarnessReproBundleKind::Failure => Err(MoltenError::invalid_harness(format!(
                 "failure repro bundle {} wrapping {} cannot satisfy pass evidence gate",
                 bundle.bundle_ref, bundle.artifact_ref
             ))),
@@ -293,25 +289,27 @@ pub fn gate_check_value(value: &IoValue) -> Result<GateCheck> {
 pub fn sealed_repro_bundle_value_with_command(report_value: &IoValue, command: &[String]) -> Result<IoValue> {
     let report_check = gate_check_report(report_value, "report".to_string(), None)?;
     let report_receipt_value = gate_receipt_value(&report_check);
-    schema::sealed_repro_bundle_value_with_command_and_receipt(report_value, command, &report_receipt_value)
+    super::schema::sealed_repro_bundle_value_with_command_and_receipt(report_value, command, &report_receipt_value)
 }
 
 pub fn repro_bundle_value_with_export_profile(
     report_value: &IoValue,
     command: &[String],
-    profile: schema::ReproExportProfile,
+    profile: super::schema::ReproExportProfile,
 ) -> Result<IoValue> {
     match profile {
-        schema::ReproExportProfile::DenySensitive => sealed_repro_bundle_value_with_command(report_value, command),
-        schema::ReproExportProfile::RedactedDiagnostic | schema::ReproExportProfile::EncryptedPrivate => {
-            schema::profiled_repro_bundle_value_with_command(report_value, command, profile)
+        super::schema::ReproExportProfile::DenySensitive => {
+            sealed_repro_bundle_value_with_command(report_value, command)
+        }
+        super::schema::ReproExportProfile::RedactedDiagnostic | super::schema::ReproExportProfile::EncryptedPrivate => {
+            super::schema::profiled_repro_bundle_value_with_command(report_value, command, profile)
         }
     }
 }
 
 pub fn repro_verify_receipt_value(bundle_value: &IoValue) -> Result<IoValue> {
-    let bundle = schema::parse_repro_bundle(bundle_value)?;
-    if bundle.kind == schema::HarnessReproBundleKind::Failure {
+    let bundle = super::schema::parse_repro_bundle(bundle_value)?;
+    if bundle.kind == super::schema::HarnessReproBundleKind::Failure {
         return Err(MoltenError::invalid_harness(format!(
             "failure repro bundle {} wrapping {} is diagnostic-only and cannot be verified as pass evidence",
             bundle.bundle_ref, bundle.artifact_ref
@@ -445,7 +443,7 @@ pub fn parse_gate_receipt(value: &IoValue) -> Result<GateReceipt> {
         suite: &suite_ref,
         final_state: &final_state_hash,
     })?;
-    let chain_link = evidence_chain::parse_chain_link(&chain_evidence.link_value)?;
+    let chain_link = crate::evidence_chain::parse_chain_link(&chain_evidence.link_value)?;
     require_link_context(&chain_link, &report_ref, &suite_ref, &final_state_hash)?;
     require_artifact_ref(&artifact_refs, "report", &report_ref)?;
     require_artifact_ref(&artifact_refs, "suite", &suite_ref)?;
@@ -548,7 +546,7 @@ pub fn repro_verify_receipt_summary(value: &IoValue) -> Result<String> {
     ))
 }
 
-fn validate_sealed_report_bundle(report_value: &IoValue, bundle: &schema::HarnessReproBundle) -> Result<()> {
+fn validate_sealed_report_bundle(report_value: &IoValue, bundle: &super::schema::HarnessReproBundle) -> Result<()> {
     if bundle.redaction_policy_ref.is_none() || bundle.redaction_gate_ref.is_none() {
         return Err(MoltenError::invalid_harness("sealed report repro bundle missing redaction preflight evidence"));
     }
@@ -610,9 +608,9 @@ struct EvidenceRefs {
 }
 
 fn gate_check_report(value: &IoValue, artifact_kind: String, artifact_ref: Option<String>) -> Result<GateCheck> {
-    let validation = replay::validate_report_value(value)?;
-    let replay = replay::replay_report_value(value)?;
-    let report = schema::parse_report(value)?;
+    let validation = super::replay::validate_report_value(value)?;
+    let replay = super::replay::replay_report_value(value)?;
+    let report = super::schema::parse_report(value)?;
     if validation.report_ref != replay.expected_report_ref || validation.report_ref != replay.actual_report_ref {
         return Err(MoltenError::invalid_harness("gate replay report refs do not match validation report ref"));
     }
@@ -667,7 +665,7 @@ fn gate_check_report(value: &IoValue, artifact_kind: String, artifact_ref: Optio
     })
 }
 
-fn evidence_refs(report: &schema::HarnessReport) -> Result<EvidenceRefs> {
+fn evidence_refs(report: &super::schema::HarnessReport) -> Result<EvidenceRefs> {
     let policy = report
         .policy_gate
         .as_ref()
@@ -705,14 +703,14 @@ fn evidence_refs(report: &schema::HarnessReport) -> Result<EvidenceRefs> {
     })
 }
 
-fn executor_execution_receipts_ref(observations: &[schema::HarnessObservation]) -> Result<String> {
+fn executor_execution_receipts_ref(observations: &[super::schema::HarnessObservation]) -> Result<String> {
     let receipts = observations
         .iter()
         .flat_map(|observation| observation.events.iter())
         .filter(|event| {
             matches!(
-                schema::event_boundary(event),
-                schema::EventBoundary::SteelExecution | schema::EventBoundary::WasmExecution
+                super::schema::event_boundary(event),
+                super::schema::EventBoundary::SteelExecution | super::schema::EventBoundary::WasmExecution
             )
         })
         .cloned()
@@ -720,11 +718,11 @@ fn executor_execution_receipts_ref(observations: &[schema::HarnessObservation]) 
     canonical_hash(&record("executor-execution-receipts", vec![sequence(receipts)]))
 }
 
-fn runtime_predicate_receipts_ref(observations: &[schema::HarnessObservation]) -> Result<String> {
+fn runtime_predicate_receipts_ref(observations: &[super::schema::HarnessObservation]) -> Result<String> {
     let receipts = observations
         .iter()
         .flat_map(|observation| observation.events.iter())
-        .filter(|event| schema::event_boundary(event) == schema::EventBoundary::RuntimePredicate)
+        .filter(|event| super::schema::event_boundary(event) == super::schema::EventBoundary::RuntimePredicate)
         .cloned()
         .collect::<Vec<_>>();
     canonical_hash(&record("runtime-predicate-receipts", vec![sequence(receipts)]))
@@ -749,8 +747,8 @@ fn validation_value(check: &GateCheck) -> IoValue {
         record("suite", vec![string(&check.suite_ref)]),
         record("final-state", vec![string(&check.final_state_hash)]),
         record("observations", vec![u64_value(check.observations)]),
-        schema::actor_registry_value(&check.actors),
-        schema::budget_value(&check.budget.limits, &check.budget.usage),
+        super::schema::actor_registry_value(&check.actors),
+        super::schema::budget_value(&check.budget.limits, &check.budget.usage),
     ])
 }
 
@@ -782,8 +780,8 @@ fn replay_value(check: &GateCheck) -> IoValue {
 }
 
 struct PassLink {
-    chain: evidence_chain::ChainScope,
-    producer: evidence_chain::ChainProducer,
+    chain: crate::evidence_chain::ChainScope,
+    producer: crate::evidence_chain::ChainProducer,
     link_ref: String,
     link_value: IoValue,
     payload_refs: Vec<String>,
@@ -811,7 +809,7 @@ struct Pred<'a> {
     subject_refs: &'a [String],
     input_refs: &'a [String],
     context_refs: &'a [String],
-    checks: &'a [evidence_chain::ChainCheck],
+    checks: &'a [crate::evidence_chain::ChainCheck],
 }
 
 fn build_gate_chain_evidence(
@@ -839,25 +837,25 @@ fn build_gate_chain_evidence(
 }
 
 fn pass_link(report_ref: &str, suite_ref: &str, final_state_hash: &str, profile: &str) -> Result<PassLink> {
-    let chain = evidence_chain::ChainScope::new("harness-pass-evidence", report_ref, profile);
+    let chain = crate::evidence_chain::ChainScope::new("harness-pass-evidence", report_ref, profile);
     let producer_key_ref = canonical_hash(&record("gate-chain-producer-key", vec![string("molten")]))?;
-    let producer = evidence_chain::ChainProducer::new("molten-gate", producer_key_ref);
+    let producer = crate::evidence_chain::ChainProducer::new("molten-gate", producer_key_ref);
     let trellis_input_ref = canonical_hash(&record("gate-chain-input", vec![
         string(report_ref),
         string(suite_ref),
         string(final_state_hash),
     ]))?;
-    let link_value = evidence_chain::chain_link_value(&evidence_chain::ChainLinkInput::genesis(
+    let link_value = crate::evidence_chain::chain_link_value(&crate::evidence_chain::ChainLinkInput::genesis(
         chain.clone(),
-        evidence_chain::ChainPayload::new("harness-report", report_ref, HARNESS_REPORT_SCHEMA),
+        crate::evidence_chain::ChainPayload::new("harness-report", report_ref, HARNESS_REPORT_SCHEMA),
         vec![
-            evidence_chain::ChainContextRef::new("suite", suite_ref),
-            evidence_chain::ChainContextRef::new("final-state", final_state_hash),
+            crate::evidence_chain::ChainContextRef::new("suite", suite_ref),
+            crate::evidence_chain::ChainContextRef::new("final-state", final_state_hash),
         ],
         producer.clone(),
         trellis_input_ref,
     ));
-    let link = evidence_chain::parse_chain_link(&link_value)?;
+    let link = crate::evidence_chain::parse_chain_link(&link_value)?;
     let link_ref = link.link_ref.clone();
     let scope_context_ref = canonical_hash(&record("gate-chain-scope", vec![
         string(&chain.scope),
@@ -876,7 +874,7 @@ fn pass_link(report_ref: &str, suite_ref: &str, final_state_hash: &str, profile:
 }
 
 fn pass_predicate(input: Pred<'_>) -> IoValue {
-    evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
+    crate::evidence_chain::chain_predicate_receipt_value(&crate::evidence_chain::ChainPredicateReceiptValueInput {
         predicate: input.predicate,
         decision: "pass",
         subject_refs: input.subject_refs,
@@ -888,56 +886,56 @@ fn pass_predicate(input: Pred<'_>) -> IoValue {
 
 fn pass_predicates(link: &PassLink) -> Result<PassPredicates> {
     let genesis_checks = vec![
-        evidence_chain::ChainCheck::pass("trellis-bounded-predicate"),
-        evidence_chain::ChainCheck::pass("predicate-decision-binding"),
+        crate::evidence_chain::ChainCheck::pass("trellis-bounded-predicate"),
+        crate::evidence_chain::ChainCheck::pass("predicate-decision-binding"),
     ];
     let segment_checks = vec![
-        evidence_chain::ChainCheck::pass("segment-contiguity"),
-        evidence_chain::ChainCheck::pass("canonical-link-order"),
+        crate::evidence_chain::ChainCheck::pass("segment-contiguity"),
+        crate::evidence_chain::ChainCheck::pass("canonical-link-order"),
     ];
     let fork_checks = vec![
-        evidence_chain::ChainCheck::pass("fork-policy-profile"),
-        evidence_chain::ChainCheck::pass("fork-evidence-binding"),
+        crate::evidence_chain::ChainCheck::pass("fork-policy-profile"),
+        crate::evidence_chain::ChainCheck::pass("fork-evidence-binding"),
     ];
     let anchor_checks = vec![
-        evidence_chain::ChainCheck::pass("anchor-descent"),
-        evidence_chain::ChainCheck::pass("head-binding"),
+        crate::evidence_chain::ChainCheck::pass("anchor-descent"),
+        crate::evidence_chain::ChainCheck::pass("head-binding"),
     ];
     let checkpoint_checks = vec![
-        evidence_chain::ChainCheck::pass("checkpoint-range-coverage"),
-        evidence_chain::ChainCheck::pass("verified-range"),
+        crate::evidence_chain::ChainCheck::pass("checkpoint-range-coverage"),
+        crate::evidence_chain::ChainCheck::pass("verified-range"),
     ];
     let values = vec![
         pass_predicate(Pred {
-            predicate: evidence_chain::GENESIS_VALID_PREDICATE,
+            predicate: crate::evidence_chain::GENESIS_VALID_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.payload_refs,
             context_refs: &link.context_refs,
             checks: &genesis_checks,
         }),
         pass_predicate(Pred {
-            predicate: evidence_chain::SEGMENT_NO_GAP_PREDICATE,
+            predicate: crate::evidence_chain::SEGMENT_NO_GAP_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.payload_refs,
             context_refs: &link.context_refs,
             checks: &segment_checks,
         }),
         pass_predicate(Pred {
-            predicate: evidence_chain::SEGMENT_NO_FORK_PREDICATE,
+            predicate: crate::evidence_chain::SEGMENT_NO_FORK_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.subject_refs,
             context_refs: &link.context_refs,
             checks: &fork_checks,
         }),
         pass_predicate(Pred {
-            predicate: evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE,
+            predicate: crate::evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.subject_refs,
             context_refs: &link.context_refs,
             checks: &anchor_checks,
         }),
         pass_predicate(Pred {
-            predicate: evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE,
+            predicate: crate::evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.payload_refs,
             context_refs: &link.context_refs,
@@ -956,8 +954,8 @@ fn pass_predicate_refs(values: &[IoValue]) -> Result<(Vec<String>, String)> {
     let mut refs = Vec::with_capacity(values.len());
     let mut range_ref = None;
     for value in values {
-        let parsed = evidence_chain::parse_chain_predicate_receipt(value)?;
-        if parsed.predicate == evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE {
+        let parsed = crate::evidence_chain::parse_chain_predicate_receipt(value)?;
+        if parsed.predicate == crate::evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE {
             range_ref = Some(parsed.receipt_ref.clone());
         }
         refs.push(parsed.receipt_ref);
@@ -972,7 +970,7 @@ fn pass_predicate_refs(values: &[IoValue]) -> Result<(Vec<String>, String)> {
 
 fn pass_verify_value(link: &PassLink, predicates: &PassPredicates) -> IoValue {
     let diagnostics = Vec::new();
-    let receipt = evidence_chain::ChainVerifyReceiptValueInput {
+    let receipt = crate::evidence_chain::ChainVerifyReceiptValueInput {
         decision: "pass",
         chain: &link.chain,
         anchor_ref: Some(&link.link_ref),
@@ -982,35 +980,39 @@ fn pass_verify_value(link: &PassLink, predicates: &PassPredicates) -> IoValue {
         payload_refs: &link.payload_refs,
         diagnostics: &diagnostics,
     };
-    evidence_chain::chain_verify_receipt_value_with_policy(&evidence_chain::ChainVerifyReceiptPolicyValueInput {
-        receipt,
-        predicate_receipt_refs: &predicates.refs,
-        fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
-    })
+    crate::evidence_chain::chain_verify_receipt_value_with_policy(
+        &crate::evidence_chain::ChainVerifyReceiptPolicyValueInput {
+            receipt,
+            predicate_receipt_refs: &predicates.refs,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+        },
+    )
 }
 
 fn pass_artifacts(link: &PassLink, predicates: &PassPredicates, suite_ref: &str) -> Result<PassArtifacts> {
     let policy_refs = vec![suite_ref.to_string()];
-    let anchor_value = evidence_chain::chain_anchor_value(&link.chain, &link.link_ref, &policy_refs, &link.producer);
+    let anchor_value =
+        crate::evidence_chain::chain_anchor_value(&link.chain, &link.link_ref, &policy_refs, &link.producer);
     let anchor_ref = canonical_hash(&anchor_value)?;
     let verify_value = pass_verify_value(link, predicates);
     let verify_ref = canonical_hash(&verify_value)?;
-    let checkpoint_value = evidence_chain::chain_checkpoint_value(&evidence_chain::ChainCheckpointInput {
-        chain: link.chain.clone(),
-        prior_checkpoint_ref: None,
-        anchor_link_ref: link.link_ref.clone(),
-        head_ref: link.link_ref.clone(),
-        verify_receipt_ref: verify_ref.clone(),
-        range_predicate_ref: predicates.range_ref.clone(),
-        policy_refs,
-        membership_refs: vec![suite_ref.to_string()],
-        producer: link.producer.clone(),
-        checks: vec![
-            evidence_chain::ChainCheck::pass("raft-control-plane-command"),
-            evidence_chain::ChainCheck::pass("verified-range"),
-            evidence_chain::ChainCheck::pass("checkpoint-freshness"),
-        ],
-    });
+    let checkpoint_value =
+        crate::evidence_chain::chain_checkpoint_value(&crate::evidence_chain::ChainCheckpointInput {
+            chain: link.chain.clone(),
+            prior_checkpoint_ref: None,
+            anchor_link_ref: link.link_ref.clone(),
+            head_ref: link.link_ref.clone(),
+            verify_receipt_ref: verify_ref.clone(),
+            range_predicate_ref: predicates.range_ref.clone(),
+            policy_refs,
+            membership_refs: vec![suite_ref.to_string()],
+            producer: link.producer.clone(),
+            checks: vec![
+                crate::evidence_chain::ChainCheck::pass("raft-control-plane-command"),
+                crate::evidence_chain::ChainCheck::pass("verified-range"),
+                crate::evidence_chain::ChainCheck::pass("checkpoint-freshness"),
+            ],
+        });
     let checkpoint_ref = canonical_hash(&checkpoint_value)?;
     Ok(PassArtifacts {
         anchor_ref,
@@ -1053,19 +1055,19 @@ struct EvidenceParts {
 }
 
 struct ParsedPredicates {
-    receipts: Vec<evidence_chain::ChainPredicateReceipt>,
+    receipts: Vec<crate::evidence_chain::ChainPredicateReceipt>,
     refs: Vec<String>,
 }
 
 fn parse_chain_evidence(value: &Value<IoValue>) -> Result<GateChainEvidence> {
     let parts = evidence_parts(value)?;
-    let link = evidence_chain::parse_chain_link(&parts.link_value)?;
+    let link = crate::evidence_chain::parse_chain_link(&parts.link_value)?;
     let link_ref = link.link_ref.clone();
-    let anchor = evidence_chain::parse_chain_anchor(&parts.anchor_value)?;
+    let anchor = crate::evidence_chain::parse_chain_anchor(&parts.anchor_value)?;
     if anchor.link_ref != link_ref || anchor.chain != link.chain {
         return Err(MoltenError::invalid_harness("gate chain anchor does not bind the gate chain link"));
     }
-    let checkpoint = evidence_chain::parse_chain_checkpoint(&parts.checkpoint_value)?;
+    let checkpoint = crate::evidence_chain::parse_chain_checkpoint(&parts.checkpoint_value)?;
     if checkpoint.chain != link.chain || checkpoint.anchor_link_ref != link_ref || checkpoint.head_ref != link_ref {
         return Err(MoltenError::invalid_harness("gate chain checkpoint does not bind the anchored chain head"));
     }
@@ -1123,7 +1125,7 @@ fn parsed_predicates(values: &[IoValue]) -> Result<ParsedPredicates> {
     let mut receipts = Vec::with_capacity(values.len());
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
-        let parsed = evidence_chain::parse_chain_predicate_receipt(value)?;
+        let parsed = crate::evidence_chain::parse_chain_predicate_receipt(value)?;
         refs.push(parsed.receipt_ref.clone());
         receipts.push(parsed);
     }
@@ -1131,12 +1133,15 @@ fn parsed_predicates(values: &[IoValue]) -> Result<ParsedPredicates> {
 }
 
 fn require_predicates(predicates: &ParsedPredicates, range_ref: &str, link_ref: &str, payload_ref: &str) -> Result<()> {
-    let range_predicate =
-        require_chain_predicate(&predicates.receipts, range_ref, evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE)?;
-    require_chain_predicate_kind(&predicates.receipts, evidence_chain::GENESIS_VALID_PREDICATE)?;
-    require_chain_predicate_kind(&predicates.receipts, evidence_chain::SEGMENT_NO_GAP_PREDICATE)?;
-    require_chain_predicate_kind(&predicates.receipts, evidence_chain::SEGMENT_NO_FORK_PREDICATE)?;
-    require_chain_predicate_kind(&predicates.receipts, evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE)?;
+    let range_predicate = require_chain_predicate(
+        &predicates.receipts,
+        range_ref,
+        crate::evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE,
+    )?;
+    require_chain_predicate_kind(&predicates.receipts, crate::evidence_chain::GENESIS_VALID_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, crate::evidence_chain::SEGMENT_NO_GAP_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, crate::evidence_chain::SEGMENT_NO_FORK_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, crate::evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE)?;
     if range_predicate.subject_refs != vec![link_ref.to_string()] {
         return Err(MoltenError::invalid_harness("gate chain range predicate subjects do not match anchored link"));
     }
@@ -1200,10 +1205,10 @@ fn validate_gate_chain_verify_receipt(
 }
 
 fn require_chain_predicate<'a>(
-    predicates: &'a [evidence_chain::ChainPredicateReceipt],
+    predicates: &'a [crate::evidence_chain::ChainPredicateReceipt],
     expected_ref: &str,
     expected_kind: &str,
-) -> Result<&'a evidence_chain::ChainPredicateReceipt> {
+) -> Result<&'a crate::evidence_chain::ChainPredicateReceipt> {
     let predicate = predicates
         .iter()
         .find(|predicate| predicate.receipt_ref == expected_ref)
@@ -1217,7 +1222,7 @@ fn require_chain_predicate<'a>(
 }
 
 fn require_chain_predicate_kind(
-    predicates: &[evidence_chain::ChainPredicateReceipt],
+    predicates: &[crate::evidence_chain::ChainPredicateReceipt],
     expected_kind: &str,
 ) -> Result<()> {
     if predicates
@@ -1235,8 +1240,8 @@ fn require_chain_predicate_kind(
 #[derive(Debug, Clone)]
 struct TurnJournalBuilder {
     actor_id: String,
-    chain: evidence_chain::ChainScope,
-    links: Vec<evidence_chain::ChainLink>,
+    chain: crate::evidence_chain::ChainScope,
+    links: Vec<crate::evidence_chain::ChainLink>,
     link_values: Vec<IoValue>,
     payload_refs: Vec<String>,
 }
@@ -1246,8 +1251,8 @@ struct LinkEnds<'a> {
     head_ref: &'a String,
 }
 
-fn build_turn_journals(report: &schema::HarnessReport) -> Result<TurnJournalEvidence> {
-    let suite = schema::parse_suite(&report.suite_value)?;
+fn build_turn_journals(report: &super::schema::HarnessReport) -> Result<TurnJournalEvidence> {
+    let suite = super::schema::parse_suite(&report.suite_value)?;
     if suite.steps.len() != report.observations.len() {
         return Err(MoltenError::invalid_harness("turn journal evidence requires one observation per suite step"));
     }
@@ -1255,7 +1260,7 @@ fn build_turn_journals(report: &schema::HarnessReport) -> Result<TurnJournalEvid
     for (position, observation) in report.observations.iter().enumerate() {
         let step = &suite.steps[position];
         let actor_id = step.primary_actor().to_string();
-        let computed_step_ref = canonical_hash(&schema::step_value(step))?;
+        let computed_step_ref = canonical_hash(&super::schema::step_value(step))?;
         if observation.step_ref != computed_step_ref {
             return Err(MoltenError::invalid_harness(format!(
                 "turn journal observation {} step ref does not match embedded suite step",
@@ -1264,14 +1269,21 @@ fn build_turn_journals(report: &schema::HarnessReport) -> Result<TurnJournalEvid
         }
         let builder = builders.entry(actor_id.clone()).or_insert_with(|| TurnJournalBuilder {
             actor_id: actor_id.clone(),
-            chain: evidence_chain::ChainScope::new("harness-turn-journal", actor_id.clone(), report.report_ref.clone()),
+            chain: crate::evidence_chain::ChainScope::new(
+                "harness-turn-journal",
+                actor_id.clone(),
+                report.report_ref.clone(),
+            ),
             links: Vec::new(),
             link_values: Vec::new(),
             payload_refs: Vec::new(),
         });
         let observation_ref = observation.observation_ref.clone();
-        let payload =
-            evidence_chain::ChainPayload::new("turn-observation", observation_ref.clone(), HARNESS_OBSERVATION_SCHEMA);
+        let payload = crate::evidence_chain::ChainPayload::new(
+            "turn-observation",
+            observation_ref.clone(),
+            HARNESS_OBSERVATION_SCHEMA,
+        );
         let context_refs = turn_journal_context_refs(report, observation, &actor_id)?;
         let trellis_input_ref = canonical_hash(&record("turn-journal-input", vec![
             string(&actor_id),
@@ -1284,9 +1296,9 @@ fn build_turn_journals(report: &schema::HarnessReport) -> Result<TurnJournalEvid
         ]))?;
         let producer = turn_journal_producer()?;
         let input = if let Some(previous) = builder.links.last() {
-            evidence_chain::ChainLinkInput::append(previous, payload, context_refs, producer, trellis_input_ref)
+            crate::evidence_chain::ChainLinkInput::append(previous, payload, context_refs, producer, trellis_input_ref)
         } else {
-            evidence_chain::ChainLinkInput::genesis(
+            crate::evidence_chain::ChainLinkInput::genesis(
                 builder.chain.clone(),
                 payload,
                 context_refs,
@@ -1294,8 +1306,8 @@ fn build_turn_journals(report: &schema::HarnessReport) -> Result<TurnJournalEvid
                 trellis_input_ref,
             )
         };
-        let link_value = evidence_chain::chain_link_value(&input);
-        let link = evidence_chain::parse_chain_link(&link_value)?;
+        let link_value = crate::evidence_chain::chain_link_value(&input);
+        let link = crate::evidence_chain::parse_chain_link(&link_value)?;
         builder.payload_refs.push(observation_ref);
         builder.link_values.push(link_value);
         builder.links.push(link);
@@ -1315,7 +1327,7 @@ fn build_turn_journals(report: &schema::HarnessReport) -> Result<TurnJournalEvid
 
 fn build_turn_journal_chain(
     builder: TurnJournalBuilder,
-    report: &schema::HarnessReport,
+    report: &super::schema::HarnessReport,
 ) -> Result<TurnJournalChainEvidence> {
     let link_refs = builder.links.iter().map(|link| link.link_ref.clone()).collect::<Vec<_>>();
     let ends = link_ends(&link_refs)?;
@@ -1347,7 +1359,7 @@ fn link_ends(link_refs: &[String]) -> Result<LinkEnds<'_>> {
     Ok(LinkEnds { anchor_ref, head_ref })
 }
 
-fn actor_refs(report: &schema::HarnessReport, actor_id: &str) -> Result<Vec<String>> {
+fn actor_refs(report: &super::schema::HarnessReport, actor_id: &str) -> Result<Vec<String>> {
     Ok(vec![
         report.report_ref.clone(),
         report.suite_ref.clone(),
@@ -1362,37 +1374,37 @@ fn predicate_values(
     ends: &LinkEnds<'_>,
 ) -> Vec<IoValue> {
     let segment_checks = vec![
-        evidence_chain::ChainCheck::pass("segment-contiguity"),
-        evidence_chain::ChainCheck::pass("canonical-link-order"),
+        crate::evidence_chain::ChainCheck::pass("segment-contiguity"),
+        crate::evidence_chain::ChainCheck::pass("canonical-link-order"),
     ];
     let fork_checks = vec![
-        evidence_chain::ChainCheck::pass("fork-policy-profile"),
-        evidence_chain::ChainCheck::pass("fork-evidence-binding"),
+        crate::evidence_chain::ChainCheck::pass("fork-policy-profile"),
+        crate::evidence_chain::ChainCheck::pass("fork-evidence-binding"),
     ];
     let anchor_subject_refs = vec![ends.anchor_ref.clone(), ends.head_ref.clone()];
     let anchor_checks = vec![
-        evidence_chain::ChainCheck::pass("anchor-descent"),
-        evidence_chain::ChainCheck::pass("head-binding"),
+        crate::evidence_chain::ChainCheck::pass("anchor-descent"),
+        crate::evidence_chain::ChainCheck::pass("head-binding"),
     ];
     vec![
-        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
-            predicate: evidence_chain::SEGMENT_NO_GAP_PREDICATE,
+        crate::evidence_chain::chain_predicate_receipt_value(&crate::evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: crate::evidence_chain::SEGMENT_NO_GAP_PREDICATE,
             decision: "pass",
             subject_refs: link_refs,
             input_refs: payload_refs,
             context_refs,
             checks: &segment_checks,
         }),
-        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
-            predicate: evidence_chain::SEGMENT_NO_FORK_PREDICATE,
+        crate::evidence_chain::chain_predicate_receipt_value(&crate::evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: crate::evidence_chain::SEGMENT_NO_FORK_PREDICATE,
             decision: "pass",
             subject_refs: std::slice::from_ref(ends.head_ref),
             input_refs: link_refs,
             context_refs,
             checks: &fork_checks,
         }),
-        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
-            predicate: evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE,
+        crate::evidence_chain::chain_predicate_receipt_value(&crate::evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: crate::evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE,
             decision: "pass",
             subject_refs: &anchor_subject_refs,
             input_refs: link_refs,
@@ -1405,7 +1417,7 @@ fn predicate_values(
 fn predicate_refs(values: &[IoValue]) -> Result<Vec<String>> {
     Ok(values
         .iter()
-        .map(evidence_chain::parse_chain_predicate_receipt)
+        .map(crate::evidence_chain::parse_chain_predicate_receipt)
         .collect::<Result<Vec<_>>>()?
         .into_iter()
         .map(|receipt| receipt.receipt_ref)
@@ -1413,14 +1425,14 @@ fn predicate_refs(values: &[IoValue]) -> Result<Vec<String>> {
 }
 
 fn verify_value(
-    chain: &evidence_chain::ChainScope,
+    chain: &crate::evidence_chain::ChainScope,
     link_refs: &[String],
     payload_refs: &[String],
     ends: &LinkEnds<'_>,
     predicate_receipt_refs: &[String],
 ) -> IoValue {
     let verify_diagnostics = Vec::new();
-    let verify_receipt = evidence_chain::ChainVerifyReceiptValueInput {
+    let verify_receipt = crate::evidence_chain::ChainVerifyReceiptValueInput {
         decision: "pass",
         chain,
         anchor_ref: Some(ends.anchor_ref.as_str()),
@@ -1430,29 +1442,31 @@ fn verify_value(
         payload_refs,
         diagnostics: &verify_diagnostics,
     };
-    evidence_chain::chain_verify_receipt_value_with_policy(&evidence_chain::ChainVerifyReceiptPolicyValueInput {
-        receipt: verify_receipt,
-        predicate_receipt_refs,
-        fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
-    })
+    crate::evidence_chain::chain_verify_receipt_value_with_policy(
+        &crate::evidence_chain::ChainVerifyReceiptPolicyValueInput {
+            receipt: verify_receipt,
+            predicate_receipt_refs,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+        },
+    )
 }
 
 fn turn_journal_context_refs(
-    report: &schema::HarnessReport,
-    observation: &schema::HarnessObservation,
+    report: &super::schema::HarnessReport,
+    observation: &super::schema::HarnessObservation,
     actor_id: &str,
-) -> Result<Vec<evidence_chain::ChainContextRef>> {
+) -> Result<Vec<crate::evidence_chain::ChainContextRef>> {
     let mut refs = vec![
-        evidence_chain::ChainContextRef::new("report", report.report_ref.clone()),
-        evidence_chain::ChainContextRef::new("suite", report.suite_ref.clone()),
-        evidence_chain::ChainContextRef::new(
+        crate::evidence_chain::ChainContextRef::new("report", report.report_ref.clone()),
+        crate::evidence_chain::ChainContextRef::new("suite", report.suite_ref.clone()),
+        crate::evidence_chain::ChainContextRef::new(
             "actor",
             canonical_hash(&record("turn-journal-actor", vec![string(actor_id)]))?,
         ),
-        evidence_chain::ChainContextRef::new("observation", observation.observation_ref.clone()),
-        evidence_chain::ChainContextRef::new("step", observation.step_ref.clone()),
-        evidence_chain::ChainContextRef::new("before-state", observation.before_state_hash.clone()),
-        evidence_chain::ChainContextRef::new("after-state", observation.after_state_hash.clone()),
+        crate::evidence_chain::ChainContextRef::new("observation", observation.observation_ref.clone()),
+        crate::evidence_chain::ChainContextRef::new("step", observation.step_ref.clone()),
+        crate::evidence_chain::ChainContextRef::new("before-state", observation.before_state_hash.clone()),
+        crate::evidence_chain::ChainContextRef::new("after-state", observation.after_state_hash.clone()),
     ];
     for (event, event_ref) in observation.events.iter().zip(observation.event_refs.iter()) {
         let computed_event_ref = canonical_hash(event)?;
@@ -1461,18 +1475,18 @@ fn turn_journal_context_refs(
                 "turn journal observation event refs do not match canonical events",
             ));
         }
-        let label = match schema::event_boundary(event) {
-            schema::EventBoundary::PolicyDecision => "admission",
-            schema::EventBoundary::EffectRequest | schema::EventBoundary::EffectResponse => "effect-log",
+        let label = match super::schema::event_boundary(event) {
+            super::schema::EventBoundary::PolicyDecision => "admission",
+            super::schema::EventBoundary::EffectRequest | super::schema::EventBoundary::EffectResponse => "effect-log",
             _ => "trace",
         };
-        refs.push(evidence_chain::ChainContextRef::new(label, event_ref.clone()));
+        refs.push(crate::evidence_chain::ChainContextRef::new(label, event_ref.clone()));
     }
     Ok(refs)
 }
 
-fn turn_journal_producer() -> Result<evidence_chain::ChainProducer> {
-    Ok(evidence_chain::ChainProducer::new(
+fn turn_journal_producer() -> Result<crate::evidence_chain::ChainProducer> {
+    Ok(crate::evidence_chain::ChainProducer::new(
         "molten-turn-journal",
         canonical_hash(&record("turn-journal-producer-key", vec![string("molten")]))?,
     ))
@@ -1596,7 +1610,7 @@ fn parse_turn_journal(value: &IoValue, report_ref: &str, suite_ref: &str) -> Res
 }
 
 struct ParsedTurnJournalLinks {
-    links: Vec<evidence_chain::ChainLink>,
+    links: Vec<crate::evidence_chain::ChainLink>,
     link_refs: Vec<String>,
     payload_refs: Vec<String>,
 }
@@ -1614,7 +1628,7 @@ fn parse_turn_journal_links(
     let mut link_refs = Vec::with_capacity(link_values.len());
     let mut payload_refs = Vec::with_capacity(link_values.len());
     for (position, link_value) in link_values.iter().enumerate() {
-        let link = evidence_chain::parse_chain_link(link_value)?;
+        let link = crate::evidence_chain::parse_chain_link(link_value)?;
         validate_turn_journal_link(TurnJournalLinkValidation {
             link: &link,
             position,
@@ -1635,7 +1649,7 @@ fn parse_turn_journal_links(
 }
 
 struct TurnJournalLinkValidation<'a> {
-    link: &'a evidence_chain::ChainLink,
+    link: &'a crate::evidence_chain::ChainLink,
     position: usize,
     link_refs: &'a [String],
     actor_id: &'a str,
@@ -1667,7 +1681,7 @@ fn validate_turn_journal_link(input: TurnJournalLinkValidation<'_>) -> Result<()
 }
 
 fn validate_turn_journal_previous_ref(
-    link: &evidence_chain::ChainLink,
+    link: &crate::evidence_chain::ChainLink,
     position: usize,
     link_refs: &[String],
 ) -> Result<()> {
@@ -1683,20 +1697,22 @@ fn validate_turn_journal_previous_ref(
     Ok(())
 }
 
-fn parse_turn_journal_predicates(predicate_values: &[IoValue]) -> Result<Vec<evidence_chain::ChainPredicateReceipt>> {
+fn parse_turn_journal_predicates(
+    predicate_values: &[IoValue],
+) -> Result<Vec<crate::evidence_chain::ChainPredicateReceipt>> {
     let receipts = predicate_values
         .iter()
-        .map(evidence_chain::parse_chain_predicate_receipt)
+        .map(crate::evidence_chain::parse_chain_predicate_receipt)
         .collect::<Result<Vec<_>>>()?;
-    require_chain_predicate_kind(&receipts, evidence_chain::SEGMENT_NO_GAP_PREDICATE)?;
-    require_chain_predicate_kind(&receipts, evidence_chain::SEGMENT_NO_FORK_PREDICATE)?;
-    require_chain_predicate_kind(&receipts, evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE)?;
+    require_chain_predicate_kind(&receipts, crate::evidence_chain::SEGMENT_NO_GAP_PREDICATE)?;
+    require_chain_predicate_kind(&receipts, crate::evidence_chain::SEGMENT_NO_FORK_PREDICATE)?;
+    require_chain_predicate_kind(&receipts, crate::evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE)?;
     Ok(receipts)
 }
 
 fn validate_turn_journal_verify_receipt(
     value: &IoValue,
-    chain: &evidence_chain::ChainScope,
+    chain: &crate::evidence_chain::ChainScope,
     link_refs: &[String],
     payload_refs: &[String],
     predicate_receipt_refs: &[String],
@@ -1742,7 +1758,11 @@ fn validate_turn_journal_verify_receipt(
     Ok(())
 }
 
-fn require_context_ref(context_refs: &[evidence_chain::ChainContextRef], label: &str, expected: &str) -> Result<()> {
+fn require_context_ref(
+    context_refs: &[crate::evidence_chain::ChainContextRef],
+    label: &str,
+    expected: &str,
+) -> Result<()> {
     if context_refs.iter().any(|context| context.label == label && context.artifact_ref == expected) {
         Ok(())
     } else {
@@ -1750,7 +1770,7 @@ fn require_context_ref(context_refs: &[evidence_chain::ChainContextRef], label: 
     }
 }
 
-fn require_context_ref_kind(context_refs: &[evidence_chain::ChainContextRef], label: &str) -> Result<()> {
+fn require_context_ref_kind(context_refs: &[crate::evidence_chain::ChainContextRef], label: &str) -> Result<()> {
     if context_refs.iter().any(|context| context.label == label) {
         Ok(())
     } else {
@@ -1814,8 +1834,8 @@ fn parse_validation(value: &Value<IoValue>) -> Result<ValidationReceipt> {
     let suite_ref = required_record_hash(&validation[2], "suite", "gate validation suite ref")?;
     let final_state_hash = required_record_hash(&validation[3], "final-state", "gate validation final state hash")?;
     let observations = required_record_u64(&validation[4], "observations", "gate validation observations")?;
-    schema::parse_actor_registry(&value_to_iovalue(&validation[5]))?;
-    let budget = schema::parse_budget(&value_to_iovalue(&validation[6]))?;
+    super::schema::parse_actor_registry(&value_to_iovalue(&validation[5]))?;
+    let budget = super::schema::parse_budget(&value_to_iovalue(&validation[6]))?;
     if observations != budget.usage.steps {
         return Err(MoltenError::invalid_harness(
             "gate receipt validation observation count does not match budget step usage",
@@ -1953,7 +1973,7 @@ fn require_core_refs(input: &CoreRefs<'_>) -> Result<()> {
 }
 
 fn require_link_context(
-    link: &evidence_chain::ChainLink,
+    link: &crate::evidence_chain::ChainLink,
     report_ref: &str,
     suite_ref: &str,
     final_state_hash: &str,
@@ -2082,10 +2102,10 @@ fn required_record_u64(value: &Value<IoValue>, label: &str, field: &str) -> Resu
     required_u64(&record[0], field)
 }
 
-fn required_chain_scope(value: &Value<IoValue>) -> Result<evidence_chain::ChainScope> {
+fn required_chain_scope(value: &Value<IoValue>) -> Result<crate::evidence_chain::ChainScope> {
     let value = value_to_iovalue(value);
     let chain = simple_record(&value, "chain", 3)?;
-    Ok(evidence_chain::ChainScope::new(
+    Ok(crate::evidence_chain::ChainScope::new(
         required_record_string(&chain[0], "scope", "chain scope")?,
         required_record_string(&chain[1], "id", "chain id")?,
         required_record_string(&chain[2], "epoch", "chain epoch")?,
