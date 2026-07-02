@@ -1,10 +1,10 @@
 type IoValue = preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
-use preserves::ValueImpl;
+type MoltenError = crate::error::MoltenError;
+type Record<T> = preserves::Record<T>;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
-use crate::error::MoltenError;
-use crate::error::Result;
+use preserves::ValueImpl;
 
 fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)

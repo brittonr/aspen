@@ -1,11 +1,10 @@
-use std::cmp::Ordering;
-use std::fmt;
-
+type AdmissionDecision = super::AdmissionDecision;
+type AdmissionRequest = super::AdmissionRequest;
+type Formatter<'a> = std::fmt::Formatter<'a>;
+type FmtResult = std::fmt::Result;
 type IoValue = preserves::IOValue;
-
-use super::AdmissionDecision;
-use super::AdmissionRequest;
-use crate::error::Result;
+type Ordering = std::cmp::Ordering;
+type Result<T> = crate::error::Result<T>;
 
 fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
@@ -70,8 +69,8 @@ impl RuntimeValue {
     }
 }
 
-impl fmt::Debug for RuntimeValue {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Debug for RuntimeValue {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("RuntimeValue")
             .field("value", &self.value)

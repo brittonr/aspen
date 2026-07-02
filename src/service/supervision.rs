@@ -1,10 +1,9 @@
-use std::collections::BTreeSet;
-
+type BTreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
-use preserves::Value;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::preserves_rail;
 use crate::service_records;
 

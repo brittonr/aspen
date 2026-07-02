@@ -1,10 +1,8 @@
-use std::collections::BTreeSet;
-
+type BTreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
-use preserves::Value;
-
-use crate::error::MoltenError;
-use crate::error::Result;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
 const PEER_AGREEMENT_SCHEMA: &str = crate::preserves_rail::PEER_AGREEMENT_SCHEMA;
 const PEER_BOOTSTRAP_INPUT_SCHEMA: &str = crate::preserves_rail::PEER_BOOTSTRAP_INPUT_SCHEMA;
