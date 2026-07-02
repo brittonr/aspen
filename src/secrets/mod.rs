@@ -1,5 +1,3 @@
-use crate::retention;
-
 type BtreeSet<T> = std::collections::BTreeSet<T>;
 type Cow<'a, B> = std::borrow::Cow<'a, B>;
 type IoValue = preserves::IOValue;
@@ -904,16 +902,18 @@ fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<Strin
     let mut has_matching_pass = false;
     let mut has_matching_tombstone = false;
     for receipt_value in &input.retention_receipts {
-        match retention::parse_retention_receipt(receipt_value) {
+        match crate::retention::parse_retention_receipt(receipt_value) {
             Ok(receipt) => {
                 actual_refs.insert(receipt.receipt_ref.clone());
                 let is_cleanup_action = matches!(
                     receipt.action.as_str(),
-                    retention::ACTION_DELETE | retention::ACTION_TOMBSTONE | retention::ACTION_REDACT
+                    crate::retention::ACTION_DELETE
+                        | crate::retention::ACTION_TOMBSTONE
+                        | crate::retention::ACTION_REDACT
                 );
                 if receipt.decision == "pass"
                     && receipt.object_ref == input.secret_ref
-                    && receipt.retention_class == retention::CLASS_PRIVATE_SECRET_REF
+                    && receipt.retention_class == crate::retention::CLASS_PRIVATE_SECRET_REF
                     && is_cleanup_action
                 {
                     has_matching_pass = true;
@@ -1290,7 +1290,7 @@ struct FixtureReceipts {
 }
 
 struct FixtureTail {
-    retention: retention::RetentionEvaluation,
+    retention: crate::retention::RetentionEvaluation,
     cleanup: SecretCleanupReceipt,
     private_bundle: PrivateBundleProfile,
 }
@@ -1454,14 +1454,14 @@ fn fixture_receipts(core: &FixtureCore) -> Result<FixtureReceipts> {
     })
 }
 
-fn fixture_retention(core: &FixtureCore) -> Result<retention::RetentionEvaluation> {
+fn fixture_retention(core: &FixtureCore) -> Result<crate::retention::RetentionEvaluation> {
     let retention_root = secrets_fixture_retention_root(&core.secret.secret_ref)?;
-    retention::evaluate_retention(retention::RetentionEvaluationInput {
+    crate::retention::evaluate_retention(crate::retention::RetentionEvaluationInput {
         root: &retention_root,
         object_ref: &core.secret.secret_ref,
         object_kind: "secret-ref",
-        retention_class: retention::CLASS_PRIVATE_SECRET_REF,
-        action: retention::ACTION_REDACT,
+        retention_class: crate::retention::CLASS_PRIVATE_SECRET_REF,
+        action: crate::retention::ACTION_REDACT,
         requester_ref: &fixture_ref("requester"),
         is_reference_index_complete: true,
         retained_refs: &[],
@@ -1473,7 +1473,10 @@ fn fixture_retention(core: &FixtureCore) -> Result<retention::RetentionEvaluatio
     })
 }
 
-fn fixture_cleanup(core: &FixtureCore, retention: &retention::RetentionEvaluation) -> Result<SecretCleanupReceipt> {
+fn fixture_cleanup(
+    core: &FixtureCore,
+    retention: &crate::retention::RetentionEvaluation,
+) -> Result<SecretCleanupReceipt> {
     let tombstone_ref = retention
         .receipt
         .tombstone_ref
