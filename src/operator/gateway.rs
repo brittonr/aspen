@@ -663,14 +663,19 @@ fn pass_fail(is_pass: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
     use super::*;
-    use crate::chunk_store;
-    use crate::preserves_rail::content_ref_from_bytes;
-    use crate::preserves_rail::to_text;
+
+    type AtomicU64 = std::sync::atomic::AtomicU64;
+    type Ordering = std::sync::atomic::Ordering;
+    type PathBuf = std::path::PathBuf;
+
+    fn content_ref_from_bytes(bytes: &[u8]) -> String {
+        crate::preserves_rail::content_ref_from_bytes(bytes)
+    }
+
+    fn to_text(value: &IoValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     const CHUNK_SIZE: u64 = 4;
     const RANGE_OFFSET: u64 = 2;
@@ -710,9 +715,9 @@ mod tests {
     fn manifest_fixture() -> (PathBuf, ChunkManifest, Map<String, Vec<u8>>) {
         let root = temp_root("range");
         let body = b"abcdefghi";
-        let put = chunk_store::put_bytes(&root, "artifact", body, CHUNK_SIZE).expect("put");
+        let put = crate::chunk_store::put_bytes(&root, "artifact", body, CHUNK_SIZE).expect("put");
         let manifest =
-            chunk_store::parse_manifest_value(&put.manifest_value, Some(&put.manifest_ref)).expect("manifest");
+            crate::chunk_store::parse_manifest_value(&put.manifest_value, Some(&put.manifest_ref)).expect("manifest");
         let chunk_size = usize::try_from(CHUNK_SIZE).expect("fixture chunk size fits usize");
         let chunks = manifest
             .chunks
