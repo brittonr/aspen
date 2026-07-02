@@ -2557,12 +2557,13 @@ mod tests {
     use hegel::generators;
 
     use super::*;
-    use crate::catalog;
-    use crate::catalog::CatalogListInput;
-    use crate::catalog::CatalogVisibilityInput;
-    use crate::catalog_mcp;
-    use crate::ledger;
-    use crate::preserves_rail::to_text;
+
+    type CatalogListInput = crate::catalog::CatalogListInput;
+    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+
+    fn to_text(value: &IoValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     fn test_ref(label: &str) -> String {
         canonical_hash(&record("protocol-test-ref", vec![string(label)])).expect("test ref")
@@ -2871,32 +2872,32 @@ mod tests {
     fn ledger_catalog_and_mcp_classify_protocol_records() {
         let lifecycle = request_response_lifecycle().expect("lifecycle");
         let gate = gate_protocol_session_lifecycle(gate_input(&lifecycle)).expect("protocol session gate");
-        assert_eq!(ledger::artifact_kind(&lifecycle.manifest_value), "protocol-manifest");
-        assert_eq!(ledger::artifact_kind(&lifecycle.install.value), "protocol-install-receipt");
-        assert_eq!(ledger::artifact_kind(&gate.value), "protocol-session-gate-receipt");
-        assert_eq!(ledger::artifact_kind(&lifecycle.install.endpoints[0].value), "protocol-endpoint");
-        assert_eq!(ledger::artifact_kind(&lifecycle.initial_states[0].value), "protocol-session-state");
+        assert_eq!(crate::ledger::artifact_kind(&lifecycle.manifest_value), "protocol-manifest");
+        assert_eq!(crate::ledger::artifact_kind(&lifecycle.install.value), "protocol-install-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&gate.value), "protocol-session-gate-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&lifecycle.install.endpoints[0].value), "protocol-endpoint");
+        assert_eq!(crate::ledger::artifact_kind(&lifecycle.initial_states[0].value), "protocol-session-state");
         assert_eq!(
-            ledger::artifact_kind(&lifecycle.operations[0].message.as_ref().expect("message").value),
+            crate::ledger::artifact_kind(&lifecycle.operations[0].message.as_ref().expect("message").value),
             "protocol-message"
         );
-        assert_eq!(ledger::artifact_kind(&lifecycle.operations[0].receipt.value), "protocol-operation-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&lifecycle.operations[0].receipt.value), "protocol-operation-receipt");
         let dir = temp_dir("catalog");
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
-        let imported = ledger::import_artifact(&ledger_root, &lifecycle.install.value).expect("ledger import");
+        let imported = crate::ledger::import_artifact(&ledger_root, &lifecycle.install.value).expect("ledger import");
         assert_eq!(imported.artifact_kind, "protocol-install-receipt");
-        let listed = catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
             kind: Some("protocol-install-receipt".to_string()),
             visibility: CatalogVisibilityInput::default(),
         })
         .expect("catalog list");
         assert_eq!(listed.items.len(), 1);
-        let request = catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string(
+        let request = crate::catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string(
             "protocol-install-receipt",
         )])])
         .expect("mcp request");
-        let mcp = catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("mcp call");
+        let mcp = crate::catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("mcp call");
         assert_eq!(mcp.decision, "pass");
         assert!(to_text(&mcp.response_value).expect("render mcp").contains("protocol-install-receipt"));
     }
