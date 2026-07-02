@@ -7512,7 +7512,7 @@ struct EnqueueOutcome {
 fn apply_ingress_enqueue(state_root: &Path, envelope: &ControlIngressEnvelope) -> Result<EnqueueOutcome> {
     let idempotency_evidence_refs = ingress_idempotency_evidence_refs(envelope);
     let scope_ref = crate::delivery_idempotency::remote_topic_scope_ref(&envelope.topic, &envelope.to_node)?;
-    let delivery = crate::delivery_idempotency::check_delivery(crate::delivery_idempotency::DeliveryCheckInput {
+    let delivery = crate::delivery_idempotency::check(crate::delivery_idempotency::CheckInput {
         root: &state_root.join(CONTROL_IDEMPOTENCY_DIR),
         scope_profile: crate::delivery_idempotency::SCOPE_REMOTE_TOPIC,
         scope_ref: &scope_ref,

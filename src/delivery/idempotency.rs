@@ -27,11 +27,11 @@ const STORE_RECEIPTS: redb::TableDefinition<&str, &[u8]> =
     redb::TableDefinition::new("delivery_idempotency_receipts_v1");
 const STORE_PINS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("delivery_retention_pins_v1");
 
-const MAX_DELIVERY_REFS: usize = 4096;
-const MAX_DELIVERY_DIAGNOSTICS: usize = 128;
+const MAX_REFS: usize = 4096;
+const MAX_DIAGNOSTICS: usize = 128;
 const MAX_SCOPE_NAME_LEN: usize = 256;
-const _: () = assert!(MAX_DELIVERY_REFS <= 100_000);
-const _: () = assert!(MAX_DELIVERY_DIAGNOSTICS <= 10_000);
+const _: () = assert!(MAX_REFS <= 100_000);
+const _: () = assert!(MAX_DIAGNOSTICS <= 10_000);
 const _: () = assert!(MAX_SCOPE_NAME_LEN <= 4096);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,7 +65,7 @@ pub struct OperationId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeliveryWindow {
+pub struct Window {
     pub window_ref: String,
     pub scope_ref: String,
     pub scope_profile: String,
@@ -93,7 +93,7 @@ pub struct DedupEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IdempotencyReceipt {
+pub struct Receipt {
     pub receipt_ref: String,
     pub decision: String,
     pub operation_ref: String,
@@ -107,17 +107,17 @@ pub struct IdempotencyReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeliveryDecision {
+pub struct Decision {
     pub operation: OperationId,
-    pub window: DeliveryWindow,
-    pub receipt: IdempotencyReceipt,
+    pub window: Window,
+    pub receipt: Receipt,
     pub entry: Option<DedupEntry>,
     pub should_commit_side_effect: bool,
     pub prior_semantic_result_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeliveryCheckInput<'a> {
+pub struct CheckInput<'a> {
     pub root: &'a std::path::Path,
     pub scope_profile: &'a str,
     pub scope_ref: &'a str,
@@ -222,7 +222,7 @@ pub fn parse_operation_id(value: &IoValue) -> Result<OperationId> {
     })
 }
 
-pub fn delivery_window_value(
+pub fn window_value(
     scope_profile: &str,
     scope_ref: &str,
     next_sequence: u64,
@@ -246,7 +246,7 @@ pub fn delivery_window_value(
     ]))
 }
 
-pub fn parse_delivery_window(value: &IoValue) -> Result<DeliveryWindow> {
+pub fn parse_window(value: &IoValue) -> Result<Window> {
     let fields = value
         .collect_simple_record("delivery-window-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <delivery-window-v1 ...>"))?;
@@ -261,7 +261,7 @@ pub fn parse_delivery_window(value: &IoValue) -> Result<DeliveryWindow> {
         return Err(MoltenError::invalid_harness("invalid parsed delivery window sequence bounds"));
     }
     require_check(&parse_checks(&fields[6])?, "dedup-window-scoped", "delivery window")?;
-    Ok(DeliveryWindow {
+    Ok(Window {
         window_ref: crate::preserves_rail::canonical_hash(value)?,
         scope_ref,
         scope_profile,
@@ -272,7 +272,7 @@ pub fn parse_delivery_window(value: &IoValue) -> Result<DeliveryWindow> {
     })
 }
 
-pub fn check_delivery(input: DeliveryCheckInput<'_>) -> Result<DeliveryDecision> {
+pub fn check(input: CheckInput<'_>) -> Result<Decision> {
     validate_scope_profile(input.scope_profile)?;
     require_ref(input.scope_ref, "delivery scope ref")?;
     validate_refs(input.policy_refs, "delivery policy ref")?;
@@ -316,11 +316,7 @@ pub fn read_idempotency_receipt(root: &std::path::Path, receipt_ref: &str) -> Re
     crate::preserves_rail::parse_canonical_bytes(bytes.value())
 }
 
-pub fn retry_receipt_value(
-    operation: &OperationId,
-    window: &DeliveryWindow,
-    diagnostics: &[String],
-) -> Result<IoValue> {
+pub fn retry_receipt_value(operation: &OperationId, window: &Window, diagnostics: &[String]) -> Result<IoValue> {
     validate_diagnostics(diagnostics)?;
     Ok(record("retry-receipt-v1", vec![
         string(crate::preserves_rail::DELIVERY_RETRY_RECEIPT_SCHEMA),
@@ -333,7 +329,7 @@ pub fn retry_receipt_value(
     ]))
 }
 
-pub fn parse_idempotency_receipt(value: &IoValue) -> Result<IdempotencyReceipt> {
+pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     let fields = value
         .collect_simple_record("delivery-idempotency-receipt-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <delivery-idempotency-receipt-v1 ...>"))?;
@@ -347,7 +343,7 @@ pub fn parse_idempotency_receipt(value: &IoValue) -> Result<IdempotencyReceipt> 
     let side_effect = record_string(&fields[7], "side-effect")?;
     validate_side_effect(&side_effect)?;
     require_check(&parse_checks(&fields[9])?, "dedup-before-commit", "delivery idempotency receipt")?;
-    Ok(IdempotencyReceipt {
+    Ok(Receipt {
         receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         operation_ref: record_ref(&fields[2], "operation")?,
@@ -384,7 +380,7 @@ pub fn parse_dedup_entry(value: &IoValue) -> Result<DedupEntry> {
     })
 }
 
-pub fn delivery_summary(value: &IoValue) -> Result<String> {
+pub fn summary(value: &IoValue) -> Result<String> {
     if let Ok(operation) = parse_operation_id(value) {
         return Ok(format!(
             "delivery operation ref={} scope={} producer={} consumer={} sequence={} intent={} payload={}",
@@ -397,7 +393,7 @@ pub fn delivery_summary(value: &IoValue) -> Result<String> {
             operation.payload_ref
         ));
     }
-    if let Ok(window) = parse_delivery_window(value) {
+    if let Ok(window) = parse_window(value) {
         return Ok(format!(
             "delivery window ref={} scope={} profile={} next_sequence={} lowest_retained={} retention_refs={}",
             window.window_ref,
@@ -419,7 +415,7 @@ pub fn delivery_summary(value: &IoValue) -> Result<String> {
             entry.evidence_refs.len()
         ));
     }
-    if let Ok(receipt) = parse_idempotency_receipt(value) {
+    if let Ok(receipt) = parse_receipt(value) {
         return Ok(format!(
             "delivery idempotency receipt ref={} decision={} operation={} scope={} side_effect={} diagnostics={}",
             receipt.receipt_ref,
@@ -450,17 +446,17 @@ pub fn delivery_summary(value: &IoValue) -> Result<String> {
 }
 
 fn first_decision(
-    input: DeliveryCheckInput<'_>,
+    input: CheckInput<'_>,
     db: &redb::Database,
     operation: OperationId,
-    window: DeliveryWindow,
+    window: Window,
     dedup_key: String,
-) -> Result<DeliveryDecision> {
+) -> Result<Decision> {
     let next_sequence = operation
         .sequence
         .checked_add(1)
         .ok_or_else(|| MoltenError::invalid_harness("delivery sequence overflow"))?;
-    let updated_window = parse_delivery_window(&delivery_window_value(
+    let updated_window = parse_window(&window_value(
         input.scope_profile,
         input.scope_ref,
         next_sequence,
@@ -482,7 +478,7 @@ fn first_decision(
             ("retention-pinned", "pass"),
         ],
     })?;
-    let receipt = parse_idempotency_receipt(&receipt_value)?;
+    let receipt = parse_receipt(&receipt_value)?;
     let entry_value = dedup_entry_value(DedupEntryValueInput {
         dedup_key: &dedup_key,
         operation: &operation,
@@ -492,7 +488,7 @@ fn first_decision(
     })?;
     let entry = parse_dedup_entry(&entry_value)?;
     store_first_decision(db, &updated_window, &entry, &receipt)?;
-    Ok(DeliveryDecision {
+    Ok(Decision {
         operation,
         window: updated_window,
         receipt,
@@ -503,12 +499,12 @@ fn first_decision(
 }
 
 fn duplicate_or_conflict_decision(
-    input: DeliveryCheckInput<'_>,
+    input: CheckInput<'_>,
     db: &redb::Database,
     operation: OperationId,
-    window: DeliveryWindow,
+    window: Window,
     entry: DedupEntry,
-) -> Result<DeliveryDecision> {
+) -> Result<Decision> {
     let has_same_operation = entry.operation_ref == operation.operation_ref;
     let has_same_payload = entry.payload_ref == operation.payload_ref;
     let has_same_evidence = entry.evidence_refs == input.evidence_refs;
@@ -539,9 +535,9 @@ fn duplicate_or_conflict_decision(
             ("conflict-denies-before-side-effects", if decision == "conflict" { "pass" } else { "n/a" }),
         ],
     })?;
-    let receipt = parse_idempotency_receipt(&receipt_value)?;
+    let receipt = parse_receipt(&receipt_value)?;
     store_receipt(db, &receipt)?;
-    Ok(DeliveryDecision {
+    Ok(Decision {
         operation,
         window,
         receipt,
@@ -552,11 +548,11 @@ fn duplicate_or_conflict_decision(
 }
 
 fn stale_decision(
-    input: DeliveryCheckInput<'_>,
+    input: CheckInput<'_>,
     db: &redb::Database,
     operation: OperationId,
-    window: DeliveryWindow,
-) -> Result<DeliveryDecision> {
+    window: Window,
+) -> Result<Decision> {
     let diagnostics = vec![format!(
         "delivery sequence {} is stale for window next {}",
         input.sequence, window.next_sequence
@@ -565,11 +561,11 @@ fn stale_decision(
 }
 
 fn gap_or_retry_decision(
-    input: DeliveryCheckInput<'_>,
+    input: CheckInput<'_>,
     db: &redb::Database,
     operation: OperationId,
-    window: DeliveryWindow,
-) -> Result<DeliveryDecision> {
+    window: Window,
+) -> Result<Decision> {
     let diagnostics = vec![format!(
         "delivery sequence {} leaves gap before expected {}",
         input.sequence, window.next_sequence
@@ -590,10 +586,10 @@ fn gap_or_retry_decision(
 fn suppressed_decision(
     db: &redb::Database,
     operation: OperationId,
-    window: DeliveryWindow,
+    window: Window,
     decision: &str,
     diagnostics: Vec<String>,
-) -> Result<DeliveryDecision> {
+) -> Result<Decision> {
     let receipt_value = idempotency_receipt_value(IdempotencyReceiptValueInput {
         decision,
         operation_ref: &operation.operation_ref,
@@ -609,9 +605,9 @@ fn suppressed_decision(
             ("no-side-effects", "pass"),
         ],
     })?;
-    let receipt = parse_idempotency_receipt(&receipt_value)?;
+    let receipt = parse_receipt(&receipt_value)?;
     store_receipt(db, &receipt)?;
-    Ok(DeliveryDecision {
+    Ok(Decision {
         operation,
         window,
         receipt,
@@ -626,17 +622,17 @@ fn read_or_create_window(
     scope_profile: &str,
     scope_ref: &str,
     retention_refs: &[String],
-) -> Result<DeliveryWindow> {
+) -> Result<Window> {
     let read_txn = db.begin_read().map_err(store_error)?;
     let windows = read_txn.open_table(STORE_WINDOWS).map_err(store_error)?;
     if let Some(bytes) = windows.get(scope_ref).map_err(store_error)? {
         let value = crate::preserves_rail::parse_canonical_bytes(bytes.value())?;
-        return parse_delivery_window(&value);
+        return parse_window(&value);
     }
     drop(windows);
     drop(read_txn);
-    let value = delivery_window_value(scope_profile, scope_ref, 1, 1, retention_refs)?;
-    let window = parse_delivery_window(&value)?;
+    let value = window_value(scope_profile, scope_ref, 1, 1, retention_refs)?;
+    let window = parse_window(&value)?;
     let write_txn = db.begin_write().map_err(store_error)?;
     {
         let bytes = crate::preserves_rail::canonical_bytes(&window.value)?;
@@ -657,12 +653,7 @@ fn read_entry_from_store(db: &redb::Database, dedup_key: &str) -> Result<Option<
     parse_dedup_entry(&value).map(Some)
 }
 
-fn store_first_decision(
-    db: &redb::Database,
-    window: &DeliveryWindow,
-    entry: &DedupEntry,
-    receipt: &IdempotencyReceipt,
-) -> Result<()> {
+fn store_first_decision(db: &redb::Database, window: &Window, entry: &DedupEntry, receipt: &Receipt) -> Result<()> {
     let write_txn = db.begin_write().map_err(store_error)?;
     {
         let mut windows = write_txn.open_table(STORE_WINDOWS).map_err(store_error)?;
@@ -687,7 +678,7 @@ fn store_first_decision(
     write_txn.commit().map_err(store_error)
 }
 
-fn store_receipt(db: &redb::Database, receipt: &IdempotencyReceipt) -> Result<()> {
+fn store_receipt(db: &redb::Database, receipt: &Receipt) -> Result<()> {
     store_raw_receipt(db, &receipt.receipt_ref, &receipt.value)
 }
 
@@ -798,7 +789,7 @@ fn validate_operation_input(input: &OperationIdInput) -> Result<()> {
     validate_name(&input.intent, "delivery operation intent")?;
     require_ref(&input.payload_ref, "delivery operation payload ref")?;
     validate_refs(&input.policy_refs, "delivery operation policy ref")?;
-    ensure_count_at_most(input.policy_refs.len(), MAX_DELIVERY_REFS, "delivery operation policy refs")
+    ensure_count_at_most(input.policy_refs.len(), MAX_REFS, "delivery operation policy refs")
 }
 
 fn validate_scope_profile(profile: &str) -> Result<()> {
@@ -828,7 +819,7 @@ fn validate_side_effect(side_effect: &str) -> Result<()> {
 }
 
 fn validate_diagnostics(diagnostics: &[String]) -> Result<()> {
-    ensure_count_at_most(diagnostics.len(), MAX_DELIVERY_DIAGNOSTICS, "delivery diagnostics")?;
+    ensure_count_at_most(diagnostics.len(), MAX_DIAGNOSTICS, "delivery diagnostics")?;
     for diagnostic in diagnostics {
         validate_name(diagnostic, "delivery diagnostic")?;
     }
@@ -843,7 +834,7 @@ fn validate_name(value: &str, label: &str) -> Result<()> {
 }
 
 fn validate_refs(refs: &[String], label: &str) -> Result<()> {
-    ensure_count_at_most(refs.len(), MAX_DELIVERY_REFS, label)?;
+    ensure_count_at_most(refs.len(), MAX_REFS, label)?;
     for reference in refs {
         require_ref(reference, label)?;
     }
@@ -1057,7 +1048,7 @@ mod tests {
         let policy_refs = vec![fake_ref("policy")];
         let evidence_refs = vec![fake_ref("evidence")];
         let result_ref = fake_ref("semantic-result");
-        let first = check_delivery(DeliveryCheckInput {
+        let first = check(CheckInput {
             root: &root,
             scope_profile: SCOPE_REMOTE_TOPIC,
             scope_ref: &scope,
@@ -1074,7 +1065,7 @@ mod tests {
         .expect("first delivery");
         assert_eq!(first.receipt.decision, "first");
         assert!(first.should_commit_side_effect);
-        let duplicate = check_delivery(DeliveryCheckInput {
+        let duplicate = check(CheckInput {
             root: &root,
             scope_profile: SCOPE_REMOTE_TOPIC,
             scope_ref: &scope,
@@ -1166,8 +1157,8 @@ mod tests {
         assert_eq!(denied.receipt.decision, decision);
     }
 
-    fn check_case(case: &Case, attempt: Attempt, context: &str) -> DeliveryDecision {
-        check_delivery(DeliveryCheckInput {
+    fn check_case(case: &Case, attempt: Attempt, context: &str) -> Decision {
+        check(CheckInput {
             root: &case.root,
             scope_profile: SCOPE_REMOTE_TOPIC,
             scope_ref: &case.scope,
@@ -1192,7 +1183,7 @@ mod tests {
             let right_scope = remote_topic_scope_ref("services", "peer:right").expect("right scope");
             let policy_refs = vec![fake_ref("policy")];
             let evidence_refs = vec![fake_ref("evidence")];
-            let left = check_delivery(DeliveryCheckInput {
+            let left = check(CheckInput {
                 root: &root,
                 scope_profile: SCOPE_REMOTE_TOPIC,
                 scope_ref: &left_scope,
@@ -1211,7 +1202,7 @@ mod tests {
                 },
             })
             .expect("left delivery");
-            let right = check_delivery(DeliveryCheckInput {
+            let right = check(CheckInput {
                 root: &root,
                 scope_profile: SCOPE_REMOTE_TOPIC,
                 scope_ref: &right_scope,

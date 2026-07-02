@@ -617,7 +617,7 @@ pub fn admit_and_apply_delivered_envelope_idempotent(
         diagnostics: Vec::new(),
     });
     let admission_receipt_ref = canonical_hash(&admission_receipt_value)?;
-    let idempotency = crate::delivery_idempotency::check_delivery(crate::delivery_idempotency::DeliveryCheckInput {
+    let idempotency = crate::delivery_idempotency::check(crate::delivery_idempotency::CheckInput {
         root: idempotency_root,
         scope_profile: crate::delivery_idempotency::SCOPE_REMOTE_TOPIC,
         scope_ref: &crate::delivery_idempotency::remote_topic_scope_ref(
@@ -703,7 +703,7 @@ pub fn delivery_log_with_idempotency_receipts(
             record("operation-ref", vec![string(&delivery.envelope.operation_ref)]),
         ];
         if let Some(receipt) = idempotency_receipts.get(index) {
-            let parsed = crate::delivery_idempotency::parse_idempotency_receipt(receipt)?;
+            let parsed = crate::delivery_idempotency::parse_receipt(receipt)?;
             if parsed.operation_ref != delivery.envelope.operation_ref {
                 return Err(MoltenError::invalid_harness("remote delivery log idempotency operation ref mismatch"));
             }
@@ -1145,7 +1145,7 @@ fn parse_delivery_log_entry(value: &Value<IoValue>) -> Result<Delivery> {
     }
     if has_idempotency_receipt {
         let receipt_value = record_iovalue(&fields[4], "idempotency-receipt")?;
-        let receipt = crate::delivery_idempotency::parse_idempotency_receipt(&receipt_value)?;
+        let receipt = crate::delivery_idempotency::parse_receipt(&receipt_value)?;
         if receipt.operation_ref != envelope.operation_ref {
             return Err(MoltenError::invalid_harness("remote delivery log idempotency receipt mismatch"));
         }

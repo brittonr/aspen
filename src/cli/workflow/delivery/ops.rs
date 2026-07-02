@@ -11,7 +11,7 @@ pub(super) fn run(command: Command) -> Outcome<()> {
             out,
         } => scope(scope_profile, scope_name, retention_refs, out),
         command @ Command::OperationId { .. } => operation_id(command),
-        command @ Command::Check { .. } => check_delivery(command),
+        command @ Command::Check { .. } => check(command),
         Command::ReceiptShow { receipt_ref, root } => receipt_show(receipt_ref, root),
         Command::Show { artifact } => show(artifact),
     }
@@ -66,7 +66,7 @@ fn operation_id(command: Command) -> Outcome<()> {
     Ok(())
 }
 
-fn check_delivery(command: Command) -> Outcome<()> {
+fn check(command: Command) -> Outcome<()> {
     let Command::Check {
         root,
         scope_profile,
@@ -87,7 +87,7 @@ fn check_delivery(command: Command) -> Outcome<()> {
         return Err(wrong_handler("check"));
     };
     let resolved_scope_ref = resolve_delivery_scope_ref(&scope_profile, scope_name.as_deref(), scope_ref.as_deref())?;
-    let delivery = molten::delivery_idempotency::check_delivery(molten::delivery_idempotency::DeliveryCheckInput {
+    let delivery = molten::delivery_idempotency::check(molten::delivery_idempotency::CheckInput {
         root: &root,
         scope_profile: &scope_profile,
         scope_ref: &resolved_scope_ref,
@@ -118,13 +118,13 @@ fn check_delivery(command: Command) -> Outcome<()> {
 
 fn receipt_show(receipt_ref: String, root: FilePath) -> Outcome<()> {
     let value = molten::delivery_idempotency::read_idempotency_receipt(&root, &receipt_ref)?;
-    println!("{}", molten::delivery_idempotency::delivery_summary(&value)?);
+    println!("{}", molten::delivery_idempotency::summary(&value)?);
     Ok(())
 }
 
 fn show(artifact: FilePath) -> Outcome<()> {
     let value = super::io::read_preserves_file(&artifact)?;
-    println!("{}", molten::delivery_idempotency::delivery_summary(&value)?);
+    println!("{}", molten::delivery_idempotency::summary(&value)?);
     Ok(())
 }
 

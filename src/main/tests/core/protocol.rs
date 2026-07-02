@@ -121,11 +121,11 @@ fn run_first_delivery_check(
     dir: &Path,
     root: &Path,
     fixture: &DeliveryFixture,
-) -> molten::delivery_idempotency::IdempotencyReceipt {
+) -> molten::delivery_idempotency::Receipt {
     let first_receipt = dir.join("first.preserves");
     run_delivery_command(delivery_check(root, fixture, fixture.result_ref.clone(), Some(first_receipt.clone())))
         .expect("first delivery check");
-    let first = molten::delivery_idempotency::parse_idempotency_receipt(
+    let first = molten::delivery_idempotency::parse_receipt(
         &read_preserves_file(&first_receipt).expect("read first receipt"),
     )
     .expect("parse first receipt");
@@ -133,7 +133,7 @@ fn run_first_delivery_check(
     first
 }
 
-fn show_delivery_receipt(root: &Path, first: &molten::delivery_idempotency::IdempotencyReceipt) {
+fn show_delivery_receipt(root: &Path, first: &molten::delivery_idempotency::Receipt) {
     run_delivery_command(DeliveryCommand::ReceiptShow {
         receipt_ref: first.receipt_ref.clone(),
         root: root.to_path_buf(),
@@ -145,7 +145,7 @@ fn run_duplicate_delivery_check(
     dir: &Path,
     root: &Path,
     fixture: &DeliveryFixture,
-    first: molten::delivery_idempotency::IdempotencyReceipt,
+    first: molten::delivery_idempotency::Receipt,
 ) {
     let duplicate_receipt = dir.join("duplicate.preserves");
     run_delivery_command(delivery_check(
@@ -155,7 +155,7 @@ fn run_duplicate_delivery_check(
         Some(duplicate_receipt.clone()),
     ))
     .expect("duplicate delivery check");
-    let duplicate = molten::delivery_idempotency::parse_idempotency_receipt(
+    let duplicate = molten::delivery_idempotency::parse_receipt(
         &read_preserves_file(&duplicate_receipt).expect("read duplicate receipt"),
     )
     .expect("parse duplicate receipt");
