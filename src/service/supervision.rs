@@ -1437,12 +1437,9 @@ mod tests {
     type TestCase = hegel::TestCase;
 
     use super::*;
-    use crate::catalog;
-    use crate::catalog::CatalogListInput;
-    use crate::catalog::CatalogVisibilityInput;
-    use crate::catalog_mcp;
-    use crate::ledger;
-    use crate::preserves_rail;
+
+    type CatalogListInput = crate::catalog::CatalogListInput;
+    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
 
     fn test_ref(label: &str) -> String {
         preserves_rail::canonical_hash(&preserves_rail::record("service-supervision-test-ref", vec![
@@ -1659,24 +1656,25 @@ mod tests {
         let suite_value = supervision_fixture_suite_value().expect("fixture suite");
         let run = run_service_supervision_suite_value(&suite_value).expect("run supervision");
         let gate = gate_service_supervision_report(&run.value).expect("gate supervision report");
-        assert_eq!(ledger::artifact_kind(&suite_value), "service-supervision-suite");
-        assert_eq!(ledger::artifact_kind(&run.value), "service-supervision-report");
-        assert_eq!(ledger::artifact_kind(&gate.value), "service-supervision-gate-receipt");
-        assert_eq!(ledger::artifact_kind(&run.failure_markers[0]), "service-failure");
-        assert_eq!(ledger::artifact_kind(&run.monitor_notifications[0]), "service-monitor-notification");
+        assert_eq!(crate::ledger::artifact_kind(&suite_value), "service-supervision-suite");
+        assert_eq!(crate::ledger::artifact_kind(&run.value), "service-supervision-report");
+        assert_eq!(crate::ledger::artifact_kind(&gate.value), "service-supervision-gate-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&run.failure_markers[0]), "service-failure");
+        assert_eq!(crate::ledger::artifact_kind(&run.monitor_notifications[0]), "service-monitor-notification");
 
         let denied_suite_value = suite_with_attempt(2);
         let denied = run_service_supervision_suite_value(&denied_suite_value).expect("denied supervision");
-        assert_eq!(ledger::artifact_kind(&denied.cleanup_receipts[0]), "service-cleanup-receipt");
-        assert_eq!(ledger::artifact_kind(&denied.retractions[0]), "service-retraction");
-        assert_eq!(ledger::artifact_kind(&denied.retention_inputs[0]), "service-retention-input");
+        assert_eq!(crate::ledger::artifact_kind(&denied.cleanup_receipts[0]), "service-cleanup-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&denied.retractions[0]), "service-retraction");
+        assert_eq!(crate::ledger::artifact_kind(&denied.retention_inputs[0]), "service-retention-input");
 
         let dir = temp_dir("service-supervision-catalog");
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
-        let imported = ledger::import_artifact(&ledger_root, &run.value).expect("ledger import supervision report");
+        let imported =
+            crate::ledger::import_artifact(&ledger_root, &run.value).expect("ledger import supervision report");
         assert_eq!(imported.artifact_kind, "service-supervision-report");
-        let listed = catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
             kind: Some("service-supervision-report".to_string()),
             visibility: CatalogVisibilityInput::default(),
         })
@@ -1687,11 +1685,13 @@ mod tests {
                 .expect("render catalog result")
                 .contains("ledger-kind:service-supervision-report")
         );
-        let request = catalog_mcp::mcp_request_value("catalog.list", vec![preserves_rail::record("kind", vec![
-            preserves_rail::string("service-supervision-report"),
-        ])])
-        .expect("MCP request");
-        let mcp = catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("MCP list supervision report");
+        let request =
+            crate::catalog_mcp::mcp_request_value("catalog.list", vec![preserves_rail::record("kind", vec![
+                preserves_rail::string("service-supervision-report"),
+            ])])
+            .expect("MCP request");
+        let mcp =
+            crate::catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("MCP list supervision report");
         assert_eq!(mcp.decision, "pass");
         assert!(
             preserves_rail::to_text(&mcp.response_value)
