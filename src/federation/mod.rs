@@ -68,9 +68,9 @@ mod ledger {
     }
 }
 
-const FEDERATION_ANNOUNCEMENT_SCHEMA: &str = crate::preserves_rail::FEDERATION_ANNOUNCEMENT_SCHEMA;
-const FEDERATION_INVENTORY_SCHEMA: &str = crate::preserves_rail::FEDERATION_INVENTORY_SCHEMA;
-const FEDERATION_RECEIPT_SCHEMA: &str = crate::preserves_rail::FEDERATION_RECEIPT_SCHEMA;
+const ANNOUNCEMENT_SCHEMA: &str = crate::preserves_rail::FEDERATION_ANNOUNCEMENT_SCHEMA;
+const INVENTORY_SCHEMA: &str = crate::preserves_rail::FEDERATION_INVENTORY_SCHEMA;
+const RECEIPT_SCHEMA: &str = crate::preserves_rail::FEDERATION_RECEIPT_SCHEMA;
 const SIGNATURE_ALGORITHM: &str = crate::evidence::SIGNATURE_ALGORITHM;
 
 fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
@@ -105,8 +105,8 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
-pub const FEDERATION_ANNOUNCEMENT_PURPOSE: &str = "federation-announcement";
-pub const FEDERATION_INVENTORY_PURPOSE: &str = "federation-inventory";
+pub const ANNOUNCEMENT_PURPOSE: &str = "federation-announcement";
+pub const INVENTORY_PURPOSE: &str = "federation-inventory";
 pub const RESOURCE_ARTIFACT: &str = "artifact";
 pub const RESOURCE_CHUNK_MANIFEST: &str = "chunk-manifest";
 pub const RESOURCE_CHUNK: &str = "chunk";
@@ -118,14 +118,14 @@ pub const RESOURCE_TRANSCRIPT: &str = "transcript";
 pub const RESOURCE_PROTOCOL: &str = "protocol";
 pub const RESOURCE_SCHEMA: &str = "schema";
 
-const MAX_FEDERATION_RESOURCES: usize = 4096;
-const MAX_FEDERATION_ASSERTIONS: usize = 8192;
+const MAX_RESOURCES: usize = 4096;
+const MAX_ASSERTIONS: usize = 8192;
 
-const _: () = assert!(MAX_FEDERATION_RESOURCES <= 100_000);
-const _: () = assert!(MAX_FEDERATION_ASSERTIONS <= 100_000);
+const _: () = assert!(MAX_RESOURCES <= 100_000);
+const _: () = assert!(MAX_ASSERTIONS <= 100_000);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FederatedResource {
+pub struct Resource {
     pub resource_type: String,
     pub resource_ref: String,
     pub schema: String,
@@ -133,7 +133,7 @@ pub struct FederatedResource {
     pub source_peer: String,
 }
 
-impl FederatedResource {
+impl Resource {
     pub fn new(
         resource_type: impl Into<String>,
         resource_ref: impl Into<String>,
@@ -152,28 +152,28 @@ impl FederatedResource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FederationAnnouncement {
+pub struct Announcement {
     pub announcement_ref: String,
     pub peer: String,
-    pub resource: FederatedResource,
+    pub resource: Resource,
     pub signer: String,
     pub trust_root: String,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FederationInventory {
+pub struct Inventory {
     pub inventory_ref: String,
     pub peer: String,
-    pub resources: Vec<FederatedResource>,
-    pub delegates: Vec<FederationDelegate>,
+    pub resources: Vec<Resource>,
+    pub delegates: Vec<Delegate>,
     pub signer: String,
     pub trust_root: String,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FederationDelegate {
+pub struct Delegate {
     pub delegate_ref: String,
     pub resource_ref: String,
     pub capability: String,
@@ -183,7 +183,7 @@ pub struct FederationDelegate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FederationPullPolicy {
+pub struct PullPolicy {
     pub allowed_resource_types: Vec<String>,
     pub required_delegate_capability: Option<String>,
     pub delegate_trust_root: String,
@@ -192,7 +192,7 @@ pub struct FederationPullPolicy {
     pub max_imports: usize,
 }
 
-impl FederationPullPolicy {
+impl PullPolicy {
     pub fn allow_all() -> Self {
         Self {
             allowed_resource_types: Vec::new(),
@@ -213,7 +213,7 @@ impl FederationPullPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FederationPull {
+pub struct Pull {
     pub peer: String,
     pub imported_refs: Vec<String>,
     pub skipped_refs: Vec<String>,
@@ -224,7 +224,7 @@ pub struct FederationPull {
 #[derive(Debug, Clone, Copy)]
 pub struct AnnounceResourceInput<'a> {
     pub peer: &'a str,
-    pub resource: &'a FederatedResource,
+    pub resource: &'a Resource,
     pub signer: &'a str,
     pub trust_root: &'a str,
     pub key: &'a str,
@@ -234,8 +234,8 @@ pub struct AnnounceResourceInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct InventoryWithDelegatesInput<'a> {
     pub peer: &'a str,
-    pub resources: &'a [FederatedResource],
-    pub delegates: &'a [FederationDelegate],
+    pub resources: &'a [Resource],
+    pub delegates: &'a [Delegate],
     pub signer: &'a str,
     pub trust_root: &'a str,
     pub key: &'a str,
@@ -258,7 +258,7 @@ pub struct PullLedgerInventoryPolicyInput<'a> {
     pub inventory_value: &'a IoValue,
     pub trust_root: &'a str,
     pub key: &'a str,
-    pub policy: &'a FederationPullPolicy,
+    pub policy: &'a PullPolicy,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -272,25 +272,24 @@ pub struct PullChunkManifestInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FederationReceiptValueInput<'a> {
+pub struct ReceiptValueInput<'a> {
     pub operation: &'a str,
     pub decision: &'a str,
     pub peer: &'a str,
-    pub resources: &'a [FederatedResource],
+    pub resources: &'a [Resource],
     pub imported_refs: &'a [String],
     pub skipped_refs: &'a [String],
     pub denied_refs: &'a [String],
 }
 
-pub fn announce_resource(input: &AnnounceResourceInput<'_>) -> Result<FederationAnnouncement> {
+pub fn announce_resource(input: &AnnounceResourceInput<'_>) -> Result<Announcement> {
     validate_peer(input.peer)?;
     validate_resource(input.resource)?;
     validate_refs(input.policy_refs, "federation announcement policy ref")?;
     let payload = announcement_payload_value(input.peer, input.resource, input.policy_refs);
-    let signature =
-        signature_record(&payload, input.signer, FEDERATION_ANNOUNCEMENT_PURPOSE, input.trust_root, input.key)?;
+    let signature = signature_record(&payload, input.signer, ANNOUNCEMENT_PURPOSE, input.trust_root, input.key)?;
     let value = record("federation-announcement-v1", vec![
-        string(FEDERATION_ANNOUNCEMENT_SCHEMA),
+        string(ANNOUNCEMENT_SCHEMA),
         record("payload", vec![payload]),
         signature,
         record("checks", vec![sequence(vec![
@@ -302,24 +301,12 @@ pub fn announce_resource(input: &AnnounceResourceInput<'_>) -> Result<Federation
     parse_announcement(&value, input.trust_root, input.key)
 }
 
-pub fn inventory_ledger(
-    root: &Path,
-    peer: &str,
-    signer: &str,
-    trust_root: &str,
-    key: &str,
-) -> Result<FederationInventory> {
+pub fn inventory_ledger(root: &Path, peer: &str, signer: &str, trust_root: &str, key: &str) -> Result<Inventory> {
     validate_peer(peer)?;
     let resources = ledger::list_artifacts(root)?
         .into_iter()
         .map(|entry| {
-            FederatedResource::new(
-                entry.artifact_kind,
-                entry.artifact_ref,
-                "molten.ledger.artifact.v1",
-                "ledger-local",
-                peer,
-            )
+            Resource::new(entry.artifact_kind, entry.artifact_ref, "molten.ledger.artifact.v1", "ledger-local", peer)
         })
         .collect::<Vec<_>>();
     inventory_for_resources(peer, &resources, signer, trust_root, key)
@@ -327,11 +314,11 @@ pub fn inventory_ledger(
 
 pub fn inventory_for_resources(
     peer: &str,
-    resources: &[FederatedResource],
+    resources: &[Resource],
     signer: &str,
     trust_root: &str,
     key: &str,
-) -> Result<FederationInventory> {
+) -> Result<Inventory> {
     inventory_for_resources_with_delegates(&InventoryWithDelegatesInput {
         peer,
         resources,
@@ -342,7 +329,7 @@ pub fn inventory_for_resources(
     })
 }
 
-pub fn inventory_for_resources_with_delegates(input: &InventoryWithDelegatesInput<'_>) -> Result<FederationInventory> {
+pub fn inventory_for_resources_with_delegates(input: &InventoryWithDelegatesInput<'_>) -> Result<Inventory> {
     validate_peer(input.peer)?;
     for resource in input.resources {
         validate_resource(resource)?;
@@ -351,10 +338,9 @@ pub fn inventory_for_resources_with_delegates(input: &InventoryWithDelegatesInpu
         require_ref(&delegate.resource_ref, "federation delegate resource ref")?;
     }
     let payload = inventory_payload_value(input.peer, input.resources, input.delegates);
-    let signature =
-        signature_record(&payload, input.signer, FEDERATION_INVENTORY_PURPOSE, input.trust_root, input.key)?;
+    let signature = signature_record(&payload, input.signer, INVENTORY_PURPOSE, input.trust_root, input.key)?;
     let value = record("federation-inventory-v1", vec![
-        string(FEDERATION_INVENTORY_SCHEMA),
+        string(INVENTORY_SCHEMA),
         record("payload", vec![payload]),
         signature,
         record("checks", vec![sequence(vec![
@@ -368,12 +354,12 @@ pub fn inventory_for_resources_with_delegates(input: &InventoryWithDelegatesInpu
 }
 
 pub fn delegate_resource(
-    resource: &FederatedResource,
+    resource: &Resource,
     capability: &str,
     signer: &str,
     trust_root: &str,
     key: &str,
-) -> Result<FederationDelegate> {
+) -> Result<Delegate> {
     validate_resource(resource)?;
     if capability.trim().is_empty() {
         return Err(MoltenError::invalid_harness("federation delegate capability must not be empty"));
@@ -393,7 +379,7 @@ pub fn parse_delegate(
     expected_capability: Option<&str>,
     trust_root: &str,
     key: &str,
-) -> Result<FederationDelegate> {
+) -> Result<Delegate> {
     let fields = value
         .collect_simple_record("federation-delegate-v1", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("expected <federation-delegate-v1 ...>"))?;
@@ -415,7 +401,7 @@ pub fn parse_delegate(
     }
     let (signer, actual_trust_root) =
         verify_signature_record(&fields[1], &payload, "federation-delegate", trust_root, key)?;
-    Ok(FederationDelegate {
+    Ok(Delegate {
         delegate_ref: canonical_hash(value)?,
         resource_ref: resource.resource_ref,
         capability,
@@ -425,7 +411,7 @@ pub fn parse_delegate(
     })
 }
 
-fn parse_delegate_unverified(value: &IoValue) -> Result<FederationDelegate> {
+fn parse_delegate_unverified(value: &IoValue) -> Result<Delegate> {
     let fields = value
         .collect_simple_record("federation-delegate-v1", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("expected <federation-delegate-v1 ...>"))?;
@@ -439,7 +425,7 @@ fn parse_delegate_unverified(value: &IoValue) -> Result<FederationDelegate> {
     let signature_fields = signature
         .collect_simple_record("signature", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected federation signature"))?;
-    Ok(FederationDelegate {
+    Ok(Delegate {
         delegate_ref: canonical_hash(value)?,
         resource_ref: resource.resource_ref,
         capability,
@@ -449,19 +435,19 @@ fn parse_delegate_unverified(value: &IoValue) -> Result<FederationDelegate> {
     })
 }
 
-pub fn parse_announcement(value: &IoValue, trust_root: &str, key: &str) -> Result<FederationAnnouncement> {
+pub fn parse_announcement(value: &IoValue, trust_root: &str, key: &str) -> Result<Announcement> {
     let fields = value
         .collect_simple_record("federation-announcement-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <federation-announcement-v1 ...>"))?;
-    require_schema(&fields[0], FEDERATION_ANNOUNCEMENT_SCHEMA, "federation announcement schema")?;
+    require_schema(&fields[0], ANNOUNCEMENT_SCHEMA, "federation announcement schema")?;
     let payload = record_value(&fields[1], "payload")?;
     let (peer, resource, _policy_refs) = parse_announcement_payload(&payload)?;
     let (signer, actual_trust_root) =
-        verify_signature_record(&fields[2], &payload, FEDERATION_ANNOUNCEMENT_PURPOSE, trust_root, key)?;
+        verify_signature_record(&fields[2], &payload, ANNOUNCEMENT_PURPOSE, trust_root, key)?;
     let checks = parse_checks(&fields[3])?;
     require_check(&checks, "signed-announcement")?;
     require_check(&checks, "announcement-is-a-hint")?;
-    Ok(FederationAnnouncement {
+    Ok(Announcement {
         announcement_ref: canonical_hash(value)?,
         peer,
         resource,
@@ -471,19 +457,19 @@ pub fn parse_announcement(value: &IoValue, trust_root: &str, key: &str) -> Resul
     })
 }
 
-pub fn parse_inventory(value: &IoValue, trust_root: &str, key: &str) -> Result<FederationInventory> {
+pub fn parse_inventory(value: &IoValue, trust_root: &str, key: &str) -> Result<Inventory> {
     let fields = value
         .collect_simple_record("federation-inventory-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <federation-inventory-v1 ...>"))?;
-    require_schema(&fields[0], FEDERATION_INVENTORY_SCHEMA, "federation inventory schema")?;
+    require_schema(&fields[0], INVENTORY_SCHEMA, "federation inventory schema")?;
     let payload = record_value(&fields[1], "payload")?;
     let (peer, resources, delegates) = parse_inventory_payload(&payload)?;
     let (signer, actual_trust_root) =
-        verify_signature_record(&fields[2], &payload, FEDERATION_INVENTORY_PURPOSE, trust_root, key)?;
+        verify_signature_record(&fields[2], &payload, INVENTORY_PURPOSE, trust_root, key)?;
     let checks = parse_checks(&fields[3])?;
     require_check(&checks, "signed-inventory")?;
     require_check(&checks, "no-global-consistency-claim")?;
-    Ok(FederationInventory {
+    Ok(Inventory {
         inventory_ref: canonical_hash(value)?,
         peer,
         resources,
@@ -494,18 +480,18 @@ pub fn parse_inventory(value: &IoValue, trust_root: &str, key: &str) -> Result<F
     })
 }
 
-pub fn pull_ledger_inventory(input: &PullLedgerInventoryInput<'_>) -> Result<FederationPull> {
+pub fn pull_ledger_inventory(input: &PullLedgerInventoryInput<'_>) -> Result<Pull> {
     pull_ledger_inventory_with_policy(&PullLedgerInventoryPolicyInput {
         source_root: input.source_root,
         dest_root: input.dest_root,
         inventory_value: input.inventory_value,
         trust_root: input.trust_root,
         key: input.key,
-        policy: &FederationPullPolicy::allowed_types(input.allowed_resource_types.to_vec()),
+        policy: &PullPolicy::allowed_types(input.allowed_resource_types.to_vec()),
     })
 }
 
-pub fn pull_ledger_inventory_with_policy(input: &PullLedgerInventoryPolicyInput<'_>) -> Result<FederationPull> {
+pub fn pull_ledger_inventory_with_policy(input: &PullLedgerInventoryPolicyInput<'_>) -> Result<Pull> {
     let inventory = parse_inventory(input.inventory_value, input.trust_root, input.key)?;
     if inventory.resources.len() > input.policy.max_resources {
         return Ok(oversized_pull(&inventory));
@@ -522,48 +508,33 @@ struct PullRefs {
 }
 
 impl PullRefs {
-    fn deny(&mut self, resource: &FederatedResource) -> Result<()> {
-        push_bounded(
-            &mut self.denied_refs,
-            resource.resource_ref.clone(),
-            MAX_FEDERATION_RESOURCES,
-            "federation denied refs",
-        )
+    fn deny(&mut self, resource: &Resource) -> Result<()> {
+        push_bounded(&mut self.denied_refs, resource.resource_ref.clone(), MAX_RESOURCES, "federation denied refs")
     }
 
-    fn skip(&mut self, resource: &FederatedResource) -> Result<()> {
-        push_bounded(
-            &mut self.skipped_refs,
-            resource.resource_ref.clone(),
-            MAX_FEDERATION_RESOURCES,
-            "federation skipped refs",
-        )
+    fn skip(&mut self, resource: &Resource) -> Result<()> {
+        push_bounded(&mut self.skipped_refs, resource.resource_ref.clone(), MAX_RESOURCES, "federation skipped refs")
     }
 
-    fn import(&mut self, resource: &FederatedResource) -> Result<()> {
-        push_bounded(
-            &mut self.imported_refs,
-            resource.resource_ref.clone(),
-            MAX_FEDERATION_RESOURCES,
-            "federation imported refs",
-        )
+    fn import(&mut self, resource: &Resource) -> Result<()> {
+        push_bounded(&mut self.imported_refs, resource.resource_ref.clone(), MAX_RESOURCES, "federation imported refs")
     }
 }
 
 struct PullEnv<'a, 'b> {
     input: &'a PullLedgerInventoryPolicyInput<'b>,
-    inventory: &'a FederationInventory,
+    inventory: &'a Inventory,
     existing: BtreeSet<String>,
     allowed: BtreeSet<String>,
 }
 
 impl<'a, 'b> PullEnv<'a, 'b> {
-    fn new(input: &'a PullLedgerInventoryPolicyInput<'b>, inventory: &'a FederationInventory) -> Result<Self> {
+    fn new(input: &'a PullLedgerInventoryPolicyInput<'b>, inventory: &'a Inventory) -> Result<Self> {
         let existing = ledger::list_artifacts(input.dest_root)?
             .into_iter()
             .map(|entry| entry.artifact_ref)
             .collect::<BtreeSet<_>>();
-        ensure_count_at_most(inventory.resources.len(), MAX_FEDERATION_RESOURCES, "federation inventory resources")?;
+        ensure_count_at_most(inventory.resources.len(), MAX_RESOURCES, "federation inventory resources")?;
         let allowed = input.policy.allowed_resource_types.iter().cloned().collect::<BtreeSet<_>>();
         Ok(Self {
             input,
@@ -581,7 +552,7 @@ impl<'a, 'b> PullEnv<'a, 'b> {
         Ok(refs)
     }
 
-    fn apply_resource(&self, refs: &mut PullRefs, resource: &FederatedResource) -> Result<()> {
+    fn apply_resource(&self, refs: &mut PullRefs, resource: &Resource) -> Result<()> {
         if self.is_type_denied(resource) || self.is_delegate_missing(resource)? {
             return refs.deny(resource);
         }
@@ -594,11 +565,11 @@ impl<'a, 'b> PullEnv<'a, 'b> {
         self.import_verified(refs, resource)
     }
 
-    fn is_type_denied(&self, resource: &FederatedResource) -> bool {
+    fn is_type_denied(&self, resource: &Resource) -> bool {
         !self.allowed.is_empty() && !self.allowed.contains(&resource.resource_type)
     }
 
-    fn is_delegate_missing(&self, resource: &FederatedResource) -> Result<bool> {
+    fn is_delegate_missing(&self, resource: &Resource) -> Result<bool> {
         if let Some(capability) = self.input.policy.required_delegate_capability.as_deref() {
             return Ok(!has_valid_delegate(
                 &self.inventory.delegates,
@@ -611,12 +582,12 @@ impl<'a, 'b> PullEnv<'a, 'b> {
         Ok(false)
     }
 
-    fn is_duplicate(&self, refs: &PullRefs, resource: &FederatedResource) -> bool {
+    fn is_duplicate(&self, refs: &PullRefs, resource: &Resource) -> bool {
         self.existing.contains(&resource.resource_ref)
             || refs.imported_refs.iter().any(|imported| imported == &resource.resource_ref)
     }
 
-    fn import_verified(&self, refs: &mut PullRefs, resource: &FederatedResource) -> Result<()> {
+    fn import_verified(&self, refs: &mut PullRefs, resource: &Resource) -> Result<()> {
         let artifact = match ledger::read_artifact(self.input.source_root, &resource.resource_ref) {
             Ok(artifact) => artifact,
             Err(_) => return refs.deny(resource),
@@ -630,14 +601,14 @@ impl<'a, 'b> PullEnv<'a, 'b> {
     }
 }
 
-fn oversized_pull(inventory: &FederationInventory) -> FederationPull {
+fn oversized_pull(inventory: &Inventory) -> Pull {
     let denied_refs = inventory.resources.iter().map(|resource| resource.resource_ref.clone()).collect::<Vec<_>>();
-    FederationPull {
+    Pull {
         peer: inventory.peer.clone(),
         imported_refs: Vec::new(),
         skipped_refs: Vec::new(),
         denied_refs: denied_refs.clone(),
-        receipt_value: federation_receipt_value(&FederationReceiptValueInput {
+        receipt_value: receipt_value(&ReceiptValueInput {
             operation: "pull-ledger-inventory",
             decision: "fail",
             peer: &inventory.peer,
@@ -649,9 +620,9 @@ fn oversized_pull(inventory: &FederationInventory) -> FederationPull {
     }
 }
 
-fn finish_pull(inventory: FederationInventory, refs: PullRefs) -> FederationPull {
+fn finish_pull(inventory: Inventory, refs: PullRefs) -> Pull {
     let decision = if refs.denied_refs.is_empty() { "pass" } else { "fail" };
-    let receipt_value = federation_receipt_value(&FederationReceiptValueInput {
+    let receipt_value = receipt_value(&ReceiptValueInput {
         operation: "pull-ledger-inventory",
         decision,
         peer: &inventory.peer,
@@ -660,7 +631,7 @@ fn finish_pull(inventory: FederationInventory, refs: PullRefs) -> FederationPull
         skipped_refs: &refs.skipped_refs,
         denied_refs: &refs.denied_refs,
     });
-    FederationPull {
+    Pull {
         peer: inventory.peer,
         imported_refs: refs.imported_refs,
         skipped_refs: refs.skipped_refs,
@@ -669,7 +640,7 @@ fn finish_pull(inventory: FederationInventory, refs: PullRefs) -> FederationPull
     }
 }
 
-pub fn pull_chunk_manifest_from_announcement(input: &PullChunkManifestInput<'_>) -> Result<FederationPull> {
+pub fn pull_chunk_manifest_from_announcement(input: &PullChunkManifestInput<'_>) -> Result<Pull> {
     let announcement = parse_announcement(input.announcement_value, input.trust_root, input.key)?;
     if announcement.resource.resource_type != RESOURCE_CHUNK_MANIFEST {
         return Err(MoltenError::invalid_harness("federation chunk pull requires a chunk-manifest resource"));
@@ -685,7 +656,7 @@ pub fn pull_chunk_manifest_from_announcement(input: &PullChunkManifestInput<'_>)
         .chain(fetched.fetched_chunks.iter().cloned())
         .collect::<Vec<_>>();
     let resources = vec![announcement.resource.clone()];
-    let receipt_value = federation_receipt_value(&FederationReceiptValueInput {
+    let receipt_value = receipt_value(&ReceiptValueInput {
         operation: "pull-chunk-manifest",
         decision: "pass",
         peer: &announcement.peer,
@@ -694,7 +665,7 @@ pub fn pull_chunk_manifest_from_announcement(input: &PullChunkManifestInput<'_>)
         skipped_refs: &[],
         denied_refs: &[],
     });
-    Ok(FederationPull {
+    Ok(Pull {
         peer: announcement.peer,
         imported_refs,
         skipped_refs: Vec::new(),
@@ -703,7 +674,7 @@ pub fn pull_chunk_manifest_from_announcement(input: &PullChunkManifestInput<'_>)
     })
 }
 
-pub fn federation_status_assertions(pull: &FederationPull) -> Result<Vec<RuntimeAssertion>> {
+pub fn status_assertions(pull: &Pull) -> Result<Vec<RuntimeAssertion>> {
     let mut assertions = Vec::new();
     push_bounded(
         &mut assertions,
@@ -716,7 +687,7 @@ pub fn federation_status_assertions(pull: &FederationPull) -> Result<Vec<Runtime
                 record("denied", vec![sequence(pull.denied_refs.iter().map(string).collect())]),
             ]))?,
         },
-        MAX_FEDERATION_ASSERTIONS,
+        MAX_ASSERTIONS,
         "federation status assertions",
     )?;
     for imported in &pull.imported_refs {
@@ -729,7 +700,7 @@ pub fn federation_status_assertions(pull: &FederationPull) -> Result<Vec<Runtime
                     record("ref", vec![string(imported)]),
                 ]))?,
             },
-            MAX_FEDERATION_ASSERTIONS,
+            MAX_ASSERTIONS,
             "federation status assertions",
         )?;
     }
@@ -743,7 +714,7 @@ pub fn federation_status_assertions(pull: &FederationPull) -> Result<Vec<Runtime
                     record("ref", vec![string(denied)]),
                 ]))?,
             },
-            MAX_FEDERATION_ASSERTIONS,
+            MAX_ASSERTIONS,
             "federation status assertions",
         )?;
     }
@@ -751,8 +722,8 @@ pub fn federation_status_assertions(pull: &FederationPull) -> Result<Vec<Runtime
 }
 
 fn has_valid_delegate(
-    delegates: &[FederationDelegate],
-    resource: &FederatedResource,
+    delegates: &[Delegate],
+    resource: &Resource,
     capability: &str,
     trust_root: &str,
     key: &str,
@@ -766,9 +737,9 @@ fn has_valid_delegate(
     Ok(false)
 }
 
-pub fn federation_receipt_value(input: &FederationReceiptValueInput<'_>) -> IoValue {
+pub fn receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
     record("federation-receipt-v1", vec![
-        string(FEDERATION_RECEIPT_SCHEMA),
+        string(RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("peer", vec![string(input.peer)]),
@@ -789,7 +760,7 @@ pub fn federation_receipt_value(input: &FederationReceiptValueInput<'_>) -> IoVa
     ])
 }
 
-fn announcement_payload_value(peer: &str, resource: &FederatedResource, policy_refs: &[String]) -> IoValue {
+fn announcement_payload_value(peer: &str, resource: &Resource, policy_refs: &[String]) -> IoValue {
     record("federation-announcement-payload", vec![
         record("peer", vec![string(peer)]),
         resource_value(resource),
@@ -801,7 +772,7 @@ fn announcement_payload_value(peer: &str, resource: &FederatedResource, policy_r
     ])
 }
 
-fn inventory_payload_value(peer: &str, resources: &[FederatedResource], delegates: &[FederationDelegate]) -> IoValue {
+fn inventory_payload_value(peer: &str, resources: &[Resource], delegates: &[Delegate]) -> IoValue {
     record("federation-inventory-payload", vec![
         record("peer", vec![string(peer)]),
         record("resources", vec![sequence(resources.iter().map(resource_value).collect())]),
@@ -816,7 +787,7 @@ fn inventory_payload_value(peer: &str, resources: &[FederatedResource], delegate
     ])
 }
 
-fn resource_value(resource: &FederatedResource) -> IoValue {
+fn resource_value(resource: &Resource) -> IoValue {
     record("federated-resource", vec![
         record("type", vec![string(&resource.resource_type)]),
         record("ref", vec![string(&resource.resource_ref)]),
@@ -826,7 +797,7 @@ fn resource_value(resource: &FederatedResource) -> IoValue {
     ])
 }
 
-fn parse_announcement_payload(value: &IoValue) -> Result<(String, FederatedResource, Vec<String>)> {
+fn parse_announcement_payload(value: &IoValue) -> Result<(String, Resource, Vec<String>)> {
     let fields = value
         .collect_simple_record("federation-announcement-payload", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected federation announcement payload"))?;
@@ -838,7 +809,7 @@ fn parse_announcement_payload(value: &IoValue) -> Result<(String, FederatedResou
     Ok((peer, resource, policy_refs))
 }
 
-fn parse_inventory_payload(value: &IoValue) -> Result<(String, Vec<FederatedResource>, Vec<FederationDelegate>)> {
+fn parse_inventory_payload(value: &IoValue) -> Result<(String, Vec<Resource>, Vec<Delegate>)> {
     let fields = value
         .collect_simple_record("federation-inventory-payload", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected federation inventory payload"))?;
@@ -870,11 +841,11 @@ fn parse_inventory_payload(value: &IoValue) -> Result<(String, Vec<FederatedReso
     Ok((peer, resources, delegates))
 }
 
-fn parse_resource(value: &IoValue) -> Result<FederatedResource> {
+fn parse_resource(value: &IoValue) -> Result<Resource> {
     let fields = value
         .collect_simple_record("federated-resource", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected federated resource"))?;
-    let resource = FederatedResource::new(
+    let resource = Resource::new(
         record_string(&fields[0], "type")?,
         record_string(&fields[1], "ref")?,
         record_string(&fields[2], "schema")?,
@@ -949,7 +920,7 @@ fn signature_for(payload: &IoValue, signer: &str, purpose: &str, trust_root: &st
     Ok(content_ref_from_bytes(&material))
 }
 
-fn validate_resource(resource: &FederatedResource) -> Result<()> {
+fn validate_resource(resource: &Resource) -> Result<()> {
     if resource.resource_type.trim().is_empty()
         || resource.schema.trim().is_empty()
         || resource.transport.trim().is_empty()
@@ -1093,7 +1064,7 @@ mod tests {
 
     #[test]
     fn signed_announcement_binds_resource_and_rejects_wrong_key() {
-        let resource = FederatedResource::new(
+        let resource = Resource::new(
             RESOURCE_ARTIFACT,
             ref_for("artifact"),
             "molten.ledger.artifact.v1",
@@ -1143,7 +1114,7 @@ mod tests {
         let artifact = record("federation-test-artifact", vec![string("hello")]);
         let imported = ledger::import_artifact(&source, &artifact).expect("source import");
         let inventory = inventory_ledger(&source, "peer:source", "peer:source", "root", "key").expect("inventory");
-        let tampered_resource = FederatedResource::new(
+        let tampered_resource = Resource::new(
             "artifact",
             imported.artifact_ref,
             "molten.ledger.artifact.v1",
@@ -1178,7 +1149,7 @@ mod tests {
         let destination = temp_dir("federation-delegate-destination");
         let artifact = record("federation-test-artifact", vec![string("hello")]);
         let imported = ledger::import_artifact(&source, &artifact).expect("source import");
-        let resource = FederatedResource::new(
+        let resource = Resource::new(
             RESOURCE_ARTIFACT,
             imported.artifact_ref.clone(),
             "molten.ledger.artifact.v1",
@@ -1196,11 +1167,11 @@ mod tests {
             key: "key",
         })
         .expect("inventory with delegate");
-        let policy = FederationPullPolicy {
+        let policy = PullPolicy {
             required_delegate_capability: Some("pull".to_string()),
             delegate_trust_root: "delegate-root".to_string(),
             delegate_key: "delegate-key".to_string(),
-            ..FederationPullPolicy::allow_all()
+            ..PullPolicy::allow_all()
         };
         let pull = pull_ledger_inventory_with_policy(&PullLedgerInventoryPolicyInput {
             source_root: &source,
@@ -1238,9 +1209,9 @@ mod tests {
         let second = ledger::import_artifact(&source, &record("federation-test-artifact", vec![string("two")]))
             .expect("second import");
         let inventory = inventory_ledger(&source, "peer:source", "peer:source", "root", "key").expect("inventory");
-        let policy = FederationPullPolicy {
+        let policy = PullPolicy {
             max_resources: 1,
-            ..FederationPullPolicy::allow_all()
+            ..PullPolicy::allow_all()
         };
         let pull = pull_ledger_inventory_with_policy(&PullLedgerInventoryPolicyInput {
             source_root: &source,
@@ -1260,12 +1231,12 @@ mod tests {
 
     #[test]
     fn sync_status_assertions_capture_imports_and_denials() {
-        let pull = FederationPull {
+        let pull = Pull {
             peer: "peer:source".to_string(),
             imported_refs: vec![ref_for("imported")],
             skipped_refs: Vec::new(),
             denied_refs: vec![ref_for("denied")],
-            receipt_value: federation_receipt_value(&FederationReceiptValueInput {
+            receipt_value: receipt_value(&ReceiptValueInput {
                 operation: "test",
                 decision: "fail",
                 peer: "peer:source",
@@ -1275,7 +1246,7 @@ mod tests {
                 denied_refs: &[],
             }),
         };
-        let assertions = federation_status_assertions(&pull).expect("status assertions");
+        let assertions = status_assertions(&pull).expect("status assertions");
         assert_eq!(assertions.len(), 3);
         assert!(assertions.iter().any(|assertion| {
             assertion.value.as_iovalue().collect_simple_record("federation-sync-status", None).is_some()
@@ -1296,7 +1267,7 @@ mod tests {
         let put = chunk_store::put_bytes(&source, "artifact", b"abcdef", 2).expect("put chunks");
         let published =
             chunk_store::publish_iroh_blobs(&source, &iroh, &put.manifest_ref, "peer:source").expect("publish chunks");
-        let resource = FederatedResource::new(
+        let resource = Resource::new(
             RESOURCE_CHUNK_MANIFEST,
             put.manifest_ref.clone(),
             "molten.chunk-store.manifest.v1",
