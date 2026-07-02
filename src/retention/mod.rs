@@ -2942,7 +2942,7 @@ fn push_index_gates(gates: &mut impl VecSink<PlanGate>, input: &GateInputs<'_>, 
     )?;
     push_bounded(
         gates,
-        local_retention_gate(LocalGateInput {
+        local_gate(LocalGateInput {
             input: input.input,
             index,
             has_delete_authority: input.has_delete_authority,
@@ -3026,7 +3026,7 @@ fn requester_gate(requester_ref: Option<&str>) -> Result<PlanGate> {
     })
 }
 
-fn local_retention_gate(input: LocalGateInput<'_>) -> Result<PlanGate> {
+fn local_gate(input: LocalGateInput<'_>) -> Result<PlanGate> {
     let requester_ref = match input.input.evidence.requester_ref.as_ref() {
         Some(reference) => reference.clone(),
         None => synthetic_ref("retention-gc-plan-missing-requester")?,
@@ -3705,7 +3705,7 @@ pub fn admit_destructive_evidence(input: DestructiveAdmissionInput<'_>) -> Resul
     validate_name(input.object_kind, "retention admission object kind")?;
     validate_class(input.retention_class)?;
     validate_action(input.action)?;
-    let mut diagnostics = destructive_retention_evidence_diagnostics(input.evidence, input.action)?;
+    let mut diagnostics = destructive_evidence_diagnostics(input.evidence, input.action)?;
     let mut admitted_refs = Vec::new();
     let scope = AdmissionScope {
         requester_ref: input.evidence.requester_ref.as_deref(),
@@ -3790,7 +3790,7 @@ where S: VecSink<String> {
     Ok(())
 }
 
-pub fn destructive_retention_evidence_diagnostics(input: &DestructiveEvidence, action: &str) -> Result<Vec<String>> {
+pub fn destructive_evidence_diagnostics(input: &DestructiveEvidence, action: &str) -> Result<Vec<String>> {
     validate_destructive_evidence(input)?;
     validate_action(action)?;
     let is_destructive = is_destructive_action(action);
@@ -3839,7 +3839,7 @@ pub fn destructive_retention_evidence_diagnostics(input: &DestructiveEvidence, a
     Ok(diagnostics)
 }
 
-pub fn destructive_retention_evidence_value(input: &DestructiveEvidence) -> Result<IoValue> {
+pub fn destructive_evidence_value(input: &DestructiveEvidence) -> Result<IoValue> {
     validate_destructive_evidence(input)?;
     let requester_value = input
         .requester_ref
@@ -3907,7 +3907,7 @@ pub fn store_gc_plan(input: GcPlanInput<'_>) -> Result<GcPlan> {
     } else {
         "deny"
     };
-    let evidence_value = destructive_retention_evidence_value(input.evidence)?;
+    let evidence_value = destructive_evidence_value(input.evidence)?;
     let value = gc_plan_value(&GcPlanValueInput {
         decision,
         subsystem: input.subsystem,
@@ -5094,7 +5094,7 @@ impl MatchRefs {
 }
 
 fn pins_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &pins_dir(root),
         parse_pin,
         |pin| filter.matches_object(&pin.object_ref, &pin.object_kind, &pin.retention_class),
@@ -5104,7 +5104,7 @@ fn pins_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
 }
 
 fn admissions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &admissions_dir(root),
         parse_evidence_admission,
         |admission| {
@@ -5121,7 +5121,7 @@ fn admissions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<Strin
 }
 
 fn clearances_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &remote_clearances_dir(root),
         parse_remote_gc_clearance,
         |clearance| {
@@ -5138,7 +5138,7 @@ fn clearances_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<Strin
 }
 
 fn imports_for(root: &Path, remote_clearance_refs: &[String]) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &remote_clearance_imports_dir(root),
         parse_remote_gc_clearance_import,
         |import| import.clearance_ref.as_ref().is_some_and(|reference| remote_clearance_refs.contains(reference)),
@@ -5148,7 +5148,7 @@ fn imports_for(root: &Path, remote_clearance_refs: &[String]) -> Result<Vec<Stri
 }
 
 fn plans_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &gc_plans_dir(root),
         parse_gc_plan,
         |plan| {
@@ -5160,7 +5160,7 @@ fn plans_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
 }
 
 fn applies_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &gc_applies_dir(root),
         parse_gc_apply,
         |apply| {
@@ -5178,7 +5178,7 @@ fn applies_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>>
 }
 
 fn executions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &gc_executes_dir(root),
         parse_gc_execution_gate,
         |execute| {
@@ -5196,7 +5196,7 @@ fn executions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<Strin
 }
 
 fn audits_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &gc_audits_dir(root),
         parse_gc_audit,
         |audit| {
@@ -5214,7 +5214,7 @@ fn audits_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> 
 }
 
 fn receipts_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &receipts_dir(root),
         parse_receipt,
         |receipt| {
@@ -5231,7 +5231,7 @@ fn receipts_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>
 }
 
 fn tombstones_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_retention_refs(
+    collect_matching_refs(
         &tombstones_dir(root),
         parse_tombstone,
         |tombstone| {
@@ -5496,10 +5496,10 @@ fn profile_candidate_bundle(
     let mut marker_refs = Vec::new();
     let mut diagnostics = Vec::new();
     if profile != CandidateBundleExportProfile::Internal {
-        collect_retention_bundle_sensitive_markers(&bundle.value, "/bundle", &bundle.bundle_ref, &mut marker_refs)?;
+        collect_bundle_sensitive_markers(&bundle.value, "/bundle", &bundle.bundle_ref, &mut marker_refs)?;
         let explain_value = read_store_value(&bundle_dir.join("explain.preserves"))?;
-        collect_retention_bundle_sensitive_markers(&explain_value, "/explain", &bundle.bundle_ref, &mut marker_refs)?;
-        collect_retention_bundle_artifact_sensitive_markers(bundle_dir, &bundle.bundle_ref, &mut marker_refs)?;
+        collect_bundle_sensitive_markers(&explain_value, "/explain", &bundle.bundle_ref, &mut marker_refs)?;
+        collect_bundle_artifact_sensitive_markers(bundle_dir, &bundle.bundle_ref, &mut marker_refs)?;
         marker_refs.sort();
         marker_refs.dedup();
     }
@@ -5539,7 +5539,7 @@ fn profile_candidate_bundle(
     parse_candidate_bundle_profile(&value)
 }
 
-fn collect_retention_bundle_artifact_sensitive_markers(
+fn collect_bundle_artifact_sensitive_markers(
     bundle_dir: &Path,
     bundle_ref: &str,
     marker_refs: &mut impl VecSink<String>,
@@ -5564,7 +5564,7 @@ fn collect_retention_bundle_artifact_sensitive_markers(
             }
             let value = read_store_value(&path)?;
             let file_name = entry.file_name().to_string_lossy().into_owned();
-            collect_retention_bundle_sensitive_markers(
+            collect_bundle_sensitive_markers(
                 &value,
                 &format!("/artifacts/{dir_name}/{file_name}"),
                 bundle_ref,
@@ -5575,7 +5575,7 @@ fn collect_retention_bundle_artifact_sensitive_markers(
     Ok(())
 }
 
-fn collect_retention_bundle_sensitive_markers(
+fn collect_bundle_sensitive_markers(
     value: &IoValue,
     path: &str,
     bundle_ref: &str,
@@ -6053,11 +6053,11 @@ pub fn verify_candidate_bundle(input: CandidateBundleVerifyInput<'_>) -> Result<
     let explain_value = read_store_value(&input.bundle_dir.join("explain.preserves"))?;
     let explain = parse_candidate_explain(&explain_value)?;
     let mut diagnostics = Vec::new();
-    push_retention_bundle_scope_diagnostics(&bundle, &explain, &mut diagnostics)?;
+    push_bundle_scope_diagnostics(&bundle, &explain, &mut diagnostics)?;
     let expected_refs = candidate_bundle_expected_refs(&bundle)?;
     let expected_ref_set = push_expected_ref_notes(&bundle, &expected_refs, &mut diagnostics)?;
     let mut file_refs = Vec::new();
-    scan_retention_bundle_artifact_files(
+    scan_bundle_artifact_files(
         &input.bundle_dir.join("artifacts"),
         &expected_ref_set,
         &mut file_refs,
@@ -6219,7 +6219,7 @@ fn push_mismatch_notes(checks: &[MismatchNote], diagnostics: &mut impl VecSink<S
     Ok(())
 }
 
-fn push_retention_bundle_scope_diagnostics(
+fn push_bundle_scope_diagnostics(
     bundle: &CandidateBundle,
     explain: &CandidateExplain,
     diagnostics: &mut impl VecSink<String>,
@@ -6288,7 +6288,7 @@ fn ref_set(refs: &[String]) -> OrderedSet<String> {
     refs.iter().cloned().collect()
 }
 
-fn scan_retention_bundle_artifact_files(
+fn scan_bundle_artifact_files(
     artifact_dir: &Path,
     expected_refs: &OrderedSet<String>,
     file_refs: &mut impl VecSink<String>,
@@ -6695,7 +6695,7 @@ impl CandidateFilter<'_> {
     }
 }
 
-fn collect_matching_retention_refs<T, Parse, Matches, Reference>(
+fn collect_matching_refs<T, Parse, Matches, Reference>(
     dir: &Path,
     parse: Parse,
     matches: Matches,
@@ -8925,8 +8925,7 @@ mod tests {
         .expect("store requester-bound plan");
         let mut mismatched_evidence = fixture.evidence.clone();
         mismatched_evidence.requester_ref = Some(fake_ref("wrong-plan-requester"));
-        let evidence_value =
-            destructive_retention_evidence_value(&mismatched_evidence).expect("mismatched evidence value");
+        let evidence_value = destructive_evidence_value(&mismatched_evidence).expect("mismatched evidence value");
         let index = reference_index_for_object(ReferenceIndexForObjectInput {
             root: &root,
             object_ref: &fixture.object_ref,

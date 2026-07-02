@@ -2270,7 +2270,7 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
     };
     let requester_ref =
         crate::retention::destructive_requester_ref(input.retention_evidence, "chunk-store-gc-missing-requester")?;
-    let evidence_summary = crate::retention::destructive_retention_evidence_value(input.retention_evidence)?;
+    let evidence_summary = crate::retention::destructive_evidence_value(input.retention_evidence)?;
     let env = GcEnv {
         root,
         is_dry_run: input.dry_run,

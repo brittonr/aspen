@@ -153,7 +153,7 @@ pub fn gc(root: &std::path::Path, input: LedgerGcInput<'_>) -> crate::error::Res
     let action = action_for(input.dry_run);
     let requester_ref =
         crate::retention::destructive_requester_ref(input.retention_evidence, "ledger-gc-missing-requester")?;
-    let evidence_summary = crate::retention::destructive_retention_evidence_value(input.retention_evidence)?;
+    let evidence_summary = crate::retention::destructive_evidence_value(input.retention_evidence)?;
     let review = review_entries(
         ReviewInput {
             root,
