@@ -2,8 +2,6 @@ use std::fs;
 
 type IoValue = preserves::IOValue;
 
-use crate::ledger;
-
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
@@ -738,7 +736,7 @@ pub fn import_octet_artifacts_to_ledger(input: &OctetArtifactLedgerInput) -> Res
     ensure_count_at_most(values.len(), MAX_OCTET_IMPORTED_REFS, "octet imported artifacts")?;
     let mut imported_refs = Vec::with_capacity(values.len());
     for value in &values {
-        imported_refs.push(ledger::import_artifact(&input.ledger_root, value)?.artifact_ref);
+        imported_refs.push(crate::ledger::import_artifact(&input.ledger_root, value)?.artifact_ref);
     }
     push_check(&mut checks, "octet-ledger-imports", !imported_refs.is_empty());
     let decision = if checks.iter().all(|check| check.status == "pass") {
@@ -2803,12 +2801,13 @@ mod tests {
         .expect("import octet artifacts");
 
         assert_eq!(imported.decision, "pass");
-        let kinds = ledger::list_artifacts(&ledger_root)
+        let kinds = crate::ledger::list_artifacts(&ledger_root)
             .expect("list ledger")
             .into_iter()
             .map(|entry| {
-                let value = ledger::read_artifact(&ledger_root, &entry.artifact_ref).expect("read ledger artifact");
-                ledger::artifact_kind(&value).to_string()
+                let value =
+                    crate::ledger::read_artifact(&ledger_root, &entry.artifact_ref).expect("read ledger artifact");
+                crate::ledger::artifact_kind(&value).to_string()
             })
             .collect::<Vec<_>>();
         assert!(kinds.iter().any(|kind| kind == "octet-command-artifact"));
