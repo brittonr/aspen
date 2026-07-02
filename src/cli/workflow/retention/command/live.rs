@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+type PathBuf = std::path::PathBuf;
 
 #[derive(Debug, clap::Args)]
 pub(crate) struct RequestSend {
