@@ -88,7 +88,7 @@ pub struct ResourceLimits {
 pub struct HandshakeRecord {
     pub handshake_ref: String,
     pub node_id: String,
-    pub node_identity_ref: String,
+    pub identity_ref: String,
     pub endpoint_id: String,
     pub molten_version: String,
     pub features: FeatureVector,
@@ -145,7 +145,7 @@ pub struct PeerAgreement {
 
 pub struct HandshakeValueInput<'a> {
     pub node_id: &'a str,
-    pub node_identity_ref: &'a str,
+    pub identity_ref: &'a str,
     pub endpoint_id: &'a str,
     pub molten_version: &'a str,
     pub features: &'a FeatureVector,
@@ -196,7 +196,7 @@ pub fn bootstrap_input_value(input: &BootstrapInput) -> Result<IoValue> {
 
 pub fn handshake_value(input: &HandshakeValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.node_id, "peer handshake node id")?;
-    require_ref(input.node_identity_ref, "peer handshake node identity ref")?;
+    require_ref(input.identity_ref, "peer handshake node identity ref")?;
     validate_endpoint(input.endpoint_id)?;
     validate_features(input.features)?;
     validate_refs(input.policy_refs, "peer handshake policy ref")?;
@@ -211,7 +211,7 @@ pub fn handshake_value(input: &HandshakeValueInput<'_>) -> Result<IoValue> {
         string(PEER_HANDSHAKE_SCHEMA),
         record("node", vec![
             record("id", vec![string(input.node_id)]),
-            record("identity", vec![string(input.node_identity_ref)]),
+            record("identity", vec![string(input.identity_ref)]),
             record("endpoint-id", vec![string(input.endpoint_id)]),
             record("version", vec![string(input.molten_version)]),
         ]),
@@ -251,7 +251,7 @@ pub fn parse_handshake(value: &IoValue) -> Result<HandshakeRecord> {
     Ok(HandshakeRecord {
         handshake_ref: canonical_hash(value)?,
         node_id: record_string(&node_fields[0], "id")?,
-        node_identity_ref: record_string(&node_fields[1], "identity")?,
+        identity_ref: record_string(&node_fields[1], "identity")?,
         endpoint_id: record_string(&node_fields[2], "endpoint-id")?,
         molten_version: record_string(&node_fields[3], "version")?,
         features,
@@ -364,11 +364,8 @@ fn agreement_value(input: AgreementValueInput<'_>) -> IoValue {
         string(PEER_AGREEMENT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("peers", vec![
-            record("local", vec![string(&input.local.node_identity_ref), string(&input.local.endpoint_id)]),
-            record("remote", vec![
-                string(&input.remote.node_identity_ref),
-                string(&input.remote.endpoint_id),
-            ]),
+            record("local", vec![string(&input.local.identity_ref), string(&input.local.endpoint_id)]),
+            record("remote", vec![string(&input.remote.identity_ref), string(&input.remote.endpoint_id)]),
         ]),
         feature_vector_value(input.selected_features),
         record("admitted-joins", vec![sequence(input.admitted_joins.iter().map(join_value).collect())]),
@@ -780,7 +777,7 @@ mod tests {
         remote_features.preserves_boundaries = vec!["legacy-preserves".to_string()];
         let remote = handshake_value(&HandshakeValueInput {
             node_id: "remote",
-            node_identity_ref: &ref_for("remote-identity"),
+            identity_ref: &ref_for("remote-identity"),
             endpoint_id: "iroh:remote",
             molten_version: "0.1.0",
             features: &remote_features,
@@ -869,7 +866,7 @@ mod tests {
     fn sample_handshake(name: &str, offers: Vec<CapabilityOffer>, joins: Vec<JoinRequest>) -> IoValue {
         handshake_value(&HandshakeValueInput {
             node_id: name,
-            node_identity_ref: &ref_for(&format!("identity-{name}")),
+            identity_ref: &ref_for(&format!("identity-{name}")),
             endpoint_id: &format!("iroh:{name}"),
             molten_version: "0.1.0",
             features: &sample_features(),

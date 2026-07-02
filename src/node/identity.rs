@@ -42,7 +42,7 @@ const ENDPOINT_FILE: &str = "node-endpoint.id";
 const KEY_ALGORITHM: &str = "blake3-local-endpoint-fixture-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeIdentityConfig {
+pub struct Config {
     pub node_id: String,
     pub display_name: String,
     pub data_dir: std::path::PathBuf,
@@ -52,7 +52,7 @@ pub struct NodeIdentityConfig {
     pub policy_refs: Vec<String>,
 }
 
-impl NodeIdentityConfig {
+impl Config {
     pub fn new(node_id: impl Into<String>, data_dir: impl Into<std::path::PathBuf>) -> Self {
         let node_id = node_id.into();
         Self {
@@ -68,7 +68,7 @@ impl NodeIdentityConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeIdentity {
+pub struct Identity {
     pub identity_ref: String,
     pub node_id: String,
     pub display_name: String,
@@ -83,23 +83,23 @@ pub struct NodeIdentity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeIdentityResolution {
-    pub identity: Option<NodeIdentity>,
+pub struct Resolution {
+    pub identity: Option<Identity>,
     pub receipt_ref: String,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeBootstrapHandshake {
+pub struct BootstrapHandshake {
     pub handshake_ref: String,
-    pub node_identity_ref: String,
+    pub identity_ref: String,
     pub endpoint_id: String,
     pub peer: String,
     pub value: IoValue,
 }
 
 struct ResolutionInput<'a> {
-    config: &'a NodeIdentityConfig,
+    config: &'a Config,
     operation: &'a str,
     secret: &'a str,
     material: &'a EndpointMaterial,
@@ -121,7 +121,7 @@ struct ReceiptValueInput<'a> {
     checks: &'a [&'a str],
 }
 
-pub fn resolve_node_identity(config: &NodeIdentityConfig) -> Result<NodeIdentityResolution> {
+pub fn resolve(config: &Config) -> Result<Resolution> {
     validate_config(config)?;
     let backend_ref = backend_ref(&config.data_dir)?;
     let secret_path = config.data_dir.join(SECRET_FILE);
@@ -170,7 +170,7 @@ pub fn resolve_node_identity(config: &NodeIdentityConfig) -> Result<NodeIdentity
         });
     }
 
-    let receipt_value = node_identity_receipt_value(&ReceiptValueInput {
+    let receipt_value = receipt_value(&ReceiptValueInput {
         operation: "deny-if-unavailable",
         decision: "fail",
         node_id: &config.node_id,
@@ -182,15 +182,15 @@ pub fn resolve_node_identity(config: &NodeIdentityConfig) -> Result<NodeIdentity
         diagnostic: "persistent endpoint key unavailable and generation is disabled",
         checks: &["resolution-order", "no-secret-material", "deny-if-unavailable"],
     });
-    Ok(NodeIdentityResolution {
+    Ok(Resolution {
         identity: None,
         receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
         receipt_value,
     })
 }
 
-pub fn node_identity_value(
-    config: &NodeIdentityConfig,
+pub fn identity_value(
+    config: &Config,
     material: &EndpointMaterial,
     key_source_class: &str,
     backend_ref: &str,
@@ -227,7 +227,7 @@ pub fn node_identity_value(
     ])
 }
 
-pub fn parse_node_identity(value: &IoValue) -> Result<NodeIdentity> {
+pub fn parse_identity(value: &IoValue) -> Result<Identity> {
     let fields = value
         .collect_simple_record("node-identity-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-identity-v1 ...>"))?;
@@ -249,7 +249,7 @@ pub fn parse_node_identity(value: &IoValue) -> Result<NodeIdentity> {
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "no-ambient-authority")?;
     require_check(&checks, "secret-material-redacted")?;
-    Ok(NodeIdentity {
+    Ok(Identity {
         identity_ref: crate::preserves_rail::canonical_hash(value)?,
         node_id: record_string(&node_fields[0], "id")?,
         display_name: record_string(&node_fields[1], "display-name")?,
@@ -264,7 +264,7 @@ pub fn parse_node_identity(value: &IoValue) -> Result<NodeIdentity> {
     })
 }
 
-pub fn node_bootstrap_handshake_value(identity: &NodeIdentity, peer: &str, policy_refs: &[String]) -> Result<IoValue> {
+pub fn bootstrap_handshake_value(identity: &Identity, peer: &str, policy_refs: &[String]) -> Result<IoValue> {
     if peer.trim().is_empty() {
         return Err(MoltenError::invalid_harness("node bootstrap peer must not be empty"));
     }
@@ -288,7 +288,7 @@ pub fn node_bootstrap_handshake_value(identity: &NodeIdentity, peer: &str, polic
     ]))
 }
 
-pub fn parse_node_bootstrap_handshake(value: &IoValue) -> Result<NodeBootstrapHandshake> {
+pub fn parse_bootstrap_handshake(value: &IoValue) -> Result<BootstrapHandshake> {
     let fields = value
         .collect_simple_record("node-identity-bootstrap-v1", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-identity-bootstrap-v1 ...>"))?;
@@ -303,16 +303,16 @@ pub fn parse_node_bootstrap_handshake(value: &IoValue) -> Result<NodeBootstrapHa
         .ok_or_else(|| MoltenError::invalid_harness("node bootstrap missing node field"))?;
     let checks = parse_checks(&fields[4])?;
     require_check(&checks, "join-admission-still-required")?;
-    Ok(NodeBootstrapHandshake {
+    Ok(BootstrapHandshake {
         handshake_ref: crate::preserves_rail::canonical_hash(value)?,
-        node_identity_ref: record_string(&node_fields[0], "identity")?,
+        identity_ref: record_string(&node_fields[0], "identity")?,
         endpoint_id: record_string(&node_fields[2], "endpoint-id")?,
         peer: record_string(&fields[2], "peer")?,
         value: value.clone(),
     })
 }
 
-pub fn node_identity_startup_evidence_value(identity_ref: &str, receipt_ref: &str) -> Result<IoValue> {
+pub fn startup_evidence_value(identity_ref: &str, receipt_ref: &str) -> Result<IoValue> {
     require_ref(identity_ref, "node identity startup identity ref")?;
     require_ref(receipt_ref, "node identity startup receipt ref")?;
     Ok(record("node-identity-startup-v1", vec![
@@ -326,7 +326,7 @@ pub fn node_identity_startup_evidence_value(identity_ref: &str, receipt_ref: &st
     ]))
 }
 
-fn finish_resolution(input: ResolutionInput<'_>) -> Result<NodeIdentityResolution> {
+fn finish_resolution(input: ResolutionInput<'_>) -> Result<Resolution> {
     if input.secret.trim().is_empty() {
         return Err(MoltenError::invalid_harness("node endpoint secret must not be empty"));
     }
@@ -341,24 +341,24 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<NodeIdentityResolutio
     let receipt_operation = resolution_operation(&input, is_drift);
     let pre_receipt_value = pass_receipt(&input, receipt_operation, None);
     let pre_receipt_ref = crate::preserves_rail::canonical_hash(&pre_receipt_value)?;
-    let identity_value = node_identity_value(
+    let identity_value = identity_value(
         input.config,
         input.material,
         input.operation,
         input.backend_ref,
         std::slice::from_ref(&pre_receipt_ref),
     );
-    let identity = parse_node_identity(&identity_value)?;
+    let identity = parse_identity(&identity_value)?;
     let receipt_value = pass_receipt(&input, receipt_operation, Some(&identity.identity_ref));
-    Ok(NodeIdentityResolution {
+    Ok(Resolution {
         identity: Some(identity),
         receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
         receipt_value,
     })
 }
 
-fn drift_denial(input: &ResolutionInput<'_>) -> Result<NodeIdentityResolution> {
-    let receipt_value = node_identity_receipt_value(&ReceiptValueInput {
+fn drift_denial(input: &ResolutionInput<'_>) -> Result<Resolution> {
+    let receipt_value = receipt_value(&ReceiptValueInput {
         operation: "drift-detected",
         decision: "fail",
         node_id: &input.config.node_id,
@@ -370,7 +370,7 @@ fn drift_denial(input: &ResolutionInput<'_>) -> Result<NodeIdentityResolution> {
         diagnostic: "endpoint id drift detected; rotation policy is required",
         checks: &["drift-detection", "rotation-denied", "no-secret-material"],
     });
-    Ok(NodeIdentityResolution {
+    Ok(Resolution {
         identity: None,
         receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
         receipt_value,
@@ -396,7 +396,7 @@ fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Opti
         "identity-grants-no-authority",
         "config-contract",
     ];
-    node_identity_receipt_value(&ReceiptValueInput {
+    receipt_value(&ReceiptValueInput {
         operation,
         decision: "pass",
         node_id: &input.config.node_id,
@@ -410,7 +410,7 @@ fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Opti
     })
 }
 
-fn node_identity_receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
+fn receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
     record("node-identity-receipt-v1", vec![
         string(crate::preserves_rail::NODE_IDENTITY_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -472,7 +472,7 @@ fn backend_ref(data_dir: &std::path::Path) -> Result<String> {
     ]))
 }
 
-fn validate_config(config: &NodeIdentityConfig) -> Result<()> {
+fn validate_config(config: &Config) -> Result<()> {
     if config.node_id.trim().is_empty() {
         return Err(MoltenError::invalid_harness("node id must not be empty"));
     }
@@ -606,10 +606,10 @@ mod tests {
     #[test]
     fn restart_with_same_data_dir_preserves_endpoint_id_without_secret_in_receipts() {
         let dir = temp_dir("node-identity-restart");
-        let config = NodeIdentityConfig::new("node-a", &dir);
-        let first = resolve_node_identity(&config).expect("first resolve");
+        let config = Config::new("node-a", &dir);
+        let first = resolve(&config).expect("first resolve");
         let first_identity = first.identity.expect("first identity");
-        let second = resolve_node_identity(&config).expect("second resolve");
+        let second = resolve(&config).expect("second resolve");
         let second_identity = second.identity.expect("second identity");
         assert_eq!(first_identity.endpoint_id, second_identity.endpoint_id);
         assert_eq!(second_identity.key_source_class, "persisted-file");
@@ -623,17 +623,17 @@ mod tests {
     #[test]
     fn drift_is_denied_unless_rotation_policy_is_admitted() {
         let dir = temp_dir("node-identity-drift");
-        let config = NodeIdentityConfig::new("node-a", &dir);
-        let first = resolve_node_identity(&config).expect("first resolve");
+        let config = Config::new("node-a", &dir);
+        let first = resolve(&config).expect("first resolve");
         let first_endpoint = first.identity.expect("identity").endpoint_id;
         fs::write(dir.join(SECRET_FILE), "replacement-secret\n").expect("replace secret");
-        let drift = resolve_node_identity(&config).expect("drift receipt");
+        let drift = resolve(&config).expect("drift receipt");
         assert!(drift.identity.is_none());
         assert!(crate::preserves_rail::to_text(&drift.receipt_value).expect("drift text").contains("drift-detected"));
 
         let mut rotation = config.clone();
         rotation.allow_rotation = true;
-        let rotated = resolve_node_identity(&rotation).expect("rotation allowed");
+        let rotated = resolve(&rotation).expect("rotation allowed");
         let rotated_endpoint = rotated.identity.expect("rotated identity").endpoint_id;
         assert_ne!(first_endpoint, rotated_endpoint);
     }
@@ -641,10 +641,10 @@ mod tests {
     #[test]
     fn explicit_key_and_deny_if_unavailable_follow_resolution_order() {
         let explicit_dir = temp_dir("node-identity-explicit");
-        let mut explicit = NodeIdentityConfig::new("node-explicit", &explicit_dir);
+        let mut explicit = Config::new("node-explicit", &explicit_dir);
         explicit.explicit_key = Some("deployment-secret".to_string());
         explicit.allow_generate = false;
-        let resolved = resolve_node_identity(&explicit).expect("explicit resolve");
+        let resolved = resolve(&explicit).expect("explicit resolve");
         assert_eq!(resolved.identity.expect("explicit identity").key_source_class, "explicit-key");
         assert!(
             !crate::preserves_rail::to_text(&resolved.receipt_value)
@@ -653,9 +653,9 @@ mod tests {
         );
 
         let denied_dir = temp_dir("node-identity-denied");
-        let mut denied = NodeIdentityConfig::new("node-denied", denied_dir);
+        let mut denied = Config::new("node-denied", denied_dir);
         denied.allow_generate = false;
-        let denied = resolve_node_identity(&denied).expect("denial receipt");
+        let denied = resolve(&denied).expect("denial receipt");
         assert!(denied.identity.is_none());
         assert!(
             crate::preserves_rail::to_text(&denied.receipt_value)
@@ -667,19 +667,18 @@ mod tests {
     #[test]
     fn bootstrap_and_startup_evidence_bind_identity_without_authority() {
         let dir = temp_dir("node-identity-bootstrap");
-        let resolved = resolve_node_identity(&NodeIdentityConfig::new("node-a", &dir)).expect("resolve");
+        let resolved = resolve(&Config::new("node-a", &dir)).expect("resolve");
         let identity = resolved.identity.expect("identity");
-        let handshake = node_bootstrap_handshake_value(&identity, "peer:b", &[]).expect("handshake");
-        let parsed = parse_node_bootstrap_handshake(&handshake).expect("parse handshake");
-        assert_eq!(parsed.node_identity_ref, identity.identity_ref);
+        let handshake = bootstrap_handshake_value(&identity, "peer:b", &[]).expect("handshake");
+        let parsed = parse_bootstrap_handshake(&handshake).expect("parse handshake");
+        assert_eq!(parsed.identity_ref, identity.identity_ref);
         assert_eq!(parsed.endpoint_id, identity.endpoint_id);
         assert!(
             crate::preserves_rail::to_text(&handshake)
                 .expect("handshake text")
                 .contains("identity-grants-no-capabilities")
         );
-        let startup =
-            node_identity_startup_evidence_value(&identity.identity_ref, &resolved.receipt_ref).expect("startup");
+        let startup = startup_evidence_value(&identity.identity_ref, &resolved.receipt_ref).expect("startup");
         assert!(crate::preserves_rail::to_text(&startup).expect("startup text").contains("private-key-not-required"));
     }
 
@@ -688,14 +687,14 @@ mod tests {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let secret_suffix = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let secret = format!("explicit-secret-{salt}-{secret_suffix}");
-        let mut first_config = NodeIdentityConfig::new(format!("node-{salt}"), temp_dir("node-identity-hegel-a"));
+        let mut first_config = Config::new(format!("node-{salt}"), temp_dir("node-identity-hegel-a"));
         first_config.explicit_key = Some(secret.clone());
         first_config.allow_generate = false;
-        let mut second_config = NodeIdentityConfig::new(format!("node-{salt}"), temp_dir("node-identity-hegel-b"));
+        let mut second_config = Config::new(format!("node-{salt}"), temp_dir("node-identity-hegel-b"));
         second_config.explicit_key = Some(secret.clone());
         second_config.allow_generate = false;
-        let first = resolve_node_identity(&first_config).expect("first explicit");
-        let second = resolve_node_identity(&second_config).expect("second explicit");
+        let first = resolve(&first_config).expect("first explicit");
+        let second = resolve(&second_config).expect("second explicit");
         assert_eq!(
             first.identity.as_ref().expect("first identity").endpoint_id,
             second.identity.as_ref().expect("second identity").endpoint_id

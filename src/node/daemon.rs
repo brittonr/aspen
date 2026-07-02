@@ -459,7 +459,7 @@ pub struct ControlAuthorityGrantInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct ControlLiveTicketInput<'a> {
     pub node_id: &'a str,
-    pub node_identity_ref: &'a str,
+    pub identity_ref: &'a str,
     pub logical_endpoint_id: &'a str,
     pub live_endpoint_id: &'a str,
     pub topic: &'a str,
@@ -1363,7 +1363,7 @@ pub struct ControlAuthorityGrant {
 pub struct ControlLiveTicket {
     pub ticket_ref: String,
     pub node_id: String,
-    pub node_identity_ref: String,
+    pub identity_ref: String,
     pub logical_endpoint_id: String,
     pub live_endpoint_id: String,
     pub topic: String,
@@ -1506,7 +1506,7 @@ pub fn import_control_authority_grant(state_root: &Path, grant_value: &IoValue) 
 
 pub fn control_live_ticket_value(input: &ControlLiveTicketInput<'_>) -> Result<IoValue> {
     validate_node_id(input.node_id)?;
-    validate_ingress_ref(input.node_identity_ref, "node control live ticket identity ref")?;
+    validate_ingress_ref(input.identity_ref, "node control live ticket identity ref")?;
     validate_node_id(input.logical_endpoint_id)?;
     validate_node_id(input.live_endpoint_id)?;
     validate_node_id(input.topic)?;
@@ -1516,7 +1516,7 @@ pub fn control_live_ticket_value(input: &ControlLiveTicketInput<'_>) -> Result<I
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA),
         crate::preserves_rail::record("node", vec![
             crate::preserves_rail::record("id", vec![crate::preserves_rail::string(input.node_id)]),
-            crate::preserves_rail::record("identity", vec![crate::preserves_rail::string(input.node_identity_ref)]),
+            crate::preserves_rail::record("identity", vec![crate::preserves_rail::string(input.identity_ref)]),
             crate::preserves_rail::record("logical-endpoint", vec![crate::preserves_rail::string(
                 input.logical_endpoint_id,
             )]),
@@ -1571,7 +1571,7 @@ pub fn parse_control_live_ticket(value: &IoValue) -> Result<ControlLiveTicket> {
     Ok(ControlLiveTicket {
         ticket_ref: crate::preserves_rail::canonical_hash(value)?,
         node_id: record_string(&node_fields[0], "id")?,
-        node_identity_ref: record_ref_string(&node_fields[1], "identity")?,
+        identity_ref: record_ref_string(&node_fields[1], "identity")?,
         logical_endpoint_id: record_string(&node_fields[2], "logical-endpoint")?,
         live_endpoint_id: record_string(&live_fields[0], "endpoint-id")?,
         topic: record_string(&live_fields[1], "topic")?,
@@ -1586,11 +1586,11 @@ pub fn export_control_live_ticket(input: &ControlLiveTicketExportInput<'_>) -> R
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     ensure_state_layout(input.state_root)?;
-    let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let address_refs = Vec::new();
     let value = control_live_ticket_value(&ControlLiveTicketInput {
         node_id: &identity.node_id,
-        node_identity_ref: &identity.identity_ref,
+        identity_ref: &identity.identity_ref,
         logical_endpoint_id: &identity.endpoint_id,
         live_endpoint_id: &stable_live_endpoint_id(&identity),
         topic: input.topic,
@@ -1611,7 +1611,7 @@ pub fn admit_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<
     ensure_state_layout(input.state_root)?;
     let ticket = parse_control_live_ticket(input.ticket_value)?;
     import_artifact(input.state_root, input.ticket_value)?;
-    let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let mut diagnostics = Vec::new();
     if ticket.node_id != identity.node_id {
         diagnostics.push(format!(
@@ -1619,7 +1619,7 @@ pub fn admit_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<
             ticket.node_id, identity.node_id
         ));
     }
-    if ticket.node_identity_ref != identity.identity_ref {
+    if ticket.identity_ref != identity.identity_ref {
         diagnostics.push("node control live ticket identity ref does not match local identity".to_string());
     }
     let expected_live_endpoint = stable_live_endpoint_id(&identity);
@@ -5071,7 +5071,7 @@ pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
     validate_node_id(input.node_id)?;
     ensure_state_layout(input.state_root)?;
     let policy_refs = vec![local_ref("node-policy", input.node_id)?];
-    let identity_config = crate::node_identity::NodeIdentityConfig {
+    let identity_config = crate::node_identity::Config {
         node_id: input.node_id.to_string(),
         display_name: input.node_id.to_string(),
         data_dir: input.state_root.join("identity"),
@@ -5080,7 +5080,7 @@ pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
         allow_rotation: false,
         policy_refs: policy_refs.clone(),
     };
-    let identity_resolution = crate::node_identity::resolve_node_identity(&identity_config)?;
+    let identity_resolution = crate::node_identity::resolve(&identity_config)?;
     let identity = identity_resolution
         .identity
         .ok_or_else(|| MoltenError::invalid_harness("node daemon identity resolution denied"))?;
@@ -5090,7 +5090,7 @@ pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
     let effect_profile_refs = vec![local_ref("node-effect-profile", input.node_id)?];
     let state_root_ref = state_root_profile_ref(input.state_root)?;
     let config_value = crate::node_runtime::node_config_value(&crate::node_runtime::ConfigValueInput {
-        node_identity_ref: &identity.identity_ref,
+        identity_ref: &identity.identity_ref,
         state_root_ref: &state_root_ref,
         adapters: &adapters,
         policy_refs: &policy_refs,
@@ -5616,7 +5616,7 @@ fn start_service_run(
     supervisor_policy: Option<&ControlSupervisorPolicy>,
     mut supervisor_receipt_refs: Vec<String>,
 ) -> Result<ServiceStart> {
-    let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let service_run_id = local_ref(
         "node-control-service-run",
         &format!("{}:{}:{}:{}", startup.receipt_ref, input.topic, input.max_ticks, input.max_requests_per_tick),
@@ -6879,7 +6879,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
     validate_listener_event_limit(input.max_events)?;
     validate_loop_request_limit(input.max_requests_per_tick)?;
     ensure_state_layout(input.state_root)?;
-    let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
     let bound_endpoint_id = format!("iroh:{}", endpoint.id());
@@ -6989,7 +6989,7 @@ struct LoopbackPair {
 }
 
 async fn loopback_pair(state_root: &Path, topic: &str) -> Result<LoopbackPair> {
-    let identity = crate::node_identity::parse_node_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
     let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
@@ -7161,14 +7161,14 @@ async fn receive_first_live_ingress_event(
     ))
 }
 
-fn stable_live_endpoint_secret(identity: &crate::node_identity::NodeIdentity) -> iroh::SecretKey {
+fn stable_live_endpoint_secret(identity: &crate::node_identity::Identity) -> iroh::SecretKey {
     let seed = blake3::hash(
         format!("molten.node-control.live.endpoint.v1:{}:{}", identity.node_id, identity.endpoint_id).as_bytes(),
     );
     iroh::SecretKey::from_bytes(seed.as_bytes())
 }
 
-fn stable_live_endpoint_id(identity: &crate::node_identity::NodeIdentity) -> String {
+fn stable_live_endpoint_id(identity: &crate::node_identity::Identity) -> String {
     format!("iroh:{}", stable_live_endpoint_secret(identity).public())
 }
 
@@ -7178,14 +7178,14 @@ fn live_ticket_address_refs(addr: &iroh::EndpointAddr) -> Vec<String> {
 
 fn live_ticket_for_bound_endpoint(
     state_root: &Path,
-    identity: &crate::node_identity::NodeIdentity,
+    identity: &crate::node_identity::Identity,
     topic: &str,
     addr: &iroh::EndpointAddr,
 ) -> Result<ControlLiveTicket> {
     let address_refs = live_ticket_address_refs(addr);
     let value = control_live_ticket_value(&ControlLiveTicketInput {
         node_id: &identity.node_id,
-        node_identity_ref: &identity.identity_ref,
+        identity_ref: &identity.identity_ref,
         logical_endpoint_id: &identity.endpoint_id,
         live_endpoint_id: &format!("iroh:{}", addr.id),
         topic,
@@ -7621,7 +7621,7 @@ fn ingress_pre_enqueue_diagnostics(
     if envelope.topic != topic {
         diagnostics.push(format!("node control ingress topic {} does not match requested {topic}", envelope.topic));
     }
-    let identity = crate::node_identity::parse_node_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
     if envelope.to_node != identity.node_id {
         diagnostics
             .push(format!("node control ingress target {} does not match node {}", envelope.to_node, identity.node_id));
@@ -9328,7 +9328,7 @@ fn runtime_summary(value: &IoValue) -> Result<Option<String>> {
         return Ok(Some(format!(
             "node config ref={} identity={} adapters={}",
             config.config_ref,
-            config.node_identity_ref,
+            config.identity_ref,
             config.adapters.len()
         )));
     }
@@ -12935,7 +12935,7 @@ mod tests {
         request_value: IoValue,
     }
 
-    fn init_send_case() -> (std::path::PathBuf, crate::node_identity::NodeIdentity) {
+    fn init_send_case() -> (std::path::PathBuf, crate::node_identity::Identity) {
         let root = temp_dir("node-control-live-send");
         init_local(&InitInput {
             state_root: &root,
@@ -12944,7 +12944,7 @@ mod tests {
         .expect("init node");
         run_local(&RunInput { state_root: &root }).expect("run node");
         let identity =
-            crate::node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
+            crate::node_identity::parse_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
                 .expect("parse identity");
         (root, identity)
     }
@@ -13479,7 +13479,7 @@ mod tests {
         run_local(&RunInput { state_root: &root }).expect("run node");
         let startup = current_startup_receipt(&root).expect("startup");
         let identity =
-            crate::node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
+            crate::node_identity::parse_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
                 .expect("parse identity");
         let service_run_ref = local_ref("node-control-service-run", "already-active").expect("service run ref");
         let lock_value = service_lock_value(&ServiceLockValueInput {
@@ -13583,7 +13583,7 @@ mod tests {
     fn write_active_service_lock(root: &Path, service_suffix: &str) {
         let startup = current_startup_receipt(root).expect("startup");
         let identity =
-            crate::node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
+            crate::node_identity::parse_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
                 .expect("parse identity");
         let service_run_ref = local_ref("node-control-service-run", service_suffix).expect("service run ref");
         let lock_value = service_lock_value(&ServiceLockValueInput {

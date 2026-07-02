@@ -7153,7 +7153,7 @@ mod tests {
             authority_refs: &[],
             resource_refs: &fixture.resource_refs,
             peer_bootstrap_refs: std::slice::from_ref(&fixture.peer_bootstrap_ref),
-            node_identity_refs: std::slice::from_ref(&fixture.node_identity_ref),
+            node_identity_refs: std::slice::from_ref(&fixture.identity_ref),
             evidence_refs: &fixture.evidence_refs,
         })
         .expect("missing authority worker request");
@@ -7188,7 +7188,7 @@ mod tests {
             authority_refs: std::slice::from_ref(&fixture.context_ref),
             resource_refs: &fixture.resource_refs,
             peer_bootstrap_refs: std::slice::from_ref(&fixture.peer_bootstrap_ref),
-            node_identity_refs: std::slice::from_ref(&fixture.node_identity_ref),
+            node_identity_refs: std::slice::from_ref(&fixture.identity_ref),
             evidence_refs: &[
                 fixture.sync_ref.clone(),
                 missing_admission_ref.clone(),
@@ -7256,7 +7256,7 @@ mod tests {
             authority_refs: &[],
             resource_refs: &[],
             peer_bootstrap_refs: std::slice::from_ref(&fixture.peer_bootstrap_ref),
-            node_identity_refs: std::slice::from_ref(&fixture.node_identity_ref),
+            node_identity_refs: std::slice::from_ref(&fixture.identity_ref),
             evidence_refs: &[
                 fixture.sync_ref.clone(),
                 admission_ref.clone(),
@@ -7294,7 +7294,7 @@ mod tests {
             authority_refs: std::slice::from_ref(&fixture.context_ref),
             resource_refs: &fixture.resource_refs,
             peer_bootstrap_refs: std::slice::from_ref(&fixture.peer_bootstrap_ref),
-            node_identity_refs: std::slice::from_ref(&fixture.node_identity_ref),
+            node_identity_refs: std::slice::from_ref(&fixture.identity_ref),
             evidence_refs: &[
                 stale_sync.clone(),
                 fixture.admission_ref.clone(),
@@ -7416,7 +7416,7 @@ mod tests {
         let authority_ref = test_ref(&format!("worker-authority-{salt}"));
         let resource_ref = test_ref(&format!("worker-resource-{salt}"));
         let peer_bootstrap_ref = test_ref(&format!("worker-bootstrap-{salt}"));
-        let node_identity_ref = test_ref(&format!("worker-node-{salt}"));
+        let identity_ref = test_ref(&format!("worker-node-{salt}"));
         let evidence = vec![sync_ref.clone(), admission_ref.clone(), execution_request_ref.clone()];
         let first = job_worker_request_value(JobWorkerRequestValueInput {
             job_ref: &job_ref,
@@ -7428,7 +7428,7 @@ mod tests {
             authority_refs: std::slice::from_ref(&authority_ref),
             resource_refs: std::slice::from_ref(&resource_ref),
             peer_bootstrap_refs: std::slice::from_ref(&peer_bootstrap_ref),
-            node_identity_refs: std::slice::from_ref(&node_identity_ref),
+            node_identity_refs: std::slice::from_ref(&identity_ref),
             evidence_refs: &evidence,
         })
         .expect("first request");
@@ -7815,7 +7815,7 @@ mod tests {
         context_ref: String,
         resource_refs: Vec<String>,
         peer_bootstrap_ref: String,
-        node_identity_ref: String,
+        identity_ref: String,
         evidence_refs: Vec<String>,
         worker_request: IoValue,
         delivery: crate::remote_dataspace::Delivery,
@@ -7839,7 +7839,7 @@ mod tests {
 
     struct RequestParts {
         peer_bootstrap_ref: String,
-        node_identity_ref: String,
+        identity_ref: String,
         evidence_refs: Vec<String>,
         worker_request: IoValue,
     }
@@ -7994,13 +7994,13 @@ mod tests {
 
     fn request_parts(installed: &JobInstall, sync_ref: &str, flow: &FlowParts) -> RequestParts {
         let peer_bootstrap_ref = test_ref("worker-peer-bootstrap");
-        let node_identity_ref = test_ref("worker-node-identity");
+        let identity_ref = test_ref("worker-node-identity");
         let evidence_refs = vec![
             sync_ref.to_string(),
             flow.admission_ref.clone(),
             flow.execution_request_ref.clone(),
             peer_bootstrap_ref.clone(),
-            node_identity_ref.clone(),
+            identity_ref.clone(),
         ];
         let worker_request = job_worker_request_value(JobWorkerRequestValueInput {
             job_ref: &installed.job_ref,
@@ -8012,13 +8012,13 @@ mod tests {
             authority_refs: std::slice::from_ref(&flow.context_ref),
             resource_refs: &flow.resource_refs,
             peer_bootstrap_refs: std::slice::from_ref(&peer_bootstrap_ref),
-            node_identity_refs: std::slice::from_ref(&node_identity_ref),
+            node_identity_refs: std::slice::from_ref(&identity_ref),
             evidence_refs: &evidence_refs,
         })
         .expect("worker request");
         RequestParts {
             peer_bootstrap_ref,
-            node_identity_ref,
+            identity_ref,
             evidence_refs,
             worker_request,
         }
@@ -8046,7 +8046,7 @@ mod tests {
         } = flow;
         let RequestParts {
             peer_bootstrap_ref,
-            node_identity_ref,
+            identity_ref,
             evidence_refs,
             worker_request,
         } = request;
@@ -8064,7 +8064,7 @@ mod tests {
             context_ref,
             resource_refs,
             peer_bootstrap_ref,
-            node_identity_ref,
+            identity_ref,
             evidence_refs,
             worker_request,
             delivery,

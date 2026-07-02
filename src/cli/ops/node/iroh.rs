@@ -164,7 +164,7 @@ pub(super) fn port_mapping_fixture(input: super::command::iroh::PortMappingFixtu
     let receipt = molten::node_iroh::port_mapping_receipt(&molten::node_iroh::PortMappingInput {
         mode: if input.attempt { "mutate" } else { "probe" }.to_string(),
         requester_ref: input.attempt.then(|| fixture_ref("requester")),
-        node_identity_ref: input.attempt.then(|| fixture_ref("node")),
+        identity_ref: input.attempt.then(|| fixture_ref("node")),
         protocol: "pcp".to_string(),
         external_port: input.attempt.then_some(EXTERNAL_PORT),
         internal_port: input.attempt.then_some(INTERNAL_PORT),

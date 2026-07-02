@@ -260,7 +260,7 @@ pub struct ConnectivityProbeInput {
 pub struct PortMappingInput {
     pub mode: String,
     pub requester_ref: Option<String>,
-    pub node_identity_ref: Option<String>,
+    pub identity_ref: Option<String>,
     pub protocol: String,
     pub external_port: Option<u64>,
     pub internal_port: Option<u64>,
@@ -893,7 +893,7 @@ pub fn port_mapping_receipt(input: &PortMappingInput) -> crate::error::Result<Di
     }
     if input.mode == "mutate" {
         collect_required_optional_ref(input.requester_ref.as_deref(), "requester", &mut diagnostics)?;
-        collect_required_optional_ref(input.node_identity_ref.as_deref(), "node identity", &mut diagnostics)?;
+        collect_required_optional_ref(input.identity_ref.as_deref(), "node identity", &mut diagnostics)?;
         collect_ref_diagnostics(&input.authority_refs, "authority", &mut diagnostics)?;
         collect_ref_diagnostics(&input.policy_refs, "policy", &mut diagnostics)?;
         collect_ref_diagnostics(&input.resource_refs, "resource", &mut diagnostics)?;
@@ -920,7 +920,7 @@ pub fn port_mapping_receipt(input: &PortMappingInput) -> crate::error::Result<Di
         crate::preserves_rail::record("mode", vec![crate::preserves_rail::string(&input.mode)]),
         crate::preserves_rail::record("protocol", vec![crate::preserves_rail::string(&input.protocol)]),
         crate::preserves_rail::record("requester", vec![optional_string_value(input.requester_ref.as_deref())]),
-        crate::preserves_rail::record("node", vec![optional_string_value(input.node_identity_ref.as_deref())]),
+        crate::preserves_rail::record("node", vec![optional_string_value(input.identity_ref.as_deref())]),
         crate::preserves_rail::record("external-port", vec![optional_u64_value(input.external_port)]),
         crate::preserves_rail::record("internal-port", vec![optional_u64_value(input.internal_port)]),
         crate::preserves_rail::record("duration-seconds", vec![optional_u64_value(input.duration_seconds)]),
@@ -1717,7 +1717,7 @@ mod tests {
         let deny = port_mapping_receipt(&PortMappingInput {
             mode: "mutate".to_string(),
             requester_ref: None,
-            node_identity_ref: None,
+            identity_ref: None,
             protocol: "pcp".to_string(),
             external_port: Some(EXTERNAL_PORT),
             internal_port: Some(INTERNAL_PORT),
@@ -1734,7 +1734,7 @@ mod tests {
         let probe = port_mapping_receipt(&PortMappingInput {
             mode: "probe".to_string(),
             requester_ref: None,
-            node_identity_ref: None,
+            identity_ref: None,
             protocol: "pcp".to_string(),
             external_port: None,
             internal_port: None,

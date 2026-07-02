@@ -56,7 +56,7 @@ pub struct NodeRuntimeStartInput {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ConfigValueInput<'a> {
-    pub node_identity_ref: &'a str,
+    pub identity_ref: &'a str,
     pub state_root_ref: &'a str,
     pub adapters: &'a [NodeAdapterBinding],
     pub policy_refs: &'a [String],
@@ -212,7 +212,7 @@ pub struct NodeHealthReceipt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeConfig {
     pub config_ref: String,
-    pub node_identity_ref: String,
+    pub identity_ref: String,
     pub state_root_ref: String,
     pub adapters: Vec<NodeAdapterBinding>,
     pub policy_refs: Vec<String>,
@@ -251,7 +251,7 @@ pub fn node_adapter_binding(name: &str, profile_ref: &str) -> Result<NodeAdapter
 }
 
 pub fn node_config_value(input: &ConfigValueInput<'_>) -> Result<IoValue> {
-    validate_ref(input.node_identity_ref, "node config identity ref")?;
+    validate_ref(input.identity_ref, "node config identity ref")?;
     validate_ref(input.state_root_ref, "node config state root ref")?;
     if input.adapters.is_empty() {
         return Err(MoltenError::invalid_harness("node config requires explicit adapter profiles"));
@@ -262,7 +262,7 @@ pub fn node_config_value(input: &ConfigValueInput<'_>) -> Result<IoValue> {
     validate_refs(input.effect_profile_refs, "node config effect profile ref")?;
     Ok(record("node-config-v1", vec![
         string(NODE_CONFIG_SCHEMA),
-        record("node-id", vec![string(input.node_identity_ref)]),
+        record("node-id", vec![string(input.identity_ref)]),
         record("state-root", vec![string(input.state_root_ref)]),
         record("adapters", vec![sequence(input.adapters.iter().map(adapter_binding_value).collect())]),
         record("policy", vec![refs_sequence(input.policy_refs)]),
@@ -511,7 +511,7 @@ pub fn parse_node_config(value: &IoValue) -> Result<NodeConfig> {
     }
     Ok(NodeConfig {
         config_ref: canonical_hash(value)?,
-        node_identity_ref: record_ref(&fields[1], "node-id")?,
+        identity_ref: record_ref(&fields[1], "node-id")?,
         state_root_ref: record_ref(&fields[2], "state-root")?,
         adapters,
         policy_refs: record_ref_sequence(&fields[4], "policy")?,
@@ -1262,14 +1262,14 @@ mod tests {
     }
 
     fn test_node_config_value(adapters: &[NodeAdapterBinding]) -> IoValue {
-        let node_identity_ref = test_ref("node-id");
+        let identity_ref = test_ref("node-id");
         let state_root_ref = test_ref("state-root");
         let policy_refs = vec![test_ref("policy")];
         let capability_refs = vec![test_ref("capability")];
         let resource_refs = vec![test_ref("resource")];
         let effect_profile_refs = vec![test_ref("effects")];
         node_config_value(&ConfigValueInput {
-            node_identity_ref: &node_identity_ref,
+            identity_ref: &identity_ref,
             state_root_ref: &state_root_ref,
             adapters,
             policy_refs: &policy_refs,
@@ -1287,11 +1287,11 @@ mod tests {
         let config = parse_node_config(&value).expect("parse config");
         assert_eq!(config.adapters[0].name, "ledger");
         assert_eq!(crate::ledger::artifact_kind(&value), "node-config");
-        let node_identity_ref = test_ref("node-id");
+        let identity_ref = test_ref("node-id");
         let state_root_ref = test_ref("state-root");
         assert!(
             node_config_value(&ConfigValueInput {
-                node_identity_ref: &node_identity_ref,
+                identity_ref: &identity_ref,
                 state_root_ref: "./state",
                 adapters: &adapters,
                 policy_refs: &[],
@@ -1303,7 +1303,7 @@ mod tests {
         );
         assert!(
             node_config_value(&ConfigValueInput {
-                node_identity_ref: &node_identity_ref,
+                identity_ref: &identity_ref,
                 state_root_ref: &state_root_ref,
                 adapters: &[],
                 policy_refs: &[],

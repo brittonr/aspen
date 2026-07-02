@@ -2991,14 +2991,14 @@ fn dirty_state_report(state_root_ref: &str, diagnostic: String) -> Result<LocalN
     })
 }
 
-fn resolve_identity(state_root: &Path, policy_refs: &[String]) -> Result<crate::node_identity::NodeIdentityResolution> {
-    let mut config = crate::node_identity::NodeIdentityConfig::new("node:dogfood-local", state_root.join("identity"));
+fn resolve_identity(state_root: &Path, policy_refs: &[String]) -> Result<crate::node_identity::Resolution> {
+    let mut config = crate::node_identity::Config::new("node:dogfood-local", state_root.join("identity"));
     config.policy_refs = policy_refs.to_vec();
-    crate::node_identity::resolve_node_identity(&config)
+    crate::node_identity::resolve(&config)
 }
 
 fn start_node(
-    identity: &crate::node_identity::NodeIdentity,
+    identity: &crate::node_identity::Identity,
     identity_receipt_ref: &str,
     policy_refs: &[String],
     capability_refs: &[String],
@@ -3011,7 +3011,7 @@ fn start_node(
     let state_root_ref = dogfood_ref("node-state-root")?;
     let effects_ref = dogfood_ref("effect-profile")?;
     let config_value = crate::node_runtime::node_config_value(&crate::node_runtime::ConfigValueInput {
-        node_identity_ref: &identity.identity_ref,
+        identity_ref: &identity.identity_ref,
         state_root_ref: &state_root_ref,
         adapters: &adapter_bindings,
         policy_refs,
@@ -3600,10 +3600,8 @@ fn record_start_steps(input: StartStepInput<'_>) -> Result<StartSteps> {
         .identity
         .clone()
         .ok_or_else(|| MoltenError::invalid_harness("local dogfood identity resolution denied"))?;
-    let identity_startup = crate::node_identity::node_identity_startup_evidence_value(
-        &identity.identity_ref,
-        &identity_resolution.receipt_ref,
-    )?;
+    let identity_startup =
+        crate::node_identity::startup_evidence_value(&identity.identity_ref, &identity_resolution.receipt_ref)?;
     let identity_startup_ref = crate::preserves_rail::canonical_hash(&identity_startup)?;
     push_step_checkpoint(checkpoints, StepCheckpointInput {
         name: "clean-state",

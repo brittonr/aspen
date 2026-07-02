@@ -1,7 +1,7 @@
     fn exercise_job_worker(setup: &JobSetup, sync: &JobSync, admission: &JobAdmission) {
         let worker_request = setup.dir.join("job-worker-request.preserves");
         let peer_bootstrap_ref = cli_synthetic_ref("job-worker-peer-bootstrap").expect("peer bootstrap");
-        let node_identity_ref = cli_synthetic_ref("job-worker-node-identity").expect("node identity");
+        let identity_ref = cli_synthetic_ref("job-worker-node-identity").expect("node identity");
         run_job_command(JobCommand::WorkerRequest(cli_job::command::worker::Request {
             admission_receipt: admission.admit_loopback_receipt.clone(),
             execution_request: admission.worker_execution_request.clone(),
@@ -11,7 +11,7 @@
             authority_refs: vec![sync.context_ref.clone()],
             resource_refs: sync.worker_resource_refs.clone(),
             peer_bootstrap_refs: vec![peer_bootstrap_ref],
-            node_identity_refs: vec![node_identity_ref],
+            node_identity_refs: vec![identity_ref],
             evidence_refs: Vec::new(),
             out: Some(worker_request.clone()),
         }))

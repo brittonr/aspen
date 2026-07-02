@@ -10032,7 +10032,7 @@ mod tests {
     async fn start_bound_live_node(state_root: &Path, topic: &str) -> LiveNodeHarness {
         let identity_text = fs::read_to_string(state_root.join("identity.preserves")).expect("node identity file");
         let identity_value = crate::preserves_rail::parse_text(&identity_text).expect("parse node identity file");
-        let identity = crate::node_identity::parse_node_identity(&identity_value).expect("parse node identity");
+        let identity = crate::node_identity::parse_identity(&identity_value).expect("parse node identity");
         let seed = blake3::hash(
             format!("molten.node-control.live.endpoint.v1:{}:{}", identity.node_id, identity.endpoint_id).as_bytes(),
         );
@@ -10053,7 +10053,7 @@ mod tests {
         let address_refs = endpoint_addr.addrs.iter().map(ToString::to_string).collect::<Vec<_>>();
         let ticket_value = crate::node_daemon::control_live_ticket_value(&crate::node_daemon::ControlLiveTicketInput {
             node_id: &identity.node_id,
-            node_identity_ref: &identity.identity_ref,
+            identity_ref: &identity.identity_ref,
             logical_endpoint_id: &identity.endpoint_id,
             live_endpoint_id: &live_endpoint_id,
             topic,
