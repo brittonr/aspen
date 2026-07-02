@@ -28,7 +28,7 @@ repos:
 
       - id: cargo-octet-check
         name: cargo octet check
-        entry: cargo octet check --artifact-dir target/octet-precommit
+        entry: sh -c 'mkdir -p target/tmp && TMPDIR="$PWD/target/tmp" cargo octet check --artifact-dir target/octet-precommit'
         language: system
         pass_filenames: false
         stages:
