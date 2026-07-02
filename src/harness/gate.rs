@@ -1258,59 +1258,7 @@ fn build_turn_journals(report: &super::schema::HarnessReport) -> Result<TurnJour
     }
     let mut builders: OrderedMap<String, TurnJournalBuilder> = OrderedMap::new();
     for (position, observation) in report.observations.iter().enumerate() {
-        let step = &suite.steps[position];
-        let actor_id = step.primary_actor().to_string();
-        let computed_step_ref = canonical_hash(&super::schema::step_value(step))?;
-        if observation.step_ref != computed_step_ref {
-            return Err(MoltenError::invalid_harness(format!(
-                "turn journal observation {} step ref does not match embedded suite step",
-                observation.index
-            )));
-        }
-        let builder = builders.entry(actor_id.clone()).or_insert_with(|| TurnJournalBuilder {
-            actor_id: actor_id.clone(),
-            chain: crate::evidence_chain::ChainScope::new(
-                "harness-turn-journal",
-                actor_id.clone(),
-                report.report_ref.clone(),
-            ),
-            links: Vec::new(),
-            link_values: Vec::new(),
-            payload_refs: Vec::new(),
-        });
-        let observation_ref = observation.observation_ref.clone();
-        let payload = crate::evidence_chain::ChainPayload::new(
-            "turn-observation",
-            observation_ref.clone(),
-            HARNESS_OBSERVATION_SCHEMA,
-        );
-        let context_refs = turn_journal_context_refs(report, observation, &actor_id)?;
-        let trellis_input_ref = canonical_hash(&record("turn-journal-input", vec![
-            string(&actor_id),
-            u64_value(observation.index),
-            record("observation", vec![string(&observation.observation_ref)]),
-            string(&observation.step_ref),
-            string(&observation.before_state_hash),
-            string(&observation.after_state_hash),
-            record("event-refs", vec![sequence(observation.event_refs.iter().map(string).collect())]),
-        ]))?;
-        let producer = turn_journal_producer()?;
-        let input = if let Some(previous) = builder.links.last() {
-            crate::evidence_chain::ChainLinkInput::append(previous, payload, context_refs, producer, trellis_input_ref)
-        } else {
-            crate::evidence_chain::ChainLinkInput::genesis(
-                builder.chain.clone(),
-                payload,
-                context_refs,
-                producer,
-                trellis_input_ref,
-            )
-        };
-        let link_value = crate::evidence_chain::chain_link_value(&input);
-        let link = crate::evidence_chain::parse_chain_link(&link_value)?;
-        builder.payload_refs.push(observation_ref);
-        builder.link_values.push(link_value);
-        builder.links.push(link);
+        append_turn_journal_observation(&mut builders, report, observation, &suite.steps[position])?;
     }
 
     let mut journals = Vec::with_capacity(builders.len());
@@ -1323,6 +1271,71 @@ fn build_turn_journals(report: &super::schema::HarnessReport) -> Result<TurnJour
     };
     evidence.aggregate_ref = canonical_hash(&turn_journals_value(&evidence))?;
     Ok(evidence)
+}
+
+fn append_turn_journal_observation(
+    builders: &mut OrderedMap<String, TurnJournalBuilder>,
+    report: &super::schema::HarnessReport,
+    observation: &super::schema::HarnessObservation,
+    step: &super::core::CoreStep,
+) -> Result<()> {
+    let actor_id = step.primary_actor().to_string();
+    let computed_step_ref = canonical_hash(&super::schema::step_value(step))?;
+    if observation.step_ref != computed_step_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "turn journal observation {} step ref does not match embedded suite step",
+            observation.index
+        )));
+    }
+    let builder = builders.entry(actor_id.clone()).or_insert_with(|| TurnJournalBuilder {
+        actor_id: actor_id.clone(),
+        chain: crate::evidence_chain::ChainScope::new(
+            "harness-turn-journal",
+            actor_id.clone(),
+            report.report_ref.clone(),
+        ),
+        links: Vec::new(),
+        link_values: Vec::new(),
+        payload_refs: Vec::new(),
+    });
+    let observation_ref = observation.observation_ref.clone();
+    let payload = crate::evidence_chain::ChainPayload::new(
+        "turn-observation",
+        observation_ref.clone(),
+        HARNESS_OBSERVATION_SCHEMA,
+    );
+    let context_refs = turn_journal_context_refs(report, observation, &actor_id)?;
+    let trellis_input_ref = turn_journal_trellis_input_ref(observation, &actor_id)?;
+    let producer = turn_journal_producer()?;
+    let input = if let Some(previous) = builder.links.last() {
+        crate::evidence_chain::ChainLinkInput::append(previous, payload, context_refs, producer, trellis_input_ref)
+    } else {
+        crate::evidence_chain::ChainLinkInput::genesis(
+            builder.chain.clone(),
+            payload,
+            context_refs,
+            producer,
+            trellis_input_ref,
+        )
+    };
+    let link_value = crate::evidence_chain::chain_link_value(&input);
+    let link = crate::evidence_chain::parse_chain_link(&link_value)?;
+    builder.payload_refs.push(observation_ref);
+    builder.link_values.push(link_value);
+    builder.links.push(link);
+    Ok(())
+}
+
+fn turn_journal_trellis_input_ref(observation: &super::schema::HarnessObservation, actor_id: &str) -> Result<String> {
+    canonical_hash(&record("turn-journal-input", vec![
+        string(actor_id),
+        u64_value(observation.index),
+        record("observation", vec![string(&observation.observation_ref)]),
+        string(&observation.step_ref),
+        string(&observation.before_state_hash),
+        string(&observation.after_state_hash),
+        record("event-refs", vec![sequence(observation.event_refs.iter().map(string).collect())]),
+    ]))
 }
 
 fn build_turn_journal_chain(
