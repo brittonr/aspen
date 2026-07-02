@@ -1,5 +1,5 @@
 fn synthetic_ref(kind: &str, subject: &str) -> molten::error::Result<String> {
-    super::io::synthetic_ref(kind, subject)
+    crate::cli_job::io::synthetic_ref(kind, subject)
 }
 
 pub(super) struct AdmissionInput<'a> {

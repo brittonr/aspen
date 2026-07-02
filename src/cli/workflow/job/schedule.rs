@@ -3,8 +3,6 @@ type Path = std::path::Path;
 type Result<T> = molten::error::Result<T>;
 type ScheduleLocal = super::command::worker::ScheduleLocal;
 
-use super::io;
-
 #[path = "schedule/output.rs"]
 mod output;
 #[path = "schedule/phase.rs"]

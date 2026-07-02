@@ -1,5 +1,3 @@
-use super::io;
-
 type Result<T> = molten::error::Result<T>;
 
 pub(crate) struct Items<T> {
@@ -47,12 +45,12 @@ impl<T: PartialEq> Items<T> {
 }
 
 pub(crate) fn install(args: super::command::base::Install) -> Result<()> {
-    let value = io::read_preserves_file(&args.dag)?;
+    let value = super::io::read_preserves_file(&args.dag)?;
     let installed = molten::job_dag::install_job_dag(&args.registry, &value)?;
     if let Some(path) = args.artifact_out.as_ref() {
-        io::write_file(path, &molten::preserves_rail::to_text(&value)?)?;
+        super::io::write_file(path, &molten::preserves_rail::to_text(&value)?)?;
     }
-    io::emit_named_receipt(args.receipt_out.as_ref(), "job receipt", &installed.receipt_value)?;
+    super::io::emit_named_receipt(args.receipt_out.as_ref(), "job receipt", &installed.receipt_value)?;
     println!(
         "job install {} job={} artifact={} registry={}",
         installed.decision,
@@ -72,7 +70,7 @@ pub(crate) fn show(args: super::command::base::Show) -> Result<()> {
 
 pub(crate) fn run(args: super::command::base::Run) -> Result<()> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(&args.registry, &args.job)?;
-    let request = args.output_request.as_ref().map(|path| io::read_preserves_file(path)).transpose()?;
+    let request = args.output_request.as_ref().map(|path| super::io::read_preserves_file(path)).transpose()?;
     let chunk_root = args.chunks.unwrap_or_else(|| args.registry.join("job-chunks"));
     let run = molten::job_dag::run_job_dag(&dag, &molten::job_dag::JobRunOptions {
         registry_root: &args.registry,
@@ -83,8 +81,8 @@ pub(crate) fn run(args: super::command::base::Run) -> Result<()> {
         output_request: request,
     })?;
     let output_text = molten::preserves_rail::to_text(&run.output_value)?;
-    io::write_optional_output(args.out.as_ref(), &output_text)?;
-    io::emit_named_receipt(args.receipt_out.as_ref(), "job receipt", &run.receipt_value)?;
+    super::io::write_optional_output(args.out.as_ref(), &output_text)?;
+    super::io::emit_named_receipt(args.receipt_out.as_ref(), "job receipt", &run.receipt_value)?;
     eprintln!(
         "job run ok job={} request={} outputs={} stages={}",
         run.job_ref,
@@ -97,20 +95,20 @@ pub(crate) fn run(args: super::command::base::Run) -> Result<()> {
 
 pub(crate) fn plan(args: super::command::base::Plan) -> Result<()> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(&args.registry, &args.job)?;
-    let request = args.output_request.as_ref().map(|path| io::read_preserves_file(path)).transpose()?;
+    let request = args.output_request.as_ref().map(|path| super::io::read_preserves_file(path)).transpose()?;
     let plan = molten::job_dag::plan_job_dag(&dag, request.as_ref())?;
-    io::emit_job_analysis(&plan.value, args.out.as_ref())?;
-    io::emit_named_receipt(args.receipt_out.as_ref(), "job plan receipt", &plan.receipt_value)?;
+    super::io::emit_job_analysis(&plan.value, args.out.as_ref())?;
+    super::io::emit_named_receipt(args.receipt_out.as_ref(), "job plan receipt", &plan.receipt_value)?;
     eprintln!("job plan ok job={} plan={} stages={}", plan.job_ref, plan.plan_ref, plan.stage_order.len());
     Ok(())
 }
 
 pub(crate) fn profile(args: super::command::base::Profile) -> Result<()> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(&args.registry, &args.job)?;
-    let request = args.output_request.as_ref().map(|path| io::read_preserves_file(path)).transpose()?;
+    let request = args.output_request.as_ref().map(|path| super::io::read_preserves_file(path)).transpose()?;
     let profile = molten::job_dag::profile_job_dag(&dag, request.as_ref(), args.cache.as_deref())?;
-    io::emit_job_analysis(&profile.value, args.out.as_ref())?;
-    io::emit_named_receipt(args.receipt_out.as_ref(), "job profile receipt", &profile.receipt_value)?;
+    super::io::emit_job_analysis(&profile.value, args.out.as_ref())?;
+    super::io::emit_named_receipt(args.receipt_out.as_ref(), "job profile receipt", &profile.receipt_value)?;
     eprintln!(
         "job profile ok job={} profile={} stages={} edges={}",
         profile.job_ref, profile.profile_ref, profile.stage_count, profile.edge_count
@@ -120,10 +118,10 @@ pub(crate) fn profile(args: super::command::base::Profile) -> Result<()> {
 
 pub(crate) fn fusion_preview(args: super::command::base::FusionPreview) -> Result<()> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(&args.registry, &args.job)?;
-    let request = args.output_request.as_ref().map(|path| io::read_preserves_file(path)).transpose()?;
+    let request = args.output_request.as_ref().map(|path| super::io::read_preserves_file(path)).transpose()?;
     let fusion = molten::job_dag::fusion_preview_job_dag(&dag, request.as_ref())?;
-    io::emit_job_analysis(&fusion.value, args.out.as_ref())?;
-    io::emit_named_receipt(args.receipt_out.as_ref(), "job fusion receipt", &fusion.receipt_value)?;
+    super::io::emit_job_analysis(&fusion.value, args.out.as_ref())?;
+    super::io::emit_named_receipt(args.receipt_out.as_ref(), "job fusion receipt", &fusion.receipt_value)?;
     eprintln!(
         "job fusion-preview ok job={} fusion={} chains={}",
         fusion.job_ref,

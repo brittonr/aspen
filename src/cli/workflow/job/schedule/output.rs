@@ -103,54 +103,57 @@ fn write_outputs(
     receipt_value: &preserves::IOValue,
 ) -> molten::error::Result<()> {
     std::fs::create_dir_all(input.input.out).map_err(molten::error::MoltenError::from)?;
-    io::write_file(
+    crate::cli_job::io::write_file(
         &input.input.out.join("schedule-receipt.preserves"),
         &molten::preserves_rail::to_text(receipt_value)?,
     )?;
     let coordination_out = input.input.out.join("coordination");
     std::fs::create_dir_all(&coordination_out).map_err(molten::error::MoltenError::from)?;
-    io::write_file(
+    crate::cli_job::io::write_file(
         &coordination_out.join("manifest.preserves"),
         &molten::preserves_rail::to_text(&evidence_values[0])?,
     )?;
-    io::write_file(&coordination_out.join("report.preserves"), &molten::preserves_rail::to_text(report_value)?)?;
-    io::write_indexed_values(&coordination_out, "evidence", evidence_values)?;
+    crate::cli_job::io::write_file(
+        &coordination_out.join("report.preserves"),
+        &molten::preserves_rail::to_text(report_value)?,
+    )?;
+    crate::cli_job::io::write_indexed_values(&coordination_out, "evidence", evidence_values)?;
     write_optional_receipts(input, &coordination_out)
 }
 
 fn write_optional_receipts(input: &FinalizeInput<'_>, coordination_out: &std::path::Path) -> molten::error::Result<()> {
     if let Some(result) = input.enqueue {
-        io::write_file(
+        crate::cli_job::io::write_file(
             &coordination_out.join("enqueue-receipt.preserves"),
             &molten::preserves_rail::to_text(&result.receipt.value)?,
         )?;
     }
     if let Some(result) = input.enqueue_duplicate {
-        io::write_file(
+        crate::cli_job::io::write_file(
             &coordination_out.join("enqueue-duplicate-receipt.preserves"),
             &molten::preserves_rail::to_text(&result.receipt.value)?,
         )?;
     }
     if let Some(result) = input.dequeue {
-        io::write_file(
+        crate::cli_job::io::write_file(
             &coordination_out.join("dequeue-receipt.preserves"),
             &molten::preserves_rail::to_text(&result.receipt.value)?,
         )?;
     }
     if let Some(result) = input.lease {
-        io::write_file(
+        crate::cli_job::io::write_file(
             &coordination_out.join("lease-receipt.preserves"),
             &molten::preserves_rail::to_text(&result.receipt.value)?,
         )?;
         if let Some(token) = &result.token {
-            io::write_file(
+            crate::cli_job::io::write_file(
                 &coordination_out.join("fencing-token.preserves"),
                 &molten::preserves_rail::to_text(&token.value)?,
             )?;
         }
     }
     if let Some(result) = input.release {
-        io::write_file(
+        crate::cli_job::io::write_file(
             &coordination_out.join("release-receipt.preserves"),
             &molten::preserves_rail::to_text(&result.receipt.value)?,
         )?;

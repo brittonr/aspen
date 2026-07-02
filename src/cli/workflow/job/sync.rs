@@ -6,8 +6,6 @@ type MoltenError = molten::error::MoltenError;
 type Plan = super::command::sync::Plan;
 type Result<T> = molten::error::Result<T>;
 
-use super::io;
-
 #[path = "sync/input.rs"]
 mod input;
 
