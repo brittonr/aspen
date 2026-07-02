@@ -1014,11 +1014,10 @@ fn blob_path(root: &Path, bundle_ref: &str) -> Result<std::path::PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
     use super::*;
+
+    type AtomicU64 = std::sync::atomic::AtomicU64;
+    type Ordering = std::sync::atomic::Ordering;
     use crate::evidence_chain;
     use crate::harness::run_suite_value;
     use crate::harness::sealed_repro_bundle_value_with_command;

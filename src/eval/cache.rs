@@ -1900,9 +1900,9 @@ fn index_error(error: impl std::fmt::Display) -> MoltenError {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
+    type AtomicU64 = std::sync::atomic::AtomicU64;
+    type Ordering = std::sync::atomic::Ordering;
+    type PathBuf = std::path::PathBuf;
 
     use hegel::TestCase;
     use hegel::generators;
