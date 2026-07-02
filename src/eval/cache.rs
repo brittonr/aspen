@@ -1907,7 +1907,6 @@ mod tests {
     type TestCase = hegel::TestCase;
 
     use super::*;
-    use crate::schema_identity;
 
     #[test]
     fn cache_hit_miss_output_integrity_and_no_name_key() {
@@ -2096,7 +2095,7 @@ mod tests {
     fn helper_keys_cover_schema_and_artifact_operations() {
         let shape = record("shape", vec![string("string")]);
         let (_normalized, shape_ref, fingerprint) =
-            schema_identity::structural_fingerprint(&shape).expect("fingerprint");
+            crate::schema_identity::structural_fingerprint(&shape).expect("fingerprint");
         let key = schema_fingerprint_key_input(&shape_ref, &test_ref("tool"), "v1", &[test_ref("policy")])
             .expect("schema fingerprint key");
         assert_eq!(key.operation, "schema-fingerprint");
