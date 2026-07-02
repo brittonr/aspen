@@ -26,7 +26,7 @@
         })
         .expect("install base artifact");
         let base_value = read_preserves_file(&base_out).expect("read base artifact");
-        let base = artifacts::parse_artifact_value(&base_value).expect("parse base artifact");
+        let base = molten::artifacts::parse_artifact_value(&base_value).expect("parse base artifact");
         crate::cli_artifact::run(crate::cli_artifact::Command::Install {
             payload: dep_payload,
             registry: registry.to_path_buf(),
@@ -39,7 +39,7 @@
         })
         .expect("install dependent artifact");
         let dep_value = read_preserves_file(&dep_out).expect("read dependent artifact");
-        let dep = artifacts::parse_artifact_value(&dep_value).expect("parse dependent artifact");
+        let dep = molten::artifacts::parse_artifact_value(&dep_value).expect("parse dependent artifact");
         (base.artifact_ref, dep.artifact_ref)
     }
 

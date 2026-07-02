@@ -85,7 +85,7 @@
     }
 
     fn run_schema_fingerprint_search(registry: &Path, shape: &str) {
-        let schema_artifact = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let schema_artifact = molten::artifacts::install_artifact(registry, &molten::artifacts::ArtifactInstallInput {
             kind: "schema".to_string(),
             payload: record("schema-source", vec![string("cli")]),
             schema_refs: Vec::new(),
@@ -97,7 +97,7 @@
             capability_refs: vec![test_ref("capability")],
         })
         .expect("install schema artifact");
-        let identity_value = schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
+        let identity_value = molten::schema_identity::schema_identity_value(&molten::schema_identity::SchemaIdentityInput {
             mode: "structural".to_string(),
             schema_ref: schema_artifact.artifact_ref.clone(),
             shape: parse_text(shape).expect("parse shape"),
@@ -107,8 +107,8 @@
             evidence_refs: vec![test_ref("evidence")],
         })
         .expect("identity value");
-        let identity = schema_identity::parse_schema_identity(&identity_value).expect("parse identity");
-        artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let identity = molten::schema_identity::parse_schema_identity(&identity_value).expect("parse identity");
+        molten::artifacts::install_artifact(registry, &molten::artifacts::ArtifactInstallInput {
             kind: "schema-identity".to_string(),
             payload: identity_value,
             schema_refs: vec![schema_artifact.artifact_ref.clone()],

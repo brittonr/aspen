@@ -35,7 +35,7 @@ fn import_chain_payload(ledger: &Path) -> String {
         "cli-chain-payload",
         vec![molten::preserves_rail::string("ok")],
     );
-    ledger::import_artifact(ledger, &payload_value)
+    molten::ledger::import_artifact(ledger, &payload_value)
         .expect("import chain payload")
         .artifact_ref
 }
@@ -82,7 +82,7 @@ fn fetch_chain_segment(dir: &Path, fixture: ChainPublishFixture, bundle_ref: Str
         receipt_out: Some(dir.join("chain-fetch.preserves")),
     })
     .expect("fetch chain segment");
-    let entries = ledger::list_artifacts(&fixture.destination).expect("list destination ledger");
+    let entries = molten::ledger::list_artifacts(&fixture.destination).expect("list destination ledger");
     assert!(entries.iter().any(|entry| entry.artifact_kind == "chain-link"));
     assert!(entries
         .iter()

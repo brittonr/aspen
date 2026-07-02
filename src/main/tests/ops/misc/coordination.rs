@@ -24,7 +24,7 @@
         let manifest = out.join("evidence-0.preserves");
         let manifest_value = read_preserves_file(&manifest).expect("read coordination manifest");
         let parsed =
-            coordination::parse_coordination_service_manifest(&manifest_value).expect("parse coordination manifest");
+            molten::coordination::parse_coordination_service_manifest(&manifest_value).expect("parse coordination manifest");
         assert_eq!(parsed.service_id, "coordination:local");
         run_coordination_command(CoordinationCommand::Show { artifact: manifest }).expect("coordination show manifest");
     }
@@ -35,21 +35,21 @@
         let generated_manifest = dir.join("coordination.manifest.preserves");
         run_coordination_command(CoordinationCommand::Manifest {
             service_id: "coordination:local".to_string(),
-            services: vec![coordination::SERVICE_QUEUE.to_string()],
+            services: vec![molten::coordination::SERVICE_QUEUE.to_string()],
             control_group_ref: None,
             queue_capacity: 2,
-            semaphore_capacity: coordination::DEFAULT_COORDINATION_SEMAPHORE_CAPACITY,
-            rate_limit: coordination::DEFAULT_COORDINATION_RATE_LIMIT,
-            barrier_parties: coordination::DEFAULT_COORDINATION_BARRIER_PARTIES,
+            semaphore_capacity: molten::coordination::DEFAULT_COORDINATION_SEMAPHORE_CAPACITY,
+            rate_limit: molten::coordination::DEFAULT_COORDINATION_RATE_LIMIT,
+            barrier_parties: molten::coordination::DEFAULT_COORDINATION_BARRIER_PARTIES,
             policy_refs: vec![policy_ref],
             resource_refs: vec![resource_ref],
             out: Some(generated_manifest.clone()),
         })
         .expect("coordination manifest");
         let generated_manifest_value = read_preserves_file(&generated_manifest).expect("read generated manifest");
-        let generated_manifest_parsed = coordination::parse_coordination_service_manifest(&generated_manifest_value)
+        let generated_manifest_parsed = molten::coordination::parse_coordination_service_manifest(&generated_manifest_value)
             .expect("parse generated coordination manifest");
-        assert_eq!(generated_manifest_parsed.services, vec![coordination::SERVICE_QUEUE.to_string()]);
+        assert_eq!(generated_manifest_parsed.services, vec![molten::coordination::SERVICE_QUEUE.to_string()]);
         generated_manifest
     }
 
@@ -62,8 +62,8 @@
         write_file(&payload, r#"<item "cli-one">"#).expect("write queue payload");
         let request = dir.join("coordination.request.preserves");
         run_coordination_command(CoordinationCommand::Request {
-            service: coordination::SERVICE_QUEUE.to_string(),
-            operation: coordination::OP_ENQUEUE.to_string(),
+            service: molten::coordination::SERVICE_QUEUE.to_string(),
+            operation: molten::coordination::OP_ENQUEUE.to_string(),
             key: "queue:cli".to_string(),
             client_session: "client-cli".to_string(),
             operation_id_ref,
@@ -90,7 +90,7 @@
         })
         .expect("coordination apply");
         let apply_report = read_preserves_file(&apply_out.join("report.preserves")).expect("read apply report");
-        let parsed_report = coordination::parse_coordination_apply_report(&apply_report).expect("parse apply report");
+        let parsed_report = molten::coordination::parse_coordination_apply_report(&apply_report).expect("parse apply report");
         assert_eq!(parsed_report.decision, "pass");
         assert_eq!(parsed_report.receipt_refs.len(), 2);
         assert_eq!(parsed_report.receipt_refs[0], parsed_report.receipt_refs[1]);

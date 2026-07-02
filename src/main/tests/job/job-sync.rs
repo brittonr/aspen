@@ -35,12 +35,12 @@
     fn exercise_job_sync(setup: &JobSetup) -> JobSync {
         let sync_plan_out = setup.dir.join("job-sync-plan.preserves");
         let sync_loopback_receipt = setup.dir.join("job-sync-loopback-receipt.preserves");
-        let source_artifacts = artifacts::list_artifacts(&setup.registry, None).expect("list source artifacts");
+        let source_artifacts = molten::artifacts::list_artifacts(&setup.registry, None).expect("list source artifacts");
         let mut provenance_paths = Vec::with_capacity(source_artifacts.len());
         for artifact in source_artifacts {
             let provenance_path = setup.dir.join(format!("job-provenance-{}.preserves", provenance_paths.len()));
             let provenance_value =
-                provenance::synthetic_reviewed_provenance_record(&artifact.artifact_ref).expect("provenance");
+                molten::provenance::synthetic_reviewed_provenance_record(&artifact.artifact_ref).expect("provenance");
             write_file(&provenance_path, &to_text(&provenance_value).expect("provenance text"))
                 .expect("write provenance");
             provenance_paths.push(provenance_path);
@@ -69,7 +69,7 @@
         .expect("job sync loopback");
         assert!(fs::read_to_string(&sync_plan_out).expect("read sync plan").contains("job-sync-plan-v1"));
         assert!(
-            !artifacts::list_artifacts(&setup.target_registry, Some(job_dag::JOB_ARTIFACT_KIND))
+            !molten::artifacts::list_artifacts(&setup.target_registry, Some(molten::job_dag::JOB_ARTIFACT_KIND))
                 .expect("target jobs")
                 .is_empty()
         );

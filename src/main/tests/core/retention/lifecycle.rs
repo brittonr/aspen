@@ -4,8 +4,8 @@ fn pin_unpin_and_tombstone(dir: &Path, fixture: &RetentionFixture) {
         root: fixture.root.clone(),
         object_ref: fixture.object_ref.clone(),
         object_kind: "encrypted-ref".to_string(),
-        retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
-        source: retention::SOURCE_SECRET_REDACTION.to_string(),
+        retention_class: molten::retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+        source: molten::retention::SOURCE_SECRET_REDACTION.to_string(),
         reason: "reveal audit pending".to_string(),
         owner_ref: fixture.owner_ref.clone(),
         expiry_ref: None,
@@ -16,7 +16,7 @@ fn pin_unpin_and_tombstone(dir: &Path, fixture: &RetentionFixture) {
         receipt_out: Some(dir.join("pin-receipt.preserves")),
     }))
     .expect("pin retention object");
-    let pin = retention::parse_retention_pin(&read_preserves_file(&pin_out).expect("read pin")).expect("parse pin");
+    let pin = molten::retention::parse_retention_pin(&read_preserves_file(&pin_out).expect("read pin")).expect("parse pin");
     deny_pinned_delete(dir, fixture);
     unpin_retention_object(dir, fixture, pin.pin_ref);
     tombstone_retention_object(dir, fixture);
@@ -26,11 +26,11 @@ fn deny_pinned_delete(dir: &Path, fixture: &RetentionFixture) {
     let denied_receipt = dir.join("delete-denied.preserves");
     run_retention_command(retention_check(
         fixture,
-        retention::ACTION_DELETE,
+        molten::retention::ACTION_DELETE,
         Some(denied_receipt.clone()),
     ))
     .expect("deny pinned delete");
-    let denied = retention::parse_retention_receipt(
+    let denied = molten::retention::parse_retention_receipt(
         &read_preserves_file(&denied_receipt).expect("read denied receipt"),
     )
     .expect("parse denied receipt");
@@ -54,11 +54,11 @@ fn tombstone_retention_object(dir: &Path, fixture: &RetentionFixture) {
     let tombstone_receipt = dir.join("tombstone-receipt.preserves");
     run_retention_command(retention_check(
         fixture,
-        retention::ACTION_TOMBSTONE,
+        molten::retention::ACTION_TOMBSTONE,
         Some(tombstone_receipt.clone()),
     ))
     .expect("tombstone retention object");
-    let tombstone = retention::parse_retention_receipt(
+    let tombstone = molten::retention::parse_retention_receipt(
         &read_preserves_file(&tombstone_receipt).expect("read tombstone receipt"),
     )
     .expect("parse tombstone receipt");
@@ -71,7 +71,7 @@ fn retention_check(fixture: &RetentionFixture, action: &str, receipt_out: Option
         root: fixture.root.clone(),
         object_ref: fixture.object_ref.clone(),
         object_kind: "encrypted-ref".to_string(),
-        retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+        retention_class: molten::retention::CLASS_PRIVATE_SECRET_REF.to_string(),
         action: action.to_string(),
         requester_ref: fixture.owner_ref.clone(),
         is_reference_index_complete: true,

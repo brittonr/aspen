@@ -29,7 +29,7 @@
         })
         .expect("storage put");
         let typed_ref_value = read_preserves_file(&typed_ref_out).expect("read typed ref");
-        let typed_ref = typed_storage::parse_typed_ref_value(&typed_ref_value).expect("parse typed ref");
+        let typed_ref = molten::typed_storage::parse_typed_ref_value(&typed_ref_value).expect("parse typed ref");
         StoredProfile {
             schema_ref: typed_ref.schema_ref,
             storage_ref: typed_ref.storage_ref,

@@ -77,7 +77,7 @@ fn cli_eval_cache_commands_work() {
 
 struct CacheFixture {
     cache: PathBuf,
-    key: eval_cache::EvalCacheKey,
+    key: molten::eval_cache::EvalCacheKey,
     value_out: PathBuf,
     dependency_ref: String,
     policy_ref: String,
@@ -108,8 +108,8 @@ fn put_cache_value(dir: &Path) -> CacheFixture {
         tool_ref: None,
         tool_version: "cli-test".to_string(),
         assumption_refs: Vec::new(),
-        tier: eval_cache::TIER_PURE.to_string(),
-        status: eval_cache::STATUS_PASS.to_string(),
+        tier: molten::eval_cache::TIER_PURE.to_string(),
+        status: molten::eval_cache::STATUS_PASS.to_string(),
         evidence_refs: Vec::new(),
         diagnostics: Vec::new(),
         key_out: Some(key_out.clone()),
@@ -117,7 +117,7 @@ fn put_cache_value(dir: &Path) -> CacheFixture {
         receipt_out: Some(dir.join("put-receipt.preserves")),
     }))
     .expect("cache put");
-    let key = eval_cache::parse_eval_cache_key(&read_preserves_file(&key_out).expect("read key"))
+    let key = molten::eval_cache::parse_eval_cache_key(&read_preserves_file(&key_out).expect("read key"))
         .expect("parse cache key");
     CacheFixture {
         cache,
@@ -152,8 +152,8 @@ fn inspect_cache_entries(fixture: &CacheFixture) {
     crate::cli_cache::run(crate::cli_cache::Command::List(crate::cli_cache::command::List {
         cache: fixture.cache.clone(),
         operation: Some("schema-fingerprint".to_string()),
-        tier: Some(eval_cache::TIER_PURE.to_string()),
-        status: Some(eval_cache::STATUS_PASS.to_string()),
+        tier: Some(molten::eval_cache::TIER_PURE.to_string()),
+        status: Some(molten::eval_cache::STATUS_PASS.to_string()),
         dependency_ref: Some(fixture.dependency_ref.clone()),
         policy_ref: Some(fixture.policy_ref.clone()),
         capability_ref: None,
@@ -171,7 +171,7 @@ fn show_cache_key_and_value(fixture: &CacheFixture) {
     }))
     .expect("cache show key");
     crate::cli_cache::run(crate::cli_cache::Command::Show(crate::cli_cache::command::Show {
-        reference: eval_cache::parse_eval_cache_value(&read_preserves_file(&fixture.value_out).expect("read value"))
+        reference: molten::eval_cache::parse_eval_cache_value(&read_preserves_file(&fixture.value_out).expect("read value"))
             .expect("parse cache value")
             .value_ref,
         cache: fixture.cache.clone(),
@@ -185,8 +185,8 @@ fn invalidate_cache_entry(dir: &Path, fixture: CacheFixture) {
         label: "cache-invalidate",
         object_ref: &fixture.key.key_ref,
         object_kind: "eval-cache-key",
-        retention_class: retention::CLASS_EPHEMERAL_CACHE,
-        action: retention::ACTION_TOMBSTONE,
+        retention_class: molten::retention::CLASS_EPHEMERAL_CACHE,
+        action: molten::retention::ACTION_TOMBSTONE,
     };
     let retention = retention_cli_args_for_object(retention_object);
     let apply_refs = vec![retention_apply_ref(retention_object, "eval-cache-invalidate", &retention)];

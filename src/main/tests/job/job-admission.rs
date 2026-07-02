@@ -72,7 +72,7 @@ fn deny_execution_without_admission(setup: &JobSetup) {
     }))
     .expect_err("missing admission denies execution");
     assert_eq!(
-        ledger::artifact_kind(&read_preserves_file(&missing_execution_receipt).expect("missing execution receipt")),
+        molten::ledger::artifact_kind(&read_preserves_file(&missing_execution_receipt).expect("missing execution receipt")),
         "job-execution-receipt"
     );
 }

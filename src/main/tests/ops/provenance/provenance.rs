@@ -36,7 +36,7 @@ fn sandbox_provenance_denies(dir: &Path) {
     let sandbox_out = dir.join("sandbox.preserves");
     run_provenance_command(ProvenanceCommand::Record {
         artifact_ref: sandbox_ref.clone(),
-        trust_state: provenance::TRUST_STATE_SANDBOX_ONLY.to_string(),
+        trust_state: molten::provenance::TRUST_STATE_SANDBOX_ONLY.to_string(),
         source_refs: vec![cli_synthetic_ref("provenance-source").expect("source ref")],
         dependency_closure_ref: cli_synthetic_ref("provenance-deps").expect("deps ref"),
         toolchain_refs: vec![cli_synthetic_ref("provenance-toolchain").expect("toolchain ref")],
@@ -89,7 +89,7 @@ fn reproducible_provenance_passes(dir: &Path, artifact_ref: &str, build: &Proven
     let reproducible_record = dir.join("reproducible.preserves");
     run_provenance_command(ProvenanceCommand::Record {
         artifact_ref: artifact_ref.to_string(),
-        trust_state: provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED.to_string(),
+        trust_state: molten::provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED.to_string(),
         source_refs: vec![cli_synthetic_ref("provenance-repro-source").expect("repro source ref")],
         dependency_closure_ref: cli_synthetic_ref("provenance-repro-deps").expect("repro deps ref"),
         toolchain_refs: vec![cli_synthetic_ref("provenance-repro-toolchain").expect("repro toolchain ref")],
@@ -169,7 +169,7 @@ fn verify_build_record(build_record: &Path, actual_artifact_ref: &str, receipt_o
 }
 
 fn assert_provenance_summary(receipt: &Path, expected: &str) {
-    let summary = provenance::provenance_summary(&read_preserves_file(receipt).expect("read provenance receipt"))
+    let summary = molten::provenance::provenance_summary(&read_preserves_file(receipt).expect("read provenance receipt"))
         .expect("summarize provenance receipt");
     assert!(summary.contains(expected));
 }

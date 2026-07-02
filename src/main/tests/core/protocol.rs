@@ -30,7 +30,7 @@ fn gate_protocol_lifecycle(dir: &Path, fixture: &ProtocolFixture) {
         receipt_out: Some(gate_receipt.clone()),
     })
     .expect("gate protocol lifecycle");
-    let gate = protocol_session::parse_protocol_session_gate_receipt(
+    let gate = molten::protocol_session::parse_protocol_session_gate_receipt(
         &read_preserves_file(&gate_receipt).expect("read protocol gate receipt"),
     )
     .expect("parse protocol gate receipt");
@@ -88,7 +88,7 @@ fn write_delivery_scope_and_operation(dir: &Path) -> DeliveryFixture {
     };
     let scope_out = dir.join("scope.preserves");
     run_delivery_command(DeliveryCommand::Scope {
-        scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
+        scope_profile: molten::delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
         scope_name: "peer:b:services".to_string(),
         retention_refs: vec![fixture.policy_ref.clone()],
         out: Some(scope_out.clone()),
@@ -102,7 +102,7 @@ fn write_delivery_scope_and_operation(dir: &Path) -> DeliveryFixture {
 fn write_delivery_operation(dir: &Path, fixture: &DeliveryFixture) {
     let operation_out = dir.join("operation.preserves");
     run_delivery_command(DeliveryCommand::OperationId {
-        scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
+        scope_profile: molten::delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
         scope_name: Some("peer:b:services".to_string()),
         scope_ref: None,
         producer: "peer:a/producer".to_string(),
@@ -121,11 +121,11 @@ fn run_first_delivery_check(
     dir: &Path,
     root: &Path,
     fixture: &DeliveryFixture,
-) -> delivery_idempotency::IdempotencyReceipt {
+) -> molten::delivery_idempotency::IdempotencyReceipt {
     let first_receipt = dir.join("first.preserves");
     run_delivery_command(delivery_check(root, fixture, fixture.result_ref.clone(), Some(first_receipt.clone())))
         .expect("first delivery check");
-    let first = delivery_idempotency::parse_idempotency_receipt(
+    let first = molten::delivery_idempotency::parse_idempotency_receipt(
         &read_preserves_file(&first_receipt).expect("read first receipt"),
     )
     .expect("parse first receipt");
@@ -133,7 +133,7 @@ fn run_first_delivery_check(
     first
 }
 
-fn show_delivery_receipt(root: &Path, first: &delivery_idempotency::IdempotencyReceipt) {
+fn show_delivery_receipt(root: &Path, first: &molten::delivery_idempotency::IdempotencyReceipt) {
     run_delivery_command(DeliveryCommand::ReceiptShow {
         receipt_ref: first.receipt_ref.clone(),
         root: root.to_path_buf(),
@@ -145,7 +145,7 @@ fn run_duplicate_delivery_check(
     dir: &Path,
     root: &Path,
     fixture: &DeliveryFixture,
-    first: delivery_idempotency::IdempotencyReceipt,
+    first: molten::delivery_idempotency::IdempotencyReceipt,
 ) {
     let duplicate_receipt = dir.join("duplicate.preserves");
     run_delivery_command(delivery_check(
@@ -155,7 +155,7 @@ fn run_duplicate_delivery_check(
         Some(duplicate_receipt.clone()),
     ))
     .expect("duplicate delivery check");
-    let duplicate = delivery_idempotency::parse_idempotency_receipt(
+    let duplicate = molten::delivery_idempotency::parse_idempotency_receipt(
         &read_preserves_file(&duplicate_receipt).expect("read duplicate receipt"),
     )
     .expect("parse duplicate receipt");
@@ -171,7 +171,7 @@ fn delivery_check(
 ) -> DeliveryCommand {
     DeliveryCommand::Check {
         root: root.to_path_buf(),
-        scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
+        scope_profile: molten::delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
         scope_name: Some("peer:b:services".to_string()),
         scope_ref: None,
         producer: "peer:a/producer".to_string(),

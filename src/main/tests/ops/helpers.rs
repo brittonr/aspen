@@ -28,22 +28,22 @@
         let requester_ref = test_ref(&format!("retention-requester-{}", input.label));
         let policy_refs = vec![store_cli_admission(
             input,
-            retention::ADMISSION_KIND_POLICY,
+            molten::retention::ADMISSION_KIND_POLICY,
             &requester_ref,
         )];
         let authority_refs = vec![store_cli_admission(
             input,
-            retention::ADMISSION_KIND_AUTHORITY,
+            molten::retention::ADMISSION_KIND_AUTHORITY,
             &requester_ref,
         )];
         let evidence_refs = vec![store_cli_admission(
             input,
-            retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            molten::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
             &requester_ref,
         )];
         let reference_index_refs = vec![store_cli_admission(
             input,
-            retention::ADMISSION_KIND_REFERENCE_INDEX,
+            molten::retention::ADMISSION_KIND_REFERENCE_INDEX,
             &requester_ref,
         )];
         RetentionEvidenceArgs {
@@ -67,7 +67,7 @@
         retention_args: &RetentionEvidenceArgs,
     ) -> String {
         let evidence = retention_args.clone().into_retention_evidence();
-        let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+        let plan = molten::retention::store_retention_gc_plan(molten::retention::RetentionGcPlanInput {
             root: input.root,
             subsystem,
             object_ref: input.object_ref,
@@ -77,7 +77,7 @@
             evidence: &evidence,
         })
         .expect("store CLI retention GC plan");
-        retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+        molten::retention::apply_retention_gc_plan(molten::retention::RetentionGcApplyFromPlanInput {
             root: input.root,
             plan_ref: &plan.plan_ref,
         })
@@ -86,7 +86,7 @@
     }
 
     fn store_cli_admission(input: RetentionCliObject<'_>, kind: &str, requester_ref: &str) -> String {
-        retention::store_retention_evidence_admission(input.root, &retention::RetentionEvidenceAdmissionInput {
+        molten::retention::store_retention_evidence_admission(input.root, &molten::retention::RetentionEvidenceAdmissionInput {
             kind,
             decision: "pass",
             requester_ref,
@@ -172,8 +172,8 @@
     }
 
     fn install_cli_stage_artifact(registry: &Path, operation: &str) -> String {
-        let payload = job_dag::builtin_stage_operation_value(operation).expect("stage operation");
-        let installed = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let payload = molten::job_dag::builtin_stage_operation_value(operation).expect("stage operation");
+        let installed = molten::artifacts::install_artifact(registry, &molten::artifacts::ArtifactInstallInput {
             kind: "stage".to_string(),
             payload,
             schema_refs: vec![cli_synthetic_ref("job-worker-stage-schema").expect("schema")],
@@ -190,9 +190,9 @@
     }
 
     fn install_cli_clean_octet_gate(registry: &Path) -> String {
-        let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate");
+        let gate_value = molten::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate");
         let gate_ref = canonical_hash(&gate_value).expect("gate ref");
-        let installed = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let installed = molten::artifacts::install_artifact(registry, &molten::artifacts::ArtifactInstallInput {
             kind: "octet-gate-receipt".to_string(),
             payload: gate_value,
             schema_refs: Vec::new(),
@@ -210,9 +210,9 @@
 
     fn install_cli_job_execute_authority_context(registry: &Path, job_ref: &str) -> String {
         let subject_ref = cli_synthetic_ref("job-worker-target-subject").expect("subject");
-        let context_value = authority::authority_context_value(authority::ContextValueInput {
+        let context_value = molten::authority::authority_context_value(molten::authority::ContextValueInput {
             subject_ref: &subject_ref,
-            capabilities: &[authority::AuthorityCapability {
+            capabilities: &[molten::authority::AuthorityCapability {
                 capability: "job:execute".to_string(),
                 scope: job_ref.to_string(),
                 attenuation: "scoped".to_string(),
@@ -227,7 +227,7 @@
         })
         .expect("authority context");
         let context_ref = canonical_hash(&context_value).expect("authority context ref");
-        let installed = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let installed = molten::artifacts::install_artifact(registry, &molten::artifacts::ArtifactInstallInput {
             kind: "authority-context".to_string(),
             payload: context_value,
             schema_refs: Vec::new(),

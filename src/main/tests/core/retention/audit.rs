@@ -5,8 +5,8 @@ fn audit_retention_gc(dir: &Path, root: &Path) {
         label: "retention-audit",
         object_ref: &audit_object_ref,
         object_kind: "encrypted-ref",
-        retention_class: retention::CLASS_PRIVATE_SECRET_REF,
-        action: retention::ACTION_DELETE,
+        retention_class: molten::retention::CLASS_PRIVATE_SECRET_REF,
+        action: molten::retention::ACTION_DELETE,
     };
     let retention_args = retention_cli_args_for_object(audit_object);
     let audit_apply_ref = retention_apply_ref(audit_object, "ledger-gc", &retention_args);
@@ -26,14 +26,14 @@ fn store_audit_execution(
     root: &Path,
     object_ref: &str,
     apply_ref: &str,
-) -> retention::RetentionGcExecutionGate {
-    let audit_execution = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+) -> molten::retention::RetentionGcExecutionGate {
+    let audit_execution = molten::retention::store_retention_gc_execution_gate(molten::retention::RetentionGcExecutionGateInput {
         root,
         subsystem: "ledger-gc",
-        action: retention::ACTION_DELETE,
+        action: molten::retention::ACTION_DELETE,
         object_ref,
         object_kind: "encrypted-ref",
-        retention_class: retention::CLASS_PRIVATE_SECRET_REF,
+        retention_class: molten::retention::CLASS_PRIVATE_SECRET_REF,
         apply_ref: Some(apply_ref),
     })
     .expect("store audit execution gate");
@@ -42,7 +42,7 @@ fn store_audit_execution(
 }
 
 fn assert_audit_receipt(audit_out: &Path, audit_apply_ref: &str) {
-    let audit = retention::parse_retention_gc_audit(&read_preserves_file(audit_out).expect("read retention gc audit"))
+    let audit = molten::retention::parse_retention_gc_audit(&read_preserves_file(audit_out).expect("read retention gc audit"))
         .expect("parse retention gc audit");
     assert_eq!(audit.decision, "pass");
     assert_eq!(audit.apply_ref.as_deref(), Some(audit_apply_ref));

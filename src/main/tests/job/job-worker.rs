@@ -34,7 +34,7 @@
         }))
         .expect("job worker local run");
         let worker_receipt = read_preserves_file(&worker_out.join("worker-receipt.preserves")).expect("worker receipt");
-        assert_eq!(ledger::artifact_kind(&worker_receipt), "job-worker-receipt");
+        assert_eq!(molten::ledger::artifact_kind(&worker_receipt), "job-worker-receipt");
         assert!(fs::read_to_string(worker_out.join("output.preserves")).expect("worker output").contains("3"));
         let worker_receipt_ref = canonical_hash(&worker_receipt).expect("worker receipt ref");
         run_job_command(JobCommand::ReceiptShow(cli_job::command::refs::ReceiptShow {
@@ -78,7 +78,7 @@
         .expect("job worker scheduled local run");
         let schedule_receipt =
             read_preserves_file(&schedule_out.join("schedule-receipt.preserves")).expect("schedule receipt");
-        assert_eq!(ledger::artifact_kind(&schedule_receipt), "job-worker-schedule-receipt");
+        assert_eq!(molten::ledger::artifact_kind(&schedule_receipt), "job-worker-schedule-receipt");
         assert!(
             fs::read_to_string(schedule_out.join("worker").join("output.preserves"))
                 .expect("scheduled worker output")

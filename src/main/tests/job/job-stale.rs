@@ -29,7 +29,7 @@
             out: stale_schedule_out.clone(),
         }))
         .expect_err("stale schedule token denies before worker");
-        let stale_receipt = job_dag::parse_job_worker_schedule_receipt_value(
+        let stale_receipt = molten::job_dag::parse_job_worker_schedule_receipt_value(
             &read_preserves_file(&stale_schedule_out.join("schedule-receipt.preserves")).expect("stale receipt"),
         )
         .expect("parse stale schedule receipt");

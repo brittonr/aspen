@@ -15,14 +15,14 @@
     }
 
     struct UpgradePlanFile {
-        plan: upgrades::UpgradePlan,
+        plan: molten::upgrades::UpgradePlan,
     }
 
     fn import_upgrade_artifacts(ledger_root: &Path) -> UpgradeArtifacts {
-        let old = ledger::import_artifact(ledger_root, &record("cli-old-artifact", vec![string("old")]))
+        let old = molten::ledger::import_artifact(ledger_root, &record("cli-old-artifact", vec![string("old")]))
             .expect("import old")
             .artifact_ref;
-        let new = ledger::import_artifact(ledger_root, &record("cli-new-artifact", vec![string("new")]))
+        let new = molten::ledger::import_artifact(ledger_root, &record("cli-new-artifact", vec![string("new")]))
             .expect("import new")
             .artifact_ref;
         UpgradeArtifacts { old, new }
@@ -48,7 +48,7 @@
         })
         .expect("plan name move");
         let plan_value = read_preserves_file(&plan_out).expect("read plan");
-        let plan = upgrades::parse_upgrade_plan(&plan_value).expect("parse plan");
+        let plan = molten::upgrades::parse_upgrade_plan(&plan_value).expect("parse plan");
         run_upgrade_command(UpgradeCommand::Create {
             plan: plan_out,
             store: store.to_path_buf(),
@@ -67,7 +67,7 @@
 
     fn write_source_gate(dir: &Path) -> PathBuf {
         let source_gate = dir.join("octet-gate-receipt.preserves");
-        let source_gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("source gate fixture");
+        let source_gate_value = molten::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("source gate fixture");
         write_file(&source_gate, &to_text(&source_gate_value).expect("source gate text")).expect("write source gate");
         source_gate
     }
@@ -91,7 +91,7 @@
     }
 
     fn check_upgrade_result(dir: &Path, ledger_root: PathBuf, store: PathBuf, expected_ref: String) {
-        let pointer = upgrades::read_name_pointer(&store, "app/main")
+        let pointer = molten::upgrades::read_name_pointer(&store, "app/main")
             .expect("read name pointer")
             .expect("name pointer exists");
         assert_eq!(pointer.artifact_ref, expected_ref);

@@ -45,7 +45,7 @@ fn sign_receipt_fixture(fixture: &ReceiptSignatureFixture) {
     })
     .expect("sign receipt");
     assert_eq!(
-        ledger::artifact_kind(&read_preserves_file(&fixture.signed).expect("read signed receipt")),
+        molten::ledger::artifact_kind(&read_preserves_file(&fixture.signed).expect("read signed receipt")),
         "signed-receipt"
     );
 }

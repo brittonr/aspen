@@ -32,7 +32,7 @@ fn install_receipt_artifact(dir: &Path) -> ReceiptArtifactFixture {
     })
     .expect("sign receipt artifact");
     let signed_value = read_preserves_file(&signed).expect("read signed receipt");
-    let imported = ledger::import_artifact(&ledger_root, &signed_value).expect("import signed receipt");
+    let imported = molten::ledger::import_artifact(&ledger_root, &signed_value).expect("import signed receipt");
     ReceiptArtifactFixture {
         ledger_root,
         artifact_ref: imported.artifact_ref,

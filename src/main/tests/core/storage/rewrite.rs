@@ -85,10 +85,10 @@
     }
 
     fn assert_rewritten_doc(registry: PathBuf) {
-        let docs = artifacts::list_artifacts(&registry, Some("doc")).expect("list rewritten docs");
+        let docs = molten::artifacts::list_artifacts(&registry, Some("doc")).expect("list rewritten docs");
         assert_eq!(docs.len(), 2);
         assert!(docs.iter().any(|artifact| {
-            artifacts::read_payload(&registry, &artifact.artifact_ref)
+            molten::artifacts::read_payload(&registry, &artifact.artifact_ref)
                 .and_then(|value| to_text(&value))
                 .is_ok_and(|text| text.contains("new"))
         }));

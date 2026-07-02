@@ -17,9 +17,9 @@ struct ProtocolDrainFixture {
 
 fn protocol_drain_fixture(dir: &Path) -> ProtocolDrainFixture {
     let ledger_root = dir.join("ledger");
-    let lifecycle = protocol_session::request_response_lifecycle().expect("protocol lifecycle");
+    let lifecycle = molten::protocol_session::request_response_lifecycle().expect("protocol lifecycle");
     let gate = protocol_gate_for_lifecycle(&lifecycle);
-    let gate_ref = ledger::import_artifact(&ledger_root, &gate.value)
+    let gate_ref = molten::ledger::import_artifact(&ledger_root, &gate.value)
         .expect("import protocol gate")
         .artifact_ref;
     ProtocolDrainFixture {
@@ -33,9 +33,9 @@ fn protocol_drain_fixture(dir: &Path) -> ProtocolDrainFixture {
 }
 
 fn protocol_gate_for_lifecycle(
-    lifecycle: &protocol_session::RequestResponseLifecycle,
-) -> protocol_session::ProtocolSessionGate {
-    protocol_session::gate_protocol_session_lifecycle(protocol_session::ProtocolSessionGateInput {
+    lifecycle: &molten::protocol_session::RequestResponseLifecycle,
+) -> molten::protocol_session::ProtocolSessionGate {
+    molten::protocol_session::gate_protocol_session_lifecycle(molten::protocol_session::ProtocolSessionGateInput {
         install_receipt: lifecycle.install.value.clone(),
         initial_states: lifecycle.initial_states.iter().map(|state| state.value.clone()).collect(),
         operation_receipts: lifecycle
@@ -116,7 +116,7 @@ fn protocol_drain_plan_value(
     new_protocol_ref: &str,
     precondition_ref: String,
 ) -> preserves::IOValue {
-    upgrades::upgrade_plan_value(&upgrades::UpgradePlanInput {
+    molten::upgrades::upgrade_plan_value(&molten::upgrades::UpgradePlanInput {
         session_id: session_id.to_string(),
         reason: "protocol drain".to_string(),
         summary: summary.to_string(),
@@ -129,14 +129,14 @@ fn protocol_drain_plan_value(
         rollback_refs: vec![test_ref("rollback")],
         policy_refs: vec![test_ref("upgrade-policy")],
         evidence_refs: vec![test_ref("upgrade-evidence")],
-        source_gate_receipt_values: vec![octet_gate::synthetic_clean_octet_gate_receipt_for_tests()
+        source_gate_receipt_values: vec![molten::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()
             .expect("source gate fixture")],
     })
     .expect("protocol drain plan")
 }
 
-fn protocol_drain_task(old_protocol_ref: &str, new_protocol_ref: &str, precondition_ref: String) -> upgrades::UpgradeTaskInput {
-    upgrades::UpgradeTaskInput {
+fn protocol_drain_task(old_protocol_ref: &str, new_protocol_ref: &str, precondition_ref: String) -> molten::upgrades::UpgradeTaskInput {
+    molten::upgrades::UpgradeTaskInput {
         task_id: "drain-sessions".to_string(),
         kind: "drain-sessions".to_string(),
         subject: "request-response-protocol".to_string(),
@@ -148,8 +148,8 @@ fn protocol_drain_task(old_protocol_ref: &str, new_protocol_ref: &str, precondit
     }
 }
 
-fn protocol_drain_compatibility(old_protocol_ref: &str, new_protocol_ref: &str) -> upgrades::UpgradeCompatibilityWindow {
-    upgrades::UpgradeCompatibilityWindow {
+fn protocol_drain_compatibility(old_protocol_ref: &str, new_protocol_ref: &str) -> molten::upgrades::UpgradeCompatibilityWindow {
+    molten::upgrades::UpgradeCompatibilityWindow {
         old_refs: vec![old_protocol_ref.to_string()],
         new_refs: vec![new_protocol_ref.to_string()],
         expires_at: Some(64),
@@ -163,10 +163,10 @@ fn create_protocol_drain_session(
     plan_name: &str,
     receipt_name: &str,
     store: PathBuf,
-) -> upgrades::UpgradePlan {
+) -> molten::upgrades::UpgradePlan {
     let plan_file = fixture.dir.join(plan_name);
     write_file(&plan_file, &to_text(&plan_value).expect("plan text")).expect("write protocol drain plan");
-    let plan = upgrades::parse_upgrade_plan(&plan_value).expect("parse plan");
+    let plan = molten::upgrades::parse_upgrade_plan(&plan_value).expect("parse plan");
     run_upgrade_command(UpgradeCommand::Create {
         plan: plan_file,
         store,
@@ -187,6 +187,6 @@ fn run_protocol_drain_task(store: PathBuf, ledger: PathBuf, plan_ref: String, re
     .expect("run protocol drain task");
 }
 
-fn parse_protocol_drain_receipt(receipt_out: &Path) -> upgrades::UpgradeReceipt {
-    upgrades::parse_upgrade_receipt(&read_preserves_file(receipt_out).expect("read receipt")).expect("parse receipt")
+fn parse_protocol_drain_receipt(receipt_out: &Path) -> molten::upgrades::UpgradeReceipt {
+    molten::upgrades::parse_upgrade_receipt(&read_preserves_file(receipt_out).expect("read receipt")).expect("parse receipt")
 }

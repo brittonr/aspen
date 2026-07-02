@@ -40,7 +40,7 @@ fn run_dogfood_local_node(dir: &Path) -> DogfoodCliFixture {
     })
     .expect("dogfood local node");
     let report_value = read_preserves_file(&report).expect("read dogfood report");
-    let parsed = operator_dogfood::parse_dogfood_report(&report_value).expect("parse dogfood report");
+    let parsed = molten::operator_dogfood::parse_dogfood_report(&report_value).expect("parse dogfood report");
     assert_eq!(parsed.decision, "pass");
     assert_dogfood_evidence_files(&release_gate, &replay_verify, &replay_index);
     DogfoodCliFixture {
@@ -133,7 +133,7 @@ fn export_nix_dogfood(fixture: &DogfoodCliFixture) -> NixDogfoodFixture {
     })
     .expect("dogfood nix release verify");
     let value = read_preserves_file(&verify).expect("read nix verify");
-    let parsed = operator_dogfood::parse_nix_dogfood_verify_receipt(&value).expect("parse nix verify");
+    let parsed = molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&value).expect("parse nix verify");
     assert_eq!(parsed.decision, "pass");
     NixDogfoodFixture { evidence, verify }
 }
@@ -152,7 +152,7 @@ fn verify_stale_nextest_marker(fixture: &DogfoodCliFixture, nix: &NixDogfoodFixt
     })
     .expect("dogfood nix release verify stale marker");
     let value = read_preserves_file(&stale_verify).expect("read stale nix verify");
-    let receipt = operator_dogfood::parse_nix_dogfood_verify_receipt(&value).expect("parse stale nix verify");
+    let receipt = molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&value).expect("parse stale nix verify");
     assert_eq!(receipt.decision, "deny");
     assert!(receipt
         .diagnostics
@@ -170,7 +170,7 @@ fn verify_tampered_dogfood_report(fixture: &DogfoodCliFixture, nix: &NixDogfoodF
     })
     .expect("dogfood nix release verify tampered report");
     let value = read_preserves_file(&tampered_verify).expect("read tampered nix verify");
-    let receipt = operator_dogfood::parse_nix_dogfood_verify_receipt(&value).expect("parse tampered nix verify");
+    let receipt = molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&value).expect("parse tampered nix verify");
     assert_eq!(receipt.decision, "deny");
     assert!(receipt
         .diagnostics

@@ -9,7 +9,7 @@ fn remote_clearance_roundtrip(dir: &Path, fixture: &RetentionFixture) -> Clearan
         "remote-clearance-response.preserves",
     );
     let import_out = import_clearance(dir, fixture, &clearance, response_out, "remote-clearance-import.preserves");
-    let imported = retention::parse_retention_remote_gc_clearance_import(
+    let imported = molten::retention::parse_retention_remote_gc_clearance_import(
         &read_preserves_file(&import_out).expect("read clearance import"),
     )
     .expect("parse clearance import");
@@ -29,8 +29,8 @@ fn write_remote_clearance(dir: &Path, fixture: &RetentionFixture) -> ClearanceFi
         peer_ref: peer_ref.clone(),
         object_ref: fixture.object_ref.clone(),
         object_kind: "encrypted-ref".to_string(),
-        retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
-        action: retention::ACTION_DELETE.to_string(),
+        retention_class: molten::retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+        action: molten::retention::ACTION_DELETE.to_string(),
         remote_ref: remote_ref.clone(),
         policy_ref: fixture.policy_ref.clone(),
         authority_ref: fixture.authority_ref.clone(),
@@ -59,8 +59,8 @@ fn write_clearance_request(dir: &Path, fixture: &RetentionFixture, remote_ref: &
         peer_ref: peer_ref.to_string(),
         object_ref: fixture.object_ref.clone(),
         object_kind: "encrypted-ref".to_string(),
-        retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
-        action: retention::ACTION_DELETE.to_string(),
+        retention_class: molten::retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+        action: molten::retention::ACTION_DELETE.to_string(),
         remote_ref: remote_ref.to_string(),
         policy_ref: fixture.policy_ref.clone(),
         authority_ref: fixture.authority_ref.clone(),
@@ -128,7 +128,7 @@ fn retained_clearance_is_denied(dir: &Path, fixture: &RetentionFixture, clearanc
         "remote-clearance-retained-response.preserves",
     );
     let import_out = import_clearance(dir, fixture, &clearance, response, "remote-clearance-retained-import.preserves");
-    let imported = retention::parse_retention_remote_gc_clearance_import(
+    let imported = molten::retention::parse_retention_remote_gc_clearance_import(
         &read_preserves_file(&import_out).expect("read retained clearance import"),
     )
     .expect("parse retained clearance import");

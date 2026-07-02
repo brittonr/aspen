@@ -1,7 +1,7 @@
 fn define_retention_class(dir: &Path, fixture: &RetentionFixture) {
     let class_out = dir.join("class.preserves");
     run_retention_command(RetentionCommand::Class(cli_retention::command::base::Class {
-        class_name: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+        class_name: molten::retention::CLASS_PRIVATE_SECRET_REF.to_string(),
         minimum_age_seconds: 0,
         maximum_age_seconds: Some(3600),
         deletion_authority_ref: fixture.authority_ref.clone(),
@@ -19,13 +19,13 @@ fn admit_retention_authority(dir: &Path, fixture: &RetentionFixture) {
     let admission_out = dir.join("authority-admission.preserves");
     run_retention_command(RetentionCommand::Admit(cli_retention::command::base::Admit {
         root: fixture.root.clone(),
-        kind: retention::ADMISSION_KIND_AUTHORITY.to_string(),
+        kind: molten::retention::ADMISSION_KIND_AUTHORITY.to_string(),
         decision: "pass".to_string(),
         requester_ref: fixture.owner_ref.clone(),
         object_ref: fixture.object_ref.clone(),
         object_kind: "encrypted-ref".to_string(),
-        retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
-        action: retention::ACTION_DELETE.to_string(),
+        retention_class: molten::retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+        action: molten::retention::ACTION_DELETE.to_string(),
         bound_refs: vec![fixture.authority_ref.clone()],
         retained_refs: Vec::new(),
         remote_refs: Vec::new(),

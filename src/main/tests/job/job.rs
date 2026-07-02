@@ -7,7 +7,7 @@
         ledger_root: PathBuf,
         output: PathBuf,
         run_receipt: PathBuf,
-        dag: job_dag::JobDag,
+        dag: molten::job_dag::JobDag,
         target_registry: PathBuf,
     }
 

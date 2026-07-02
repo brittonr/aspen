@@ -123,7 +123,7 @@
             store: fixture.store.clone(),
         })
         .expect("chunk receipt list");
-        let receipt_ref = chunk_store::list_receipt_refs(&fixture.store)
+        let receipt_ref = molten::chunk_store::list_receipt_refs(&fixture.store)
             .expect("list receipt refs")
             .into_iter()
             .next()

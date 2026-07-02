@@ -86,9 +86,9 @@ fn build_remote_envelope(dir: &Path) -> PathBuf {
     envelope_out
 }
 
-fn read_remote_envelope(path: &Path) -> remote_dataspace::RemoteDataspaceEnvelope {
+fn read_remote_envelope(path: &Path) -> molten::remote_dataspace::RemoteDataspaceEnvelope {
     let value = read_preserves_file(path).expect("read remote envelope");
-    remote_dataspace::parse_envelope(&value).expect("parse remote envelope")
+    molten::remote_dataspace::parse_envelope(&value).expect("parse remote envelope")
 }
 
 fn publish_and_deliver_remote_envelope(dir: &Path, envelope_out: &Path, envelope_ref: String) {
@@ -130,7 +130,7 @@ fn gate_remote_two_peer(dir: &Path) {
     })
     .expect("remote gate");
     let gate = read_preserves_file(&gate_out).expect("read remote gate");
-    assert_eq!(ledger::artifact_kind(&gate), "remote-dataspace-gate-receipt");
+    assert_eq!(molten::ledger::artifact_kind(&gate), "remote-dataspace-gate-receipt");
     let missing = run_remote_command(RemoteCommand::Gate {
         delivery_log: out.join("delivery-log.preserves"),
         admission_receipts: Vec::new(),

@@ -27,7 +27,7 @@ fn catalog_install_fixture(dir: &Path) -> CatalogCliFixture {
     .expect("write catalog dep payload");
     let base = install_catalog_artifact(dir, &registry, "catalog-base", "schema", Vec::new());
     let dep = install_catalog_artifact(dir, &registry, "catalog-dependent", "doc", vec![base.artifact_ref.clone()]);
-    ledger::import_artifact(&ledger_root, &dep.value).expect("import dep artifact to ledger");
+    molten::ledger::import_artifact(&ledger_root, &dep.value).expect("import dep artifact to ledger");
     CatalogCliFixture {
         registry,
         ledger_root,
@@ -44,7 +44,7 @@ fn install_catalog_artifact(
     name: &str,
     kind: &str,
     dependencies: Vec<String>,
-) -> artifacts::ArtifactRecord {
+) -> molten::artifacts::ArtifactRecord {
     let artifact_out = dir.join(format!("{name}-artifact.preserves"));
     crate::cli_artifact::run(crate::cli_artifact::Command::Install {
         payload: dir.join(format!("{name}.preserves")),
@@ -57,7 +57,7 @@ fn install_catalog_artifact(
         receipt_out: Some(dir.join(format!("{name}-install-receipt.preserves"))),
     })
     .expect("install catalog artifact");
-    artifacts::parse_artifact_value(&read_preserves_file(&artifact_out).expect("read catalog artifact"))
+    molten::artifacts::parse_artifact_value(&read_preserves_file(&artifact_out).expect("read catalog artifact"))
         .expect("parse catalog artifact")
 }
 
@@ -182,7 +182,7 @@ fn write_catalog_mcp_request(path: &Path, base_ref: &str) {
     write_file(
         path,
         &to_text(
-            &catalog_mcp::mcp_request_value(
+            &molten::catalog_mcp::mcp_request_value(
                 "catalog.search",
                 vec![
                     record("kind", vec![string("doc")]),

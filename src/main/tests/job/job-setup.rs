@@ -46,11 +46,11 @@ impl JobPaths {
     }
 }
 
-fn build_cli_job_dag(registry: &Path) -> (preserves::IOValue, job_dag::JobDag) {
+fn build_cli_job_dag(registry: &Path) -> (preserves::IOValue, molten::job_dag::JobDag) {
     let source_stage = install_cli_stage_artifact(registry, "source");
     let reduce_stage = install_cli_stage_artifact(registry, "sum-u64");
     let materialize_stage = install_cli_stage_artifact(registry, "materialize");
-    let dag_value = job_dag::job_dag_value(job_dag::DagValueInput {
+    let dag_value = molten::job_dag::job_dag_value(molten::job_dag::DagValueInput {
         nodes: vec![
             source_job_node(&source_stage),
             reduce_job_node(&reduce_stage),
@@ -64,12 +64,12 @@ fn build_cli_job_dag(registry: &Path) -> (preserves::IOValue, job_dag::JobDag) {
         evidence_refs: &[],
     })
     .expect("dag value");
-    let dag = job_dag::parse_job_dag_value(&dag_value).expect("parse dag");
+    let dag = molten::job_dag::parse_job_dag_value(&dag_value).expect("parse dag");
     (dag_value, dag)
 }
 
 fn source_job_node(stage_ref: &str) -> preserves::IOValue {
-    job_dag::job_node_value(job_dag::NodeValueInput {
+    molten::job_dag::job_node_value(molten::job_dag::NodeValueInput {
         id: "source",
         kind: "source",
         stage_artifact_ref: Some(stage_ref),
@@ -93,7 +93,7 @@ fn source_job_node(stage_ref: &str) -> preserves::IOValue {
 }
 
 fn reduce_job_node(stage_ref: &str) -> preserves::IOValue {
-    job_dag::job_node_value(job_dag::NodeValueInput {
+    molten::job_dag::job_node_value(molten::job_dag::NodeValueInput {
         id: "sum",
         kind: "reduce",
         stage_artifact_ref: Some(stage_ref),
@@ -108,7 +108,7 @@ fn reduce_job_node(stage_ref: &str) -> preserves::IOValue {
 }
 
 fn materialize_job_node(stage_ref: &str) -> preserves::IOValue {
-    job_dag::job_node_value(job_dag::NodeValueInput {
+    molten::job_dag::job_node_value(molten::job_dag::NodeValueInput {
         id: "out",
         kind: "materialize",
         stage_artifact_ref: Some(stage_ref),
@@ -127,7 +127,7 @@ fn job_edges() -> Vec<preserves::IOValue> {
 }
 
 fn job_edge(from_node: &str, from_port: &str, to_node: &str, to_port: &str) -> preserves::IOValue {
-    job_dag::job_edge_value(job_dag::EdgeValueInput {
+    molten::job_dag::job_edge_value(molten::job_dag::EdgeValueInput {
         from_node,
         from_port,
         to_node,
@@ -139,7 +139,7 @@ fn job_edge(from_node: &str, from_port: &str, to_node: &str, to_port: &str) -> p
     .expect("job edge")
 }
 
-fn install_job_artifact(paths: &JobPaths, dag: &job_dag::JobDag) {
+fn install_job_artifact(paths: &JobPaths, dag: &molten::job_dag::JobDag) {
     run_job_command(JobCommand::Install(cli_job::command::base::Install {
         dag: paths.dag_file.clone(),
         registry: paths.registry.clone(),
