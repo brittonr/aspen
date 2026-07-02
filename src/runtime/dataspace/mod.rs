@@ -8,14 +8,14 @@ type OrderedSet<Value> = std::collections::BTreeSet<Value>;
 type PendingTurn = super::PendingTurn;
 type PredicateDecision = super::PredicateDecision;
 type Result<T> = crate::error::Result<T>;
-type RuntimeAssertion = super::RuntimeAssertion;
-type RuntimeEffect = super::RuntimeEffect;
-type RuntimeEvent = super::RuntimeEvent;
-type RuntimeMessage = super::RuntimeMessage;
-type RuntimeObserver = super::RuntimeObserver;
-type RuntimePredicateReceipt = super::RuntimePredicateReceipt;
-type RuntimeStep = super::RuntimeStep;
-type RuntimeValue = super::RuntimeValue;
+type Assertion = super::RuntimeAssertion;
+type Effect = super::RuntimeEffect;
+type Event = super::RuntimeEvent;
+type Message = super::RuntimeMessage;
+type Observer = super::RuntimeObserver;
+type PredicateReceipt = super::RuntimePredicateReceipt;
+type Step = super::RuntimeStep;
+type Value = super::RuntimeValue;
 type TurnAction = super::turn::TurnAction;
 type TurnOutcome = super::TurnOutcome;
 
@@ -28,7 +28,7 @@ fn evaluate_turn_transition(
     turn: &PendingTurn,
     after: &RuntimeSnapshot,
     outcome: TurnOutcome,
-) -> Result<RuntimePredicateReceipt> {
+) -> Result<PredicateReceipt> {
     super::evaluate_turn_transition(before, turn, after, outcome)
 }
 
@@ -49,9 +49,9 @@ pub struct RuntimeSnapshot {
     pub logical_time: u64,
     pub rng_state: u64,
     pub effect_sequence: u64,
-    pub messages: OrderedSet<RuntimeMessage>,
-    pub assertions: OrderedSet<RuntimeAssertion>,
-    pub observers: OrderedSet<RuntimeObserver>,
+    pub messages: OrderedSet<Message>,
+    pub assertions: OrderedSet<Assertion>,
+    pub observers: OrderedSet<Observer>,
 }
 
 impl RuntimeSnapshot {
@@ -60,9 +60,9 @@ impl RuntimeSnapshot {
             u64_value(self.logical_time),
             u64_value(self.rng_state),
             u64_value(self.effect_sequence),
-            sequence(self.messages.iter().map(RuntimeMessage::to_value).collect()),
-            sequence(self.assertions.iter().map(RuntimeAssertion::to_value).collect()),
-            sequence(self.observers.iter().map(RuntimeObserver::to_value).collect()),
+            sequence(self.messages.iter().map(Message::to_value).collect()),
+            sequence(self.assertions.iter().map(Assertion::to_value).collect()),
+            sequence(self.observers.iter().map(Observer::to_value).collect()),
         ])
     }
 
@@ -76,9 +76,9 @@ pub struct RuntimeState {
     logical_time: u64,
     rng_state: u64,
     effect_sequence: u64,
-    messages: OrderedSet<RuntimeMessage>,
-    assertions: OrderedSet<RuntimeAssertion>,
-    observers: OrderedSet<RuntimeObserver>,
+    messages: OrderedSet<Message>,
+    assertions: OrderedSet<Assertion>,
+    observers: OrderedSet<Observer>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,17 +90,17 @@ pub struct RuntimeScopeCleanup {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalEnvelopeDelivery {
+pub struct LocalDelivery {
     pub actor: ActorId,
     pub boundary: EnvelopeBoundary,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct LocalDataspaceAdapter {
+pub struct LocalAdapter {
     subscriptions: OrderedMap<String, OrderedSet<String>>,
 }
 
-impl LocalDataspaceAdapter {
+impl LocalAdapter {
     pub fn new() -> Self {
         Self::default()
     }
@@ -109,17 +109,17 @@ impl LocalDataspaceAdapter {
         self.subscriptions.entry(actor.into_string()).or_default();
     }
 
-    pub fn observe_subject(&mut self, actor: ActorId, subject: &RuntimeValue) {
+    pub fn observe_subject(&mut self, actor: ActorId, subject: &Value) {
         self.subscriptions.entry(actor.into_string()).or_default().insert(subject.value_ref().to_string());
     }
 
-    pub fn route_envelope(&self, envelope: &Envelope) -> Result<Vec<LocalEnvelopeDelivery>> {
+    pub fn route_envelope(&self, envelope: &Envelope) -> Result<Vec<LocalDelivery>> {
         let subject_ref = envelope.subject.value_ref();
         let boundary = envelope.boundary()?;
         let mut deliveries = Vec::with_capacity(self.subscriptions.len());
         for (actor, subjects) in &self.subscriptions {
             if subjects.contains(subject_ref) {
-                deliveries.push(LocalEnvelopeDelivery {
+                deliveries.push(LocalDelivery {
                     actor: ActorId::parse(actor.clone())?,
                     boundary: boundary.clone(),
                 });
@@ -137,14 +137,8 @@ impl LocalDataspaceAdapter {
     }
 }
 
-fn effect_response(
-    effect: RuntimeEffect,
-    actor: String,
-    sequence: u64,
-    upper: Option<u64>,
-    value: u64,
-) -> RuntimeEvent {
-    RuntimeEvent::EffectResponse {
+fn effect_response(effect: Effect, actor: String, sequence: u64, upper: Option<u64>, value: u64) -> Event {
+    Event::EffectResponse {
         effect,
         actor,
         sequence,
@@ -176,49 +170,46 @@ impl RuntimeState {
         }
     }
 
-    pub fn apply_step(&mut self, step: &RuntimeStep) -> Vec<RuntimeEvent> {
+    pub fn apply_step(&mut self, step: &Step) -> Vec<Event> {
         match step {
-            RuntimeStep::Clock { actor } => {
+            Step::Clock { actor } => {
                 let sequence = self.next_effect_sequence();
-                let request = RuntimeEvent::EffectRequest {
-                    effect: RuntimeEffect::Clock,
+                let request = Event::EffectRequest {
+                    effect: Effect::Clock,
                     actor: actor.clone(),
                     sequence,
                     upper: None,
                 };
                 let value = self.local_clock_response_value();
-                let response = effect_response(RuntimeEffect::Clock, actor.clone(), sequence, None, value);
+                let response = effect_response(Effect::Clock, actor.clone(), sequence, None, value);
                 vec![request, response]
             }
-            RuntimeStep::Random { actor, upper } => {
+            Step::Random { actor, upper } => {
                 let sequence = self.next_effect_sequence();
-                let request = RuntimeEvent::EffectRequest {
-                    effect: RuntimeEffect::Random,
+                let request = Event::EffectRequest {
+                    effect: Effect::Random,
                     actor: actor.clone(),
                     sequence,
                     upper: Some(*upper),
                 };
                 let value = self.next_random(*upper);
-                let response = effect_response(RuntimeEffect::Random, actor.clone(), sequence, Some(*upper), value);
+                let response = effect_response(Effect::Random, actor.clone(), sequence, Some(*upper), value);
                 vec![request, response]
             }
-            RuntimeStep::Send { .. }
-            | RuntimeStep::Observe { .. }
-            | RuntimeStep::Assert { .. }
-            | RuntimeStep::Retract { .. } => {
+            Step::Send { .. } | Step::Observe { .. } | Step::Assert { .. } | Step::Retract { .. } => {
                 let turn = self.begin_turn(step);
                 self.commit_turn(turn)
             }
         }
     }
 
-    pub fn begin_turn(&self, step: &RuntimeStep) -> PendingTurn {
+    pub fn begin_turn(&self, step: &Step) -> PendingTurn {
         let mut turn = PendingTurn::new();
         self.stage_step(&mut turn, step);
         turn
     }
 
-    pub fn commit_turn(&mut self, turn: PendingTurn) -> Vec<RuntimeEvent> {
+    pub fn commit_turn(&mut self, turn: PendingTurn) -> Vec<Event> {
         for action in turn.actions {
             match action {
                 TurnAction::Send(message) => {
@@ -238,10 +229,7 @@ impl RuntimeState {
         turn.events
     }
 
-    pub fn commit_turn_with_predicate_receipt(
-        &mut self,
-        turn: PendingTurn,
-    ) -> Result<(Vec<RuntimeEvent>, RuntimePredicateReceipt)> {
+    pub fn commit_turn_with_predicate_receipt(&mut self, turn: PendingTurn) -> Result<(Vec<Event>, PredicateReceipt)> {
         let before = self.snapshot();
         let mut preview = self.clone();
         let events = preview.commit_turn(turn.clone());
@@ -255,13 +243,8 @@ impl RuntimeState {
         }
     }
 
-    pub fn rollback_turn(
-        &self,
-        _turn: PendingTurn,
-        actor: impl Into<String>,
-        reason: impl Into<String>,
-    ) -> Vec<RuntimeEvent> {
-        vec![RuntimeEvent::TurnRolledBack {
+    pub fn rollback_turn(&self, _turn: PendingTurn, actor: impl Into<String>, reason: impl Into<String>) -> Vec<Event> {
+        vec![Event::TurnRolledBack {
             actor: actor.into(),
             reason: reason.into(),
         }]
@@ -272,7 +255,7 @@ impl RuntimeState {
         turn: PendingTurn,
         actor: impl Into<String>,
         reason: impl Into<String>,
-    ) -> Result<(Vec<RuntimeEvent>, RuntimePredicateReceipt)> {
+    ) -> Result<(Vec<Event>, PredicateReceipt)> {
         let before = self.snapshot();
         let receipt = evaluate_turn_transition(&before, &turn, &before, TurnOutcome::Denied)?;
         let events = self.rollback_turn(turn, actor, reason);
@@ -306,81 +289,77 @@ impl RuntimeState {
         })
     }
 
-    pub fn begin_effect_for_step(&mut self, step: &RuntimeStep) -> Option<RuntimeEvent> {
+    pub fn begin_effect_for_step(&mut self, step: &Step) -> Option<Event> {
         match step {
-            RuntimeStep::Clock { actor } => Some(RuntimeEvent::EffectRequest {
-                effect: RuntimeEffect::Clock,
+            Step::Clock { actor } => Some(Event::EffectRequest {
+                effect: Effect::Clock,
                 actor: actor.clone(),
                 sequence: self.next_effect_sequence(),
                 upper: None,
             }),
-            RuntimeStep::Random { actor, upper } => Some(RuntimeEvent::EffectRequest {
-                effect: RuntimeEffect::Random,
+            Step::Random { actor, upper } => Some(Event::EffectRequest {
+                effect: Effect::Random,
                 actor: actor.clone(),
                 sequence: self.next_effect_sequence(),
                 upper: Some(*upper),
             }),
-            RuntimeStep::Send { .. }
-            | RuntimeStep::Observe { .. }
-            | RuntimeStep::Assert { .. }
-            | RuntimeStep::Retract { .. } => None,
+            Step::Send { .. } | Step::Observe { .. } | Step::Assert { .. } | Step::Retract { .. } => None,
         }
     }
 
-    pub fn apply_recorded_effect_response(&mut self, request: &RuntimeEvent, value: u64) -> Result<RuntimeEvent> {
+    pub fn apply_recorded_effect_response(&mut self, request: &Event, value: u64) -> Result<Event> {
         match request {
-            RuntimeEvent::EffectRequest {
-                effect: RuntimeEffect::Clock,
+            Event::EffectRequest {
+                effect: Effect::Clock,
                 actor,
                 sequence,
                 upper,
             } => {
                 self.logical_time = value + 1;
-                Ok(effect_response(RuntimeEffect::Clock, actor.clone(), *sequence, *upper, value))
+                Ok(effect_response(Effect::Clock, actor.clone(), *sequence, *upper, value))
             }
-            RuntimeEvent::EffectRequest {
-                effect: RuntimeEffect::Random,
+            Event::EffectRequest {
+                effect: Effect::Random,
                 actor,
                 sequence,
                 upper: Some(upper),
             } => {
                 let _ignored_local_value = self.next_random(*upper);
-                Ok(effect_response(RuntimeEffect::Random, actor.clone(), *sequence, Some(*upper), value))
+                Ok(effect_response(Effect::Random, actor.clone(), *sequence, Some(*upper), value))
             }
-            RuntimeEvent::EffectRequest {
-                effect: RuntimeEffect::Random,
-                ..
+            Event::EffectRequest {
+                effect: Effect::Random, ..
             } => Err(MoltenError::invalid_harness("recorded random effect request missing upper bound")),
             _ => Err(MoltenError::invalid_harness("recorded effect response requires an effect request")),
         }
     }
 
-    fn stage_step(&self, turn: &mut PendingTurn, step: &RuntimeStep) {
+    fn stage_step(&self, turn: &mut PendingTurn, step: &Step) {
         match step {
-            RuntimeStep::Send { from, to, body } => {
-                let message = RuntimeMessage {
+            Step::Send { from, to, body } => {
+                let message = Message {
                     from: from.clone(),
                     to: to.clone(),
                     body: body.clone(),
                 };
-                turn.events.push(RuntimeEvent::MessageDelivered {
+                turn.events.push(Event::MessageDelivered {
                     from: from.clone(),
                     to: to.clone(),
                     body: body.clone(),
                 });
                 turn.actions.push(TurnAction::Send(message));
             }
-            RuntimeStep::Observe { actor, pattern } => {
-                let observer = RuntimeObserver {
+            Step::Observe { actor, pattern } => {
+                let observer = Observer {
                     actor: actor.clone(),
                     pattern: pattern.clone(),
                 };
-                turn.events.push(RuntimeEvent::ObserveRegistered {
+                turn.events.push(Event::ObserveRegistered {
                     actor: actor.clone(),
                     pattern: pattern.clone(),
                 });
                 for assertion in self.assertions.iter().filter(|assertion| assertion.value == *pattern) {
-                    turn.events.push(RuntimeEvent::AssertionObserved {
+                    turn.events.push(Event::AssertionObserved {
                         observer: actor.clone(),
                         owner: assertion.actor.clone(),
                         value: assertion.value.clone(),
@@ -388,17 +367,17 @@ impl RuntimeState {
                 }
                 turn.actions.push(TurnAction::Observe(observer));
             }
-            RuntimeStep::Assert { actor, value } => {
-                let assertion = RuntimeAssertion {
+            Step::Assert { actor, value } => {
+                let assertion = Assertion {
                     actor: actor.clone(),
                     value: value.clone(),
                 };
-                turn.events.push(RuntimeEvent::AssertionCommitted {
+                turn.events.push(Event::AssertionCommitted {
                     actor: actor.clone(),
                     value: value.clone(),
                 });
                 for observer in self.observers.iter().filter(|observer| observer.pattern == *value) {
-                    turn.events.push(RuntimeEvent::AssertionObserved {
+                    turn.events.push(Event::AssertionObserved {
                         observer: observer.actor.clone(),
                         owner: actor.clone(),
                         value: value.clone(),
@@ -406,17 +385,17 @@ impl RuntimeState {
                 }
                 turn.actions.push(TurnAction::Assert(assertion));
             }
-            RuntimeStep::Retract { actor, value } => {
-                let assertion = RuntimeAssertion {
+            Step::Retract { actor, value } => {
+                let assertion = Assertion {
                     actor: actor.clone(),
                     value: value.clone(),
                 };
-                turn.events.push(RuntimeEvent::AssertionRetracted {
+                turn.events.push(Event::AssertionRetracted {
                     actor: actor.clone(),
                     value: value.clone(),
                 });
                 for observer in self.observers.iter().filter(|observer| observer.pattern == *value) {
-                    turn.events.push(RuntimeEvent::AssertionRetractionObserved {
+                    turn.events.push(Event::AssertionRetractionObserved {
                         observer: observer.actor.clone(),
                         owner: actor.clone(),
                         value: value.clone(),
@@ -424,7 +403,7 @@ impl RuntimeState {
                 }
                 turn.actions.push(TurnAction::Retract(assertion));
             }
-            RuntimeStep::Clock { .. } | RuntimeStep::Random { .. } => {}
+            Step::Clock { .. } | Step::Random { .. } => {}
         }
     }
 
@@ -462,12 +441,12 @@ mod tests {
     type EvidenceRef = crate::runtime::EvidenceRef;
 
     #[test]
-    fn local_dataspace_routes_matching_envelope_subject() {
-        let subject = RuntimeValue::string("service.ready").expect("subject");
+    fn local_routes_matching_envelope_subject() {
+        let subject = Value::string("service.ready").expect("subject");
         let envelope = Envelope::new(EnvelopeInput {
             sender: ActorId::parse("actor:producer").expect("sender"),
             subject: subject.clone(),
-            body: RuntimeValue::string("ready").expect("body"),
+            body: Value::string("ready").expect("body"),
             blob_refs: vec![
                 ContentRef::parse(crate::preserves_rail::content_ref_from_bytes(b"payload")).expect("blob"),
             ],
@@ -477,7 +456,7 @@ mod tests {
             ],
         })
         .expect("envelope");
-        let mut adapter = LocalDataspaceAdapter::new();
+        let mut adapter = LocalAdapter::new();
         adapter.register_actor(ActorId::parse("actor:ignored").expect("ignored actor"));
         adapter.observe_subject(ActorId::parse("actor:consumer").expect("consumer"), &subject);
 
@@ -489,15 +468,15 @@ mod tests {
     }
 
     #[test]
-    fn runtime_values_and_events_expose_stable_content_refs() {
-        let value = RuntimeValue::string("service.ready").expect("runtime value");
+    fn values_and_events_expose_stable_content_refs() {
+        let value = Value::string("service.ready").expect("runtime value");
         crate::preserves_rail::validate_content_ref(value.value_ref()).expect("value ref shape");
         assert_eq!(
             value.value_ref(),
             crate::preserves_rail::canonical_hash(value.as_iovalue()).expect("canonical value ref")
         );
 
-        let message = RuntimeMessage {
+        let message = Message {
             from: "producer".to_string(),
             to: "consumer".to_string(),
             body: value.clone(),
@@ -505,7 +484,7 @@ mod tests {
         crate::preserves_rail::validate_content_ref(&message.message_ref().expect("message ref"))
             .expect("message ref shape");
         let mut state = RuntimeState::new(7);
-        state.apply_step(&RuntimeStep::Send {
+        state.apply_step(&Step::Send {
             from: "producer".to_string(),
             to: "consumer".to_string(),
             body: value.clone(),
@@ -513,7 +492,7 @@ mod tests {
         let snapshot_ref = state.snapshot().snapshot_ref().expect("snapshot ref");
         crate::preserves_rail::validate_content_ref(&snapshot_ref).expect("snapshot ref shape");
 
-        let event = RuntimeEvent::MessageDelivered {
+        let event = Event::MessageDelivered {
             from: "producer".to_string(),
             to: "consumer".to_string(),
             body: value,
@@ -524,26 +503,26 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_model_covers_handler_state_and_dataspace_indexes() {
+    fn snapshot_model_covers_handler_state_indexes() {
         let mut state = RuntimeState::new(7);
-        let message = RuntimeValue::string("hello").expect("runtime test value");
-        state.apply_step(&RuntimeStep::Send {
+        let message = Value::string("hello").expect("runtime test value");
+        state.apply_step(&Step::Send {
             from: "producer".into(),
             to: "consumer".into(),
             body: message,
         });
-        state.apply_step(&RuntimeStep::Observe {
+        state.apply_step(&Step::Observe {
             actor: "consumer".into(),
-            pattern: RuntimeValue::string("service.ready").expect("runtime test value"),
+            pattern: Value::string("service.ready").expect("runtime test value"),
         });
-        state.apply_step(&RuntimeStep::Assert {
+        state.apply_step(&Step::Assert {
             actor: "producer".into(),
-            value: RuntimeValue::string("service.ready").expect("runtime test value"),
+            value: Value::string("service.ready").expect("runtime test value"),
         });
-        state.apply_step(&RuntimeStep::Clock {
+        state.apply_step(&Step::Clock {
             actor: "producer".into(),
         });
-        state.apply_step(&RuntimeStep::Random {
+        state.apply_step(&Step::Random {
             actor: "producer".into(),
             upper: 100,
         });
@@ -561,18 +540,18 @@ mod tests {
     #[test]
     fn transition_is_deterministic_from_explicit_seed() {
         let steps = [
-            RuntimeStep::Observe {
+            Step::Observe {
                 actor: "consumer".into(),
-                pattern: RuntimeValue::string("service.ready").expect("runtime test value"),
+                pattern: Value::string("service.ready").expect("runtime test value"),
             },
-            RuntimeStep::Assert {
+            Step::Assert {
                 actor: "producer".into(),
-                value: RuntimeValue::string("service.ready").expect("runtime test value"),
+                value: Value::string("service.ready").expect("runtime test value"),
             },
-            RuntimeStep::Clock {
+            Step::Clock {
                 actor: "producer".into(),
             },
-            RuntimeStep::Random {
+            Step::Random {
                 actor: "producer".into(),
                 upper: 100,
             },
@@ -588,26 +567,23 @@ mod tests {
     #[test]
     fn clock_and_random_emit_request_response_pairs() {
         let mut state = RuntimeState::new(7);
-        let clock = state.apply_step(&RuntimeStep::Clock { actor: "a".into() });
-        assert!(matches!(clock.as_slice(), [
-            RuntimeEvent::EffectRequest { sequence: 0, .. },
-            RuntimeEvent::EffectResponse {
-                sequence: 0,
-                value: 0,
-                ..
-            }
-        ]));
-        let random = state.apply_step(&RuntimeStep::Random {
+        let clock = state.apply_step(&Step::Clock { actor: "a".into() });
+        assert!(matches!(clock.as_slice(), [Event::EffectRequest { sequence: 0, .. }, Event::EffectResponse {
+            sequence: 0,
+            value: 0,
+            ..
+        }]));
+        let random = state.apply_step(&Step::Random {
             actor: "a".into(),
             upper: 10,
         });
         assert!(matches!(random.as_slice(), [
-            RuntimeEvent::EffectRequest {
+            Event::EffectRequest {
                 sequence: 1,
                 upper: Some(10),
                 ..
             },
-            RuntimeEvent::EffectResponse {
+            Event::EffectResponse {
                 sequence: 1,
                 upper: Some(10),
                 ..
@@ -615,10 +591,10 @@ mod tests {
         ]));
 
         let mut replay = RuntimeState::new(7);
-        assert_eq!(clock, replay.apply_step(&RuntimeStep::Clock { actor: "a".into() }));
+        assert_eq!(clock, replay.apply_step(&Step::Clock { actor: "a".into() }));
         assert_eq!(
             random,
-            replay.apply_step(&RuntimeStep::Random {
+            replay.apply_step(&Step::Random {
                 actor: "a".into(),
                 upper: 10
             })
@@ -626,21 +602,21 @@ mod tests {
     }
 
     #[test]
-    fn rollback_leaves_staged_dataspace_actions_uncommitted() {
+    fn rollback_leaves_staged_actions_uncommitted() {
         let mut state = RuntimeState::new(1);
         let before = state.snapshot();
-        let step = RuntimeStep::Assert {
+        let step = Step::Assert {
             actor: "producer".into(),
-            value: RuntimeValue::string("service.ready").expect("runtime test value"),
+            value: Value::string("service.ready").expect("runtime test value"),
         };
         let turn = state.begin_turn(&step);
         assert_eq!(state.snapshot(), before);
         let events = state.rollback_turn(turn, step.primary_actor(), "policy denied");
         assert_eq!(state.snapshot(), before);
-        assert!(matches!(events.as_slice(), [RuntimeEvent::TurnRolledBack { .. }]));
+        assert!(matches!(events.as_slice(), [Event::TurnRolledBack { .. }]));
 
         let committed = state.apply_step(&step);
-        assert!(matches!(committed.as_slice(), [RuntimeEvent::AssertionCommitted { .. }]));
+        assert!(matches!(committed.as_slice(), [Event::AssertionCommitted { .. }]));
         assert_ne!(state.snapshot(), before);
     }
 }
