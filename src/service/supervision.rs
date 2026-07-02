@@ -954,36 +954,45 @@ fn evaluate_cleanup(
             retention_input: None,
         });
     }
-    let is_foreign_claim_present = !suite.owned_state.foreign_ref_claims.is_empty();
-    if is_foreign_claim_present {
-        let cleanup_receipt = crate::service_records::service_cleanup_receipt_value(
-            &crate::service_records::ServiceCleanupReceiptInput {
-                decision: "deny".to_string(),
-                service_id: suite.manifest.service_id.clone(),
-                manifest_ref: Some(suite.manifest.manifest_ref.clone()),
-                authority_refs: suite.evidence.authority_refs.clone(),
-                owned_assertion_refs: suite.owned_state.owned_assertion_refs.clone(),
-                observer_refs: suite.owned_state.observer_refs.clone(),
-                live_ref_refs: suite.owned_state.live_ref_refs.clone(),
-                exposed_ref_refs: suite.owned_state.exposed_ref_refs.clone(),
-                pending_effect_refs: suite.owned_state.pending_effect_refs.clone(),
-                retraction_refs: Vec::new(),
-                revocation_refs: suite.evidence.revocation_refs.clone(),
-                retention_refs: suite.evidence.retention_policy_refs.clone(),
-                diagnostics: vec!["foreign service-owned state cannot be proven".to_string()],
-            },
-        )?;
-        let retention_input = retention_input_value(
-            suite,
-            &crate::preserves_rail::canonical_hash(&cleanup_receipt)?,
-            restart_decision_ref,
-        )?;
-        return Ok(CleanupEvaluation {
-            cleanup_receipt: Some(cleanup_receipt),
-            retractions: Vec::new(),
-            retention_input: Some(retention_input),
-        });
+    if !suite.owned_state.foreign_ref_claims.is_empty() {
+        return foreign_claim_cleanup_evaluation(suite, restart_decision_ref);
     }
+    owned_state_cleanup_evaluation(suite, restart_decision_ref)
+}
+
+fn foreign_claim_cleanup_evaluation(
+    suite: &ServiceSupervisionSuite,
+    restart_decision_ref: &str,
+) -> Result<CleanupEvaluation> {
+    let cleanup_receipt =
+        crate::service_records::service_cleanup_receipt_value(&crate::service_records::ServiceCleanupReceiptInput {
+            decision: "deny".to_string(),
+            service_id: suite.manifest.service_id.clone(),
+            manifest_ref: Some(suite.manifest.manifest_ref.clone()),
+            authority_refs: suite.evidence.authority_refs.clone(),
+            owned_assertion_refs: suite.owned_state.owned_assertion_refs.clone(),
+            observer_refs: suite.owned_state.observer_refs.clone(),
+            live_ref_refs: suite.owned_state.live_ref_refs.clone(),
+            exposed_ref_refs: suite.owned_state.exposed_ref_refs.clone(),
+            pending_effect_refs: suite.owned_state.pending_effect_refs.clone(),
+            retraction_refs: Vec::new(),
+            revocation_refs: suite.evidence.revocation_refs.clone(),
+            retention_refs: suite.evidence.retention_policy_refs.clone(),
+            diagnostics: vec!["foreign service-owned state cannot be proven".to_string()],
+        })?;
+    let retention_input =
+        retention_input_value(suite, &crate::preserves_rail::canonical_hash(&cleanup_receipt)?, restart_decision_ref)?;
+    Ok(CleanupEvaluation {
+        cleanup_receipt: Some(cleanup_receipt),
+        retractions: Vec::new(),
+        retention_input: Some(retention_input),
+    })
+}
+
+fn owned_state_cleanup_evaluation(
+    suite: &ServiceSupervisionSuite,
+    restart_decision_ref: &str,
+) -> Result<CleanupEvaluation> {
     let targets = cleanup_targets(&suite.owned_state)?;
     let mut retractions = Vec::with_capacity(targets.len());
     let mut retraction_refs = Vec::with_capacity(targets.len());
