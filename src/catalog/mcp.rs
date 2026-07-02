@@ -1403,8 +1403,8 @@ mod tests {
         }
     }
 
-    fn seed_evidence(seed: &GcSeed<'_>) -> crate::retention::DestructiveRetentionEvidence {
-        crate::retention::DestructiveRetentionEvidence {
+    fn seed_evidence(seed: &GcSeed<'_>) -> crate::retention::DestructiveEvidence {
+        crate::retention::DestructiveEvidence {
             requester_ref: Some(seed.requester_ref.clone()),
             policy_refs: vec![seed_admission(seed, crate::retention::ADMISSION_KIND_POLICY, "policy")],
             authority_refs: vec![seed_admission(

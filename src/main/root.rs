@@ -33,8 +33,8 @@ pub(crate) struct RetentionEvidenceArgs {
 }
 
 impl RetentionEvidenceArgs {
-    pub(crate) fn into_retention_evidence(self) -> molten::retention::DestructiveRetentionEvidence {
-        molten::retention::DestructiveRetentionEvidence {
+    pub(crate) fn into_retention_evidence(self) -> molten::retention::DestructiveEvidence {
+        molten::retention::DestructiveEvidence {
             requester_ref: self.requester_ref,
             policy_refs: self.policy_refs,
             authority_refs: self.authority_refs,

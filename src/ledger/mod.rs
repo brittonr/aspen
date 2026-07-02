@@ -34,7 +34,7 @@ pub struct LedgerGc {
 #[derive(Debug, Clone, Copy)]
 pub struct LedgerGcInput<'a> {
     pub dry_run: bool,
-    pub retention_evidence: &'a crate::retention::DestructiveRetentionEvidence,
+    pub retention_evidence: &'a crate::retention::DestructiveEvidence,
     pub apply_refs: &'a [String],
 }
 
@@ -223,16 +223,15 @@ fn review_entries(input: ReviewInput<'_>, candidates: &[LedgerEntry]) -> crate::
     let mut review = Review::default();
     for entry in candidates {
         let retention_class = ledger_retention_class(&entry.artifact_kind);
-        let admission = crate::retention::admit_destructive_retention_evidence(
-            crate::retention::DestructiveRetentionAdmissionInput {
+        let admission =
+            crate::retention::admit_destructive_retention_evidence(crate::retention::DestructiveAdmissionInput {
                 root: input.root,
                 evidence: input.source.retention_evidence,
                 object_ref: &entry.artifact_ref,
                 object_kind: &entry.artifact_kind,
                 retention_class,
                 action: input.action,
-            },
-        )?;
+            })?;
         extend_refs(
             &mut review.admission_diagnostics,
             &admission.diagnostics,
@@ -910,7 +909,7 @@ mod tests {
         assert_eq!(imported.artifact_ref, duplicate.artifact_ref);
         assert_eq!(list_artifacts(&root).expect("list artifacts").len(), 1);
         pin_artifact(&root, &imported.artifact_ref).expect("pin artifact");
-        let retention_evidence = crate::retention::DestructiveRetentionEvidence::default();
+        let retention_evidence = crate::retention::DestructiveEvidence::default();
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -1251,7 +1250,7 @@ mod tests {
         label: &str,
         imported: &LedgerImport,
         retention_class: &str,
-        evidence: &mut crate::retention::DestructiveRetentionEvidence,
+        evidence: &mut crate::retention::DestructiveEvidence,
     ) -> PeerCase {
         let peer = PeerCase {
             peer: ledger_test_ref("remote-peer", label),
@@ -1278,7 +1277,7 @@ mod tests {
         root: &std::path::Path,
         imported: &LedgerImport,
         retention_class: &str,
-        evidence: &crate::retention::DestructiveRetentionEvidence,
+        evidence: &crate::retention::DestructiveEvidence,
         peer: &PeerCase,
     ) -> String {
         crate::retention::store_remote_gc_clearance(root, &crate::retention::RemoteGcClearanceInput {
@@ -1308,7 +1307,7 @@ mod tests {
         object_ref: &str,
         object_kind: &str,
         retention_class: &str,
-        evidence: &crate::retention::DestructiveRetentionEvidence,
+        evidence: &crate::retention::DestructiveEvidence,
     ) -> String {
         let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
             root,
@@ -1335,7 +1334,7 @@ mod tests {
         object_kind: &str,
         retention_class: &str,
         action: &str,
-    ) -> crate::retention::DestructiveRetentionEvidence {
+    ) -> crate::retention::DestructiveEvidence {
         let requester_ref = ledger_test_ref("requester", label);
         let policy_refs = vec![store_admission(
             root,
@@ -1385,7 +1384,7 @@ mod tests {
             &[],
             true,
         )];
-        crate::retention::DestructiveRetentionEvidence {
+        crate::retention::DestructiveEvidence {
             requester_ref: Some(requester_ref),
             policy_refs,
             authority_refs,
@@ -1407,7 +1406,7 @@ mod tests {
         object_kind: &str,
         retention_class: &str,
         action: &str,
-    ) -> crate::retention::DestructiveRetentionEvidence {
+    ) -> crate::retention::DestructiveEvidence {
         let mut evidence = retention_evidence(root, label, object_ref, object_kind, retention_class, action);
         evidence.authority_refs.clear();
         evidence
@@ -1420,7 +1419,7 @@ mod tests {
         object_kind: &str,
         retention_class: &str,
         action: &str,
-    ) -> crate::retention::DestructiveRetentionEvidence {
+    ) -> crate::retention::DestructiveEvidence {
         let mut evidence = retention_evidence(root, label, object_ref, object_kind, retention_class, action);
         evidence.policy_refs.clear();
         evidence.evidence_refs.clear();

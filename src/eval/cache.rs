@@ -248,7 +248,7 @@ pub struct EvalCacheInvalidateInput {
     pub revocation_ref: Option<String>,
     pub operation: Option<String>,
     pub reason: String,
-    pub retention_evidence: crate::retention::DestructiveRetentionEvidence,
+    pub retention_evidence: crate::retention::DestructiveEvidence,
     pub apply_refs: Vec<String>,
 }
 
@@ -748,7 +748,7 @@ fn evaluate_invalidate_key(
     key_ref: &str,
 ) -> Result<InvalStep> {
     let admission =
-        crate::retention::admit_destructive_retention_evidence(crate::retention::DestructiveRetentionAdmissionInput {
+        crate::retention::admit_destructive_retention_evidence(crate::retention::DestructiveAdmissionInput {
             root,
             evidence: &input.retention_evidence,
             object_ref: key_ref,
@@ -2219,7 +2219,7 @@ mod tests {
     fn eval_cache_apply_ref(
         root: &std::path::Path,
         key_ref: &str,
-        evidence: &crate::retention::DestructiveRetentionEvidence,
+        evidence: &crate::retention::DestructiveEvidence,
     ) -> String {
         let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
             root,
@@ -2239,7 +2239,7 @@ mod tests {
         .apply_ref
     }
 
-    fn retention_evidence(root: &std::path::Path, label: &str) -> crate::retention::DestructiveRetentionEvidence {
+    fn retention_evidence(root: &std::path::Path, label: &str) -> crate::retention::DestructiveEvidence {
         let requester_ref = test_ref(&format!("retention-requester-{label}"));
         let summaries = list(root, &EvalCacheListFilter::default()).expect("list cache for retention evidence");
         let mut policy_refs = Vec::with_capacity(summaries.len());
@@ -2284,7 +2284,7 @@ mod tests {
                 true,
             ));
         }
-        crate::retention::DestructiveRetentionEvidence {
+        crate::retention::DestructiveEvidence {
             requester_ref: Some(requester_ref),
             policy_refs,
             authority_refs,

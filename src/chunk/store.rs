@@ -261,7 +261,7 @@ pub struct ChunkStoreGc {
 #[derive(Debug, Clone, Copy)]
 pub struct ChunkStoreGcInput<'a> {
     pub dry_run: bool,
-    pub retention_evidence: &'a crate::retention::DestructiveRetentionEvidence,
+    pub retention_evidence: &'a crate::retention::DestructiveEvidence,
     pub apply_refs: &'a [String],
 }
 
@@ -1995,7 +1995,7 @@ fn gc_targets(root: &Path, pinned_manifests: Vec<String>, mut reachable_chunks: 
 struct GcEnv<'a> {
     root: &'a Path,
     is_dry_run: bool,
-    evidence: &'a crate::retention::DestructiveRetentionEvidence,
+    evidence: &'a crate::retention::DestructiveEvidence,
     apply_refs: &'a [String],
     action: &'a str,
     requester_ref: &'a str,
@@ -2020,16 +2020,15 @@ struct GcNotes {
 
 impl GcNotes {
     fn consider(&mut self, env: &GcEnv<'_>, object: GcObject<'_>) -> Result<()> {
-        let admission = crate::retention::admit_destructive_retention_evidence(
-            crate::retention::DestructiveRetentionAdmissionInput {
+        let admission =
+            crate::retention::admit_destructive_retention_evidence(crate::retention::DestructiveAdmissionInput {
                 root: env.root,
                 evidence: env.evidence,
                 object_ref: object.object_ref,
                 object_kind: object.object_kind,
                 retention_class: object.retention_class,
                 action: env.action,
-            },
-        )?;
+            })?;
         self.note_admission(&admission)?;
         let evaluation = crate::retention::evaluate(crate::retention::EvaluationInput {
             root: env.root,
@@ -2068,7 +2067,7 @@ impl GcNotes {
         Ok(())
     }
 
-    fn note_admission(&mut self, admission: &crate::retention::DestructiveRetentionAdmission) -> Result<()> {
+    fn note_admission(&mut self, admission: &crate::retention::DestructiveAdmission) -> Result<()> {
         for diagnostic in &admission.diagnostics {
             push_bounded(
                 &mut self.admission_diagnostics,
@@ -4889,7 +4888,7 @@ mod tests {
         root: &std::path::Path,
         manifest_refs: &[String],
         chunk_refs: &[String],
-        evidence: &crate::retention::DestructiveRetentionEvidence,
+        evidence: &crate::retention::DestructiveEvidence,
     ) -> Vec<String> {
         let mut apply_refs = Vec::with_capacity(manifest_refs.len() + chunk_refs.len());
         for manifest_ref in manifest_refs {
@@ -4935,7 +4934,7 @@ mod tests {
         apply_refs
     }
 
-    fn retention_evidence(root: &std::path::Path, label: &str) -> crate::retention::DestructiveRetentionEvidence {
+    fn retention_evidence(root: &std::path::Path, label: &str) -> crate::retention::DestructiveEvidence {
         let requester_ref = chunk_test_ref("requester", label);
         let mut policy_refs = Vec::new();
         let mut authority_refs = Vec::new();
@@ -4969,7 +4968,7 @@ mod tests {
                 &mut reference_index_refs,
             );
         }
-        crate::retention::DestructiveRetentionEvidence {
+        crate::retention::DestructiveEvidence {
             requester_ref: Some(requester_ref),
             policy_refs,
             authority_refs,

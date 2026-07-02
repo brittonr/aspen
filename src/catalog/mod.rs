@@ -3189,7 +3189,7 @@ mod tests {
         assert_eq!(hidden.decision, "deny");
     }
 
-    type GcEvidence = crate::retention::DestructiveRetentionEvidence;
+    type GcEvidence = crate::retention::DestructiveEvidence;
     type GcPlan = crate::retention::GcPlan;
     type GcApply = crate::retention::GcApply;
     type GcExecution = crate::retention::GcExecutionGate;

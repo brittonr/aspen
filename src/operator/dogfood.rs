@@ -4220,7 +4220,7 @@ struct GcAdmissions {
     index: crate::retention::EvidenceAdmission,
     remote_gc: crate::retention::EvidenceAdmission,
     clearance: crate::retention::RemoteGcClearance,
-    evidence: crate::retention::DestructiveRetentionEvidence,
+    evidence: crate::retention::DestructiveEvidence,
 }
 
 struct GcFlow {
@@ -4287,7 +4287,7 @@ fn gc_admissions(seed: GcSeed<'_>) -> Result<GcAdmissions> {
             revoked_refs: &[],
             diagnostics: &[],
         })?;
-    let evidence = crate::retention::DestructiveRetentionEvidence {
+    let evidence = crate::retention::DestructiveEvidence {
         requester_ref: Some(seed.requester_ref.to_string()),
         policy_refs: vec![policy.admission_ref.clone()],
         authority_refs: vec![authority.admission_ref.clone()],
@@ -4314,7 +4314,7 @@ fn gc_admissions(seed: GcSeed<'_>) -> Result<GcAdmissions> {
 fn gc_flow(
     input: GcWorkflowInput<'_>,
     seed: GcSeed<'_>,
-    evidence: &crate::retention::DestructiveRetentionEvidence,
+    evidence: &crate::retention::DestructiveEvidence,
 ) -> Result<GcFlow> {
     let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
         root: input.root,
