@@ -39,6 +39,11 @@ fn string(value: impl AsRef<str>) -> IOValue {
     crate::preserves_rail::string(value)
 }
 
+#[cfg(test)]
+fn to_text(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
+
 const LOCAL_VAT_ID: &str = "vat:fixture:local";
 const REMOTE_VAT_ID: &str = "vat:fixture:remote";
 const ROOT_OBJECT_ID: &str = "object:root";
@@ -1427,24 +1432,7 @@ mod tests {
     use hegel::TestCase;
     use hegel::generators;
 
-    use super::PIPELINE_MAX_QUEUE;
-    use super::canonical_hash;
-    use super::run_vat_ambient_authority_fixture;
-    use super::run_vat_authority_graph_fixture;
-    use super::run_vat_distributed_ref_fixture;
-    use super::run_vat_fixture;
-    use super::run_vat_portable_storage_fixture;
-    use super::run_vat_promise_fixture;
-    use super::run_vat_replay_fixture;
-    use super::run_vat_restore_fixture;
-    use super::run_vat_rights_fixture;
-    use super::run_vat_snapshot_fixture;
-    use super::run_vat_time_travel_fixture;
-    use super::sorted_refs;
-    use super::string;
-    use super::vat_fixture_summary;
-    use crate::preserves_rail::to_text;
-    use crate::runtime;
+    use super::*;
 
     #[test]
     fn vat_fixture_binds_near_far_actormap_pipeline_and_revocation_predicates() {
