@@ -7,10 +7,6 @@ use preserves::Record;
 use preserves::Value;
 use preserves::ValueClass;
 use preserves::ValueImpl;
-use wasmparser::Encoding;
-use wasmparser::Parser;
-use wasmparser::Payload;
-use wasmparser::Validator;
 
 use super::core;
 use crate::effects;
@@ -4529,20 +4525,20 @@ fn validate_remote_proxy_executor_config(actor_id: &str, config: &RemoteProxyExe
 
 fn inspect_wasm_module(config: &WasmExecutorConfig) -> Result<WasmInspection> {
     let bytes = wasm_module_bytes(config)?;
-    Validator::new()
+    wasmparser::Validator::new()
         .validate_all(&bytes)
         .map_err(|error| MoltenError::invalid_harness(format!("wasmparser validation failed: {error}")))?;
     let mut module_kind = None;
     let mut imports = Vec::new();
-    for payload in Parser::new(0).parse_all(&bytes) {
+    for payload in wasmparser::Parser::new(0).parse_all(&bytes) {
         match payload.map_err(|error| MoltenError::invalid_harness(format!("wasmparser parse failed: {error}")))? {
-            Payload::Version { encoding, .. } => {
+            wasmparser::Payload::Version { encoding, .. } => {
                 module_kind = Some(match encoding {
-                    Encoding::Module => "core-module".to_string(),
-                    Encoding::Component => "component".to_string(),
+                    wasmparser::Encoding::Module => "core-module".to_string(),
+                    wasmparser::Encoding::Component => "component".to_string(),
                 });
             }
-            Payload::ImportSection(section) => {
+            wasmparser::Payload::ImportSection(section) => {
                 for import in section {
                     let import = import
                         .map_err(|error| MoltenError::invalid_harness(format!("wasm import parse failed: {error}")))?;
@@ -4558,7 +4554,7 @@ fn inspect_wasm_module(config: &WasmExecutorConfig) -> Result<WasmInspection> {
                     )?;
                 }
             }
-            Payload::ComponentImportSection(section) => {
+            wasmparser::Payload::ComponentImportSection(section) => {
                 for import in section {
                     let import = import.map_err(|error| {
                         MoltenError::invalid_harness(format!("wasm component import parse failed: {error}"))
