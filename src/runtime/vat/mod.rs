@@ -1,6 +1,5 @@
 type IoValue = preserves::IOValue;
 
-use crate::deterministic_replay;
 use crate::runtime;
 
 type Result<T> = crate::error::Result<T>;
@@ -864,9 +863,10 @@ pub fn run_vat_replay_fixture() -> Result<VatReplayFixture> {
     let changed_policy = case_run(RunCase::Policy)?;
     let changed_state = case_run(RunCase::State)?;
     let generic_pass =
-        deterministic_replay::verify_fixture_value(deterministic_replay::ReplayFixtureVariant::Baseline)?;
-    let generic_deny =
-        deterministic_replay::verify_fixture_value(deterministic_replay::ReplayFixtureVariant::ChangedEffectResponse)?;
+        crate::deterministic_replay::verify_fixture_value(crate::deterministic_replay::ReplayFixtureVariant::Baseline)?;
+    let generic_deny = crate::deterministic_replay::verify_fixture_value(
+        crate::deterministic_replay::ReplayFixtureVariant::ChangedEffectResponse,
+    )?;
     let generic_first_divergence = generic_deny
         .first_divergence
         .clone()
