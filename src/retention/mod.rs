@@ -3129,7 +3129,7 @@ fn plan_gate(input: PlanGateBuildInput<'_>) -> Result<PlanGate> {
     })
 }
 
-fn retention_plan_gate_value(input: &PlanGate) -> Result<IoValue> {
+fn plan_gate_value(input: &PlanGate) -> Result<IoValue> {
     validate_name(&input.name, "retention GC plan gate name")?;
     validate_decision(&input.decision)?;
     validate_refs(&input.required_refs, "retention GC plan gate required ref")?;
@@ -3143,7 +3143,7 @@ fn retention_plan_gate_value(input: &PlanGate) -> Result<IoValue> {
     ]))
 }
 
-fn parse_retention_plan_gates(value: &Value<IoValue>) -> Result<Vec<PlanGate>> {
+fn parse_plan_gates(value: &Value<IoValue>) -> Result<Vec<PlanGate>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("gates", Some(1))
@@ -3194,20 +3194,20 @@ fn parse_embedded_reference_index(value: &Value<IoValue>) -> Result<(String, Ref
     Ok((index_ref, index))
 }
 
-fn parse_embedded_destructive_retention_evidence_summary(value: &Value<IoValue>) -> Result<IoValue> {
+fn parse_embedded_destructive_evidence_summary(value: &Value<IoValue>) -> Result<IoValue> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("retention-evidence", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected embedded retention evidence summary"))?;
-    parse_destructive_retention_evidence_summary(&crate::preserves_rail::value_to_iovalue(&fields[0]))
+    parse_destructive_evidence_summary(&crate::preserves_rail::value_to_iovalue(&fields[0]))
 }
 
-fn parse_destructive_retention_evidence_summary(value: &IoValue) -> Result<IoValue> {
-    parse_destructive_retention_evidence_summary_to_evidence(value)?;
+fn parse_destructive_evidence_summary(value: &IoValue) -> Result<IoValue> {
+    parse_destructive_evidence_summary_to_evidence(value)?;
     Ok(value.clone())
 }
 
-fn parse_destructive_retention_evidence_summary_to_evidence(value: &IoValue) -> Result<DestructiveEvidence> {
+fn parse_destructive_evidence_summary_to_evidence(value: &IoValue) -> Result<DestructiveEvidence> {
     let fields = value
         .collect_simple_record("retention-evidence-summary-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-evidence-summary-v1 ...>"))?;
@@ -3936,8 +3936,8 @@ pub fn gc_plan_value(input: &GcPlanValueInput<'_>) -> Result<IoValue> {
     if let Some(requester_ref) = input.requester_ref {
         require_ref(requester_ref, "retention GC plan requester ref")?;
     }
-    parse_destructive_retention_evidence_summary(input.evidence_value)?;
-    let gate_values = input.gates.iter().map(retention_plan_gate_value).collect::<Result<Vec<_>>>()?;
+    parse_destructive_evidence_summary(input.evidence_value)?;
+    let gate_values = input.gates.iter().map(plan_gate_value).collect::<Result<Vec<_>>>()?;
     Ok(crate::preserves_rail::record("retention-gc-plan-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_GC_PLAN_SCHEMA),
         crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
@@ -3988,12 +3988,12 @@ pub fn parse_gc_plan(value: &IoValue) -> Result<GcPlan> {
     if index.object_ref != object_ref || index.object_kind != object_kind {
         return Err(MoltenError::invalid_harness("retention GC plan index scope mismatch"));
     }
-    let evidence_value = parse_embedded_destructive_retention_evidence_summary(&fields[9])?;
-    let evidence = parse_destructive_retention_evidence_summary_to_evidence(&evidence_value)?;
+    let evidence_value = parse_embedded_destructive_evidence_summary(&fields[9])?;
+    let evidence = parse_destructive_evidence_summary_to_evidence(&evidence_value)?;
     if requester_ref != evidence.requester_ref {
         return Err(MoltenError::invalid_harness("retention GC plan requester evidence mismatch"));
     }
-    let gates = parse_retention_plan_gates(&fields[10])?;
+    let gates = parse_plan_gates(&fields[10])?;
     let diagnostics = record_string_sequence(&fields[11], "diagnostics")?;
     let checks = parse_checks(&fields[12])?;
     require_check(&checks, "dry-run-only", "retention GC plan")?;
@@ -5590,7 +5590,7 @@ fn collect_bundle_sensitive_markers(
     )?;
     while let Some((current, current_path)) = stack.pop() {
         if let Some(label) = record_label_string(&current)
-            && is_sensitive_retention_bundle_token(&label)
+            && is_sensitive_bundle_token(&label)
         {
             push_bounded(
                 marker_refs,
@@ -5600,7 +5600,7 @@ fn collect_bundle_sensitive_markers(
             )?;
         }
         if let Some(text) = current.as_string()
-            && is_sensitive_retention_bundle_token(&text)
+            && is_sensitive_bundle_token(&text)
         {
             push_bounded(
                 marker_refs,
@@ -5639,12 +5639,10 @@ fn write_candidate_bundle_redacted_view(bundle_dir: &Path, bundle: &CandidateBun
     let redacted_dir = bundle_dir.join(BUNDLE_REDACTED_DIR);
     let mut ignored_markers = Vec::new();
     let bundle_value = read_store_value(&bundle_dir.join("bundle.preserves"))?;
-    let redacted_bundle =
-        redacted_retention_bundle_value(&bundle_value, "/bundle", &bundle.bundle_ref, &mut ignored_markers)?;
+    let redacted_bundle = redacted_bundle_value(&bundle_value, "/bundle", &bundle.bundle_ref, &mut ignored_markers)?;
     write_store_value(&redacted_dir.join("bundle.preserves"), &redacted_bundle)?;
     let explain_value = read_store_value(&bundle_dir.join("explain.preserves"))?;
-    let redacted_explain =
-        redacted_retention_bundle_value(&explain_value, "/explain", &bundle.bundle_ref, &mut ignored_markers)?;
+    let redacted_explain = redacted_bundle_value(&explain_value, "/explain", &bundle.bundle_ref, &mut ignored_markers)?;
     write_store_value(&redacted_dir.join("explain.preserves"), &redacted_explain)?;
     let artifact_dir = bundle_dir.join("artifacts");
     for dir_name in bundle_artifact_dirs() {
@@ -5663,7 +5661,7 @@ fn write_candidate_bundle_redacted_view(bundle_dir: &Path, bundle: &CandidateBun
             }
             let value = read_store_value(&path)?;
             let file_name = entry.file_name().to_string_lossy().into_owned();
-            let redacted = redacted_retention_bundle_value(
+            let redacted = redacted_bundle_value(
                 &value,
                 &format!("/artifacts/{dir_name}/{file_name}"),
                 &bundle.bundle_ref,
@@ -5724,7 +5722,7 @@ impl RedactionResults {
     }
 }
 
-fn redacted_retention_bundle_value(
+fn redacted_bundle_value(
     value: &IoValue,
     path: &str,
     bundle_ref: &str,
@@ -5795,12 +5793,12 @@ fn sensitive_marker(
     marker_refs: &mut impl VecSink<String>,
 ) -> Result<Option<IoValue>> {
     if let Some(label) = record_label_string(value)
-        && is_sensitive_retention_bundle_token(&label)
+        && is_sensitive_bundle_token(&label)
     {
         return marker_result(bundle_ref, path, &label, marker_refs).map(Some);
     }
     if let Some(text) = value.as_string()
-        && is_sensitive_retention_bundle_token(&text)
+        && is_sensitive_bundle_token(&text)
     {
         return marker_result(bundle_ref, path, &text, marker_refs).map(Some);
     }
@@ -5855,7 +5853,7 @@ fn bundle_marker_ref(bundle_ref: &str, path: &str, token: &str) -> Result<String
     ]))
 }
 
-fn is_sensitive_retention_bundle_token(value: &str) -> bool {
+fn is_sensitive_bundle_token(value: &str) -> bool {
     matches!(
         value,
         "secret"
@@ -6150,7 +6148,7 @@ fn verify_artifact_groups(
         },
     ];
     for group in groups {
-        verify_retention_bundle_artifact_group(
+        verify_bundle_artifact_group(
             BundleVerifyGroupInput {
                 bundle_dir,
                 dir_name: group.dir_name,
@@ -6326,7 +6324,7 @@ fn scan_bundle_artifact_files(
             )?;
             continue;
         }
-        scan_retention_bundle_artifact_group_files(
+        scan_bundle_artifact_group_files(
             BundleArtifactGroupScanInput {
                 group_dir: &entry.path(),
                 dir_name: &dir_name,
@@ -6340,7 +6338,7 @@ fn scan_bundle_artifact_files(
     Ok(())
 }
 
-fn scan_retention_bundle_artifact_group_files(
+fn scan_bundle_artifact_group_files(
     input: BundleArtifactGroupScanInput<'_>,
     file_refs: &mut impl VecSink<String>,
     diagnostics: &mut impl VecSink<String>,
@@ -6392,7 +6390,7 @@ fn scan_retention_bundle_artifact_group_files(
     Ok(())
 }
 
-fn verify_retention_bundle_artifact_group(
+fn verify_bundle_artifact_group(
     input: BundleVerifyGroupInput<'_>,
     diagnostics: &mut impl VecSink<String>,
 ) -> Result<()> {
