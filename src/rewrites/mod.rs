@@ -1,9 +1,6 @@
 type IoValue = preserves::IOValue;
 use preserves::ValueImpl;
 
-use crate::artifacts;
-use crate::upgrades;
-
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type Path = std::path::Path;
 type CompoundClass = preserves::CompoundClass;
@@ -241,7 +238,7 @@ fn found_items(root: &Path, input: &RewriteQueryInput) -> Result<Vec<RewriteMatc
     let hidden = input.hidden_refs.as_slice().iter().cloned().collect::<OrderedSet<_>>();
     let kind_filter = input.artifact_kinds.as_slice().iter().cloned().collect::<OrderedSet<_>>();
     let mut matches = Vec::new();
-    for artifact in artifacts::list_artifacts(root, None)? {
+    for artifact in crate::artifacts::list_artifacts(root, None)? {
         if hidden.contains(&artifact.artifact_ref) {
             continue;
         }
@@ -256,7 +253,7 @@ fn found_items(root: &Path, input: &RewriteQueryInput) -> Result<Vec<RewriteMatc
         {
             continue;
         }
-        let payload = artifacts::read_payload(root, &artifact.artifact_ref)?;
+        let payload = crate::artifacts::read_payload(root, &artifact.artifact_ref)?;
         let mut bindings = Vec::new();
         collect_bindings(&payload, &input.pattern, "$", &mut bindings)?;
         if !bindings.is_empty() || matches!(&input.pattern, RewritePattern::ArtifactKind(_)) {
@@ -305,8 +302,8 @@ fn found_refs(query_ref: &str, input: &RewriteQueryInput, matches: &[RewriteMatc
 fn diff_items(root: &Path, input: &RewritePlanInput, query: &RewriteQuery) -> Result<Vec<RewriteDiff>> {
     let mut diffs = Vec::new();
     for rewrite_match in &query.matches {
-        let artifact = artifacts::read_artifact(root, &rewrite_match.artifact_ref)?;
-        let payload = artifacts::read_payload(root, &artifact.artifact_ref)?;
+        let artifact = crate::artifacts::read_artifact(root, &rewrite_match.artifact_ref)?;
+        let payload = crate::artifacts::read_payload(root, &artifact.artifact_ref)?;
         let old_payload_ref = canonical_hash(&payload)?;
         let RewriteReplacement::StringValue { from, to } = &input.replacement;
         let mut paths = Vec::new();
@@ -386,7 +383,7 @@ pub fn apply(root: &Path, input: &RewritePlanInput) -> Result<RewriteApply> {
     let query_receipt_ref = canonical_hash(&preview.query.receipt_value)?;
     let mut installed = Vec::new();
     for diff in &preview.diffs {
-        let artifact = artifacts::read_artifact(root, &diff.artifact_ref)?;
+        let artifact = crate::artifacts::read_artifact(root, &diff.artifact_ref)?;
         let mut policy_refs = sorted_unique_refs(&merge_refs(&artifact.policy_refs, &input.policy_refs));
         policy_refs.push(preview.plan_ref.clone());
         policy_refs = sorted_unique_refs(&policy_refs);
@@ -396,7 +393,7 @@ pub fn apply(root: &Path, input: &RewritePlanInput) -> Result<RewriteApply> {
         evidence_refs.extend(input.transcript_refs.as_slice().iter().cloned());
         evidence_refs.extend(input.schema_migration_recipe_refs.as_slice().iter().cloned());
         evidence_refs = sorted_unique_refs(&evidence_refs);
-        let install = artifacts::install_artifact(root, &artifacts::ArtifactInstallInput {
+        let install = crate::artifacts::install_artifact(root, &crate::artifacts::ArtifactInstallInput {
             kind: artifact.kind,
             payload: diff.new_payload.clone(),
             schema_refs: artifact.schema_refs,
@@ -463,7 +460,7 @@ pub fn upgrade_plan_from_apply(
     for (index, installed) in rewrite.installed.iter().enumerate() {
         push_bounded(
             &mut tasks,
-            upgrades::UpgradeTaskInput {
+            crate::upgrades::UpgradeTaskInput {
                 task_id: format!("rewrite-install-{index}"),
                 kind: "install-artifact".to_string(),
                 subject: installed.old_artifact_ref.clone(),
@@ -480,7 +477,7 @@ pub fn upgrade_plan_from_apply(
     if !rewrite.preview.query.matches.is_empty() {
         push_bounded(
             &mut tasks,
-            upgrades::UpgradeTaskInput {
+            crate::upgrades::UpgradeTaskInput {
                 task_id: "rewrite-transcript-gate".to_string(),
                 kind: "transcript-rerun".to_string(),
                 subject: rewrite.preview.plan_ref.clone(),
@@ -499,7 +496,7 @@ pub fn upgrade_plan_from_apply(
         .iter()
         .flat_map(|installed| [installed.old_artifact_ref.clone(), installed.new_artifact_ref.clone()])
         .collect::<Vec<_>>();
-    upgrades::upgrade_plan_value(&upgrades::UpgradePlanInput {
+    crate::upgrades::upgrade_plan_value(&crate::upgrades::UpgradePlanInput {
         session_id: session_id.to_string(),
         reason: "structured rewrite".to_string(),
         summary: format!("structured rewrite applied {} immutable artifact replacement(s)", rewrite.installed.len()),
@@ -508,7 +505,7 @@ pub fn upgrade_plan_from_apply(
         affected_refs: sorted_unique_refs(&affected_refs),
         impact_refs: rewrite.preview.impacted_refs.clone(),
         tasks,
-        compatibility: upgrades::UpgradeCompatibilityWindow {
+        compatibility: crate::upgrades::UpgradeCompatibilityWindow {
             old_refs: rewrite.installed.iter().map(|installed| installed.old_artifact_ref.clone()).collect(),
             new_refs: rewrite.installed.iter().map(|installed| installed.new_artifact_ref.clone()).collect(),
             expires_at: None,
@@ -1048,7 +1045,7 @@ fn scoped_refs(root: &Path, roots: &[String], include_dependencies: bool) -> Res
         if !scoped.insert(current.clone()) || !include_dependencies {
             continue;
         }
-        for dependency in artifacts::direct_dependencies(root, &current)? {
+        for dependency in crate::artifacts::direct_dependencies(root, &current)? {
             stack.push(dependency);
         }
     }
@@ -1058,7 +1055,7 @@ fn scoped_refs(root: &Path, roots: &[String], include_dependencies: bool) -> Res
 fn impacted_refs(root: &Path, diffs: &[RewriteDiff]) -> Result<Vec<String>> {
     let mut impacted = OrderedSet::new();
     for diff in diffs {
-        for reference in artifacts::impact_refs(root, std::slice::from_ref(&diff.artifact_ref))? {
+        for reference in crate::artifacts::impact_refs(root, std::slice::from_ref(&diff.artifact_ref))? {
             impacted.insert(reference);
         }
     }
@@ -1322,8 +1319,8 @@ mod tests {
         assert_eq!(applied.installed.len(), 1);
         let new_ref = &applied.installed[0].new_artifact_ref;
         assert_ne!(&installed.artifact_ref, new_ref);
-        assert_eq!(artifacts::read_payload(&root, &installed.artifact_ref).expect("old payload"), payload);
-        let new_payload = artifacts::read_payload(&root, new_ref).expect("new payload");
+        assert_eq!(crate::artifacts::read_payload(&root, &installed.artifact_ref).expect("old payload"), payload);
+        let new_payload = crate::artifacts::read_payload(&root, new_ref).expect("new payload");
         assert!(to_text(&new_payload).expect("render new").contains("new"));
         assert!(!to_text(&new_payload).expect("render new again").contains("old"));
     }
@@ -1343,7 +1340,7 @@ mod tests {
             &[test_ref("upgrade-policy")],
         )
         .expect("upgrade plan");
-        let parsed = upgrades::parse_upgrade_plan(&plan).expect("parse upgrade plan");
+        let parsed = crate::upgrades::parse_upgrade_plan(&plan).expect("parse upgrade plan");
         assert_eq!(parsed.tasks[0].kind, "install-artifact");
         assert!(parsed.checks.as_slice().iter().any(|check| check == "no-ucm-clone"));
     }
@@ -1374,7 +1371,7 @@ mod tests {
         assert_eq!(first.diffs[0].new_payload_ref, second.diffs[0].new_payload_ref);
         let applied = apply(&root, &input).expect("apply");
         assert_ne!(installed.artifact_ref, applied.installed[0].new_artifact_ref);
-        assert_eq!(artifacts::read_payload(&root, &installed.artifact_ref).expect("old payload"), payload);
+        assert_eq!(crate::artifacts::read_payload(&root, &installed.artifact_ref).expect("old payload"), payload);
     }
 
     fn query(pattern: RewritePattern) -> RewriteQueryInput {
@@ -1409,8 +1406,8 @@ mod tests {
         kind: &str,
         payload: IoValue,
         dependency_refs: &[String],
-    ) -> artifacts::ArtifactInstall {
-        artifacts::install_artifact(root, &artifacts::ArtifactInstallInput {
+    ) -> crate::artifacts::ArtifactInstall {
+        crate::artifacts::install_artifact(root, &crate::artifacts::ArtifactInstallInput {
             kind: kind.to_string(),
             payload,
             schema_refs: vec![test_ref("schema")],
