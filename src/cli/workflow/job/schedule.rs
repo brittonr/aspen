@@ -1,9 +1,10 @@
 type MoltenError = molten::error::MoltenError;
 type Path = std::path::Path;
 type Result<T> = molten::error::Result<T>;
+type ScheduleLocal = super::command::worker::ScheduleLocal;
 
-use super::command::worker;
 use super::io;
+
 #[path = "schedule/output.rs"]
 mod output;
 #[path = "schedule/phase.rs"]
@@ -84,10 +85,10 @@ struct FinalizeInput<'a> {
     lease_key: &'a str,
 }
 
-pub(crate) fn local(args: worker::ScheduleLocal) -> Result<()> {
-    let request_value = io::read_preserves_file(&args.request)?;
-    let admission_value = io::read_preserves_file(&args.admission_receipt)?;
-    let execution_request_value = io::read_preserves_file(&args.execution_request)?;
+pub(crate) fn local(args: ScheduleLocal) -> Result<()> {
+    let request_value = super::io::read_preserves_file(&args.request)?;
+    let admission_value = super::io::read_preserves_file(&args.admission_receipt)?;
+    let execution_request_value = super::io::read_preserves_file(&args.execution_request)?;
     let chunk_root = args.chunks.unwrap_or_else(|| args.target_registry.join("job-chunks"));
     let result = run::execute(LocalInput {
         request_value: &request_value,
@@ -135,7 +136,7 @@ fn coordination_refs(input: &LocalInput<'_>, request: &Request, request_ref: &st
         authority_refs: select(input.coordination_authority_refs.clone(), request.authority_refs.clone()),
         resource_refs: select(input.coordination_resource_refs.clone(), request.resource_refs.clone()),
         policy_refs: if input.coordination_policy_refs.is_empty() {
-            vec![io::synthetic_ref("worker-schedule-policy", request_ref)?]
+            vec![super::io::synthetic_ref("worker-schedule-policy", request_ref)?]
         } else {
             input.coordination_policy_refs.clone()
         },
@@ -152,7 +153,7 @@ fn coordination_request(input: RequestInput<'_>) -> Result<Value> {
         operation: input.operation.to_string(),
         key: input.key.to_string(),
         client_session: input.client_session.to_string(),
-        operation_id_ref: io::synthetic_ref(input.operation_label, input.request_ref)?,
+        operation_id_ref: super::io::synthetic_ref(input.operation_label, input.request_ref)?,
         payload: input.payload,
         authority_refs: input.refs.authority_refs.clone(),
         resource_refs: input.refs.resource_refs.clone(),
