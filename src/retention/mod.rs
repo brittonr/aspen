@@ -1775,7 +1775,7 @@ pub async fn send_remote_gc_clearance_live_request(
         resource_refs: input.resource_refs,
         evidence_refs: &control_evidence,
     })?;
-    let send = crate::node_daemon::send_node_control_live_ingress(&crate::node_daemon::ControlLiveSendInput {
+    let send = crate::node_daemon::send_control_live_ingress(&crate::node_daemon::ControlLiveSendInput {
         state_root: input.requester_node_root,
         request_value: &control_value,
         receiver_ticket_value: input.peer_ticket_value,
@@ -1830,7 +1830,7 @@ pub async fn send_remote_gc_clearance_live_response(
         resource_refs: input.resource_refs,
         evidence_refs: &control_evidence,
     })?;
-    let send = crate::node_daemon::send_node_control_live_ingress(&crate::node_daemon::ControlLiveSendInput {
+    let send = crate::node_daemon::send_control_live_ingress(&crate::node_daemon::ControlLiveSendInput {
         state_root: input.peer_node_root,
         request_value: &control_value,
         receiver_ticket_value: input.requester_ticket_value,
@@ -9430,12 +9430,12 @@ mod tests {
         let peer_node_root = temp_dir("retention-live-peer-node");
         let requester_node_id = "retention-live-requester";
         let peer_node_id = "retention-live-peer";
-        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
+        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
             state_root: &requester_node_root,
             node_id: requester_node_id,
         })
         .expect("init requester node");
-        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
+        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
             state_root: &peer_node_root,
             node_id: peer_node_id,
         })
@@ -9733,21 +9733,21 @@ mod tests {
             requester_node: temp_dir("retention-remote-clearance-live-two-node-requester-node"),
             peer_node: temp_dir("retention-remote-clearance-live-two-node-peer-node"),
         };
-        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
+        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
             state_root: &roots.requester_node,
             node_id: "requester-node",
         })
         .expect("init requester node");
-        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
+        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
             state_root: &roots.peer_node,
             node_id: "peer-node",
         })
         .expect("init peer node");
-        crate::node_daemon::run_local_node(&crate::node_daemon::RunInput {
+        crate::node_daemon::run_local(&crate::node_daemon::RunInput {
             state_root: &roots.requester_node,
         })
         .expect("run requester node");
-        crate::node_daemon::run_local_node(&crate::node_daemon::RunInput {
+        crate::node_daemon::run_local(&crate::node_daemon::RunInput {
             state_root: &roots.peer_node,
         })
         .expect("run peer node");
@@ -10883,12 +10883,12 @@ mod tests {
     fn ticket_pair() -> TicketPair {
         let requester_root = temp_dir("retention-remote-clearance-live-multihost-requester");
         let peer_root = temp_dir("retention-remote-clearance-live-multihost-peer");
-        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
+        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
             state_root: &requester_root,
             node_id: "requester-node",
         })
         .expect("init requester node");
-        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
+        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
             state_root: &peer_root,
             node_id: "peer-node",
         })

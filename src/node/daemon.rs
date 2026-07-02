@@ -1500,7 +1500,7 @@ pub fn import_control_authority_grant(state_root: &Path, grant_value: &IoValue) 
     validate_state_root(state_root)?;
     ensure_state_layout(state_root)?;
     let grant = parse_control_authority_grant(grant_value)?;
-    import_node_artifact(state_root, grant_value)?;
+    import_artifact(state_root, grant_value)?;
     Ok(grant)
 }
 
@@ -1599,7 +1599,7 @@ pub fn export_control_live_ticket(input: &ControlLiveTicketExportInput<'_>) -> R
         evidence_refs: input.evidence_refs,
     })?;
     let ticket = parse_control_live_ticket(&value)?;
-    import_node_artifact(input.state_root, &value)?;
+    import_artifact(input.state_root, &value)?;
     Ok(ticket)
 }
 
@@ -1610,7 +1610,7 @@ pub fn admit_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<
     validate_ingress_refs(input.evidence_refs, "node control live peer admission evidence ref")?;
     ensure_state_layout(input.state_root)?;
     let ticket = parse_control_live_ticket(input.ticket_value)?;
-    import_node_artifact(input.state_root, input.ticket_value)?;
+    import_artifact(input.state_root, input.ticket_value)?;
     let identity = crate::node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let mut diagnostics = Vec::new();
     if ticket.node_id != identity.node_id {
@@ -1641,7 +1641,7 @@ pub fn admit_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<
         diagnostics: &diagnostics,
     })?;
     let admission = parse_control_live_peer_admission(&value)?;
-    import_node_artifact(input.state_root, &value)?;
+    import_artifact(input.state_root, &value)?;
     Ok(admission)
 }
 
@@ -1739,9 +1739,9 @@ pub fn import_control_live_ticket(input: &ControlLiveTicketImportInput<'_>) -> R
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let mut imported_refs = Vec::with_capacity(2);
     if diagnostics.is_empty() {
-        imported_refs.push(import_node_artifact(input.state_root, input.ticket_value)?);
+        imported_refs.push(import_artifact(input.state_root, input.ticket_value)?);
         if let Some(value) = input.peer_admission_value {
-            imported_refs.push(import_node_artifact(input.state_root, value)?);
+            imported_refs.push(import_artifact(input.state_root, value)?);
         }
     }
     let peer_id = admission.as_ref().map(|value| value.peer_id.as_str()).or(input.expected_peer);
@@ -1756,7 +1756,7 @@ pub fn import_control_live_ticket(input: &ControlLiveTicketImportInput<'_>) -> R
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlLiveTicketImport {
         decision: decision.to_string(),
         ticket_ref: ticket.ticket_ref,
@@ -1793,7 +1793,7 @@ pub fn import_control_authority_grant_checked(
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let mut imported_refs = Vec::with_capacity(1);
     if diagnostics.is_empty() {
-        imported_refs.push(import_node_artifact(input.state_root, input.grant_value)?);
+        imported_refs.push(import_artifact(input.state_root, input.grant_value)?);
     }
     let receipt_value = authority_grant_import_receipt_value(&AuthorityGrantImportReceiptValueInput {
         decision,
@@ -1804,7 +1804,7 @@ pub fn import_control_authority_grant_checked(
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlAuthorityGrantImport {
         decision: decision.to_string(),
         grant_ref: grant.grant_ref,
@@ -2113,7 +2113,7 @@ async fn apply_transfer_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) ->
         join_timeout_ms: input.join_timeout_ms,
     };
     if input.should_send {
-        let sent = send_node_control_live_ingress(&send_input).await?;
+        let sent = send_control_live_ingress(&send_input).await?;
         let send_receipt = parse_control_live_send_receipt(&sent.send_receipt_value)?;
         let diagnostics = if send_receipt.decision == "pass" {
             Vec::new()
@@ -2168,7 +2168,7 @@ fn finish_apply(input: FinishInput<'_>) -> Result<ControlLiveWorkflowBundleApply
         diagnostics: &input.diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_node_artifact(input.input.state_root, &receipt_value)?;
+    import_artifact(input.input.state_root, &receipt_value)?;
     Ok(ControlLiveWorkflowBundleApply {
         bundle_ref: input.verified.bundle_ref,
         gate_receipt_ref: input.gate_receipt_ref,
@@ -2186,7 +2186,7 @@ fn finish_apply(input: FinishInput<'_>) -> Result<ControlLiveWorkflowBundleApply
     })
 }
 
-pub async fn apply_node_control_live_workflow_bundle(
+pub async fn apply_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleApplyInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleApply> {
     validate_live_workflow_bundle_apply_input(input)?;
@@ -2366,7 +2366,7 @@ pub fn import_control_live_workflow_bundle_ack(
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(ControlLiveWorkflowBundleAckImport {
         ack_ref: ack.ack_ref.clone(),
@@ -3273,21 +3273,21 @@ fn import_live_workflow_bundle_ack_members(
     ack: &ControlLiveWorkflowBundleAck,
 ) -> Result<Vec<String>> {
     let mut imported_refs = Vec::with_capacity(8);
-    imported_refs.push(import_node_artifact(state_root, &ack.apply_receipt_value)?);
+    imported_refs.push(import_artifact(state_root, &ack.apply_receipt_value)?);
     if let Some(value) = ack.send_receipt_value.as_ref() {
-        imported_refs.push(import_node_artifact(state_root, value)?);
+        imported_refs.push(import_artifact(state_root, value)?);
     }
     if let Some(value) = ack.ingress_receipt_value.as_ref() {
-        imported_refs.push(import_node_artifact(state_root, value)?);
+        imported_refs.push(import_artifact(state_root, value)?);
     }
     if let Some(value) = ack.queue_receipt_value.as_ref() {
-        imported_refs.push(import_node_artifact(state_root, value)?);
+        imported_refs.push(import_artifact(state_root, value)?);
     }
     if let Some(value) = ack.control_receipt_value.as_ref() {
-        imported_refs.push(import_node_artifact(state_root, value)?);
+        imported_refs.push(import_artifact(state_root, value)?);
     }
-    imported_refs.push(import_node_artifact(state_root, &ack.reconcile_receipt_value)?);
-    imported_refs.push(import_node_artifact(state_root, &ack.ack_value)?);
+    imported_refs.push(import_artifact(state_root, &ack.reconcile_receipt_value)?);
+    imported_refs.push(import_artifact(state_root, &ack.ack_value)?);
     Ok(imported_refs)
 }
 
@@ -3771,7 +3771,7 @@ pub fn import_control_live_workflow_bundle(
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlLiveWorkflowBundleImport {
         bundle_ref: bundle.bundle_ref,
         ticket_import_ref: parts.ticket_import_ref,
@@ -3825,9 +3825,9 @@ fn import_parts(
     if diagnostics.is_empty() {
         parts.imported_refs.extend(ticket_import.imported_refs);
         parts.imported_refs.extend(authority_import.imported_refs);
-        parts.imported_refs.push(import_node_artifact(input.state_root, input.bundle_value)?);
+        parts.imported_refs.push(import_artifact(input.state_root, input.bundle_value)?);
         for receipt_value in &bundle.receipt_values {
-            parts.imported_refs.push(import_node_artifact(input.state_root, receipt_value)?);
+            parts.imported_refs.push(import_artifact(input.state_root, receipt_value)?);
         }
     }
     Ok((parts, diagnostics))
@@ -5008,7 +5008,7 @@ pub fn import_control_supervisor_policy(state_root: &Path, policy_value: &IoValu
     validate_state_root(state_root)?;
     ensure_state_layout(state_root)?;
     let policy = parse_control_supervisor_policy(policy_value)?;
-    import_node_artifact(state_root, policy_value)?;
+    import_artifact(state_root, policy_value)?;
     Ok(policy)
 }
 
@@ -5066,7 +5066,7 @@ fn count_prior_supervised_service_runs(state_root: &Path, supervisor_policy_ref:
     Ok(count)
 }
 
-pub fn init_local_node(input: &InitInput<'_>) -> Result<Init> {
+pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.node_id)?;
     ensure_state_layout(input.state_root)?;
@@ -5110,7 +5110,7 @@ pub fn init_local_node(input: &InitInput<'_>) -> Result<Init> {
     })
 }
 
-pub fn run_local_node(input: &RunInput<'_>) -> Result<Run> {
+pub fn run_local(input: &RunInput<'_>) -> Result<Run> {
     ensure_state_layout(input.state_root)?;
     verify_restart_state(input.state_root)?;
     let config_value = read_preserves(&input.state_root.join(CONFIG_FILE))?;
@@ -5147,7 +5147,7 @@ pub fn run_local_node(input: &RunInput<'_>) -> Result<Run> {
     }
     let startup_ref = run.startup_receipt.receipt_ref.clone();
     write_active_lock(input.state_root, &startup_ref)?;
-    import_node_artifact(input.state_root, &run.startup_receipt.value)?;
+    import_artifact(input.state_root, &run.startup_receipt.value)?;
     Ok(Run {
         startup_ref,
         startup_value: run.startup_receipt.value,
@@ -5155,7 +5155,7 @@ pub fn run_local_node(input: &RunInput<'_>) -> Result<Run> {
     })
 }
 
-pub fn status_local_node(input: &StatusInput<'_>) -> Result<Status> {
+pub fn status_local(input: &StatusInput<'_>) -> Result<Status> {
     let request = status_request()?;
     status_local_node_with_request(input, &request)
 }
@@ -5185,7 +5185,7 @@ fn status_local_node_with_request(
     })?;
     let health_ref = crate::preserves_rail::canonical_hash(&health_value)?;
     write_preserves(&input.state_root.join(HEALTH_FILE), &health_value)?;
-    import_node_artifact(input.state_root, &health_value)?;
+    import_artifact(input.state_root, &health_value)?;
     let control_receipt_value = control_receipt_for_request(
         input.state_root,
         request,
@@ -5195,7 +5195,7 @@ fn status_local_node_with_request(
     )?;
     let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt_value)?;
     write_preserves(&input.state_root.join(CONTROL_STATUS_FILE), &control_receipt_value)?;
-    import_node_artifact(input.state_root, &control_receipt_value)?;
+    import_artifact(input.state_root, &control_receipt_value)?;
     Ok(Status {
         health_ref,
         control_receipt_ref,
@@ -5205,7 +5205,7 @@ fn status_local_node_with_request(
     })
 }
 
-pub fn stop_local_node(input: &StopInput<'_>) -> Result<Stop> {
+pub fn stop_local(input: &StopInput<'_>) -> Result<Stop> {
     let request = shutdown_request()?;
     stop_local_node_with_request(input, &request)
 }
@@ -5231,7 +5231,7 @@ fn stop_local_node_with_request(input: &StopInput<'_>, request: &crate::node_run
             &input.state_root.join("receipts").join(format!("adapter-shutdown-{}.preserves", adapter.name)),
             &value,
         )?;
-        import_node_artifact(input.state_root, &value)?;
+        import_artifact(input.state_root, &value)?;
         shutdown_adapters.push(crate::node_runtime::NodeAdapterReceiptRef {
             name: adapter.name.clone(),
             receipt_ref,
@@ -5249,7 +5249,7 @@ fn stop_local_node_with_request(input: &StopInput<'_>, request: &crate::node_run
         })?;
     let shutdown_ref = crate::preserves_rail::canonical_hash(&shutdown_value)?;
     write_preserves(&input.state_root.join(SHUTDOWN_FILE), &shutdown_value)?;
-    import_node_artifact(input.state_root, &shutdown_value)?;
+    import_artifact(input.state_root, &shutdown_value)?;
     let control_receipt_value = control_receipt_for_request(
         input.state_root,
         request,
@@ -5259,7 +5259,7 @@ fn stop_local_node_with_request(input: &StopInput<'_>, request: &crate::node_run
     )?;
     let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt_value)?;
     write_preserves(&input.state_root.join(CONTROL_STOP_FILE), &control_receipt_value)?;
-    import_node_artifact(input.state_root, &control_receipt_value)?;
+    import_artifact(input.state_root, &control_receipt_value)?;
     remove_active_lock(input.state_root)?;
     Ok(Stop {
         shutdown_ref,
@@ -5273,7 +5273,7 @@ pub fn submit_control_request(input: &ControlSubmitInput<'_>) -> Result<ControlS
     validate_state_root(input.state_root)?;
     ensure_state_layout(input.state_root)?;
     let request = crate::node_runtime::parse_control_request(input.request_value)?;
-    import_node_artifact(input.state_root, input.request_value)?;
+    import_artifact(input.state_root, input.request_value)?;
     let inbox_path = control_inbox_path(input.state_root, &request.request_ref);
     write_preserves(&inbox_path, input.request_value)?;
     let location_ref = local_ref("node-control-inbox-path", &inbox_path.display().to_string())?;
@@ -5287,7 +5287,7 @@ pub fn submit_control_request(input: &ControlSubmitInput<'_>) -> Result<ControlS
     })?;
     let queue_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&queue_receipt_path(input.state_root, &request.request_ref), &receipt_value)?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlSubmit {
         request_ref: request.request_ref,
         inbox_path,
@@ -5306,7 +5306,7 @@ pub fn dispatch_control_request(input: &ControlDispatchInput<'_>) -> Result<Cont
     };
     let request_value = read_preserves(&request_path)?;
     let request = crate::node_runtime::parse_control_request(&request_value)?;
-    import_node_artifact(input.state_root, &request_value)?;
+    import_artifact(input.state_root, &request_value)?;
     if let Some(prior) = prior_dispatch_for_request(input.state_root, &request)? {
         archive_dispatched_request(input.state_root, &request_path, &request.value)?;
         write_dispatch_queue_receipt(input.state_root, &request, "duplicate-dispatch")?;
@@ -5345,7 +5345,7 @@ pub fn run_control_loop(input: &ControlLoopInput<'_>) -> Result<ControlLoop> {
     })?;
     let heartbeat_receipt_ref = crate::preserves_rail::canonical_hash(&heartbeat_value)?;
     write_preserves(&control_heartbeat_receipt_path(input.state_root, &heartbeat_receipt_ref), &heartbeat_value)?;
-    import_node_artifact(input.state_root, &heartbeat_value)?;
+    import_artifact(input.state_root, &heartbeat_value)?;
 
     let mut processed_request_refs = Vec::with_capacity(max_requests);
     let mut dispatch_receipt_refs = Vec::with_capacity(max_requests);
@@ -5383,7 +5383,7 @@ pub fn run_control_loop(input: &ControlLoopInput<'_>) -> Result<ControlLoop> {
     })?;
     let loop_receipt_ref = crate::preserves_rail::canonical_hash(&loop_value)?;
     write_preserves(&control_loop_receipt_path(input.state_root, &loop_receipt_ref), &loop_value)?;
-    import_node_artifact(input.state_root, &loop_value)?;
+    import_artifact(input.state_root, &loop_value)?;
     Ok(ControlLoop {
         loop_receipt_ref,
         loop_receipt_value: loop_value,
@@ -5593,7 +5593,7 @@ fn denied_restart_attempt(
     })?;
     let service_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlServe {
         service_receipt_ref,
         service_receipt_value: receipt_value,
@@ -5632,7 +5632,7 @@ fn start_service_run(
     })?;
     let service_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
     write_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value)?;
-    import_node_artifact(input.state_root, &lock_value)?;
+    import_artifact(input.state_root, &lock_value)?;
     if let Some(policy) = supervisor_policy {
         let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
             decision: "pass",
@@ -5697,7 +5697,7 @@ fn write_service_heartbeat(input: &ServiceTickInput<'_>, run: &mut ServiceRunPar
     })?;
     let heartbeat_ref = crate::preserves_rail::canonical_hash(&heartbeat_value)?;
     write_preserves(&control_service_heartbeat_path(input.state_root, &heartbeat_ref), &heartbeat_value)?;
-    import_node_artifact(input.state_root, &heartbeat_value)?;
+    import_artifact(input.state_root, &heartbeat_value)?;
     run.heartbeat_receipt_refs.push(heartbeat_ref);
     Ok(())
 }
@@ -5723,7 +5723,7 @@ fn deliver_service_ingress(input: &ServiceTickInput<'_>, run: &mut ServiceRunPar
                 continue;
             }
         };
-        let receipt = node_ingress_receipt_decision(&delivered.ingress_receipt_value)?;
+        let receipt = ingress_receipt_decision(&delivered.ingress_receipt_value)?;
         if receipt != "pass" {
             run.diagnostics
                 .push(format!("node control service ingress {} decision {}", delivered.envelope_ref, receipt));
@@ -5818,7 +5818,7 @@ fn finish_service_run(input: FinishServiceInput<'_>) -> Result<ControlServe> {
     })?;
     let service_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlServe {
         service_receipt_ref,
         service_receipt_value: receipt_value,
@@ -5876,7 +5876,7 @@ fn denied_duplicate_service_run(
     })?;
     let service_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlServe {
         service_receipt_ref,
         service_receipt_value: receipt_value,
@@ -5940,7 +5940,7 @@ fn remove_service_lock(state_root: &Path, service_lock_ref: &str) -> Result<()> 
     fs::remove_file(path).map_err(MoltenError::from)
 }
 
-fn node_ingress_receipt_decision(value: &IoValue) -> Result<String> {
+fn ingress_receipt_decision(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
@@ -6061,7 +6061,7 @@ pub fn receive_control_live_ingress_bytes(
     let envelope = parse_control_ingress_envelope(&value)?;
     let mut diagnostics = live_receive_diagnostics(input, &envelope);
     write_ingress_envelope_and_verify(input.state_root, input.topic, &envelope)?;
-    import_node_artifact(input.state_root, &value)?;
+    import_artifact(input.state_root, &value)?;
     let delivered = if diagnostics.is_empty() {
         deliver_control_ingress(&ControlIngressDeliverInput {
             state_root: input.state_root,
@@ -6071,7 +6071,7 @@ pub fn receive_control_live_ingress_bytes(
     } else {
         denied_live_ingress_delivery(input.state_root, &envelope, &diagnostics)?
     };
-    let ingress_decision = node_ingress_receipt_decision(&delivered.ingress_receipt_value)?;
+    let ingress_decision = ingress_receipt_decision(&delivered.ingress_receipt_value)?;
     if ingress_decision != "pass" {
         diagnostics.push(format!("node control live ingress delivery decision {ingress_decision}"));
     }
@@ -6090,7 +6090,7 @@ pub fn receive_control_live_ingress_bytes(
         &control_live_transport_receipt_path(input.state_root, &envelope.envelope_ref, "receive"),
         &receipt_value,
     )?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlLiveIngressReceive {
         envelope_ref: envelope.envelope_ref,
         transport_receipt_ref,
@@ -6246,7 +6246,7 @@ pub fn preflight_control_live_send(input: &ControlLiveSendInput<'_>) -> Result<C
     })
 }
 
-pub async fn send_node_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSend> {
+pub async fn send_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSend> {
     validate_send_input(input)?;
     let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
     let envelope = send_envelope(input, &ticket)?;
@@ -6402,7 +6402,7 @@ async fn publish_with_retries(
     let mut diagnostics = Vec::with_capacity(attempt_capacity);
     let mut published = None;
     for attempt in 1..=input.max_attempts {
-        match attempt_node_control_live_send(input, receiver_addr, envelope).await? {
+        match attempt_control_live_send(input, receiver_addr, envelope).await? {
             Ok(receipt) => {
                 published = Some(receipt);
                 break;
@@ -6425,7 +6425,7 @@ async fn publish_with_retries(
                 let retry_ref = crate::preserves_rail::canonical_hash(&retry_value)?;
                 if let Some(state_root) = input.state_root {
                     write_preserves(&control_live_send_retry_receipt_path(state_root, &retry_ref), &retry_value)?;
-                    import_node_artifact(state_root, &retry_value)?;
+                    import_artifact(state_root, &retry_value)?;
                 }
                 retry_receipt_refs.push(retry_ref);
                 retry_receipt_values.push(retry_value);
@@ -6451,16 +6451,16 @@ fn finish_send(input: FinishSendInput<'_>) -> Result<ControlLiveSend> {
     })?;
     let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
     if let Some(state_root) = input.input.state_root {
-        import_node_artifact(state_root, input.input.receiver_ticket_value)?;
+        import_artifact(state_root, input.input.receiver_ticket_value)?;
         write_ingress_envelope_and_verify(state_root, &input.ticket.topic, &input.envelope)?;
-        import_node_artifact(state_root, &input.envelope.value)?;
+        import_artifact(state_root, &input.envelope.value)?;
         write_preserves(
             &control_live_transport_receipt_path(state_root, &input.envelope.envelope_ref, "send"),
             &input.published.transport_receipt_value,
         )?;
-        import_node_artifact(state_root, &input.published.transport_receipt_value)?;
+        import_artifact(state_root, &input.published.transport_receipt_value)?;
         write_preserves(&control_live_send_receipt_path(state_root, &send_receipt_ref), &send_receipt_value)?;
-        import_node_artifact(state_root, &send_receipt_value)?;
+        import_artifact(state_root, &send_receipt_value)?;
     }
     Ok(ControlLiveSend {
         envelope_ref: input.envelope.envelope_ref,
@@ -6479,7 +6479,7 @@ fn finish_send(input: FinishSendInput<'_>) -> Result<ControlLiveSend> {
     })
 }
 
-async fn attempt_node_control_live_send(
+async fn attempt_control_live_send(
     input: &ControlLiveSendInput<'_>,
     receiver_addr: &iroh::EndpointAddr,
     envelope: &ControlIngressEnvelope,
@@ -6585,7 +6585,7 @@ fn duplicate_control_live_send(
         &control_live_send_duplicate_receipt_path(state_root, &duplicate_receipt_ref),
         &duplicate_receipt_value,
     )?;
-    import_node_artifact(state_root, &duplicate_receipt_value)?;
+    import_artifact(state_root, &duplicate_receipt_value)?;
     Ok(Some(ControlLiveSend {
         envelope_ref: envelope.envelope_ref.clone(),
         envelope_value: envelope.value.clone(),
@@ -6614,11 +6614,11 @@ fn denied_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_>) ->
     })?;
     let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
     if let Some(state_root) = denied.input.state_root {
-        import_node_artifact(state_root, denied.input.receiver_ticket_value)?;
+        import_artifact(state_root, denied.input.receiver_ticket_value)?;
         write_ingress_envelope_and_verify(state_root, &denied.ticket.topic, &denied.envelope)?;
-        import_node_artifact(state_root, &denied.envelope.value)?;
+        import_artifact(state_root, &denied.envelope.value)?;
         write_preserves(&control_live_send_receipt_path(state_root, &send_receipt_ref), &send_receipt_value)?;
-        import_node_artifact(state_root, &send_receipt_value)?;
+        import_artifact(state_root, &send_receipt_value)?;
     }
     Ok(ControlLiveSend {
         envelope_ref: denied.envelope.envelope_ref,
@@ -6761,19 +6761,19 @@ fn import_flow_values(
     receipt_ref: &str,
     receipt_value: &IoValue,
 ) -> Result<()> {
-    import_node_artifact(state_root, input.receiver_ticket_value)?;
-    import_node_artifact(state_root, input.peer_admission_value)?;
-    import_node_artifact(state_root, input.authority_grant_value)?;
-    import_node_artifact(state_root, input.send_receipt_value)?;
+    import_artifact(state_root, input.receiver_ticket_value)?;
+    import_artifact(state_root, input.peer_admission_value)?;
+    import_artifact(state_root, input.authority_grant_value)?;
+    import_artifact(state_root, input.send_receipt_value)?;
     for receive_value in input.receive_receipt_values {
-        import_node_artifact(state_root, receive_value)?;
+        import_artifact(state_root, receive_value)?;
     }
     if let Some(listener_value) = input.listener_receipt_value {
-        import_node_artifact(state_root, listener_value)?;
+        import_artifact(state_root, listener_value)?;
     }
-    import_node_artifact(state_root, input.service_receipt_value)?;
+    import_artifact(state_root, input.service_receipt_value)?;
     write_preserves(&control_live_workflow_receipt_path(state_root, receipt_ref), receipt_value)?;
-    import_node_artifact(state_root, receipt_value)?;
+    import_artifact(state_root, receipt_value)?;
     Ok(())
 }
 
@@ -6873,7 +6873,7 @@ fn live_listener_receipt_refs(value: &IoValue) -> Result<(String, Vec<String>, S
     ))
 }
 
-pub async fn serve_node_control_live_listener(input: &ControlLiveServeInput<'_>) -> Result<ControlLiveServe> {
+pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> Result<ControlLiveServe> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     validate_listener_event_limit(input.max_events)?;
@@ -7126,7 +7126,7 @@ async fn serve_node_control_live_listener_with_topic(
     })?;
     let listener_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_live_listener_receipt_path(input.state_root, &listener_receipt_ref), &receipt_value)?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlLiveServe {
         listener_receipt_ref,
         listener_receipt_value: receipt_value,
@@ -7194,7 +7194,7 @@ fn live_ticket_for_bound_endpoint(
         evidence_refs: &identity.receipt_refs,
     })?;
     let ticket = parse_control_live_ticket(&value)?;
-    import_node_artifact(state_root, &value)?;
+    import_artifact(state_root, &value)?;
     Ok(ticket)
 }
 
@@ -7274,7 +7274,7 @@ fn live_send_authority_grant_diagnostics(state_root: &Path, envelope: &ControlIn
         .filter(|authority_ref| envelope.request.authority_refs.contains(*authority_ref))
     {
         has_candidate_authority = true;
-        match read_node_ledger_artifact(state_root, authority_ref) {
+        match read_ledger_artifact(state_root, authority_ref) {
             Ok(value) => match parse_control_authority_grant(&value) {
                 Ok(grant) => {
                     let grant_diagnostics = authority_grant_diagnostics(envelope, &grant);
@@ -7371,7 +7371,7 @@ fn denied_live_ingress_delivery(
     })?;
     let ingress_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_ingress_receipt_path(state_root, &envelope.envelope_ref, "deliver"), &receipt_value)?;
-    import_node_artifact(state_root, &receipt_value)?;
+    import_artifact(state_root, &receipt_value)?;
     Ok(ControlIngressDeliver {
         envelope_ref: envelope.envelope_ref.clone(),
         request_ref: envelope.request.request_ref.clone(),
@@ -7476,7 +7476,7 @@ pub fn publish_control_ingress(input: &ControlIngressPublishInput<'_>) -> Result
     let envelope = parse_control_ingress_envelope(input.envelope_value)?;
     let envelope_path = control_ingress_envelope_path(input.state_root, &envelope.topic, &envelope.envelope_ref);
     write_ingress_envelope_and_verify(input.state_root, &envelope.topic, &envelope)?;
-    import_node_artifact(input.state_root, &envelope.value)?;
+    import_artifact(input.state_root, &envelope.value)?;
     let diagnostics = Vec::new();
     let receipt_value = ingress_receipt_value(&IngressReceiptValueInput {
         decision: "pass",
@@ -7492,7 +7492,7 @@ pub fn publish_control_ingress(input: &ControlIngressPublishInput<'_>) -> Result
         &control_ingress_receipt_path(input.state_root, &envelope.envelope_ref, "publish"),
         &receipt_value,
     )?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlIngressPublish {
         envelope_ref: envelope.envelope_ref,
         envelope_path,
@@ -7527,7 +7527,7 @@ fn apply_ingress_enqueue(state_root: &Path, envelope: &ControlIngressEnvelope) -
         gap_policy: crate::delivery_idempotency::GapPolicy::Deny,
     })?;
     let idempotency_receipt_ref = Some(delivery.receipt.receipt_ref.clone());
-    import_node_artifact(state_root, &delivery.receipt.value)?;
+    import_artifact(state_root, &delivery.receipt.value)?;
     if delivery.should_commit_side_effect {
         let submitted = submit_control_request(&ControlSubmitInput {
             state_root,
@@ -7597,7 +7597,7 @@ pub fn deliver_control_ingress(input: &ControlIngressDeliverInput<'_>) -> Result
         &control_ingress_receipt_path(input.state_root, &envelope.envelope_ref, "deliver"),
         &receipt_value,
     )?;
-    import_node_artifact(input.state_root, &receipt_value)?;
+    import_artifact(input.state_root, &receipt_value)?;
     Ok(ControlIngressDeliver {
         envelope_ref: envelope.envelope_ref,
         request_ref: envelope.request.request_ref,
@@ -7651,7 +7651,7 @@ fn evaluate_live_peer_bootstrap(state_root: &Path, envelope: &ControlIngressEnve
     let mut diagnostics = Vec::with_capacity(envelope.peer_bootstrap_refs.len().saturating_add(1));
     let mut admitted_peer_ref = None;
     for peer_ref in envelope.peer_bootstrap_refs.iter() {
-        match read_node_ledger_artifact(state_root, peer_ref) {
+        match read_ledger_artifact(state_root, peer_ref) {
             Ok(value) => match parse_control_live_peer_admission(&value) {
                 Ok(admission) => {
                     let admission_diagnostics = live_peer_admission_diagnostics(state_root, envelope, &admission)?;
@@ -7703,7 +7703,7 @@ fn live_peer_admission_diagnostics(
             admission.admission_ref, admission.topic, envelope.topic
         ));
     }
-    match read_node_ledger_artifact(state_root, &admission.ticket_ref) {
+    match read_ledger_artifact(state_root, &admission.ticket_ref) {
         Ok(value) => match parse_control_live_ticket(&value) {
             Ok(ticket) => {
                 if ticket.node_id != admission.node_id || ticket.topic != admission.topic {
@@ -7752,7 +7752,7 @@ fn evaluate_live_authority_delegation(state_root: &Path, envelope: &ControlIngre
         diagnostics.push("node control live authority refs are not bound to the request".to_string());
     }
     for authority_ref in candidate_authority_refs {
-        match read_node_ledger_artifact(state_root, authority_ref) {
+        match read_ledger_artifact(state_root, authority_ref) {
             Ok(value) => match parse_control_authority_grant(&value) {
                 Ok(grant) => {
                     let grant_diagnostics = authority_grant_diagnostics(envelope, &grant);
@@ -7781,7 +7781,7 @@ fn evaluate_live_authority_delegation(state_root: &Path, envelope: &ControlIngre
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_authority_receipt_path(state_root, &envelope.envelope_ref), &receipt_value)?;
-    import_node_artifact(state_root, &receipt_value)?;
+    import_artifact(state_root, &receipt_value)?;
     if decision == "deny" {
         diagnostics.push(format!("node control authority receipt {receipt_ref} denied"));
     }
@@ -7926,7 +7926,7 @@ fn write_dispatch_queue_receipt(
     })?;
     let queue_receipt_ref = crate::preserves_rail::canonical_hash(&queue_receipt)?;
     write_preserves(&dispatch_receipt_path(state_root, &request.request_ref), &queue_receipt)?;
-    import_node_artifact(state_root, &queue_receipt)?;
+    import_artifact(state_root, &queue_receipt)?;
     Ok(queue_receipt_ref)
 }
 
@@ -7977,7 +7977,7 @@ fn evaluate_control_provenance(input: &ControlProvenanceInput<'_>) -> Result<cra
     let mut provenance_values = Vec::with_capacity(input.request.evidence_refs.len());
     let mut build_verification_values = Vec::with_capacity(input.request.evidence_refs.len());
     for evidence_ref in &input.request.evidence_refs {
-        match read_node_ledger_artifact(input.state_root, evidence_ref) {
+        match read_ledger_artifact(input.state_root, evidence_ref) {
             Ok(value) => {
                 if crate::provenance::parse_provenance_build_verification_receipt(&value).is_ok() {
                     build_verification_values.push(value);
@@ -8001,7 +8001,7 @@ fn evaluate_control_provenance(input: &ControlProvenanceInput<'_>) -> Result<cra
         &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, input.subreceipt_kind),
         &evaluation.receipt_value,
     )?;
-    import_node_artifact(input.state_root, &evaluation.receipt_value)?;
+    import_artifact(input.state_root, &evaluation.receipt_value)?;
     Ok(evaluation)
 }
 
@@ -8096,9 +8096,9 @@ fn finish_install(input: InstallFinishInput<'_>) -> Result<ControlDispatch> {
         &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "artifact-install"),
         &install.receipt_value,
     )?;
-    import_node_artifact(input.state_root, &install.receipt_value)?;
+    import_artifact(input.state_root, &install.receipt_value)?;
     if install.decision == "pass" {
-        import_node_artifact(input.state_root, &install.artifact.value)?;
+        import_artifact(input.state_root, &install.artifact.value)?;
     } else if install.missing_dependencies.is_empty() {
         diagnostics.push("node control artifact install denied".to_string());
     } else {
@@ -8122,7 +8122,7 @@ fn dispatch_install_request(
     if !diagnostics.is_empty() {
         return finish_install_dispatch(state_root, request, &startup.receipt_ref, &[], &diagnostics);
     }
-    let payload_value = match read_node_ledger_artifact(state_root, payload_ref) {
+    let payload_value = match read_ledger_artifact(state_root, payload_ref) {
         Ok(value) => value,
         Err(error) => {
             diagnostics.push(format!("node control install payload not found in node ledger: {error}"));
@@ -8230,7 +8230,7 @@ fn prepare_run(
             diagnostics,
         });
     }
-    let execution_request_value = match read_node_ledger_artifact(state_root, execution_request_ref) {
+    let execution_request_value = match read_ledger_artifact(state_root, execution_request_ref) {
         Ok(value) => value,
         Err(error) => {
             diagnostics.push(format!("node control run execution request not found in node ledger: {error}"));
@@ -8267,7 +8267,7 @@ fn prepare_run(
 fn complete_run(input: CompleteRunInput<'_>) -> Result<ControlDispatch> {
     let mut diagnostics = input.diagnostics;
     let provenance_receipt_refs = [input.provenance.receipt_ref.clone()];
-    let admission_receipt_value = match read_node_ledger_artifact(input.state_root, &input.prepared.admission_ref) {
+    let admission_receipt_value = match read_ledger_artifact(input.state_root, &input.prepared.admission_ref) {
         Ok(value) => value,
         Err(error) => {
             diagnostics.push(format!("node control run admission receipt not found in node ledger: {error}"));
@@ -8292,7 +8292,7 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<ControlDispatch> {
         &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "job-execution"),
         &execution.receipt_value,
     )?;
-    import_node_artifact(input.state_root, &execution.receipt_value)?;
+    import_artifact(input.state_root, &execution.receipt_value)?;
     let mut subreceipt_refs = Vec::with_capacity(3);
     subreceipt_refs.push(input.provenance.receipt_ref);
     subreceipt_refs.push(execution.receipt_ref.clone());
@@ -8302,7 +8302,7 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<ControlDispatch> {
             &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "job-run"),
             &run.receipt_value,
         )?;
-        import_node_artifact(input.state_root, &run.receipt_value)?;
+        import_artifact(input.state_root, &run.receipt_value)?;
         subreceipt_refs.push(run_ref);
     }
     diagnostics.extend(execution.diagnostics.iter().cloned());
@@ -8385,7 +8385,7 @@ fn dispatch_gate_request(state_root: &Path, request: &crate::node_runtime::Contr
             diagnostics: &diagnostics,
         });
     }
-    let gate_value = match read_node_ledger_artifact(state_root, gate_receipt_ref) {
+    let gate_value = match read_ledger_artifact(state_root, gate_receipt_ref) {
         Ok(value) => value,
         Err(error) => {
             diagnostics.push(format!("node control gate receipt not found in node ledger: {error}"));
@@ -8409,7 +8409,7 @@ fn dispatch_gate_request(state_root: &Path, request: &crate::node_runtime::Contr
         &control_operation_subreceipt_path(state_root, &request.request_ref, "octet-source-gate"),
         &validation.value,
     )?;
-    import_node_artifact(state_root, &validation.value)?;
+    import_artifact(state_root, &validation.value)?;
     diagnostics.extend(validation.diagnostics.iter().cloned());
     if validation.decision != "pass" && diagnostics.is_empty() {
         diagnostics.push("node control gate validation denied".to_string());
@@ -8432,7 +8432,7 @@ fn finalize_operation_dispatch(input: &OperationFinalizeInput<'_>) -> Result<Con
     })?;
     let operation_receipt_ref = crate::preserves_rail::canonical_hash(&operation_receipt)?;
     write_preserves(&control_operation_receipt_path(input.state_root, &input.request.request_ref), &operation_receipt)?;
-    import_node_artifact(input.state_root, &operation_receipt)?;
+    import_artifact(input.state_root, &operation_receipt)?;
     let mut all_subreceipt_refs = Vec::with_capacity(input.subreceipt_refs.len() + 1);
     all_subreceipt_refs.extend(input.subreceipt_refs.iter().cloned());
     all_subreceipt_refs.push(operation_receipt_ref);
@@ -8445,7 +8445,7 @@ fn finalize_operation_dispatch(input: &OperationFinalizeInput<'_>) -> Result<Con
     )?;
     let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt)?;
     write_preserves(&control_outbox_receipt_path(input.state_root, &input.request.request_ref), &control_receipt)?;
-    import_node_artifact(input.state_root, &control_receipt)?;
+    import_artifact(input.state_root, &control_receipt)?;
     Ok(ControlDispatch {
         operation: input.request.operation.clone(),
         request_ref: input.request.request_ref.clone(),
@@ -8469,7 +8469,7 @@ fn side_effect_preflight_diagnostics(request: &crate::node_runtime::ControlReque
     diagnostics
 }
 
-fn read_node_ledger_artifact(state_root: &Path, artifact_ref: &str) -> Result<IoValue> {
+fn read_ledger_artifact(state_root: &Path, artifact_ref: &str) -> Result<IoValue> {
     crate::ledger::read_artifact(&state_root.join("ledger"), artifact_ref)
 }
 
@@ -9280,7 +9280,7 @@ fn loop_receipt_value(input: &LoopReceiptValueInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-pub fn node_daemon_summary(value: &IoValue) -> Result<String> {
+pub fn summary(value: &IoValue) -> Result<String> {
     if let Some(summary) = runtime_summary(value)? {
         return Ok(summary);
     }
@@ -9760,7 +9760,7 @@ fn current_startup_receipt(state_root: &Path) -> Result<crate::node_runtime::Nod
 fn write_active_lock(state_root: &Path, startup_receipt_ref: &str) -> Result<()> {
     let lock_value = active_lock_value(state_root, startup_receipt_ref)?;
     write_preserves(&state_root.join(CONTROL_LOCK_FILE), &lock_value)?;
-    import_node_artifact(state_root, &lock_value)?;
+    import_artifact(state_root, &lock_value)?;
     Ok(())
 }
 
@@ -9821,7 +9821,7 @@ fn active_lock_value(state_root: &Path, startup_receipt_ref: &str) -> Result<IoV
     ]))
 }
 
-fn import_node_artifact(state_root: &Path, value: &IoValue) -> Result<String> {
+fn import_artifact(state_root: &Path, value: &IoValue) -> Result<String> {
     let imported = crate::ledger::import_artifact(&state_root.join("ledger"), value)?;
     let receipt_path = state_root
         .join("receipts")
@@ -9942,7 +9942,7 @@ fn write_supervisor_receipt(state_root: &Path, input: &SupervisorReceiptValueInp
     let value = supervisor_receipt_value(input)?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
     write_preserves(&control_supervisor_receipt_path(state_root, &receipt_ref), &value)?;
-    import_node_artifact(state_root, &value)?;
+    import_artifact(state_root, &value)?;
     Ok(receipt_ref)
 }
 
@@ -10542,7 +10542,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn node_daemon_ingress_ref_parser_rejects_short_fixture_refs() {
+    fn ingress_ref_parser_rejects_short_fixture_refs() {
         let error = validate_ingress_ref("blake3:fixture", "node control ingress payload ref")
             .expect_err("short fixture ref denied");
         assert!(error.to_string().contains("canonical blake3 content ref"));
@@ -10556,26 +10556,26 @@ mod tests {
     #[test]
     fn local_node_init_run_status_stop_and_restart_recovery_are_receipted() {
         let root = temp_dir("node-daemon-lifecycle");
-        let init = init_local_node(&InitInput {
+        let init = init_local(&InitInput {
             state_root: &root,
             node_id: "node:test",
         })
         .expect("init node");
         crate::preserves_rail::validate_content_ref(&init.config_ref).expect("config ref is canonical");
-        let run = run_local_node(&RunInput { state_root: &root }).expect("run node");
+        let run = run_local(&RunInput { state_root: &root }).expect("run node");
         crate::preserves_rail::validate_content_ref(&run.startup_ref).expect("startup ref is canonical");
         assert_eq!(run.adapter_receipt_refs.len(), crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
-        let status = status_local_node(&StatusInput { state_root: &root }).expect("status node");
+        let status = status_local(&StatusInput { state_root: &root }).expect("status node");
         assert_eq!(status.status, "running");
-        let stop = stop_local_node(&StopInput { state_root: &root }).expect("stop node");
+        let stop = stop_local(&StopInput { state_root: &root }).expect("stop node");
         crate::preserves_rail::validate_content_ref(&stop.shutdown_ref).expect("shutdown ref is canonical");
-        let stopped = status_local_node(&StatusInput { state_root: &root }).expect("stopped status");
+        let stopped = status_local(&StatusInput { state_root: &root }).expect("stopped status");
         assert_eq!(stopped.status, "stopped");
-        let restarted = run_local_node(&RunInput { state_root: &root }).expect("restart node");
+        let restarted = run_local(&RunInput { state_root: &root }).expect("restart node");
         crate::preserves_rail::validate_content_ref(&restarted.startup_ref).expect("restart startup ref is canonical");
-        let restarted_status = status_local_node(&StatusInput { state_root: &root }).expect("restarted status");
+        let restarted_status = status_local(&StatusInput { state_root: &root }).expect("restarted status");
         assert_eq!(restarted_status.status, "running");
-        let stale = run_local_node(&RunInput { state_root: &root }).expect_err("stale running state denied");
+        let stale = run_local(&RunInput { state_root: &root }).expect_err("stale running state denied");
         assert!(stale.to_string().contains("previous startup has no clean shutdown receipt"));
         let startup = crate::node_runtime::parse_node_startup_receipt(&run.startup_value).expect("startup parse");
         let restart = crate::node_runtime::node_restart_health_receipt_value(
@@ -10595,7 +10595,7 @@ mod tests {
 
     #[test]
     fn ambient_current_directory_state_root_is_denied() {
-        let denied = init_local_node(&InitInput {
+        let denied = init_local(&InitInput {
             state_root: Path::new("."),
             node_id: "node:test",
         })
@@ -10622,12 +10622,12 @@ mod tests {
 
     fn initialized_control_root(label: &str, node_id: &str) -> PathBuf {
         let root = temp_dir(label);
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id,
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         root
     }
 
@@ -10733,12 +10733,12 @@ mod tests {
     #[test]
     fn control_loop_processes_queue_idempotently_and_stops_on_shutdown() {
         let root = temp_dir("node-control-loop");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:loop",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let status_request = status_request().expect("status request");
         submit_control_request(&ControlSubmitInput {
             state_root: &root,
@@ -10800,12 +10800,12 @@ mod tests {
     #[test]
     fn duplicate_request_with_conflicting_archive_fails_closed() {
         let root = temp_dir("node-control-duplicate-conflict");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:duplicate",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let status_request = status_request().expect("status request");
         let submitted = submit_control_request(&ControlSubmitInput {
             state_root: &root,
@@ -10887,7 +10887,7 @@ mod tests {
             crate::preserves_rail::record("node-control-install-payload", vec![crate::preserves_rail::string(
                 "missing-provenance",
             )]);
-        let payload_ref = import_node_artifact(root, &payload_value).expect("import payload");
+        let payload_ref = import_artifact(root, &payload_value).expect("import payload");
         let request = request_value(&payload_ref, refs, &[]);
         let dispatch = submit_and_dispatch(root, &request);
         let receipt =
@@ -10908,7 +10908,7 @@ mod tests {
             crate::preserves_rail::record("node-control-install-payload", vec![crate::preserves_rail::string(
                 "queued-missing-provenance",
             )]);
-        let payload_ref = import_node_artifact(root, &payload).expect("import queued payload");
+        let payload_ref = import_artifact(root, &payload).expect("import queued payload");
         let request = request_value(&payload_ref, refs, &[]);
         let queued = crate::node_runtime::parse_control_request(&request).expect("queued request parse");
         submit_control_request(&ControlSubmitInput {
@@ -10934,11 +10934,11 @@ mod tests {
             crate::preserves_rail::record("node-control-install-payload", vec![crate::preserves_rail::string(
                 "tampered-provenance",
             )]);
-        let payload_ref = import_node_artifact(root, &payload).expect("import tampered payload");
+        let payload_ref = import_artifact(root, &payload).expect("import tampered payload");
         let wrong_artifact_ref = local_ref("node-control-wrong-provenance-artifact", "tampered").expect("wrong ref");
         let wrong_provenance =
             crate::provenance::synthetic_reviewed_provenance_record(&wrong_artifact_ref).expect("wrong provenance");
-        let wrong_ref = import_node_artifact(root, &wrong_provenance).expect("import wrong provenance");
+        let wrong_ref = import_artifact(root, &wrong_provenance).expect("import wrong provenance");
         let evidence_refs = vec![wrong_ref];
         let request = request_value(&payload_ref, refs, &evidence_refs);
         let dispatch = submit_and_dispatch(root, &request);
@@ -10952,12 +10952,12 @@ mod tests {
     #[test]
     fn control_reproducible_provenance_requires_build_verification_binding() {
         let root = temp_dir("node-control-reproducible-provenance");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:reproducible-provenance",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
 
         let case = build_case(&root);
         assert_install_passes(&root, &case);
@@ -10997,7 +10997,7 @@ mod tests {
             authority_refs: vec![local_ref("node-control-authority", "reproducible").expect("authority ref")],
             policy_refs: vec![local_ref("node-control-policy", "reproducible").expect("policy ref")],
             resource_refs: vec![local_ref("node-control-resource", "reproducible").expect("resource ref")],
-            payload_ref: import_node_artifact(root, &payload_value).expect("import payload"),
+            payload_ref: import_artifact(root, &payload_value).expect("import payload"),
             source_refs: vec![local_ref("node-control-source", "reproducible").expect("source ref")],
             toolchain_refs: vec![local_ref("node-control-toolchain", "reproducible").expect("toolchain ref")],
             dependency_ref: local_ref("node-control-deps", "reproducible").expect("deps ref"),
@@ -11039,7 +11039,7 @@ mod tests {
 
     fn verified_refs(root: &Path, material: &BuildMaterial) -> Vec<String> {
         let build_record = build_record_for(material);
-        let build_record_ref = import_node_artifact(root, &build_record).expect("import build record");
+        let build_record_ref = import_artifact(root, &build_record).expect("import build record");
         let build_verification =
             crate::provenance::verify_provenance_build(&crate::provenance::ProvenanceBuildVerificationInput {
                 build_record_value: &build_record,
@@ -11048,10 +11048,10 @@ mod tests {
             })
             .expect("verify build");
         let build_verification_ref =
-            import_node_artifact(root, &build_verification.receipt_value).expect("import build verification");
+            import_artifact(root, &build_verification.receipt_value).expect("import build verification");
         let build_record_refs = vec![build_record_ref];
         let provenance_record = provenance_record_for(material, &build_record_refs);
-        let provenance_ref = import_node_artifact(root, &provenance_record).expect("import provenance");
+        let provenance_ref = import_artifact(root, &provenance_record).expect("import provenance");
         vec![provenance_ref, build_verification_ref]
     }
 
@@ -11094,12 +11094,12 @@ mod tests {
     #[test]
     fn control_ingress_enqueues_once_and_preserves_provenance_gate() {
         let root = temp_dir("node-control-ingress");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:ingress",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let authority_refs = vec![local_ref("node-control-authority", "ingress").expect("authority ref")];
         let policy_refs = vec![local_ref("node-control-policy", "ingress").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "ingress").expect("resource ref")];
@@ -11109,7 +11109,7 @@ mod tests {
             crate::preserves_rail::record("node-control-ingress-payload", vec![crate::preserves_rail::string(
                 "missing-provenance",
             )]);
-        let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
+        let payload_ref = import_artifact(&root, &payload_value).expect("import payload");
         let request_value =
             crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
                 operation: "install",
@@ -11226,12 +11226,12 @@ mod tests {
 
     fn initialized_materialized_ingress_root() -> PathBuf {
         let root = temp_dir("node-control-ingress-materialized-ref");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:ingress-materialized",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         root
     }
 
@@ -11249,7 +11249,7 @@ mod tests {
             crate::preserves_rail::record("node-control-ingress-payload", vec![crate::preserves_rail::string(
                 "materialized",
             )]);
-        let payload_ref = import_node_artifact(root, &payload_value).expect("import payload");
+        let payload_ref = import_artifact(root, &payload_value).expect("import payload");
         crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
@@ -11345,12 +11345,12 @@ mod tests {
 
     fn reconcile_seed() -> ReconcileSeed {
         let root = temp_dir("node-control-live-workflow-reconcile");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:reconcile",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let policy_refs = vec![local_ref("node-control-policy", "reconcile").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "reconcile").expect("resource ref")];
         let peer_bootstrap_refs =
@@ -11600,7 +11600,7 @@ mod tests {
                 .expect("reconcile text")
                 .contains("reconcile-receipt-is-not-authority")
         );
-        import_node_artifact(&delivery.root, &reconciled.receipt_value).expect("import reconcile receipt");
+        import_artifact(&delivery.root, &reconciled.receipt_value).expect("import reconcile receipt");
         assert_reconcile_not_authority(case, &reconciled);
         reconciled
     }
@@ -11735,7 +11735,7 @@ mod tests {
                 .contains("ack-bundle-is-not-authority")
         );
         let import_root = temp_dir("node-control-live-workflow-ack-import");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &import_root,
             node_id: "node:ack-import",
         })
@@ -11760,8 +11760,8 @@ mod tests {
                 .expect("ack import text")
                 .contains("ack-import-is-not-authority")
         );
-        read_node_ledger_artifact(&import_root, &ack_export.ack.ack_ref).expect("ack imported");
-        read_node_ledger_artifact(&import_root, &reconciled.receipt_ref).expect("reconcile imported");
+        read_ledger_artifact(&import_root, &ack_export.ack.ack_ref).expect("ack imported");
+        read_ledger_artifact(&import_root, &reconciled.receipt_ref).expect("reconcile imported");
         assert_protocol_pass(case, reconciled, &ack_export.ack.ack_value);
         let wrong_ack_import = import_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckImportInput {
             state_root: &import_root,
@@ -11872,12 +11872,12 @@ mod tests {
     #[test]
     fn control_ingress_denies_missing_authority_before_enqueue() {
         let root = temp_dir("node-control-ingress-deny");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:ingress-deny",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let request = status_request().expect("status request");
         let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:operator").expect("bootstrap ref")];
         let policy_refs = vec![local_ref("node-control-policy", "ingress-deny").expect("policy ref")];
@@ -11960,12 +11960,12 @@ mod tests {
     #[test]
     fn control_live_peer_ticket_admission_gates_bootstrap() {
         let root = temp_dir("node-control-live-peer-ticket");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:live-ticket",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let policy_refs = vec![local_ref("node-control-policy", "live-ticket").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "live-ticket").expect("resource ref")];
         let peer_bootstrap_refs =
@@ -12020,13 +12020,13 @@ mod tests {
     fn import_case() -> ImportCase {
         let receiver = temp_dir("node-control-live-import-receiver");
         let sender = temp_dir("node-control-live-import-sender");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &receiver,
             node_id: "node:live-import",
         })
         .expect("init receiver");
-        run_local_node(&RunInput { state_root: &receiver }).expect("run receiver");
-        init_local_node(&InitInput {
+        run_local(&RunInput { state_root: &receiver }).expect("run receiver");
+        init_local(&InitInput {
             state_root: &sender,
             node_id: "node:live-import-sender",
         })
@@ -12075,8 +12075,8 @@ mod tests {
             crate::ledger::artifact_kind(&imported_ticket.receipt_value),
             "node-control-live-ticket-import-receipt"
         );
-        read_node_ledger_artifact(&case.sender, &case.ticket.ticket_ref).expect("ticket imported");
-        read_node_ledger_artifact(&case.sender, &case.admission.admission_ref).expect("admission imported");
+        read_ledger_artifact(&case.sender, &case.ticket.ticket_ref).expect("ticket imported");
+        read_ledger_artifact(&case.sender, &case.admission.admission_ref).expect("admission imported");
 
         let stale_ticket = import_control_live_ticket(&ControlLiveTicketImportInput {
             state_root: &case.sender,
@@ -12126,7 +12126,7 @@ mod tests {
             crate::ledger::artifact_kind(&imported_grant.receipt_value),
             "node-control-authority-grant-import-receipt"
         );
-        read_node_ledger_artifact(&case.sender, &imported_grant.grant_ref).expect("grant imported");
+        read_ledger_artifact(&case.sender, &imported_grant.grant_ref).expect("grant imported");
 
         let bad_operations = vec!["shutdown".to_string()];
         let denied_grant = import_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
@@ -12189,7 +12189,7 @@ mod tests {
 
     fn init_flow_root(label: &str, node_id: &str) -> PathBuf {
         let root = temp_dir(label);
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id,
         })
@@ -12199,7 +12199,7 @@ mod tests {
 
     fn flow_roots() -> (PathBuf, PathBuf, PathBuf) {
         let receiver = init_flow_root("node-control-live-workflow-bundle-receiver", "node:live-bundle");
-        run_local_node(&RunInput { state_root: &receiver }).expect("run receiver");
+        run_local(&RunInput { state_root: &receiver }).expect("run receiver");
         let staging = init_flow_root("node-control-live-workflow-bundle-staging", "node:live-bundle-staging");
         let sender = init_flow_root("node-control-live-workflow-bundle-sender", "node:live-bundle-sender");
         (receiver, staging, sender)
@@ -12438,7 +12438,7 @@ mod tests {
         input: FlowApplyInput<'_>,
     ) -> ControlLiveWorkflowBundleApply {
         runtime
-            .block_on(apply_node_control_live_workflow_bundle(&ControlLiveWorkflowBundleApplyInput {
+            .block_on(apply_control_live_workflow_bundle(&ControlLiveWorkflowBundleApplyInput {
                 state_root: input.state_root,
                 bundle_value: &case.exported.bundle.bundle_value,
                 gate_receipt_value: input.gate_receipt_value,
@@ -12490,8 +12490,7 @@ mod tests {
                 .expect("apply receipt text")
                 .contains("apply-receipt-is-not-authority")
         );
-        read_node_ledger_artifact(&case.bundle_sender, &case.exported.bundle.bundle_ref)
-            .expect("apply imported bundle");
+        read_ledger_artifact(&case.bundle_sender, &case.exported.bundle.bundle_ref).expect("apply imported bundle");
         applied
     }
 
@@ -12511,7 +12510,7 @@ mod tests {
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.imported_refs.is_empty());
         assert!(receipt.diagnostics.iter().any(|value| value.contains("requires a current gate receipt")));
-        assert!(read_node_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
+        assert!(read_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
     }
 
     fn assert_flow_send_denial(case: &FlowCase, runtime: &tokio::runtime::Runtime) {
@@ -12560,10 +12559,9 @@ mod tests {
         .expect("import bundle");
         assert_eq!(imported.decision, "pass");
         assert!(imported.imported_refs.iter().any(|reference| reference == &case.exported.bundle.bundle_ref));
-        read_node_ledger_artifact(&case.bundle_sender, &case.ticket.ticket_ref).expect("bundle imported ticket");
-        read_node_ledger_artifact(&case.bundle_sender, &case.admission.admission_ref)
-            .expect("bundle imported admission");
-        read_node_ledger_artifact(&case.bundle_sender, &case.authority_import_ref).expect("bundle imported authority");
+        read_ledger_artifact(&case.bundle_sender, &case.ticket.ticket_ref).expect("bundle imported ticket");
+        read_ledger_artifact(&case.bundle_sender, &case.admission.admission_ref).expect("bundle imported admission");
+        read_ledger_artifact(&case.bundle_sender, &case.authority_import_ref).expect("bundle imported authority");
         assert!(parse_control_authority_grant(&imported.receipt_value).is_err());
         assert!(
             crate::preserves_rail::to_text(&imported.receipt_value)
@@ -12591,7 +12589,7 @@ mod tests {
         assert_eq!(wrong_topic.decision, "deny");
         assert!(wrong_topic.imported_refs.is_empty());
         assert!(wrong_topic.diagnostics.iter().any(|value| value.contains("wrong-topic")));
-        assert!(read_node_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
+        assert!(read_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
         let wrong_verify = verify_control_live_workflow_bundle(&ControlLiveWorkflowBundleVerifyInput {
             bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
@@ -12645,7 +12643,7 @@ mod tests {
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.imported_refs.is_empty());
         assert!(receipt.diagnostics.iter().any(|value| value.contains("decision deny")));
-        assert!(read_node_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
+        assert!(read_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
     }
 
     fn assert_flow_wrong_peer(case: &FlowCase) {
@@ -12793,9 +12791,9 @@ mod tests {
     }
 
     fn assert_flow_receipts_not_grants(case: &FlowCase, applied: &ControlLiveWorkflowBundleApply) {
-        import_node_artifact(&case.bundle_sender, &case.verified.receipt_value).expect("import verify receipt");
+        import_artifact(&case.bundle_sender, &case.verified.receipt_value).expect("import verify receipt");
         assert_ref_not_grant(&case.bundle_sender, &case.verified.receipt_ref, 3);
-        import_node_artifact(&case.bundle_sender, &case.gated.receipt_value).expect("import gate receipt");
+        import_artifact(&case.bundle_sender, &case.gated.receipt_value).expect("import gate receipt");
         assert_ref_not_grant(&case.bundle_sender, &case.gated.receipt_ref, 4);
         assert_ref_not_grant(&case.bundle_sender, &applied.receipt_ref, 5);
     }
@@ -12906,12 +12904,12 @@ mod tests {
         assert_eq!(case.listener.service.processed_request_refs.len(), 1);
         assert_eq!(case.listener.transport_receipt_refs.len(), 1);
         assert!(case.listener.observed_events > 0);
-        let authority_value = read_node_ledger_artifact(case.root, case.authority_ref).expect("authority value");
+        let authority_value = read_ledger_artifact(case.root, case.authority_ref).expect("authority value");
         let receive_values = case
             .listener
             .transport_receipt_refs
             .iter()
-            .map(|reference| read_node_ledger_artifact(case.root, reference).expect("receive receipt value"))
+            .map(|reference| read_ledger_artifact(case.root, reference).expect("receive receipt value"))
             .collect::<Vec<_>>();
         let receive_value_refs = receive_values.iter().collect::<Vec<_>>();
         let workflow = control_live_workflow_receipt(&ControlLiveWorkflowInput {
@@ -12940,12 +12938,12 @@ mod tests {
 
     fn init_send_case() -> (std::path::PathBuf, crate::node_identity::NodeIdentity) {
         let root = temp_dir("node-control-live-send");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:live-send",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let identity =
             crate::node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
                 .expect("parse identity");
@@ -13050,9 +13048,9 @@ mod tests {
                 .expect("receiver subscribe");
             let material = send_material(&root, &live_ticket);
             let send_input = build_send_input(&root, &live_ticket, &material);
-            let sent = send_node_control_live_ingress(&send_input).await.expect("live send");
+            let sent = send_control_live_ingress(&send_input).await.expect("live send");
             assert_sent(&sent);
-            let duplicate = send_node_control_live_ingress(&send_input).await.expect("duplicate live send");
+            let duplicate = send_control_live_ingress(&send_input).await.expect("duplicate live send");
             assert_duplicate(&sent, &duplicate);
             let listener_input = build_listener_input(&root);
             let listener = serve_node_control_live_listener_with_topic(
@@ -13239,12 +13237,12 @@ mod tests {
 
     fn assert_denied_case(case: &DenyCase<'_>) {
         let root = temp_dir(&format!("node-control-live-authority-{}", case.name));
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:live-authority",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let refs = denied_case_refs(&root, case);
         let request_value =
             crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
@@ -13297,12 +13295,12 @@ mod tests {
     #[tokio::test]
     async fn control_live_serve_listener_loopback_dispatches_through_service() {
         let root = temp_dir("node-control-live-listener");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:live-listener",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let policy_refs = vec![local_ref("node-control-policy", "live-listener").expect("policy ref")];
         let authority_refs =
             test_live_authority_refs(&root, "peer:listener", "node:live-listener", "status", &policy_refs)
@@ -13352,12 +13350,12 @@ mod tests {
     #[tokio::test]
     async fn control_live_iroh_loopback_delivers_to_durable_inbox() {
         let root = temp_dir("node-control-live-iroh");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:live-ingress",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let policy_refs = vec![local_ref("node-control-policy", "live-ingress").expect("policy ref")];
         let authority_refs = test_live_authority_refs(&root, "peer:live", "node:live-ingress", "status", &policy_refs)
             .expect("authority grant ref");
@@ -13411,12 +13409,12 @@ mod tests {
     #[test]
     fn control_service_delivers_ingress_and_dispatches_through_loop() {
         let root = temp_dir("node-control-service-ingress");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:service-ingress",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let authority_refs = vec![local_ref("node-control-authority", "service-ingress").expect("authority ref")];
         let policy_refs = vec![local_ref("node-control-policy", "service-ingress").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "service-ingress").expect("resource ref")];
@@ -13474,12 +13472,12 @@ mod tests {
     #[test]
     fn control_service_duplicate_lock_denies_before_side_effects() {
         let root = temp_dir("node-control-service-duplicate");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:service-duplicate",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let startup = current_startup_receipt(&root).expect("startup");
         let identity =
             crate::node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
@@ -13631,12 +13629,12 @@ mod tests {
     #[test]
     fn control_service_heartbeats_continue_and_shutdown_stops() {
         let root = temp_dir("node-control-service-shutdown");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:service-shutdown",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         let idle = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
@@ -13689,12 +13687,12 @@ mod tests {
 
     fn op_case() -> OpCase {
         let root = temp_dir("node-control-operations");
-        init_local_node(&InitInput {
+        init_local(&InitInput {
             state_root: &root,
             node_id: "node:ops",
         })
         .expect("init node");
-        run_local_node(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root }).expect("run node");
         OpCase {
             root,
             authority_refs: vec![local_ref("node-control-authority", "ops").expect("authority ref")],
@@ -13722,11 +13720,11 @@ mod tests {
             crate::preserves_rail::record("node-control-install-payload", vec![crate::preserves_rail::string(
                 "payload",
             )]);
-        let payload_ref = import_node_artifact(&case.root, &payload_value).expect("import payload");
+        let payload_ref = import_artifact(&case.root, &payload_value).expect("import payload");
         let payload_provenance =
             crate::provenance::synthetic_reviewed_provenance_record(&payload_ref).expect("payload provenance");
         let payload_provenance_ref =
-            import_node_artifact(&case.root, &payload_provenance).expect("import payload provenance");
+            import_artifact(&case.root, &payload_provenance).expect("import payload provenance");
         let install_evidence_refs = vec![payload_provenance_ref];
         let install_value =
             crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
@@ -13748,7 +13746,7 @@ mod tests {
 
     fn assert_gate(case: &OpCase) {
         let gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("gate receipt");
-        let gate_ref = import_node_artifact(&case.root, &gate_value).expect("import gate");
+        let gate_ref = import_artifact(&case.root, &gate_value).expect("import gate");
         let gate_target = local_ref("node-control-gate-target", "ops").expect("gate target");
         let gate_request = crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "gate",
@@ -13771,14 +13769,14 @@ mod tests {
     }
 
     fn assert_run(case: &OpCase) {
-        let job_fixture = install_node_job_fixture(&case.root);
+        let job_fixture = install_job_fixture(&case.root);
         let execution_request_ref =
-            import_node_artifact(&case.root, &job_fixture.execution_request).expect("import execution request");
+            import_artifact(&case.root, &job_fixture.execution_request).expect("import execution request");
         let admission_ref =
-            import_node_artifact(&case.root, &job_fixture.admission_receipt).expect("import admission receipt");
+            import_artifact(&case.root, &job_fixture.admission_receipt).expect("import admission receipt");
         let job_provenance =
             crate::provenance::synthetic_reviewed_provenance_record(&job_fixture.job_ref).expect("job provenance");
-        let job_provenance_ref = import_node_artifact(&case.root, &job_provenance).expect("import job provenance");
+        let job_provenance_ref = import_artifact(&case.root, &job_provenance).expect("import job provenance");
         let run_evidence_refs = vec![job_provenance_ref];
         let run_request = crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
             operation: "run",
@@ -13808,7 +13806,7 @@ mod tests {
         assert!(kinds.iter().any(|kind| kind == "node-control-operation-receipt"));
     }
 
-    struct NodeJobFixture {
+    struct JobFixture {
         execution_request: IoValue,
         admission_receipt: IoValue,
         job_ref: String,
@@ -13828,14 +13826,14 @@ mod tests {
         resource_refs: Vec<String>,
     }
 
-    fn install_node_job_fixture(root: &Path) -> NodeJobFixture {
+    fn install_job_fixture(root: &Path) -> JobFixture {
         let registry = root.join("registry");
         let stages = install_stage_pair(&registry);
         let dag_value = graph_value(&stages);
         let installed = crate::job_dag::install_job_dag(&registry, &dag_value).expect("install job dag");
         let admission = admit_graph(&registry, &installed.job_ref);
         let execution_request = execution_request_value(&installed.job_ref, &admission);
-        NodeJobFixture {
+        JobFixture {
             execution_request,
             admission_receipt: admission.receipt_value,
             job_ref: installed.job_ref,
@@ -13940,8 +13938,8 @@ mod tests {
     }
 
     fn admit_graph(registry: &Path, graph_ref: &str) -> AdmissionParts {
-        let authority_ref = install_node_job_authority(registry, graph_ref);
-        let gate_ref = install_node_clean_gate(registry);
+        let authority_ref = install_job_authority(registry, graph_ref);
+        let gate_ref = install_clean_gate(registry);
         let sync_ref = local_ref("node-job-sync", graph_ref).expect("sync ref");
         let resource_refs = vec![local_ref("node-job-resource", graph_ref).expect("resource ref")];
         let policy_refs = vec![local_ref("node-job-policy", graph_ref).expect("policy ref")];
@@ -13987,7 +13985,7 @@ mod tests {
         .expect("execution request")
     }
 
-    fn install_node_job_authority(registry: &Path, job_ref: &str) -> String {
+    fn install_job_authority(registry: &Path, job_ref: &str) -> String {
         let subject_ref = local_ref("node-job-authority-subject", job_ref).expect("authority subject");
         let policy_ref = local_ref("node-job-authority-policy", job_ref).expect("authority policy");
         let evidence_ref = local_ref("node-job-authority-evidence", job_ref).expect("authority evidence");
@@ -14024,7 +14022,7 @@ mod tests {
         context_ref
     }
 
-    fn install_node_clean_gate(registry: &Path) -> String {
+    fn install_clean_gate(registry: &Path) -> String {
         let gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean gate");
         let gate_ref = crate::preserves_rail::canonical_hash(&gate_value).expect("gate ref");
         let install = crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {

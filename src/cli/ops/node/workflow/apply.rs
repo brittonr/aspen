@@ -35,7 +35,7 @@ fn execute(
         .enable_all()
         .build()
         .map_err(molten::error::MoltenError::from)?;
-    runtime.block_on(molten::node_daemon::apply_node_control_live_workflow_bundle(
+    runtime.block_on(molten::node_daemon::apply_control_live_workflow_bundle(
         &molten::node_daemon::ControlLiveWorkflowBundleApplyInput {
             state_root: &input.state_root,
             bundle_value: &loaded.bundle_value,

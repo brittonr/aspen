@@ -159,7 +159,7 @@ fn send_live(
         .enable_all()
         .build()
         .map_err(molten::error::MoltenError::from)?;
-    runtime.block_on(molten::node_daemon::send_node_control_live_ingress(&molten::node_daemon::ControlLiveSendInput {
+    runtime.block_on(molten::node_daemon::send_control_live_ingress(&molten::node_daemon::ControlLiveSendInput {
         state_root: input.state_root.as_deref(),
         request_value: &values.request_value,
         receiver_ticket_value: &values.ticket_value,
