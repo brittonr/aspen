@@ -254,7 +254,7 @@ pub fn check_value(value: &IoValue) -> Result<Check> {
     if value.collect_simple_record("harness-repro-bundle-v1", None).is_some() {
         let bundle = super::schema::parse_repro_bundle(value)?;
         return match bundle.kind {
-            super::schema::HarnessReproBundleKind::Report => {
+            super::schema::ReproBundleKind::Report => {
                 if let Some(loss_classification) = bundle.loss_classification.as_deref()
                     && loss_classification != "gate-preserving"
                 {
@@ -274,7 +274,7 @@ pub fn check_value(value: &IoValue) -> Result<Check> {
                 check.redaction_gate_ref = bundle.redaction_gate_ref;
                 Ok(check)
             }
-            super::schema::HarnessReproBundleKind::Failure => Err(MoltenError::invalid_harness(format!(
+            super::schema::ReproBundleKind::Failure => Err(MoltenError::invalid_harness(format!(
                 "failure repro bundle {} wrapping {} cannot satisfy pass evidence gate",
                 bundle.bundle_ref, bundle.artifact_ref
             ))),
@@ -309,7 +309,7 @@ pub fn repro_bundle_value_with_export_profile(
 
 pub fn repro_verify_receipt_value(bundle_value: &IoValue) -> Result<IoValue> {
     let bundle = super::schema::parse_repro_bundle(bundle_value)?;
-    if bundle.kind == super::schema::HarnessReproBundleKind::Failure {
+    if bundle.kind == super::schema::ReproBundleKind::Failure {
         return Err(MoltenError::invalid_harness(format!(
             "failure repro bundle {} wrapping {} is diagnostic-only and cannot be verified as pass evidence",
             bundle.bundle_ref, bundle.artifact_ref
@@ -546,7 +546,7 @@ pub fn repro_verify_receipt_summary(value: &IoValue) -> Result<String> {
     ))
 }
 
-fn validate_sealed_report_bundle(report_value: &IoValue, bundle: &super::schema::HarnessReproBundle) -> Result<()> {
+fn validate_sealed_report_bundle(report_value: &IoValue, bundle: &super::schema::ReproBundle) -> Result<()> {
     if bundle.redaction_policy_ref.is_none() || bundle.redaction_gate_ref.is_none() {
         return Err(MoltenError::invalid_harness("sealed report repro bundle missing redaction preflight evidence"));
     }
@@ -665,7 +665,7 @@ fn check_report(value: &IoValue, artifact_kind: String, artifact_ref: Option<Str
     })
 }
 
-fn evidence_refs(report: &super::schema::HarnessReport) -> Result<EvidenceRefs> {
+fn evidence_refs(report: &super::schema::Report) -> Result<EvidenceRefs> {
     let policy = report
         .policy_gate
         .as_ref()
@@ -703,7 +703,7 @@ fn evidence_refs(report: &super::schema::HarnessReport) -> Result<EvidenceRefs> 
     })
 }
 
-fn executor_execution_receipts_ref(observations: &[super::schema::HarnessObservation]) -> Result<String> {
+fn executor_execution_receipts_ref(observations: &[super::schema::Observation]) -> Result<String> {
     let receipts = observations
         .iter()
         .flat_map(|observation| observation.events.iter())
@@ -718,7 +718,7 @@ fn executor_execution_receipts_ref(observations: &[super::schema::HarnessObserva
     canonical_hash(&record("executor-execution-receipts", vec![sequence(receipts)]))
 }
 
-fn runtime_predicate_receipts_ref(observations: &[super::schema::HarnessObservation]) -> Result<String> {
+fn runtime_predicate_receipts_ref(observations: &[super::schema::Observation]) -> Result<String> {
     let receipts = observations
         .iter()
         .flat_map(|observation| observation.events.iter())
@@ -1251,7 +1251,7 @@ struct LinkEnds<'a> {
     head_ref: &'a String,
 }
 
-fn build_turn_journals(report: &super::schema::HarnessReport) -> Result<TurnJournalEvidence> {
+fn build_turn_journals(report: &super::schema::Report) -> Result<TurnJournalEvidence> {
     let suite = super::schema::parse_suite(&report.suite_value)?;
     if suite.steps.len() != report.observations.len() {
         return Err(MoltenError::invalid_harness("turn journal evidence requires one observation per suite step"));
@@ -1275,8 +1275,8 @@ fn build_turn_journals(report: &super::schema::HarnessReport) -> Result<TurnJour
 
 fn append_turn_journal_observation(
     builders: &mut OrderedMap<String, TurnJournalBuilder>,
-    report: &super::schema::HarnessReport,
-    observation: &super::schema::HarnessObservation,
+    report: &super::schema::Report,
+    observation: &super::schema::Observation,
     step: &super::core::CoreStep,
 ) -> Result<()> {
     let actor_id = step.primary_actor().to_string();
@@ -1326,7 +1326,7 @@ fn append_turn_journal_observation(
     Ok(())
 }
 
-fn turn_journal_trellis_input_ref(observation: &super::schema::HarnessObservation, actor_id: &str) -> Result<String> {
+fn turn_journal_trellis_input_ref(observation: &super::schema::Observation, actor_id: &str) -> Result<String> {
     canonical_hash(&record("turn-journal-input", vec![
         string(actor_id),
         u64_value(observation.index),
@@ -1340,7 +1340,7 @@ fn turn_journal_trellis_input_ref(observation: &super::schema::HarnessObservatio
 
 fn build_turn_journal_chain(
     builder: TurnJournalBuilder,
-    report: &super::schema::HarnessReport,
+    report: &super::schema::Report,
 ) -> Result<TurnJournalChainEvidence> {
     let link_refs = builder.links.iter().map(|link| link.link_ref.clone()).collect::<Vec<_>>();
     let ends = link_ends(&link_refs)?;
@@ -1372,7 +1372,7 @@ fn link_ends(link_refs: &[String]) -> Result<LinkEnds<'_>> {
     Ok(LinkEnds { anchor_ref, head_ref })
 }
 
-fn actor_refs(report: &super::schema::HarnessReport, actor_id: &str) -> Result<Vec<String>> {
+fn actor_refs(report: &super::schema::Report, actor_id: &str) -> Result<Vec<String>> {
     Ok(vec![
         report.report_ref.clone(),
         report.suite_ref.clone(),
@@ -1465,8 +1465,8 @@ fn verify_value(
 }
 
 fn turn_journal_context_refs(
-    report: &super::schema::HarnessReport,
-    observation: &super::schema::HarnessObservation,
+    report: &super::schema::Report,
+    observation: &super::schema::Observation,
     actor_id: &str,
 ) -> Result<Vec<crate::evidence_chain::ChainContextRef>> {
     let mut refs = vec![

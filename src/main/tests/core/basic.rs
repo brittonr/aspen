@@ -79,7 +79,7 @@
         .expect("export failure repro");
         let bundle = read_preserves_file(&out.join("refs.preserves")).expect("read refs");
         let parsed = parse_repro_bundle(&bundle).expect("parse bundle");
-        assert_eq!(parsed.kind, molten::harness::HarnessReproBundleKind::Failure);
+        assert_eq!(parsed.kind, molten::harness::ReproBundleKind::Failure);
         assert!(out.join("failure.preserves").exists());
         assert!(out.join("commands.txt").exists());
 

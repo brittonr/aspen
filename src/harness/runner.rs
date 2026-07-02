@@ -17,19 +17,19 @@ pub fn run_suite_value(value: &preserves::IOValue) -> Result<HarnessRun> {
     run_suite(&super::schema::parse_suite(value)?)
 }
 
-pub fn run_suite(suite: &super::schema::HarnessSuite) -> Result<HarnessRun> {
+pub fn run_suite(suite: &super::schema::Suite) -> Result<HarnessRun> {
     run_suite_inner(suite, None)
 }
 
 pub fn run_suite_with_effect_log(
-    suite: &super::schema::HarnessSuite,
+    suite: &super::schema::Suite,
     effect_log: &[super::schema::EffectLogEntry],
 ) -> Result<HarnessRun> {
     run_suite_inner(suite, Some(effect_log))
 }
 
 fn run_suite_inner(
-    suite: &super::schema::HarnessSuite,
+    suite: &super::schema::Suite,
     replay_effect_log: Option<&[super::schema::EffectLogEntry]>,
 ) -> Result<HarnessRun> {
     let material = prepare_suite_run(suite)?;
@@ -54,10 +54,10 @@ struct SuiteRunMaterial {
     policy_ref: String,
     capability_ref: String,
     budget_ref: String,
-    budget: super::schema::HarnessBudget,
+    budget: super::schema::Budget,
 }
 
-fn prepare_suite_run(suite: &super::schema::HarnessSuite) -> Result<SuiteRunMaterial> {
+fn prepare_suite_run(suite: &super::schema::Suite) -> Result<SuiteRunMaterial> {
     if !suite.actors_explicit {
         return Err(MoltenError::invalid_harness(
             "missing explicit actor registry fixture; inferred actors cannot execute evidence-bearing suites",
@@ -106,7 +106,7 @@ struct RunTrace {
 }
 
 fn collect_trace(
-    suite: &super::schema::HarnessSuite,
+    suite: &super::schema::Suite,
     replay_effect_log: Option<&[super::schema::EffectLogEntry]>,
     material: &SuiteRunMaterial,
 ) -> Result<RunTrace> {
@@ -151,7 +151,7 @@ fn collect_trace(
 
 struct StepRunInput<'a> {
     state: &'a mut super::core::RuntimeState,
-    suite: &'a super::schema::HarnessSuite,
+    suite: &'a super::schema::Suite,
     step: &'a super::core::CoreStep,
     material: &'a SuiteRunMaterial,
     step_index: u64,
@@ -228,7 +228,7 @@ struct AdmissionStep<'a> {
 }
 
 fn admission_step<'a>(
-    suite: &'a super::schema::HarnessSuite,
+    suite: &'a super::schema::Suite,
     step: &'a super::core::CoreStep,
     material: &'a SuiteRunMaterial,
     step_index: u64,
@@ -265,7 +265,7 @@ fn admission_step<'a>(
 }
 
 struct ActorExecutionInput<'a> {
-    suite: &'a super::schema::HarnessSuite,
+    suite: &'a super::schema::Suite,
     step: &'a super::core::CoreStep,
     step_index: u64,
     step_ref: &'a str,
@@ -323,7 +323,7 @@ fn boundary_events(
     events
 }
 
-fn check_event_budget(step_index: u64, total_events: u64, budget: &super::schema::HarnessBudget) -> Result<()> {
+fn check_event_budget(step_index: u64, total_events: u64, budget: &super::schema::Budget) -> Result<()> {
     if total_events > budget.max_events {
         return Err(divergence(
             "resource",
@@ -336,7 +336,7 @@ fn check_event_budget(step_index: u64, total_events: u64, budget: &super::schema
     Ok(())
 }
 
-fn check_effect_budget(step_index: u64, effects: u64, budget: &super::schema::HarnessBudget) -> Result<()> {
+fn check_effect_budget(step_index: u64, effects: u64, budget: &super::schema::Budget) -> Result<()> {
     if effects > budget.max_effects {
         return Err(divergence(
             "resource",
@@ -368,7 +368,7 @@ fn check_replay_consumed(
 }
 
 fn build_report_value(
-    suite: &super::schema::HarnessSuite,
+    suite: &super::schema::Suite,
     material: &SuiteRunMaterial,
     trace: &RunTrace,
 ) -> Result<preserves::IOValue> {
@@ -401,7 +401,7 @@ fn build_report_value(
 }
 
 fn report_value_with_usage(
-    suite: &super::schema::HarnessSuite,
+    suite: &super::schema::Suite,
     material: &SuiteRunMaterial,
     trace: &RunTrace,
     usage: &super::schema::BudgetUsage,
@@ -421,7 +421,7 @@ fn report_value_with_usage(
     })
 }
 
-fn validate_actor_registry(suite: &super::schema::HarnessSuite) -> Result<()> {
+fn validate_actor_registry(suite: &super::schema::Suite) -> Result<()> {
     let mut ids = std::collections::BTreeSet::new();
     super::executor::ensure_supported_actor_executors(&suite.actors)?;
     for actor in &suite.actors {

@@ -50,7 +50,7 @@ fn assert_report_repro_flow(
 
     let bundle = read_preserves(&repro.join("refs.preserves"))?;
     let parsed_bundle = molten::harness::parse_repro_bundle(&bundle)?;
-    assert_eq!(parsed_bundle.kind, molten::harness::HarnessReproBundleKind::Report);
+    assert_eq!(parsed_bundle.kind, molten::harness::ReproBundleKind::Report);
     assert!(parsed_bundle.gate_receipt_ref.is_some());
     let embedded_value = parsed_bundle
         .receipt_value

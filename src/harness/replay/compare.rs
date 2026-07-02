@@ -1,5 +1,5 @@
-type ParsedReport = super::super::schema::HarnessReport;
-type Observation = super::super::schema::HarnessObservation;
+type ParsedReport = super::super::schema::Report;
+type Observation = super::super::schema::Observation;
 type Result<T> = crate::error::Result<T>;
 type IoValue = preserves::IOValue;
 

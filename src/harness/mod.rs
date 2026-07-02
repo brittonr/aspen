@@ -38,15 +38,15 @@ pub use schema::ActorDecl;
 pub use schema::ActorExecutorConfig;
 pub use schema::ActorKind;
 pub use schema::AdapterExecutorConfig;
+pub use schema::Budget;
 pub use schema::CapabilityGateEvidence;
-pub use schema::HarnessBudget;
-pub use schema::HarnessFailure;
-pub use schema::HarnessReproBundle;
-pub use schema::HarnessReproBundleKind;
-pub use schema::HarnessSuite;
+pub use schema::Failure;
 pub use schema::RemoteProxyExecutorConfig;
+pub use schema::ReproBundle;
+pub use schema::ReproBundleKind;
 pub use schema::ReproExportProfile;
 pub use schema::SteelExecutorConfig;
+pub use schema::Suite;
 pub use schema::WasmExecutorConfig;
 pub use schema::actor_registry_value;
 pub use schema::boundary_coverage_value;
@@ -61,7 +61,6 @@ pub use schema::failure_repro_bundle_value_with_command;
 pub use schema::failure_summary;
 pub use schema::failure_value;
 pub use schema::golden_trace_update_receipt_value;
-pub use schema::harness_run_receipt_value;
 pub use schema::parse_budget_gate;
 pub use schema::parse_capabilities;
 pub use schema::parse_capability_gate;
@@ -79,6 +78,7 @@ pub use schema::repro_bundle_report_value;
 pub use schema::repro_bundle_summary;
 pub use schema::repro_bundle_value;
 pub use schema::repro_bundle_value_with_command;
+pub use schema::run_receipt_value;
 pub use schema::suite_failure_value;
 pub use schema::upgrade_replay_receipt_value;
 pub use schema::validate_deterministic_multipeer_receipt;
@@ -101,12 +101,12 @@ mod tests {
     }
 
     fn effect_log_from_observations(
-        observations: &[schema::HarnessObservation],
+        observations: &[schema::Observation],
     ) -> crate::error::Result<Vec<schema::EffectLogEntry>> {
         schema::effect_log_from_observations(observations)
     }
 
-    fn parse_report(value: &preserves::IOValue) -> crate::error::Result<schema::HarnessReport> {
+    fn parse_report(value: &preserves::IOValue) -> crate::error::Result<schema::Report> {
         schema::parse_report(value)
     }
 
@@ -115,7 +115,7 @@ mod tests {
     }
 
     fn run_suite_with_effect_log(
-        suite: &schema::HarnessSuite,
+        suite: &schema::Suite,
         effect_log: &[schema::EffectLogEntry],
     ) -> crate::error::Result<runner::HarnessRun> {
         runner::run_suite_with_effect_log(suite, effect_log)
@@ -708,7 +708,7 @@ mod tests {
         assert!(rendered.contains("receipt-refs"));
     }
 
-    fn turn_journal_refs(report: &super::schema::HarnessReport) -> Vec<String> {
+    fn turn_journal_refs(report: &super::schema::Report) -> Vec<String> {
         report
             .observations
             .iter()
@@ -1222,7 +1222,7 @@ mod tests {
 
         let bundle = repro_bundle_value(&run.report_value).expect("bundle report");
         let parsed_bundle = parse_repro_bundle(&bundle).expect("parse report bundle");
-        assert_eq!(parsed_bundle.kind, super::HarnessReproBundleKind::Report);
+        assert_eq!(parsed_bundle.kind, super::ReproBundleKind::Report);
         let unsealed_error = check_value(&bundle).expect_err("unsealed report bundle lacks redaction preflight");
         assert!(error_contains_any(&unsealed_error, &["redaction preflight", "gate receipt"]));
 
@@ -1230,7 +1230,7 @@ mod tests {
             sealed_repro_bundle_value_with_command(&run.report_value, &["molten".into(), "test".into()])
                 .expect("sealed bundle report");
         let parsed_sealed = parse_repro_bundle(&sealed_bundle).expect("parse sealed bundle");
-        assert_eq!(parsed_sealed.kind, super::HarnessReproBundleKind::Report);
+        assert_eq!(parsed_sealed.kind, super::ReproBundleKind::Report);
         assert!(parsed_sealed.gate_receipt_ref.is_some());
         assert!(parsed_sealed.redaction_policy_ref.is_some());
         assert!(parsed_sealed.redaction_gate_ref.is_some());
@@ -1548,7 +1548,7 @@ mod tests {
 
         let failure_bundle = failure_repro_bundle_value(&failure).expect("failure bundle");
         let parsed_bundle = parse_repro_bundle(&failure_bundle).expect("parse failure bundle");
-        assert_eq!(parsed_bundle.kind, super::HarnessReproBundleKind::Failure);
+        assert_eq!(parsed_bundle.kind, super::ReproBundleKind::Failure);
         let gate_error = check_value(&failure_bundle).expect_err("failure bundle cannot satisfy gate");
         assert!(gate_error.to_string().contains("cannot satisfy pass evidence gate"));
     }
@@ -1591,7 +1591,7 @@ mod tests {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");
         let export_ref = canonical_hash(&run.report_value).expect("report export ref");
-        let receipt = harness_run_receipt_value(&run.report_value, &[&export_ref]).expect("harness run receipt");
+        let receipt = run_receipt_value(&run.report_value, &[&export_ref]).expect("harness run receipt");
         let receipt_text = to_text(&receipt).expect("render harness run receipt");
 
         assert!(receipt_text.contains("harness-run-receipt-v1"));

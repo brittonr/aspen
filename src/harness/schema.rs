@@ -78,10 +78,10 @@ fn parse_text(source: &str) -> Result<IoValue> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HarnessSuite {
+pub struct Suite {
     pub name: String,
     pub seed: u64,
-    pub budget: HarnessBudget,
+    pub budget: Budget,
     pub budget_explicit: bool,
     pub actors: Vec<ActorDecl>,
     pub actors_explicit: bool,
@@ -93,7 +93,7 @@ pub struct HarnessSuite {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HarnessReport {
+pub struct Report {
     pub report_ref: String,
     pub status: String,
     pub replay_status: String,
@@ -108,13 +108,13 @@ pub struct HarnessReport {
     pub budget_gate: Option<BudgetGateEvidence>,
     pub actors: Vec<ActorDecl>,
     pub executor_preflights: Option<ExecutorPreflightsEvidence>,
-    pub observations: Vec<HarnessObservation>,
+    pub observations: Vec<Observation>,
     pub effect_log: Vec<EffectLogEntry>,
     pub budget: BudgetEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HarnessFailure {
+pub struct Failure {
     pub failure_ref: String,
     pub phase: String,
     pub kind: String,
@@ -167,15 +167,15 @@ impl ReproExportProfile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HarnessReproBundleKind {
+pub enum ReproBundleKind {
     Report,
     Failure,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HarnessReproBundle {
+pub struct ReproBundle {
     pub bundle_ref: String,
-    pub kind: HarnessReproBundleKind,
+    pub kind: ReproBundleKind,
     pub artifact_ref: String,
     pub report_value: Option<IoValue>,
     pub failure_value: Option<IoValue>,
@@ -199,14 +199,14 @@ pub struct HarnessReproBundle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HarnessBudget {
+pub struct Budget {
     pub max_steps: u64,
     pub max_effects: u64,
     pub max_events: u64,
     pub max_report_bytes: u64,
 }
 
-impl Default for HarnessBudget {
+impl Default for Budget {
     fn default() -> Self {
         Self {
             max_steps: 64,
@@ -227,7 +227,7 @@ pub struct BudgetUsage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BudgetEvidence {
-    pub limits: HarnessBudget,
+    pub limits: Budget,
     pub usage: BudgetUsage,
 }
 
@@ -384,7 +384,7 @@ pub struct WasmImportEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HarnessObservation {
+pub struct Observation {
     pub value: IoValue,
     pub observation_ref: String,
     pub index: u64,
@@ -437,7 +437,7 @@ pub struct HostcallEvidenceContext<'a> {
 
 #[derive(Default)]
 struct SuiteFixtures {
-    budget: HarnessBudget,
+    budget: Budget,
     has_budget_fixture: bool,
     actors: Option<Vec<ActorDecl>>,
     has_actor_fixture: bool,
@@ -510,7 +510,7 @@ impl SuiteFixtures {
     }
 }
 
-pub fn parse_suite(value: &IoValue) -> Result<HarnessSuite> {
+pub fn parse_suite(value: &IoValue) -> Result<Suite> {
     let suite = value
         .collect_simple_record("harness-suite-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <harness-suite-v1 ...>"))?;
@@ -536,7 +536,7 @@ pub fn parse_suite(value: &IoValue) -> Result<HarnessSuite> {
         steps.push(parse_step(&step)?);
     }
     let actors = fixtures.actors.unwrap_or_else(|| infer_actor_registry(&steps));
-    Ok(HarnessSuite {
+    Ok(Suite {
         name,
         seed,
         budget: fixtures.budget,
@@ -567,7 +567,7 @@ fn suite_fixtures(suite: &Record<Value<IoValue>>, arity: usize) -> Result<(usize
     Ok((cursor, fixtures))
 }
 
-pub fn suite_ref(suite: &HarnessSuite) -> Result<String> {
+pub fn suite_ref(suite: &Suite) -> Result<String> {
     canonical_hash(&suite.source_value)
 }
 
@@ -700,7 +700,7 @@ fn optional_u64_value(value: Option<u64>) -> IoValue {
 }
 
 pub fn actor_input_value(
-    suite: &HarnessSuite,
+    suite: &Suite,
     step: &super::core::CoreStep,
     context: HostcallEvidenceContext<'_>,
 ) -> Result<IoValue> {
@@ -720,7 +720,7 @@ pub fn actor_input_value(
 }
 
 pub fn hostcall_request_value(
-    suite: &HarnessSuite,
+    suite: &Suite,
     step: &super::core::CoreStep,
     context: HostcallEvidenceContext<'_>,
     decision: &crate::runtime::AdmissionDecision,
@@ -813,7 +813,7 @@ struct RequestRefs {
 }
 
 fn hostcall_effect_refs(
-    suite: &HarnessSuite,
+    suite: &Suite,
     step: &super::core::CoreStep,
     context: HostcallEvidenceContext<'_>,
     bind_effect_request: bool,
@@ -836,11 +836,7 @@ fn hostcall_effect_refs(
     })
 }
 
-fn call_base(
-    suite: &HarnessSuite,
-    step: &super::core::CoreStep,
-    context: HostcallEvidenceContext<'_>,
-) -> Result<CallBase> {
+fn call_base(suite: &Suite, step: &super::core::CoreStep, context: HostcallEvidenceContext<'_>) -> Result<CallBase> {
     let actor = actor_decl_for_primary_actor(suite, step.primary_actor())?;
     let operation = super::core::AdmissionRequest::from_step(step).action.as_str();
     let actor_ref = actor_identity_ref(&actor.id)?;
@@ -1234,7 +1230,7 @@ fn hostcall_checks_value(checks: &[&str]) -> IoValue {
     )])
 }
 
-fn actor_decl_for_primary_actor<'a>(suite: &'a HarnessSuite, actor: &str) -> Result<&'a ActorDecl> {
+fn actor_decl_for_primary_actor<'a>(suite: &'a Suite, actor: &str) -> Result<&'a ActorDecl> {
     suite
         .actors
         .iter()
@@ -1242,7 +1238,7 @@ fn actor_decl_for_primary_actor<'a>(suite: &'a HarnessSuite, actor: &str) -> Res
         .ok_or_else(|| MoltenError::invalid_harness(format!("actor {actor} missing from executor registry")))
 }
 
-fn actor_kind_for_primary_actor<'a>(suite: &'a HarnessSuite, actor: &str) -> Result<&'a ActorKind> {
+fn actor_kind_for_primary_actor<'a>(suite: &'a Suite, actor: &str) -> Result<&'a ActorKind> {
     actor_decl_for_primary_actor(suite, actor).map(|decl| &decl.kind)
 }
 
@@ -1294,7 +1290,7 @@ pub fn observation_value(
 }
 
 pub struct ReportValueInput<'a> {
-    pub suite: &'a HarnessSuite,
+    pub suite: &'a Suite,
     pub suite_ref: String,
     pub initial_state_hash: String,
     pub final_state_hash: String,
@@ -1303,7 +1299,7 @@ pub struct ReportValueInput<'a> {
     pub budget_gate: IoValue,
     pub observations: Vec<IoValue>,
     pub effect_log: Vec<EffectLogEntry>,
-    pub budget: &'a HarnessBudget,
+    pub budget: &'a Budget,
     pub usage: &'a BudgetUsage,
 }
 
@@ -1361,7 +1357,7 @@ pub fn report_failure_value(phase: &str, error: &MoltenError, report_value: &IoV
     ]))
 }
 
-pub fn parse_failure(failure_value: &IoValue) -> Result<HarnessFailure> {
+pub fn parse_failure(failure_value: &IoValue) -> Result<Failure> {
     let failure = simple_record(failure_value, "harness-failure-v1", 5)?;
     let schema = required_string(&failure[0], "failure schema")?;
     if schema != crate::preserves_rail::HARNESS_FAILURE_SCHEMA {
@@ -1390,7 +1386,7 @@ pub fn parse_failure(failure_value: &IoValue) -> Result<HarnessFailure> {
     for diagnostic in diagnostic_values.iter() {
         diagnostics.push(value_to_iovalue(&diagnostic));
     }
-    Ok(HarnessFailure {
+    Ok(Failure {
         failure_ref: canonical_hash(failure_value)?,
         phase,
         kind,
@@ -1420,7 +1416,7 @@ struct ParsedHeader {
     initial_state_hash: String,
     final_state_hash: String,
     suite_value: IoValue,
-    suite: HarnessSuite,
+    suite: Suite,
 }
 
 struct GateSet {
@@ -1430,7 +1426,7 @@ struct GateSet {
     budget_gate: Option<BudgetGateEvidence>,
 }
 
-pub fn parse_report(report_value: &IoValue) -> Result<HarnessReport> {
+pub fn parse_report(report_value: &IoValue) -> Result<Report> {
     let report = report_value
         .collect_simple_record("harness-report-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <harness-report-v1 ...>"))?;
@@ -1442,7 +1438,7 @@ pub fn parse_report(report_value: &IoValue) -> Result<HarnessReport> {
     let (cursor, observations) = observations_after(&report, cursor)?;
     let (effect_log, budget) = log_and_budget(&report, cursor, &header.suite)?;
 
-    Ok(HarnessReport {
+    Ok(Report {
         report_ref: canonical_hash(report_value)?,
         status: header.status,
         replay_status: header.replay_status,
@@ -1574,7 +1570,7 @@ fn optional_budget_gate(
 fn registry_after_gates(
     report: &Record<Value<IoValue>>,
     cursor: usize,
-    suite: &HarnessSuite,
+    suite: &Suite,
 ) -> Result<(usize, Vec<ActorDecl>)> {
     let actors = parse_actor_registry(&value_to_iovalue(&report[cursor]))?;
     if actors != suite.actors {
@@ -1595,7 +1591,7 @@ fn preflights_after_registry(
     Ok((cursor, None))
 }
 
-fn observations_after(report: &Record<Value<IoValue>>, cursor: usize) -> Result<(usize, Vec<HarnessObservation>)> {
+fn observations_after(report: &Record<Value<IoValue>>, cursor: usize) -> Result<(usize, Vec<Observation>)> {
     let observation_values = required_sequence(&report[cursor], "report observations")?;
     let mut observations = Vec::with_capacity(observation_values.len());
     for (position, observation) in observation_values.iter().enumerate() {
@@ -1614,7 +1610,7 @@ fn observations_after(report: &Record<Value<IoValue>>, cursor: usize) -> Result<
 fn log_and_budget(
     report: &Record<Value<IoValue>>,
     cursor: usize,
-    suite: &HarnessSuite,
+    suite: &Suite,
 ) -> Result<(Vec<EffectLogEntry>, BudgetEvidence)> {
     let effect_log_value = value_to_iovalue(&report[cursor]);
     let effect_log = parse_effect_log(&effect_log_value)?;
@@ -1626,7 +1622,7 @@ fn log_and_budget(
     Ok((effect_log, budget))
 }
 
-pub fn validate_budget_fixture_evidence(suite: &HarnessSuite) -> Result<()> {
+pub fn validate_budget_fixture_evidence(suite: &Suite) -> Result<()> {
     if suite.budget_explicit {
         Ok(())
     } else {
@@ -1636,7 +1632,7 @@ pub fn validate_budget_fixture_evidence(suite: &HarnessSuite) -> Result<()> {
     }
 }
 
-pub fn budget_gate_value(budget: &HarnessBudget) -> Result<IoValue> {
+pub fn budget_gate_value(budget: &Budget) -> Result<IoValue> {
     let preflight = budget_preflight_material(budget)?;
     Ok(record("budget-gate-v1", vec![
         string(crate::preserves_rail::HARNESS_BUDGET_GATE_SCHEMA),
@@ -1709,7 +1705,7 @@ pub fn parse_budget_gate(value: &IoValue) -> Result<BudgetGateEvidence> {
     })
 }
 
-pub fn validate_budget_gate_evidence(suite: &HarnessSuite, budget_gate: Option<&BudgetGateEvidence>) -> Result<()> {
+pub fn validate_budget_gate_evidence(suite: &Suite, budget_gate: Option<&BudgetGateEvidence>) -> Result<()> {
     if !suite.budget_explicit {
         return Err(MoltenError::invalid_harness(
             "missing explicit budget fixture; default resource policy cannot satisfy evidence gates",
@@ -1766,7 +1762,7 @@ struct BasaltResourcePreflightEvidence {
 const BUDGET_CONTRACT_ID: &str = "molten.harness.resource-budget";
 const BUDGET_CONTRACT_VERSION: &str = "v1";
 
-fn budget_preflight_material(budget: &HarnessBudget) -> Result<BudgetPreflightMaterial> {
+fn budget_preflight_material(budget: &Budget) -> Result<BudgetPreflightMaterial> {
     let budget_snapshot = budget_limits_value(budget);
     let budget_ref = canonical_hash(&budget_snapshot)?;
     let source = nickel_budget_source(budget, &budget_ref);
@@ -1997,7 +1993,7 @@ fn parse_basalt_resource_preflight_evidence(value: &Value<IoValue>) -> Result<Ba
     })
 }
 
-fn nickel_budget_source(budget: &HarnessBudget, budget_ref: &str) -> String {
+fn nickel_budget_source(budget: &Budget, budget_ref: &str) -> String {
     format!(
         "{{\n  schema_version = {},\n  budget_schema = {},\n  budget_ref = {},\n  limits = {{\n    max_steps = {},\n    max_effects = {},\n    max_events = {},\n    max_report_bytes = {},\n  }},\n}}",
         nickel_string(crate::preserves_rail::HARNESS_BUDGET_NICKEL_STATIC_SCHEMA),
@@ -2056,7 +2052,7 @@ fn require_budget_gate_check(checks: &[String], expected: &str) -> Result<()> {
     }
 }
 
-pub fn validate_actor_registry_evidence(suite: &HarnessSuite, observations: &[HarnessObservation]) -> Result<()> {
+pub fn validate_actor_registry_evidence(suite: &Suite, observations: &[Observation]) -> Result<()> {
     if !suite.actors_explicit {
         return Err(MoltenError::invalid_harness(
             "missing explicit actor registry fixture; inferred actors cannot satisfy evidence gates",
@@ -2079,8 +2075,8 @@ pub fn validate_actor_registry_evidence(suite: &HarnessSuite, observations: &[Ha
 }
 
 pub fn validate_admission_evidence(
-    suite: &HarnessSuite,
-    observations: &[HarnessObservation],
+    suite: &Suite,
+    observations: &[Observation],
     capability_gate: &CapabilityGateEvidence,
 ) -> Result<()> {
     if observations.len() != suite.steps.len() {
@@ -2150,7 +2146,7 @@ pub fn validate_admission_evidence(
     Ok(())
 }
 
-pub fn validate_runtime_predicate_evidence(suite: &HarnessSuite, observations: &[HarnessObservation]) -> Result<()> {
+pub fn validate_runtime_predicate_evidence(suite: &Suite, observations: &[Observation]) -> Result<()> {
     if observations.len() != suite.steps.len() {
         return Err(MoltenError::invalid_harness(format!(
             "runtime predicate observation count {} does not match suite step count {}",
@@ -2283,34 +2279,34 @@ fn sequence_strings(value: &Value<IoValue>, field: &str) -> Result<Vec<String>> 
 
 #[derive(Clone, Copy)]
 struct BoundaryEvidence<'a> {
-    suite: &'a HarnessSuite,
+    suite: &'a Suite,
     policy_gate: &'a PolicyGateEvidence,
     capability_gate: &'a CapabilityGateEvidence,
     budget_gate: &'a BudgetGateEvidence,
 }
 
 struct ExpectedBoundary<'a> {
-    suite: &'a HarnessSuite,
+    suite: &'a Suite,
     step: &'a super::core::CoreStep,
     position: usize,
-    observation: &'a HarnessObservation,
+    observation: &'a Observation,
     context: HostcallEvidenceContext<'a>,
     admission: &'a AdmissionDecisionEvent,
     authority: &'a AdmissionAuthorityEvidence,
 }
 
 struct RuntimeBoundary<'a> {
-    suite: &'a HarnessSuite,
+    suite: &'a Suite,
     step: &'a super::core::CoreStep,
     position: usize,
-    observation: &'a HarnessObservation,
+    observation: &'a Observation,
     decision: &'a crate::runtime::AdmissionDecision,
     runtime_events: &'a [IoValue],
 }
 
 pub fn validate_hostcall_evidence(
-    suite: &HarnessSuite,
-    observations: &[HarnessObservation],
+    suite: &Suite,
+    observations: &[Observation],
     policy_gate: &PolicyGateEvidence,
     capability_gate: &CapabilityGateEvidence,
     budget_gate: &BudgetGateEvidence,
@@ -2338,7 +2334,7 @@ fn validate_boundary_observation(
     evidence: BoundaryEvidence<'_>,
     position: usize,
     step: &super::core::CoreStep,
-    observation: &HarnessObservation,
+    observation: &Observation,
 ) -> Result<()> {
     let step_ref = validated_step_ref(position, step, observation)?;
     let (actor_output_index, actor_output_event) = actor_output_slot(position, observation)?;
@@ -2380,11 +2376,7 @@ fn validate_boundary_observation(
     require_hostcall_event(position, "actor-output", actor_output_event, &expected_output)
 }
 
-fn validated_step_ref(
-    position: usize,
-    step: &super::core::CoreStep,
-    observation: &HarnessObservation,
-) -> Result<String> {
+fn validated_step_ref(position: usize, step: &super::core::CoreStep, observation: &Observation) -> Result<String> {
     let step_ref = canonical_hash(&step_value(step))?;
     if observation.step_ref != step_ref {
         return Err(MoltenError::invalid_harness(format!("hostcall step ref mismatch at observation {position}")));
@@ -2392,7 +2384,7 @@ fn validated_step_ref(
     Ok(step_ref)
 }
 
-fn actor_output_slot(position: usize, observation: &HarnessObservation) -> Result<(usize, &IoValue)> {
+fn actor_output_slot(position: usize, observation: &Observation) -> Result<(usize, &IoValue)> {
     if observation.events.len() < 5 {
         return Err(MoltenError::invalid_harness(format!(
             "missing executor hostcall boundary evidence at observation {position}"
@@ -2409,7 +2401,7 @@ fn actor_output_slot(position: usize, observation: &HarnessObservation) -> Resul
     Ok((actor_output_index, actor_output_event))
 }
 
-fn boundary_order(position: usize, observation: &HarnessObservation, actor_output_event: &IoValue) -> Result<()> {
+fn boundary_order(position: usize, observation: &Observation, actor_output_event: &IoValue) -> Result<()> {
     if event_boundary(&observation.events[1]) != EventBoundary::ActorInput
         || event_boundary(&observation.events[2]) != EventBoundary::HostcallRequest
         || event_boundary(&observation.events[3]) != EventBoundary::HostcallDecision
@@ -2449,7 +2441,7 @@ fn validate_runtime_boundary(input: &RuntimeBoundary<'_>) -> Result<()> {
 }
 
 struct WasmExecutionEvidenceInput<'a> {
-    suite: &'a HarnessSuite,
+    suite: &'a Suite,
     step: &'a super::core::CoreStep,
     position: usize,
     decision: &'a crate::runtime::AdmissionDecision,
@@ -2458,7 +2450,7 @@ struct WasmExecutionEvidenceInput<'a> {
 }
 
 fn validate_steel_execution_evidence(
-    suite: &HarnessSuite,
+    suite: &Suite,
     step: &super::core::CoreStep,
     position: usize,
     decision: &crate::runtime::AdmissionDecision,
@@ -2904,7 +2896,7 @@ fn push_boundary_coverage(out: &mut impl crate::bounded::VecSink<IoValue>, name:
     ]));
 }
 
-fn report_has_denied_admission(report: &HarnessReport) -> Result<bool> {
+fn report_has_denied_admission(report: &Report) -> Result<bool> {
     for observation in &report.observations {
         for event in &observation.events {
             if event.collect_simple_record("admission-decision-v1", None).is_some()
@@ -3127,8 +3119,8 @@ fn require_upgrade_replay_header(receipt: &Record<Value<IoValue>>) -> Result<Str
 
 fn require_upgrade_replay_report_refs(
     receipt: &Record<Value<IoValue>>,
-    old_report: &HarnessReport,
-    new_report: &HarnessReport,
+    old_report: &Report,
+    new_report: &Report,
 ) -> Result<(String, String)> {
     if required_record_hash(&receipt[3], "old-report-ref", "old upgrade report ref")? != old_report.report_ref {
         return Err(MoltenError::invalid_harness("upgrade replay old report ref mismatch"));
@@ -3197,11 +3189,11 @@ fn require_upgrade_replay_checks(checks_value: &Value<IoValue>) -> Result<()> {
     Ok(())
 }
 
-fn report_trace_ref(report: &HarnessReport) -> Result<String> {
+fn report_trace_ref(report: &Report) -> Result<String> {
     canonical_hash(&sequence(report.observations.iter().map(|observation| observation.value.clone()).collect()))
 }
 
-pub fn harness_run_receipt_value(report_value: &IoValue, export_refs: &[&str]) -> Result<IoValue> {
+pub fn run_receipt_value(report_value: &IoValue, export_refs: &[&str]) -> Result<IoValue> {
     let report = parse_report(report_value)?;
     for export_ref in export_refs {
         validate_content_ref(export_ref)?;
@@ -3247,7 +3239,7 @@ pub fn harness_run_receipt_value(report_value: &IoValue, export_refs: &[&str]) -
 }
 
 pub fn validate_harness_run_receipt(value: &IoValue, report_value: &IoValue, export_refs: &[&str]) -> Result<()> {
-    let expected = harness_run_receipt_value(report_value, export_refs)?;
+    let expected = run_receipt_value(report_value, export_refs)?;
     if canonical_hash(value)? != canonical_hash(&expected)? {
         return Err(MoltenError::invalid_harness("harness run receipt does not match report and export refs"));
     }
@@ -3576,7 +3568,7 @@ struct RedactionManifestEntry {
 
 fn redacted_report_for_profile(
     report_value: &IoValue,
-    report: &HarnessReport,
+    report: &Report,
     profile: ReproExportProfile,
     policy_ref: &str,
 ) -> Result<ProfiledTransformOutput> {
@@ -3971,7 +3963,7 @@ pub fn failure_repro_bundle_value_with_command(failure_value: &IoValue, command:
     ]))
 }
 
-pub fn parse_repro_bundle(value: &IoValue) -> Result<HarnessReproBundle> {
+pub fn parse_repro_bundle(value: &IoValue) -> Result<ReproBundle> {
     let bundle = value
         .collect_simple_record("harness-repro-bundle-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <harness-repro-bundle-v1 ...>"))?;
@@ -4007,12 +3999,12 @@ pub fn parse_repro_bundle(value: &IoValue) -> Result<HarnessReproBundle> {
 pub fn repro_bundle_report_value(bundle_value: &IoValue) -> Result<IoValue> {
     let bundle = parse_repro_bundle(bundle_value)?;
     match (bundle.kind, bundle.report_value) {
-        (HarnessReproBundleKind::Report, Some(report_value)) => Ok(report_value),
-        (HarnessReproBundleKind::Failure, _) => Err(MoltenError::invalid_harness(format!(
+        (ReproBundleKind::Report, Some(report_value)) => Ok(report_value),
+        (ReproBundleKind::Failure, _) => Err(MoltenError::invalid_harness(format!(
             "failure repro bundle {} cannot satisfy pass evidence gate",
             bundle.bundle_ref
         ))),
-        (HarnessReproBundleKind::Report, None) => {
+        (ReproBundleKind::Report, None) => {
             Err(MoltenError::invalid_harness("report repro bundle missing report value"))
         }
     }
@@ -4027,8 +4019,8 @@ pub fn repro_bundle_summary(bundle_value: &IoValue) -> Result<String> {
         "repro bundle {}\nkind={}\nartifact={}\ngate_receipt={}\nprofile={}\nloss_classification={}",
         bundle.bundle_ref,
         match bundle.kind {
-            HarnessReproBundleKind::Report => "report",
-            HarnessReproBundleKind::Failure => "failure",
+            ReproBundleKind::Report => "report",
+            ReproBundleKind::Failure => "failure",
         },
         bundle.artifact_ref,
         gate_receipt,
@@ -4112,7 +4104,7 @@ fn remote_proxy_executor_config_value(config: &RemoteProxyExecutorConfig) -> IoV
     ])
 }
 
-pub fn executor_preflights_value(suite: &HarnessSuite) -> Result<IoValue> {
+pub fn executor_preflights_value(suite: &Suite) -> Result<IoValue> {
     validate_executor_preflight_inputs(suite)?;
     Ok(record("executor-preflights-v1", vec![
         string(crate::preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA),
@@ -4126,7 +4118,7 @@ pub fn executor_preflights_value(suite: &HarnessSuite) -> Result<IoValue> {
     ]))
 }
 
-pub fn validate_executor_preflight_inputs(suite: &HarnessSuite) -> Result<()> {
+pub fn validate_executor_preflight_inputs(suite: &Suite) -> Result<()> {
     for actor in &suite.actors {
         match (&actor.kind, &actor.executor) {
             (ActorKind::Native, None) => {}
@@ -4186,7 +4178,7 @@ pub fn validate_executor_preflight_inputs(suite: &HarnessSuite) -> Result<()> {
 }
 
 fn validate_required_hostcalls_allowed(
-    suite: &HarnessSuite,
+    suite: &Suite,
     actor: &ActorDecl,
     allowed_hostcalls: &[String],
     executor_name: &str,
@@ -4704,7 +4696,7 @@ fn decode_hex_bytes(input: &str, field: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn allowed_hostcalls_for_actor(suite: &HarnessSuite, actor: &ActorDecl) -> Vec<String> {
+fn allowed_hostcalls_for_actor(suite: &Suite, actor: &ActorDecl) -> Vec<String> {
     match &actor.executor {
         Some(ActorExecutorConfig::Steel(config)) => config.allowed_hostcalls.clone(),
         Some(ActorExecutorConfig::Wasm(config)) => config.allowed_hostcalls.clone(),
@@ -4714,7 +4706,7 @@ fn allowed_hostcalls_for_actor(suite: &HarnessSuite, actor: &ActorDecl) -> Vec<S
     }
 }
 
-fn hostcalls_required_by_steps(suite: &HarnessSuite, actor_id: &str) -> Vec<String> {
+fn hostcalls_required_by_steps(suite: &Suite, actor_id: &str) -> Vec<String> {
     let mut hostcalls = OrderedSet::new();
     for step in &suite.steps {
         if step.primary_actor() == actor_id {
@@ -4797,8 +4789,8 @@ fn parse_executor_preflight(value: &IoValue) -> Result<ExecutorPreflightEvidence
 }
 
 pub fn validate_executor_preflight_evidence(
-    suite: &HarnessSuite,
-    observations: &[HarnessObservation],
+    suite: &Suite,
+    observations: &[Observation],
     preflights: Option<&ExecutorPreflightsEvidence>,
 ) -> Result<()> {
     let preflights = preflights.ok_or_else(|| MoltenError::invalid_harness("missing executor preflight evidence"))?;
@@ -4830,7 +4822,7 @@ fn preflights_by_actor(preflights: &[ExecutorPreflightEvidence]) -> Result<Prefl
     Ok(by_actor)
 }
 
-fn validate_actor_preflights(suite: &HarnessSuite, by_actor: &PreflightMap<'_>) -> Result<()> {
+fn validate_actor_preflights(suite: &Suite, by_actor: &PreflightMap<'_>) -> Result<()> {
     for actor in &suite.actors {
         let Some(preflight) = by_actor.get(actor.id.as_str()) else {
             return Err(MoltenError::invalid_harness(format!("missing executor preflight for actor {}", actor.id)));
@@ -4843,10 +4835,7 @@ fn validate_actor_preflights(suite: &HarnessSuite, by_actor: &PreflightMap<'_>) 
     Ok(())
 }
 
-fn validate_hostcall_preflight_bindings(
-    observations: &[HarnessObservation],
-    by_actor: &PreflightMap<'_>,
-) -> Result<()> {
+fn validate_hostcall_preflight_bindings(observations: &[Observation], by_actor: &PreflightMap<'_>) -> Result<()> {
     for (position, observation) in observations.iter().enumerate() {
         for event in &observation.events {
             validate_hostcall_preflight_event(position, event, by_actor)?;
@@ -5389,7 +5378,7 @@ pub fn parse_policy_gate(value: &IoValue) -> Result<PolicyGateEvidence> {
     })
 }
 
-pub fn validate_policy_gate_evidence(suite: &HarnessSuite, policy_gate: Option<&PolicyGateEvidence>) -> Result<()> {
+pub fn validate_policy_gate_evidence(suite: &Suite, policy_gate: Option<&PolicyGateEvidence>) -> Result<()> {
     let policy_gate = policy_gate.ok_or_else(|| {
         MoltenError::invalid_harness("missing policy gate evidence; policy must pass preflight before side effects")
     })?;
@@ -5835,7 +5824,7 @@ pub fn parse_capability_gate(value: &IoValue) -> Result<CapabilityGateEvidence> 
 }
 
 pub fn validate_capability_gate_evidence(
-    suite: &HarnessSuite,
+    suite: &Suite,
     capability_gate: Option<&CapabilityGateEvidence>,
 ) -> Result<()> {
     if !suite.capabilities_explicit {
@@ -6697,10 +6686,7 @@ fn parse_actor_kind(kind: &str) -> Result<ActorKind> {
     }
 }
 
-fn parse_legacy_report_repro_bundle(
-    bundle_value: &IoValue,
-    bundle: &Record<Value<IoValue>>,
-) -> Result<HarnessReproBundle> {
+fn parse_legacy_report_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<ReproBundle> {
     let report_ref = required_string(&bundle[1], "repro bundle report ref")?;
     let suite_ref = required_string(&bundle[2], "repro bundle suite ref")?;
     let initial_state_hash = required_hash(&bundle[3], "repro bundle initial state hash")?;
@@ -6724,9 +6710,9 @@ fn parse_legacy_report_repro_bundle(
         effect_log: &effect_log,
         suite_value: &suite_value,
     })?;
-    Ok(HarnessReproBundle {
+    Ok(ReproBundle {
         bundle_ref: canonical_hash(bundle_value)?,
-        kind: HarnessReproBundleKind::Report,
+        kind: ReproBundleKind::Report,
         artifact_ref: report_ref,
         report_value: Some(report_value),
         failure_value: None,
@@ -6757,7 +6743,7 @@ struct ReportBundleBody {
     replay_status: String,
     profile: String,
     report_value: IoValue,
-    report: HarnessReport,
+    report: Report,
 }
 
 struct SealedRedaction {
@@ -6769,7 +6755,7 @@ struct SealedRedaction {
     has_redaction: bool,
 }
 
-fn parse_report_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<HarnessReproBundle> {
+fn parse_report_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<ReproBundle> {
     let body = parse_report_body(bundle)?;
     report_bundle_from_body(bundle_value, body)
 }
@@ -6819,10 +6805,10 @@ fn parse_report_body(bundle: &Record<Value<IoValue>>) -> Result<ReportBundleBody
     })
 }
 
-fn report_bundle_from_body(bundle_value: &IoValue, body: ReportBundleBody) -> Result<HarnessReproBundle> {
-    Ok(HarnessReproBundle {
+fn report_bundle_from_body(bundle_value: &IoValue, body: ReportBundleBody) -> Result<ReproBundle> {
+    Ok(ReproBundle {
         bundle_ref: canonical_hash(bundle_value)?,
-        kind: HarnessReproBundleKind::Report,
+        kind: ReproBundleKind::Report,
         artifact_ref: body.report_ref,
         report_value: Some(body.report_value),
         failure_value: None,
@@ -6846,10 +6832,7 @@ fn report_bundle_from_body(bundle_value: &IoValue, body: ReportBundleBody) -> Re
     })
 }
 
-fn parse_sealed_report_repro_bundle(
-    bundle_value: &IoValue,
-    bundle: &Record<Value<IoValue>>,
-) -> Result<HarnessReproBundle> {
+fn parse_sealed_report_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<ReproBundle> {
     let body = parse_report_body(bundle)?;
     require_report_artifact_refs(&body.artifact_refs, &body.report)?;
     let arity = bundle.fields_iter().count();
@@ -6938,10 +6921,10 @@ fn sealed_report_bundle(
     seal: ReproSeal,
     receipt_value: IoValue,
     redaction: SealedRedaction,
-) -> Result<HarnessReproBundle> {
-    Ok(HarnessReproBundle {
+) -> Result<ReproBundle> {
+    Ok(ReproBundle {
         bundle_ref: canonical_hash(bundle_value)?,
-        kind: HarnessReproBundleKind::Report,
+        kind: ReproBundleKind::Report,
         artifact_ref: body.report_ref,
         report_value: Some(body.report_value),
         failure_value: None,
@@ -6973,7 +6956,7 @@ struct ProfiledBody {
     export_profile_value: IoValue,
     export_profile: ReproExportProfileEvidence,
     report_value: IoValue,
-    report: HarnessReport,
+    report: Report,
 }
 
 struct ProfiledEvidence {
@@ -6989,10 +6972,7 @@ struct ProfiledPrivate {
     checks_index: usize,
 }
 
-fn parse_profiled_report_repro_bundle(
-    bundle_value: &IoValue,
-    bundle: &Record<Value<IoValue>>,
-) -> Result<HarnessReproBundle> {
+fn parse_profiled_report_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<ReproBundle> {
     let arity = bundle.fields_iter().count();
     let body = parse_profiled_body(bundle)?;
     require_report_artifact_refs(&body.artifact_refs, &body.report)?;
@@ -7194,11 +7174,11 @@ fn profiled_report_bundle(
     body: ProfiledBody,
     evidence: ProfiledEvidence,
     private: ProfiledPrivate,
-) -> Result<HarnessReproBundle> {
+) -> Result<ReproBundle> {
     let transform_receipt = evidence.transform_receipt;
-    Ok(HarnessReproBundle {
+    Ok(ReproBundle {
         bundle_ref: canonical_hash(bundle_value)?,
-        kind: HarnessReproBundleKind::Report,
+        kind: ReproBundleKind::Report,
         artifact_ref: body.output_report_ref,
         report_value: Some(body.report_value),
         failure_value: None,
@@ -7226,7 +7206,7 @@ fn validate_redaction_transform_manifest(
     value: &IoValue,
     source_report_ref: &str,
     source_suite_ref: &str,
-    report: &HarnessReport,
+    report: &Report,
     profile: ReproExportProfile,
 ) -> Result<()> {
     let manifest = simple_record(value, "redaction-transform-manifest-v1", 9)?;
@@ -7298,7 +7278,7 @@ fn collect_redaction_marker_refs(value: &IoValue) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-fn parse_failure_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<HarnessReproBundle> {
+fn parse_failure_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<ReproBundle> {
     let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
     if kind != "failure" {
         return Err(MoltenError::invalid_harness(format!("expected failure repro bundle kind, got {kind}")));
@@ -7317,9 +7297,9 @@ fn parse_failure_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoVa
             failure.failure_ref
         )));
     }
-    Ok(HarnessReproBundle {
+    Ok(ReproBundle {
         bundle_ref: canonical_hash(bundle_value)?,
-        kind: HarnessReproBundleKind::Failure,
+        kind: ReproBundleKind::Failure,
         artifact_ref: failure_ref,
         report_value: None,
         failure_value: Some(failure_value),
@@ -7415,7 +7395,7 @@ fn require_seal_check(checks: &[String], expected: &str) -> Result<()> {
 }
 
 struct ReproReportMatchInput<'a> {
-    report: &'a HarnessReport,
+    report: &'a Report,
     report_ref: &'a str,
     suite_ref: &'a str,
     initial_state_hash: &'a str,
@@ -7427,7 +7407,7 @@ struct ReproReportMatchInput<'a> {
     suite_value: &'a IoValue,
 }
 
-fn require_report_artifact_refs(refs: &[(String, String)], report: &HarnessReport) -> Result<()> {
+fn require_report_artifact_refs(refs: &[(String, String)], report: &Report) -> Result<()> {
     for (kind, artifact_ref) in report_artifact_refs(report, None, None)? {
         require_artifact_ref(refs, &kind, &artifact_ref)?;
     }
@@ -7500,7 +7480,7 @@ fn artifact_refs_owned_value(refs: &[(String, String)]) -> IoValue {
 }
 
 fn report_artifact_refs_value(
-    report: &HarnessReport,
+    report: &Report,
     gate_receipt_ref: Option<&str>,
     redaction_refs: Option<(&str, &str)>,
 ) -> Result<IoValue> {
@@ -7508,7 +7488,7 @@ fn report_artifact_refs_value(
 }
 
 fn report_artifact_refs(
-    report: &HarnessReport,
+    report: &Report,
     gate_receipt_ref: Option<&str>,
     redaction_refs: Option<(&str, &str)>,
 ) -> Result<Vec<(String, String)>> {
@@ -7670,8 +7650,8 @@ fn parse_repro_export_profile(value: &IoValue) -> Result<ReproExportProfileEvide
 }
 
 fn redaction_transform_manifest_value(
-    source_report: &HarnessReport,
-    output_report: &HarnessReport,
+    source_report: &Report,
+    output_report: &Report,
     profile: ReproExportProfile,
     entries: &[RedactionManifestEntry],
     encrypted_refs: &[String],
@@ -7771,7 +7751,7 @@ fn parse_redaction_transform_receipt(value: &IoValue) -> Result<RedactionTransfo
     })
 }
 
-fn redaction_gate_value(report_value: &IoValue, report: &HarnessReport) -> Result<IoValue> {
+fn redaction_gate_value(report_value: &IoValue, report: &Report) -> Result<IoValue> {
     if let Some(marker) = first_sensitive_marker(report_value) {
         return Err(MoltenError::invalid_harness(format!(
             "redaction preflight found sensitive marker {marker}; sealed pass repro bundles require explicit redaction before export"
@@ -7871,7 +7851,7 @@ fn redaction_gate_checks_value() -> IoValue {
 
 fn validate_redaction_evidence(
     report_value: &IoValue,
-    report: &HarnessReport,
+    report: &Report,
     policy_value: &IoValue,
     gate_value: &IoValue,
 ) -> Result<(String, String)> {
@@ -7920,12 +7900,7 @@ fn parse_redaction_policy(value: &IoValue) -> Result<()> {
     Ok(())
 }
 
-fn parse_redaction_gate(
-    value: &IoValue,
-    report: &HarnessReport,
-    policy_ref: &str,
-    report_value: &IoValue,
-) -> Result<()> {
+fn parse_redaction_gate(value: &IoValue, report: &Report, policy_ref: &str, report_value: &IoValue) -> Result<()> {
     let gate = simple_record(value, "redaction-gate-v1", 7)?;
     let schema = required_string(&gate[0], "redaction gate schema")?;
     if schema != crate::preserves_rail::HARNESS_REDACTION_GATE_SCHEMA {
@@ -8084,7 +8059,7 @@ fn first_sensitive_marker(value: &IoValue) -> Option<String> {
     None
 }
 
-fn repro_seal_value(report: &HarnessReport, gate_receipt_ref: &str) -> IoValue {
+fn repro_seal_value(report: &Report, gate_receipt_ref: &str) -> IoValue {
     record("repro-seal", vec![
         string(crate::preserves_rail::HARNESS_REPRO_SEAL_SCHEMA),
         record("decision", vec![string("pass")]),
@@ -8267,14 +8242,14 @@ pub fn effect_log_value(entries: &[EffectLogEntry]) -> IoValue {
     ])
 }
 
-pub fn budget_limits_value(budget: &HarnessBudget) -> IoValue {
+pub fn budget_limits_value(budget: &Budget) -> IoValue {
     record("budget-v1", vec![
         string(crate::preserves_rail::HARNESS_BUDGET_SCHEMA),
         limits_value(budget),
     ])
 }
 
-pub fn budget_value(budget: &HarnessBudget, usage: &BudgetUsage) -> IoValue {
+pub fn budget_value(budget: &Budget, usage: &BudgetUsage) -> IoValue {
     record("budget-v1", vec![
         string(crate::preserves_rail::HARNESS_BUDGET_SCHEMA),
         limits_value(budget),
@@ -8301,12 +8276,12 @@ pub fn parse_budget(value: &IoValue) -> Result<BudgetEvidence> {
     Ok(BudgetEvidence { limits, usage })
 }
 
-pub fn parse_budget_limits(value: &IoValue) -> Result<HarnessBudget> {
+pub fn parse_budget_limits(value: &IoValue) -> Result<Budget> {
     let budget = simple_record(value, "budget-v1", 2)?;
     parse_budget_schema_and_limits(&budget)
 }
 
-fn limits_value(budget: &HarnessBudget) -> IoValue {
+fn limits_value(budget: &Budget) -> IoValue {
     record("limits", vec![
         u64_value(budget.max_steps),
         u64_value(budget.max_effects),
@@ -8315,7 +8290,7 @@ fn limits_value(budget: &HarnessBudget) -> IoValue {
     ])
 }
 
-fn parse_budget_schema_and_limits(budget: &Record<Value<IoValue>>) -> Result<HarnessBudget> {
+fn parse_budget_schema_and_limits(budget: &Record<Value<IoValue>>) -> Result<Budget> {
     let schema = required_string(&budget[0], "budget schema")?;
     if schema != crate::preserves_rail::HARNESS_BUDGET_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
@@ -8325,7 +8300,7 @@ fn parse_budget_schema_and_limits(budget: &Record<Value<IoValue>>) -> Result<Har
     }
     let limits_value = value_to_iovalue(&budget[1]);
     let limits = simple_record(&limits_value, "limits", 4)?;
-    Ok(HarnessBudget {
+    Ok(Budget {
         max_steps: required_u64(&limits[0], "budget max steps")?,
         max_effects: required_u64(&limits[1], "budget max effects")?,
         max_events: required_u64(&limits[2], "budget max events")?,
@@ -8371,7 +8346,7 @@ pub fn parse_effect_log(value: &IoValue) -> Result<Vec<EffectLogEntry>> {
     Ok(entries)
 }
 
-pub fn effect_log_from_observations(observations: &[HarnessObservation]) -> Result<Vec<EffectLogEntry>> {
+pub fn effect_log_from_observations(observations: &[Observation]) -> Result<Vec<EffectLogEntry>> {
     let mut entries = Vec::new();
     let mut pending_request: Option<(u64, IoValue)> = None;
     for observation in observations {
@@ -8552,7 +8527,7 @@ pub fn event_boundary(value: &IoValue) -> EventBoundary {
     EventBoundary::Trace
 }
 
-fn parse_observation(value: &Value<IoValue>) -> Result<HarnessObservation> {
+fn parse_observation(value: &Value<IoValue>) -> Result<Observation> {
     let value = value_to_iovalue(value);
     let observation = value
         .collect_simple_record("turn-observation-v1", None)
@@ -8590,7 +8565,7 @@ fn parse_observation(value: &Value<IoValue>) -> Result<HarnessObservation> {
     let step_ref = required_hash(&observation[2], "observation step ref")?;
     let before_state_hash = required_hash(&observation[3], "observation before state hash")?;
     let after_state_hash = required_hash(&observation[4], "observation after state hash")?;
-    Ok(HarnessObservation {
+    Ok(Observation {
         value,
         observation_ref,
         index,

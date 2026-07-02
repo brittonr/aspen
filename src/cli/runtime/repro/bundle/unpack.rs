@@ -2,7 +2,7 @@ type Error = molten::error::MoltenError;
 type Outcome<T> = molten::error::Result<T>;
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
-type Source = molten::harness::HarnessReproBundle;
+type Source = molten::harness::ReproBundle;
 type Value = preserves::IOValue;
 
 pub(crate) fn run(

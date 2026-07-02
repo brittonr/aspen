@@ -78,11 +78,11 @@ fn failure_value(phase: &str, error: &MoltenError, diagnostics: Vec<preserves::I
     molten::harness::failure_value(phase, error, diagnostics)
 }
 
-fn parse_failure(value: &preserves::IOValue) -> Result<molten::harness::HarnessFailure> {
+fn parse_failure(value: &preserves::IOValue) -> Result<molten::harness::Failure> {
     molten::harness::parse_failure(value)
 }
 
-fn parse_repro_bundle(value: &preserves::IOValue) -> Result<molten::harness::HarnessReproBundle> {
+fn parse_repro_bundle(value: &preserves::IOValue) -> Result<molten::harness::ReproBundle> {
     molten::harness::parse_repro_bundle(value)
 }
 
