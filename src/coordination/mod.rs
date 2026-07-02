@@ -2325,10 +2325,10 @@ mod tests {
     type TestCase = hegel::TestCase;
 
     use super::*;
-    use crate::catalog;
-    use crate::catalog_mcp;
-    use crate::ledger;
-    use crate::preserves_rail::to_text;
+
+    fn to_text(value: &IoValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     fn refs() -> (Vec<String>, Vec<String>, Vec<String>) {
         (vec![fixture_ref("auth")], vec![fixture_ref("resource")], vec![fixture_ref("policy")])
@@ -2596,10 +2596,13 @@ mod tests {
             &request(SERVICE_LOCK, OP_ACQUIRE, "resource:classify", "session", 1, None),
         )
         .expect("lock");
-        assert_eq!(ledger::artifact_kind(&manifest), "coordination-service-manifest");
-        assert_eq!(ledger::artifact_kind(&result.receipt.value), "coordination-receipt");
-        assert_eq!(ledger::artifact_kind(&result.assertions[0].value), "coordination-status-assertion");
-        assert_eq!(ledger::artifact_kind(&result.token.as_ref().expect("token").value), "coordination-fencing-token");
+        assert_eq!(crate::ledger::artifact_kind(&manifest), "coordination-service-manifest");
+        assert_eq!(crate::ledger::artifact_kind(&result.receipt.value), "coordination-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&result.assertions[0].value), "coordination-status-assertion");
+        assert_eq!(
+            crate::ledger::artifact_kind(&result.token.as_ref().expect("token").value),
+            "coordination-fencing-token"
+        );
         let report_evidence_refs = result
             .evidence_values
             .iter()
@@ -2616,24 +2619,25 @@ mod tests {
             evidence_refs: &report_evidence_refs,
         })
         .expect("apply report");
-        assert_eq!(ledger::artifact_kind(&apply_report), "coordination-apply-report");
+        assert_eq!(crate::ledger::artifact_kind(&apply_report), "coordination-apply-report");
         let root = temp_root("coordination-ledger-catalog");
         let registry_root = root.join("registry");
         let ledger_root = root.join("ledger");
         std::fs::create_dir_all(&registry_root).expect("registry root");
-        ledger::import_artifact(&ledger_root, &result.receipt.value).expect("import receipt");
-        let list = catalog::list(&registry_root, Some(&ledger_root), &catalog::CatalogListInput {
+        crate::ledger::import_artifact(&ledger_root, &result.receipt.value).expect("import receipt");
+        let list = crate::catalog::list(&registry_root, Some(&ledger_root), &crate::catalog::CatalogListInput {
             kind: Some("coordination-receipt".to_string()),
-            visibility: catalog::CatalogVisibilityInput::default(),
+            visibility: crate::catalog::CatalogVisibilityInput::default(),
         })
         .expect("catalog list");
         assert_eq!(list.decision, "pass");
         assert_eq!(list.items.len(), 1);
-        let view_request = catalog_mcp::mcp_request_value("catalog.view", vec![record("reference", vec![string(
-            &result.receipt.receipt_ref,
-        )])])
-        .expect("mcp request");
-        let call = catalog_mcp::call(&registry_root, Some(&ledger_root), &view_request).expect("mcp call");
+        let view_request =
+            crate::catalog_mcp::mcp_request_value("catalog.view", vec![record("reference", vec![string(
+                &result.receipt.receipt_ref,
+            )])])
+            .expect("mcp request");
+        let call = crate::catalog_mcp::call(&registry_root, Some(&ledger_root), &view_request).expect("mcp call");
         assert_eq!(call.decision, "pass");
     }
 
