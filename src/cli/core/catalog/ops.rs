@@ -237,7 +237,7 @@ fn show(artifact: FilePath) -> Outcome<()> {
     let value = super::io::read_preserves_file(&artifact)?;
     match molten::catalog::summary(&value) {
         Ok(summary) => println!("{summary}"),
-        Err(_) => println!("{}", molten::catalog_mcp::catalog_mcp_summary(&value)?),
+        Err(_) => println!("{}", molten::catalog_mcp::summary(&value)?),
     }
     Ok(())
 }

@@ -4235,7 +4235,7 @@ struct GcFlow {
 struct GcFinishInput {
     object_ref: String,
     flow: GcFlow,
-    mcp_call: crate::catalog_mcp::CatalogMcpCall,
+    mcp_call: crate::catalog_mcp::Call,
     catalog_receipt_ref: String,
     artifact_refs: Vec<String>,
     bundle_diagnostics: Vec<String>,
@@ -4405,7 +4405,7 @@ fn gc_catalog(
     registry_root: &Path,
     ledger_root: &Path,
     object_ref: &str,
-) -> Result<(crate::catalog_mcp::CatalogMcpCall, String)> {
+) -> Result<(crate::catalog_mcp::Call, String)> {
     let mcp_request = crate::catalog_mcp::mcp_request_value("search_retention_gc", vec![
         crate::preserves_rail::record("stage", vec![crate::preserves_rail::string("audit")]),
         crate::preserves_rail::record("object-ref", vec![crate::preserves_rail::string(object_ref)]),

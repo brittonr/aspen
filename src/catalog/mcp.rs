@@ -33,18 +33,18 @@ pub const READ_ONLY_TOOLS: &[&str] = &[
     "short_id_resolve",
 ];
 
-const MAX_CATALOG_MCP_ARGS: usize = 512;
-const MAX_CATALOG_MCP_REFS: usize = 4096;
-const MAX_CATALOG_MCP_FILTERS: usize = 512;
-const MAX_CATALOG_MCP_CHECKS: usize = 128;
+const MAX_ARGS: usize = 512;
+const MAX_REFS: usize = 4096;
+const MAX_FILTERS: usize = 512;
+const MAX_CHECKS: usize = 128;
 
-const _: () = assert!(MAX_CATALOG_MCP_ARGS <= 10_000);
-const _: () = assert!(MAX_CATALOG_MCP_REFS <= 100_000);
-const _: () = assert!(MAX_CATALOG_MCP_FILTERS <= 10_000);
-const _: () = assert!(MAX_CATALOG_MCP_CHECKS <= 1_000);
+const _: () = assert!(MAX_ARGS <= 10_000);
+const _: () = assert!(MAX_REFS <= 100_000);
+const _: () = assert!(MAX_FILTERS <= 10_000);
+const _: () = assert!(MAX_CHECKS <= 1_000);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogMcpRequest {
+pub struct Request {
     pub request_ref: String,
     pub tool: String,
     pub args: Vec<IoValue>,
@@ -53,8 +53,8 @@ pub struct CatalogMcpRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogMcpCall {
-    pub request: CatalogMcpRequest,
+pub struct Call {
+    pub request: Request,
     pub decision: String,
     pub response_ref: String,
     pub response_value: IoValue,
@@ -63,7 +63,7 @@ pub struct CatalogMcpCall {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogMcpReceipt {
+pub struct Receipt {
     pub receipt_ref: String,
     pub tool: String,
     pub decision: String,
@@ -74,7 +74,7 @@ pub struct CatalogMcpReceipt {
 }
 
 struct BuildCallInput<'a> {
-    request: CatalogMcpRequest,
+    request: Request,
     decision: &'a str,
     payload: Option<&'a IoValue>,
     result_ref: Option<&'a str>,
@@ -107,7 +107,7 @@ struct ReceiptValueInput<'a> {
 
 pub fn mcp_request_value(tool: &str, args: Vec<IoValue>) -> Result<IoValue> {
     validate_non_empty(tool, "catalog MCP tool")?;
-    ensure_count_at_most(args.len(), MAX_CATALOG_MCP_ARGS, "catalog MCP args")?;
+    ensure_count_at_most(args.len(), MAX_ARGS, "catalog MCP args")?;
     Ok(record("catalog-mcp-request-v1", vec![
         string(crate::preserves_rail::CATALOG_MCP_REQUEST_SCHEMA),
         record("tool", vec![string(tool)]),
@@ -116,7 +116,7 @@ pub fn mcp_request_value(tool: &str, args: Vec<IoValue>) -> Result<IoValue> {
     ]))
 }
 
-pub fn call(registry_root: &Path, ledger_root: Option<&Path>, request_value: &IoValue) -> Result<CatalogMcpCall> {
+pub fn call(registry_root: &Path, ledger_root: Option<&Path>, request_value: &IoValue) -> Result<Call> {
     call_with_chunk_store(registry_root, ledger_root, None, request_value)
 }
 
@@ -125,7 +125,7 @@ pub fn call_with_chunk_store(
     ledger_root: Option<&Path>,
     chunk_root: Option<&Path>,
     request_value: &IoValue,
-) -> Result<CatalogMcpCall> {
+) -> Result<Call> {
     let request = parse_mcp_request(request_value)?;
     if !READ_ONLY_TOOLS.contains(&request.tool.as_str()) {
         return build_call(BuildCallInput {
@@ -178,7 +178,7 @@ pub fn call_with_chunk_store(
     }
 }
 
-pub fn parse_mcp_request(value: &IoValue) -> Result<CatalogMcpRequest> {
+pub fn parse_mcp_request(value: &IoValue) -> Result<Request> {
     let fields = value
         .collect_simple_record("catalog-mcp-request-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-mcp-request-v1 ...>"))?;
@@ -187,7 +187,7 @@ pub fn parse_mcp_request(value: &IoValue) -> Result<CatalogMcpRequest> {
     require_check(&checks, "read-only-surface", "catalog MCP request")?;
     let args = record_sequence(&fields[2], "args")?;
     let visibility = visibility_from_args(&args)?;
-    Ok(CatalogMcpRequest {
+    Ok(Request {
         request_ref: canonical_hash(value)?,
         tool: record_string(&fields[1], "tool")?,
         args,
@@ -196,14 +196,14 @@ pub fn parse_mcp_request(value: &IoValue) -> Result<CatalogMcpRequest> {
     })
 }
 
-pub fn parse_mcp_receipt(value: &IoValue) -> Result<CatalogMcpReceipt> {
+pub fn parse_mcp_receipt(value: &IoValue) -> Result<Receipt> {
     let fields = value
         .collect_simple_record("catalog-mcp-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-mcp-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::CATALOG_MCP_RECEIPT_SCHEMA, "catalog MCP receipt")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "canonical-receipt", "catalog MCP receipt")?;
-    Ok(CatalogMcpReceipt {
+    Ok(Receipt {
         receipt_ref: canonical_hash(value)?,
         tool: record_string(&fields[1], "tool")?,
         decision: record_string(&fields[2], "decision")?,
@@ -214,7 +214,7 @@ pub fn parse_mcp_receipt(value: &IoValue) -> Result<CatalogMcpReceipt> {
     })
 }
 
-pub fn catalog_mcp_summary(value: &IoValue) -> Result<String> {
+pub fn summary(value: &IoValue) -> Result<String> {
     if let Ok(receipt) = parse_mcp_receipt(value) {
         return Ok(format!(
             "catalog MCP receipt tool={} decision={} request={} response={}",
@@ -242,7 +242,7 @@ fn dispatch_read_only(
     registry_root: &Path,
     ledger_root: Option<&Path>,
     chunk_root: Option<&Path>,
-    request: &CatalogMcpRequest,
+    request: &Request,
 ) -> Result<DispatchPayload> {
     let result = match request.tool.as_str() {
         "catalog.list" | "list_artifacts" => list_result(registry_root, ledger_root, request),
@@ -267,7 +267,7 @@ fn dispatch_read_only(
     result.map(DispatchPayload::from)
 }
 
-fn list_result(registry_root: &Path, ledger_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
+fn list_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let kind = optional_arg_string(&request.args, "kind");
     crate::catalog::list(registry_root, ledger_root, &crate::catalog::ListInput {
         kind,
@@ -276,7 +276,7 @@ fn list_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Catal
     .map(CoreResult::Query)
 }
 
-fn view_result(registry_root: &Path, ledger_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
+fn view_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let reference = required_arg_string(&request.args, "reference")?;
     let should_include_payload = arg_bool(&request.args, "payload", false)?;
     let should_redact_payload = arg_bool(&request.args, "redacted", true)?;
@@ -289,7 +289,7 @@ fn view_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Catal
     .map(CoreResult::Query)
 }
 
-fn chunk_store_result(chunk_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
+fn chunk_store_result(chunk_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let Some(chunk_root) = chunk_root else {
         return Err(MoltenError::invalid_harness(
             "catalog MCP chunk-store tool requires a chunk store root supplied by the caller",
@@ -301,30 +301,22 @@ fn chunk_store_result(chunk_root: Option<&Path>, request: &CatalogMcpRequest) ->
     .map(CoreResult::Query)
 }
 
-fn deps_result(registry_root: &Path, ledger_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
+fn deps_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let graph_input = graph_input(request)?;
     crate::catalog::dependencies(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
 }
 
-fn dependents_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn dependents_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let graph_input = graph_input(request)?;
     crate::catalog::dependents(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
 }
 
-fn receipts_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn receipts_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let graph_input = graph_input(request)?;
     crate::catalog::receipts(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
 }
 
-fn graph_input(request: &CatalogMcpRequest) -> Result<crate::catalog::GraphInput> {
+fn graph_input(request: &Request) -> Result<crate::catalog::GraphInput> {
     Ok(crate::catalog::GraphInput {
         reference: required_arg_string(&request.args, "reference")?,
         transitive: arg_bool(&request.args, "transitive", false)?,
@@ -332,11 +324,7 @@ fn graph_input(request: &CatalogMcpRequest) -> Result<crate::catalog::GraphInput
     })
 }
 
-fn short_id_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn short_id_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let prefix = required_arg_string(&request.args, "prefix")?;
     let min_length =
         usize::try_from(arg_u64(&request.args, "min-length", crate::catalog::DEFAULT_SHORT_ID_MIN_LENGTH as u64)?)
@@ -349,62 +337,36 @@ fn short_id_result(
     .map(CoreResult::ShortId)
 }
 
-fn schema_search_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn schema_search_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let schema_ref = required_arg_string(&request.args, "schema-ref")?;
     let mut filters = filters_from_args(&request.args)?;
-    push_bounded(&mut filters, Filter::SchemaRef(schema_ref), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
+    push_bounded(&mut filters, Filter::SchemaRef(schema_ref), MAX_FILTERS, "catalog MCP filters")?;
     search_result(registry_root, ledger_root, request, filters)
 }
 
-fn effect_search_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn effect_search_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let effect_ref = required_arg_string(&request.args, "effect-ref")?;
     let mut filters = filters_from_args(&request.args)?;
-    push_bounded(&mut filters, Filter::EffectRef(effect_ref), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
+    push_bounded(&mut filters, Filter::EffectRef(effect_ref), MAX_FILTERS, "catalog MCP filters")?;
     search_result(registry_root, ledger_root, request, filters)
 }
 
-fn upgrade_search_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn upgrade_search_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let mut filters = filters_from_args(&request.args)?;
     if filters.is_empty() {
-        push_bounded(
-            &mut filters,
-            Filter::UpgradeStatus("planned".to_string()),
-            MAX_CATALOG_MCP_FILTERS,
-            "catalog MCP filters",
-        )?;
+        push_bounded(&mut filters, Filter::UpgradeStatus("planned".to_string()), MAX_FILTERS, "catalog MCP filters")?;
     }
     search_result(registry_root, ledger_root, request, filters)
 }
 
-fn provenance_search_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn provenance_search_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let mut filters = filters_from_args(&request.args)?;
-    push_bounded(
-        &mut filters,
-        Filter::Text("provenance:".to_string()),
-        MAX_CATALOG_MCP_FILTERS,
-        "catalog MCP filters",
-    )?;
+    push_bounded(&mut filters, Filter::Text("provenance:".to_string()), MAX_FILTERS, "catalog MCP filters")?;
     if let Some(trust_state) = optional_arg_string(&request.args, "trust-state") {
         push_bounded(
             &mut filters,
             Filter::Text(format!("provenance-trust-state:{trust_state}")),
-            MAX_CATALOG_MCP_FILTERS,
+            MAX_FILTERS,
             "catalog MCP filters",
         )?;
     }
@@ -412,25 +374,16 @@ fn provenance_search_result(
         push_bounded(
             &mut filters,
             Filter::Text(format!("provenance-decision:{decision}")),
-            MAX_CATALOG_MCP_FILTERS,
+            MAX_FILTERS,
             "catalog MCP filters",
         )?;
     }
     search_result(registry_root, ledger_root, request, filters)
 }
 
-fn retention_search_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn retention_search_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let mut filters = filters_from_args(&request.args)?;
-    push_bounded(
-        &mut filters,
-        Filter::Text("retention-gc:".to_string()),
-        MAX_CATALOG_MCP_FILTERS,
-        "catalog MCP filters",
-    )?;
+    push_bounded(&mut filters, Filter::Text("retention-gc:".to_string()), MAX_FILTERS, "catalog MCP filters")?;
     push_optional_text_filter(&mut filters, &request.args, "stage", "retention-gc")?;
     push_optional_text_filter(&mut filters, &request.args, "object-ref", "retention-gc-object")?;
     push_optional_text_filter(&mut filters, &request.args, "subsystem", "retention-gc-subsystem")?;
@@ -441,18 +394,9 @@ fn retention_search_result(
     search_result(registry_root, ledger_root, request, filters)
 }
 
-fn replay_search_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn replay_search_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let mut filters = filters_from_args(&request.args)?;
-    push_bounded(
-        &mut filters,
-        Filter::Text("deterministic-replay:".to_string()),
-        MAX_CATALOG_MCP_FILTERS,
-        "catalog MCP filters",
-    )?;
+    push_bounded(&mut filters, Filter::Text("deterministic-replay:".to_string()), MAX_FILTERS, "catalog MCP filters")?;
     push_optional_text_filter(&mut filters, &request.args, "stage", "deterministic-replay")?;
     push_optional_text_filter(&mut filters, &request.args, "decision", "replay-decision")?;
     push_optional_text_filter(&mut filters, &request.args, "divergence", "replay-divergence")?;
@@ -479,11 +423,7 @@ fn replay_search_result(
     search_result(registry_root, ledger_root, request, filters)
 }
 
-fn artifact_search_result(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
-) -> Result<CoreResult> {
+fn artifact_search_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let filters = filters_from_args(&request.args)?;
     search_result(registry_root, ledger_root, request, filters)
 }
@@ -491,7 +431,7 @@ fn artifact_search_result(
 fn search_result(
     registry_root: &Path,
     ledger_root: Option<&Path>,
-    request: &CatalogMcpRequest,
+    request: &Request,
     filters: Vec<Filter>,
 ) -> Result<CoreResult> {
     crate::catalog::search(registry_root, ledger_root, &crate::catalog::SearchInput {
@@ -504,7 +444,7 @@ fn search_result(
     .map(CoreResult::Query)
 }
 
-fn build_call(input: BuildCallInput<'_>) -> Result<CatalogMcpCall> {
+fn build_call(input: BuildCallInput<'_>) -> Result<Call> {
     validate_decision(input.decision)?;
     let catalog_receipt_ref = input.catalog_receipt_value.map(canonical_hash).transpose()?;
     let response_value = response_value(&ResponseValueInput {
@@ -519,13 +459,13 @@ fn build_call(input: BuildCallInput<'_>) -> Result<CatalogMcpCall> {
     })?;
     let response_ref = canonical_hash(&response_value)?;
     let mut refs = Vec::new();
-    push_bounded(&mut refs, input.request.request_ref.clone(), MAX_CATALOG_MCP_REFS, "catalog MCP call refs")?;
-    push_bounded(&mut refs, response_ref.clone(), MAX_CATALOG_MCP_REFS, "catalog MCP call refs")?;
+    push_bounded(&mut refs, input.request.request_ref.clone(), MAX_REFS, "catalog MCP call refs")?;
+    push_bounded(&mut refs, response_ref.clone(), MAX_REFS, "catalog MCP call refs")?;
     if let Some(result_ref) = input.result_ref {
-        push_bounded(&mut refs, result_ref.to_string(), MAX_CATALOG_MCP_REFS, "catalog MCP call refs")?;
+        push_bounded(&mut refs, result_ref.to_string(), MAX_REFS, "catalog MCP call refs")?;
     }
     if let Some(catalog_receipt_ref) = catalog_receipt_ref.as_ref() {
-        push_bounded(&mut refs, catalog_receipt_ref.clone(), MAX_CATALOG_MCP_REFS, "catalog MCP call refs")?;
+        push_bounded(&mut refs, catalog_receipt_ref.clone(), MAX_REFS, "catalog MCP call refs")?;
     }
     let receipt_value = receipt_value(&ReceiptValueInput {
         tool: &input.request.tool,
@@ -537,7 +477,7 @@ fn build_call(input: BuildCallInput<'_>) -> Result<CatalogMcpCall> {
         diagnostics: &input.diagnostics,
         checks: input.checks,
     })?;
-    Ok(CatalogMcpCall {
+    Ok(Call {
         request: input.request,
         decision: input.decision.to_string(),
         response_ref,
@@ -579,17 +519,12 @@ fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IoValue> {
         validate_ref(catalog_receipt_ref, "catalog MCP receipt catalog receipt ref")?;
     }
     validate_refs(input.refs, "catalog MCP receipt ref")?;
-    ensure_count_at_most(input.checks.len(), MAX_CATALOG_MCP_CHECKS, "catalog MCP receipt checks")?;
+    ensure_count_at_most(input.checks.len(), MAX_CHECKS, "catalog MCP receipt checks")?;
     let mut all_checks = Vec::new();
-    push_bounded(&mut all_checks, ("canonical-receipt", "pass"), MAX_CATALOG_MCP_CHECKS, "catalog MCP receipt checks")?;
-    push_bounded(
-        &mut all_checks,
-        ("mutating-tools-denied", "pass"),
-        MAX_CATALOG_MCP_CHECKS,
-        "catalog MCP receipt checks",
-    )?;
+    push_bounded(&mut all_checks, ("canonical-receipt", "pass"), MAX_CHECKS, "catalog MCP receipt checks")?;
+    push_bounded(&mut all_checks, ("mutating-tools-denied", "pass"), MAX_CHECKS, "catalog MCP receipt checks")?;
     for check in input.checks {
-        push_bounded(&mut all_checks, *check, MAX_CATALOG_MCP_CHECKS, "catalog MCP receipt checks")?;
+        push_bounded(&mut all_checks, *check, MAX_CHECKS, "catalog MCP receipt checks")?;
     }
     Ok(record("catalog-mcp-receipt-v1", vec![
         string(crate::preserves_rail::CATALOG_MCP_RECEIPT_SCHEMA),
@@ -661,12 +596,7 @@ fn push_optional_text_filter(
     prefix: &str,
 ) -> Result<()> {
     if let Some(value) = optional_arg_string(args, arg_name) {
-        push_bounded(
-            filters,
-            Filter::Text(format!("{prefix}:{value}")),
-            MAX_CATALOG_MCP_FILTERS,
-            "catalog MCP filters",
-        )?;
+        push_bounded(filters, Filter::Text(format!("{prefix}:{value}")), MAX_FILTERS, "catalog MCP filters")?;
     }
     Ok(())
 }
@@ -677,7 +607,7 @@ fn append_filter_args(
     convert: impl Fn(String) -> Filter,
 ) -> Result<()> {
     for value in values {
-        push_bounded(&mut *filters, convert(value), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
+        push_bounded(&mut *filters, convert(value), MAX_FILTERS, "catalog MCP filters")?;
     }
     Ok(())
 }
@@ -704,16 +634,11 @@ fn optional_arg_string(args: &[IoValue], label: &str) -> Option<String> {
 }
 
 fn arg_strings(args: &[IoValue], label: &str) -> Result<Vec<String>> {
-    ensure_count_at_most(args.len(), MAX_CATALOG_MCP_ARGS, "catalog MCP args")?;
+    ensure_count_at_most(args.len(), MAX_ARGS, "catalog MCP args")?;
     let mut values = Vec::new();
     for arg in args {
         if let Some(fields) = arg.collect_simple_record(label, Some(1)) {
-            push_bounded(
-                &mut values,
-                required_string(&fields[0], label)?,
-                MAX_CATALOG_MCP_ARGS,
-                "catalog MCP arg strings",
-            )?;
+            push_bounded(&mut values, required_string(&fields[0], label)?, MAX_ARGS, "catalog MCP arg strings")?;
         }
     }
     Ok(values)
@@ -796,7 +721,7 @@ fn parse_checks(value: &PreservesValue<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "catalog MCP checks")?;
-    ensure_count_at_most(items.len(), MAX_CATALOG_MCP_CHECKS, "catalog MCP checks")?;
+    ensure_count_at_most(items.len(), MAX_CHECKS, "catalog MCP checks")?;
     let mut parsed = Vec::new();
     for item in items.iter() {
         let item = value_to_iovalue(item);
@@ -806,7 +731,7 @@ fn parse_checks(value: &PreservesValue<IoValue>) -> Result<Vec<String>> {
         if status != "pass" && status != "fail" {
             return Err(MoltenError::invalid_harness(format!("catalog MCP check {name} has status {status}")));
         }
-        push_bounded(&mut parsed, name, MAX_CATALOG_MCP_CHECKS, "catalog MCP checks")?;
+        push_bounded(&mut parsed, name, MAX_CHECKS, "catalog MCP checks")?;
     }
     Ok(parsed)
 }
@@ -870,10 +795,10 @@ fn record_sequence(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<I
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     let items = required_sequence(&fields[0], label)?;
-    ensure_count_at_most(items.len(), MAX_CATALOG_MCP_ARGS, label)?;
+    ensure_count_at_most(items.len(), MAX_ARGS, label)?;
     let mut values = Vec::new();
     for item in items.iter() {
-        push_bounded(&mut values, value_to_iovalue(item), MAX_CATALOG_MCP_ARGS, label)?;
+        push_bounded(&mut values, value_to_iovalue(item), MAX_ARGS, label)?;
     }
     Ok(values)
 }
@@ -907,7 +832,7 @@ fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
 }
 
 fn validate_refs(refs: &[String], field: &str) -> Result<()> {
-    ensure_count_at_most(refs.len(), MAX_CATALOG_MCP_REFS, field)?;
+    ensure_count_at_most(refs.len(), MAX_REFS, field)?;
     for value_ref in refs {
         validate_ref(value_ref, field)?;
     }
