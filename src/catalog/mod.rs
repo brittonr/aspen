@@ -44,9 +44,6 @@ fn value_to_iovalue(value: &PreservesValue<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
-use crate::artifacts;
-use crate::ledger;
-
 pub const TOOL_VERSION: &str = "local-artifact-catalog-v1";
 pub const DEFAULT_SHORT_ID_MIN_LENGTH: usize = 8;
 
@@ -250,10 +247,10 @@ pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogVie
         render_mode: if input.redacted { "redacted" } else { "raw" },
         include_payload: input.include_payload,
     })?;
-    let item = if let Ok(artifact) = artifacts::read_artifact(registry_root, &full_ref) {
+    let item = if let Ok(artifact) = crate::artifacts::read_artifact(registry_root, &full_ref) {
         let summary = registry_summary(registry_root, ledger_root, artifact, &input.visibility)?;
         let payload = if input.include_payload {
-            let payload = artifacts::read_payload(registry_root, &full_ref)?;
+            let payload = crate::artifacts::read_payload(registry_root, &full_ref)?;
             if input.redacted {
                 maybe_redacted_value(&payload, input.visibility.redaction_profile_ref.as_deref())?
             } else {
@@ -264,7 +261,7 @@ pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogVie
         };
         catalog_view_value(&summary, &summary.value, &payload, input.include_payload, input.redacted)?
     } else if let Some(ledger_root) = ledger_root {
-        let value = ledger::read_artifact(ledger_root, &full_ref)?;
+        let value = crate::ledger::read_artifact(ledger_root, &full_ref)?;
         let summary = ledger_summary(registry_root, ledger_root, &full_ref, value.clone(), &input.visibility)?;
         let rendered = if input.redacted {
             maybe_redacted_value(&value, input.visibility.redaction_profile_ref.as_deref())?
@@ -745,13 +742,13 @@ fn graph_query(
     })?;
     let refs = if operation == "deps" {
         if input.transitive {
-            let closure = artifacts::dependency_closure(registry_root, std::slice::from_ref(&full_ref))?;
+            let closure = crate::artifacts::dependency_closure(registry_root, std::slice::from_ref(&full_ref))?;
             closure.closure_refs.into_iter().filter(|item| item != &full_ref).collect::<Vec<_>>()
         } else {
-            artifacts::direct_dependencies(registry_root, &full_ref)?
+            crate::artifacts::direct_dependencies(registry_root, &full_ref)?
         }
     } else if input.transitive {
-        artifacts::impact_refs(registry_root, std::slice::from_ref(&full_ref))?
+        crate::artifacts::impact_refs(registry_root, std::slice::from_ref(&full_ref))?
             .into_iter()
             .filter(|item| item != &full_ref)
             .collect::<Vec<_>>()
@@ -775,7 +772,7 @@ fn append_registry_receipt_views(
     visibility: &CatalogVisibilityInput,
     items: &mut impl crate::bounded::VecSink<IoValue>,
 ) -> Result<()> {
-    for receipt in artifacts::list_receipts(registry_root)? {
+    for receipt in crate::artifacts::list_receipts(registry_root)? {
         if receipt.subject_ref != subject_ref && !to_text(&receipt.value)?.contains(subject_ref) {
             continue;
         }
@@ -799,12 +796,12 @@ fn append_ledger_receipt_views(
     visibility: &CatalogVisibilityInput,
     items: &mut impl crate::bounded::VecSink<IoValue>,
 ) -> Result<()> {
-    for entry in ledger::list_artifacts(ledger_root)? {
+    for entry in crate::ledger::list_artifacts(ledger_root)? {
         if hidden_set(visibility).contains(&entry.artifact_ref) {
             continue;
         }
-        let value = ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
-        let kind = ledger::artifact_kind(&value);
+        let value = crate::ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
+        let kind = crate::ledger::artifact_kind(&value);
         if !kind.contains("receipt") {
             continue;
         }
@@ -830,7 +827,7 @@ fn collect_summaries(
     let hidden = hidden_set(visibility);
     let mut summaries = Vec::new();
     let mut seen = Set::new();
-    for artifact in artifacts::list_artifacts(registry_root, None)? {
+    for artifact in crate::artifacts::list_artifacts(registry_root, None)? {
         if hidden.contains(&artifact.artifact_ref) {
             continue;
         }
@@ -844,11 +841,11 @@ fn collect_summaries(
         )?;
     }
     if let Some(ledger_root) = ledger_root {
-        for entry in ledger::list_artifacts(ledger_root)? {
+        for entry in crate::ledger::list_artifacts(ledger_root)? {
             if seen.contains(&entry.artifact_ref) || hidden.contains(&entry.artifact_ref) {
                 continue;
             }
-            let value = ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
+            let value = crate::ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
             push_bounded(
                 &mut summaries,
                 ledger_summary(registry_root, ledger_root, &entry.artifact_ref, value, visibility)?,
@@ -864,12 +861,12 @@ fn collect_summaries(
 fn registry_summary(
     registry_root: &Path,
     ledger_root: Option<&Path>,
-    artifact: artifacts::ArtifactRecord,
+    artifact: crate::artifacts::ArtifactRecord,
     visibility: &CatalogVisibilityInput,
 ) -> Result<CatalogSummary> {
     let payload_ref = payload_identity(&artifact.payload);
     let mut name_refs = Vec::new();
-    for pointer in artifacts::list_name_pointers(registry_root)? {
+    for pointer in crate::artifacts::list_name_pointers(registry_root)? {
         if pointer.artifact_ref == artifact.artifact_ref {
             push_bounded(&mut name_refs, pointer.pointer_ref, MAX_CATALOG_REFS, "catalog name refs")?;
         }
@@ -883,17 +880,17 @@ fn registry_summary(
         MAX_CATALOG_REFS,
         "catalog classifications",
     )?;
-    if let Ok(payload) = artifacts::read_payload(registry_root, &artifact.artifact_ref) {
+    if let Ok(payload) = crate::artifacts::read_payload(registry_root, &artifact.artifact_ref) {
         for classification in known_classifications(&payload) {
             push_bounded(&mut classifications, classification, MAX_CATALOG_REFS, "catalog classifications")?;
         }
     }
     if let Some(ledger_root) = ledger_root
-        && let Ok(value) = ledger::read_artifact(ledger_root, &artifact.artifact_ref)
+        && let Ok(value) = crate::ledger::read_artifact(ledger_root, &artifact.artifact_ref)
     {
         push_bounded(
             &mut classifications,
-            format!("ledger-kind:{}", ledger::artifact_kind(&value)),
+            format!("ledger-kind:{}", crate::ledger::artifact_kind(&value)),
             MAX_CATALOG_REFS,
             "catalog classifications",
         )?;
@@ -937,16 +934,16 @@ fn ledger_summary(
     value: IoValue,
     visibility: &CatalogVisibilityInput,
 ) -> Result<CatalogSummary> {
-    let kind = ledger::artifact_kind(&value).to_string();
+    let kind = crate::ledger::artifact_kind(&value).to_string();
     let mut classifications = Vec::new();
     push_bounded(&mut classifications, "ledger-artifact".to_string(), MAX_CATALOG_REFS, "catalog classifications")?;
     push_bounded(&mut classifications, format!("ledger-kind:{kind}"), MAX_CATALOG_REFS, "catalog classifications")?;
     for classification in known_classifications(&value) {
         push_bounded(&mut classifications, classification, MAX_CATALOG_REFS, "catalog classifications")?;
     }
-    let dependent_refs = artifacts::impact_refs(registry_root, &[artifact_ref.to_string()]).unwrap_or_default();
+    let dependent_refs = crate::artifacts::impact_refs(registry_root, &[artifact_ref.to_string()]).unwrap_or_default();
     let mut name_refs = Vec::new();
-    for pointer in artifacts::list_name_pointers(registry_root).unwrap_or_default() {
+    for pointer in crate::artifacts::list_name_pointers(registry_root).unwrap_or_default() {
         if pointer.artifact_ref == artifact_ref {
             push_bounded(&mut name_refs, pointer.pointer_ref, MAX_CATALOG_REFS, "catalog name refs")?;
         }
@@ -1015,7 +1012,7 @@ fn known_classifications_result(value: &IoValue) -> Result<Vec<String>> {
 }
 
 fn direct_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
-    if let Ok(receipt) = artifacts::parse_artifact_receipt(value) {
+    if let Ok(receipt) = crate::artifacts::parse_artifact_receipt(value) {
         return Ok(Some(vec![
             "artifact-receipt:registry".to_string(),
             format!("receipt-operation:{}", receipt.operation),
@@ -1738,9 +1735,9 @@ fn summary_public_text(
 ) -> Result<String> {
     let mut parts = Vec::new();
     push_bounded(&mut parts, to_text(&summary.value)?, MAX_CATALOG_ITEMS, "catalog public text parts")?;
-    if let Ok(artifact) = artifacts::read_artifact(registry_root, &summary.artifact_ref) {
+    if let Ok(artifact) = crate::artifacts::read_artifact(registry_root, &summary.artifact_ref) {
         push_bounded(&mut parts, to_text(&artifact.value)?, MAX_CATALOG_ITEMS, "catalog public text parts")?;
-        let payload = artifacts::read_payload(registry_root, &summary.artifact_ref)?;
+        let payload = crate::artifacts::read_payload(registry_root, &summary.artifact_ref)?;
         push_bounded(
             &mut parts,
             to_text(&maybe_redacted_value(&payload, visibility.redaction_profile_ref.as_deref())?)?,
@@ -1748,7 +1745,7 @@ fn summary_public_text(
             "catalog public text parts",
         )?;
     } else if let Some(ledger_root) = ledger_root
-        && let Ok(value) = ledger::read_artifact(ledger_root, &summary.artifact_ref)
+        && let Ok(value) = crate::ledger::read_artifact(ledger_root, &summary.artifact_ref)
     {
         push_bounded(
             &mut parts,
@@ -1763,7 +1760,7 @@ fn summary_public_text(
 fn direct_dependents(registry_root: &Path, artifact_ref: &str) -> Result<Vec<String>> {
     validate_ref(artifact_ref, "catalog dependent ref")?;
     let mut dependents = Vec::new();
-    for artifact in artifacts::list_artifacts(registry_root, None)? {
+    for artifact in crate::artifacts::list_artifacts(registry_root, None)? {
         if artifact.dependency_refs.iter().any(|dependency| dependency == artifact_ref) {
             push_bounded(&mut dependents, artifact.artifact_ref, MAX_CATALOG_REFS, "catalog dependents")?;
         }
@@ -1787,7 +1784,7 @@ fn scoped_refs(
             continue;
         }
         insert_bounded(&mut scoped, current.clone(), MAX_CATALOG_REFS, "catalog scoped refs")?;
-        if include_dependencies && let Ok(deps) = artifacts::direct_dependencies(registry_root, &current) {
+        if include_dependencies && let Ok(deps) = crate::artifacts::direct_dependencies(registry_root, &current) {
             for dependency in deps {
                 push_bounded(&mut frontier, dependency, MAX_CATALOG_REFS, "catalog scope frontier")?;
             }
@@ -1834,13 +1831,13 @@ fn visible_candidate_refs(
 ) -> Result<Vec<String>> {
     let hidden = hidden_set(visibility);
     let mut candidates = Set::new();
-    for artifact in artifacts::list_artifacts(registry_root, None)? {
+    for artifact in crate::artifacts::list_artifacts(registry_root, None)? {
         if !hidden.contains(&artifact.artifact_ref) {
             insert_bounded(&mut candidates, artifact.artifact_ref, MAX_CATALOG_REFS, "catalog visible candidates")?;
         }
     }
     if let Some(ledger_root) = ledger_root {
-        for entry in ledger::list_artifacts(ledger_root)? {
+        for entry in crate::ledger::list_artifacts(ledger_root)? {
             if !hidden.contains(&entry.artifact_ref) {
                 insert_bounded(&mut candidates, entry.artifact_ref, MAX_CATALOG_REFS, "catalog visible candidates")?;
             }
@@ -2574,7 +2571,7 @@ mod tests {
             std::slice::from_ref(&base.artifact_ref),
             &[],
         );
-        artifacts::set_name_pointer(&registry, &artifacts::SetNamePointerInput {
+        crate::artifacts::set_name_pointer(&registry, &crate::artifacts::SetNamePointerInput {
             pointer_kind: "name",
             name: "docs/main",
             artifact_ref: &dependent.artifact_ref,
@@ -2582,7 +2579,7 @@ mod tests {
             evidence_refs: &[test_ref("evidence")],
         })
         .expect("set name");
-        ledger::import_artifact(&ledger_root, &dependent.artifact.value).expect("ledger import");
+        crate::ledger::import_artifact(&ledger_root, &dependent.artifact.value).expect("ledger import");
         let listed = list(&registry, Some(&ledger_root), &CatalogListInput {
             kind: Some("doc".to_string()),
             visibility: CatalogVisibilityInput::default(),
@@ -2810,10 +2807,10 @@ mod tests {
     }
 
     fn import_values(ledger_root: &std::path::Path, values: &Values) {
-        let verify_import = ledger::import_artifact(ledger_root, &values.verify).expect("import replay verify");
-        ledger::import_artifact(ledger_root, &values.divergence).expect("import first divergence");
-        let rollup_import = ledger::import_artifact(ledger_root, &values.rollup).expect("import replay rollup");
-        let index_import = ledger::import_artifact(ledger_root, &values.index).expect("import replay index");
+        let verify_import = crate::ledger::import_artifact(ledger_root, &values.verify).expect("import replay verify");
+        crate::ledger::import_artifact(ledger_root, &values.divergence).expect("import first divergence");
+        let rollup_import = crate::ledger::import_artifact(ledger_root, &values.rollup).expect("import replay rollup");
+        let index_import = crate::ledger::import_artifact(ledger_root, &values.index).expect("import replay index");
         assert_eq!(verify_import.artifact_kind, "deterministic-replay-verify-receipt");
         assert_eq!(rollup_import.artifact_kind, "deterministic-replay-rollup");
         assert_eq!(index_import.artifact_kind, "deterministic-replay-index");
@@ -2911,8 +2908,8 @@ mod tests {
             prior_diagnostics: &[],
         })
         .expect("evaluate provenance");
-        ledger::import_artifact(&ledger_root, &record).expect("import record");
-        ledger::import_artifact(&ledger_root, &evaluation.receipt_value).expect("import receipt");
+        crate::ledger::import_artifact(&ledger_root, &record).expect("import record");
+        crate::ledger::import_artifact(&ledger_root, &evaluation.receipt_value).expect("import receipt");
         let found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
@@ -2934,10 +2931,10 @@ mod tests {
         let ledger_root = dir.join("ledger");
         let retention_root = dir.join("retention");
         let fixture = gc_case(&retention_root, "catalog-retention-gc", "ledger-gc");
-        ledger::import_artifact(&ledger_root, &fixture.plan.value).expect("import plan");
-        ledger::import_artifact(&ledger_root, &fixture.apply.value).expect("import apply");
-        ledger::import_artifact(&ledger_root, &fixture.execution.value).expect("import execution");
-        ledger::import_artifact(&ledger_root, &fixture.audit.value).expect("import audit");
+        crate::ledger::import_artifact(&ledger_root, &fixture.plan.value).expect("import plan");
+        crate::ledger::import_artifact(&ledger_root, &fixture.apply.value).expect("import apply");
+        crate::ledger::import_artifact(&ledger_root, &fixture.execution.value).expect("import execution");
+        crate::ledger::import_artifact(&ledger_root, &fixture.audit.value).expect("import audit");
 
         let found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
             root_refs: Vec::new(),
@@ -3127,7 +3124,7 @@ mod tests {
             record("review-refs", vec![sequence(vec![string(&review_ref)])]),
             checks_value(&["baseline-findings-keyed"]),
         ]);
-        let imported = ledger::import_artifact(&ledger_root, &baseline).expect("import baseline");
+        let imported = crate::ledger::import_artifact(&ledger_root, &baseline).expect("import baseline");
         let viewed = view(&registry, Some(&ledger_root), &CatalogViewInput {
             reference: imported.artifact_ref,
             include_payload: true,
@@ -3158,7 +3155,7 @@ mod tests {
         })
         .expect("first list");
         let display_name = format!("display-{salt}");
-        artifacts::set_name_pointer(&registry, &artifacts::SetNamePointerInput {
+        crate::artifacts::set_name_pointer(&registry, &crate::artifacts::SetNamePointerInput {
             pointer_kind: "name",
             name: &display_name,
             artifact_ref: &installed.artifact_ref,
@@ -3339,8 +3336,8 @@ mod tests {
         payload: IoValue,
         dependency_refs: &[String],
         schema_refs: &[String],
-    ) -> artifacts::ArtifactInstall {
-        artifacts::install_artifact(root, &artifacts::ArtifactInstallInput {
+    ) -> crate::artifacts::ArtifactInstall {
+        crate::artifacts::install_artifact(root, &crate::artifacts::ArtifactInstallInput {
             kind: kind.to_string(),
             payload,
             schema_refs: schema_refs.to_vec(),
