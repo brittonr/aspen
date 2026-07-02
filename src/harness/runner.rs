@@ -1,11 +1,11 @@
 use super::core;
-use super::executor;
 use super::schema;
-use super::steel_executor;
-use super::wasm_executor;
-use crate::error;
 use crate::preserves_rail;
-use crate::runtime;
+
+type HarnessDivergence = crate::error::HarnessDivergence;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type RuntimeObserver = crate::runtime::RuntimeObserver;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessRun {
@@ -17,25 +17,25 @@ pub struct HarnessRun {
     pub status: String,
 }
 
-pub fn run_suite_value(value: &preserves::IOValue) -> error::Result<HarnessRun> {
+pub fn run_suite_value(value: &preserves::IOValue) -> Result<HarnessRun> {
     run_suite(&schema::parse_suite(value)?)
 }
 
-pub fn run_suite(suite: &schema::HarnessSuite) -> error::Result<HarnessRun> {
+pub fn run_suite(suite: &schema::HarnessSuite) -> Result<HarnessRun> {
     run_suite_inner(suite, None)
 }
 
 pub fn run_suite_with_effect_log(
     suite: &schema::HarnessSuite,
     effect_log: &[schema::EffectLogEntry],
-) -> error::Result<HarnessRun> {
+) -> Result<HarnessRun> {
     run_suite_inner(suite, Some(effect_log))
 }
 
 fn run_suite_inner(
     suite: &schema::HarnessSuite,
     replay_effect_log: Option<&[schema::EffectLogEntry]>,
-) -> error::Result<HarnessRun> {
+) -> Result<HarnessRun> {
     let material = prepare_suite_run(suite)?;
     let trace = collect_trace(suite, replay_effect_log, &material)?;
     let report_value = build_report_value(suite, &material, &trace)?;
@@ -61,21 +61,21 @@ struct SuiteRunMaterial {
     budget: schema::HarnessBudget,
 }
 
-fn prepare_suite_run(suite: &schema::HarnessSuite) -> error::Result<SuiteRunMaterial> {
+fn prepare_suite_run(suite: &schema::HarnessSuite) -> Result<SuiteRunMaterial> {
     if !suite.actors_explicit {
-        return Err(error::MoltenError::invalid_harness(
+        return Err(MoltenError::invalid_harness(
             "missing explicit actor registry fixture; inferred actors cannot execute evidence-bearing suites",
         ));
     }
     validate_actor_registry(suite)?;
     schema::validate_executor_preflight_inputs(suite)?;
     if !suite.capabilities_explicit {
-        return Err(error::MoltenError::invalid_harness(
+        return Err(MoltenError::invalid_harness(
             "missing explicit capability fixture; implicit authority cannot execute evidence-bearing suites",
         ));
     }
     if !suite.budget_explicit {
-        return Err(error::MoltenError::invalid_harness(
+        return Err(MoltenError::invalid_harness(
             "missing explicit budget fixture; default resource policy cannot execute evidence-bearing suites",
         ));
     }
@@ -113,7 +113,7 @@ fn collect_trace(
     suite: &schema::HarnessSuite,
     replay_effect_log: Option<&[schema::EffectLogEntry]>,
     material: &SuiteRunMaterial,
-) -> error::Result<RunTrace> {
+) -> Result<RunTrace> {
     let mut state = core::RuntimeState::new(suite.seed);
     let initial_state_hash = preserves_rail::canonical_hash(&schema::snapshot_value(&state.snapshot()))?;
     let mut observations = Vec::with_capacity(suite.steps.len());
@@ -170,7 +170,7 @@ struct StepOutcome {
     events: Vec<preserves::IOValue>,
 }
 
-fn run_step(input: StepRunInput<'_>) -> error::Result<StepOutcome> {
+fn run_step(input: StepRunInput<'_>) -> Result<StepOutcome> {
     let before_state_hash = preserves_rail::canonical_hash(&schema::snapshot_value(&input.state.snapshot()))?;
     let step_ref = preserves_rail::canonical_hash(&schema::step_value(input.step))?;
     let admission = admission_step(input.suite, input.step, input.material, input.step_index, &step_ref)?;
@@ -235,7 +235,7 @@ fn admission_step<'a>(
     material: &'a SuiteRunMaterial,
     step_index: u64,
     step_ref: &'a str,
-) -> error::Result<AdmissionStep<'a>> {
+) -> Result<AdmissionStep<'a>> {
     let request = core::AdmissionRequest::from_step(step);
     let authority = schema::admission_authority_evidence(&suite.capabilities, &request)?;
     let decision = suite.policy.decide_with_capabilities(&suite.capabilities, &request);
@@ -282,7 +282,7 @@ struct ActorExecutionEvents {
     wasm: Option<preserves::IOValue>,
 }
 
-fn actor_execution_events(input: ActorExecutionInput<'_>) -> error::Result<ActorExecutionEvents> {
+fn actor_execution_events(input: ActorExecutionInput<'_>) -> Result<ActorExecutionEvents> {
     if !input.admission_decision.is_allowed() {
         return Ok(ActorExecutionEvents {
             steel: None,
@@ -290,13 +290,13 @@ fn actor_execution_events(input: ActorExecutionInput<'_>) -> error::Result<Actor
         });
     }
     Ok(ActorExecutionEvents {
-        steel: steel_executor::execute_steel_actor_step(
+        steel: super::steel_executor::execute_steel_actor_step(
             input.suite,
             input.step,
             input.actor_input,
             input.hostcall_request,
         )?,
-        wasm: wasm_executor::execute_wasm_actor_step(&wasm_executor::WasmActorStepInput {
+        wasm: super::wasm_executor::execute_wasm_actor_step(&super::wasm_executor::WasmActorStepInput {
             suite: input.suite,
             step: input.step,
             sequence: input.step_index,
@@ -325,7 +325,7 @@ fn boundary_events(
     events
 }
 
-fn check_event_budget(step_index: u64, total_events: u64, budget: &schema::HarnessBudget) -> error::Result<()> {
+fn check_event_budget(step_index: u64, total_events: u64, budget: &schema::HarnessBudget) -> Result<()> {
     if total_events > budget.max_events {
         return Err(divergence(
             "resource",
@@ -338,7 +338,7 @@ fn check_event_budget(step_index: u64, total_events: u64, budget: &schema::Harne
     Ok(())
 }
 
-fn check_effect_budget(step_index: u64, effects: u64, budget: &schema::HarnessBudget) -> error::Result<()> {
+fn check_effect_budget(step_index: u64, effects: u64, budget: &schema::HarnessBudget) -> Result<()> {
     if effects > budget.max_effects {
         return Err(divergence(
             "resource",
@@ -354,7 +354,7 @@ fn check_effect_budget(step_index: u64, effects: u64, budget: &schema::HarnessBu
 fn check_replay_consumed(
     replay_effect_log: Option<&[schema::EffectLogEntry]>,
     replay_effect_index: usize,
-) -> error::Result<()> {
+) -> Result<()> {
     if let Some(replay_effect_log) = replay_effect_log
         && replay_effect_index != replay_effect_log.len()
     {
@@ -373,7 +373,7 @@ fn build_report_value(
     suite: &schema::HarnessSuite,
     material: &SuiteRunMaterial,
     trace: &RunTrace,
-) -> error::Result<preserves::IOValue> {
+) -> Result<preserves::IOValue> {
     let mut usage = schema::BudgetUsage {
         steps: suite.steps.len() as u64,
         effects: trace.effect_log.len() as u64,
@@ -423,16 +423,16 @@ fn report_value_with_usage(
     })
 }
 
-fn validate_actor_registry(suite: &schema::HarnessSuite) -> error::Result<()> {
+fn validate_actor_registry(suite: &schema::HarnessSuite) -> Result<()> {
     let mut ids = std::collections::BTreeSet::new();
-    executor::ensure_supported_actor_executors(&suite.actors)?;
+    super::executor::ensure_supported_actor_executors(&suite.actors)?;
     for actor in &suite.actors {
         ids.insert(actor.id.as_str());
     }
     for step in &suite.steps {
         for actor in schema::actor_ids_for_step(step) {
             if !ids.contains(actor) {
-                return Err(error::MoltenError::invalid_harness(format!("unknown actor {actor} in harness step")));
+                return Err(MoltenError::invalid_harness(format!("unknown actor {actor} in harness step")));
             }
         }
     }
@@ -450,7 +450,7 @@ struct TurnJournalInput<'a> {
     events: &'a [preserves::IOValue],
 }
 
-fn turn_journal_value(input: TurnJournalInput<'_>) -> error::Result<preserves::IOValue> {
+fn turn_journal_value(input: TurnJournalInput<'_>) -> Result<preserves::IOValue> {
     let mut event_refs = Vec::with_capacity(input.events.len());
     let mut effect_refs = Vec::with_capacity(input.events.len());
     let mut receipt_refs = Vec::with_capacity(input.events.len());
@@ -508,7 +508,7 @@ struct RuntimeStepInput<'a> {
     replay_effect_index: &'a mut usize,
 }
 
-fn runtime_events_for_step(input: RuntimeStepInput<'_>) -> error::Result<Vec<preserves::IOValue>> {
+fn runtime_events_for_step(input: RuntimeStepInput<'_>) -> Result<Vec<preserves::IOValue>> {
     let RuntimeStepInput {
         state,
         step,
@@ -565,19 +565,19 @@ fn step_predicate_receipts(
     step: &core::CoreStep,
     before: &crate::runtime::RuntimeSnapshot,
     after: &crate::runtime::RuntimeSnapshot,
-) -> error::Result<Vec<preserves::IOValue>> {
+) -> Result<Vec<preserves::IOValue>> {
     match step {
         core::CoreStep::Observe { actor, pattern } => {
-            let observer = runtime::RuntimeObserver {
+            let observer = RuntimeObserver {
                 actor: actor.clone(),
                 pattern: pattern.clone(),
             };
-            let receipt = runtime::evaluate_observe_initial_delivery(before, &observer)?.receipt;
+            let receipt = crate::runtime::evaluate_observe_initial_delivery(before, &observer)?.receipt;
             Ok(vec![receipt.value])
         }
         core::CoreStep::Assert { value, .. } | core::CoreStep::Retract { value, .. } => {
             let live_owners = after.assertions.iter().map(|assertion| assertion.actor.clone()).collect();
-            let receipt = runtime::evaluate_assertion_visibility(after, value, &live_owners)?.receipt;
+            let receipt = crate::runtime::evaluate_assertion_visibility(after, value, &live_owners)?.receipt;
             Ok(vec![receipt.value])
         }
         core::CoreStep::Send { .. } | core::CoreStep::Clock { .. } | core::CoreStep::Random { .. } => Ok(Vec::new()),
@@ -590,7 +590,7 @@ fn replay_effect_events(
     step_index: u64,
     replay_effect_log: &[schema::EffectLogEntry],
     replay_effect_index: &mut usize,
-) -> error::Result<Vec<preserves::IOValue>> {
+) -> Result<Vec<preserves::IOValue>> {
     let Some(request) = state.begin_effect_for_step(step) else {
         if !is_dataspace_turn(step) {
             return Ok(state.apply_step(step).iter().map(schema::event_value).collect());
@@ -661,7 +661,7 @@ fn with_time_random_handler_receipt(
     step: &core::CoreStep,
     step_index: u64,
     events: Vec<preserves::IOValue>,
-) -> error::Result<Vec<preserves::IOValue>> {
+) -> Result<Vec<preserves::IOValue>> {
     let (effect, actor) = match step {
         core::CoreStep::Clock { actor } => ("clock", actor.as_str()),
         core::CoreStep::Random { actor, .. } => ("random", actor.as_str()),
@@ -671,7 +671,7 @@ fn with_time_random_handler_receipt(
         | core::CoreStep::Retract { .. } => return Ok(events),
     };
     if events.len() != 2 {
-        return Err(error::MoltenError::invalid_harness(format!(
+        return Err(MoltenError::invalid_harness(format!(
             "deterministic {effect} handler expected request and response events at step {step_index}"
         )));
     }
@@ -707,6 +707,6 @@ fn divergence(
     expected: impl Into<String>,
     actual: impl Into<String>,
     detail: impl Into<String>,
-) -> error::MoltenError {
-    error::MoltenError::harness_divergence(error::HarnessDivergence::new(kind, step, expected, actual, detail))
+) -> MoltenError {
+    MoltenError::harness_divergence(HarnessDivergence::new(kind, step, expected, actual, detail))
 }
