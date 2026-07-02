@@ -1,6 +1,6 @@
-use molten::error::Result;
-
 use super::io;
+
+type Result<T> = molten::error::Result<T>;
 
 pub(crate) struct Items<T> {
     values: Vec<T>,
