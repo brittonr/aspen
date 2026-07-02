@@ -1,8 +1,5 @@
 type IoValue = preserves::IOValue;
 
-use crate::evidence_chain;
-use crate::ledger;
-
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type Path = std::path::Path;
 type Value<T> = preserves::Value<T>;
@@ -90,7 +87,7 @@ pub struct ReproExchange {
 pub struct ChainSegmentExchange {
     pub ticket: String,
     pub bundle_ref: String,
-    pub chain: evidence_chain::ChainScope,
+    pub chain: crate::evidence_chain::ChainScope,
     pub anchor_ref: Option<String>,
     pub head_ref: Option<String>,
     pub receipt_value: IoValue,
@@ -99,7 +96,7 @@ pub struct ChainSegmentExchange {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ChainSegmentBundle {
     bundle_ref: String,
-    chain: evidence_chain::ChainScope,
+    chain: crate::evidence_chain::ChainScope,
     anchor_ref: Option<String>,
     head_ref: Option<String>,
     artifacts: Vec<ChainBundleArtifact>,
@@ -117,7 +114,7 @@ struct ChainBundleArtifact {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ParsedChainVerifyReceipt {
     decision: String,
-    chain: evidence_chain::ChainScope,
+    chain: crate::evidence_chain::ChainScope,
     anchor_ref: Option<String>,
     expected_head: Option<String>,
     discovered_heads: Vec<String>,
@@ -141,11 +138,11 @@ pub struct FetchBundleInput<'a> {
 pub struct PublishChainSegmentInput<'a> {
     pub iroh_root: &'a Path,
     pub ledger_root: &'a Path,
-    pub chain: &'a evidence_chain::ChainScope,
+    pub chain: &'a crate::evidence_chain::ChainScope,
     pub anchor_ref: Option<&'a str>,
     pub expected_head: Option<&'a str>,
     pub node: &'a str,
-    pub fork_policy: evidence_chain::ChainForkPolicy,
+    pub fork_policy: crate::evidence_chain::ChainForkPolicy,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -155,11 +152,11 @@ pub struct FetchChainSegmentInput<'a> {
     pub expected_bundle_ref: Option<&'a str>,
     pub peer: &'a str,
     pub ledger_root: &'a Path,
-    pub fork_policy: evidence_chain::ChainForkPolicy,
+    pub fork_policy: crate::evidence_chain::ChainForkPolicy,
 }
 
 struct ChainSegmentBundleValueInput<'a> {
-    chain: &'a evidence_chain::ChainScope,
+    chain: &'a crate::evidence_chain::ChainScope,
     anchor_ref: Option<&'a str>,
     head_ref: Option<&'a str>,
     artifacts: &'a [IoValue],
@@ -168,13 +165,13 @@ struct ChainSegmentBundleValueInput<'a> {
 }
 
 struct ValidateChainBundleInput<'a> {
-    chain: &'a evidence_chain::ChainScope,
+    chain: &'a crate::evidence_chain::ChainScope,
     anchor_ref: Option<&'a str>,
     head_ref: Option<&'a str>,
     artifacts: &'a [ChainBundleArtifact],
     verify_receipt_refs: &'a [String],
     checkpoint_refs: &'a [String],
-    fork_policy: evidence_chain::ChainForkPolicy,
+    fork_policy: crate::evidence_chain::ChainForkPolicy,
 }
 
 struct ChainExchangeReceiptValueInput<'a> {
@@ -253,8 +250,8 @@ pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<ReproExchange> {
         fs::write(out, crate::preserves_rail::to_text(&bundle)?).map_err(MoltenError::from)?;
     }
     if let Some(ledger_root) = input.ledger_root {
-        ledger::import_artifact(ledger_root, &bundle)?;
-        ledger::import_artifact(ledger_root, &verify_receipt)?;
+        crate::ledger::import_artifact(ledger_root, &bundle)?;
+        crate::ledger::import_artifact(ledger_root, &verify_receipt)?;
     }
     let verify_ref = canonical_hash(&verify_receipt)?;
     let receipt_value = exchange_receipt_value(&ExchangeReceiptValueInput {
@@ -331,9 +328,9 @@ pub fn fetch_chain_segment(input: &FetchChainSegmentInput<'_>) -> Result<ChainSe
         )));
     }
     for artifact in &parsed.artifacts {
-        ledger::import_artifact(input.ledger_root, &artifact.value)?;
+        crate::ledger::import_artifact(input.ledger_root, &artifact.value)?;
     }
-    ledger::import_artifact(input.ledger_root, &bundle)?;
+    crate::ledger::import_artifact(input.ledger_root, &bundle)?;
     let receipt_value = chain_exchange_receipt_value(&ChainExchangeReceiptValueInput {
         operation: "fetch",
         decision: "pass",
@@ -344,7 +341,7 @@ pub fn fetch_chain_segment(input: &FetchChainSegmentInput<'_>) -> Result<ChainSe
         verify_receipt_refs: &parsed.verify_receipt_refs,
         checkpoint_refs: &parsed.checkpoint_refs,
     });
-    ledger::import_artifact(input.ledger_root, &receipt_value)?;
+    crate::ledger::import_artifact(input.ledger_root, &receipt_value)?;
     Ok(ChainSegmentExchange {
         ticket: input.ticket.to_string(),
         bundle_ref: parsed.bundle_ref,
@@ -357,14 +354,19 @@ pub fn fetch_chain_segment(input: &FetchChainSegmentInput<'_>) -> Result<ChainSe
 
 fn build_chain_segment_bundle_value(
     ledger_root: &Path,
-    chain: &evidence_chain::ChainScope,
+    chain: &crate::evidence_chain::ChainScope,
     anchor_ref: Option<&str>,
     expected_head: Option<&str>,
-    fork_policy: evidence_chain::ChainForkPolicy,
+    fork_policy: crate::evidence_chain::ChainForkPolicy,
 ) -> Result<IoValue> {
-    let verified =
-        evidence_chain::verify_chain_segment_with_policy(ledger_root, chain, anchor_ref, expected_head, fork_policy)?;
-    let index = evidence_chain::build_chain_index(ledger_root)?;
+    let verified = crate::evidence_chain::verify_chain_segment_with_policy(
+        ledger_root,
+        chain,
+        anchor_ref,
+        expected_head,
+        fork_policy,
+    )?;
+    let index = crate::evidence_chain::build_chain_index(ledger_root)?;
     let mut artifacts = OrderedMap::<String, IoValue>::new();
     for link_ref in &verified.verified_links {
         add_ledger_artifact(ledger_root, &mut artifacts, link_ref)?;
@@ -384,13 +386,13 @@ fn build_chain_segment_bundle_value(
     }
     let mut checkpoint_refs = Vec::new();
     for checkpoint_ref in index.checkpoints_for_chain(chain) {
-        let checkpoint_value = ledger::read_artifact(ledger_root, &checkpoint_ref)?;
-        let checkpoint = evidence_chain::parse_chain_checkpoint(&checkpoint_value)?;
+        let checkpoint_value = crate::ledger::read_artifact(ledger_root, &checkpoint_ref)?;
+        let checkpoint = crate::evidence_chain::parse_chain_checkpoint(&checkpoint_value)?;
         add_ledger_artifact(ledger_root, &mut artifacts, &checkpoint_ref)?;
         for checkpoint_link_ref in [&checkpoint.anchor_link_ref, &checkpoint.head_ref] {
             add_ledger_artifact(ledger_root, &mut artifacts, checkpoint_link_ref)?;
-            let checkpoint_link_value = ledger::read_artifact(ledger_root, checkpoint_link_ref)?;
-            let checkpoint_link = evidence_chain::parse_chain_link(&checkpoint_link_value)?;
+            let checkpoint_link_value = crate::ledger::read_artifact(ledger_root, checkpoint_link_ref)?;
+            let checkpoint_link = crate::evidence_chain::parse_chain_link(&checkpoint_link_value)?;
             add_ledger_artifact(ledger_root, &mut artifacts, &checkpoint_link.payload.artifact_ref)?;
         }
         add_ledger_artifact(ledger_root, &mut artifacts, &checkpoint.verify_receipt_ref)?;
@@ -406,7 +408,7 @@ fn build_chain_segment_bundle_value(
         .iter()
         .map(|(artifact_ref, value)| {
             record("artifact", vec![
-                string(ledger::artifact_kind(value)),
+                string(crate::ledger::artifact_kind(value)),
                 string(artifact_ref),
                 value.clone(),
             ])
@@ -424,7 +426,7 @@ fn build_chain_segment_bundle_value(
 
 fn add_ledger_artifact(root: &Path, artifacts: &mut OrderedMap<String, IoValue>, artifact_ref: &str) -> Result<()> {
     if !artifacts.contains_key(artifact_ref) {
-        artifacts.insert(artifact_ref.to_string(), ledger::read_artifact(root, artifact_ref)?);
+        artifacts.insert(artifact_ref.to_string(), crate::ledger::read_artifact(root, artifact_ref)?);
     }
     Ok(())
 }
@@ -450,7 +452,7 @@ fn chain_segment_bundle_value(input: &ChainSegmentBundleValueInput<'_>) -> IoVal
 
 fn parse_chain_segment_bundle(
     value: &IoValue,
-    fork_policy: evidence_chain::ChainForkPolicy,
+    fork_policy: crate::evidence_chain::ChainForkPolicy,
 ) -> Result<ChainSegmentBundle> {
     let bundle = value
         .collect_simple_record("chain-segment-bundle-v1", Some(8))
@@ -489,17 +491,17 @@ fn parse_chain_segment_bundle(
 
 struct Parts<'a> {
     artifacts: OrderedMap<String, &'a ChainBundleArtifact>,
-    links: OrderedMap<String, evidence_chain::ChainLink>,
-    predicates: OrderedMap<String, evidence_chain::ChainPredicateReceipt>,
+    links: OrderedMap<String, crate::evidence_chain::ChainLink>,
+    predicates: OrderedMap<String, crate::evidence_chain::ChainPredicateReceipt>,
     has_forks: bool,
 }
 
 struct PrimaryCheck<'a> {
     primary: &'a ParsedChainVerifyReceipt,
-    chain: &'a evidence_chain::ChainScope,
+    chain: &'a crate::evidence_chain::ChainScope,
     anchor_ref: Option<&'a str>,
     head_ref: Option<&'a str>,
-    fork_policy: evidence_chain::ChainForkPolicy,
+    fork_policy: crate::evidence_chain::ChainForkPolicy,
     has_forks: bool,
 }
 
@@ -532,19 +534,21 @@ fn parsed_parts(artifacts: &[ChainBundleArtifact]) -> Result<Parts<'_>> {
     let links = artifacts
         .iter()
         .filter(|artifact| artifact.kind == "chain-link")
-        .map(|artifact| evidence_chain::parse_chain_link(&artifact.value).map(|link| (link.link_ref.clone(), link)))
+        .map(|artifact| {
+            crate::evidence_chain::parse_chain_link(&artifact.value).map(|link| (link.link_ref.clone(), link))
+        })
         .collect::<Result<OrderedMap<_, _>>>()?;
     let predicates = artifacts
         .iter()
         .filter(|artifact| artifact.kind == "chain-predicate-receipt")
         .map(|artifact| {
-            evidence_chain::parse_chain_predicate_receipt(&artifact.value)
+            crate::evidence_chain::parse_chain_predicate_receipt(&artifact.value)
                 .map(|receipt| (receipt.receipt_ref.clone(), receipt))
         })
         .collect::<Result<OrderedMap<_, _>>>()?;
     let mut has_forks = false;
     for artifact in artifacts.iter().filter(|artifact| artifact.kind == "chain-fork-evidence") {
-        evidence_chain::parse_chain_fork_evidence(&artifact.value)?;
+        crate::evidence_chain::parse_chain_fork_evidence(&artifact.value)?;
         has_forks = true;
     }
     Ok(Parts {
@@ -555,9 +559,9 @@ fn parsed_parts(artifacts: &[ChainBundleArtifact]) -> Result<Parts<'_>> {
     })
 }
 
-fn anchors(chain: &evidence_chain::ChainScope, artifacts: &[ChainBundleArtifact]) -> Result<()> {
+fn anchors(chain: &crate::evidence_chain::ChainScope, artifacts: &[ChainBundleArtifact]) -> Result<()> {
     for artifact in artifacts.iter().filter(|artifact| artifact.kind == "chain-anchor") {
-        let anchor = evidence_chain::parse_chain_anchor(&artifact.value)?;
+        let anchor = crate::evidence_chain::parse_chain_anchor(&artifact.value)?;
         if anchor.chain != *chain {
             return Err(MoltenError::invalid_harness("chain bundle anchor belongs to a different chain"));
         }
@@ -603,7 +607,7 @@ fn check_primary(input: PrimaryCheck<'_>) -> Result<()> {
         .diagnostics
         .iter()
         .any(|diagnostic| matches!(diagnostic.as_str(), "fork" | "sequence-conflict"));
-    if has_fork_diagnostics && input.fork_policy == evidence_chain::ChainForkPolicy::RejectUnexpectedForks {
+    if has_fork_diagnostics && input.fork_policy == crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks {
         return Err(MoltenError::invalid_harness(
             "chain bundle contains fork diagnostics rejected by production policy",
         ));
@@ -627,7 +631,7 @@ fn payloads(verify: &ParsedChainVerifyReceipt, artifacts: &OrderedMap<String, &C
 
 fn predicates(
     verify: &ParsedChainVerifyReceipt,
-    predicates: &OrderedMap<String, evidence_chain::ChainPredicateReceipt>,
+    predicates: &OrderedMap<String, crate::evidence_chain::ChainPredicateReceipt>,
 ) -> Result<()> {
     for predicate_ref in &verify.predicate_refs {
         let Some(predicate) = predicates.get(predicate_ref) else {
@@ -647,19 +651,19 @@ fn predicates(
 fn checkpoints(
     refs: &[String],
     artifacts: &OrderedMap<String, &ChainBundleArtifact>,
-) -> Result<Vec<evidence_chain::ChainCheckpoint>> {
+) -> Result<Vec<crate::evidence_chain::ChainCheckpoint>> {
     refs.iter()
         .map(|checkpoint_ref| {
             let artifact = artifacts.get(checkpoint_ref).ok_or_else(|| {
                 MoltenError::invalid_harness(format!("chain bundle missing checkpoint {checkpoint_ref}"))
             })?;
-            evidence_chain::parse_chain_checkpoint(&artifact.value)
+            crate::evidence_chain::parse_chain_checkpoint(&artifact.value)
         })
         .collect()
 }
 
 fn validate_chain_links(
-    links: &OrderedMap<String, evidence_chain::ChainLink>,
+    links: &OrderedMap<String, crate::evidence_chain::ChainLink>,
     verify: &ParsedChainVerifyReceipt,
     anchor_ref: Option<&str>,
     head_ref: Option<&str>,
@@ -685,25 +689,25 @@ fn validate_chain_links(
             return Err(MoltenError::invalid_harness("chain bundle link belongs to a different chain scope"));
         }
         if position == 0 && anchor_ref.is_none() {
-            evidence_chain::validate_genesis(link)?;
+            crate::evidence_chain::validate_genesis(link)?;
         }
         if position > 0 {
             let previous_ref = &verify.verified_links[position - 1];
             let previous = links.get(previous_ref).ok_or_else(|| {
                 MoltenError::invalid_harness(format!("chain bundle missing previous link {previous_ref}"))
             })?;
-            evidence_chain::validate_append(previous, link)?;
+            crate::evidence_chain::validate_append(previous, link)?;
         }
     }
     Ok(())
 }
 
 fn validate_bundle_checkpoints(
-    chain: &evidence_chain::ChainScope,
-    checkpoints: &[evidence_chain::ChainCheckpoint],
+    chain: &crate::evidence_chain::ChainScope,
+    checkpoints: &[crate::evidence_chain::ChainCheckpoint],
     artifacts: &OrderedMap<String, &ChainBundleArtifact>,
-    links: &OrderedMap<String, evidence_chain::ChainLink>,
-    predicates: &OrderedMap<String, evidence_chain::ChainPredicateReceipt>,
+    links: &OrderedMap<String, crate::evidence_chain::ChainLink>,
+    predicates: &OrderedMap<String, crate::evidence_chain::ChainPredicateReceipt>,
 ) -> Result<()> {
     for checkpoint in checkpoints {
         if &checkpoint.chain != chain {
@@ -760,7 +764,7 @@ fn parse_chain_bundle_artifacts(value: &Value<IoValue>) -> Result<Vec<ChainBundl
                 "chain bundle artifact ref mismatch: got {actual_ref}, expected {artifact_ref}"
             )));
         }
-        let actual_kind = ledger::artifact_kind(&value);
+        let actual_kind = crate::ledger::artifact_kind(&value);
         if actual_kind != kind {
             return Err(MoltenError::invalid_harness(format!(
                 "chain bundle artifact {artifact_ref} kind mismatch: declared {kind}, parsed {actual_kind}"
@@ -864,19 +868,19 @@ fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result
     Ok(())
 }
 
-fn parse_chain_scope(value: &Value<IoValue>) -> Result<evidence_chain::ChainScope> {
+fn parse_chain_scope(value: &Value<IoValue>) -> Result<crate::evidence_chain::ChainScope> {
     let value = value_to_iovalue(value);
     let chain = value
         .collect_simple_record("chain", Some(3))
         .ok_or_else(|| MoltenError::invalid_harness("expected chain scope record"))?;
-    Ok(evidence_chain::ChainScope::new(
+    Ok(crate::evidence_chain::ChainScope::new(
         record_string(&chain[0], "scope")?,
         record_string(&chain[1], "id")?,
         record_string(&chain[2], "epoch")?,
     ))
 }
 
-fn chain_scope_value(chain: &evidence_chain::ChainScope) -> IoValue {
+fn chain_scope_value(chain: &crate::evidence_chain::ChainScope) -> IoValue {
     record("chain", vec![
         record("scope", vec![string(&chain.scope)]),
         record("id", vec![string(&chain.id)]),
@@ -1064,11 +1068,11 @@ mod tests {
         let source = temp_dir("chain-source");
         let destination = temp_dir("chain-destination");
         let iroh = temp_dir("chain-iroh");
-        let chain = evidence_chain::ChainScope::new("test-chain", "artifact-a", "epoch-1");
+        let chain = crate::evidence_chain::ChainScope::new("test-chain", "artifact-a", "epoch-1");
         let genesis = append_test_link(&source, &chain, None, "payload-a");
         let second = append_test_link(&source, &chain, Some(&genesis), "payload-b");
         let policy_ref = ref_for("checkpoint-policy");
-        evidence_chain::publish_chain_anchor(
+        crate::evidence_chain::publish_chain_anchor(
             &source,
             &chain,
             &genesis.link_ref,
@@ -1076,10 +1080,14 @@ mod tests {
             &sample_producer(),
         )
         .expect("publish anchor");
-        let verified =
-            evidence_chain::verify_chain_segment(&source, &chain, Some(&genesis.link_ref), Some(&second.link_ref))
-                .expect("verify range");
-        evidence_chain::accept_chain_checkpoint(&source, &evidence_chain::ChainCheckpointInput {
+        let verified = crate::evidence_chain::verify_chain_segment(
+            &source,
+            &chain,
+            Some(&genesis.link_ref),
+            Some(&second.link_ref),
+        )
+        .expect("verify range");
+        crate::evidence_chain::accept_chain_checkpoint(&source, &crate::evidence_chain::ChainCheckpointInput {
             chain: chain.clone(),
             prior_checkpoint_ref: None,
             anchor_link_ref: genesis.link_ref.clone(),
@@ -1100,7 +1108,7 @@ mod tests {
             anchor_ref: Some(&genesis.link_ref),
             expected_head: Some(&second.link_ref),
             node: "node:source",
-            fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
         })
         .expect("publish chain segment");
         let fetched = fetch_chain_segment(&FetchChainSegmentInput {
@@ -1109,11 +1117,11 @@ mod tests {
             expected_bundle_ref: Some(&published.bundle_ref),
             peer: "peer:source",
             ledger_root: &destination,
-            fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
         })
         .expect("fetch chain segment");
         assert_eq!(published.bundle_ref, fetched.bundle_ref);
-        let destination_index = evidence_chain::build_chain_index(&destination).expect("destination index");
+        let destination_index = crate::evidence_chain::build_chain_index(&destination).expect("destination index");
         assert_eq!(destination_index.heads_for_chain(&chain), vec![second.link_ref.clone()]);
         assert_eq!(destination_index.anchor_links_for_chain(&chain), vec![genesis.link_ref.clone()]);
         assert_eq!(destination_index.checkpoint_heads_for_chain(&chain), vec![second.link_ref.clone()]);
@@ -1124,11 +1132,11 @@ mod tests {
         let source = temp_dir("chain-missing-predicate-source");
         let destination = temp_dir("chain-missing-predicate-destination");
         let iroh = temp_dir("chain-missing-predicate-iroh");
-        let chain = evidence_chain::ChainScope::new("test-chain", "artifact-missing-predicate", "epoch-1");
+        let chain = crate::evidence_chain::ChainScope::new("test-chain", "artifact-missing-predicate", "epoch-1");
         let genesis = append_test_link(&source, &chain, None, "payload-a");
         let second = append_test_link(&source, &chain, Some(&genesis), "payload-b");
         let policy_ref = ref_for("checkpoint-policy");
-        evidence_chain::publish_chain_anchor(
+        crate::evidence_chain::publish_chain_anchor(
             &source,
             &chain,
             &genesis.link_ref,
@@ -1136,10 +1144,14 @@ mod tests {
             &sample_producer(),
         )
         .expect("publish anchor");
-        let verified =
-            evidence_chain::verify_chain_segment(&source, &chain, Some(&genesis.link_ref), Some(&second.link_ref))
-                .expect("verify range");
-        evidence_chain::accept_chain_checkpoint(&source, &evidence_chain::ChainCheckpointInput {
+        let verified = crate::evidence_chain::verify_chain_segment(
+            &source,
+            &chain,
+            Some(&genesis.link_ref),
+            Some(&second.link_ref),
+        )
+        .expect("verify range");
+        crate::evidence_chain::accept_chain_checkpoint(&source, &crate::evidence_chain::ChainCheckpointInput {
             chain: chain.clone(),
             prior_checkpoint_ref: None,
             anchor_link_ref: genesis.link_ref,
@@ -1159,7 +1171,7 @@ mod tests {
             anchor_ref: None,
             expected_head: Some(&second.link_ref),
             node: "node:source",
-            fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
         })
         .expect("publish chain segment");
         let bundle_bytes = fs::read(blob_path(&iroh, &published.bundle_ref).expect("blob path")).expect("read bundle");
@@ -1176,7 +1188,7 @@ mod tests {
             expected_bundle_ref: Some(&published.bundle_ref),
             peer: "peer:source",
             ledger_root: &destination,
-            fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
         })
         .expect_err("missing predicate rejected");
         assert!(error.to_string().contains("predicate"));
@@ -1187,7 +1199,7 @@ mod tests {
         let source = temp_dir("chain-tamper-source");
         let destination = temp_dir("chain-tamper-destination");
         let iroh = temp_dir("chain-tamper-iroh");
-        let chain = evidence_chain::ChainScope::new("test-chain", "artifact-tamper", "epoch-1");
+        let chain = crate::evidence_chain::ChainScope::new("test-chain", "artifact-tamper", "epoch-1");
         let genesis = append_test_link(&source, &chain, None, "payload-a");
         let published = publish_chain_segment(&PublishChainSegmentInput {
             iroh_root: &iroh,
@@ -1196,7 +1208,7 @@ mod tests {
             anchor_ref: None,
             expected_head: Some(&genesis.link_ref),
             node: "node:source",
-            fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
         })
         .expect("publish chain segment");
         fs::write(blob_path(&iroh, &published.bundle_ref).expect("blob path"), b"tampered").expect("tamper blob");
@@ -1206,7 +1218,7 @@ mod tests {
             expected_bundle_ref: Some(&published.bundle_ref),
             peer: "peer:source",
             ledger_root: &destination,
-            fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
         })
         .expect_err("tampered bundle rejected");
         assert!(!error.to_string().is_empty());
@@ -1216,7 +1228,7 @@ mod tests {
     fn fetched_forked_chain_segment_requires_diagnostic_policy() {
         let source = temp_dir("chain-fork-source");
         let iroh = temp_dir("chain-fork-iroh");
-        let chain = evidence_chain::ChainScope::new("test-chain", "artifact-fork", "epoch-1");
+        let chain = crate::evidence_chain::ChainScope::new("test-chain", "artifact-fork", "epoch-1");
         let genesis = import_test_link(&source, &chain, None, "payload-a");
         let first_child = import_test_link(&source, &chain, Some(&genesis), "payload-b");
         let _second_child = import_test_link(&source, &chain, Some(&genesis), "payload-c");
@@ -1227,7 +1239,7 @@ mod tests {
             anchor_ref: None,
             expected_head: Some(&first_child.link_ref),
             node: "node:source",
-            fork_policy: evidence_chain::ChainForkPolicy::RetainForkEvidence,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RetainForkEvidence,
         })
         .expect("publish retained-fork segment");
         let production_destination = temp_dir("chain-fork-prod-destination");
@@ -1237,7 +1249,7 @@ mod tests {
             expected_bundle_ref: Some(&published.bundle_ref),
             peer: "peer:source",
             ledger_root: &production_destination,
-            fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
         })
         .expect_err("production policy rejects fetched forks");
         assert!(production_error.to_string().contains("fork diagnostics"));
@@ -1248,10 +1260,11 @@ mod tests {
             expected_bundle_ref: Some(&published.bundle_ref),
             peer: "peer:source",
             ledger_root: &diagnostic_destination,
-            fork_policy: evidence_chain::ChainForkPolicy::RetainForkEvidence,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RetainForkEvidence,
         })
         .expect("diagnostic policy retains fetched forks");
-        let diagnostic_index = evidence_chain::build_chain_index(&diagnostic_destination).expect("diagnostic index");
+        let diagnostic_index =
+            crate::evidence_chain::build_chain_index(&diagnostic_destination).expect("diagnostic index");
         assert!(diagnostic_index.heads_for_chain(&chain).contains(&first_child.link_ref));
         assert!(!diagnostic_index.fork_evidence_for_chain(&chain).is_empty());
     }
@@ -1284,44 +1297,44 @@ mod tests {
 
     fn append_test_link(
         root: &Path,
-        chain: &evidence_chain::ChainScope,
-        previous: Option<&evidence_chain::ChainLink>,
+        chain: &crate::evidence_chain::ChainScope,
+        previous: Option<&crate::evidence_chain::ChainLink>,
         payload_label: &str,
-    ) -> evidence_chain::ChainLink {
+    ) -> crate::evidence_chain::ChainLink {
         let value = test_link_value(root, chain, previous, payload_label);
-        let link = evidence_chain::parse_chain_link(&value).expect("parse link");
-        evidence_chain::append_chain_link(root, &value).expect("append link");
+        let link = crate::evidence_chain::parse_chain_link(&value).expect("parse link");
+        crate::evidence_chain::append_chain_link(root, &value).expect("append link");
         link
     }
 
     fn import_test_link(
         root: &Path,
-        chain: &evidence_chain::ChainScope,
-        previous: Option<&evidence_chain::ChainLink>,
+        chain: &crate::evidence_chain::ChainScope,
+        previous: Option<&crate::evidence_chain::ChainLink>,
         payload_label: &str,
-    ) -> evidence_chain::ChainLink {
+    ) -> crate::evidence_chain::ChainLink {
         let value = test_link_value(root, chain, previous, payload_label);
-        let link = evidence_chain::parse_chain_link(&value).expect("parse link");
-        ledger::import_artifact(root, &value).expect("import raw link");
+        let link = crate::evidence_chain::parse_chain_link(&value).expect("parse link");
+        crate::ledger::import_artifact(root, &value).expect("import raw link");
         link
     }
 
     fn test_link_value(
         root: &Path,
-        chain: &evidence_chain::ChainScope,
-        previous: Option<&evidence_chain::ChainLink>,
+        chain: &crate::evidence_chain::ChainScope,
+        previous: Option<&crate::evidence_chain::ChainLink>,
         payload_label: &str,
     ) -> IoValue {
         let payload = stored_payload(root, payload_label);
         match previous {
-            Some(previous) => evidence_chain::chain_link_value(&evidence_chain::ChainLinkInput::append(
+            Some(previous) => crate::evidence_chain::chain_link_value(&crate::evidence_chain::ChainLinkInput::append(
                 previous,
                 payload,
                 Vec::new(),
                 sample_producer(),
                 ref_for(&format!("append-input-{payload_label}")),
             )),
-            None => evidence_chain::chain_link_value(&evidence_chain::ChainLinkInput::genesis(
+            None => crate::evidence_chain::chain_link_value(&crate::evidence_chain::ChainLinkInput::genesis(
                 chain.clone(),
                 payload,
                 Vec::new(),
@@ -1331,35 +1344,37 @@ mod tests {
         }
     }
 
-    fn stored_payload(root: &Path, label: &str) -> evidence_chain::ChainPayload {
+    fn stored_payload(root: &Path, label: &str) -> crate::evidence_chain::ChainPayload {
         let artifact = record("test-payload", vec![string(label)]);
-        let imported = ledger::import_artifact(root, &artifact).expect("import payload");
-        evidence_chain::ChainPayload::new("test-payload", imported.artifact_ref, "molten.test.payload.v1")
+        let imported = crate::ledger::import_artifact(root, &artifact).expect("import payload");
+        crate::evidence_chain::ChainPayload::new("test-payload", imported.artifact_ref, "molten.test.payload.v1")
     }
 
-    fn checkpoint_range_predicate(root: &Path, verify: &evidence_chain::ChainVerify) -> String {
+    fn checkpoint_range_predicate(root: &Path, verify: &crate::evidence_chain::ChainVerify) -> String {
         verify
             .predicate_receipt_refs
             .iter()
             .find(|predicate_ref| {
-                let value = ledger::read_artifact(root, predicate_ref).expect("read predicate receipt");
-                evidence_chain::parse_chain_predicate_receipt(&value).expect("parse predicate receipt").predicate
-                    == evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE
+                let value = crate::ledger::read_artifact(root, predicate_ref).expect("read predicate receipt");
+                crate::evidence_chain::parse_chain_predicate_receipt(&value)
+                    .expect("parse predicate receipt")
+                    .predicate
+                    == crate::evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE
             })
             .cloned()
             .expect("checkpoint range predicate ref")
     }
 
-    fn checkpoint_checks() -> Vec<evidence_chain::ChainCheck> {
+    fn checkpoint_checks() -> Vec<crate::evidence_chain::ChainCheck> {
         vec![
-            evidence_chain::ChainCheck::pass("raft-control-plane-command"),
-            evidence_chain::ChainCheck::pass("verified-range"),
-            evidence_chain::ChainCheck::pass("checkpoint-freshness"),
+            crate::evidence_chain::ChainCheck::pass("raft-control-plane-command"),
+            crate::evidence_chain::ChainCheck::pass("verified-range"),
+            crate::evidence_chain::ChainCheck::pass("checkpoint-freshness"),
         ]
     }
 
-    fn sample_producer() -> evidence_chain::ChainProducer {
-        evidence_chain::ChainProducer::new("node:local", ref_for("producer-key"))
+    fn sample_producer() -> crate::evidence_chain::ChainProducer {
+        crate::evidence_chain::ChainProducer::new("node:local", ref_for("producer-key"))
     }
 
     fn ref_for(label: &str) -> String {
