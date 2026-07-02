@@ -1,18 +1,18 @@
-use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-
-use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
 
 use crate::artifacts;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::ledger;
 use crate::octet_gate;
 use crate::protocol_session;
+
+type BtreeSet<T> = std::collections::BTreeSet<T>;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Path = std::path::Path;
+type PathBuf = std::path::PathBuf;
+type Record<T> = preserves::Record<T>;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
 pub const SUPPORTED_TASK_KINDS: &[&str] = &[
     "install-artifact",
@@ -46,11 +46,11 @@ const UPGRADE_NAME_POINTER_SCHEMA: &str = crate::preserves_rail::UPGRADE_NAME_PO
 const UPGRADE_PLAN_SCHEMA: &str = crate::preserves_rail::UPGRADE_PLAN_SCHEMA;
 const UPGRADE_RECEIPT_SCHEMA: &str = crate::preserves_rail::UPGRADE_RECEIPT_SCHEMA;
 
-fn bool_value(value: bool) -> IOValue {
+fn bool_value(value: bool) -> IoValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
@@ -58,27 +58,27 @@ fn content_ref_hex(value: &str) -> Result<&str> {
     crate::preserves_rail::content_ref_hex(value)
 }
 
-fn parse_text(source: &str) -> Result<IOValue> {
+fn parse_text(source: &str) -> Result<IoValue> {
     crate::preserves_rail::parse_text(source)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn to_text(value: &IOValue) -> Result<String> {
+fn to_text(value: &IoValue) -> Result<String> {
     crate::preserves_rail::to_text(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -86,7 +86,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -127,7 +127,7 @@ pub struct UpgradePlanInput {
     pub rollback_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub source_gate_receipt_values: Vec<IOValue>,
+    pub source_gate_receipt_values: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,7 +140,7 @@ pub struct NameMovePlanInput {
     pub capability_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub source_gate_receipt_values: Vec<IOValue>,
+    pub source_gate_receipt_values: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,7 +171,7 @@ pub struct UpgradePlan {
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -182,7 +182,7 @@ pub struct UpgradeReceipt {
     pub session_id: String,
     pub plan_ref: String,
     pub task_id: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 struct UpgradeReceiptValueInput<'a> {
@@ -217,7 +217,7 @@ pub struct NamePointer {
     pub artifact_ref: String,
     pub previous_ref: Option<String>,
     pub receipt_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -236,7 +236,7 @@ pub struct UpgradeStatus {
     pub remaining_task_ids: Vec<String>,
 }
 
-pub fn upgrade_task_value(task: &UpgradeTaskInput) -> Result<IOValue> {
+pub fn upgrade_task_value(task: &UpgradeTaskInput) -> Result<IoValue> {
     validate_task_input(task)?;
     Ok(record("upgrade-task-v1", vec![
         string(&task.task_id),
@@ -250,7 +250,7 @@ pub fn upgrade_task_value(task: &UpgradeTaskInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn upgrade_plan_value(input: &UpgradePlanInput) -> Result<IOValue> {
+pub fn upgrade_plan_value(input: &UpgradePlanInput) -> Result<IoValue> {
     validate_plan_input(input)?;
     let source_gate_validation_refs = validate_upgrade_source_gates(input)?;
     let evidence_refs =
@@ -281,7 +281,7 @@ pub fn upgrade_plan_value(input: &UpgradePlanInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn name_move_plan_value(ledger_root: &Path, input: &NameMovePlanInput) -> Result<IOValue> {
+pub fn name_move_plan_value(ledger_root: &Path, input: &NameMovePlanInput) -> Result<IoValue> {
     name_move_plan_value_with_registry(None, ledger_root, input)
 }
 
@@ -289,7 +289,7 @@ pub fn name_move_plan_value_with_registry(
     registry_root: Option<&Path>,
     ledger_root: &Path,
     input: &NameMovePlanInput,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_non_empty(&input.name, "upgrade name")?;
     validate_ref(&input.from_ref, "name move from ref")?;
     validate_ref(&input.to_ref, "name move to ref")?;
@@ -359,7 +359,7 @@ fn planned_task(
     }
 }
 
-pub fn parse_upgrade_plan(value: &IOValue) -> Result<UpgradePlan> {
+pub fn parse_upgrade_plan(value: &IoValue) -> Result<UpgradePlan> {
     let fields = value
         .collect_simple_record("upgrade-plan-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-plan-v1 ...>"))?;
@@ -399,7 +399,7 @@ pub fn parse_upgrade_plan(value: &IOValue) -> Result<UpgradePlan> {
 
 pub fn compute_impact_set(ledger_root: &Path, seed_refs: &[String]) -> Result<Vec<String>> {
     validate_refs(seed_refs, "impact seed ref")?;
-    let mut impacted: BTreeSet<String> = seed_refs.iter().cloned().collect();
+    let mut impacted: BtreeSet<String> = seed_refs.iter().cloned().collect();
     let mut artifacts = Vec::new();
     for entry in ledger::list_artifacts(ledger_root)? {
         let value = ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
@@ -423,7 +423,7 @@ pub fn compute_impact_set(ledger_root: &Path, seed_refs: &[String]) -> Result<Ve
     Ok(impacted.into_iter().collect())
 }
 
-pub fn create_session(root: &Path, plan_value: &IOValue) -> Result<UpgradeSessionCreated> {
+pub fn create_session(root: &Path, plan_value: &IoValue) -> Result<UpgradeSessionCreated> {
     ensure_dirs(root)?;
     let plan = parse_upgrade_plan(plan_value)?;
     if plan.policy_refs.is_empty() {
@@ -865,7 +865,7 @@ fn protocol_drain_task_outcome(
 }
 
 fn protocol_drain_evidence_refs(task: &UpgradeTask) -> Result<Vec<String>> {
-    let mut refs = BTreeSet::new();
+    let mut refs = BtreeSet::new();
     refs.extend(task.precondition_refs.iter().cloned());
     refs.extend(task.postcondition_refs.iter().cloned());
     let refs: Vec<String> = refs.into_iter().collect();
@@ -874,7 +874,7 @@ fn protocol_drain_evidence_refs(task: &UpgradeTask) -> Result<Vec<String>> {
 }
 
 fn protocol_drain_expected_protocol_refs(plan: &UpgradePlan, task: &UpgradeTask) -> Result<Vec<String>> {
-    let mut refs = BTreeSet::new();
+    let mut refs = BtreeSet::new();
     if let Some(from_ref) = task.from_ref.as_ref() {
         refs.insert(from_ref.clone());
     } else if is_canonical_ref(&task.subject) {
@@ -1008,7 +1008,7 @@ fn validate_plan_input(input: &UpgradePlanInput) -> Result<()> {
     if input.tasks.is_empty() {
         return Err(MoltenError::invalid_harness("upgrade plan must contain at least one task"));
     }
-    let mut seen = BTreeSet::new();
+    let mut seen = BtreeSet::new();
     for task in &input.tasks {
         validate_task_input(task)?;
         if !seen.insert(task.task_id.clone()) {
@@ -1031,7 +1031,7 @@ fn validate_parsed_plan(plan: &UpgradePlan) -> Result<()> {
     if plan.tasks.is_empty() {
         return Err(MoltenError::invalid_harness("upgrade plan must contain at least one task"));
     }
-    let mut seen = BTreeSet::new();
+    let mut seen = BtreeSet::new();
     for task in &plan.tasks {
         validate_task(task)?;
         if !seen.insert(task.task_id.clone()) {
@@ -1117,14 +1117,14 @@ fn validate_compatibility(compatibility: &UpgradeCompatibilityWindow) -> Result<
     validate_refs(&compatibility.old_refs, "compatibility old ref")?;
     validate_refs(&compatibility.new_refs, "compatibility new ref")?;
     validate_refs(&compatibility.policy_refs, "compatibility policy ref")?;
-    let old: BTreeSet<_> = compatibility.old_refs.iter().collect();
+    let old: BtreeSet<_> = compatibility.old_refs.iter().collect();
     if compatibility.new_refs.iter().any(|new_ref| old.contains(new_ref)) {
         return Err(MoltenError::invalid_harness("compatibility window old/new refs must be explicit and distinct"));
     }
     Ok(())
 }
 
-fn compatibility_window_value(compatibility: &UpgradeCompatibilityWindow) -> Result<IOValue> {
+fn compatibility_window_value(compatibility: &UpgradeCompatibilityWindow) -> Result<IoValue> {
     validate_compatibility(compatibility)?;
     Ok(record("compatibility-window", vec![
         record("old", vec![refs_sequence(&compatibility.old_refs)]),
@@ -1134,7 +1134,7 @@ fn compatibility_window_value(compatibility: &UpgradeCompatibilityWindow) -> Res
     ]))
 }
 
-fn parse_compatibility_window(value: &Value<IOValue>) -> Result<UpgradeCompatibilityWindow> {
+fn parse_compatibility_window(value: &Value<IoValue>) -> Result<UpgradeCompatibilityWindow> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, "compatibility-window", 4)?;
     Ok(UpgradeCompatibilityWindow {
@@ -1145,7 +1145,7 @@ fn parse_compatibility_window(value: &Value<IOValue>) -> Result<UpgradeCompatibi
     })
 }
 
-fn parse_tasks(value: &Value<IOValue>) -> Result<Vec<UpgradeTask>> {
+fn parse_tasks(value: &Value<IoValue>) -> Result<Vec<UpgradeTask>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, "tasks", 1)?;
     let items = required_sequence(&fields[0], "upgrade tasks")?;
@@ -1156,7 +1156,7 @@ fn parse_tasks(value: &Value<IOValue>) -> Result<Vec<UpgradeTask>> {
     Ok(tasks)
 }
 
-fn parse_task(value: &IOValue) -> Result<UpgradeTask> {
+fn parse_task(value: &IoValue) -> Result<UpgradeTask> {
     let fields = value
         .collect_simple_record("upgrade-task-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-task-v1 ...>"))?;
@@ -1174,7 +1174,7 @@ fn parse_task(value: &IOValue) -> Result<UpgradeTask> {
     })
 }
 
-pub fn parse_upgrade_receipt(value: &IOValue) -> Result<UpgradeReceipt> {
+pub fn parse_upgrade_receipt(value: &IoValue) -> Result<UpgradeReceipt> {
     let fields = value
         .collect_simple_record("upgrade-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-receipt-v1 ...>"))?;
@@ -1198,7 +1198,7 @@ pub fn parse_upgrade_receipt(value: &IOValue) -> Result<UpgradeReceipt> {
     })
 }
 
-fn upgrade_receipt_value(input: &UpgradeReceiptValueInput<'_>) -> Result<IOValue> {
+fn upgrade_receipt_value(input: &UpgradeReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "upgrade receipt operation")?;
     if input.decision != "pass" && input.decision != "deny" {
         return Err(MoltenError::invalid_harness(format!("unsupported upgrade receipt decision {}", input.decision)));
@@ -1224,7 +1224,7 @@ fn name_pointer_value(
     artifact_ref: &str,
     previous_ref: Option<&str>,
     receipt_ref: &str,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_non_empty(name, "name pointer name")?;
     validate_non_empty(pointer_kind, "name pointer kind")?;
     validate_ref(artifact_ref, "name pointer artifact ref")?;
@@ -1243,7 +1243,7 @@ fn name_pointer_value(
     ]))
 }
 
-fn parse_name_pointer(value: &IOValue) -> Result<NamePointer> {
+fn parse_name_pointer(value: &IoValue) -> Result<NamePointer> {
     let fields = value
         .collect_simple_record("upgrade-name-pointer-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-name-pointer-v1 ...>"))?;
@@ -1261,7 +1261,7 @@ fn parse_name_pointer(value: &IOValue) -> Result<NamePointer> {
 }
 
 fn plan_refs(plan: &UpgradePlan) -> Vec<String> {
-    let mut refs = BTreeSet::new();
+    let mut refs = BtreeSet::new();
     refs.insert(plan.plan_ref.clone());
     refs.insert(plan.initiator_ref.clone());
     refs.extend(plan.capability_refs.iter().cloned());
@@ -1277,7 +1277,7 @@ fn plan_refs(plan: &UpgradePlan) -> Vec<String> {
 }
 
 fn task_refs(task: &UpgradeTask) -> Vec<String> {
-    let mut refs = BTreeSet::new();
+    let mut refs = BtreeSet::new();
     if let Some(value) = task.from_ref.as_ref() {
         refs.insert(value.clone());
     }
@@ -1371,18 +1371,18 @@ fn ensure_dirs(root: &Path) -> Result<()> {
     fs::create_dir_all(root.join("status")).map_err(MoltenError::from)
 }
 
-fn write_preserves(path: &Path, value: &IOValue) -> Result<()> {
+fn write_preserves(path: &Path, value: &IoValue) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(MoltenError::from)?;
     }
     fs::write(path, to_text(value)?).map_err(MoltenError::from)
 }
 
-fn read_preserves(path: &Path) -> Result<IOValue> {
+fn read_preserves(path: &Path) -> Result<IoValue> {
     parse_text(&fs::read_to_string(path).map_err(MoltenError::from)?)
 }
 
-fn store_receipt(root: &Path, receipt_value: &IOValue) -> Result<()> {
+fn store_receipt(root: &Path, receipt_value: &IoValue) -> Result<()> {
     let receipt_ref = canonical_hash(receipt_value)?;
     write_preserves(&receipt_path(root, &receipt_ref)?, receipt_value)
 }
@@ -1416,23 +1416,23 @@ fn local_ref(kind: &str, a: &str, b: &str) -> Result<String> {
     canonical_hash(&record("upgrade-local-ref", vec![string(kind), string(a), string(b)]))
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_u64_value(value: Option<u64>) -> IOValue {
+fn optional_u64_value(value: Option<u64>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![u64_value(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1442,7 +1442,7 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_string_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1452,7 +1452,7 @@ fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>>
     required_string(value, "optional string").map(Some)
 }
 
-fn parse_optional_u64_value(value: &Value<IOValue>) -> Result<Option<u64>> {
+fn parse_optional_u64_value(value: &Value<IoValue>) -> Result<Option<u64>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1462,31 +1462,31 @@ fn parse_optional_u64_value(value: &Value<IOValue>) -> Result<Option<u64>> {
     required_u64(value, "optional u64").map(Some)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn record_optional_u64(value: &Value<IOValue>, label: &str) -> Result<Option<u64>> {
+fn record_optional_u64(value: &Value<IoValue>, label: &str) -> Result<Option<u64>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_u64_value(&record[0])
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
@@ -1510,7 +1510,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     Ok(())
 }
 
-fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_value(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     ensure_count_at_most(items.len(), MAX_UPGRADE_REFS, label)?;
     let mut refs = Vec::with_capacity(items.len());
@@ -1520,17 +1520,17 @@ fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<S
     Ok(refs)
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
 }
 
-fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
@@ -1556,7 +1556,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -1566,43 +1566,43 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
-fn required_bool(value: &Value<IOValue>, field: &str) -> Result<bool> {
+fn required_bool(value: &Value<IoValue>, field: &str) -> Result<bool> {
     value.as_boolean().ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {field}")))
 }
 
@@ -1937,7 +1937,7 @@ mod tests {
             plan.tasks.iter().position(|task| task.kind == "transcript-rerun")
                 < plan.tasks.iter().position(|task| task.kind == "cutover")
         );
-        let old: BTreeSet<_> = plan.compatibility.old_refs.iter().collect();
+        let old: BtreeSet<_> = plan.compatibility.old_refs.iter().collect();
         assert!(plan.compatibility.new_refs.iter().all(|new_ref| !old.contains(new_ref)));
     }
 
@@ -1972,7 +1972,7 @@ mod tests {
         .expect("protocol gate")
     }
 
-    fn protocol_drain_plan_value(gate_ref: &str, old_protocol_ref: &str, new_protocol_ref: &str) -> Result<IOValue> {
+    fn protocol_drain_plan_value(gate_ref: &str, old_protocol_ref: &str, new_protocol_ref: &str) -> Result<IoValue> {
         upgrade_plan_value(&UpgradePlanInput {
             session_id: "session-protocol-drain".to_string(),
             reason: "protocol drain".to_string(),
@@ -2022,7 +2022,7 @@ mod tests {
         canonical_hash(&record("upgrade-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    fn source_gate_values() -> Vec<IOValue> {
+    fn source_gate_values() -> Vec<IoValue> {
         vec![octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("source gate fixture")]
     }
 
