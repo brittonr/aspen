@@ -1,14 +1,3 @@
-use crate::artifacts;
-use crate::authority;
-use crate::chunk_store;
-use crate::eval_cache;
-use crate::ledger;
-use crate::octet_gate;
-use crate::preserves_rail;
-use crate::remote_dataspace;
-use crate::resources;
-use crate::typed_storage;
-
 type FilePath = std::path::Path;
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
@@ -515,8 +504,8 @@ pub struct JobWorkerExecuteInput<'a> {
     pub storage_root: &'a FilePath,
     pub cache_root: &'a FilePath,
     pub chunk_root: &'a FilePath,
-    pub delivery: &'a remote_dataspace::RemoteDataspaceDelivery,
-    pub delivery_log: Option<&'a remote_dataspace::RemoteDeliveryLog>,
+    pub delivery: &'a crate::remote_dataspace::RemoteDataspaceDelivery,
+    pub delivery_log: Option<&'a crate::remote_dataspace::RemoteDeliveryLog>,
     pub admission_receipt_value: &'a IoValue,
     pub execution_request_value: &'a IoValue,
     pub ledger_root: Option<&'a FilePath>,
@@ -695,7 +684,7 @@ struct WorkerResultValueInput<'a> {
 
 struct WorkerStatusValueInput<'a> {
     request: &'a JobWorkerRequest,
-    delivery: &'a remote_dataspace::RemoteDataspaceDelivery,
+    delivery: &'a crate::remote_dataspace::RemoteDataspaceDelivery,
     state: &'a str,
     execution_receipt_ref: Option<&'a str>,
     diagnostics: &'a [String],
@@ -735,17 +724,17 @@ pub fn job_node_value(input: NodeValueInput<'_>) -> Result<IoValue> {
     validate_refs(input.policy_refs, "job node policy ref")?;
     validate_refs(input.evidence_refs, "job node evidence ref")?;
     reject_mobile_closure_config(&input.config)?;
-    Ok(preserves_rail::record("job-node-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_DAG_NODE_SCHEMA),
-        preserves_rail::record("id", vec![preserves_rail::string(input.id)]),
-        preserves_rail::record("kind", vec![preserves_rail::string(input.kind)]),
-        preserves_rail::record("stage-artifact", vec![optional_ref_value(input.stage_artifact_ref)]),
-        preserves_rail::record("inputs", vec![ports_sequence(input.input_ports)]),
-        preserves_rail::record("outputs", vec![ports_sequence(input.output_ports)]),
-        preserves_rail::record("config", vec![input.config]),
-        preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
-        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+    Ok(crate::preserves_rail::record("job-node-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_DAG_NODE_SCHEMA),
+        crate::preserves_rail::record("id", vec![crate::preserves_rail::string(input.id)]),
+        crate::preserves_rail::record("kind", vec![crate::preserves_rail::string(input.kind)]),
+        crate::preserves_rail::record("stage-artifact", vec![optional_ref_value(input.stage_artifact_ref)]),
+        crate::preserves_rail::record("inputs", vec![ports_sequence(input.input_ports)]),
+        crate::preserves_rail::record("outputs", vec![ports_sequence(input.output_ports)]),
+        crate::preserves_rail::record("config", vec![input.config]),
+        crate::preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
+        crate::preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        crate::preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&[
             "stage-artifact-not-closure",
             "bounded-stage-kind",
@@ -764,19 +753,19 @@ pub fn job_edge_value(input: EdgeValueInput<'_>) -> Result<IoValue> {
     }
     validate_partitioning(input.partitioning)?;
     validate_materialization(input.materialization)?;
-    Ok(preserves_rail::record("job-edge-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_DAG_EDGE_SCHEMA),
-        preserves_rail::record("from", vec![
-            preserves_rail::string(input.from_node),
-            preserves_rail::string(input.from_port),
+    Ok(crate::preserves_rail::record("job-edge-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_DAG_EDGE_SCHEMA),
+        crate::preserves_rail::record("from", vec![
+            crate::preserves_rail::string(input.from_node),
+            crate::preserves_rail::string(input.from_port),
         ]),
-        preserves_rail::record("to", vec![
-            preserves_rail::string(input.to_node),
-            preserves_rail::string(input.to_port),
+        crate::preserves_rail::record("to", vec![
+            crate::preserves_rail::string(input.to_node),
+            crate::preserves_rail::string(input.to_port),
         ]),
-        preserves_rail::record("schema", vec![optional_ref_value(input.schema_ref)]),
-        preserves_rail::record("partitioning", vec![preserves_rail::string(input.partitioning)]),
-        preserves_rail::record("materialization", vec![preserves_rail::string(input.materialization)]),
+        crate::preserves_rail::record("schema", vec![optional_ref_value(input.schema_ref)]),
+        crate::preserves_rail::record("partitioning", vec![crate::preserves_rail::string(input.partitioning)]),
+        crate::preserves_rail::record("materialization", vec![crate::preserves_rail::string(input.materialization)]),
         checks_value(&["schema-bound", "canonical-edge", "explicit-materialization"]),
     ]))
 }
@@ -786,18 +775,20 @@ pub fn job_dag_value(input: DagValueInput<'_>) -> Result<IoValue> {
     validate_refs(input.effect_manifest_refs, "job effect manifest ref")?;
     validate_refs(input.policy_refs, "job policy ref")?;
     validate_refs(input.evidence_refs, "job evidence ref")?;
-    Ok(preserves_rail::record("job-dag-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_DAG_SCHEMA),
-        preserves_rail::record("version", vec![preserves_rail::string("v1")]),
-        preserves_rail::record("nodes", vec![preserves_rail::sequence(input.nodes)]),
-        preserves_rail::record("edges", vec![preserves_rail::sequence(input.edges)]),
-        preserves_rail::record("outputs", vec![preserves_rail::sequence(
-            input.output_roots.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-dag-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_DAG_SCHEMA),
+        crate::preserves_rail::record("version", vec![crate::preserves_rail::string("v1")]),
+        crate::preserves_rail::record("nodes", vec![crate::preserves_rail::sequence(input.nodes)]),
+        crate::preserves_rail::record("edges", vec![crate::preserves_rail::sequence(input.edges)]),
+        crate::preserves_rail::record("outputs", vec![crate::preserves_rail::sequence(
+            input.output_roots.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("schemas", vec![refs_sequence(&sorted_unique(input.schema_refs))]),
-        preserves_rail::record("effect-manifests", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
-        preserves_rail::record("policies", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+        crate::preserves_rail::record("schemas", vec![refs_sequence(&sorted_unique(input.schema_refs))]),
+        crate::preserves_rail::record("effect-manifests", vec![refs_sequence(&sorted_unique(
+            input.effect_manifest_refs,
+        ))]),
+        crate::preserves_rail::record("policies", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        crate::preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&[
             "canonical-dag",
             "no-name-identity",
@@ -820,31 +811,31 @@ pub fn job_output_request_value(input: OutputRequestValueInput<'_>) -> Result<Io
     if let Some(seed_config_ref) = input.seed_config_ref {
         validate_ref(seed_config_ref, "job output request seed config ref")?;
     }
-    Ok(preserves_rail::record("job-output-request-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_DAG_OUTPUT_REQUEST_SCHEMA),
-        preserves_rail::record("dag", vec![preserves_rail::string(input.dag_ref)]),
-        preserves_rail::record("roots", vec![preserves_rail::sequence(
-            input.roots.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-output-request-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_DAG_OUTPUT_REQUEST_SCHEMA),
+        crate::preserves_rail::record("dag", vec![crate::preserves_rail::string(input.dag_ref)]),
+        crate::preserves_rail::record("roots", vec![crate::preserves_rail::sequence(
+            input.roots.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("materialization", vec![preserves_rail::string(input.materialization)]),
-        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        preserves_rail::record("handler-profile", vec![optional_ref_value(input.handler_profile_ref)]),
-        preserves_rail::record("seed-config", vec![optional_ref_value(input.seed_config_ref)]),
+        crate::preserves_rail::record("materialization", vec![crate::preserves_rail::string(input.materialization)]),
+        crate::preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        crate::preserves_rail::record("handler-profile", vec![optional_ref_value(input.handler_profile_ref)]),
+        crate::preserves_rail::record("seed-config", vec![optional_ref_value(input.seed_config_ref)]),
         checks_value(&["request-ref-bound", "full-ref-identity", "deterministic-inputs-bound"]),
     ]))
 }
 
 pub fn builtin_stage_operation_value(operation: &str) -> Result<IoValue> {
     validate_stage_operation(operation)?;
-    Ok(preserves_rail::record("job-stage-operation-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_STAGE_OPERATION_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string(operation)]),
+    Ok(crate::preserves_rail::record("job-stage-operation-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_STAGE_OPERATION_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(operation)]),
         checks_value(&["bounded-built-in", "no-mobile-closure", "canonical-operation"]),
     ]))
 }
 
 pub fn builtin_stage_operation_ref(operation: &str) -> Result<String> {
-    preserves_rail::canonical_hash(&builtin_stage_operation_value(operation)?)
+    crate::preserves_rail::canonical_hash(&builtin_stage_operation_value(operation)?)
 }
 
 pub fn job_sync_request_value(input: SyncRequestValueInput<'_>) -> Result<IoValue> {
@@ -856,16 +847,16 @@ pub fn job_sync_request_value(input: SyncRequestValueInput<'_>) -> Result<IoValu
     validate_refs(input.policy_refs, "job sync policy ref")?;
     validate_refs(input.capability_refs, "job sync capability ref")?;
     validate_refs(input.evidence_refs, "job sync evidence ref")?;
-    Ok(preserves_rail::record("job-sync-request-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_SYNC_REQUEST_SCHEMA),
-        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(
-            input.stage_ids.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-sync-request-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_SYNC_REQUEST_SCHEMA),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(input.job_ref)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            input.stage_ids.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(input.target_peer)]),
-        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        preserves_rail::record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
-        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(input.target_peer)]),
+        crate::preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        crate::preserves_rail::record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
+        crate::preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&["transport-neutral", "no-execution", "full-ref-identity"]),
     ]))
 }
@@ -874,11 +865,11 @@ pub fn parse_job_sync_request_value(value: &IoValue) -> Result<JobSyncRequest> {
     let fields = value
         .collect_simple_record("job-sync-request-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-sync-request-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_SYNC_REQUEST_SCHEMA, "job sync request")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_SYNC_REQUEST_SCHEMA, "job sync request")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "no-execution", "job sync request")?;
     Ok(JobSyncRequest {
-        request_ref: preserves_rail::canonical_hash(value)?,
+        request_ref: crate::preserves_rail::canonical_hash(value)?,
         job_ref: record_ref(&fields[1], "job")?,
         stage_ids: record_node_id_sequence(&fields[2], "stages")?,
         target_peer: record_string(&fields[3], "target-peer")?,
@@ -900,18 +891,18 @@ pub fn job_admission_request_value(input: AdmissionRequestValueInput<'_>) -> Res
     validate_refs(input.capability_refs, "job admission capability ref")?;
     validate_refs(input.evidence_refs, "job admission evidence ref")?;
     validate_refs(input.resource_refs, "job admission resource ref")?;
-    Ok(preserves_rail::record("job-admission-request-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_ADMISSION_REQUEST_SCHEMA),
-        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
-        preserves_rail::record("sync", vec![preserves_rail::string(input.sync_ref)]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(
-            input.stage_ids.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-admission-request-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_ADMISSION_REQUEST_SCHEMA),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(input.job_ref)]),
+        crate::preserves_rail::record("sync", vec![crate::preserves_rail::string(input.sync_ref)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            input.stage_ids.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(input.target_peer)]),
-        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        preserves_rail::record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
-        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
-        preserves_rail::record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(input.target_peer)]),
+        crate::preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        crate::preserves_rail::record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
+        crate::preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+        crate::preserves_rail::record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
         checks_value(&["target-side-admission", "no-execution", "full-ref-identity"]),
     ]))
 }
@@ -920,11 +911,11 @@ pub fn parse_job_admission_request_value(value: &IoValue) -> Result<JobAdmission
     let fields = value
         .collect_simple_record("job-admission-request-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-admission-request-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_ADMISSION_REQUEST_SCHEMA, "job admission request")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_ADMISSION_REQUEST_SCHEMA, "job admission request")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "no-execution", "job admission request")?;
     Ok(JobAdmissionRequest {
-        request_ref: preserves_rail::canonical_hash(value)?,
+        request_ref: crate::preserves_rail::canonical_hash(value)?,
         job_ref: record_ref(&fields[1], "job")?,
         sync_ref: record_ref(&fields[2], "sync")?,
         stage_ids: record_node_id_sequence(&fields[3], "stages")?,
@@ -950,20 +941,20 @@ pub fn job_execution_request_value(input: ExecutionRequestValueInput<'_>) -> Res
     validate_refs(input.policy_refs, "job execution policy ref")?;
     validate_refs(input.capability_refs, "job execution capability ref")?;
     validate_refs(input.resource_refs, "job execution resource ref")?;
-    Ok(preserves_rail::record("job-execution-request-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_EXECUTION_REQUEST_SCHEMA),
-        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
-        preserves_rail::record("admission", vec![preserves_rail::string(input.admission_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(input.target_peer)]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(
-            input.stage_ids.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-execution-request-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_EXECUTION_REQUEST_SCHEMA),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(input.job_ref)]),
+        crate::preserves_rail::record("admission", vec![crate::preserves_rail::string(input.admission_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(input.target_peer)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            input.stage_ids.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("storage", vec![preserves_rail::string(input.storage_profile_ref)]),
-        preserves_rail::record("cache", vec![preserves_rail::string(input.cache_profile_ref)]),
-        preserves_rail::record("chunks", vec![preserves_rail::string(input.chunk_profile_ref)]),
-        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        preserves_rail::record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
-        preserves_rail::record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
+        crate::preserves_rail::record("storage", vec![crate::preserves_rail::string(input.storage_profile_ref)]),
+        crate::preserves_rail::record("cache", vec![crate::preserves_rail::string(input.cache_profile_ref)]),
+        crate::preserves_rail::record("chunks", vec![crate::preserves_rail::string(input.chunk_profile_ref)]),
+        crate::preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        crate::preserves_rail::record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
+        crate::preserves_rail::record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
         checks_value(&[
             "admission-required",
             "target-state-only",
@@ -977,13 +968,13 @@ pub fn parse_job_execution_request_value(value: &IoValue) -> Result<JobExecution
     let fields = value
         .collect_simple_record("job-execution-request-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-execution-request-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_EXECUTION_REQUEST_SCHEMA, "job execution request")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_EXECUTION_REQUEST_SCHEMA, "job execution request")?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "admission-required", "job execution request")?;
     require_check(&checks, "target-state-only", "job execution request")?;
     require_check(&checks, "no-source-registry", "job execution request")?;
     Ok(JobExecutionRequest {
-        request_ref: preserves_rail::canonical_hash(value)?,
+        request_ref: crate::preserves_rail::canonical_hash(value)?,
         job_ref: record_ref(&fields[1], "job")?,
         admission_ref: record_ref(&fields[2], "admission")?,
         target_peer: record_string(&fields[3], "target-peer")?,
@@ -1000,32 +991,32 @@ pub fn parse_job_execution_request_value(value: &IoValue) -> Result<JobExecution
 
 pub fn job_content_ref_value(content: &JobContentRef) -> Result<IoValue> {
     validate_job_content_ref(content, "job content ref")?;
-    Ok(preserves_rail::record("job-content-ref", vec![
-        preserves_rail::record("content-ref", vec![preserves_rail::string(&content.content_ref)]),
-        preserves_rail::record("size", vec![preserves_rail::u64_value(content.size)]),
-        preserves_rail::record("format", vec![preserves_rail::string(&content.format)]),
-        preserves_rail::record("schema", vec![optional_ref_value(content.schema_ref.as_deref())]),
+    Ok(crate::preserves_rail::record("job-content-ref", vec![
+        crate::preserves_rail::record("content-ref", vec![crate::preserves_rail::string(&content.content_ref)]),
+        crate::preserves_rail::record("size", vec![crate::preserves_rail::u64_value(content.size)]),
+        crate::preserves_rail::record("format", vec![crate::preserves_rail::string(&content.format)]),
+        crate::preserves_rail::record("schema", vec![optional_ref_value(content.schema_ref.as_deref())]),
     ]))
 }
 
 pub fn job_ref_submission_value(input: BlobRefJobSubmissionValueInput<'_>) -> Result<IoValue> {
     validate_blob_ref_submission_input(&input)?;
     let input_values = input.inputs.iter().map(job_content_ref_value).collect::<Result<Vec<_>>>()?;
-    Ok(preserves_rail::record("job-ref-submission-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
-        preserves_rail::record("job-id", vec![preserves_rail::string(input.job_id)]),
-        preserves_rail::record("operation-id", vec![preserves_rail::string(input.operation_id)]),
-        preserves_rail::record("executable", vec![job_content_ref_value(&input.executable)?]),
-        preserves_rail::record("inputs", vec![preserves_rail::sequence(input_values)]),
-        preserves_rail::record("output-mode", vec![preserves_rail::string(input.output_mode)]),
-        preserves_rail::record("input-schemas", vec![refs_sequence(&sorted_unique(input.input_schema_refs))]),
-        preserves_rail::record("output-schemas", vec![refs_sequence(&sorted_unique(input.output_schema_refs))]),
-        preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
-        preserves_rail::record("handler-profile", vec![preserves_rail::string(input.handler_profile)]),
-        preserves_rail::record("authority", vec![preserves_rail::string(input.authority_context_ref)]),
-        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        preserves_rail::record("provenance", vec![refs_sequence(&sorted_unique(input.provenance_refs))]),
-        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+    Ok(crate::preserves_rail::record("job-ref-submission-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
+        crate::preserves_rail::record("job-id", vec![crate::preserves_rail::string(input.job_id)]),
+        crate::preserves_rail::record("operation-id", vec![crate::preserves_rail::string(input.operation_id)]),
+        crate::preserves_rail::record("executable", vec![job_content_ref_value(&input.executable)?]),
+        crate::preserves_rail::record("inputs", vec![crate::preserves_rail::sequence(input_values)]),
+        crate::preserves_rail::record("output-mode", vec![crate::preserves_rail::string(input.output_mode)]),
+        crate::preserves_rail::record("input-schemas", vec![refs_sequence(&sorted_unique(input.input_schema_refs))]),
+        crate::preserves_rail::record("output-schemas", vec![refs_sequence(&sorted_unique(input.output_schema_refs))]),
+        crate::preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
+        crate::preserves_rail::record("handler-profile", vec![crate::preserves_rail::string(input.handler_profile)]),
+        crate::preserves_rail::record("authority", vec![crate::preserves_rail::string(input.authority_context_ref)]),
+        crate::preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        crate::preserves_rail::record("provenance", vec![refs_sequence(&sorted_unique(input.provenance_refs))]),
+        crate::preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&[
             "content-refs-only",
             "no-inline-large-bytes",
@@ -1041,7 +1032,7 @@ pub fn parse_job_ref_submission_value(value: &IoValue) -> Result<BlobRefJobSubmi
     let fields = value
         .collect_simple_record("job-ref-submission-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-ref-submission-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_REF_SUBMISSION_SCHEMA, "job ref submission")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_REF_SUBMISSION_SCHEMA, "job ref submission")?;
     let checks = parse_checks(&fields[14])?;
     require_check(&checks, "content-refs-only", "job ref submission")?;
     require_check(&checks, "no-inline-large-bytes", "job ref submission")?;
@@ -1057,7 +1048,7 @@ pub fn parse_job_ref_submission_value(value: &IoValue) -> Result<BlobRefJobSubmi
         )?;
     }
     let submission = BlobRefJobSubmission {
-        submission_ref: preserves_rail::canonical_hash(value)?,
+        submission_ref: crate::preserves_rail::canonical_hash(value)?,
         job_id: record_string(&fields[1], "job-id")?,
         operation_id: record_ref(&fields[2], "operation-id")?,
         executable,
@@ -1151,21 +1142,23 @@ pub fn job_worker_request_value(input: JobWorkerRequestValueInput<'_>) -> Result
     validate_refs(input.peer_bootstrap_refs, "job worker peer bootstrap ref")?;
     validate_refs(input.node_identity_refs, "job worker node identity ref")?;
     validate_refs(input.evidence_refs, "job worker evidence ref")?;
-    Ok(preserves_rail::record("job-worker-request-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_WORKER_REQUEST_SCHEMA),
-        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(input.target_peer)]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(
-            input.stage_ids.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-worker-request-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_WORKER_REQUEST_SCHEMA),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(input.job_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(input.target_peer)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            input.stage_ids.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("sync", vec![preserves_rail::string(input.sync_ref)]),
-        preserves_rail::record("admission", vec![preserves_rail::string(input.admission_ref)]),
-        preserves_rail::record("execution-request", vec![preserves_rail::string(input.execution_request_ref)]),
-        preserves_rail::record("authority", vec![refs_sequence(&sorted_unique(input.authority_refs))]),
-        preserves_rail::record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
-        preserves_rail::record("peer-bootstrap", vec![refs_sequence(&sorted_unique(input.peer_bootstrap_refs))]),
-        preserves_rail::record("node-identity", vec![refs_sequence(&sorted_unique(input.node_identity_refs))]),
-        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+        crate::preserves_rail::record("sync", vec![crate::preserves_rail::string(input.sync_ref)]),
+        crate::preserves_rail::record("admission", vec![crate::preserves_rail::string(input.admission_ref)]),
+        crate::preserves_rail::record("execution-request", vec![crate::preserves_rail::string(
+            input.execution_request_ref,
+        )]),
+        crate::preserves_rail::record("authority", vec![refs_sequence(&sorted_unique(input.authority_refs))]),
+        crate::preserves_rail::record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
+        crate::preserves_rail::record("peer-bootstrap", vec![refs_sequence(&sorted_unique(input.peer_bootstrap_refs))]),
+        crate::preserves_rail::record("node-identity", vec![refs_sequence(&sorted_unique(input.node_identity_refs))]),
+        crate::preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&[
             "target-admission-required",
             "loopback-execution-required",
@@ -1183,7 +1176,7 @@ pub fn parse_job_worker_request_value(value: &IoValue) -> Result<JobWorkerReques
     let fields = value
         .collect_simple_record("job-worker-request-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-request-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_WORKER_REQUEST_SCHEMA, "job worker request")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_WORKER_REQUEST_SCHEMA, "job worker request")?;
     let checks = parse_checks(&fields[12])?;
     require_check(&checks, "target-admission-required", "job worker request")?;
     require_check(&checks, "loopback-execution-required", "job worker request")?;
@@ -1192,7 +1185,7 @@ pub fn parse_job_worker_request_value(value: &IoValue) -> Result<JobWorkerReques
     require_check(&checks, "target-state-only", "job worker request")?;
     require_check(&checks, "no-mobile-closures", "job worker request")?;
     Ok(JobWorkerRequest {
-        request_ref: preserves_rail::canonical_hash(value)?,
+        request_ref: crate::preserves_rail::canonical_hash(value)?,
         job_ref: record_ref(&fields[1], "job")?,
         target_peer: record_string(&fields[2], "target-peer")?,
         stage_ids: record_node_id_sequence(&fields[3], "stages")?,
@@ -1208,7 +1201,9 @@ pub fn parse_job_worker_request_value(value: &IoValue) -> Result<JobWorkerReques
     })
 }
 
-pub fn job_worker_envelope(input: JobWorkerEnvelopeInput<'_>) -> Result<remote_dataspace::RemoteDataspaceEnvelope> {
+pub fn job_worker_envelope(
+    input: JobWorkerEnvelopeInput<'_>,
+) -> Result<crate::remote_dataspace::RemoteDataspaceEnvelope> {
     let request = parse_job_worker_request_value(input.request_value)?;
     if input.to_peer != request.target_peer {
         return Err(MoltenError::invalid_harness(format!(
@@ -1216,12 +1211,12 @@ pub fn job_worker_envelope(input: JobWorkerEnvelopeInput<'_>) -> Result<remote_d
             input.to_peer, request.target_peer
         )));
     }
-    remote_dataspace::build_envelope(remote_dataspace::RemoteDataspaceEnvelopeInput {
+    crate::remote_dataspace::build_envelope(crate::remote_dataspace::RemoteDataspaceEnvelopeInput {
         from_peer: input.from_peer.to_string(),
         from_actor: input.from_actor.to_string(),
         to_peer: input.to_peer.to_string(),
         topic: input.topic.to_string(),
-        operation: remote_dataspace::RemoteDataspaceOperation::Message,
+        operation: crate::remote_dataspace::RemoteDataspaceOperation::Message,
         payload: input.request_value.clone(),
         content_refs: Vec::new(),
         capability_refs: request.authority_refs.clone(),
@@ -1232,7 +1227,7 @@ pub fn job_worker_envelope(input: JobWorkerEnvelopeInput<'_>) -> Result<remote_d
 pub fn execute_worker_delivery(input: JobWorkerExecuteInput<'_>) -> Result<JobWorkerExecution> {
     let request = parse_job_worker_request_value(&input.delivery.envelope.payload)?;
     let assignment_value = job_worker_assignment_value(&request, input.delivery)?;
-    let assignment_ref = preserves_rail::canonical_hash(&assignment_value)?;
+    let assignment_ref = crate::preserves_rail::canonical_hash(&assignment_value)?;
     let delivery = collect_delivery_checks(&input, &request)?;
     let run = run_worker_delivery(&input, &request, &delivery)?;
     finish_worker_delivery(FinishDeliveryInput {
@@ -1257,13 +1252,13 @@ pub fn parse_job_worker_result_value(value: &IoValue) -> Result<JobWorkerResult>
     let fields = value
         .collect_simple_record("job-worker-result-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-result-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_WORKER_RESULT_SCHEMA, "job worker result")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_WORKER_RESULT_SCHEMA, "job worker result")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_worker_decision(&decision)?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "canonical-result", "job worker result")?;
     Ok(JobWorkerResult {
-        result_ref: preserves_rail::canonical_hash(value)?,
+        result_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         job_ref: record_ref(&fields[2], "job")?,
         target_peer: record_string(&fields[3], "target-peer")?,
@@ -1282,7 +1277,7 @@ pub fn parse_job_worker_receipt_value(value: &IoValue) -> Result<JobWorkerReceip
     let fields = value
         .collect_simple_record("job-worker-receipt-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-receipt-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_WORKER_RECEIPT_SCHEMA, "job worker receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_WORKER_RECEIPT_SCHEMA, "job worker receipt")?;
     let operation = record_string(&fields[1], "operation")?;
     if operation != "worker-execute" {
         return Err(MoltenError::invalid_harness(format!("unsupported job worker receipt operation {operation}")));
@@ -1291,7 +1286,7 @@ pub fn parse_job_worker_receipt_value(value: &IoValue) -> Result<JobWorkerReceip
     validate_worker_decision(&decision)?;
     require_check(&parse_checks(&fields[12])?, "canonical-receipt", "job worker receipt")?;
     Ok(JobWorkerReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         job_ref: record_optional_ref(&fields[3], "job")?,
         request_ref: record_optional_ref(&fields[4], "request")?,
@@ -1309,7 +1304,11 @@ pub fn parse_job_worker_schedule_receipt_value(value: &IoValue) -> Result<JobWor
     let fields = value
         .collect_simple_record("job-worker-schedule-receipt-v1", Some(20))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-schedule-receipt-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA, "job worker schedule receipt")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA,
+        "job worker schedule receipt",
+    )?;
     let operation = record_string(&fields[1], "operation")?;
     if operation != "worker-schedule-local" {
         return Err(MoltenError::invalid_harness(format!("unsupported job worker schedule operation {operation}")));
@@ -1318,7 +1317,7 @@ pub fn parse_job_worker_schedule_receipt_value(value: &IoValue) -> Result<JobWor
     validate_decision(&decision)?;
     require_check(&parse_checks(&fields[19])?, "canonical-receipt", "job worker schedule receipt")?;
     Ok(JobWorkerScheduleReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         operation,
         decision,
         job_ref: record_ref(&fields[3], "job")?,
@@ -1340,12 +1339,12 @@ pub fn parse_blob_ref_job_receipt_value(value: &IoValue) -> Result<JobReceipt> {
     let fields = value
         .collect_simple_record("job-ref-receipt-v1", Some(18))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-ref-receipt-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_REF_RECEIPT_SCHEMA, "job ref receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_REF_RECEIPT_SCHEMA, "job ref receipt")?;
     let checks = parse_checks(&fields[17])?;
     require_check(&checks, "content-refs-only", "job ref receipt")?;
     require_check(&checks, "no-inline-large-bytes", "job ref receipt")?;
     Ok(JobReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision: record_string(&fields[2], "decision")?,
         job_ref: Some(record_string(&fields[4], "job-id")?),
@@ -1363,7 +1362,7 @@ pub fn parse_job_dag_value(value: &IoValue) -> Result<JobDag> {
     let fields = value
         .collect_simple_record("job-dag-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-dag-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_DAG_SCHEMA, "job dag")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_DAG_SCHEMA, "job dag")?;
     let version = record_string(&fields[1], "version")?;
     if version != "v1" {
         return Err(MoltenError::invalid_harness(format!("unsupported job dag version {version}")));
@@ -1398,7 +1397,7 @@ pub fn parse_job_dag_value(value: &IoValue) -> Result<JobDag> {
     require_check(&checks, "no-name-identity", "job dag")?;
     validate_topology(&nodes, &edges)?;
     Ok(JobDag {
-        job_ref: preserves_rail::canonical_hash(value)?,
+        job_ref: crate::preserves_rail::canonical_hash(value)?,
         version,
         nodes,
         edges,
@@ -1415,7 +1414,7 @@ pub fn parse_job_output_request_value(value: &IoValue, expected_dag_ref: &str) -
     let fields = value
         .collect_simple_record("job-output-request-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-output-request-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_DAG_OUTPUT_REQUEST_SCHEMA, "job output request")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_DAG_OUTPUT_REQUEST_SCHEMA, "job output request")?;
     let dag_ref = record_ref(&fields[1], "dag")?;
     if dag_ref != expected_dag_ref {
         return Err(MoltenError::invalid_harness(format!(
@@ -1428,7 +1427,7 @@ pub fn parse_job_output_request_value(value: &IoValue, expected_dag_ref: &str) -
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "request-ref-bound", "job output request")?;
     Ok(JobOutputRequest {
-        request_ref: preserves_rail::canonical_hash(value)?,
+        request_ref: crate::preserves_rail::canonical_hash(value)?,
         dag_ref,
         roots,
         materialization,
@@ -1443,11 +1442,11 @@ pub fn parse_job_receipt(value: &IoValue) -> Result<JobReceipt> {
     let fields = value
         .collect_simple_record("job-dag-receipt-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-dag-receipt-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_DAG_RECEIPT_SCHEMA, "job dag receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_DAG_RECEIPT_SCHEMA, "job dag receipt")?;
     let checks = parse_checks(&fields[13])?;
     require_check(&checks, "canonical-receipt", "job dag receipt")?;
     Ok(JobReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision: record_string(&fields[2], "decision")?,
         job_ref: record_optional_ref(&fields[3], "job")?,
@@ -1465,11 +1464,11 @@ pub fn parse_job_admission_receipt_value(value: &IoValue) -> Result<JobAdmission
     let fields = value
         .collect_simple_record("job-admission-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-admission-receipt-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_ADMISSION_RECEIPT_SCHEMA, "job admission receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_ADMISSION_RECEIPT_SCHEMA, "job admission receipt")?;
     let checks = parse_checks(&fields[14])?;
     require_check(&checks, "canonical-receipt", "job admission receipt")?;
     Ok(JobAdmissionReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision: record_string(&fields[2], "decision")?,
         job_ref: record_ref(&fields[3], "job")?,
@@ -1492,7 +1491,7 @@ pub fn parse_job_admission_receipt_value(value: &IoValue) -> Result<JobAdmission
 pub fn install_job_dag(registry_root: &FilePath, value: &IoValue) -> Result<JobInstall> {
     let dag = parse_job_dag_value(value)?;
     let stage_deps = dag.nodes.iter().filter_map(|node| node.stage_artifact_ref.clone()).collect::<Vec<_>>();
-    let install = artifacts::install_artifact(registry_root, &artifacts::ArtifactInstallInput {
+    let install = crate::artifacts::install_artifact(registry_root, &crate::artifacts::ArtifactInstallInput {
         kind: JOB_ARTIFACT_KIND.to_string(),
         payload: dag.value.clone(),
         schema_refs: dag.schema_refs.clone(),
@@ -1511,7 +1510,7 @@ pub fn install_job_dag(registry_root: &FilePath, value: &IoValue) -> Result<JobI
         installer_ref: local_ref("job-installer", &dag.job_ref)?,
         capability_refs: vec![local_ref("job-install-capability", &dag.job_ref)?],
     })?;
-    let artifact_receipt_ref = preserves_rail::canonical_hash(&install.receipt_value)?;
+    let artifact_receipt_ref = crate::preserves_rail::canonical_hash(&install.receipt_value)?;
     let evidence_refs = vec![artifact_receipt_ref];
     let diagnostics = install
         .missing_dependencies
@@ -1548,8 +1547,8 @@ pub fn install_job_dag(registry_root: &FilePath, value: &IoValue) -> Result<JobI
 
 pub fn job_artifact_ref(registry_root: &FilePath, job_ref: &str) -> Result<String> {
     validate_ref(job_ref, "job artifact lookup ref")?;
-    for artifact in artifacts::list_artifacts(registry_root, Some(JOB_ARTIFACT_KIND))? {
-        let payload = artifacts::read_payload(registry_root, &artifact.artifact_ref)?;
+    for artifact in crate::artifacts::list_artifacts(registry_root, Some(JOB_ARTIFACT_KIND))? {
+        let payload = crate::artifacts::read_payload(registry_root, &artifact.artifact_ref)?;
         let dag = parse_job_dag_value(&payload)?;
         if dag.job_ref == job_ref || artifact.artifact_ref == job_ref {
             return Ok(artifact.artifact_ref);
@@ -1560,13 +1559,13 @@ pub fn job_artifact_ref(registry_root: &FilePath, job_ref: &str) -> Result<Strin
 
 pub fn read_job_dag(registry_root: &FilePath, reference: &str) -> Result<JobDag> {
     if validate_ref(reference, "job ref").is_ok() {
-        if let Ok(payload) = artifacts::read_payload(registry_root, reference)
+        if let Ok(payload) = crate::artifacts::read_payload(registry_root, reference)
             && let Ok(dag) = parse_job_dag_value(&payload)
         {
             return Ok(dag);
         }
-        for artifact in artifacts::list_artifacts(registry_root, Some(JOB_ARTIFACT_KIND))? {
-            let payload = artifacts::read_payload(registry_root, &artifact.artifact_ref)?;
+        for artifact in crate::artifacts::list_artifacts(registry_root, Some(JOB_ARTIFACT_KIND))? {
+            let payload = crate::artifacts::read_payload(registry_root, &artifact.artifact_ref)?;
             let dag = parse_job_dag_value(&payload)?;
             if dag.job_ref == reference || artifact.artifact_ref == reference {
                 return Ok(dag);
@@ -1580,7 +1579,7 @@ pub fn read_job_dag_file_or_registry(registry_root: &FilePath, spec: &str) -> Re
     let path = FilePath::new(spec);
     if path.exists() {
         let text = std::fs::read_to_string(path).map_err(MoltenError::from)?;
-        let value = preserves_rail::parse_text(&text)?;
+        let value = crate::preserves_rail::parse_text(&text)?;
         parse_job_dag_value(&value)
     } else {
         read_job_dag(registry_root, spec)
@@ -1611,7 +1610,7 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
         stage_receipt_refs: &stages.receipt_refs,
     })?;
     if let Some(ledger_root) = options.ledger_root {
-        ledger::import_artifact(ledger_root, &finish.receipt_value)?;
+        crate::ledger::import_artifact(ledger_root, &finish.receipt_value)?;
     }
     Ok(JobRun {
         job_ref: dag.job_ref.clone(),
@@ -1651,9 +1650,9 @@ fn run_stages(
         let node = find_job_node(&dag.nodes, node_id)?;
         let inputs = gather_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)?;
         let stage = run_stage_with_cache(dag, request, node, &inputs, options)?;
-        let receipt_ref = preserves_rail::canonical_hash(&stage.receipt_value)?;
+        let receipt_ref = crate::preserves_rail::canonical_hash(&stage.receipt_value)?;
         if let Some(ledger_root) = options.ledger_root {
-            ledger::import_artifact(ledger_root, &stage.receipt_value)?;
+            crate::ledger::import_artifact(ledger_root, &stage.receipt_value)?;
         }
         ensure_count_at_most(stage.output_refs.len(), MAX_JOB_REFS, "job stage output refs")?;
         ensure_count_at_most(stage.output_values.len(), MAX_JOB_STAGE_VALUES, "job stage output values")?;
@@ -1726,9 +1725,14 @@ fn complete_run(input: CompleteInput<'_>) -> Result<RunFinish> {
             extend_cloned_bounded(&mut final_refs, refs, MAX_JOB_REFS, "job final refs")?;
         }
     }
-    let output_value = preserves_rail::sequence(final_values.clone());
+    let output_value = crate::preserves_rail::sequence(final_values.clone());
     if final_refs.is_empty() {
-        push_bounded(&mut final_refs, preserves_rail::canonical_hash(&output_value)?, MAX_JOB_REFS, "job final refs")?;
+        push_bounded(
+            &mut final_refs,
+            crate::preserves_rail::canonical_hash(&output_value)?,
+            MAX_JOB_REFS,
+            "job final refs",
+        )?;
     }
     let evidence_count = checked_count_sum(
         dag.evidence_refs.len(),
@@ -1784,25 +1788,25 @@ fn stage_plan_values(dag: &JobDag, plan: &TrellisExecutionPlan) -> Result<Vec<Io
         let deps = dependency_ids(plan, node_id)?;
         push_bounded(
             &mut stage_values,
-            preserves_rail::record("job-stage-plan-v1", vec![
-                preserves_rail::record("id", vec![preserves_rail::string(node_id)]),
-                preserves_rail::record("trellis-index", vec![preserves_rail::u64_value(usize_to_u64(
+            crate::preserves_rail::record("job-stage-plan-v1", vec![
+                crate::preserves_rail::record("id", vec![crate::preserves_rail::string(node_id)]),
+                crate::preserves_rail::record("trellis-index", vec![crate::preserves_rail::u64_value(usize_to_u64(
                     index,
                     "job plan trellis index",
                 )?)]),
-                preserves_rail::record("dependencies", vec![preserves_rail::sequence(
-                    deps.iter().map(preserves_rail::string).collect(),
+                crate::preserves_rail::record("dependencies", vec![crate::preserves_rail::sequence(
+                    deps.iter().map(crate::preserves_rail::string).collect(),
                 )]),
-                preserves_rail::record("placement", vec![preserves_rail::string("local")]),
-                preserves_rail::record("cache-projection", vec![preserves_rail::string(
+                crate::preserves_rail::record("placement", vec![crate::preserves_rail::string("local")]),
+                crate::preserves_rail::record("cache-projection", vec![crate::preserves_rail::string(
                     if node.kind == "materialize" {
                         "not-cacheable"
                     } else {
                         "eligible"
                     },
                 )]),
-                preserves_rail::record("policy", vec![refs_sequence(&node.policy_refs)]),
-                preserves_rail::record("resources", vec![preserves_rail::sequence(Vec::new())]),
+                crate::preserves_rail::record("policy", vec![refs_sequence(&node.policy_refs)]),
+                crate::preserves_rail::record("resources", vec![crate::preserves_rail::sequence(Vec::new())]),
                 checks_value(&["trellis-dependencies-bound", "placement-is-proposal", "local-only-plan"]),
             ]),
             MAX_JOB_STAGE_VALUES,
@@ -1816,15 +1820,15 @@ pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IoValue>) -> Result<Jo
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
     let stage_values = stage_plan_values(dag, &plan)?;
-    let value = preserves_rail::record("job-plan-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_PLAN_SCHEMA),
-        preserves_rail::record("job", vec![preserves_rail::string(&dag.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
-        preserves_rail::record("stage-order", vec![preserves_rail::sequence(
-            plan.order_ids.iter().map(preserves_rail::string).collect(),
+    let value = crate::preserves_rail::record("job-plan-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_PLAN_SCHEMA),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&dag.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&request.request_ref)]),
+        crate::preserves_rail::record("stage-order", vec![crate::preserves_rail::sequence(
+            plan.order_ids.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(stage_values)]),
-        preserves_rail::record("policy", vec![refs_sequence(&combined_policy_refs(dag, &request, None))]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(stage_values)]),
+        crate::preserves_rail::record("policy", vec![refs_sequence(&combined_policy_refs(dag, &request, None))]),
         checks_value(&[
             "trellis-topo-order",
             "trellis-deps-ready",
@@ -1832,10 +1836,10 @@ pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IoValue>) -> Result<Jo
             "placement-proposals-only",
         ]),
     ]);
-    let plan_ref = preserves_rail::canonical_hash(&value)?;
+    let plan_ref = crate::preserves_rail::canonical_hash(&value)?;
     let receipt_value = analysis_receipt_value(AnalysisReceiptValueInput {
         label: "job-plan-receipt-v1",
-        schema: preserves_rail::JOB_PLAN_RECEIPT_SCHEMA,
+        schema: crate::preserves_rail::JOB_PLAN_RECEIPT_SCHEMA,
         operation: "plan",
         job_ref: &dag.job_ref,
         request_ref: &request.request_ref,
@@ -1871,17 +1875,18 @@ fn stage_profile_values(dag: &JobDag, plan: &TrellisExecutionPlan, cache_entries
             .iter()
             .find(|candidate| candidate.id == *node_id)
             .ok_or_else(|| MoltenError::invalid_harness(format!("job profile missing node {node_id}")))?;
-        let bytes = usize_to_u64(preserves_rail::canonical_bytes(&node.config)?.len(), "job profile config bytes")?;
+        let bytes =
+            usize_to_u64(crate::preserves_rail::canonical_bytes(&node.config)?.len(), "job profile config bytes")?;
         config_bytes = config_bytes
             .checked_add(bytes)
             .ok_or_else(|| MoltenError::invalid_harness("job profile estimated config bytes overflowed"))?;
         push_bounded(
             &mut values,
-            preserves_rail::record("job-stage-profile-v1", vec![
-                preserves_rail::record("id", vec![preserves_rail::string(node_id)]),
-                preserves_rail::record("kind", vec![preserves_rail::string(&node.kind)]),
-                preserves_rail::record("estimated-config-bytes", vec![preserves_rail::u64_value(bytes)]),
-                preserves_rail::record("cache-projection", vec![preserves_rail::string(
+            crate::preserves_rail::record("job-stage-profile-v1", vec![
+                crate::preserves_rail::record("id", vec![crate::preserves_rail::string(node_id)]),
+                crate::preserves_rail::record("kind", vec![crate::preserves_rail::string(&node.kind)]),
+                crate::preserves_rail::record("estimated-config-bytes", vec![crate::preserves_rail::u64_value(bytes)]),
+                crate::preserves_rail::record("cache-projection", vec![crate::preserves_rail::string(
                     if node.kind == "materialize" {
                         "not-cacheable"
                     } else if cache_entries == 0 {
@@ -1907,9 +1912,9 @@ pub fn profile_job_dag(
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
     let cache_entries = if let Some(cache_root) = cache_root {
-        eval_cache::list(cache_root, &eval_cache::EvalCacheListFilter {
+        crate::eval_cache::list(cache_root, &crate::eval_cache::EvalCacheListFilter {
             operation: Some(JOB_CACHE_OPERATION.to_string()),
-            ..eval_cache::EvalCacheListFilter::default()
+            ..crate::eval_cache::EvalCacheListFilter::default()
         })?
         .len()
     } else {
@@ -1923,23 +1928,25 @@ pub fn profile_job_dag(
     )?;
     let stage_count = usize_to_u64(dag.nodes.len(), "job profile stage count")?;
     let edge_count = usize_to_u64(dag.edges.len(), "job profile edge count")?;
-    let value = preserves_rail::record("job-profile-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_PROFILE_SCHEMA),
-        preserves_rail::record("job", vec![preserves_rail::string(&dag.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
-        preserves_rail::record("stage-count", vec![preserves_rail::u64_value(stage_count)]),
-        preserves_rail::record("edge-count", vec![preserves_rail::u64_value(edge_count)]),
-        preserves_rail::record("materialization-boundaries", vec![preserves_rail::u64_value(
+    let value = crate::preserves_rail::record("job-profile-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_PROFILE_SCHEMA),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&dag.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&request.request_ref)]),
+        crate::preserves_rail::record("stage-count", vec![crate::preserves_rail::u64_value(stage_count)]),
+        crate::preserves_rail::record("edge-count", vec![crate::preserves_rail::u64_value(edge_count)]),
+        crate::preserves_rail::record("materialization-boundaries", vec![crate::preserves_rail::u64_value(
             materialization_boundaries,
         )]),
-        preserves_rail::record("estimated-bytes", vec![
-            preserves_rail::record("config", vec![preserves_rail::u64_value(profile_stages.config_bytes)]),
-            preserves_rail::record("known-cache-entries", vec![preserves_rail::u64_value(usize_to_u64(
+        crate::preserves_rail::record("estimated-bytes", vec![
+            crate::preserves_rail::record("config", vec![crate::preserves_rail::u64_value(
+                profile_stages.config_bytes,
+            )]),
+            crate::preserves_rail::record("known-cache-entries", vec![crate::preserves_rail::u64_value(usize_to_u64(
                 cache_entries,
                 "job cache entry count",
             )?)]),
         ]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(profile_stages.values)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(profile_stages.values)]),
         checks_value(&[
             "deterministic-profile",
             "no-wall-clock-time",
@@ -1947,10 +1954,10 @@ pub fn profile_job_dag(
             "trellis-order-bound",
         ]),
     ]);
-    let profile_ref = preserves_rail::canonical_hash(&value)?;
+    let profile_ref = crate::preserves_rail::canonical_hash(&value)?;
     let receipt_value = analysis_receipt_value(AnalysisReceiptValueInput {
         label: "job-profile-receipt-v1",
-        schema: preserves_rail::JOB_PROFILE_RECEIPT_SCHEMA,
+        schema: crate::preserves_rail::JOB_PROFILE_RECEIPT_SCHEMA,
         operation: "profile",
         job_ref: &dag.job_ref,
         request_ref: &request.request_ref,
@@ -1982,7 +1989,7 @@ pub fn sync_plan_value(
     let request = parse_job_sync_request_value(request_value)?;
     let dag = read_job_dag(source_registry, &request.job_ref)?;
     let roots = sync_roots(source_registry, &dag, &request)?;
-    let closure = artifacts::dependency_closure(source_registry, &roots)?;
+    let closure = crate::artifacts::dependency_closure(source_registry, &roots)?;
     if !closure.missing_refs.is_empty() {
         return Err(MoltenError::invalid_harness(format!(
             "job sync source dependency closure missing refs: {}",
@@ -1991,21 +1998,21 @@ pub fn sync_plan_value(
     }
     let mut missing_refs = Vec::new();
     for artifact_ref in &closure.closure_refs {
-        match artifacts::read_artifact(target_registry, artifact_ref) {
+        match crate::artifacts::read_artifact(target_registry, artifact_ref) {
             Ok(_) => {}
             Err(_) => push_bounded(&mut missing_refs, artifact_ref.clone(), MAX_JOB_REFS, "job sync missing refs")?,
         }
     }
-    let value = preserves_rail::record("job-sync-plan-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_SYNC_PLAN_SCHEMA),
-        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
-        preserves_rail::record("job", vec![preserves_rail::string(&request.job_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(&request.target_peer)]),
-        preserves_rail::record("roots", vec![refs_sequence(&roots)]),
-        preserves_rail::record("closure", vec![refs_sequence(&closure.closure_refs)]),
-        preserves_rail::record("missing", vec![refs_sequence(&missing_refs)]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(
-            request.stage_ids.iter().map(preserves_rail::string).collect(),
+    let value = crate::preserves_rail::record("job-sync-plan-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_SYNC_PLAN_SCHEMA),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&request.request_ref)]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&request.job_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(&request.target_peer)]),
+        crate::preserves_rail::record("roots", vec![refs_sequence(&roots)]),
+        crate::preserves_rail::record("closure", vec![refs_sequence(&closure.closure_refs)]),
+        crate::preserves_rail::record("missing", vec![refs_sequence(&missing_refs)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            request.stage_ids.iter().map(crate::preserves_rail::string).collect(),
         )]),
         checks_value(&[
             "dependency-closure",
@@ -2015,10 +2022,10 @@ pub fn sync_plan_value(
             "no-mobile-closures",
         ]),
     ]);
-    let plan_ref = preserves_rail::canonical_hash(&value)?;
+    let plan_ref = crate::preserves_rail::canonical_hash(&value)?;
     let receipt_value = analysis_receipt_value(AnalysisReceiptValueInput {
         label: "job-sync-receipt-v1",
-        schema: preserves_rail::JOB_SYNC_RECEIPT_SCHEMA,
+        schema: crate::preserves_rail::JOB_SYNC_RECEIPT_SCHEMA,
         operation: "sync-plan",
         job_ref: &request.job_ref,
         request_ref: &request.request_ref,
@@ -2043,7 +2050,7 @@ pub fn sync_plan_value(
 
 struct SyncInstallCandidate {
     artifact_ref: String,
-    source: artifacts::ArtifactRecord,
+    source: crate::artifacts::ArtifactRecord,
     payload: IoValue,
 }
 
@@ -2078,8 +2085,8 @@ fn collect_candidates(
             push_bounded(&mut already_present_refs, artifact_ref, MAX_JOB_REFS, "job sync already-present refs")?;
             continue;
         }
-        let source = artifacts::read_artifact(input.source_registry, &artifact_ref)?;
-        let payload = artifacts::read_payload(input.source_registry, &artifact_ref)?;
+        let source = crate::artifacts::read_artifact(input.source_registry, &artifact_ref)?;
+        let payload = crate::artifacts::read_payload(input.source_registry, &artifact_ref)?;
         let provenance = crate::provenance::evaluate_provenance(&crate::provenance::ProvenanceEvaluationInput {
             operation: "remote-sync-install",
             profile: "node-control",
@@ -2132,7 +2139,7 @@ fn apply_candidates(
 ) -> Result<Vec<String>> {
     let mut installed_refs = Vec::new();
     for candidate in candidates {
-        let installed = artifacts::install_artifact(target_registry, &artifacts::ArtifactInstallInput {
+        let installed = crate::artifacts::install_artifact(target_registry, &crate::artifacts::ArtifactInstallInput {
             kind: candidate.source.kind.clone(),
             payload: candidate.payload,
             schema_refs: candidate.source.schema_refs.clone(),
@@ -2153,7 +2160,7 @@ fn apply_candidates(
                 candidate.artifact_ref, installed.decision, installed.artifact_ref
             )));
         }
-        let target = artifacts::read_artifact(target_registry, &candidate.artifact_ref)?;
+        let target = crate::artifacts::read_artifact(target_registry, &candidate.artifact_ref)?;
         if target.value != candidate.source.value {
             return Err(MoltenError::invalid_harness(format!(
                 "job sync target artifact {} differs from source",
@@ -2172,20 +2179,20 @@ fn loopback_receipt(input: ReceiptInput<'_>) -> Result<IoValue> {
     extend_cloned_bounded(&mut refs, input.provenance_receipt_refs, MAX_JOB_REFS, "job sync refs")?;
     push_bounded(&mut refs, input.plan.plan_ref.clone(), MAX_JOB_REFS, "job sync refs")?;
     let is_clean = input.diagnostics.is_empty();
-    Ok(preserves_rail::record("job-sync-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_SYNC_RECEIPT_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string("sync-loopback")]),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("job", vec![preserves_rail::string(&input.plan.request.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&input.plan.request.request_ref)]),
-        preserves_rail::record("artifact", vec![preserves_rail::string(&input.plan.plan_ref)]),
-        preserves_rail::record("installed", vec![refs_sequence(input.installed_refs)]),
-        preserves_rail::record("already-present", vec![refs_sequence(input.already_present_refs)]),
-        preserves_rail::record("provenance", vec![refs_sequence(input.provenance_receipt_refs)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-sync-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_SYNC_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string("sync-loopback")]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&input.plan.request.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&input.plan.request.request_ref)]),
+        crate::preserves_rail::record("artifact", vec![crate::preserves_rail::string(&input.plan.plan_ref)]),
+        crate::preserves_rail::record("installed", vec![refs_sequence(input.installed_refs)]),
+        crate::preserves_rail::record("already-present", vec![refs_sequence(input.already_present_refs)]),
+        crate::preserves_rail::record("provenance", vec![refs_sequence(input.provenance_receipt_refs)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&[
             ("hash-verify-before-install", status(is_clean)),
             ("provenance-before-install", status(is_clean)),
@@ -2221,7 +2228,7 @@ pub fn sync_loopback(input: SyncLoopbackInput<'_>) -> Result<JobSyncLoopback> {
         provenance_receipt_refs: &provenance_receipt_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     Ok(JobSyncLoopback {
         receipt_ref,
         plan,
@@ -2420,7 +2427,7 @@ fn finish_plan(input: PlanOutcomeInput) -> Result<JobAdmissionPlan> {
         diagnostics: &input.diagnostics,
         checks: &checks,
     });
-    let plan_ref = preserves_rail::canonical_hash(&value)?;
+    let plan_ref = crate::preserves_rail::canonical_hash(&value)?;
     let receipt_value = job_admission_receipt_value(JobAdmissionReceiptValueInput {
         operation: "admit-plan",
         decision,
@@ -2489,27 +2496,27 @@ fn plan_checks(input: &PlanOutcomeInput) -> [(&'static str, &'static str); 9] {
 }
 
 fn plan_record(input: RecordInput<'_>) -> IoValue {
-    preserves_rail::record("job-admission-plan-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_ADMISSION_PLAN_SCHEMA),
-        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
-        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
-        preserves_rail::record("sync", vec![preserves_rail::string(&input.request.sync_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(
-            input.request.stage_ids.iter().map(preserves_rail::string).collect(),
+    crate::preserves_rail::record("job-admission-plan-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_ADMISSION_PLAN_SCHEMA),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&input.request.request_ref)]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&input.request.job_ref)]),
+        crate::preserves_rail::record("sync", vec![crate::preserves_rail::string(&input.request.sync_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(&input.request.target_peer)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            input.request.stage_ids.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("closure", vec![refs_sequence(&input.readiness.closure_refs)]),
-        preserves_rail::record("topology", vec![preserves_rail::sequence(
-            input.readiness.stage_order.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("closure", vec![refs_sequence(&input.readiness.closure_refs)]),
+        crate::preserves_rail::record("topology", vec![crate::preserves_rail::sequence(
+            input.readiness.stage_order.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("stage-verdicts", vec![preserves_rail::sequence(verdict_values(
+        crate::preserves_rail::record("stage-verdicts", vec![crate::preserves_rail::sequence(verdict_values(
             &input.readiness.stage_verdicts,
         ))]),
-        preserves_rail::record("authority", vec![refs_sequence(input.authority_receipt_refs)]),
-        preserves_rail::record("resource-verdict", vec![preserves_rail::string(input.resource_verdict)]),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("authority", vec![refs_sequence(input.authority_receipt_refs)]),
+        crate::preserves_rail::record("resource-verdict", vec![crate::preserves_rail::string(input.resource_verdict)]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
         checks_value_from_pairs(input.checks),
     ])
@@ -2519,11 +2526,11 @@ fn verdict_values(verdicts: &[JobAdmissionStageVerdict]) -> Vec<IoValue> {
     verdicts
         .iter()
         .map(|verdict| {
-            preserves_rail::record("stage", vec![
-                preserves_rail::string(&verdict.stage_id),
-                preserves_rail::string(&verdict.decision),
-                preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-                    verdict.diagnostics.iter().map(preserves_rail::string).collect(),
+            crate::preserves_rail::record("stage", vec![
+                crate::preserves_rail::string(&verdict.stage_id),
+                crate::preserves_rail::string(&verdict.decision),
+                crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+                    verdict.diagnostics.iter().map(crate::preserves_rail::string).collect(),
                 )]),
             ])
         })
@@ -2572,7 +2579,7 @@ pub fn admission_loopback(target_registry: &FilePath, request_value: &IoValue) -
         diagnostics: &plan.diagnostics,
         checks: &checks,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     Ok(JobAdmissionLoopback {
         receipt_ref,
         plan,
@@ -2592,22 +2599,24 @@ pub fn missing_admission_execution_receipt_value(request_value: &IoValue, diagno
     refs.extend(request.policy_refs.iter().cloned());
     refs.extend(request.capability_refs.iter().cloned());
     refs.extend(request.resource_refs.iter().cloned());
-    Ok(preserves_rail::record("job-execution-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_EXECUTION_RECEIPT_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string("execute-loopback")]),
-        preserves_rail::record("decision", vec![preserves_rail::string("deny")]),
-        preserves_rail::record("job", vec![preserves_rail::string(&request.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
-        preserves_rail::record("admission", vec![preserves_rail::string(&request.admission_ref)]),
-        preserves_rail::record("sync", vec![preserves_rail::string(&sync_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(&request.target_peer)]),
-        preserves_rail::record("closure", vec![refs_sequence(&[])]),
-        preserves_rail::record("authority", vec![refs_sequence(&[])]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(Vec::new())]),
-        preserves_rail::record("outputs", vec![refs_sequence(&[])]),
-        preserves_rail::record("run", vec![refs_sequence(&[])]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(vec![preserves_rail::string(diagnostic)])]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(crate::preserves_rail::record("job-execution-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_EXECUTION_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string("execute-loopback")]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string("deny")]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&request.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&request.request_ref)]),
+        crate::preserves_rail::record("admission", vec![crate::preserves_rail::string(&request.admission_ref)]),
+        crate::preserves_rail::record("sync", vec![crate::preserves_rail::string(&sync_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(&request.target_peer)]),
+        crate::preserves_rail::record("closure", vec![refs_sequence(&[])]),
+        crate::preserves_rail::record("authority", vec![refs_sequence(&[])]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(Vec::new())]),
+        crate::preserves_rail::record("outputs", vec![refs_sequence(&[])]),
+        crate::preserves_rail::record("run", vec![refs_sequence(&[])]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::string(diagnostic),
+        ])]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&[
             ("admission-required", "fail"),
             ("admission-readable", "fail"),
@@ -2833,7 +2842,7 @@ fn deny_result(input: DenyInput<'_>) -> Result<JobExecutionLoopback> {
         diagnostics: &input.diagnostics,
         checks: &checks_with_extra(&input.checks, input.extra_checks),
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     Ok(JobExecutionLoopback {
         receipt_ref,
         request: input.request,
@@ -2860,7 +2869,7 @@ fn pass_result(input: PassInput) -> Result<JobExecutionLoopback> {
         admission: &input.admission,
         stage_receipt_refs: &input.run.stage_receipt_refs,
         output_refs: &input.run.output_refs,
-        run_receipt_refs: &[preserves_rail::canonical_hash(&input.run.receipt_value)?],
+        run_receipt_refs: &[crate::preserves_rail::canonical_hash(&input.run.receipt_value)?],
         diagnostics: &input.diagnostics,
         checks: &checks_with_extra(&input.checks, &[
             ("executed-on-target-state", "pass"),
@@ -2868,7 +2877,7 @@ fn pass_result(input: PassInput) -> Result<JobExecutionLoopback> {
             ("output-refs-bound", "pass"),
         ]),
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     Ok(JobExecutionLoopback {
         receipt_ref,
         request: input.request,
@@ -2884,11 +2893,11 @@ pub fn fusion_preview_job_dag(dag: &JobDag, output_request: Option<&IoValue>) ->
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
     let (chain_values, chains) = adjacent_chains(dag, &plan.order_ids)?;
-    let value = preserves_rail::record("job-fusion-plan-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_FUSION_PLAN_SCHEMA),
-        preserves_rail::record("job", vec![preserves_rail::string(&dag.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
-        preserves_rail::record("chains", vec![preserves_rail::sequence(chain_values)]),
+    let value = crate::preserves_rail::record("job-fusion-plan-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_FUSION_PLAN_SCHEMA),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&dag.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&request.request_ref)]),
+        crate::preserves_rail::record("chains", vec![crate::preserves_rail::sequence(chain_values)]),
         checks_value(&[
             "trellis-order-bound",
             "no-reduce-materialize-fusion",
@@ -2896,10 +2905,10 @@ pub fn fusion_preview_job_dag(dag: &JobDag, output_request: Option<&IoValue>) ->
             "fusion-is-preview-only",
         ]),
     ]);
-    let fusion_ref = preserves_rail::canonical_hash(&value)?;
+    let fusion_ref = crate::preserves_rail::canonical_hash(&value)?;
     let receipt_value = analysis_receipt_value(AnalysisReceiptValueInput {
         label: "job-fusion-receipt-v1",
-        schema: preserves_rail::JOB_FUSION_RECEIPT_SCHEMA,
+        schema: crate::preserves_rail::JOB_FUSION_RECEIPT_SCHEMA,
         operation: "fusion-preview",
         job_ref: &dag.job_ref,
         request_ref: &request.request_ref,
@@ -2950,11 +2959,11 @@ fn adjacent_chains(dag: &JobDag, order_ids: &[String]) -> Result<(Vec<IoValue>, 
 }
 
 fn adjacent_chain_value(chain: &[String]) -> IoValue {
-    preserves_rail::record("job-fusion-chain-v1", vec![
-        preserves_rail::record("stages", vec![preserves_rail::sequence(
-            chain.iter().map(preserves_rail::string).collect(),
+    crate::preserves_rail::record("job-fusion-chain-v1", vec![
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            chain.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("reason", vec![preserves_rail::string("pure-adjacent-map-filter")]),
+        crate::preserves_rail::record("reason", vec![crate::preserves_rail::string("pure-adjacent-map-filter")]),
         checks_value(&[
             "trellis-adjacent-order",
             "no-materialization-boundary",
@@ -3019,7 +3028,7 @@ fn target_closure_state(
         Ok(roots) => roots,
         Err(error) => return Ok((false, Vec::new(), vec![format!("target closure roots denied: {error}")])),
     };
-    let closure = match artifacts::dependency_closure(target_registry, &roots) {
+    let closure = match crate::artifacts::dependency_closure(target_registry, &roots) {
         Ok(closure) => closure,
         Err(error) => return Ok((false, Vec::new(), vec![format!("target closure computation failed: {error}")])),
     };
@@ -3042,7 +3051,7 @@ fn target_closure_state(
 }
 
 fn target_closure_artifact_diagnostic(target_registry: &FilePath, artifact_ref: &str) -> Option<String> {
-    match artifacts::read_artifact(target_registry, artifact_ref) {
+    match crate::artifacts::read_artifact(target_registry, artifact_ref) {
         Ok(artifact) if artifact.artifact_ref == artifact_ref => None,
         Ok(artifact) => Some(format!("target artifact key {artifact_ref} contains envelope {}", artifact.artifact_ref)),
         Err(error) => Some(format!("target artifact {artifact_ref} unreadable: {error}")),
@@ -3086,7 +3095,8 @@ fn capability_contexts_admit(
     for capability_ref in &request.capability_refs {
         match authority_context_value_for_ref(target_registry, capability_ref)? {
             Some(context_value) => {
-                let admission = authority::admit_authority(&context_value, "job:execute", &request.job_ref, 0, &[])?;
+                let admission =
+                    crate::authority::admit_authority(&context_value, "job:execute", &request.job_ref, 0, &[])?;
                 push_bounded(
                     &mut receipt_refs,
                     admission.receipt.receipt_ref.clone(),
@@ -3115,9 +3125,9 @@ fn capability_contexts_admit(
 
 fn authority_context_value_for_ref(target_registry: &FilePath, context_ref: &str) -> Result<Option<IoValue>> {
     validate_ref(context_ref, "job admission authority context ref")?;
-    for artifact in artifacts::list_artifacts(target_registry, None)? {
-        let payload = artifacts::read_payload(target_registry, &artifact.artifact_ref)?;
-        if let Ok(context) = authority::parse_authority_context(&payload)
+    for artifact in crate::artifacts::list_artifacts(target_registry, None)? {
+        let payload = crate::artifacts::read_payload(target_registry, &artifact.artifact_ref)?;
+        if let Ok(context) = crate::authority::parse_authority_context(&payload)
             && context.context_ref == context_ref
         {
             return Ok(Some(payload));
@@ -3155,12 +3165,14 @@ fn source_gate_evidence_bound(
     for candidate in candidates {
         match source_gate_value_for_ref(target_registry, &candidate)? {
             Some(value) => {
-                let validation = octet_gate::validate_octet_source_gate(&octet_gate::OctetSourceGateValidationInput {
-                    consumer: "job-remote-admission".to_string(),
-                    subject_ref: request.job_ref.clone(),
-                    gate_receipt_value: Some(value),
-                    source_scope: Vec::new(),
-                })?;
+                let validation = crate::octet_gate::validate_octet_source_gate(
+                    &crate::octet_gate::OctetSourceGateValidationInput {
+                        consumer: "job-remote-admission".to_string(),
+                        subject_ref: request.job_ref.clone(),
+                        gate_receipt_value: Some(value),
+                        source_scope: Vec::new(),
+                    },
+                )?;
                 push_bounded(
                     &mut validation_refs,
                     validation.validation_ref.clone(),
@@ -3189,12 +3201,12 @@ fn source_gate_evidence_bound(
 
 fn source_gate_value_for_ref(target_registry: &FilePath, gate_ref: &str) -> Result<Option<IoValue>> {
     validate_ref(gate_ref, "job admission source gate ref")?;
-    if let Ok(value) = artifacts::read_payload(target_registry, gate_ref) {
+    if let Ok(value) = crate::artifacts::read_payload(target_registry, gate_ref) {
         return Ok(Some(value));
     }
-    for artifact in artifacts::list_artifacts(target_registry, None)? {
-        let payload = artifacts::read_payload(target_registry, &artifact.artifact_ref)?;
-        if preserves_rail::canonical_hash(&payload)? == gate_ref {
+    for artifact in crate::artifacts::list_artifacts(target_registry, None)? {
+        let payload = crate::artifacts::read_payload(target_registry, &artifact.artifact_ref)?;
+        if crate::preserves_rail::canonical_hash(&payload)? == gate_ref {
             return Ok(Some(payload));
         }
     }
@@ -3210,7 +3222,8 @@ fn resource_profile_admits(
         return Ok(false);
     }
     let stages = stage_order.iter().map(|stage| (stage.as_str(), 1_u64)).collect::<Vec<_>>();
-    let planned = resources::plan_job_stages(&stages, usize_to_u64(request.resource_refs.len(), "job resource refs")?)?;
+    let planned =
+        crate::resources::plan_job_stages(&stages, usize_to_u64(request.resource_refs.len(), "job resource refs")?)?;
     if planned.len() == stage_order.len() {
         Ok(true)
     } else {
@@ -3263,25 +3276,25 @@ fn job_admission_receipt_value(input: JobAdmissionReceiptValueInput<'_>) -> Resu
     refs.extend(input.request.resource_refs.iter().cloned());
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(preserves_rail::record("job-admission-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_ADMISSION_RECEIPT_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
-        preserves_rail::record("artifact", vec![preserves_rail::string(input.plan_ref)]),
-        preserves_rail::record("sync", vec![preserves_rail::string(&input.request.sync_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
-        preserves_rail::record("closure", vec![refs_sequence(input.closure_refs)]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(
-            input.stage_order.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-admission-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_ADMISSION_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(input.operation)]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&input.request.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&input.request.request_ref)]),
+        crate::preserves_rail::record("artifact", vec![crate::preserves_rail::string(input.plan_ref)]),
+        crate::preserves_rail::record("sync", vec![crate::preserves_rail::string(&input.request.sync_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(&input.request.target_peer)]),
+        crate::preserves_rail::record("closure", vec![refs_sequence(input.closure_refs)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            input.stage_order.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("authority", vec![refs_sequence(input.authority_receipt_refs)]),
-        preserves_rail::record("resource-verdict", vec![preserves_rail::string(input.resource_verdict)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("authority", vec![refs_sequence(input.authority_receipt_refs)]),
+        crate::preserves_rail::record("resource-verdict", vec![crate::preserves_rail::string(input.resource_verdict)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3297,8 +3310,8 @@ fn job_execution_receipt_value(input: ExecutionReceiptValueInput<'_>) -> Result<
         .iter()
         .enumerate()
         .map(|(index, stage_id)| {
-            preserves_rail::record("stage", vec![
-                preserves_rail::string(stage_id),
+            crate::preserves_rail::record("stage", vec![
+                crate::preserves_rail::string(stage_id),
                 optional_ref_value(input.stage_receipt_refs.get(index).map(String::as_str)),
             ])
         })
@@ -3320,44 +3333,50 @@ fn job_execution_receipt_value(input: ExecutionReceiptValueInput<'_>) -> Result<
     refs.extend(input.request.resource_refs.iter().cloned());
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(preserves_rail::record("job-execution-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_EXECUTION_RECEIPT_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string("execute-loopback")]),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
-        preserves_rail::record("admission", vec![preserves_rail::string(&input.request.admission_ref)]),
-        preserves_rail::record("sync", vec![preserves_rail::string(&input.admission.sync_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
-        preserves_rail::record("closure", vec![refs_sequence(&input.admission.closure_refs)]),
-        preserves_rail::record("authority", vec![refs_sequence(&input.admission.authority_receipt_refs)]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(stage_values)]),
-        preserves_rail::record("outputs", vec![refs_sequence(input.output_refs)]),
-        preserves_rail::record("run", vec![refs_sequence(input.run_receipt_refs)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-execution-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_EXECUTION_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string("execute-loopback")]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&input.request.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&input.request.request_ref)]),
+        crate::preserves_rail::record("admission", vec![crate::preserves_rail::string(&input.request.admission_ref)]),
+        crate::preserves_rail::record("sync", vec![crate::preserves_rail::string(&input.admission.sync_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(&input.request.target_peer)]),
+        crate::preserves_rail::record("closure", vec![refs_sequence(&input.admission.closure_refs)]),
+        crate::preserves_rail::record("authority", vec![refs_sequence(&input.admission.authority_receipt_refs)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(stage_values)]),
+        crate::preserves_rail::record("outputs", vec![refs_sequence(input.output_refs)]),
+        crate::preserves_rail::record("run", vec![refs_sequence(input.run_receipt_refs)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
 
 fn job_worker_assignment_value(
     request: &JobWorkerRequest,
-    delivery: &remote_dataspace::RemoteDataspaceDelivery,
+    delivery: &crate::remote_dataspace::RemoteDataspaceDelivery,
 ) -> Result<IoValue> {
-    Ok(preserves_rail::record("job-worker-assignment-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_WORKER_ASSIGNMENT_SCHEMA),
-        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
-        preserves_rail::record("job", vec![preserves_rail::string(&request.job_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(&request.target_peer)]),
-        preserves_rail::record("stages", vec![preserves_rail::sequence(
-            request.stage_ids.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-worker-assignment-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_WORKER_ASSIGNMENT_SCHEMA),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&request.request_ref)]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&request.job_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(&request.target_peer)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            request.stage_ids.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("from-peer", vec![preserves_rail::string(&delivery.envelope.from_peer)]),
-        preserves_rail::record("delivery-envelope", vec![preserves_rail::string(&delivery.envelope.envelope_ref)]),
-        preserves_rail::record("operation-ref", vec![preserves_rail::string(&delivery.envelope.operation_ref)]),
-        preserves_rail::record("execution-request", vec![preserves_rail::string(&request.execution_request_ref)]),
+        crate::preserves_rail::record("from-peer", vec![crate::preserves_rail::string(&delivery.envelope.from_peer)]),
+        crate::preserves_rail::record("delivery-envelope", vec![crate::preserves_rail::string(
+            &delivery.envelope.envelope_ref,
+        )]),
+        crate::preserves_rail::record("operation-ref", vec![crate::preserves_rail::string(
+            &delivery.envelope.operation_ref,
+        )]),
+        crate::preserves_rail::record("execution-request", vec![crate::preserves_rail::string(
+            &request.execution_request_ref,
+        )]),
         checks_value(&[
             "request-assigned-to-target",
             "remote-dataspace-envelope-bound",
@@ -3380,21 +3399,23 @@ fn job_worker_status_value(input: WorkerStatusValueInput<'_>) -> Result<IoValue>
     let mut status_checks = input.checks.to_vec();
     status_checks.push(("canonical-status", "pass"));
     status_checks.push(("delivery-operation-ref-bound", "pass"));
-    Ok(preserves_rail::record("job-worker-status-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_WORKER_STATUS_SCHEMA),
-        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
-        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
-        preserves_rail::record("state", vec![preserves_rail::string(input.state)]),
-        preserves_rail::record("delivery-envelope", vec![preserves_rail::string(
+    Ok(crate::preserves_rail::record("job-worker-status-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_WORKER_STATUS_SCHEMA),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&input.request.request_ref)]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&input.request.job_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(&input.request.target_peer)]),
+        crate::preserves_rail::record("state", vec![crate::preserves_rail::string(input.state)]),
+        crate::preserves_rail::record("delivery-envelope", vec![crate::preserves_rail::string(
             &input.delivery.envelope.envelope_ref,
         )]),
-        preserves_rail::record("operation-ref", vec![preserves_rail::string(&input.delivery.envelope.operation_ref)]),
-        preserves_rail::record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("operation-ref", vec![crate::preserves_rail::string(
+            &input.delivery.envelope.operation_ref,
         )]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        crate::preserves_rail::record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&status_checks),
     ]))
 }
@@ -3429,25 +3450,28 @@ fn job_worker_result_value(input: WorkerResultValueInput<'_>) -> Result<IoValue>
         .stage_receipt_refs
         .iter()
         .map(|(stage_id, receipt_ref)| {
-            preserves_rail::record("stage", vec![preserves_rail::string(stage_id), preserves_rail::string(receipt_ref)])
+            crate::preserves_rail::record("stage", vec![
+                crate::preserves_rail::string(stage_id),
+                crate::preserves_rail::string(receipt_ref),
+            ])
         })
         .collect::<Vec<_>>();
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-result", "pass"));
-    Ok(preserves_rail::record("job-worker-result-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_WORKER_RESULT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
-        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
-        preserves_rail::record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
-        preserves_rail::record("outputs", vec![refs_sequence(input.output_refs)]),
-        preserves_rail::record("stage-receipts", vec![preserves_rail::sequence(stage_values)]),
-        preserves_rail::record("resource", vec![refs_sequence(input.resource_receipt_refs)]),
-        preserves_rail::record("delivery-log", vec![optional_ref_value(input.delivery_log_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-worker-result-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_WORKER_RESULT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&input.request.job_ref)]),
+        crate::preserves_rail::record("target-peer", vec![crate::preserves_rail::string(&input.request.target_peer)]),
+        crate::preserves_rail::record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
+        crate::preserves_rail::record("outputs", vec![refs_sequence(input.output_refs)]),
+        crate::preserves_rail::record("stage-receipts", vec![crate::preserves_rail::sequence(stage_values)]),
+        crate::preserves_rail::record("resource", vec![refs_sequence(input.resource_receipt_refs)]),
+        crate::preserves_rail::record("delivery-log", vec![optional_ref_value(input.delivery_log_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3479,21 +3503,21 @@ fn job_worker_receipt_value(input: WorkerReceiptValueInput<'_>) -> Result<IoValu
     }
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(preserves_rail::record("job-worker-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_WORKER_RECEIPT_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string("worker-execute")]),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("job", vec![optional_ref_value(job_ref)]),
-        preserves_rail::record("request", vec![optional_ref_value(request_ref)]),
-        preserves_rail::record("assignment", vec![preserves_rail::string(input.assignment_ref)]),
-        preserves_rail::record("status", vec![refs_sequence(input.status_refs)]),
-        preserves_rail::record("result", vec![preserves_rail::string(input.result_ref)]),
-        preserves_rail::record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
-        preserves_rail::record("delivery-log", vec![optional_ref_value(input.delivery_log_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-worker-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_WORKER_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string("worker-execute")]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("job", vec![optional_ref_value(job_ref)]),
+        crate::preserves_rail::record("request", vec![optional_ref_value(request_ref)]),
+        crate::preserves_rail::record("assignment", vec![crate::preserves_rail::string(input.assignment_ref)]),
+        crate::preserves_rail::record("status", vec![refs_sequence(input.status_refs)]),
+        crate::preserves_rail::record("result", vec![crate::preserves_rail::string(input.result_ref)]),
+        crate::preserves_rail::record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
+        crate::preserves_rail::record("delivery-log", vec![optional_ref_value(input.delivery_log_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3512,28 +3536,32 @@ pub fn job_worker_schedule_receipt_value(input: JobWorkerScheduleReceiptValueInp
     ensure_count_at_most(input.diagnostics.len(), MAX_JOB_REFS, "job worker schedule diagnostics")?;
     let refs = collected_refs(&input)?;
     let checks = checked_pairs(&input);
-    Ok(preserves_rail::record("job-worker-schedule-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(input.request_ref)]),
-        preserves_rail::record("queue-key", vec![preserves_rail::string(input.queue_key)]),
-        preserves_rail::record("lease-key", vec![preserves_rail::string(input.lease_key)]),
-        preserves_rail::record("worker-session", vec![preserves_rail::string(input.worker_session)]),
-        preserves_rail::record("coordination-report", vec![preserves_rail::string(input.coordination_report_ref)]),
-        preserves_rail::record("enqueue", vec![optional_ref_value(input.enqueue_receipt_ref)]),
-        preserves_rail::record("enqueue-duplicate", vec![optional_ref_value(input.enqueue_duplicate_receipt_ref)]),
-        preserves_rail::record("dequeue", vec![optional_ref_value(input.dequeue_receipt_ref)]),
-        preserves_rail::record("lease", vec![optional_ref_value(input.lease_receipt_ref)]),
-        preserves_rail::record("release", vec![optional_ref_value(input.release_receipt_ref)]),
-        preserves_rail::record("token", vec![optional_ref_value(input.token_ref)]),
-        preserves_rail::record("worker-receipt", vec![optional_ref_value(input.worker_receipt_ref)]),
-        preserves_rail::record("result", vec![optional_ref_value(input.result_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-worker-schedule-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(input.operation)]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(input.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(input.request_ref)]),
+        crate::preserves_rail::record("queue-key", vec![crate::preserves_rail::string(input.queue_key)]),
+        crate::preserves_rail::record("lease-key", vec![crate::preserves_rail::string(input.lease_key)]),
+        crate::preserves_rail::record("worker-session", vec![crate::preserves_rail::string(input.worker_session)]),
+        crate::preserves_rail::record("coordination-report", vec![crate::preserves_rail::string(
+            input.coordination_report_ref,
         )]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        crate::preserves_rail::record("enqueue", vec![optional_ref_value(input.enqueue_receipt_ref)]),
+        crate::preserves_rail::record("enqueue-duplicate", vec![optional_ref_value(
+            input.enqueue_duplicate_receipt_ref,
+        )]),
+        crate::preserves_rail::record("dequeue", vec![optional_ref_value(input.dequeue_receipt_ref)]),
+        crate::preserves_rail::record("lease", vec![optional_ref_value(input.lease_receipt_ref)]),
+        crate::preserves_rail::record("release", vec![optional_ref_value(input.release_receipt_ref)]),
+        crate::preserves_rail::record("token", vec![optional_ref_value(input.token_ref)]),
+        crate::preserves_rail::record("worker-receipt", vec![optional_ref_value(input.worker_receipt_ref)]),
+        crate::preserves_rail::record("result", vec![optional_ref_value(input.result_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3683,12 +3711,12 @@ fn run_output(
         "job ref status values",
     )?;
     let output_bytes = run_blob_ref_job_handler(submission, input_bytes)?;
-    let put = chunk_store::put_bytes(chunk_root, "job-ref-result", &output_bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
-    let output_put_ref = preserves_rail::canonical_hash(&put.receipt_value)?;
-    let output_verify = chunk_store::verify_manifest(chunk_root, &put.manifest_ref)?;
-    let verify_ref = preserves_rail::canonical_hash(&output_verify.receipt_value)?;
-    let output_pin = chunk_store::pin_manifest(chunk_root, &put.manifest_ref)?;
-    let pin_ref = preserves_rail::canonical_hash(&output_pin.receipt_value)?;
+    let put = crate::chunk_store::put_bytes(chunk_root, "job-ref-result", &output_bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
+    let output_put_ref = crate::preserves_rail::canonical_hash(&put.receipt_value)?;
+    let output_verify = crate::chunk_store::verify_manifest(chunk_root, &put.manifest_ref)?;
+    let verify_ref = crate::preserves_rail::canonical_hash(&output_verify.receipt_value)?;
+    let output_pin = crate::chunk_store::pin_manifest(chunk_root, &put.manifest_ref)?;
+    let pin_ref = crate::preserves_rail::canonical_hash(&output_pin.receipt_value)?;
     let output_manifest_ref = put.manifest_ref.clone();
     push_bounded(
         &mut status_values,
@@ -3711,10 +3739,10 @@ fn run_output(
 fn cleanup_content(chunk_root: &FilePath, content_refs: &[JobContentRef]) -> Result<Vec<String>> {
     let mut cleanup_refs = Vec::new();
     for content in content_refs {
-        if let Ok(unpin) = chunk_store::unpin_manifest(chunk_root, &content.content_ref) {
+        if let Ok(unpin) = crate::chunk_store::unpin_manifest(chunk_root, &content.content_ref) {
             push_bounded(
                 &mut cleanup_refs,
-                preserves_rail::canonical_hash(&unpin.receipt_value)?,
+                crate::preserves_rail::canonical_hash(&unpin.receipt_value)?,
                 MAX_JOB_REFS,
                 "job ref cleanup refs",
             )?;
@@ -3750,7 +3778,7 @@ fn finish_run(input: FinishInput<'_>) -> Result<BlobRefJobExecution> {
         MAX_JOB_REFS,
         "job ref status values",
     )?;
-    let status_refs = status_values.iter().map(preserves_rail::canonical_hash).collect::<Result<Vec<_>>>()?;
+    let status_refs = status_values.iter().map(crate::preserves_rail::canonical_hash).collect::<Result<Vec<_>>>()?;
     let receipt_checks = final_checks(
         preflight,
         is_content_verified,
@@ -3771,7 +3799,7 @@ fn finish_run(input: FinishInput<'_>) -> Result<BlobRefJobExecution> {
         diagnostics: &diagnostics,
         checks: &receipt_checks,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     if let Some(ledger_root) = ledger_root {
         import_blob_ref_job_artifacts(ledger_root, &status_values, &receipt_value)?;
     }
@@ -3820,14 +3848,14 @@ fn blob_ref_job_status_value(
     extend_cloned_bounded(&mut refs, output_refs, MAX_JOB_REFS, "job ref status refs")?;
     let mut status_checks = checks.to_vec();
     status_checks.push(("canonical-status", "pass"));
-    Ok(preserves_rail::record("job-ref-status-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_REF_STATUS_SCHEMA),
-        preserves_rail::record("submission", vec![preserves_rail::string(&submission.submission_ref)]),
-        preserves_rail::record("job-id", vec![preserves_rail::string(&submission.job_id)]),
-        preserves_rail::record("operation-id", vec![preserves_rail::string(&submission.operation_id)]),
-        preserves_rail::record("state", vec![preserves_rail::string(state)]),
-        preserves_rail::record("outputs", vec![refs_sequence(output_refs)]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(crate::preserves_rail::record("job-ref-status-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_REF_STATUS_SCHEMA),
+        crate::preserves_rail::record("submission", vec![crate::preserves_rail::string(&submission.submission_ref)]),
+        crate::preserves_rail::record("job-id", vec![crate::preserves_rail::string(&submission.job_id)]),
+        crate::preserves_rail::record("operation-id", vec![crate::preserves_rail::string(&submission.operation_id)]),
+        crate::preserves_rail::record("state", vec![crate::preserves_rail::string(state)]),
+        crate::preserves_rail::record("outputs", vec![refs_sequence(output_refs)]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&status_checks),
     ]))
 }
@@ -3870,28 +3898,34 @@ fn blob_ref_job_receipt_value(input: BlobRefReceiptValueInput<'_>) -> Result<IoV
     }
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(preserves_rail::record("job-ref-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_REF_RECEIPT_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string("blob-ref-worker-execute")]),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("submission", vec![preserves_rail::string(&input.submission.submission_ref)]),
-        preserves_rail::record("job-id", vec![preserves_rail::string(&input.submission.job_id)]),
-        preserves_rail::record("operation-id", vec![preserves_rail::string(&input.submission.operation_id)]),
-        preserves_rail::record("executable", vec![preserves_rail::string(&input.submission.executable.content_ref)]),
-        preserves_rail::record("inputs", vec![refs_sequence(
+    Ok(crate::preserves_rail::record("job-ref-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_REF_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string("blob-ref-worker-execute")]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("submission", vec![crate::preserves_rail::string(
+            &input.submission.submission_ref,
+        )]),
+        crate::preserves_rail::record("job-id", vec![crate::preserves_rail::string(&input.submission.job_id)]),
+        crate::preserves_rail::record("operation-id", vec![crate::preserves_rail::string(
+            &input.submission.operation_id,
+        )]),
+        crate::preserves_rail::record("executable", vec![crate::preserves_rail::string(
+            &input.submission.executable.content_ref,
+        )]),
+        crate::preserves_rail::record("inputs", vec![refs_sequence(
             &input.submission.inputs.iter().map(|content| content.content_ref.clone()).collect::<Vec<_>>(),
         )]),
-        preserves_rail::record("status", vec![refs_sequence(input.status_refs)]),
-        preserves_rail::record("verify", vec![refs_sequence(input.verify_refs)]),
-        preserves_rail::record("fetch", vec![refs_sequence(input.fetch_refs)]),
-        preserves_rail::record("pins", vec![refs_sequence(input.pin_refs)]),
-        preserves_rail::record("cleanup", vec![refs_sequence(input.cleanup_refs)]),
-        preserves_rail::record("output", vec![optional_ref_value(input.output_manifest_ref)]),
-        preserves_rail::record("output-put", vec![optional_ref_value(input.output_put_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        crate::preserves_rail::record("status", vec![refs_sequence(input.status_refs)]),
+        crate::preserves_rail::record("verify", vec![refs_sequence(input.verify_refs)]),
+        crate::preserves_rail::record("fetch", vec![refs_sequence(input.fetch_refs)]),
+        crate::preserves_rail::record("pins", vec![refs_sequence(input.pin_refs)]),
+        crate::preserves_rail::record("cleanup", vec![refs_sequence(input.cleanup_refs)]),
+        crate::preserves_rail::record("output", vec![optional_ref_value(input.output_manifest_ref)]),
+        crate::preserves_rail::record("output-put", vec![optional_ref_value(input.output_put_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        crate::preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3903,24 +3937,34 @@ fn fetch_blob_ref_job_content(
     fetch_refs: &mut impl crate::bounded::VecSink<String>,
     pin_refs: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Vec<u8>> {
-    let manifest = chunk_store::read_manifest(chunk_root, &content.content_ref)?;
+    let manifest = crate::chunk_store::read_manifest(chunk_root, &content.content_ref)?;
     if manifest.total_len != content.size {
         return Err(MoltenError::invalid_harness(format!(
             "job content {} size hint {} does not match manifest length {}",
             content.content_ref, content.size, manifest.total_len
         )));
     }
-    let verify = chunk_store::verify_manifest(chunk_root, &content.content_ref)?;
+    let verify = crate::chunk_store::verify_manifest(chunk_root, &content.content_ref)?;
     push_bounded(
         verify_refs,
-        preserves_rail::canonical_hash(&verify.receipt_value)?,
+        crate::preserves_rail::canonical_hash(&verify.receipt_value)?,
         MAX_JOB_REFS,
         "job ref verify refs",
     )?;
-    let read = chunk_store::read_object(chunk_root, &content.content_ref)?;
-    push_bounded(fetch_refs, preserves_rail::canonical_hash(&read.receipt_value)?, MAX_JOB_REFS, "job ref fetch refs")?;
-    let pin = chunk_store::pin_manifest(chunk_root, &content.content_ref)?;
-    push_bounded(pin_refs, preserves_rail::canonical_hash(&pin.receipt_value)?, MAX_JOB_REFS, "job ref pin refs")?;
+    let read = crate::chunk_store::read_object(chunk_root, &content.content_ref)?;
+    push_bounded(
+        fetch_refs,
+        crate::preserves_rail::canonical_hash(&read.receipt_value)?,
+        MAX_JOB_REFS,
+        "job ref fetch refs",
+    )?;
+    let pin = crate::chunk_store::pin_manifest(chunk_root, &content.content_ref)?;
+    push_bounded(
+        pin_refs,
+        crate::preserves_rail::canonical_hash(&pin.receipt_value)?,
+        MAX_JOB_REFS,
+        "job ref pin refs",
+    )?;
     Ok(read.bytes)
 }
 
@@ -3942,9 +3986,9 @@ fn run_blob_ref_job_handler(submission: &BlobRefJobSubmission, input_bytes: &[Ve
 
 fn import_blob_ref_job_artifacts(ledger_root: &FilePath, statuses: &[IoValue], receipt_value: &IoValue) -> Result<()> {
     for status_value in statuses {
-        ledger::import_artifact(ledger_root, status_value)?;
+        crate::ledger::import_artifact(ledger_root, status_value)?;
     }
-    ledger::import_artifact(ledger_root, receipt_value)?;
+    crate::ledger::import_artifact(ledger_root, receipt_value)?;
     Ok(())
 }
 
@@ -4189,7 +4233,7 @@ struct WorkerReceipt {
 }
 
 struct FinalStatusInput<'a> {
-    delivery: &'a remote_dataspace::RemoteDataspaceDelivery,
+    delivery: &'a crate::remote_dataspace::RemoteDataspaceDelivery,
     request: &'a JobWorkerRequest,
     diagnostics: &'a [String],
     outputs: &'a WorkerOutputs,
@@ -4230,7 +4274,8 @@ fn worker_result(
 fn worker_receipt(input: WorkerReceiptInput<'_>) -> Result<WorkerReceipt> {
     let final_decision =
         final_worker_decision(input.outputs.is_execution_pass, input.input.delivery.has_recorded_delivery);
-    let status_refs = input.status_values.iter().map(preserves_rail::canonical_hash).collect::<Result<Vec<_>>>()?;
+    let status_refs =
+        input.status_values.iter().map(crate::preserves_rail::canonical_hash).collect::<Result<Vec<_>>>()?;
     let receipt_checks = checks_with_extra(input.result_checks, &[
         ("assignment-bound", "pass"),
         ("status-log-bound", "pass"),
@@ -4249,7 +4294,7 @@ fn worker_receipt(input: WorkerReceiptInput<'_>) -> Result<WorkerReceipt> {
         checks: &receipt_checks,
     })?;
     Ok(WorkerReceipt {
-        receipt_ref: preserves_rail::canonical_hash(&receipt_value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
         receipt_value,
     })
 }
@@ -4260,7 +4305,7 @@ fn push_delivery_checks(
     buffers: &mut DeliveryCheckBuffers,
 ) -> (Option<String>, bool) {
     let has_message_operation =
-        input.delivery.envelope.operation == remote_dataspace::RemoteDataspaceOperation::Message;
+        input.delivery.envelope.operation == crate::remote_dataspace::RemoteDataspaceOperation::Message;
     buffers.push("remote-dataspace-message", has_message_operation);
     if !has_message_operation {
         buffers.note("job worker request was not delivered as a remote dataspace message");
@@ -4292,7 +4337,7 @@ fn push_input_checks(
     request: &JobWorkerRequest,
     buffers: &mut DeliveryCheckBuffers,
 ) -> Result<(JobExecutionRequest, JobAdmissionReceipt)> {
-    let execution_request_ref = preserves_rail::canonical_hash(input.execution_request_value)?;
+    let execution_request_ref = crate::preserves_rail::canonical_hash(input.execution_request_value)?;
     let has_execution_request_ref = execution_request_ref == request.execution_request_ref;
     buffers.push("execution-request-ref-binding", has_execution_request_ref);
     if !has_execution_request_ref {
@@ -4303,7 +4348,7 @@ fn push_input_checks(
     }
     let execution_request = parse_job_execution_request_value(input.execution_request_value)?;
 
-    let admission_ref = preserves_rail::canonical_hash(input.admission_receipt_value)?;
+    let admission_ref = crate::preserves_rail::canonical_hash(input.admission_receipt_value)?;
     let has_admission_ref = admission_ref == request.admission_ref;
     buffers.push("admission-ref-binding", has_admission_ref);
     if !has_admission_ref {
@@ -4396,8 +4441,8 @@ fn push_target_state_check(
     buffers: &mut DeliveryCheckBuffers,
 ) -> Result<()> {
     let has_target_state_only = execution_request.target_peer == request.target_peer
-        && !preserves_rail::to_text(&request.value)?.contains("<source-registry")
-        && !preserves_rail::to_text(&execution_request.value)?.contains("<source-registry");
+        && !crate::preserves_rail::to_text(&request.value)?.contains("<source-registry")
+        && !crate::preserves_rail::to_text(&execution_request.value)?.contains("<source-registry");
     buffers.push("target-state-only", has_target_state_only);
     if !has_target_state_only {
         buffers.note("job worker execution request must run from target roots only");
@@ -4416,7 +4461,7 @@ fn recompute_execution_closure(
 ) -> Result<Vec<String>> {
     let selected = stage_order.iter().cloned().collect::<OrderedSet<_>>();
     let roots = admission_roots(target_registry, dag, &selected)?;
-    let closure = artifacts::dependency_closure(target_registry, &roots)?;
+    let closure = crate::artifacts::dependency_closure(target_registry, &roots)?;
     if !closure.missing_refs.is_empty() {
         return Err(MoltenError::invalid_harness(format!(
             "job execution target closure missing refs: {}",
@@ -4471,7 +4516,7 @@ fn sync_install_order_visit(
         }
         let is_first_visit = visited.insert(current_ref.clone());
         if is_first_visit {
-            let artifact = artifacts::read_artifact(source_registry, &current_ref)?;
+            let artifact = crate::artifacts::read_artifact(source_registry, &current_ref)?;
             push_bounded(&mut pending, (current_ref, true), MAX_JOB_REFS, "job sync install order frames")?;
             for dependency_ref in artifact.dependency_refs.iter().rev() {
                 push_bounded(
@@ -4539,15 +4584,15 @@ fn analysis_receipt_value(input: AnalysisReceiptValueInput<'_>) -> Result<IoValu
     validate_ref(input.artifact_ref, "job analysis receipt artifact ref")?;
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(preserves_rail::record(input.label, vec![
-        preserves_rail::string(input.schema),
-        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
-        preserves_rail::record("decision", vec![preserves_rail::string("pass")]),
-        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(input.request_ref)]),
-        preserves_rail::record("artifact", vec![preserves_rail::string(input.artifact_ref)]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record(input.label, vec![
+        crate::preserves_rail::string(input.schema),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(input.operation)]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string("pass")]),
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(input.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(input.request_ref)]),
+        crate::preserves_rail::record("artifact", vec![crate::preserves_rail::string(input.artifact_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
         checks_value_from_pairs(&checks),
     ]))
@@ -4618,7 +4663,7 @@ struct StageMemo<'a> {
     node: &'a JobNode,
     inputs: &'a [IoValue],
     cache_root: &'a FilePath,
-    key_input: &'a eval_cache::EvalCacheKeyInput,
+    key_input: &'a crate::eval_cache::EvalCacheKeyInput,
     key_ref: &'a str,
 }
 
@@ -4631,8 +4676,8 @@ fn run_stage_with_cache(
 ) -> Result<JobStageRun> {
     let is_cacheable = node.kind != "materialize";
     let key_input = stage_cache_key_input(dag, request, node, inputs)?;
-    let key_value = eval_cache::eval_cache_key_value(&key_input)?;
-    let key = eval_cache::parse_eval_cache_key(&key_value)?;
+    let key_value = crate::eval_cache::eval_cache_key_value(&key_input)?;
+    let key = crate::eval_cache::parse_eval_cache_key(&key_value)?;
     let memo = StageMemo {
         dag,
         request,
@@ -4655,7 +4700,7 @@ fn run_stage_with_cache(
 
 fn stage_memo_hit(input: &StageMemo<'_>) -> Result<Option<JobStageRun>> {
     let current_policy_refs = combined_policy_refs(input.dag, input.request, Some(input.node));
-    if let Ok(hit) = eval_cache::get(input.cache_root, input.key_ref, &eval_cache::EvalCacheGetInput {
+    if let Ok(hit) = crate::eval_cache::get(input.cache_root, input.key_ref, &crate::eval_cache::EvalCacheGetInput {
         current_policy_refs,
         current_capability_refs: Vec::new(),
         current_revocation_refs: Vec::new(),
@@ -4664,7 +4709,7 @@ fn stage_memo_hit(input: &StageMemo<'_>) -> Result<Option<JobStageRun>> {
     {
         let output_values = parse_cached_stage_output(&output)?;
         let output_refs = refs_for_values(&output_values)?;
-        let cache_ref = preserves_rail::canonical_hash(&hit.receipt_value)?;
+        let cache_ref = crate::preserves_rail::canonical_hash(&hit.receipt_value)?;
         let receipt_value = job_receipt_value(JobReceiptInput {
             operation: "memo-hit",
             decision: "pass",
@@ -4695,24 +4740,25 @@ fn stage_memo_hit(input: &StageMemo<'_>) -> Result<Option<JobStageRun>> {
 }
 
 fn stage_memo_store(input: &StageMemo<'_>, stage: JobStageRun) -> Result<JobStageRun> {
-    let stage_output = preserves_rail::sequence(stage.output_values.clone());
+    let stage_output = crate::preserves_rail::sequence(stage.output_values.clone());
     let policy_refs = combined_policy_refs(input.dag, input.request, Some(input.node));
     let tier = if policy_refs.is_empty() {
-        eval_cache::TIER_PURE
+        crate::eval_cache::TIER_PURE
     } else {
-        eval_cache::TIER_POLICY_CURRENT
+        crate::eval_cache::TIER_POLICY_CURRENT
     };
-    let cache_put = eval_cache::put(input.cache_root, input.key_input, &eval_cache::EvalCacheValueInput {
-        tier: tier.to_string(),
-        status: eval_cache::STATUS_PASS.to_string(),
-        output: Some(stage_output),
-        dependency_refs: input.key_input.dependency_refs.clone(),
-        policy_refs: policy_refs.clone(),
-        evidence_refs: vec![preserves_rail::canonical_hash(&stage.receipt_value)?],
-        diagnostics: Vec::new(),
-    })?;
-    let cache_ref = preserves_rail::canonical_hash(&cache_put.receipt_value)?;
-    let stage_receipt_ref = preserves_rail::canonical_hash(&stage.receipt_value)?;
+    let cache_put =
+        crate::eval_cache::put(input.cache_root, input.key_input, &crate::eval_cache::EvalCacheValueInput {
+            tier: tier.to_string(),
+            status: crate::eval_cache::STATUS_PASS.to_string(),
+            output: Some(stage_output),
+            dependency_refs: input.key_input.dependency_refs.clone(),
+            policy_refs: policy_refs.clone(),
+            evidence_refs: vec![crate::preserves_rail::canonical_hash(&stage.receipt_value)?],
+            diagnostics: Vec::new(),
+        })?;
+    let cache_ref = crate::preserves_rail::canonical_hash(&cache_put.receipt_value)?;
+    let stage_receipt_ref = crate::preserves_rail::canonical_hash(&stage.receipt_value)?;
     let evidence_refs = vec![stage_receipt_ref, cache_ref.clone()];
     let receipt_value = job_receipt_value(JobReceiptInput {
         operation: "stage",
@@ -4790,26 +4836,28 @@ fn execute_source(
     effects: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Vec<IoValue>> {
     let source = simple_record(&node.config, "source", 1)?;
-    let payload = preserves_rail::value_to_iovalue(&source[0]);
+    let payload = crate::preserves_rail::value_to_iovalue(&source[0]);
     if let Some(values) = payload.collect_simple_record("values", Some(1)) {
         return sequence_items(&values[0], "source values");
     }
     if let Some(value) = payload.collect_simple_record("value", Some(1)) {
-        return Ok(vec![preserves_rail::value_to_iovalue(&value[0])]);
+        return Ok(vec![crate::preserves_rail::value_to_iovalue(&value[0])]);
     }
     if let Some(typed) = payload.collect_simple_record("typed-storage", Some(3)) {
         let namespace = required_string(&typed[0], "source typed storage namespace")?;
         let key = required_string(&typed[1], "source typed storage key")?;
         let schema_ref = parse_optional_ref_value(&typed[2])?;
-        let admission = typed_storage::TypedStorageAdmission::local_fixture(&format!("job:{}:{}", namespace, key));
-        let get = typed_storage::get_value(options.storage_root, &namespace, &key, schema_ref.as_deref(), &admission)?;
-        effects.push_item(preserves_rail::canonical_hash(&get.receipt_value)?);
+        let admission =
+            crate::typed_storage::TypedStorageAdmission::local_fixture(&format!("job:{}:{}", namespace, key));
+        let get =
+            crate::typed_storage::get_value(options.storage_root, &namespace, &key, schema_ref.as_deref(), &admission)?;
+        effects.push_item(crate::preserves_rail::canonical_hash(&get.receipt_value)?);
         return Ok(vec![get.value]);
     }
     if let Some(chunk) = payload.collect_simple_record("chunk-manifest", Some(1)) {
         let manifest_ref = required_ref(&chunk[0], "source chunk manifest ref")?;
-        let read = chunk_store::read_object(options.chunk_root, &manifest_ref)?;
-        effects.push_item(preserves_rail::canonical_hash(&read.receipt_value)?);
+        let read = crate::chunk_store::read_object(options.chunk_root, &manifest_ref)?;
+        effects.push_item(crate::preserves_rail::canonical_hash(&read.receipt_value)?);
         let value = crate::preserves_rail::parse_canonical_bytes(&read.bytes)?;
         if let Some(items) = value.collect_sequence() {
             ensure_count_at_most(items.len(), MAX_JOB_STAGE_VALUES, "source chunk values")?;
@@ -4817,7 +4865,7 @@ fn execute_source(
             for item in items.iter() {
                 push_bounded(
                     &mut output,
-                    preserves_rail::value_to_iovalue(item),
+                    crate::preserves_rail::value_to_iovalue(item),
                     MAX_JOB_STAGE_VALUES,
                     "source chunk values",
                 )?;
@@ -4855,7 +4903,7 @@ fn execute_filter(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
 fn execute_reduce(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
     let op = stage_operation(&node.config)?;
     match op.name.as_str() {
-        "count" => Ok(vec![preserves_rail::u64_value(inputs.len() as u64)]),
+        "count" => Ok(vec![crate::preserves_rail::u64_value(inputs.len() as u64)]),
         "sum-u64" | "sum-integers" => {
             let mut sum = 0_u64;
             for value in inputs {
@@ -4863,7 +4911,7 @@ fn execute_reduce(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
                     .checked_add(required_u64_value(value, "sum-u64 input")?)
                     .ok_or_else(|| MoltenError::invalid_harness("sum-u64 reducer overflowed u64"))?;
             }
-            Ok(vec![preserves_rail::u64_value(sum)])
+            Ok(vec![crate::preserves_rail::u64_value(sum)])
         }
         "concat-lists" => {
             let mut values = Vec::new();
@@ -4872,7 +4920,7 @@ fn execute_reduce(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
                     for item in items.iter() {
                         push_bounded(
                             &mut values,
-                            preserves_rail::value_to_iovalue(item),
+                            crate::preserves_rail::value_to_iovalue(item),
                             MAX_JOB_STAGE_VALUES,
                             "concat-list output values",
                         )?;
@@ -4881,7 +4929,7 @@ fn execute_reduce(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
                     return Err(MoltenError::invalid_harness("concat-lists reducer requires sequence inputs"));
                 }
             }
-            Ok(vec![preserves_rail::sequence(values)])
+            Ok(vec![crate::preserves_rail::sequence(values)])
         }
         other => Err(MoltenError::invalid_harness(format!("unsupported reduce operation {other}"))),
     }
@@ -4894,7 +4942,7 @@ fn execute_materialize(
     effects: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Vec<IoValue>> {
     let config = materialize_config(&node.config)?;
-    let value = preserves_rail::sequence(inputs.to_vec());
+    let value = crate::preserves_rail::sequence(inputs.to_vec());
     match config.kind.as_str() {
         "inline" => Ok(vec![value]),
         "typed-storage" => {
@@ -4904,27 +4952,33 @@ fn execute_materialize(
             let key = config
                 .key
                 .ok_or_else(|| MoltenError::invalid_harness("typed-storage materialization requires key"))?;
-            let admission = typed_storage::TypedStorageAdmission::local_fixture(&format!("job:{namespace}:{key}"));
-            let put = typed_storage::put_value(options.storage_root, &typed_storage::TypedStoragePutInput {
-                namespace,
-                key,
-                schema_ref: None,
-                value,
-                producer_ref: local_ref("job-materialize-producer", &node.id)?,
-                policy_refs: node.policy_refs.clone(),
-                evidence_refs: node.evidence_refs.clone(),
-                admission,
-            })?;
-            effects.push_item(preserves_rail::canonical_hash(&put.receipt_value)?);
+            let admission =
+                crate::typed_storage::TypedStorageAdmission::local_fixture(&format!("job:{namespace}:{key}"));
+            let put =
+                crate::typed_storage::put_value(options.storage_root, &crate::typed_storage::TypedStoragePutInput {
+                    namespace,
+                    key,
+                    schema_ref: None,
+                    value,
+                    producer_ref: local_ref("job-materialize-producer", &node.id)?,
+                    policy_refs: node.policy_refs.clone(),
+                    evidence_refs: node.evidence_refs.clone(),
+                    admission,
+                })?;
+            effects.push_item(crate::preserves_rail::canonical_hash(&put.receipt_value)?);
             Ok(vec![put.typed_ref_value])
         }
         "chunk-manifest" => {
-            let bytes = preserves_rail::canonical_bytes(&value)?;
-            let put =
-                chunk_store::put_bytes(options.chunk_root, "job-materialization", &bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
-            effects.push_item(preserves_rail::canonical_hash(&put.receipt_value)?);
-            Ok(vec![preserves_rail::record("chunk-manifest-ref", vec![
-                preserves_rail::string(&put.manifest_ref),
+            let bytes = crate::preserves_rail::canonical_bytes(&value)?;
+            let put = crate::chunk_store::put_bytes(
+                options.chunk_root,
+                "job-materialization",
+                &bytes,
+                DEFAULT_FIXED_V1_CHUNK_SIZE,
+            )?;
+            effects.push_item(crate::preserves_rail::canonical_hash(&put.receipt_value)?);
+            Ok(vec![crate::preserves_rail::record("chunk-manifest-ref", vec![
+                crate::preserves_rail::string(&put.manifest_ref),
             ])])
         }
         other => Err(MoltenError::invalid_harness(format!("unsupported materialization kind {other}"))),
@@ -4943,7 +4997,7 @@ fn stage_operation(config: &IoValue) -> Result<StageOperation> {
         validate_stage_operation(&name)?;
         return Ok(StageOperation {
             name,
-            argument: Some(preserves_rail::value_to_iovalue(&fields[1])),
+            argument: Some(crate::preserves_rail::value_to_iovalue(&fields[1])),
         });
     }
     let fields = simple_record(config, "op", 1)?;
@@ -4963,7 +5017,7 @@ fn apply_map_op(op: &StageOperation, value: &IoValue) -> Result<IoValue> {
                 .as_string()
                 .map(|value| value.into_owned())
                 .ok_or_else(|| MoltenError::invalid_harness("wrap operation label must be a string"))?;
-            Ok(preserves_rail::record("wrapped", vec![preserves_rail::string(&label), value.clone()]))
+            Ok(crate::preserves_rail::record("wrapped", vec![crate::preserves_rail::string(&label), value.clone()]))
         }
         "project-field" => {
             let label = op
@@ -4974,7 +5028,7 @@ fn apply_map_op(op: &StageOperation, value: &IoValue) -> Result<IoValue> {
                 .map(|value| value.into_owned())
                 .ok_or_else(|| MoltenError::invalid_harness("project-field label must be a string"))?;
             if let Some(fields) = value.collect_simple_record(&label, Some(1)) {
-                Ok(preserves_rail::value_to_iovalue(&fields[0]))
+                Ok(crate::preserves_rail::value_to_iovalue(&fields[0]))
             } else {
                 Err(MoltenError::invalid_harness(format!("project-field did not match record label {label}")))
             }
@@ -5051,7 +5105,7 @@ fn stage_cache_key_input(
     request: &JobOutputRequest,
     node: &JobNode,
     inputs: &[IoValue],
-) -> Result<eval_cache::EvalCacheKeyInput> {
+) -> Result<crate::eval_cache::EvalCacheKeyInput> {
     let input_refs = refs_for_values(inputs)?;
     let stage_artifact_ref = stage_artifact_or_builtin_ref(node)?;
     let dependency_capacity = 3usize
@@ -5071,17 +5125,17 @@ fn stage_cache_key_input(
     dependency_refs.extend(node.effect_manifest_refs.iter().cloned());
     dependency_refs.extend(node.evidence_refs.iter().cloned());
     let dependency_refs = sorted_unique(&dependency_refs);
-    let dependency_closure_hash = preserves_rail::canonical_hash(&preserves_rail::record(
-        "job-stage-dependency-closure",
-        vec![refs_sequence(&dependency_refs)],
-    ))?;
-    let input_ref = preserves_rail::canonical_hash(&preserves_rail::record("job-stage-input-v1", vec![
-        preserves_rail::record("job", vec![preserves_rail::string(&dag.job_ref)]),
-        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
-        preserves_rail::record("stage", vec![preserves_rail::string(&node.id)]),
-        preserves_rail::record("stage-artifact", vec![preserves_rail::string(&stage_artifact_ref)]),
-        preserves_rail::record("inputs", vec![preserves_rail::sequence(inputs.to_vec())]),
-        preserves_rail::record("config", vec![node.config.clone()]),
+    let dependency_closure_hash =
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("job-stage-dependency-closure", vec![
+            refs_sequence(&dependency_refs),
+        ]))?;
+    let input_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("job-stage-input-v1", vec![
+        crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&dag.job_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&request.request_ref)]),
+        crate::preserves_rail::record("stage", vec![crate::preserves_rail::string(&node.id)]),
+        crate::preserves_rail::record("stage-artifact", vec![crate::preserves_rail::string(&stage_artifact_ref)]),
+        crate::preserves_rail::record("inputs", vec![crate::preserves_rail::sequence(inputs.to_vec())]),
+        crate::preserves_rail::record("config", vec![node.config.clone()]),
     ]))?;
     let assumption_capacity = dag
         .schema_refs
@@ -5094,8 +5148,8 @@ fn stage_cache_key_input(
     assumptions.extend(dag.schema_refs.iter().cloned());
     assumptions.extend(node.effect_manifest_refs.iter().cloned());
     assumptions.extend(request.seed_config_ref.iter().cloned());
-    assumptions.push(preserves_rail::canonical_hash(&node.config)?);
-    Ok(eval_cache::EvalCacheKeyInput {
+    assumptions.push(crate::preserves_rail::canonical_hash(&node.config)?);
+    Ok(crate::eval_cache::EvalCacheKeyInput {
         operation: JOB_CACHE_OPERATION.to_string(),
         version: "v1".to_string(),
         input_ref,
@@ -5124,9 +5178,9 @@ fn stage_artifact_or_builtin_ref(node: &JobNode) -> Result<String> {
 }
 
 fn job_tool_ref() -> Result<String> {
-    preserves_rail::canonical_hash(&preserves_rail::record("job-dag-tool-v1", vec![
-        preserves_rail::string("molten-job-dag"),
-        preserves_rail::string(JOB_TOOL_VERSION),
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("job-dag-tool-v1", vec![
+        crate::preserves_rail::string("molten-job-dag"),
+        crate::preserves_rail::string(JOB_TOOL_VERSION),
     ]))
 }
 
@@ -5168,28 +5222,28 @@ fn job_receipt_value(input: JobReceiptInput<'_>) -> Result<IoValue> {
     validate_refs(input.evidence_refs, "job receipt evidence ref")?;
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(preserves_rail::record("job-dag-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::JOB_DAG_RECEIPT_SCHEMA),
-        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("job", vec![optional_ref_value(input.job_ref)]),
-        preserves_rail::record("request", vec![optional_ref_value(input.request_ref)]),
-        preserves_rail::record("stage", vec![optional_string_value(input.stage_id)]),
-        preserves_rail::record("inputs", vec![refs_sequence(&sorted_unique(input.input_refs))]),
-        preserves_rail::record("outputs", vec![refs_sequence(&sorted_unique(input.output_refs))]),
-        preserves_rail::record("cache", vec![optional_ref_value(input.cache_ref)]),
-        preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_refs))]),
-        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
-        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
-            input.diagnostics.iter().map(preserves_rail::string).collect(),
+    Ok(crate::preserves_rail::record("job-dag-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::JOB_DAG_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(input.operation)]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("job", vec![optional_ref_value(input.job_ref)]),
+        crate::preserves_rail::record("request", vec![optional_ref_value(input.request_ref)]),
+        crate::preserves_rail::record("stage", vec![optional_string_value(input.stage_id)]),
+        crate::preserves_rail::record("inputs", vec![refs_sequence(&sorted_unique(input.input_refs))]),
+        crate::preserves_rail::record("outputs", vec![refs_sequence(&sorted_unique(input.output_refs))]),
+        crate::preserves_rail::record("cache", vec![optional_ref_value(input.cache_ref)]),
+        crate::preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_refs))]),
+        crate::preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        crate::preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
         checks_value_from_pairs(&checks),
     ]))
 }
 
 fn parse_node_sequence(value: &Value<IoValue>) -> Result<Vec<JobNode>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, "nodes", 1)?;
     let items = required_sequence(&record[0], "job nodes")?;
     ensure_count_at_most(items.len(), MAX_JOB_NODES, "job nodes")?;
@@ -5197,7 +5251,7 @@ fn parse_node_sequence(value: &Value<IoValue>) -> Result<Vec<JobNode>> {
     for item in items.iter() {
         push_bounded(
             &mut nodes,
-            parse_job_node_value(&preserves_rail::value_to_iovalue(item))?,
+            parse_job_node_value(&crate::preserves_rail::value_to_iovalue(item))?,
             MAX_JOB_NODES,
             "job nodes",
         )?;
@@ -5209,7 +5263,7 @@ fn parse_job_node_value(value: &IoValue) -> Result<JobNode> {
     let fields = value
         .collect_simple_record("job-node-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-node-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_DAG_NODE_SCHEMA, "job node")?;
+    require_schema(&fields[0], crate::preserves_rail::JOB_DAG_NODE_SCHEMA, "job node")?;
     let id = record_string(&fields[1], "id")?;
     validate_node_id(&id)?;
     let kind = record_string(&fields[2], "kind")?;
@@ -5236,7 +5290,7 @@ fn parse_job_node_value(value: &IoValue) -> Result<JobNode> {
 }
 
 fn parse_edge_sequence(value: &Value<IoValue>) -> Result<Vec<JobEdge>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, "edges", 1)?;
     let items = required_sequence(&record[0], "job edges")?;
     ensure_count_at_most(items.len(), MAX_JOB_EDGES, "job edges")?;
@@ -5244,7 +5298,7 @@ fn parse_edge_sequence(value: &Value<IoValue>) -> Result<Vec<JobEdge>> {
     for item in items.iter() {
         push_bounded(
             &mut edges,
-            parse_job_edge_value(&preserves_rail::value_to_iovalue(item))?,
+            parse_job_edge_value(&crate::preserves_rail::value_to_iovalue(item))?,
             MAX_JOB_EDGES,
             "job edges",
         )?;
@@ -5256,10 +5310,10 @@ fn parse_job_edge_value(value: &IoValue) -> Result<JobEdge> {
     let fields = value
         .collect_simple_record("job-edge-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-edge-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::JOB_DAG_EDGE_SCHEMA, "job edge")?;
-    let from = preserves_rail::value_to_iovalue(&fields[1]);
+    require_schema(&fields[0], crate::preserves_rail::JOB_DAG_EDGE_SCHEMA, "job edge")?;
+    let from = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let from_fields = simple_record(&from, "from", 2)?;
-    let to = preserves_rail::value_to_iovalue(&fields[2]);
+    let to = crate::preserves_rail::value_to_iovalue(&fields[2]);
     let to_fields = simple_record(&to, "to", 2)?;
     let partitioning = record_string(&fields[4], "partitioning")?;
     let materialization = record_string(&fields[5], "materialization")?;
@@ -5475,7 +5529,7 @@ fn refs_for_values(values: &[IoValue]) -> Result<Vec<String>> {
     ensure_count_at_most(values.len(), MAX_JOB_STAGE_VALUES, "job values to hash")?;
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
-        push_bounded(&mut refs, preserves_rail::canonical_hash(value)?, MAX_JOB_REFS, "job value refs")?;
+        push_bounded(&mut refs, crate::preserves_rail::canonical_hash(value)?, MAX_JOB_REFS, "job value refs")?;
     }
     Ok(refs)
 }
@@ -5487,7 +5541,7 @@ fn parse_cached_stage_output(value: &IoValue) -> Result<Vec<IoValue>> {
         for item in items.iter() {
             push_bounded(
                 &mut values,
-                preserves_rail::value_to_iovalue(item),
+                crate::preserves_rail::value_to_iovalue(item),
                 MAX_JOB_STAGE_VALUES,
                 "cached job stage output",
             )?;
@@ -5516,43 +5570,43 @@ fn combined_policy_refs(dag: &JobDag, request: &JobOutputRequest, node: Option<&
 }
 
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
 fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
 fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
 fn record_optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_string_value(&record[0])
 }
 
 fn record_iovalue(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
-    Ok(preserves_rail::value_to_iovalue(&record[0]))
+    Ok(crate::preserves_rail::value_to_iovalue(&record[0]))
 }
 
 fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
 }
 
 fn record_node_id_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_NODES, label)?;
@@ -5566,7 +5620,7 @@ fn record_node_id_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<St
 }
 
 fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_REFS, label)?;
@@ -5578,13 +5632,13 @@ fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Str
 }
 
 fn record_port_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_PORTS, label)?;
     let mut ports = Vec::with_capacity(items.len());
     for item in items.iter() {
-        let port = preserves_rail::value_to_iovalue(item);
+        let port = crate::preserves_rail::value_to_iovalue(item);
         let fields = simple_record(&port, "port", 2)?;
         let name = required_string(&fields[0], "port name")?;
         validate_non_empty(&name, "port name")?;
@@ -5608,7 +5662,7 @@ fn sequence_items(value: &Value<IoValue>, label: &str) -> Result<Vec<IoValue>> {
     ensure_count_at_most(items.len(), MAX_JOB_STAGE_VALUES, label)?;
     let mut values = Vec::with_capacity(items.len());
     for item in items.iter() {
-        push_bounded(&mut values, preserves_rail::value_to_iovalue(item), MAX_JOB_STAGE_VALUES, label)?;
+        push_bounded(&mut values, crate::preserves_rail::value_to_iovalue(item), MAX_JOB_STAGE_VALUES, label)?;
     }
     Ok(values)
 }
@@ -5702,15 +5756,15 @@ fn insert_bounded<K: Ord, V>(
 
 fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(
-        || preserves_rail::record("none", Vec::new()),
-        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+        || crate::preserves_rail::record("none", Vec::new()),
+        |value| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(value)]),
     )
 }
 
 fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(
-        || preserves_rail::record("none", Vec::new()),
-        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+        || crate::preserves_rail::record("none", Vec::new()),
+        |value| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(value)]),
     )
 }
 
@@ -5735,17 +5789,17 @@ fn parse_optional_string_value(value: &Value<IoValue>) -> Result<Option<String>>
 }
 
 fn refs_sequence(refs: &[String]) -> IoValue {
-    preserves_rail::sequence(refs.iter().map(preserves_rail::string).collect())
+    crate::preserves_rail::sequence(refs.iter().map(crate::preserves_rail::string).collect())
 }
 
 fn ports_sequence(ports: &[String]) -> IoValue {
-    preserves_rail::sequence(
+    crate::preserves_rail::sequence(
         ports
             .iter()
             .map(|port| {
-                preserves_rail::record("port", vec![
-                    preserves_rail::string(port),
-                    preserves_rail::record("none", Vec::new()),
+                crate::preserves_rail::record("port", vec![
+                    crate::preserves_rail::string(port),
+                    crate::preserves_rail::record("none", Vec::new()),
                 ])
             })
             .collect(),
@@ -5757,24 +5811,27 @@ fn checks_value(names: &[&str]) -> IoValue {
 }
 
 fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
-    preserves_rail::record("checks", vec![preserves_rail::sequence(
+    crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(
         checks
             .iter()
             .map(|(name, status)| {
-                preserves_rail::record("check", vec![preserves_rail::string(name), preserves_rail::string(status)])
+                crate::preserves_rail::record("check", vec![
+                    crate::preserves_rail::string(name),
+                    crate::preserves_rail::string(status),
+                ])
             })
             .collect(),
     )])
 }
 
 fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
     ensure_count_at_most(items.len(), MAX_JOB_CHECKS, "checks")?;
     let mut parsed = Vec::with_capacity(items.len());
     for item in items.iter() {
-        let item = preserves_rail::value_to_iovalue(item);
+        let item = crate::preserves_rail::value_to_iovalue(item);
         let check = simple_record(&item, "check", 2)?;
         let name = required_string(&check[0], "check name")?;
         let status = required_string(&check[1], "check status")?;
@@ -5804,13 +5861,13 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
 }
 
 fn record_sequence_values(value: &Value<IoValue>, label: &str) -> Result<Vec<IoValue>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_REFS, label)?;
     let mut values = Vec::with_capacity(items.len());
     for item in items.iter() {
-        push_bounded(&mut values, preserves_rail::value_to_iovalue(item), MAX_JOB_REFS, label)?;
+        push_bounded(&mut values, crate::preserves_rail::value_to_iovalue(item), MAX_JOB_REFS, label)?;
     }
     Ok(values)
 }
@@ -5909,7 +5966,7 @@ fn validate_blob_ref_state(state: &str) -> Result<()> {
 }
 
 fn reject_blob_ref_job_inline_tokens(value: &IoValue) -> Result<()> {
-    let text = preserves_rail::to_text(value)?;
+    let text = crate::preserves_rail::to_text(value)?;
     for token in ["inline-bytes", "inline-executable", "inline-dataset"] {
         if text.contains(token) {
             return Err(MoltenError::invalid_harness(format!(
@@ -5995,13 +6052,13 @@ fn validate_stage_receipt_refs(stage_receipts: &[(String, String)]) -> Result<()
 }
 
 fn record_stage_receipt_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<(String, String)>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_NODES, label)?;
     let mut stage_receipts = Vec::with_capacity(items.len());
     for item in items.iter() {
-        let item = preserves_rail::value_to_iovalue(item);
+        let item = crate::preserves_rail::value_to_iovalue(item);
         let stage = simple_record(&item, "stage", 2)?;
         let stage_id = required_string(&stage[0], "job worker stage id")?;
         validate_node_id(&stage_id)?;
@@ -6018,17 +6075,17 @@ fn import_worker_artifacts(
     result_value: &IoValue,
     receipt_value: &IoValue,
 ) -> Result<()> {
-    ledger::import_artifact(ledger_root, assignment_value)?;
+    crate::ledger::import_artifact(ledger_root, assignment_value)?;
     for status_value in status_values {
-        ledger::import_artifact(ledger_root, status_value)?;
+        crate::ledger::import_artifact(ledger_root, status_value)?;
     }
-    ledger::import_artifact(ledger_root, result_value)?;
-    ledger::import_artifact(ledger_root, receipt_value)?;
+    crate::ledger::import_artifact(ledger_root, result_value)?;
+    crate::ledger::import_artifact(ledger_root, receipt_value)?;
     Ok(())
 }
 
 fn reject_worker_ambient_tokens(value: &IoValue) -> Result<()> {
-    let text = preserves_rail::to_text(value)?;
+    let text = crate::preserves_rail::to_text(value)?;
     let banned = [
         "<raw-closure",
         "<closure",
@@ -6101,7 +6158,7 @@ fn validate_node_id(id: &str) -> Result<()> {
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
-    preserves_rail::validate_content_ref(value_ref).map_err(|error| {
+    crate::preserves_rail::validate_content_ref(value_ref).map_err(|error| {
         MoltenError::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
     })
 }
@@ -6122,7 +6179,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 }
 
 fn reject_mobile_closure_config(config: &IoValue) -> Result<()> {
-    let text = preserves_rail::to_text(config)?;
+    let text = crate::preserves_rail::to_text(config)?;
     let banned = [
         "<closure",
         "<raw-closure",
@@ -6141,9 +6198,9 @@ fn reject_mobile_closure_config(config: &IoValue) -> Result<()> {
 }
 
 fn local_ref(kind: &str, label: &str) -> Result<String> {
-    preserves_rail::canonical_hash(&preserves_rail::record("job-dag-local-ref", vec![
-        preserves_rail::string(kind),
-        preserves_rail::string(label),
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("job-dag-local-ref", vec![
+        crate::preserves_rail::string(kind),
+        crate::preserves_rail::string(label),
     ]))
 }
 
@@ -6153,13 +6210,6 @@ fn sorted_unique(refs: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
 
     fn test_node_value(
@@ -6211,7 +6261,8 @@ mod tests {
         let dag = fixture_value("identity");
         let parsed = parse_job_dag_value(&dag).expect("parse dag");
         let reparsed = parse_job_dag_value(
-            &preserves_rail::parse_text(&preserves_rail::to_text(&dag).expect("text")).expect("text parse"),
+            &crate::preserves_rail::parse_text(&crate::preserves_rail::to_text(&dag).expect("text"))
+                .expect("text parse"),
         )
         .expect("reparse");
         assert_eq!(parsed.job_ref, reparsed.job_ref);
@@ -6243,9 +6294,9 @@ mod tests {
         let first = run_job_dag(&dag, &options).expect("first run");
         let second = run_job_dag(&dag, &options).expect("second run");
         assert_eq!(first.output_refs, second.output_refs);
-        let second_text = preserves_rail::to_text(&second.receipt_value).expect("receipt text");
+        let second_text = crate::preserves_rail::to_text(&second.receipt_value).expect("receipt text");
         assert!(["memo-hit", "stage-receipts-bound"].iter().any(|needle| second_text.contains(needle)));
-        let output_text = preserves_rail::to_text(&second.output_value).expect("output text");
+        let output_text = crate::preserves_rail::to_text(&second.output_value).expect("output text");
         assert!(output_text.contains("wrapped"));
     }
 
@@ -6254,10 +6305,10 @@ mod tests {
         let root = temp_dir("job-ref-worker");
         let chunks = root.join("chunks");
         let ledger = root.join("ledger");
-        let executable = chunk_store::put_bytes(&chunks, "job-executable", b"echo", DEFAULT_FIXED_V1_CHUNK_SIZE)
+        let executable = crate::chunk_store::put_bytes(&chunks, "job-executable", b"echo", DEFAULT_FIXED_V1_CHUNK_SIZE)
             .expect("put executable");
-        let input =
-            chunk_store::put_bytes(&chunks, "job-input", b"hello", DEFAULT_FIXED_V1_CHUNK_SIZE).expect("put input");
+        let input = crate::chunk_store::put_bytes(&chunks, "job-input", b"hello", DEFAULT_FIXED_V1_CHUNK_SIZE)
+            .expect("put input");
         let operation_id = local_ref("job-ref-operation", "one").expect("operation id");
         let policy_ref = local_ref("job-ref-policy", "one").expect("policy ref");
         let provenance_ref = local_ref("job-ref-provenance", "one").expect("provenance ref");
@@ -6299,7 +6350,7 @@ mod tests {
         .expect("execute blob ref job");
         assert_eq!(executed.decision, "pass");
         let output_ref = executed.output_manifest_ref.as_deref().expect("output ref");
-        let output = chunk_store::read_object(&chunks, output_ref).expect("read output");
+        let output = crate::chunk_store::read_object(&chunks, output_ref).expect("read output");
         assert_eq!(output.bytes, b"hello");
         let receipt = parse_blob_ref_job_receipt_value(&executed.receipt_value).expect("parse receipt");
         assert_eq!(receipt.decision, "pass");
@@ -6316,7 +6367,7 @@ mod tests {
     fn blob_ref_job_submission_denies_missing_ref_before_run() {
         let root = temp_dir("job-ref-missing");
         let chunks = root.join("chunks");
-        let executable = chunk_store::put_bytes(&chunks, "job-executable", b"echo", DEFAULT_FIXED_V1_CHUNK_SIZE)
+        let executable = crate::chunk_store::put_bytes(&chunks, "job-executable", b"echo", DEFAULT_FIXED_V1_CHUNK_SIZE)
             .expect("put executable");
         let operation_id = local_ref("job-ref-operation", "missing").expect("operation id");
         let policy_ref = local_ref("job-ref-policy", "missing").expect("policy ref");
@@ -6401,23 +6452,23 @@ mod tests {
     fn blob_ref_job_submission_rejects_inline_large_bytes() {
         let operation_id = local_ref("job-ref-operation", "inline").expect("operation id");
         let authority_ref = local_ref("job-ref-authority", "inline").expect("authority ref");
-        let value = preserves_rail::record("job-ref-submission-v1", vec![
-            preserves_rail::string(preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
-            preserves_rail::record("job-id", vec![preserves_rail::string("job-ref-inline")]),
-            preserves_rail::record("operation-id", vec![preserves_rail::string(&operation_id)]),
-            preserves_rail::record("executable", vec![preserves_rail::record("inline-bytes", vec![
-                preserves_rail::string("not-a-content-ref"),
+        let value = crate::preserves_rail::record("job-ref-submission-v1", vec![
+            crate::preserves_rail::string(crate::preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
+            crate::preserves_rail::record("job-id", vec![crate::preserves_rail::string("job-ref-inline")]),
+            crate::preserves_rail::record("operation-id", vec![crate::preserves_rail::string(&operation_id)]),
+            crate::preserves_rail::record("executable", vec![crate::preserves_rail::record("inline-bytes", vec![
+                crate::preserves_rail::string("not-a-content-ref"),
             ])]),
-            preserves_rail::record("inputs", vec![preserves_rail::sequence(vec![])]),
-            preserves_rail::record("output-mode", vec![preserves_rail::string("chunk-manifest")]),
-            preserves_rail::record("input-schemas", vec![refs_sequence(&[])]),
-            preserves_rail::record("output-schemas", vec![refs_sequence(&[])]),
-            preserves_rail::record("effects", vec![refs_sequence(&[])]),
-            preserves_rail::record("handler-profile", vec![preserves_rail::string("local-echo-v1")]),
-            preserves_rail::record("authority", vec![preserves_rail::string(&authority_ref)]),
-            preserves_rail::record("policy", vec![refs_sequence(&[])]),
-            preserves_rail::record("provenance", vec![refs_sequence(&[])]),
-            preserves_rail::record("evidence", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("inputs", vec![crate::preserves_rail::sequence(vec![])]),
+            crate::preserves_rail::record("output-mode", vec![crate::preserves_rail::string("chunk-manifest")]),
+            crate::preserves_rail::record("input-schemas", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("output-schemas", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("effects", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("handler-profile", vec![crate::preserves_rail::string("local-echo-v1")]),
+            crate::preserves_rail::record("authority", vec![crate::preserves_rail::string(&authority_ref)]),
+            crate::preserves_rail::record("policy", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("provenance", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("evidence", vec![refs_sequence(&[])]),
             checks_value(&["content-refs-only", "no-inline-large-bytes"]),
         ]);
         assert!(
@@ -6440,13 +6491,13 @@ mod tests {
             "source",
             &[],
             &["out".to_string()],
-            preserves_rail::record("source", vec![preserves_rail::record("values", vec![preserves_rail::sequence(
-                vec![
-                    preserves_rail::u64_value(1),
-                    preserves_rail::u64_value(2),
-                    preserves_rail::u64_value(3),
-                ],
-            )])]),
+            crate::preserves_rail::record("source", vec![crate::preserves_rail::record("values", vec![
+                crate::preserves_rail::sequence(vec![
+                    crate::preserves_rail::u64_value(1),
+                    crate::preserves_rail::u64_value(2),
+                    crate::preserves_rail::u64_value(3),
+                ]),
+            ])]),
         )
         .expect("source");
         let reduce = test_node_value(
@@ -6454,7 +6505,7 @@ mod tests {
             "reduce",
             &["in".to_string()],
             &["out".to_string()],
-            preserves_rail::record("op", vec![preserves_rail::string("sum-u64")]),
+            crate::preserves_rail::record("op", vec![crate::preserves_rail::string("sum-u64")]),
         )
         .expect("reduce");
         let edge = stream_edge_value("source", "sum").expect("edge");
@@ -6469,7 +6520,7 @@ mod tests {
             output_request: None,
         };
         let run = run_job_dag(&dag, &options).expect("run");
-        assert_eq!(preserves_rail::to_text(&run.output_value).expect("output"), "[6]");
+        assert_eq!(crate::preserves_rail::to_text(&run.output_value).expect("output"), "[6]");
     }
 
     #[test]
@@ -6479,7 +6530,7 @@ mod tests {
             "map",
             &["in".to_string()],
             &["out".to_string()],
-            preserves_rail::record("op", vec![preserves_rail::string("identity")]),
+            crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
         )
         .expect("a");
         let b = test_node_value(
@@ -6487,7 +6538,7 @@ mod tests {
             "map",
             &["in".to_string()],
             &["out".to_string()],
-            preserves_rail::record("op", vec![preserves_rail::string("identity")]),
+            crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
         )
         .expect("b");
         let a_node = parse_job_node_value(&a).expect("parse a");
@@ -6514,18 +6565,18 @@ mod tests {
     }
 
     struct CopyArtifacts {
-        base: artifacts::ArtifactInstall,
-        source_stage: artifacts::ArtifactInstall,
-        stage: artifacts::ArtifactInstall,
+        base: crate::artifacts::ArtifactInstall,
+        source_stage: crate::artifacts::ArtifactInstall,
+        stage: crate::artifacts::ArtifactInstall,
     }
 
     struct CopyCase {
-        root: PathBuf,
-        source: PathBuf,
-        target: PathBuf,
-        base: artifacts::ArtifactInstall,
-        source_stage: artifacts::ArtifactInstall,
-        stage: artifacts::ArtifactInstall,
+        root: std::path::PathBuf,
+        source: std::path::PathBuf,
+        target: std::path::PathBuf,
+        base: crate::artifacts::ArtifactInstall,
+        source_stage: crate::artifacts::ArtifactInstall,
+        stage: crate::artifacts::ArtifactInstall,
         installed_job: JobInstall,
         request: IoValue,
     }
@@ -6544,8 +6595,8 @@ mod tests {
         payload: IoValue,
         dependency_refs: Vec<String>,
         label: &str,
-    ) -> artifacts::ArtifactInstall {
-        artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+    ) -> crate::artifacts::ArtifactInstall {
+        crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {
             kind: kind.to_string(),
             payload,
             schema_refs: vec![test_ref("schema")],
@@ -6563,7 +6614,7 @@ mod tests {
         let base = install_case_artifact(
             source,
             "schema",
-            preserves_rail::record("schema", vec![preserves_rail::string("base")]),
+            crate::preserves_rail::record("schema", vec![crate::preserves_rail::string("base")]),
             Vec::new(),
             "install base",
         );
@@ -6603,8 +6654,8 @@ mod tests {
             stage_artifact_ref: Some(&source_stage.artifact_ref),
             input_ports: &[],
             output_ports: &["out".to_string()],
-            config: preserves_rail::record("source", vec![preserves_rail::record("values", vec![
-                preserves_rail::sequence(vec![preserves_rail::string("x")]),
+            config: crate::preserves_rail::record("source", vec![crate::preserves_rail::record("values", vec![
+                crate::preserves_rail::sequence(vec![crate::preserves_rail::string("x")]),
             ])]),
             effect_manifest_refs: &[],
             policy_refs: &[],
@@ -6617,7 +6668,7 @@ mod tests {
             stage_artifact_ref: Some(&stage.artifact_ref),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
-            config: preserves_rail::record("op", vec![preserves_rail::string("identity")]),
+            config: crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
@@ -6662,7 +6713,7 @@ mod tests {
         assert_eq!(denied.decision, "deny");
         assert!(denied.installed_refs.is_empty());
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing provenance")));
-        assert!(artifacts::list_artifacts(&case.target, None).expect("target artifacts").is_empty());
+        assert!(crate::artifacts::list_artifacts(&case.target, None).expect("target artifacts").is_empty());
         let sync_provenance = reviewed_provenance_values(&[
             case.base.artifact_ref.clone(),
             case.source_stage.artifact_ref.clone(),
@@ -6681,7 +6732,7 @@ mod tests {
         assert!(synced.installed_refs.contains(&case.source_stage.artifact_ref));
         assert!(synced.installed_refs.contains(&case.stage.artifact_ref));
         assert_eq!(
-            artifacts::read_artifact(&case.target, &case.base.artifact_ref).expect("target base").value,
+            crate::artifacts::read_artifact(&case.target, &case.base.artifact_ref).expect("target base").value,
             case.base.artifact.value
         );
         let second = sync_loopback(SyncLoopbackInput {
@@ -6694,8 +6745,12 @@ mod tests {
         .expect("sync no-op");
         assert!(second.installed_refs.is_empty());
         assert!(second.already_present_refs.contains(&case.base.artifact_ref));
-        assert!(preserves_rail::to_text(&second.receipt_value).expect("receipt text").contains("no-execution"));
-        preserves_rail::canonical_hash(&synced.receipt_value).expect("sync receipt ref")
+        assert!(
+            crate::preserves_rail::to_text(&second.receipt_value)
+                .expect("receipt text")
+                .contains("no-execution")
+        );
+        crate::preserves_rail::canonical_hash(&synced.receipt_value).expect("sync receipt ref")
     }
 
     fn passing_flow(case: &CopyCase, sync_ref: String) -> CopyFlow {
@@ -6715,11 +6770,11 @@ mod tests {
         let admission = admission_loopback(&case.target, &admission_request).expect("admission loopback");
         assert_eq!(admission.plan.decision, "pass");
         assert!(
-            preserves_rail::to_text(&admission.receipt_value)
+            crate::preserves_rail::to_text(&admission.receipt_value)
                 .expect("admission receipt")
                 .contains("no-execution")
         );
-        let admission_ref = preserves_rail::canonical_hash(&admission.receipt_value).expect("admission ref");
+        let admission_ref = crate::preserves_rail::canonical_hash(&admission.receipt_value).expect("admission ref");
         CopyFlow {
             sync_ref,
             source_gate_ref,
@@ -6759,7 +6814,7 @@ mod tests {
         let (request, execution) = passing_execution(case, flow);
         assert_eq!(execution.decision, "pass");
         assert!(
-            preserves_rail::to_text(&execution.run.as_ref().expect("run").output_value)
+            crate::preserves_rail::to_text(&execution.run.as_ref().expect("run").output_value)
                 .expect("execution output")
                 .contains("x")
         );
@@ -6778,7 +6833,7 @@ mod tests {
         assert_eq!(execution.run.as_ref().expect("execution run").output_value, equivalent_source_run.output_value);
         assert_eq!(crate::ledger::artifact_kind(&request), "job-execution-request");
         assert_eq!(crate::ledger::artifact_kind(&execution.receipt_value), "job-execution-receipt");
-        let execution_text = preserves_rail::to_text(&execution.receipt_value).expect("execution receipt");
+        let execution_text = crate::preserves_rail::to_text(&execution.receipt_value).expect("execution receipt");
         assert!(execution_text.contains("job-execution-receipt-v1"));
         assert!(execution_text.contains("executed-on-target-state"));
         assert!(execution_text.contains(&flow.admission.plan.request.sync_ref));
@@ -6814,7 +6869,7 @@ mod tests {
         assert_eq!(denied.decision, "deny");
         assert!(denied.run.is_none());
         assert!(
-            preserves_rail::to_text(&denied.receipt_value)
+            crate::preserves_rail::to_text(&denied.receipt_value)
                 .expect("denied execution receipt")
                 .contains("no-stage-execution-on-deny")
         );
@@ -6849,8 +6904,8 @@ mod tests {
 
     fn assert_stale_closure_execution(case: &CopyCase, flow: &CopyFlow) {
         let stale_ref = test_ref("stale-stage-artifact");
-        let tampered_admission = preserves_rail::parse_text(
-            &preserves_rail::to_text(&flow.admission.receipt_value).expect("admission text").replacen(
+        let tampered_admission = crate::preserves_rail::parse_text(
+            &crate::preserves_rail::to_text(&flow.admission.receipt_value).expect("admission text").replacen(
                 &case.stage.artifact_ref,
                 &stale_ref,
                 1,
@@ -6858,7 +6913,7 @@ mod tests {
         )
         .expect("tampered admission parse");
         let tampered_admission_ref =
-            preserves_rail::canonical_hash(&tampered_admission).expect("tampered admission ref");
+            crate::preserves_rail::canonical_hash(&tampered_admission).expect("tampered admission ref");
         let request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &case.installed_job.job_ref,
             admission_ref: &tampered_admission_ref,
@@ -6902,7 +6957,8 @@ mod tests {
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("policy")));
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("strict Octet source gate")));
         let admission = admission_loopback(&case.target, &request).expect("denied admission receipt");
-        let admission_ref = preserves_rail::canonical_hash(&admission.receipt_value).expect("denied admission ref");
+        let admission_ref =
+            crate::preserves_rail::canonical_hash(&admission.receipt_value).expect("denied admission ref");
         let execution_request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &case.installed_job.job_ref,
             admission_ref: &admission_ref,
@@ -6996,8 +7052,8 @@ mod tests {
         assert!(kinds.contains("job-worker-status"));
         assert!(kinds.contains("job-worker-result"));
         assert!(kinds.contains("job-worker-receipt"));
-        let receipt_text = preserves_rail::to_text(&worker.receipt_value).expect("worker receipt text");
-        let result_text = preserves_rail::to_text(&worker.result.value).expect("worker result text");
+        let receipt_text = crate::preserves_rail::to_text(&worker.receipt_value).expect("worker receipt text");
+        let result_text = crate::preserves_rail::to_text(&worker.result.value).expect("worker result text");
         assert!(receipt_text.contains("transport-is-not-authority"));
         assert!(receipt_text.contains("recorded-delivery-log"));
         assert!(result_text.contains(&fixture.sync_ref));
@@ -7103,7 +7159,8 @@ mod tests {
         .expect("denied admission request");
         let admission = admission_loopback(&fixture.target, &request_value).expect("denied admission");
         assert_eq!(admission.plan.decision, "deny");
-        let admission_ref = preserves_rail::canonical_hash(&admission.receipt_value).expect("denied admission ref");
+        let admission_ref =
+            crate::preserves_rail::canonical_hash(&admission.receipt_value).expect("denied admission ref");
         let execution_request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
             admission_ref: &admission_ref,
@@ -7117,7 +7174,8 @@ mod tests {
             resource_refs: &[],
         })
         .expect("denied execution request");
-        let execution_request_ref = preserves_rail::canonical_hash(&execution_request).expect("denied execution ref");
+        let execution_request_ref =
+            crate::preserves_rail::canonical_hash(&execution_request).expect("denied execution ref");
         let worker_request = job_worker_request_value(JobWorkerRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
             target_peer: "peer:b",
@@ -7279,8 +7337,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 4)]
-    fn hegel_worker_request_identity_recorded_replay_and_no_source_state(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(10_000));
+    fn hegel_worker_request_identity_recorded_replay_and_no_source_state(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(10_000));
         let job_ref = test_ref(&format!("worker-job-{salt}"));
         let sync_ref = test_ref(&format!("worker-sync-{salt}"));
         let admission_ref = test_ref(&format!("worker-admission-{salt}"));
@@ -7304,20 +7362,20 @@ mod tests {
             evidence_refs: &evidence,
         })
         .expect("first request");
-        let second = preserves_rail::parse_text(&preserves_rail::to_text(&first).expect("request text"))
+        let second = crate::preserves_rail::parse_text(&crate::preserves_rail::to_text(&first).expect("request text"))
             .expect("reparse request");
         let parsed = parse_job_worker_request_value(&second).expect("parse worker request");
-        assert_eq!(preserves_rail::canonical_hash(&first).expect("first ref"), parsed.request_ref);
-        let request_text = preserves_rail::to_text(&first).expect("worker request text");
+        assert_eq!(crate::preserves_rail::canonical_hash(&first).expect("first ref"), parsed.request_ref);
+        let request_text = crate::preserves_rail::to_text(&first).expect("worker request text");
         assert!(!request_text.contains("source-registry"));
         assert!(request_text.contains("target-state-only"));
         assert!(request_text.contains(&sync_ref));
     }
 
     #[hegel::test(test_cases = 4)]
-    fn hegel_blob_ref_submission_rejects_inline_tokens_and_records_pin_lifecycle(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(10_000));
-        let token_selector = tc.draw(generators::integers::<u64>().min_value(0).max_value(2));
+    fn hegel_blob_ref_submission_rejects_inline_tokens_and_records_pin_lifecycle(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(10_000));
+        let token_selector = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(2));
         let token = match token_selector {
             0 => "inline-bytes",
             1 => "inline-executable",
@@ -7325,34 +7383,37 @@ mod tests {
         };
         let operation_id = test_ref(&format!("job-ref-hegel-operation-{salt}"));
         let authority_ref = test_ref(&format!("job-ref-hegel-authority-{salt}"));
-        let inline_value = preserves_rail::record("job-ref-submission-v1", vec![
-            preserves_rail::string(preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
-            preserves_rail::record("job-id", vec![preserves_rail::string(format!("job-ref-hegel-{salt}"))]),
-            preserves_rail::record("operation-id", vec![preserves_rail::string(&operation_id)]),
-            preserves_rail::record("executable", vec![preserves_rail::record(token, vec![preserves_rail::string(
-                "bytes",
-            )])]),
-            preserves_rail::record("inputs", vec![preserves_rail::sequence(vec![])]),
-            preserves_rail::record("output-mode", vec![preserves_rail::string("chunk-manifest")]),
-            preserves_rail::record("input-schemas", vec![refs_sequence(&[])]),
-            preserves_rail::record("output-schemas", vec![refs_sequence(&[])]),
-            preserves_rail::record("effects", vec![refs_sequence(&[])]),
-            preserves_rail::record("handler-profile", vec![preserves_rail::string("local-echo-v1")]),
-            preserves_rail::record("authority", vec![preserves_rail::string(&authority_ref)]),
-            preserves_rail::record("policy", vec![refs_sequence(&[])]),
-            preserves_rail::record("provenance", vec![refs_sequence(&[])]),
-            preserves_rail::record("evidence", vec![refs_sequence(&[])]),
+        let inline_value = crate::preserves_rail::record("job-ref-submission-v1", vec![
+            crate::preserves_rail::string(crate::preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
+            crate::preserves_rail::record("job-id", vec![crate::preserves_rail::string(format!(
+                "job-ref-hegel-{salt}"
+            ))]),
+            crate::preserves_rail::record("operation-id", vec![crate::preserves_rail::string(&operation_id)]),
+            crate::preserves_rail::record("executable", vec![crate::preserves_rail::record(token, vec![
+                crate::preserves_rail::string("bytes"),
+            ])]),
+            crate::preserves_rail::record("inputs", vec![crate::preserves_rail::sequence(vec![])]),
+            crate::preserves_rail::record("output-mode", vec![crate::preserves_rail::string("chunk-manifest")]),
+            crate::preserves_rail::record("input-schemas", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("output-schemas", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("effects", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("handler-profile", vec![crate::preserves_rail::string("local-echo-v1")]),
+            crate::preserves_rail::record("authority", vec![crate::preserves_rail::string(&authority_ref)]),
+            crate::preserves_rail::record("policy", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("provenance", vec![refs_sequence(&[])]),
+            crate::preserves_rail::record("evidence", vec![refs_sequence(&[])]),
             checks_value(&["content-refs-only", "no-inline-large-bytes"]),
         ]);
         assert!(parse_job_ref_submission_value(&inline_value).is_err());
 
         let root = temp_dir(&format!("job-ref-hegel-{salt}"));
         let chunks = root.join("chunks");
-        let executable = chunk_store::put_bytes(&chunks, "job-executable", b"echo", DEFAULT_FIXED_V1_CHUNK_SIZE)
+        let executable = crate::chunk_store::put_bytes(&chunks, "job-executable", b"echo", DEFAULT_FIXED_V1_CHUNK_SIZE)
             .expect("put executable");
         let input_bytes = format!("input-{salt}");
-        let input = chunk_store::put_bytes(&chunks, "job-input", input_bytes.as_bytes(), DEFAULT_FIXED_V1_CHUNK_SIZE)
-            .expect("put input");
+        let input =
+            crate::chunk_store::put_bytes(&chunks, "job-input", input_bytes.as_bytes(), DEFAULT_FIXED_V1_CHUNK_SIZE)
+                .expect("put input");
         let policy_ref = test_ref(&format!("job-ref-hegel-policy-{salt}"));
         let provenance_ref = test_ref(&format!("job-ref-hegel-provenance-{salt}"));
         let effect_ref = test_ref(&format!("job-ref-hegel-effect-{salt}"));
@@ -7389,7 +7450,7 @@ mod tests {
         })
         .expect("execute");
         assert_eq!(executed.decision, "pass");
-        let receipt_text = preserves_rail::to_text(&executed.receipt_value).expect("receipt text");
+        let receipt_text = crate::preserves_rail::to_text(&executed.receipt_value).expect("receipt text");
         assert!(receipt_text.contains("content-verification-before-run"));
         assert!(receipt_text.contains("retention-pins"));
         assert!(receipt_text.contains("cleanup-receipts"));
@@ -7434,10 +7495,10 @@ mod tests {
         let dag = parse_job_dag_value(&dag_value).expect("parse dag");
         let plan = plan_job_dag(&dag, None).expect("plan");
         assert_eq!(plan.stage_order.first(), Some(&"source".to_string()));
-        assert!(preserves_rail::to_text(&plan.value).expect("plan text").contains("trellis-topo-order"));
+        assert!(crate::preserves_rail::to_text(&plan.value).expect("plan text").contains("trellis-topo-order"));
         let profile = profile_job_dag(&dag, None, Some(&root.join("cache"))).expect("profile");
         assert_eq!(profile.stage_count, 4);
-        assert!(preserves_rail::to_text(&profile.value).expect("profile text").contains("no-wall-clock-time"));
+        assert!(crate::preserves_rail::to_text(&profile.value).expect("profile text").contains("no-wall-clock-time"));
         let fusion = fusion_preview_job_dag(&dag, None).expect("fusion");
         assert!(fusion.chains.iter().any(|chain| chain == &vec!["filter".to_string(), "map".to_string()]));
 
@@ -7448,7 +7509,7 @@ mod tests {
             stage_artifact_ref: None,
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
-            config: preserves_rail::record("op", vec![preserves_rail::string("identity")]),
+            config: crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
             effect_manifest_refs: &[],
             policy_refs: std::slice::from_ref(&policy_ref),
             evidence_refs: &[],
@@ -7459,7 +7520,7 @@ mod tests {
             "filter",
             &["in".to_string()],
             &["out".to_string()],
-            preserves_rail::record("op", vec![preserves_rail::string("keep-all")]),
+            crate::preserves_rail::record("op", vec![crate::preserves_rail::string("keep-all")]),
         )
         .expect("right");
         let edge = stream_edge_value("left", "right").expect("edge");
@@ -7475,9 +7536,9 @@ mod tests {
             "source",
             &[],
             &["out".to_string()],
-            preserves_rail::record("source", vec![preserves_rail::record("values", vec![preserves_rail::sequence(
-                vec![preserves_rail::string("ok")],
-            )])]),
+            crate::preserves_rail::record("source", vec![crate::preserves_rail::record("values", vec![
+                crate::preserves_rail::sequence(vec![crate::preserves_rail::string("ok")]),
+            ])]),
         )
         .expect("source");
         let bad = test_node_value(
@@ -7485,23 +7546,23 @@ mod tests {
             "map",
             &["in".to_string()],
             &["out".to_string()],
-            preserves_rail::record("host-path", vec![preserves_rail::string("/bin/echo")]),
+            crate::preserves_rail::record("host-path", vec![crate::preserves_rail::string("/bin/echo")]),
         );
         assert!(bad.expect_err("bad config").to_string().contains("mobile/ambient"));
         let edge = stream_edge_value("source", "bad").expect("edge");
-        let bad_node = preserves_rail::record("job-node-v1", vec![
-            preserves_rail::string(preserves_rail::JOB_DAG_NODE_SCHEMA),
-            preserves_rail::record("id", vec![preserves_rail::string("bad")]),
-            preserves_rail::record("kind", vec![preserves_rail::string("map")]),
-            preserves_rail::record("stage-artifact", vec![preserves_rail::record("none", Vec::new())]),
-            preserves_rail::record("inputs", vec![ports_sequence(&["in".to_string()])]),
-            preserves_rail::record("outputs", vec![ports_sequence(&["out".to_string()])]),
-            preserves_rail::record("config", vec![preserves_rail::record("host-path", vec![preserves_rail::string(
-                "/bin/echo",
-            )])]),
-            preserves_rail::record("effects", vec![preserves_rail::sequence(Vec::new())]),
-            preserves_rail::record("policy", vec![preserves_rail::sequence(Vec::new())]),
-            preserves_rail::record("evidence", vec![preserves_rail::sequence(Vec::new())]),
+        let bad_node = crate::preserves_rail::record("job-node-v1", vec![
+            crate::preserves_rail::string(crate::preserves_rail::JOB_DAG_NODE_SCHEMA),
+            crate::preserves_rail::record("id", vec![crate::preserves_rail::string("bad")]),
+            crate::preserves_rail::record("kind", vec![crate::preserves_rail::string("map")]),
+            crate::preserves_rail::record("stage-artifact", vec![crate::preserves_rail::record("none", Vec::new())]),
+            crate::preserves_rail::record("inputs", vec![ports_sequence(&["in".to_string()])]),
+            crate::preserves_rail::record("outputs", vec![ports_sequence(&["out".to_string()])]),
+            crate::preserves_rail::record("config", vec![crate::preserves_rail::record("host-path", vec![
+                crate::preserves_rail::string("/bin/echo"),
+            ])]),
+            crate::preserves_rail::record("effects", vec![crate::preserves_rail::sequence(Vec::new())]),
+            crate::preserves_rail::record("policy", vec![crate::preserves_rail::sequence(Vec::new())]),
+            crate::preserves_rail::record("evidence", vec![crate::preserves_rail::sequence(Vec::new())]),
             checks_value(&["stage-artifact-not-closure"]),
         ]);
         let dag = test_dag_value(vec![source, bad_node], vec![edge], &["bad".to_string()]).expect("dag");
@@ -7509,12 +7570,13 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 10)]
-    fn hegel_dag_hash_and_memo_key_are_stable(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_dag_hash_and_memo_key_are_stable(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let dag = fixture_value(if salt.is_multiple_of(2) { "identity" } else { "count" });
         let first = parse_job_dag_value(&dag).expect("first");
         let second = parse_job_dag_value(
-            &preserves_rail::parse_text(&preserves_rail::to_text(&dag).expect("text")).expect("parse text"),
+            &crate::preserves_rail::parse_text(&crate::preserves_rail::to_text(&dag).expect("text"))
+                .expect("parse text"),
         )
         .expect("second");
         assert_eq!(first.job_ref, second.job_ref);
@@ -7530,34 +7592,40 @@ mod tests {
             "source",
             &[],
             &["out".to_string()],
-            preserves_rail::record("source", vec![preserves_rail::record("values", vec![preserves_rail::sequence(
-                vec![
-                    preserves_rail::record("keep", vec![preserves_rail::string("a")]),
-                    preserves_rail::record("drop", vec![preserves_rail::string("b")]),
-                    preserves_rail::record("keep", vec![preserves_rail::string("c")]),
-                ],
-            )])]),
+            crate::preserves_rail::record("source", vec![crate::preserves_rail::record("values", vec![
+                crate::preserves_rail::sequence(vec![
+                    crate::preserves_rail::record("keep", vec![crate::preserves_rail::string("a")]),
+                    crate::preserves_rail::record("drop", vec![crate::preserves_rail::string("b")]),
+                    crate::preserves_rail::record("keep", vec![crate::preserves_rail::string("c")]),
+                ]),
+            ])]),
         )?;
         let filter = test_node_value(
             "filter",
             "filter",
             &["in".to_string()],
             &["out".to_string()],
-            preserves_rail::record("op", vec![preserves_rail::string("match-record"), preserves_rail::string("keep")]),
+            crate::preserves_rail::record("op", vec![
+                crate::preserves_rail::string("match-record"),
+                crate::preserves_rail::string("keep"),
+            ]),
         )?;
         let map = test_node_value(
             "map",
             "map",
             &["in".to_string()],
             &["out".to_string()],
-            preserves_rail::record("op", vec![preserves_rail::string("wrap"), preserves_rail::string("item")]),
+            crate::preserves_rail::record("op", vec![
+                crate::preserves_rail::string("wrap"),
+                crate::preserves_rail::string("item"),
+            ]),
         )?;
         let materialize = test_node_value(
             "out",
             "materialize",
             &["in".to_string()],
             &["out".to_string()],
-            preserves_rail::record("materialize", vec![preserves_rail::string("inline")]),
+            crate::preserves_rail::record("materialize", vec![crate::preserves_rail::string("inline")]),
         )?;
         let e1 = stream_edge_value("source", "filter")?;
         let e2 = stream_edge_value("filter", "map")?;
@@ -7571,9 +7639,12 @@ mod tests {
             "source",
             &[],
             &["out".to_string()],
-            preserves_rail::record("source", vec![preserves_rail::record("values", vec![preserves_rail::sequence(
-                vec![preserves_rail::string("a"), preserves_rail::string("b")],
-            )])]),
+            crate::preserves_rail::record("source", vec![crate::preserves_rail::record("values", vec![
+                crate::preserves_rail::sequence(vec![
+                    crate::preserves_rail::string("a"),
+                    crate::preserves_rail::string("b"),
+                ]),
+            ])]),
         )
         .expect("source");
         let stage_kind = if operation == "count" { "reduce" } else { "map" };
@@ -7582,7 +7653,7 @@ mod tests {
             stage_kind,
             &["in".to_string()],
             &["out".to_string()],
-            preserves_rail::record("op", vec![preserves_rail::string(operation)]),
+            crate::preserves_rail::record("op", vec![crate::preserves_rail::string(operation)]),
         )
         .expect("stage");
         let edge = stream_edge_value("source", "stage").expect("edge");
@@ -7590,8 +7661,10 @@ mod tests {
     }
 
     fn test_ref(label: &str) -> String {
-        preserves_rail::canonical_hash(&preserves_rail::record("job-dag-test-ref", vec![preserves_rail::string(label)]))
-            .expect("test ref")
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("job-dag-test-ref", vec![
+            crate::preserves_rail::string(label),
+        ]))
+        .expect("test ref")
     }
 
     fn reviewed_provenance_values(artifact_refs: &[String]) -> Vec<IoValue> {
@@ -7604,9 +7677,10 @@ mod tests {
     }
 
     fn install_clean_octet_gate(registry: &FilePath) -> String {
-        let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate fixture");
-        let gate_ref = preserves_rail::canonical_hash(&gate_value).expect("octet gate ref");
-        let install = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let gate_value =
+            crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate fixture");
+        let gate_ref = crate::preserves_rail::canonical_hash(&gate_value).expect("octet gate ref");
+        let install = crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {
             kind: "octet-gate-receipt".to_string(),
             payload: gate_value,
             schema_refs: Vec::new(),
@@ -7624,9 +7698,9 @@ mod tests {
 
     fn install_job_execute_authority_context(registry: &FilePath, job_ref: &str) -> String {
         let subject_ref = test_ref("target-peer-subject");
-        let context_value = authority::authority_context_value(authority::ContextValueInput {
+        let context_value = crate::authority::authority_context_value(crate::authority::ContextValueInput {
             subject_ref: &subject_ref,
-            capabilities: &[authority::AuthorityCapability {
+            capabilities: &[crate::authority::AuthorityCapability {
                 capability: "job:execute".to_string(),
                 scope: job_ref.to_string(),
                 attenuation: "scoped".to_string(),
@@ -7640,8 +7714,8 @@ mod tests {
             evidence_refs: &[test_ref("authority-evidence")],
         })
         .expect("authority context");
-        let context_ref = preserves_rail::canonical_hash(&context_value).expect("authority context ref");
-        let install = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+        let context_ref = crate::preserves_rail::canonical_hash(&context_value).expect("authority context ref");
+        let install = crate::artifacts::install_artifact(registry, &crate::artifacts::ArtifactInstallInput {
             kind: "authority-context".to_string(),
             payload: context_value,
             schema_refs: Vec::new(),
@@ -7658,10 +7732,10 @@ mod tests {
     }
 
     struct WorkerFixture {
-        root: PathBuf,
-        source: PathBuf,
-        target: PathBuf,
-        ledger: PathBuf,
+        root: std::path::PathBuf,
+        source: std::path::PathBuf,
+        target: std::path::PathBuf,
+        ledger: std::path::PathBuf,
         installed_job: JobInstall,
         admission: JobAdmissionLoopback,
         sync_ref: String,
@@ -7679,9 +7753,9 @@ mod tests {
     }
 
     struct SeedArtifacts {
-        base: artifacts::ArtifactInstall,
-        source_stage: artifacts::ArtifactInstall,
-        map_stage: artifacts::ArtifactInstall,
+        base: crate::artifacts::ArtifactInstall,
+        source_stage: crate::artifacts::ArtifactInstall,
+        map_stage: crate::artifacts::ArtifactInstall,
     }
 
     struct FlowParts {
@@ -7701,9 +7775,9 @@ mod tests {
     }
 
     fn seed_artifacts(source: &FilePath) -> SeedArtifacts {
-        let base = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
+        let base = crate::artifacts::install_artifact(source, &crate::artifacts::ArtifactInstallInput {
             kind: "schema".to_string(),
-            payload: preserves_rail::record("schema", vec![preserves_rail::string("worker-base")]),
+            payload: crate::preserves_rail::record("schema", vec![crate::preserves_rail::string("worker-base")]),
             schema_refs: vec![test_ref("worker-schema")],
             dependency_refs: Vec::new(),
             effect_manifest_ref: None,
@@ -7713,7 +7787,7 @@ mod tests {
             capability_refs: vec![test_ref("worker-capability")],
         })
         .expect("install worker base");
-        let source_stage = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
+        let source_stage = crate::artifacts::install_artifact(source, &crate::artifacts::ArtifactInstallInput {
             kind: "stage".to_string(),
             payload: builtin_stage_operation_value("source").expect("source operation"),
             schema_refs: vec![test_ref("worker-stage-schema")],
@@ -7725,7 +7799,7 @@ mod tests {
             capability_refs: vec![test_ref("worker-stage-capability")],
         })
         .expect("install worker source stage");
-        let map_stage = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
+        let map_stage = crate::artifacts::install_artifact(source, &crate::artifacts::ArtifactInstallInput {
             kind: "stage".to_string(),
             payload: builtin_stage_operation_value("identity").expect("identity operation"),
             schema_refs: vec![test_ref("worker-stage-schema")],
@@ -7751,8 +7825,8 @@ mod tests {
             stage_artifact_ref: Some(&seed.source_stage.artifact_ref),
             input_ports: &[],
             output_ports: &["out".to_string()],
-            config: preserves_rail::record("source", vec![preserves_rail::record("values", vec![
-                preserves_rail::sequence(vec![preserves_rail::string("remote-x")]),
+            config: crate::preserves_rail::record("source", vec![crate::preserves_rail::record("values", vec![
+                crate::preserves_rail::sequence(vec![crate::preserves_rail::string("remote-x")]),
             ])]),
             effect_manifest_refs: &[],
             policy_refs: &[],
@@ -7765,7 +7839,7 @@ mod tests {
             stage_artifact_ref: Some(&seed.map_stage.artifact_ref),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
-            config: preserves_rail::record("op", vec![preserves_rail::string("identity")]),
+            config: crate::preserves_rail::record("op", vec![crate::preserves_rail::string("identity")]),
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
@@ -7801,7 +7875,7 @@ mod tests {
             build_verification_values: &[],
         })
         .expect("worker sync loopback");
-        preserves_rail::canonical_hash(&synced.receipt_value).expect("worker sync ref")
+        crate::preserves_rail::canonical_hash(&synced.receipt_value).expect("worker sync ref")
     }
 
     fn flow_parts(target: &FilePath, installed: &JobInstall, sync_ref: &str) -> FlowParts {
@@ -7821,7 +7895,8 @@ mod tests {
         .expect("worker admission request");
         let admission = admission_loopback(target, &admission_request).expect("worker admission");
         assert_eq!(admission.plan.decision, "pass");
-        let admission_ref = preserves_rail::canonical_hash(&admission.receipt_value).expect("worker admission ref");
+        let admission_ref =
+            crate::preserves_rail::canonical_hash(&admission.receipt_value).expect("worker admission ref");
         let execution_request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &installed.job_ref,
             admission_ref: &admission_ref,
@@ -7836,7 +7911,7 @@ mod tests {
         })
         .expect("worker execution request");
         let execution_request_ref =
-            preserves_rail::canonical_hash(&execution_request).expect("worker execution request ref");
+            crate::preserves_rail::canonical_hash(&execution_request).expect("worker execution request ref");
         FlowParts {
             authority_context_ref,
             resource_refs,
@@ -7955,10 +8030,10 @@ mod tests {
         (delivery, delivery_log)
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
             std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
