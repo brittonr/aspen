@@ -10,7 +10,7 @@ pub(crate) fn class(args: super::command::base::Class) -> molten::error::Result<
         has_compaction,
         out,
     } = args;
-    let value = molten::retention::retention_class_profile_value(&molten::retention::RetentionClassProfileInput {
+    let value = molten::retention::class_profile_value(&molten::retention::ClassProfileInput {
         class_name: class_name.clone(),
         minimum_age_seconds,
         maximum_age_seconds,
@@ -20,7 +20,7 @@ pub(crate) fn class(args: super::command::base::Class) -> molten::error::Result<
         has_remote_gc_plan,
         can_compact: has_compaction,
     })?;
-    let profile = molten::retention::parse_retention_class_profile(&value)?;
+    let profile = molten::retention::parse_class_profile(&value)?;
     let is_written_to_file = super::io::write_optional_preserves(out.as_ref(), &value)?;
     super::io::print_or_log_summary(
         is_written_to_file,

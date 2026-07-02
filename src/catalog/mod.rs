@@ -1108,7 +1108,7 @@ fn release_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
 }
 
 fn retention_core_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
-    if let Ok(profile) = crate::retention::parse_retention_class_profile(value) {
+    if let Ok(profile) = crate::retention::parse_class_profile(value) {
         return Ok(Some(vec![
             "retention:class".to_string(),
             format!("retention-class:{}", profile.class_name),

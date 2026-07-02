@@ -104,7 +104,7 @@ const _: () = assert!(MAX_RETENTION_DIAGNOSTICS <= 10_000);
 const _: () = assert!(MAX_RETENTION_TEXT_LEN <= 4096);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionClassProfileInput {
+pub struct ClassProfileInput {
     pub class_name: String,
     pub minimum_age_seconds: u64,
     pub maximum_age_seconds: Option<u64>,
@@ -116,7 +116,7 @@ pub struct RetentionClassProfileInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionClassProfile {
+pub struct ClassProfile {
     pub profile_ref: String,
     pub class_name: String,
     pub minimum_age_seconds: u64,
@@ -888,7 +888,7 @@ pub struct RetentionEvaluation {
     pub tombstone: Option<RetentionTombstone>,
 }
 
-pub fn retention_class_profile_value(input: &RetentionClassProfileInput) -> Result<IoValue> {
+pub fn class_profile_value(input: &ClassProfileInput) -> Result<IoValue> {
     validate_class_profile_input(input)?;
     let diagnostics = class_profile_diagnostics(input)?;
     Ok(crate::preserves_rail::record("retention-class-v1", vec![
@@ -922,7 +922,7 @@ pub fn retention_class_profile_value(input: &RetentionClassProfileInput) -> Resu
     ]))
 }
 
-pub fn parse_retention_class_profile(value: &IoValue) -> Result<RetentionClassProfile> {
+pub fn parse_class_profile(value: &IoValue) -> Result<ClassProfile> {
     let fields = value
         .collect_simple_record("retention-class-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-class-v1 ...>"))?;
@@ -935,7 +935,7 @@ pub fn parse_retention_class_profile(value: &IoValue) -> Result<RetentionClassPr
     let diagnostics = record_string_sequence(&fields[7], "diagnostics")?;
     validate_retention_class(&class_name)?;
     require_check(&parse_checks(&fields[8])?, "mutable-name-not-gc-proof", "retention class profile")?;
-    Ok(RetentionClassProfile {
+    Ok(ClassProfile {
         profile_ref: crate::preserves_rail::canonical_hash(value)?,
         class_name,
         minimum_age_seconds,
@@ -6979,7 +6979,7 @@ pub fn retention_summary(value: &IoValue) -> Result<String> {
 }
 
 fn base(value: &IoValue) -> Option<String> {
-    if let Ok(profile) = parse_retention_class_profile(value) {
+    if let Ok(profile) = parse_class_profile(value) {
         return Some(format!(
             "retention class ref={} class={} min={} max={} policies={} diagnostics={}",
             profile.profile_ref,
@@ -7329,7 +7329,7 @@ fn seed_refs() -> Result<SeedRefs> {
 }
 
 fn class_value(seed: &SeedRefs) -> Result<IoValue> {
-    retention_class_profile_value(&RetentionClassProfileInput {
+    class_profile_value(&ClassProfileInput {
         class_name: CLASS_PRIVATE_SECRET_REF.to_string(),
         minimum_age_seconds: 0,
         maximum_age_seconds: Some(86_400),
@@ -7533,7 +7533,7 @@ where
     Ok(())
 }
 
-fn class_profile_diagnostics(input: &RetentionClassProfileInput) -> Result<Vec<String>> {
+fn class_profile_diagnostics(input: &ClassProfileInput) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     if input.class_name == CLASS_PRIVATE_SECRET_REF && !input.has_secret_redaction_hook {
         push_bounded(
@@ -7558,7 +7558,7 @@ fn is_destructive_action(action: &str) -> bool {
     matches!(action, ACTION_DELETE | ACTION_TOMBSTONE | ACTION_REDACT | ACTION_COMPACT)
 }
 
-fn validate_class_profile_input(input: &RetentionClassProfileInput) -> Result<()> {
+fn validate_class_profile_input(input: &ClassProfileInput) -> Result<()> {
     validate_retention_class(&input.class_name)?;
     require_ref(&input.deletion_authority_ref, "retention deletion authority ref")?;
     validate_refs(&input.policy_refs, "retention class policy ref")?;
