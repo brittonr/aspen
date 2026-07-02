@@ -1561,9 +1561,6 @@ fn required_record_ref(value: &Value<IOValue>, label: &str, field: &str) -> Resu
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
 
     fn fake_ref(label: &str) -> String {
@@ -2505,9 +2502,9 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_effect_handle_identity_attenuation_and_replay_stability(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
-        let is_write_operation = tc.draw(generators::booleans());
+    fn hegel_effect_handle_identity_attenuation_and_replay_stability(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
+        let is_write_operation = tc.draw(hegel::generators::booleans());
         let operation = if is_write_operation { "write" } else { "read" };
         let actor_ref = fake_ref(&format!("actor-{salt}"));
         let scope = EffectScope {
