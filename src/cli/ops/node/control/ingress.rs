@@ -14,7 +14,7 @@ pub(crate) fn build(input: super::super::command::control::IngressBuild) -> molt
     } = input;
     let request_value = super::super::core::read_preserves_file(&request)?;
     let envelope =
-        molten::node_daemon::node_control_ingress_envelope(&molten::node_daemon::NodeControlIngressEnvelopeInput {
+        molten::node_daemon::node_control_ingress_envelope(&molten::node_daemon::ControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: &from_peer,
             to_node: &to_node,
@@ -51,8 +51,8 @@ pub(crate) fn live_build(input: super::super::command::control::IngressLiveBuild
         evidence_refs,
     } = input;
     let request_value = super::super::core::read_preserves_file(&request)?;
-    let envelope = molten::node_daemon::node_control_live_ingress_envelope(
-        &molten::node_daemon::NodeControlIngressEnvelopeInput {
+    let envelope =
+        molten::node_daemon::node_control_live_ingress_envelope(&molten::node_daemon::ControlIngressEnvelopeInput {
             request_value: &request_value,
             from_peer: &from_peer,
             to_node: &to_node,
@@ -63,8 +63,7 @@ pub(crate) fn live_build(input: super::super::command::control::IngressLiveBuild
             policy_refs: &policy_refs,
             resource_refs: &resource_refs,
             evidence_refs: &evidence_refs,
-        },
-    )?;
+        })?;
     super::super::core::write_file(&out, &molten::preserves_rail::to_text(&envelope.value)?)?;
     println!(
         "node control live ingress envelope={} request={} written to {}",
@@ -97,7 +96,7 @@ pub(crate) fn live_loopback(input: super::super::command::control::IngressLiveLo
         .build()
         .map_err(molten::error::MoltenError::from)?;
     let loopback = runtime.block_on(molten::node_daemon::node_control_live_iroh_loopback(
-        &molten::node_daemon::NodeControlLiveLoopbackInput {
+        &molten::node_daemon::ControlLiveLoopbackInput {
             state_root: &state_root,
             request_value: &request_value,
             from_peer: &from_peer,
@@ -156,36 +155,34 @@ impl LiveSendValues {
 fn send_live(
     input: &super::super::command::control::IngressLiveSend,
     values: &LiveSendValues,
-) -> molten::error::Result<molten::node_daemon::NodeControlLiveSend> {
+) -> molten::error::Result<molten::node_daemon::ControlLiveSend> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(molten::error::MoltenError::from)?;
-    runtime.block_on(molten::node_daemon::send_node_control_live_ingress(
-        &molten::node_daemon::NodeControlLiveSendInput {
-            state_root: input.state_root.as_deref(),
-            request_value: &values.request_value,
-            receiver_ticket_value: &values.ticket_value,
-            from_peer: &input.from_peer,
-            sequence: input.sequence,
-            expected_operation_ref: input.operation_id.as_deref(),
-            expected_receiver_node: input.expected_node.as_deref(),
-            expected_topic: input.expected_topic.as_deref(),
-            expected_endpoint: input.expected_endpoint.as_deref(),
-            max_attempts: input.max_attempts,
-            peer_bootstrap_refs: &input.peer_bootstrap_refs,
-            authority_refs: &input.authority_refs,
-            policy_refs: &input.policy_refs,
-            resource_refs: &input.resource_refs,
-            evidence_refs: &input.evidence_refs,
-            join_timeout_ms: input.join_timeout_ms,
-        },
-    ))
+    runtime.block_on(molten::node_daemon::send_node_control_live_ingress(&molten::node_daemon::ControlLiveSendInput {
+        state_root: input.state_root.as_deref(),
+        request_value: &values.request_value,
+        receiver_ticket_value: &values.ticket_value,
+        from_peer: &input.from_peer,
+        sequence: input.sequence,
+        expected_operation_ref: input.operation_id.as_deref(),
+        expected_receiver_node: input.expected_node.as_deref(),
+        expected_topic: input.expected_topic.as_deref(),
+        expected_endpoint: input.expected_endpoint.as_deref(),
+        max_attempts: input.max_attempts,
+        peer_bootstrap_refs: &input.peer_bootstrap_refs,
+        authority_refs: &input.authority_refs,
+        policy_refs: &input.policy_refs,
+        resource_refs: &input.resource_refs,
+        evidence_refs: &input.evidence_refs,
+        join_timeout_ms: input.join_timeout_ms,
+    }))
 }
 
 fn write_live_send_outputs(
     input: &super::super::command::control::IngressLiveSend,
-    sent: &molten::node_daemon::NodeControlLiveSend,
+    sent: &molten::node_daemon::ControlLiveSend,
 ) -> molten::error::Result<()> {
     write_optional_receipt(input.transport_receipt_out.as_ref(), sent.transport_receipt_value.as_ref())?;
     if let Some(dir) = input.retry_receipts_dir.as_ref() {
@@ -233,7 +230,7 @@ pub(crate) fn publish(input: super::super::command::control::IngressPublish) -> 
     } = input;
     let envelope_value = super::super::core::read_preserves_file(&envelope)?;
     let published =
-        molten::node_daemon::publish_node_control_ingress(&molten::node_daemon::NodeControlIngressPublishInput {
+        molten::node_daemon::publish_node_control_ingress(&molten::node_daemon::ControlIngressPublishInput {
             state_root: &state_root,
             envelope_value: &envelope_value,
         })?;
@@ -259,7 +256,7 @@ pub(crate) fn deliver(input: super::super::command::control::IngressDeliver) -> 
         receipt_out,
     } = input;
     let delivered =
-        molten::node_daemon::deliver_node_control_ingress(&molten::node_daemon::NodeControlIngressDeliverInput {
+        molten::node_daemon::deliver_node_control_ingress(&molten::node_daemon::ControlIngressDeliverInput {
             state_root: &state_root,
             topic: &topic,
             envelope_ref: &envelope_ref,

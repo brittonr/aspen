@@ -58,8 +58,8 @@ pub(crate) fn grant_fixture(input: super::command::authority::GrantFixture) -> m
     } else {
         operations
     };
-    let value = molten::node_daemon::node_control_authority_grant_value(
-        &molten::node_daemon::NodeControlAuthorityGrantInput {
+    let value =
+        molten::node_daemon::node_control_authority_grant_value(&molten::node_daemon::ControlAuthorityGrantInput {
             peer_id: &peer,
             node_id: &node,
             operations: &operations,
@@ -70,8 +70,7 @@ pub(crate) fn grant_fixture(input: super::command::authority::GrantFixture) -> m
             policy_refs: &policy_refs,
             revocation_refs: &revocation_refs,
             evidence_refs: &evidence_refs,
-        },
-    )?;
+        })?;
     let grant_ref = molten::preserves_rail::canonical_hash(&value)?;
     super::core::write_file(&out, &molten::preserves_rail::to_text(&value)?)?;
     if let Some(state_root) = state_root.as_ref() {
@@ -95,7 +94,7 @@ pub(crate) fn grant_import(input: super::command::authority::GrantImport) -> mol
     } = input;
     let grant_value = super::core::read_preserves_file(&grant)?;
     let imported = molten::node_daemon::import_node_control_authority_grant_checked(
-        &molten::node_daemon::NodeControlAuthorityGrantImportInput {
+        &molten::node_daemon::ControlAuthorityGrantImportInput {
             state_root: &state_root,
             grant_value: &grant_value,
             expected_peer: peer.as_deref(),
@@ -134,7 +133,7 @@ pub(crate) fn policy_fixture(input: super::command::authority::PolicyFixture) ->
         out,
     } = input;
     let value = molten::node_daemon::node_control_supervisor_policy_value(
-        &molten::node_daemon::NodeControlSupervisorPolicyInput {
+        &molten::node_daemon::ControlSupervisorPolicyInput {
             max_restarts,
             restart_window_ticks,
             heartbeat_timeout_ticks,
@@ -162,7 +161,7 @@ pub(crate) fn ticket_export(input: super::command::authority::TicketExport) -> m
         out,
     } = input;
     let ticket =
-        molten::node_daemon::export_node_control_live_ticket(&molten::node_daemon::NodeControlLiveTicketExportInput {
+        molten::node_daemon::export_node_control_live_ticket(&molten::node_daemon::ControlLiveTicketExportInput {
             state_root: &state_root,
             topic: &topic,
             policy_refs: &policy_refs,
@@ -189,7 +188,7 @@ pub(crate) fn ticket_import(input: super::command::authority::TicketImport) -> m
     let peer_admission_value =
         peer_admission.as_ref().map(|path| super::core::read_preserves_file(path)).transpose()?;
     let imported =
-        molten::node_daemon::import_node_control_live_ticket(&molten::node_daemon::NodeControlLiveTicketImportInput {
+        molten::node_daemon::import_node_control_live_ticket(&molten::node_daemon::ControlLiveTicketImportInput {
             state_root: &state_root,
             ticket_value: &ticket_value,
             peer_admission_value: peer_admission_value.as_ref(),
@@ -224,7 +223,7 @@ pub(crate) fn peer_admit(input: super::command::authority::PeerAdmit) -> molten:
     } = input;
     let ticket_value = super::core::read_preserves_file(&ticket)?;
     let admission =
-        molten::node_daemon::admit_node_control_live_peer(&molten::node_daemon::NodeControlLivePeerAdmitInput {
+        molten::node_daemon::admit_node_control_live_peer(&molten::node_daemon::ControlLivePeerAdmitInput {
             state_root: &state_root,
             ticket_value: &ticket_value,
             peer_id: &peer,

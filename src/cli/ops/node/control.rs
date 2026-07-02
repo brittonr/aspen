@@ -8,7 +8,7 @@ pub(crate) fn submit(input: super::command::control::Submit) -> molten::error::R
         receipt_out,
     } = input;
     let request_value = super::core::read_preserves_file(&request)?;
-    let submitted = molten::node_daemon::submit_control_request(&molten::node_daemon::NodeControlSubmitInput {
+    let submitted = molten::node_daemon::submit_control_request(&molten::node_daemon::ControlSubmitInput {
         state_root: &state_root,
         request_value: &request_value,
     })?;
@@ -32,7 +32,7 @@ pub(crate) fn dispatch(input: super::command::control::Dispatch) -> molten::erro
         request,
         receipt_out,
     } = input;
-    let dispatched = molten::node_daemon::dispatch_control_request(&molten::node_daemon::NodeControlDispatchInput {
+    let dispatched = molten::node_daemon::dispatch_control_request(&molten::node_daemon::ControlDispatchInput {
         state_root: &state_root,
         request_path: request.as_deref(),
     })?;

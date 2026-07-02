@@ -807,7 +807,7 @@ pub struct RemoteGcClearanceLiveRequestSend {
     pub request: RemoteGcClearanceRequest,
     pub control_ref: String,
     pub control_value: IoValue,
-    pub send: crate::node_daemon::NodeControlLiveSend,
+    pub send: crate::node_daemon::ControlLiveSend,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -815,7 +815,7 @@ pub struct RemoteGcClearanceLiveResponseSend {
     pub response: RemoteGcClearanceResponse,
     pub control_ref: String,
     pub control_value: IoValue,
-    pub send: crate::node_daemon::NodeControlLiveSend,
+    pub send: crate::node_daemon::ControlLiveSend,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1775,7 +1775,7 @@ pub async fn send_remote_gc_clearance_live_request(
         resource_refs: input.resource_refs,
         evidence_refs: &control_evidence,
     })?;
-    let send = crate::node_daemon::send_node_control_live_ingress(&crate::node_daemon::NodeControlLiveSendInput {
+    let send = crate::node_daemon::send_node_control_live_ingress(&crate::node_daemon::ControlLiveSendInput {
         state_root: input.requester_node_root,
         request_value: &control_value,
         receiver_ticket_value: input.peer_ticket_value,
@@ -1830,7 +1830,7 @@ pub async fn send_remote_gc_clearance_live_response(
         resource_refs: input.resource_refs,
         evidence_refs: &control_evidence,
     })?;
-    let send = crate::node_daemon::send_node_control_live_ingress(&crate::node_daemon::NodeControlLiveSendInput {
+    let send = crate::node_daemon::send_node_control_live_ingress(&crate::node_daemon::ControlLiveSendInput {
         state_root: input.peer_node_root,
         request_value: &control_value,
         receiver_ticket_value: input.requester_ticket_value,
@@ -1921,10 +1921,10 @@ pub fn import_remote_gc_clearance_live_workflow(
 struct LiveImportDiagnosticsInput<'a> {
     request: &'a RemoteGcClearanceRequest,
     response_ref: &'a str,
-    request_control: &'a crate::node_runtime::NodeControlRequest,
-    response_control: &'a crate::node_runtime::NodeControlRequest,
-    request_send: &'a crate::node_daemon::NodeControlLiveSendReceipt,
-    response_send: &'a crate::node_daemon::NodeControlLiveSendReceipt,
+    request_control: &'a crate::node_runtime::ControlRequest,
+    response_control: &'a crate::node_runtime::ControlRequest,
+    request_send: &'a crate::node_daemon::ControlLiveSendReceipt,
+    response_send: &'a crate::node_daemon::ControlLiveSendReceipt,
     request_receive: &'a NodeLiveTransportReceipt,
     response_receive: &'a NodeLiveTransportReceipt,
     request_ingress_ref: &'a str,
@@ -2610,8 +2610,8 @@ struct LoopbackValueInput<'a> {
     import_value: &'a IoValue,
     request_control_ref: &'a str,
     response_control_ref: &'a str,
-    request_live: &'a crate::node_daemon::NodeControlLiveLoopback,
-    response_live: &'a crate::node_daemon::NodeControlLiveLoopback,
+    request_live: &'a crate::node_daemon::ControlLiveLoopback,
+    response_live: &'a crate::node_daemon::ControlLiveLoopback,
     transport_diagnostics: &'a [String],
 }
 
@@ -2668,8 +2668,8 @@ async fn request_leg(
     input: &RemoteGcClearanceLiveLoopbackInput<'_>,
     control_value: &IoValue,
     evidence_refs: &[String],
-) -> Result<crate::node_daemon::NodeControlLiveLoopback> {
-    crate::node_daemon::node_control_live_iroh_loopback(&crate::node_daemon::NodeControlLiveLoopbackInput {
+) -> Result<crate::node_daemon::ControlLiveLoopback> {
+    crate::node_daemon::node_control_live_iroh_loopback(&crate::node_daemon::ControlLiveLoopbackInput {
         state_root: input.peer_node_root,
         request_value: control_value,
         from_peer: input.requester_node_id,
@@ -2689,8 +2689,8 @@ async fn response_leg(
     input: &RemoteGcClearanceLiveLoopbackInput<'_>,
     control_value: &IoValue,
     evidence_refs: &[String],
-) -> Result<crate::node_daemon::NodeControlLiveLoopback> {
-    crate::node_daemon::node_control_live_iroh_loopback(&crate::node_daemon::NodeControlLiveLoopbackInput {
+) -> Result<crate::node_daemon::ControlLiveLoopback> {
+    crate::node_daemon::node_control_live_iroh_loopback(&crate::node_daemon::ControlLiveLoopbackInput {
         state_root: input.requester_node_root,
         request_value: control_value,
         from_peer: input.peer_node_id,
@@ -2707,8 +2707,8 @@ async fn response_leg(
 }
 
 fn transport_notes(
-    request_live: &crate::node_daemon::NodeControlLiveLoopback,
-    response_live: &crate::node_daemon::NodeControlLiveLoopback,
+    request_live: &crate::node_daemon::ControlLiveLoopback,
+    response_live: &crate::node_daemon::ControlLiveLoopback,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     extend_bounded(
@@ -8188,7 +8188,7 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
     }
 }
 
-fn live_send_publish_ref(send: &crate::node_daemon::NodeControlLiveSendReceipt) -> String {
+fn live_send_publish_ref(send: &crate::node_daemon::ControlLiveSendReceipt) -> String {
     send.transport_receipt_ref.clone().unwrap_or_else(|| send.receipt_ref.clone())
 }
 
@@ -8228,7 +8228,7 @@ fn parse_node_live_transport_receipt(value: &IoValue) -> Result<NodeLiveTranspor
 
 fn node_live_control_diagnostics(
     phase: &str,
-    control: &crate::node_runtime::NodeControlRequest,
+    control: &crate::node_runtime::ControlRequest,
     expected_target_ref: &str,
     expected_payload_ref: Option<&str>,
 ) -> Vec<String> {
@@ -8245,7 +8245,7 @@ fn node_live_control_diagnostics(
     diagnostics
 }
 
-fn node_live_send_diagnostics(phase: &str, send: &crate::node_daemon::NodeControlLiveSendReceipt) -> Vec<String> {
+fn node_live_send_diagnostics(phase: &str, send: &crate::node_daemon::ControlLiveSendReceipt) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(send.diagnostics.len().saturating_add(2));
     for diagnostic in &send.diagnostics {
         diagnostics.push(format!("remote-clearance-live-{phase}:{diagnostic}"));
@@ -8287,7 +8287,7 @@ fn node_live_transport_diagnostics_from(phase: &str, receipt: &NodeLiveTransport
 
 fn node_live_receive_binding_diagnostics(
     phase: &str,
-    send: &crate::node_daemon::NodeControlLiveSendReceipt,
+    send: &crate::node_daemon::ControlLiveSendReceipt,
     receive: &NodeLiveTransportReceipt,
     expected_ingress_ref: &str,
 ) -> Vec<String> {
@@ -9430,12 +9430,12 @@ mod tests {
         let peer_node_root = temp_dir("retention-live-peer-node");
         let requester_node_id = "retention-live-requester";
         let peer_node_id = "retention-live-peer";
-        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
             state_root: &requester_node_root,
             node_id: requester_node_id,
         })
         .expect("init requester node");
-        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
             state_root: &peer_node_root,
             node_id: peer_node_id,
         })
@@ -9650,7 +9650,7 @@ mod tests {
     }
 
     struct LiveNodeHarness {
-        ticket: crate::node_daemon::NodeControlLiveTicket,
+        ticket: crate::node_daemon::ControlLiveTicket,
         topic: iroh_gossip::api::GossipTopic,
         router: iroh::protocol::Router,
     }
@@ -9658,7 +9658,7 @@ mod tests {
     struct LiveDirectionEvidenceInput<'a> {
         sender_root: &'a Path,
         receiver_root: &'a Path,
-        receiver_ticket: &'a crate::node_daemon::NodeControlLiveTicket,
+        receiver_ticket: &'a crate::node_daemon::ControlLiveTicket,
         sender_node_id: &'a str,
         receiver_node_id: &'a str,
         topic: &'a str,
@@ -9711,12 +9711,12 @@ mod tests {
 
     struct SentRequest {
         send: RemoteGcClearanceLiveRequestSend,
-        receive: crate::node_daemon::NodeControlLiveIngressReceive,
+        receive: crate::node_daemon::ControlLiveIngressReceive,
     }
 
     struct SentResponse {
         send: RemoteGcClearanceLiveResponseSend,
-        receive: crate::node_daemon::NodeControlLiveIngressReceive,
+        receive: crate::node_daemon::ControlLiveIngressReceive,
     }
 
     impl TwoNodeLive {
@@ -9733,21 +9733,21 @@ mod tests {
             requester_node: temp_dir("retention-remote-clearance-live-two-node-requester-node"),
             peer_node: temp_dir("retention-remote-clearance-live-two-node-peer-node"),
         };
-        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
             state_root: &roots.requester_node,
             node_id: "requester-node",
         })
         .expect("init requester node");
-        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
             state_root: &roots.peer_node,
             node_id: "peer-node",
         })
         .expect("init peer node");
-        crate::node_daemon::run_local_node(&crate::node_daemon::NodeDaemonRunInput {
+        crate::node_daemon::run_local_node(&crate::node_daemon::RunInput {
             state_root: &roots.requester_node,
         })
         .expect("run requester node");
-        crate::node_daemon::run_local_node(&crate::node_daemon::NodeDaemonRunInput {
+        crate::node_daemon::run_local_node(&crate::node_daemon::RunInput {
             state_root: &roots.peer_node,
         })
         .expect("run peer node");
@@ -10052,7 +10052,7 @@ mod tests {
         let live_endpoint_id = format!("iroh:{}", endpoint.id());
         let address_refs = endpoint_addr.addrs.iter().map(ToString::to_string).collect::<Vec<_>>();
         let ticket_value =
-            crate::node_daemon::node_control_live_ticket_value(&crate::node_daemon::NodeControlLiveTicketInput {
+            crate::node_daemon::node_control_live_ticket_value(&crate::node_daemon::ControlLiveTicketInput {
                 node_id: &identity.node_id,
                 node_identity_ref: &identity.identity_ref,
                 logical_endpoint_id: &identity.endpoint_id,
@@ -10073,7 +10073,7 @@ mod tests {
 
     fn install_live_direction_evidence(input: &LiveDirectionEvidenceInput<'_>) -> LiveDirectionEvidence {
         let admission =
-            crate::node_daemon::admit_node_control_live_peer(&crate::node_daemon::NodeControlLivePeerAdmitInput {
+            crate::node_daemon::admit_node_control_live_peer(&crate::node_daemon::ControlLivePeerAdmitInput {
                 state_root: input.receiver_root,
                 ticket_value: &input.receiver_ticket.value,
                 peer_id: input.sender_node_id,
@@ -10083,8 +10083,8 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("live peer admission");
-        let import = crate::node_daemon::import_node_control_live_ticket(
-            &crate::node_daemon::NodeControlLiveTicketImportInput {
+        let import =
+            crate::node_daemon::import_node_control_live_ticket(&crate::node_daemon::ControlLiveTicketImportInput {
                 state_root: input.sender_root,
                 ticket_value: &input.receiver_ticket.value,
                 peer_admission_value: Some(&admission.value),
@@ -10093,13 +10093,12 @@ mod tests {
                 expected_endpoint: Some(&input.receiver_ticket.live_endpoint_id),
                 expected_peer: Some(input.sender_node_id),
                 as_of_sequence: 1,
-            },
-        )
-        .expect("sender imports live ticket admission");
+            })
+            .expect("sender imports live ticket admission");
         assert_eq!(import.decision, "pass");
         let operations = vec!["gate".to_string()];
-        let grant_value = crate::node_daemon::node_control_authority_grant_value(
-            &crate::node_daemon::NodeControlAuthorityGrantInput {
+        let grant_value =
+            crate::node_daemon::node_control_authority_grant_value(&crate::node_daemon::ControlAuthorityGrantInput {
                 peer_id: input.sender_node_id,
                 node_id: input.receiver_node_id,
                 operations: &operations,
@@ -10110,9 +10109,8 @@ mod tests {
                 policy_refs: input.policy_refs,
                 revocation_refs: &[],
                 evidence_refs: &[],
-            },
-        )
-        .expect("live authority grant value");
+            })
+            .expect("live authority grant value");
         let sender_grant = crate::node_daemon::import_node_control_authority_grant(input.sender_root, &grant_value)
             .expect("sender imports authority grant");
         let receiver_grant = crate::node_daemon::import_node_control_authority_grant(input.receiver_root, &grant_value)
@@ -10129,7 +10127,7 @@ mod tests {
         topic: &str,
         receiver_node: &str,
         receiver: &mut iroh_gossip::api::GossipTopic,
-    ) -> crate::node_daemon::NodeControlLiveIngressReceive {
+    ) -> crate::node_daemon::ControlLiveIngressReceive {
         for _ in 0..16 {
             let event = tokio::time::timeout(Duration::from_millis(1_000), receiver.next())
                 .await
@@ -10195,17 +10193,16 @@ mod tests {
         let policy_refs = vec![fake_ref(&format!("{label}-node-policy"))];
         let resource_refs = vec![fake_ref(&format!("{label}-node-resource"))];
         let evidence_refs = vec![fake_ref(&format!("{label}-node-evidence"))];
-        let ticket = crate::node_daemon::export_node_control_live_ticket(
-            &crate::node_daemon::NodeControlLiveTicketExportInput {
+        let ticket =
+            crate::node_daemon::export_node_control_live_ticket(&crate::node_daemon::ControlLiveTicketExportInput {
                 state_root: root,
                 topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
                 policy_refs: &policy_refs,
                 evidence_refs: &evidence_refs,
-            },
-        )
-        .expect("export live ticket");
+            })
+            .expect("export live ticket");
         let admission =
-            crate::node_daemon::admit_node_control_live_peer(&crate::node_daemon::NodeControlLivePeerAdmitInput {
+            crate::node_daemon::admit_node_control_live_peer(&crate::node_daemon::ControlLivePeerAdmitInput {
                 state_root: root,
                 ticket_value: &ticket.value,
                 peer_id,
@@ -10218,8 +10215,8 @@ mod tests {
         assert_eq!(admission.decision, "pass");
         let operations = vec!["gate".to_string()];
         let revocation_refs = Vec::new();
-        let authority_value = crate::node_daemon::node_control_authority_grant_value(
-            &crate::node_daemon::NodeControlAuthorityGrantInput {
+        let authority_value =
+            crate::node_daemon::node_control_authority_grant_value(&crate::node_daemon::ControlAuthorityGrantInput {
                 peer_id,
                 node_id: &ticket.node_id,
                 operations: &operations,
@@ -10230,9 +10227,8 @@ mod tests {
                 policy_refs: &policy_refs,
                 revocation_refs: &revocation_refs,
                 evidence_refs: &evidence_refs,
-            },
-        )
-        .expect("authority grant value");
+            })
+            .expect("authority grant value");
         let authority = crate::node_daemon::import_node_control_authority_grant(root, &authority_value)
             .expect("import authority grant");
         LiveDirectionRefs {
@@ -10871,8 +10867,8 @@ mod tests {
     struct TicketPair {
         requester_root: PathBuf,
         peer_root: PathBuf,
-        peer_ticket: crate::node_daemon::NodeControlLiveTicket,
-        requester_ticket: crate::node_daemon::NodeControlLiveTicket,
+        peer_ticket: crate::node_daemon::ControlLiveTicket,
+        requester_ticket: crate::node_daemon::ControlLiveTicket,
     }
 
     struct NoEndpointCase {
@@ -10890,36 +10886,34 @@ mod tests {
     fn ticket_pair() -> TicketPair {
         let requester_root = temp_dir("retention-remote-clearance-live-multihost-requester");
         let peer_root = temp_dir("retention-remote-clearance-live-multihost-peer");
-        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
             state_root: &requester_root,
             node_id: "requester-node",
         })
         .expect("init requester node");
-        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+        crate::node_daemon::init_local_node(&crate::node_daemon::InitInput {
             state_root: &peer_root,
             node_id: "peer-node",
         })
         .expect("init peer node");
         let policy = vec![fake_ref("multihost-ticket-policy")];
         let evidence = vec![fake_ref("multihost-ticket-evidence")];
-        let peer_ticket = crate::node_daemon::export_node_control_live_ticket(
-            &crate::node_daemon::NodeControlLiveTicketExportInput {
+        let peer_ticket =
+            crate::node_daemon::export_node_control_live_ticket(&crate::node_daemon::ControlLiveTicketExportInput {
                 state_root: &peer_root,
                 topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
                 policy_refs: &policy,
                 evidence_refs: &evidence,
-            },
-        )
-        .expect("peer ticket");
-        let requester_ticket = crate::node_daemon::export_node_control_live_ticket(
-            &crate::node_daemon::NodeControlLiveTicketExportInput {
+            })
+            .expect("peer ticket");
+        let requester_ticket =
+            crate::node_daemon::export_node_control_live_ticket(&crate::node_daemon::ControlLiveTicketExportInput {
                 state_root: &requester_root,
                 topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
                 policy_refs: &policy,
                 evidence_refs: &evidence,
-            },
-        )
-        .expect("requester ticket");
+            })
+            .expect("requester ticket");
         TicketPair {
             requester_root,
             peer_root,

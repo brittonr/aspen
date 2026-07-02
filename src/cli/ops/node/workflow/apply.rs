@@ -30,13 +30,13 @@ impl Loaded {
 fn execute(
     input: &super::super::command::live::Apply,
     loaded: &Loaded,
-) -> molten::error::Result<molten::node_daemon::NodeControlLiveWorkflowBundleApply> {
+) -> molten::error::Result<molten::node_daemon::ControlLiveWorkflowBundleApply> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(molten::error::MoltenError::from)?;
     runtime.block_on(molten::node_daemon::apply_node_control_live_workflow_bundle(
-        &molten::node_daemon::NodeControlLiveWorkflowBundleApplyInput {
+        &molten::node_daemon::ControlLiveWorkflowBundleApplyInput {
             state_root: &input.state_root,
             bundle_value: &loaded.bundle_value,
             gate_receipt_value: loaded.gate_receipt_value.as_ref(),
@@ -68,7 +68,7 @@ fn execute(
 
 fn write_outputs(
     input: &super::super::command::live::Apply,
-    applied: &molten::node_daemon::NodeControlLiveWorkflowBundleApply,
+    applied: &molten::node_daemon::ControlLiveWorkflowBundleApply,
 ) -> molten::error::Result<()> {
     if let (Some(path), Some(value)) = (input.send_receipt_out.as_ref(), applied.send_receipt_value.as_ref()) {
         super::super::core::write_file(path, &molten::preserves_rail::to_text(value)?)?;
@@ -92,7 +92,7 @@ fn write_outputs(
 }
 
 fn print_next_step(
-    applied: &molten::node_daemon::NodeControlLiveWorkflowBundleApply,
+    applied: &molten::node_daemon::ControlLiveWorkflowBundleApply,
     has_request: bool,
     was_send_requested: bool,
 ) {

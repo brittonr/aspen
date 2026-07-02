@@ -18,7 +18,7 @@ pub(crate) fn run(input: super::super::command::live::Gate) -> molten::error::Re
     let verify_receipt_value =
         verify_receipt.as_ref().map(|path| super::super::core::read_preserves_file(path)).transpose()?;
     let gated = molten::node_daemon::gate_node_control_live_workflow_bundle(
-        &molten::node_daemon::NodeControlLiveWorkflowBundleGateInput {
+        &molten::node_daemon::ControlLiveWorkflowBundleGateInput {
             bundle_value: &bundle_value,
             verify_receipt_value: verify_receipt_value.as_ref(),
             require_verify_receipt,
@@ -50,7 +50,7 @@ pub(crate) fn run(input: super::super::command::live::Gate) -> molten::error::Re
     Ok(())
 }
 
-fn print_next_step(gated: &molten::node_daemon::NodeControlLiveWorkflowBundleGate) {
+fn print_next_step(gated: &molten::node_daemon::ControlLiveWorkflowBundleGate) {
     if gated.decision == "pass" {
         println!("next-step=import-bundle command=\"molten node live-workflow-bundle-import ...\"");
         return;

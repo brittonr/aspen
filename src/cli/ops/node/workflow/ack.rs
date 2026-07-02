@@ -16,7 +16,7 @@ pub(crate) fn reconcile(input: super::super::command::live::Reconcile) -> molten
     let queue_receipt_value = read_optional(queue_receipt.as_ref())?;
     let control_receipt_value = read_optional(control_receipt.as_ref())?;
     let reconciled = molten::node_daemon::reconcile_node_control_live_workflow_bundle(
-        &molten::node_daemon::NodeControlLiveWorkflowBundleReconcileInput {
+        &molten::node_daemon::ControlLiveWorkflowBundleReconcileInput {
             apply_receipt_value: &apply_receipt_value,
             send_receipt_value: send_receipt_value.as_ref(),
             ingress_receipt_value: ingress_receipt_value.as_ref(),
@@ -64,7 +64,7 @@ pub(crate) fn export(input: super::super::command::live::AckExport) -> molten::e
     let control_receipt_value = read_optional(control_receipt.as_ref())?;
     let reconcile_receipt_value = super::super::core::read_preserves_file(&reconcile_receipt)?;
     let exported = molten::node_daemon::export_node_control_live_workflow_bundle_ack(
-        &molten::node_daemon::NodeControlLiveWorkflowBundleAckExportInput {
+        &molten::node_daemon::ControlLiveWorkflowBundleAckExportInput {
             apply_receipt_value: &apply_receipt_value,
             send_receipt_value: send_receipt_value.as_ref(),
             ingress_receipt_value: ingress_receipt_value.as_ref(),
@@ -103,7 +103,7 @@ pub(crate) fn import(input: super::super::command::live::AckImport) -> molten::e
     } = input;
     let ack_value = super::super::core::read_preserves_file(&ack)?;
     let imported = molten::node_daemon::import_node_control_live_workflow_bundle_ack(
-        &molten::node_daemon::NodeControlLiveWorkflowBundleAckImportInput {
+        &molten::node_daemon::ControlLiveWorkflowBundleAckImportInput {
             state_root: &state_root,
             ack_value: &ack_value,
             expected_bundle_ref: expected_bundle.as_deref(),
@@ -148,7 +148,7 @@ pub(crate) fn protocol_gate(input: super::super::command::live::ProtocolGate) ->
     let reconcile_receipt_value = super::super::core::read_preserves_file(&reconcile_receipt)?;
     let ack_value = super::super::core::read_preserves_file(&ack)?;
     let gated = molten::node_daemon::gate_node_control_live_workflow_protocol(
-        &molten::node_daemon::NodeControlLiveWorkflowProtocolGateInput {
+        &molten::node_daemon::ControlLiveWorkflowProtocolGateInput {
             bundle_value: &bundle_value,
             gate_receipt_value: &gate_receipt_value,
             apply_receipt_value: &apply_receipt_value,
@@ -182,7 +182,7 @@ fn read_optional(path: Option<&std::path::PathBuf>) -> molten::error::Result<Opt
     path.map(|path| super::super::core::read_preserves_file(path)).transpose()
 }
 
-fn print_export_next_step(exported: &molten::node_daemon::NodeControlLiveWorkflowBundleAckExport) {
+fn print_export_next_step(exported: &molten::node_daemon::ControlLiveWorkflowBundleAckExport) {
     if exported.decision != "pass" {
         println!(
             "next-step=collect-receiver-evidence command=\"molten node live-workflow-bundle-reconcile ... --ingress-receipt <receipt> --queue-receipt <receipt>\""
@@ -194,7 +194,7 @@ fn print_export_next_step(exported: &molten::node_daemon::NodeControlLiveWorkflo
     );
 }
 
-fn print_import_next_step(imported: &molten::node_daemon::NodeControlLiveWorkflowBundleAckImport) {
+fn print_import_next_step(imported: &molten::node_daemon::ControlLiveWorkflowBundleAckImport) {
     if imported.decision != "pass" {
         println!("next-step=inspect-ack-diagnostics command=\"molten node show <ack-import-receipt>\"");
         return;
@@ -206,7 +206,7 @@ fn print_import_next_step(imported: &molten::node_daemon::NodeControlLiveWorkflo
     }
 }
 
-fn print_protocol_gate_next_step(gated: &molten::node_daemon::NodeControlLiveWorkflowProtocolGate) {
+fn print_protocol_gate_next_step(gated: &molten::node_daemon::ControlLiveWorkflowProtocolGate) {
     if gated.decision == "pass" {
         println!("next-step=archive-workflow-protocol command=\"molten node show <protocol-gate-receipt>\"");
     } else {
@@ -216,7 +216,7 @@ fn print_protocol_gate_next_step(gated: &molten::node_daemon::NodeControlLiveWor
     }
 }
 
-fn print_reconcile_next_step(reconciled: &molten::node_daemon::NodeControlLiveWorkflowBundleReconcile) {
+fn print_reconcile_next_step(reconciled: &molten::node_daemon::ControlLiveWorkflowBundleReconcile) {
     if reconciled.decision == "pass" {
         if reconciled.control_receipt_ref.is_some() {
             println!("next-step=inspect-control-receipt command=\"molten node show <control-receipt>\"");

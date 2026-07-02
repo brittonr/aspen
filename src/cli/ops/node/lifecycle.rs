@@ -5,7 +5,7 @@ pub(crate) fn init(input: super::command::base::Init) -> molten::error::Result<(
         config_out,
         identity_receipt_out,
     } = input;
-    let init = molten::node_daemon::init_local_node(&molten::node_daemon::NodeDaemonInitInput {
+    let init = molten::node_daemon::init_local_node(&molten::node_daemon::InitInput {
         state_root: &state_root,
         node_id: &node_id,
     })?;
@@ -30,7 +30,7 @@ pub(crate) fn run(input: super::command::base::Run) -> molten::error::Result<()>
         state_root,
         startup_out,
     } = input;
-    let run = molten::node_daemon::run_local_node(&molten::node_daemon::NodeDaemonRunInput {
+    let run = molten::node_daemon::run_local_node(&molten::node_daemon::RunInput {
         state_root: &state_root,
     })?;
     if let Some(path) = startup_out.as_ref() {
@@ -52,7 +52,7 @@ pub(crate) fn run_loop(input: super::command::base::RunLoop) -> molten::error::R
         receipt_out,
         heartbeat_out,
     } = input;
-    let loop_run = molten::node_daemon::run_control_loop(&molten::node_daemon::NodeControlLoopInput {
+    let loop_run = molten::node_daemon::run_control_loop(&molten::node_daemon::ControlLoopInput {
         state_root: &state_root,
         max_requests,
     })?;
@@ -104,7 +104,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
             supervisor_policy_value.as_ref(),
         )
     } else {
-        let served = molten::node_daemon::serve_node_control(&molten::node_daemon::NodeControlServeInput {
+        let served = molten::node_daemon::serve_node_control(&molten::node_daemon::ControlServeInput {
             state_root: &state_root,
             topic: &topic,
             max_ticks,
@@ -151,7 +151,7 @@ fn serve_live(
         .build()
         .map_err(molten::error::MoltenError::from)?;
     let served = runtime.block_on(molten::node_daemon::serve_node_control_live_listener(
-        &molten::node_daemon::NodeControlLiveServeInput {
+        &molten::node_daemon::ControlLiveServeInput {
             state_root: &state_root,
             topic: &topic,
             max_events: live_max_events,
@@ -192,7 +192,7 @@ pub(crate) fn status(input: super::command::base::Status) -> molten::error::Resu
         health_out,
         receipt_out,
     } = input;
-    let status = molten::node_daemon::status_local_node(&molten::node_daemon::NodeDaemonStatusInput {
+    let status = molten::node_daemon::status_local_node(&molten::node_daemon::StatusInput {
         state_root: &state_root,
     })?;
     if let Some(path) = health_out.as_ref() {
@@ -212,7 +212,7 @@ pub(crate) fn stop(input: super::command::base::Stop) -> molten::error::Result<(
         shutdown_out,
         receipt_out,
     } = input;
-    let stop = molten::node_daemon::stop_local_node(&molten::node_daemon::NodeDaemonStopInput {
+    let stop = molten::node_daemon::stop_local_node(&molten::node_daemon::StopInput {
         state_root: &state_root,
     })?;
     if let Some(path) = shutdown_out.as_ref() {

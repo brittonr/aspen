@@ -23,7 +23,7 @@ pub(crate) fn run(input: super::super::command::live::Bundle) -> molten::error::
         listener_receipt.as_ref().map(|path| super::super::core::read_preserves_file(path)).transpose()?;
     let service_receipt_value = super::super::core::read_preserves_file(&service_receipt)?;
     let workflow =
-        molten::node_daemon::node_control_live_workflow_receipt(&molten::node_daemon::NodeControlLiveWorkflowInput {
+        molten::node_daemon::node_control_live_workflow_receipt(&molten::node_daemon::ControlLiveWorkflowInput {
             state_root: state_root.as_deref(),
             receiver_ticket_value: &ticket_value,
             peer_admission_value: &peer_admission_value,
@@ -65,7 +65,7 @@ pub(crate) fn export(input: super::super::command::live::Export) -> molten::erro
         .collect::<molten::error::Result<Vec<_>>>()?;
     let receipt_value_refs = receipt_values.iter().collect::<Vec<_>>();
     let exported = molten::node_daemon::export_node_control_live_workflow_bundle(
-        &molten::node_daemon::NodeControlLiveWorkflowBundleExportInput {
+        &molten::node_daemon::ControlLiveWorkflowBundleExportInput {
             receiver_ticket_value: &ticket_value,
             peer_admission_value: &peer_admission_value,
             authority_grant_value: &authority_grant_value,
@@ -106,7 +106,7 @@ pub(crate) fn verify(input: super::super::command::live::Verify) -> molten::erro
     } = input;
     let bundle_value = super::super::core::read_preserves_file(&bundle)?;
     let verified = molten::node_daemon::verify_node_control_live_workflow_bundle(
-        &molten::node_daemon::NodeControlLiveWorkflowBundleVerifyInput {
+        &molten::node_daemon::ControlLiveWorkflowBundleVerifyInput {
             bundle_value: &bundle_value,
             expected_node: expected_node.as_deref(),
             expected_topic: expected_topic.as_deref(),
@@ -153,7 +153,7 @@ pub(crate) fn import(input: super::super::command::live::Import) -> molten::erro
     } = input;
     let bundle_value = super::super::core::read_preserves_file(&bundle)?;
     let imported = molten::node_daemon::import_node_control_live_workflow_bundle(
-        &molten::node_daemon::NodeControlLiveWorkflowBundleImportInput {
+        &molten::node_daemon::ControlLiveWorkflowBundleImportInput {
             state_root: &state_root,
             bundle_value: &bundle_value,
             expected_node: expected_node.as_deref(),

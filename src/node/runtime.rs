@@ -103,7 +103,7 @@ pub struct ControlRequestValueInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct ControlReceiptValueInput<'a> {
     pub decision: &'a str,
-    pub request: &'a NodeControlRequest,
+    pub request: &'a ControlRequest,
     pub startup_receipt_ref: &'a str,
     pub authority_receipt_refs: &'a [String],
     pub resource_receipt_refs: &'a [String],
@@ -154,7 +154,7 @@ pub struct NodeRuntimeStart {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeControlRequest {
+pub struct ControlRequest {
     pub request_ref: String,
     pub operation: String,
     pub target_ref: Option<String>,
@@ -167,7 +167,7 @@ pub struct NodeControlRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeControlReceipt {
+pub struct ControlReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub request_ref: String,
@@ -666,12 +666,12 @@ pub fn legacy_node_control_request_value(input: &ControlRequestValueInput<'_>) -
     ]))
 }
 
-pub fn parse_node_control_request(value: &IoValue) -> Result<NodeControlRequest> {
+pub fn parse_node_control_request(value: &IoValue) -> Result<ControlRequest> {
     if let Some(fields) = value.collect_simple_record("node-control-request-v1", Some(10)) {
         require_schema(&fields[0], NODE_CONTROL_REQUEST_SCHEMA, "node control request")?;
         let operation = record_string(&fields[1], "operation")?;
         validate_control_operation(&operation)?;
-        return Ok(NodeControlRequest {
+        return Ok(ControlRequest {
             request_ref: canonical_hash(value)?,
             operation,
             target_ref: record_optional_ref(&fields[2], "target")?,
@@ -689,7 +689,7 @@ pub fn parse_node_control_request(value: &IoValue) -> Result<NodeControlRequest>
     require_schema(&fields[0], NODE_CONTROL_REQUEST_SCHEMA, "node control request")?;
     let operation = record_string(&fields[1], "operation")?;
     validate_control_operation(&operation)?;
-    Ok(NodeControlRequest {
+    Ok(ControlRequest {
         request_ref: canonical_hash(value)?,
         operation,
         target_ref: record_optional_ref(&fields[2], "target")?,
@@ -731,14 +731,14 @@ pub fn node_control_receipt_value(input: &ControlReceiptValueInput<'_>) -> Resul
     ]))
 }
 
-pub fn parse_node_control_receipt(value: &IoValue) -> Result<NodeControlReceipt> {
+pub fn parse_node_control_receipt(value: &IoValue) -> Result<ControlReceipt> {
     let fields = value
         .collect_simple_record("node-control-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-receipt-v1 ...>"))?;
     require_schema(&fields[0], NODE_CONTROL_RECEIPT_SCHEMA, "node control receipt")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "canonical-receipt", "node control receipt")?;
-    Ok(NodeControlReceipt {
+    Ok(ControlReceipt {
         receipt_ref: canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         request_ref: record_ref(&fields[2], "request")?,
@@ -753,7 +753,7 @@ pub fn parse_node_control_receipt(value: &IoValue) -> Result<NodeControlReceipt>
 }
 
 pub fn node_control_deny_receipt_value(
-    request: &NodeControlRequest,
+    request: &ControlRequest,
     startup_receipt_ref: &str,
     diagnostic: &str,
 ) -> Result<IoValue> {
