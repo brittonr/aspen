@@ -32,7 +32,7 @@ pub(super) fn put(args: super::command::Put) -> molten::error::Result<()> {
         revocation: &revocation_refs,
     });
     let closure_hash = resolve_closure_hash(dependency_closure_hash, &operation, &dependencies)?;
-    let key_input = molten::eval_cache::EvalCacheKeyInput {
+    let key_input = molten::eval_cache::KeyInput {
         operation: operation.clone(),
         version,
         input_ref: molten::preserves_rail::canonical_hash(&input_value)?,
@@ -46,7 +46,7 @@ pub(super) fn put(args: super::command::Put) -> molten::error::Result<()> {
         tool_version,
         assumption_refs,
     };
-    let value_input = molten::eval_cache::EvalCacheValueInput {
+    let value_input = molten::eval_cache::ValueInput {
         tier,
         status,
         output: output_value,
@@ -110,7 +110,7 @@ fn emit_put_result(
     key_out: Option<&std::path::PathBuf>,
     value_out: Option<&std::path::PathBuf>,
     receipt_out: Option<&std::path::PathBuf>,
-    put: &molten::eval_cache::EvalCachePut,
+    put: &molten::eval_cache::Put,
 ) -> molten::error::Result<()> {
     if let Some(path) = key_out {
         super::io::write_file(path, &molten::preserves_rail::to_text(&put.key.value)?)?;
@@ -132,7 +132,7 @@ fn emit_put_result(
 }
 
 pub(super) fn get(args: super::command::Get) -> molten::error::Result<()> {
-    let get = molten::eval_cache::get(&args.cache, &args.key_ref, &molten::eval_cache::EvalCacheGetInput {
+    let get = molten::eval_cache::get(&args.cache, &args.key_ref, &molten::eval_cache::GetInput {
         current_policy_refs: args.current_policy_refs,
         current_capability_refs: args.current_capability_refs,
         current_revocation_refs: args.current_revocation_refs,
@@ -181,7 +181,7 @@ pub(super) fn status(args: super::command::Status) -> molten::error::Result<()> 
 }
 
 pub(super) fn list(args: super::command::List) -> molten::error::Result<()> {
-    for entry in molten::eval_cache::list(&args.cache, &molten::eval_cache::EvalCacheListFilter {
+    for entry in molten::eval_cache::list(&args.cache, &molten::eval_cache::ListFilter {
         operation: args.operation,
         tier: args.tier,
         status: args.status,
@@ -204,7 +204,7 @@ pub(super) fn show(args: super::command::Show) -> molten::error::Result<()> {
         println!("{}", molten::preserves_rail::to_text(&key.value)?);
         return Ok(());
     }
-    for entry in molten::eval_cache::list(&args.cache, &molten::eval_cache::EvalCacheListFilter {
+    for entry in molten::eval_cache::list(&args.cache, &molten::eval_cache::ListFilter {
         operation: None,
         tier: None,
         status: None,
@@ -226,7 +226,7 @@ pub(super) fn show(args: super::command::Show) -> molten::error::Result<()> {
 }
 
 pub(super) fn invalidate(args: super::command::Invalidate) -> molten::error::Result<()> {
-    let invalidated = molten::eval_cache::invalidate(&args.cache, &molten::eval_cache::EvalCacheInvalidateInput {
+    let invalidated = molten::eval_cache::invalidate(&args.cache, &molten::eval_cache::InvalidateInput {
         key_ref: args.key_ref,
         dependency_ref: args.dependency_ref,
         policy_ref: args.policy_ref,

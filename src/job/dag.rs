@@ -1987,9 +1987,9 @@ fn profile_counts(dag: &JobDag, cache_root: Option<&FilePath>) -> Result<Profile
 
 fn cache_entry_count(cache_root: Option<&FilePath>) -> Result<usize> {
     if let Some(cache_root) = cache_root {
-        Ok(crate::eval_cache::list(cache_root, &crate::eval_cache::EvalCacheListFilter {
+        Ok(crate::eval_cache::list(cache_root, &crate::eval_cache::ListFilter {
             operation: Some(JOB_CACHE_OPERATION.to_string()),
-            ..crate::eval_cache::EvalCacheListFilter::default()
+            ..crate::eval_cache::ListFilter::default()
         })?
         .len())
     } else {
@@ -4740,7 +4740,7 @@ struct StageMemo<'a> {
     node: &'a JobNode,
     inputs: &'a [IoValue],
     cache_root: &'a FilePath,
-    key_input: &'a crate::eval_cache::EvalCacheKeyInput,
+    key_input: &'a crate::eval_cache::KeyInput,
     key_ref: &'a str,
 }
 
@@ -4753,8 +4753,8 @@ fn run_stage_with_cache(
 ) -> Result<JobStageRun> {
     let is_cacheable = node.kind != "materialize";
     let key_input = stage_cache_key_input(dag, request, node, inputs)?;
-    let key_value = crate::eval_cache::eval_cache_key_value(&key_input)?;
-    let key = crate::eval_cache::parse_eval_cache_key(&key_value)?;
+    let key_value = crate::eval_cache::key_value(&key_input)?;
+    let key = crate::eval_cache::parse_key(&key_value)?;
     let memo = StageMemo {
         dag,
         request,
@@ -4777,7 +4777,7 @@ fn run_stage_with_cache(
 
 fn stage_memo_hit(input: &StageMemo<'_>) -> Result<Option<JobStageRun>> {
     let current_policy_refs = combined_policy_refs(input.dag, input.request, Some(input.node));
-    if let Ok(hit) = crate::eval_cache::get(input.cache_root, input.key_ref, &crate::eval_cache::EvalCacheGetInput {
+    if let Ok(hit) = crate::eval_cache::get(input.cache_root, input.key_ref, &crate::eval_cache::GetInput {
         current_policy_refs,
         current_capability_refs: Vec::new(),
         current_revocation_refs: Vec::new(),
@@ -4824,16 +4824,15 @@ fn stage_memo_store(input: &StageMemo<'_>, stage: JobStageRun) -> Result<JobStag
     } else {
         crate::eval_cache::TIER_POLICY_CURRENT
     };
-    let cache_put =
-        crate::eval_cache::put(input.cache_root, input.key_input, &crate::eval_cache::EvalCacheValueInput {
-            tier: tier.to_string(),
-            status: crate::eval_cache::STATUS_PASS.to_string(),
-            output: Some(stage_output),
-            dependency_refs: input.key_input.dependency_refs.clone(),
-            policy_refs: policy_refs.clone(),
-            evidence_refs: vec![crate::preserves_rail::canonical_hash(&stage.receipt_value)?],
-            diagnostics: Vec::new(),
-        })?;
+    let cache_put = crate::eval_cache::put(input.cache_root, input.key_input, &crate::eval_cache::ValueInput {
+        tier: tier.to_string(),
+        status: crate::eval_cache::STATUS_PASS.to_string(),
+        output: Some(stage_output),
+        dependency_refs: input.key_input.dependency_refs.clone(),
+        policy_refs: policy_refs.clone(),
+        evidence_refs: vec![crate::preserves_rail::canonical_hash(&stage.receipt_value)?],
+        diagnostics: Vec::new(),
+    })?;
     let cache_ref = crate::preserves_rail::canonical_hash(&cache_put.receipt_value)?;
     let stage_receipt_ref = crate::preserves_rail::canonical_hash(&stage.receipt_value)?;
     let evidence_refs = vec![stage_receipt_ref, cache_ref.clone()];
@@ -5182,7 +5181,7 @@ fn stage_cache_key_input(
     request: &JobOutputRequest,
     node: &JobNode,
     inputs: &[IoValue],
-) -> Result<crate::eval_cache::EvalCacheKeyInput> {
+) -> Result<crate::eval_cache::KeyInput> {
     let input_refs = refs_for_values(inputs)?;
     let stage_artifact_ref = stage_artifact_or_builtin_ref(node)?;
     let dependency_capacity = 3usize
@@ -5226,7 +5225,7 @@ fn stage_cache_key_input(
     assumptions.extend(node.effect_manifest_refs.iter().cloned());
     assumptions.extend(request.seed_config_ref.iter().cloned());
     assumptions.push(crate::preserves_rail::canonical_hash(&node.config)?);
-    Ok(crate::eval_cache::EvalCacheKeyInput {
+    Ok(crate::eval_cache::KeyInput {
         operation: JOB_CACHE_OPERATION.to_string(),
         version: "v1".to_string(),
         input_ref,

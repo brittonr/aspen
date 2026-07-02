@@ -77,7 +77,7 @@ fn cli_eval_cache_commands_work() {
 
 struct CacheFixture {
     cache: PathBuf,
-    key: molten::eval_cache::EvalCacheKey,
+    key: molten::eval_cache::Key,
     value_out: PathBuf,
     dependency_ref: String,
     policy_ref: String,
@@ -117,7 +117,7 @@ fn put_cache_value(dir: &Path) -> CacheFixture {
         receipt_out: Some(dir.join("put-receipt.preserves")),
     }))
     .expect("cache put");
-    let key = molten::eval_cache::parse_eval_cache_key(&read_preserves_file(&key_out).expect("read key"))
+    let key = molten::eval_cache::parse_key(&read_preserves_file(&key_out).expect("read key"))
         .expect("parse cache key");
     CacheFixture {
         cache,
@@ -171,7 +171,7 @@ fn show_cache_key_and_value(fixture: &CacheFixture) {
     }))
     .expect("cache show key");
     crate::cli_cache::run(crate::cli_cache::Command::Show(crate::cli_cache::command::Show {
-        reference: molten::eval_cache::parse_eval_cache_value(&read_preserves_file(&fixture.value_out).expect("read value"))
+        reference: molten::eval_cache::parse_value(&read_preserves_file(&fixture.value_out).expect("read value"))
             .expect("parse cache value")
             .value_ref,
         cache: fixture.cache.clone(),

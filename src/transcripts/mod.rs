@@ -407,8 +407,8 @@ fn cached_run(transcript: &TranscriptArtifact, input: &TranscriptRunInput) -> Re
     let cache_key = transcript_cache_key(transcript)?;
     if let Ok(cache_get) = crate::eval_cache::get(
         cache_root,
-        &canonical_hash(&crate::eval_cache::eval_cache_key_value(&cache_key)?)?,
-        &crate::eval_cache::EvalCacheGetInput {
+        &canonical_hash(&crate::eval_cache::key_value(&cache_key)?)?,
+        &crate::eval_cache::GetInput {
             current_policy_refs: transcript.policy_refs.clone(),
             current_capability_refs: transcript.capability_refs.clone(),
             current_revocation_refs: transcript.revocation_refs.clone(),
@@ -440,7 +440,7 @@ fn store_run(
         && let Some(cache_root) = input.cache_root.as_ref()
     {
         let cache_key = transcript_cache_key(transcript)?;
-        let put = crate::eval_cache::put(cache_root, &cache_key, &crate::eval_cache::EvalCacheValueInput {
+        let put = crate::eval_cache::put(cache_root, &cache_key, &crate::eval_cache::ValueInput {
             tier: crate::eval_cache::TIER_SIMULATED.to_string(),
             status: crate::eval_cache::STATUS_PASS.to_string(),
             output: Some(receipt.clone()),
@@ -505,7 +505,7 @@ pub fn render_transcript(transcript: &TranscriptArtifact, run: Option<&Transcrip
     Ok(rendered)
 }
 
-pub fn transcript_cache_key(transcript: &TranscriptArtifact) -> Result<crate::eval_cache::EvalCacheKeyInput> {
+pub fn transcript_cache_key(transcript: &TranscriptArtifact) -> Result<crate::eval_cache::KeyInput> {
     let handler_profile_ref = transcript
         .handler_profile_ref
         .clone()
@@ -880,7 +880,7 @@ fn execute_cache_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<Io
             ])))
         }
         Some("list") => {
-            let entries = crate::eval_cache::list(&state.cache, &crate::eval_cache::EvalCacheListFilter::default())?;
+            let entries = crate::eval_cache::list(&state.cache, &crate::eval_cache::ListFilter::default())?;
             Ok(Some(record("eval-cache-list", vec![sequence(
                 entries.iter().map(|entry| string(&entry.key_ref)).collect(),
             )])))
@@ -1437,8 +1437,8 @@ mod tests {
             ..TranscriptParseInput::default()
         })
         .expect("parse");
-        let cache_key = crate::eval_cache::parse_eval_cache_key(
-            &crate::eval_cache::eval_cache_key_value(&transcript_cache_key(&transcript).expect("transcript cache key"))
+        let cache_key = crate::eval_cache::parse_key(
+            &crate::eval_cache::key_value(&transcript_cache_key(&transcript).expect("transcript cache key"))
                 .expect("cache key value"),
         )
         .expect("parse cache key");

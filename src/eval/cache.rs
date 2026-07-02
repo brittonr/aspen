@@ -11,7 +11,7 @@ type PathBuf = std::path::PathBuf;
 type Record<T> = preserves::Record<T>;
 type Result<T> = crate::error::Result<T>;
 type TableDefinition<K, V> = redb::TableDefinition<'static, K, V>;
-type Value<T> = preserves::Value<T>;
+type PreservesValue<T> = preserves::Value<T>;
 
 const DEFAULT_FIXED_V1_CHUNK_SIZE: u64 = crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 const EVAL_CACHE_KEY_SCHEMA: &str = crate::preserves_rail::EVAL_CACHE_KEY_SCHEMA;
@@ -50,7 +50,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
+fn value_to_iovalue(value: &PreservesValue<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -85,7 +85,7 @@ const INDEX_TIER: TableDefinition<&str, &str> = TableDefinition::new("eval_cache
 const INDEX_RECEIPTS: TableDefinition<&str, &[u8]> = TableDefinition::new("eval_cache_receipts_v1");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCacheKeyInput {
+pub struct KeyInput {
     pub operation: String,
     pub version: String,
     pub input_ref: String,
@@ -101,7 +101,7 @@ pub struct EvalCacheKeyInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCacheKey {
+pub struct Key {
     pub key_ref: String,
     pub operation: String,
     pub version: String,
@@ -119,7 +119,7 @@ pub struct EvalCacheKey {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EvalCacheOutputRef {
+pub enum OutputRef {
     None,
     Inline {
         output_ref: String,
@@ -133,7 +133,7 @@ pub enum EvalCacheOutputRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCacheValueInput {
+pub struct ValueInput {
     pub tier: String,
     pub status: String,
     pub output: Option<IoValue>,
@@ -144,12 +144,12 @@ pub struct EvalCacheValueInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCacheValue {
+pub struct Value {
     pub value_ref: String,
     pub key_ref: String,
     pub tier: String,
     pub status: String,
-    pub output: EvalCacheOutputRef,
+    pub output: OutputRef,
     pub dependency_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -158,29 +158,29 @@ pub struct EvalCacheValue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCachePut {
-    pub key: EvalCacheKey,
-    pub value: EvalCacheValue,
+pub struct Put {
+    pub key: Key,
+    pub value: Value,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCacheGet {
-    pub key: EvalCacheKey,
-    pub value: EvalCacheValue,
+pub struct Get {
+    pub key: Key,
+    pub value: Value,
     pub output: Option<IoValue>,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCacheGetInput {
+pub struct GetInput {
     pub current_policy_refs: Vec<String>,
     pub current_capability_refs: Vec<String>,
     pub current_revocation_refs: Vec<String>,
     pub semantic: bool,
 }
 
-impl Default for EvalCacheGetInput {
+impl Default for GetInput {
     fn default() -> Self {
         Self {
             current_policy_refs: Vec::new(),
@@ -192,7 +192,7 @@ impl Default for EvalCacheGetInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCacheReceipt {
+pub struct Receipt {
     pub receipt_ref: String,
     pub operation: String,
     pub decision: String,
@@ -202,7 +202,7 @@ pub struct EvalCacheReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct EvalCacheStatus {
+pub struct Status {
     pub keys: usize,
     pub values: usize,
     pub tombstones: usize,
@@ -218,7 +218,7 @@ pub struct EvalCacheStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct EvalCacheListFilter {
+pub struct ListFilter {
     pub operation: Option<String>,
     pub tier: Option<String>,
     pub status: Option<String>,
@@ -230,7 +230,7 @@ pub struct EvalCacheListFilter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCacheEntrySummary {
+pub struct EntrySummary {
     pub key_ref: String,
     pub operation: String,
     pub tier: String,
@@ -240,7 +240,7 @@ pub struct EvalCacheEntrySummary {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct EvalCacheInvalidateInput {
+pub struct InvalidateInput {
     pub key_ref: Option<String>,
     pub dependency_ref: Option<String>,
     pub policy_ref: Option<String>,
@@ -253,7 +253,7 @@ pub struct EvalCacheInvalidateInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvalCacheInvalidate {
+pub struct Invalidation {
     pub decision: String,
     pub invalidated_key_refs: Vec<String>,
     pub retention_receipt_refs: Vec<String>,
@@ -304,7 +304,7 @@ pub struct ChoreographyProjectionKeyInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct EvalCacheReceiptValueInput<'a> {
+struct ReceiptValueInput<'a> {
     operation: &'a str,
     decision: &'a str,
     key_ref: Option<&'a str>,
@@ -314,7 +314,7 @@ struct EvalCacheReceiptValueInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-pub fn eval_cache_key_value(input: &EvalCacheKeyInput) -> Result<IoValue> {
+pub fn key_value(input: &KeyInput) -> Result<IoValue> {
     validate_key_input(input)?;
     Ok(record("eval-cache-key-v1", vec![
         string(EVAL_CACHE_KEY_SCHEMA),
@@ -335,7 +335,7 @@ pub fn eval_cache_key_value(input: &EvalCacheKeyInput) -> Result<IoValue> {
     ]))
 }
 
-pub fn parse_eval_cache_key(value: &IoValue) -> Result<EvalCacheKey> {
+pub fn parse_key(value: &IoValue) -> Result<Key> {
     let fields = value
         .collect_simple_record("eval-cache-key-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-key-v1 ...>"))?;
@@ -346,7 +346,7 @@ pub fn parse_eval_cache_key(value: &IoValue) -> Result<EvalCacheKey> {
     let tool_fields = simple_record(&tool, "tool", 2)?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "no-name-key", "eval cache key")?;
-    Ok(EvalCacheKey {
+    Ok(Key {
         key_ref: canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         version: record_string(&fields[2], "version")?,
@@ -364,11 +364,7 @@ pub fn parse_eval_cache_key(value: &IoValue) -> Result<EvalCacheKey> {
     })
 }
 
-pub fn eval_cache_value_value(
-    key_ref: &str,
-    input: &EvalCacheValueInput,
-    output_ref: &EvalCacheOutputRef,
-) -> Result<IoValue> {
+pub fn value_value(key_ref: &str, input: &ValueInput, output_ref: &OutputRef) -> Result<IoValue> {
     validate_ref(key_ref, "eval cache key ref")?;
     validate_value_input(input)?;
     validate_output_ref(output_ref)?;
@@ -386,14 +382,14 @@ pub fn eval_cache_value_value(
     ]))
 }
 
-pub fn parse_eval_cache_value(value: &IoValue) -> Result<EvalCacheValue> {
+pub fn parse_value(value: &IoValue) -> Result<Value> {
     let fields = value
         .collect_simple_record("eval-cache-value-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-value-v1 ...>"))?;
     require_schema(&fields[0], EVAL_CACHE_VALUE_SCHEMA, "eval cache value")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "determinism-inputs-bound", "eval cache value")?;
-    Ok(EvalCacheValue {
+    Ok(Value {
         value_ref: canonical_hash(value)?,
         key_ref: record_ref(&fields[1], "key")?,
         tier: record_string(&fields[2], "tier")?,
@@ -407,15 +403,15 @@ pub fn parse_eval_cache_value(value: &IoValue) -> Result<EvalCacheValue> {
     })
 }
 
-pub fn put(root: &Path, key_input: &EvalCacheKeyInput, value_input: &EvalCacheValueInput) -> Result<EvalCachePut> {
+pub fn put(root: &Path, key_input: &KeyInput, value_input: &ValueInput) -> Result<Put> {
     ensure_dirs(root)?;
-    let key_value = eval_cache_key_value(key_input)?;
-    let key = parse_eval_cache_key(&key_value)?;
+    let key_value = key_value(key_input)?;
+    let key = parse_key(&key_value)?;
     validate_value_against_key(&key, value_input)?;
     let output_bytes = value_input.output.as_ref().map(canonical_bytes).transpose()?;
     let output_ref = match (value_input.output.as_ref(), output_bytes.as_ref()) {
-        (None, None) => EvalCacheOutputRef::None,
-        (Some(output), Some(bytes)) if bytes.len() <= INLINE_OUTPUT_LIMIT => EvalCacheOutputRef::Inline {
+        (None, None) => OutputRef::None,
+        (Some(output), Some(bytes)) if bytes.len() <= INLINE_OUTPUT_LIMIT => OutputRef::Inline {
             output_ref: canonical_hash(output)?,
             length: bytes.len() as u64,
         },
@@ -426,7 +422,7 @@ pub fn put(root: &Path, key_input: &EvalCacheKeyInput, value_input: &EvalCacheVa
                 bytes,
                 DEFAULT_FIXED_V1_CHUNK_SIZE,
             )?;
-            EvalCacheOutputRef::ContentRef {
+            OutputRef::ContentRef {
                 manifest_ref: chunk.manifest_ref,
                 output_ref: canonical_hash(output)?,
                 length: bytes.len() as u64,
@@ -438,9 +434,9 @@ pub fn put(root: &Path, key_input: &EvalCacheKeyInput, value_input: &EvalCacheVa
             ));
         }
     };
-    let value_value = eval_cache_value_value(&key.key_ref, value_input, &output_ref)?;
-    let value = parse_eval_cache_value(&value_value)?;
-    let receipt_value = receipt_value(&EvalCacheReceiptValueInput {
+    let value_value = value_value(&key.key_ref, value_input, &output_ref)?;
+    let value = parse_value(&value_value)?;
+    let receipt_value = receipt_value(&ReceiptValueInput {
         operation: "put",
         decision: "pass",
         key_ref: Some(&key.key_ref),
@@ -454,14 +450,14 @@ pub fn put(root: &Path, key_input: &EvalCacheKeyInput, value_input: &EvalCacheVa
     store_key_value_in_tx(&write_txn, &key, &value, output_bytes.as_deref())?;
     store_receipt_in_tx(&write_txn, &receipt_value)?;
     write_txn.commit().map_err(index_error)?;
-    Ok(EvalCachePut {
+    Ok(Put {
         key,
         value,
         receipt_value,
     })
 }
 
-pub fn get(root: &Path, key_ref: &str, input: &EvalCacheGetInput) -> Result<EvalCacheGet> {
+pub fn get(root: &Path, key_ref: &str, input: &GetInput) -> Result<Get> {
     validate_ref(key_ref, "eval cache key ref")?;
     validate_refs(&input.current_policy_refs, "current policy ref")?;
     validate_refs(&input.current_capability_refs, "current capability ref")?;
@@ -482,7 +478,7 @@ pub fn get(root: &Path, key_ref: &str, input: &EvalCacheGetInput) -> Result<Eval
     }
     let output = read_output(root, &key.key_ref, &value)?;
     let receipt_value = hit_receipt(root, &key.key_ref, &value.value_ref, &refs)?;
-    Ok(EvalCacheGet {
+    Ok(Get {
         key,
         value,
         output,
@@ -491,7 +487,7 @@ pub fn get(root: &Path, key_ref: &str, input: &EvalCacheGetInput) -> Result<Eval
 }
 
 fn denied_tombstone(root: &Path, key_ref: &str, reason: &str) -> Result<MoltenError> {
-    let receipt = store_and_return_receipt(root, &EvalCacheReceiptValueInput {
+    let receipt = store_and_return_receipt(root, &ReceiptValueInput {
         operation: "miss",
         decision: "deny",
         key_ref: Some(key_ref),
@@ -502,12 +498,12 @@ fn denied_tombstone(root: &Path, key_ref: &str, reason: &str) -> Result<MoltenEr
     })?;
     Ok(MoltenError::invalid_harness(format!(
         "eval cache miss: key {key_ref} tombstoned ({})",
-        parse_eval_cache_receipt(&receipt)?.receipt_ref
+        parse_receipt(&receipt)?.receipt_ref
     )))
 }
 
 fn denied_missing(root: &Path, key_ref: &str) -> Result<MoltenError> {
-    let receipt = store_and_return_receipt(root, &EvalCacheReceiptValueInput {
+    let receipt = store_and_return_receipt(root, &ReceiptValueInput {
         operation: "miss",
         decision: "deny",
         key_ref: Some(key_ref),
@@ -518,12 +514,12 @@ fn denied_missing(root: &Path, key_ref: &str) -> Result<MoltenError> {
     })?;
     Ok(MoltenError::invalid_harness(format!(
         "eval cache miss: key {key_ref} not found ({})",
-        parse_eval_cache_receipt(&receipt)?.receipt_ref
+        parse_receipt(&receipt)?.receipt_ref
     )))
 }
 
 fn denied_trace_only(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> Result<MoltenError> {
-    let receipt = store_and_return_receipt(root, &EvalCacheReceiptValueInput {
+    let receipt = store_and_return_receipt(root, &ReceiptValueInput {
         operation: "trace-only",
         decision: "deny",
         key_ref: Some(key_ref),
@@ -534,12 +530,12 @@ fn denied_trace_only(root: &Path, key_ref: &str, value_ref: &str, refs: &[String
     })?;
     Ok(MoltenError::invalid_harness(format!(
         "eval cache trace-only denial: {}",
-        parse_eval_cache_receipt(&receipt)?.receipt_ref
+        parse_receipt(&receipt)?.receipt_ref
     )))
 }
 
 fn denied_stale(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> Result<MoltenError> {
-    let receipt = store_and_return_receipt(root, &EvalCacheReceiptValueInput {
+    let receipt = store_and_return_receipt(root, &ReceiptValueInput {
         operation: "stale-deny",
         decision: "deny",
         key_ref: Some(key_ref),
@@ -550,12 +546,12 @@ fn denied_stale(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) ->
     })?;
     Ok(MoltenError::invalid_harness(format!(
         "eval cache stale policy-current entry denied: {}",
-        parse_eval_cache_receipt(&receipt)?.receipt_ref
+        parse_receipt(&receipt)?.receipt_ref
     )))
 }
 
 fn hit_receipt(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> Result<IoValue> {
-    store_and_return_receipt(root, &EvalCacheReceiptValueInput {
+    store_and_return_receipt(root, &ReceiptValueInput {
         operation: "hit",
         decision: "pass",
         key_ref: Some(key_ref),
@@ -566,7 +562,7 @@ fn hit_receipt(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> 
     })
 }
 
-pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalCacheInvalidate> {
+pub fn invalidate(root: &Path, input: &InvalidateInput) -> Result<Invalidation> {
     ensure_dirs(root)?;
     validate_invalidate_input(input)?;
     let selected_key_refs = selected_keys(root, input)?;
@@ -595,7 +591,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
     let receipt = invalidate_receipt(decision, &refs, &diagnostics, &run)?;
     store_receipt_in_tx(&write_txn, &receipt)?;
     write_txn.commit().map_err(index_error)?;
-    Ok(EvalCacheInvalidate {
+    Ok(Invalidation {
         decision: decision.to_string(),
         invalidated_key_refs,
         retention_receipt_refs: run.receipts,
@@ -604,12 +600,12 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
     })
 }
 
-fn selected_keys(root: &Path, input: &EvalCacheInvalidateInput) -> Result<Vec<String>> {
+fn selected_keys(root: &Path, input: &InvalidateInput) -> Result<Vec<String>> {
     let mut keys = BtreeSet::new();
     if let Some(key_ref) = input.key_ref.as_ref() {
         keys.insert(key_ref.clone());
     }
-    for summary in list(root, &EvalCacheListFilter::default())? {
+    for summary in list(root, &ListFilter::default())? {
         if input.operation.as_ref().is_some_and(|operation| operation == &summary.operation) {
             keys.insert(summary.key_ref.clone());
         }
@@ -620,14 +616,14 @@ fn selected_keys(root: &Path, input: &EvalCacheInvalidateInput) -> Result<Vec<St
     Ok(keys.into_iter().collect())
 }
 
-fn has_ref_filter(input: &EvalCacheInvalidateInput) -> bool {
+fn has_ref_filter(input: &InvalidateInput) -> bool {
     input.dependency_ref.is_some()
         || input.policy_ref.is_some()
         || input.capability_ref.is_some()
         || input.revocation_ref.is_some()
 }
 
-fn summary_refs_match(root: &Path, input: &EvalCacheInvalidateInput, key_ref: &str) -> Result<bool> {
+fn summary_refs_match(root: &Path, input: &InvalidateInput, key_ref: &str) -> Result<bool> {
     let Some((key, value)) = read_key_value_pair(root, key_ref)? else {
         return Ok(false);
     };
@@ -643,7 +639,7 @@ fn summary_refs_match(root: &Path, input: &EvalCacheInvalidateInput, key_ref: &s
         || input.revocation_ref.as_ref().is_some_and(|reference| key.revocation_refs.contains(reference)))
 }
 
-fn invalidation_reason(input: &EvalCacheInvalidateInput) -> String {
+fn invalidation_reason(input: &InvalidateInput) -> String {
     if input.reason.is_empty() {
         "manual-invalidate".to_string()
     } else {
@@ -730,7 +726,7 @@ impl InvalRun {
 
 fn run_retention(
     root: &Path,
-    input: &EvalCacheInvalidateInput,
+    input: &InvalidateInput,
     requester_ref: &str,
     selected_key_refs: &[String],
 ) -> Result<InvalRun> {
@@ -743,7 +739,7 @@ fn run_retention(
 
 fn evaluate_invalidate_key(
     root: &Path,
-    input: &EvalCacheInvalidateInput,
+    input: &InvalidateInput,
     requester_ref: &str,
     key_ref: &str,
 ) -> Result<InvalStep> {
@@ -828,11 +824,7 @@ impl RefSink {
     }
 }
 
-fn invalidate_refs(
-    input: &EvalCacheInvalidateInput,
-    invalidated_key_refs: &[String],
-    run: &InvalRun,
-) -> Result<Vec<String>> {
+fn invalidate_refs(input: &InvalidateInput, invalidated_key_refs: &[String], run: &InvalRun) -> Result<Vec<String>> {
     let mut sink = RefSink::new(invalidated_key_refs);
     if let Some(requester_ref) = input.retention_evidence.requester_ref.as_ref() {
         sink.push(requester_ref)?;
@@ -853,7 +845,7 @@ fn invalidate_refs(
 }
 
 fn invalidate_diagnostics(
-    input: &EvalCacheInvalidateInput,
+    input: &InvalidateInput,
     decision: &str,
     invalidated_key_refs: &[String],
     run: &InvalRun,
@@ -883,7 +875,7 @@ fn invalidate_diagnostics(
 }
 
 fn invalidate_receipt(decision: &str, refs: &[String], diagnostics: &[String], run: &InvalRun) -> Result<IoValue> {
-    receipt_value(&EvalCacheReceiptValueInput {
+    receipt_value(&ReceiptValueInput {
         operation: "invalidate",
         decision,
         key_ref: None,
@@ -901,9 +893,9 @@ fn invalidate_receipt(decision: &str, refs: &[String], diagnostics: &[String], r
     })
 }
 
-pub fn status(root: &Path) -> Result<EvalCacheStatus> {
+pub fn status(root: &Path) -> Result<Status> {
     ensure_dirs(root)?;
-    let mut status = EvalCacheStatus::default();
+    let mut status = Status::default();
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     status.keys = checked_table_len(
@@ -925,7 +917,7 @@ pub fn status(root: &Path) -> Result<EvalCacheStatus> {
     let values = read_txn.open_table(INDEX_VALUES).map_err(index_error)?;
     for item in values.iter().map_err(index_error)? {
         let (_key, bytes) = item.map_err(index_error)?;
-        let value = parse_eval_cache_value(&parse_canonical_bytes(bytes.value())?)?;
+        let value = parse_value(&parse_canonical_bytes(bytes.value())?)?;
         match value.tier.as_str() {
             TIER_PURE => status.pure += 1,
             TIER_SIMULATED => status.simulated += 1,
@@ -944,7 +936,7 @@ pub fn status(root: &Path) -> Result<EvalCacheStatus> {
     Ok(status)
 }
 
-pub fn list(root: &Path, filter: &EvalCacheListFilter) -> Result<Vec<EvalCacheEntrySummary>> {
+pub fn list(root: &Path, filter: &ListFilter) -> Result<Vec<EntrySummary>> {
     ensure_dirs(root)?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -955,11 +947,11 @@ pub fn list(root: &Path, filter: &EvalCacheListFilter) -> Result<Vec<EvalCacheEn
     for item in values.iter().map_err(index_error)? {
         let (key_ref, bytes) = item.map_err(index_error)?;
         let key_ref = key_ref.value().to_string();
-        let value = parse_eval_cache_value(&parse_canonical_bytes(bytes.value())?)?;
+        let value = parse_value(&parse_canonical_bytes(bytes.value())?)?;
         let Some(key_bytes) = keys.get(key_ref.as_str()).map_err(index_error)? else {
             continue;
         };
-        let key = parse_eval_cache_key(&parse_canonical_bytes(key_bytes.value())?)?;
+        let key = parse_key(&parse_canonical_bytes(key_bytes.value())?)?;
         if filter.operation.as_ref().is_some_and(|operation| operation != &key.operation)
             || filter.tier.as_ref().is_some_and(|tier| tier != &value.tier)
             || filter.status.as_ref().is_some_and(|status| status != &value.status)
@@ -978,7 +970,7 @@ pub fn list(root: &Path, filter: &EvalCacheListFilter) -> Result<Vec<EvalCacheEn
         }
         push_bounded(
             &mut entries,
-            EvalCacheEntrySummary {
+            EntrySummary {
                 key_ref: key_ref.clone(),
                 operation: key.operation,
                 tier: value.tier,
@@ -994,7 +986,7 @@ pub fn list(root: &Path, filter: &EvalCacheListFilter) -> Result<Vec<EvalCacheEn
     Ok(entries)
 }
 
-pub fn read_key(root: &Path, key_ref: &str) -> Result<EvalCacheKey> {
+pub fn read_key(root: &Path, key_ref: &str) -> Result<Key> {
     validate_ref(key_ref, "eval cache key ref")?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -1002,10 +994,10 @@ pub fn read_key(root: &Path, key_ref: &str) -> Result<EvalCacheKey> {
     let Some(bytes) = keys.get(key_ref).map_err(index_error)? else {
         return Err(MoltenError::invalid_harness(format!("eval cache key {key_ref} not found")));
     };
-    parse_eval_cache_key(&parse_canonical_bytes(bytes.value())?)
+    parse_key(&parse_canonical_bytes(bytes.value())?)
 }
 
-pub fn read_value(root: &Path, key_ref: &str) -> Result<EvalCacheValue> {
+pub fn read_value(root: &Path, key_ref: &str) -> Result<Value> {
     validate_ref(key_ref, "eval cache key ref")?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -1013,10 +1005,10 @@ pub fn read_value(root: &Path, key_ref: &str) -> Result<EvalCacheValue> {
     let Some(bytes) = values.get(key_ref).map_err(index_error)? else {
         return Err(MoltenError::invalid_harness(format!("eval cache value for key {key_ref} not found")));
     };
-    parse_eval_cache_value(&parse_canonical_bytes(bytes.value())?)
+    parse_value(&parse_canonical_bytes(bytes.value())?)
 }
 
-pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<EvalCacheReceipt> {
+pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<Receipt> {
     validate_ref(receipt_ref, "eval cache receipt ref")?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -1024,7 +1016,7 @@ pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<EvalCacheReceipt> 
     let Some(bytes) = receipts.get(receipt_ref).map_err(index_error)? else {
         return Err(MoltenError::invalid_harness(format!("eval cache receipt {receipt_ref} not found")));
     };
-    parse_eval_cache_receipt(&parse_canonical_bytes(bytes.value())?)
+    parse_receipt(&parse_canonical_bytes(bytes.value())?)
 }
 
 pub fn rebuild_index(root: &Path) -> Result<IoValue> {
@@ -1038,8 +1030,8 @@ pub fn rebuild_index(root: &Path) -> Result<IoValue> {
         for item in keys.iter().map_err(index_error)? {
             let (key_ref, key_bytes) = item.map_err(index_error)?;
             if let Some(value_bytes) = values.get(key_ref.value()).map_err(index_error)? {
-                let key = parse_eval_cache_key(&parse_canonical_bytes(key_bytes.value())?)?;
-                let value = parse_eval_cache_value(&parse_canonical_bytes(value_bytes.value())?)?;
+                let key = parse_key(&parse_canonical_bytes(key_bytes.value())?)?;
+                let value = parse_value(&parse_canonical_bytes(value_bytes.value())?)?;
                 push_bounded(&mut pairs, (key, value), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache index pairs")?;
             }
         }
@@ -1052,7 +1044,7 @@ pub fn rebuild_index(root: &Path) -> Result<IoValue> {
         store_derived_indexes_in_tx(&write_txn, key, value)?;
     }
     let refs = keys_values.iter().map(|(key, _value)| key.key_ref.clone()).collect::<Vec<_>>();
-    let receipt = receipt_value(&EvalCacheReceiptValueInput {
+    let receipt = receipt_value(&ReceiptValueInput {
         operation: "index-rebuild",
         decision: "pass",
         key_ref: None,
@@ -1071,9 +1063,9 @@ pub fn schema_fingerprint_key_input(
     tool_ref: &str,
     tool_version: &str,
     policy_refs: &[String],
-) -> Result<EvalCacheKeyInput> {
+) -> Result<KeyInput> {
     validate_ref(normalized_shape_ref, "schema fingerprint shape ref")?;
-    Ok(EvalCacheKeyInput {
+    Ok(KeyInput {
         operation: "schema-fingerprint".to_string(),
         version: "v1".to_string(),
         input_ref: normalized_shape_ref.to_string(),
@@ -1089,7 +1081,7 @@ pub fn schema_fingerprint_key_input(
     })
 }
 
-pub fn schema_compatibility_key_input(input: &SchemaCompatibilityKeyInput<'_>) -> Result<EvalCacheKeyInput> {
+pub fn schema_compatibility_key_input(input: &SchemaCompatibilityKeyInput<'_>) -> Result<KeyInput> {
     let mut dependencies = vec![
         input.expected_identity_ref.to_string(),
         input.actual_identity_ref.to_string(),
@@ -1104,7 +1096,7 @@ pub fn schema_compatibility_key_input(input: &SchemaCompatibilityKeyInput<'_>) -
     }
     dependencies.sort();
     let closure_hash = canonical_hash(&record("eval-cache-schema-compat-closure", vec![refs_sequence(&dependencies)]))?;
-    Ok(EvalCacheKeyInput {
+    Ok(KeyInput {
         operation: "schema-compat".to_string(),
         version: "v1".to_string(),
         input_ref: canonical_hash(&record("eval-cache-schema-compat-input", vec![
@@ -1125,11 +1117,11 @@ pub fn schema_compatibility_key_input(input: &SchemaCompatibilityKeyInput<'_>) -
     })
 }
 
-pub fn artifact_closure_key_input(input: &ArtifactClosureKeyInput<'_>) -> Result<EvalCacheKeyInput> {
+pub fn artifact_closure_key_input(input: &ArtifactClosureKeyInput<'_>) -> Result<KeyInput> {
     validate_refs(input.root_refs, "artifact closure root ref")?;
     validate_ref(input.closure_hash, "artifact closure hash")?;
     validate_refs(input.dependency_refs, "artifact closure dependency ref")?;
-    Ok(EvalCacheKeyInput {
+    Ok(KeyInput {
         operation: "artifact-closure".to_string(),
         version: "v1".to_string(),
         input_ref: canonical_hash(&record("eval-cache-artifact-closure-input", vec![refs_sequence(&sorted_unique(
@@ -1147,13 +1139,13 @@ pub fn artifact_closure_key_input(input: &ArtifactClosureKeyInput<'_>) -> Result
     })
 }
 
-pub fn choreography_projection_key_input(input: &ChoreographyProjectionKeyInput<'_>) -> Result<EvalCacheKeyInput> {
+pub fn choreography_projection_key_input(input: &ChoreographyProjectionKeyInput<'_>) -> Result<KeyInput> {
     validate_ref(input.protocol_artifact_ref, "choreography protocol artifact ref")?;
     validate_ref(input.role_ref, "choreography role ref")?;
     validate_ref(input.closure_hash, "choreography closure hash")?;
     validate_refs(input.dependency_refs, "choreography dependency ref")?;
     validate_ref(input.projector_ref, "choreography projector ref")?;
-    Ok(EvalCacheKeyInput {
+    Ok(KeyInput {
         operation: "choreography-projection".to_string(),
         version: "v1".to_string(),
         input_ref: canonical_hash(&record("eval-cache-choreography-projection-input", vec![
@@ -1176,9 +1168,9 @@ pub fn wasm_inspection_key_placeholder(
     module_artifact_ref: &str,
     inspector_ref: &str,
     inspector_version: &str,
-) -> Result<EvalCacheKeyInput> {
+) -> Result<KeyInput> {
     validate_ref(module_artifact_ref, "wasm module artifact ref")?;
-    Ok(EvalCacheKeyInput {
+    Ok(KeyInput {
         operation: "wasm-inspection".to_string(),
         version: "v1".to_string(),
         input_ref: module_artifact_ref.to_string(),
@@ -1194,10 +1186,10 @@ pub fn wasm_inspection_key_placeholder(
     })
 }
 
-pub fn transcript_run_key_placeholder(input: &TranscriptRunKeyInput<'_>) -> Result<EvalCacheKeyInput> {
+pub fn transcript_run_key_placeholder(input: &TranscriptRunKeyInput<'_>) -> Result<KeyInput> {
     validate_ref(input.transcript_ref, "transcript ref")?;
     validate_ref(input.handler_profile_ref, "handler profile ref")?;
-    Ok(EvalCacheKeyInput {
+    Ok(KeyInput {
         operation: "transcript-run".to_string(),
         version: "v1".to_string(),
         input_ref: input.transcript_ref.to_string(),
@@ -1213,7 +1205,7 @@ pub fn transcript_run_key_placeholder(input: &TranscriptRunKeyInput<'_>) -> Resu
     })
 }
 
-pub fn parse_eval_cache_receipt(value: &IoValue) -> Result<EvalCacheReceipt> {
+pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     let fields = value
         .collect_simple_record("eval-cache-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-receipt-v1 ...>"))?;
@@ -1222,7 +1214,7 @@ pub fn parse_eval_cache_receipt(value: &IoValue) -> Result<EvalCacheReceipt> {
     if checks.is_empty() {
         return Err(MoltenError::invalid_harness("eval cache receipt missing checks"));
     }
-    Ok(EvalCacheReceipt {
+    Ok(Receipt {
         receipt_ref: canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision: record_string(&fields[2], "decision")?,
@@ -1232,7 +1224,7 @@ pub fn parse_eval_cache_receipt(value: &IoValue) -> Result<EvalCacheReceipt> {
     })
 }
 
-fn read_key_value_pair(root: &Path, key_ref: &str) -> Result<Option<(EvalCacheKey, EvalCacheValue)>> {
+fn read_key_value_pair(root: &Path, key_ref: &str) -> Result<Option<(Key, Value)>> {
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let keys = read_txn.open_table(INDEX_KEYS).map_err(index_error)?;
@@ -1243,15 +1235,15 @@ fn read_key_value_pair(root: &Path, key_ref: &str) -> Result<Option<(EvalCacheKe
     let Some(value_bytes) = values.get(key_ref).map_err(index_error)? else {
         return Ok(None);
     };
-    let key = parse_eval_cache_key(&parse_canonical_bytes(key_bytes.value())?)?;
-    let value = parse_eval_cache_value(&parse_canonical_bytes(value_bytes.value())?)?;
+    let key = parse_key(&parse_canonical_bytes(key_bytes.value())?)?;
+    let value = parse_value(&parse_canonical_bytes(value_bytes.value())?)?;
     Ok(Some((key, value)))
 }
 
-fn read_output(root: &Path, key_ref: &str, value: &EvalCacheValue) -> Result<Option<IoValue>> {
+fn read_output(root: &Path, key_ref: &str, value: &Value) -> Result<Option<IoValue>> {
     match &value.output {
-        EvalCacheOutputRef::None => Ok(None),
-        EvalCacheOutputRef::Inline { output_ref, length } => {
+        OutputRef::None => Ok(None),
+        OutputRef::Inline { output_ref, length } => {
             let db = ensure_index_tables(root)?;
             let read_txn = db.begin_read().map_err(index_error)?;
             let outputs = read_txn.open_table(INDEX_OUTPUTS).map_err(index_error)?;
@@ -1271,7 +1263,7 @@ fn read_output(root: &Path, key_ref: &str, value: &EvalCacheValue) -> Result<Opt
             }
             Ok(Some(output))
         }
-        EvalCacheOutputRef::ContentRef {
+        OutputRef::ContentRef {
             manifest_ref,
             output_ref,
             length,
@@ -1294,8 +1286,8 @@ fn read_output(root: &Path, key_ref: &str, value: &EvalCacheValue) -> Result<Opt
 
 fn store_key_value_in_tx(
     write_txn: &redb::WriteTransaction,
-    key: &EvalCacheKey,
-    value: &EvalCacheValue,
+    key: &Key,
+    value: &Value,
     output_bytes: Option<&[u8]>,
 ) -> Result<()> {
     {
@@ -1308,18 +1300,14 @@ fn store_key_value_in_tx(
             .insert(key.key_ref.as_str(), canonical_bytes(&value.value)?.as_slice())
             .map_err(index_error)?;
     }
-    if let (EvalCacheOutputRef::Inline { .. }, Some(output_bytes)) = (&value.output, output_bytes) {
+    if let (OutputRef::Inline { .. }, Some(output_bytes)) = (&value.output, output_bytes) {
         let mut outputs = write_txn.open_table(INDEX_OUTPUTS).map_err(index_error)?;
         outputs.insert(key.key_ref.as_str(), output_bytes).map_err(index_error)?;
     }
     store_derived_indexes_in_tx(write_txn, key, value)
 }
 
-fn store_derived_indexes_in_tx(
-    write_txn: &redb::WriteTransaction,
-    key: &EvalCacheKey,
-    value: &EvalCacheValue,
-) -> Result<()> {
+fn store_derived_indexes_in_tx(write_txn: &redb::WriteTransaction, key: &Key, value: &Value) -> Result<()> {
     insert_str_index(write_txn, INDEX_OPERATION, "operation", &key.operation, &key.key_ref)?;
     insert_str_index(write_txn, INDEX_STATUS, "status", &value.status, &key.key_ref)?;
     insert_str_index(write_txn, INDEX_TIER, "tier", &value.tier, &key.key_ref)?;
@@ -1361,7 +1349,7 @@ fn insert_str_index(
     Ok(())
 }
 
-fn store_and_return_receipt(root: &Path, input: &EvalCacheReceiptValueInput<'_>) -> Result<IoValue> {
+fn store_and_return_receipt(root: &Path, input: &ReceiptValueInput<'_>) -> Result<IoValue> {
     let receipt = receipt_value(input)?;
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
@@ -1371,7 +1359,7 @@ fn store_and_return_receipt(root: &Path, input: &EvalCacheReceiptValueInput<'_>)
 }
 
 fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt: &IoValue) -> Result<()> {
-    let parsed = parse_eval_cache_receipt(receipt)?;
+    let parsed = parse_receipt(receipt)?;
     let mut receipts = write_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
     receipts
         .insert(parsed.receipt_ref.as_str(), canonical_bytes(receipt)?.as_slice())
@@ -1386,7 +1374,7 @@ fn tombstone_reason(root: &Path, key_ref: &str) -> Result<Option<String>> {
     Ok(tombstones.get(key_ref).map_err(index_error)?.map(|value| value.value().to_string()))
 }
 
-fn receipt_value(input: &EvalCacheReceiptValueInput<'_>) -> Result<IoValue> {
+fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "eval cache receipt operation")?;
     if !matches!(input.decision, "pass" | "deny") {
         return Err(MoltenError::invalid_harness(format!(
@@ -1413,7 +1401,7 @@ fn receipt_value(input: &EvalCacheReceiptValueInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-fn refs_for_key_value(key: &EvalCacheKey, value: &EvalCacheValue) -> Vec<String> {
+fn refs_for_key_value(key: &Key, value: &Value) -> Vec<String> {
     let mut refs = vec![
         key.key_ref.clone(),
         value.value_ref.clone(),
@@ -1435,13 +1423,13 @@ fn refs_for_key_value(key: &EvalCacheKey, value: &EvalCacheValue) -> Vec<String>
     sorted_unique(&refs)
 }
 
-fn policy_current_refs_match(key: &EvalCacheKey, input: &EvalCacheGetInput) -> bool {
+fn policy_current_refs_match(key: &Key, input: &GetInput) -> bool {
     sorted_unique(&key.policy_refs) == sorted_unique(&input.current_policy_refs)
         && sorted_unique(&key.capability_refs) == sorted_unique(&input.current_capability_refs)
         && sorted_unique(&key.revocation_refs) == sorted_unique(&input.current_revocation_refs)
 }
 
-fn validate_key_input(input: &EvalCacheKeyInput) -> Result<()> {
+fn validate_key_input(input: &KeyInput) -> Result<()> {
     validate_operation(&input.operation)?;
     validate_non_empty(&input.version, "eval cache key version")?;
     validate_ref(&input.input_ref, "eval cache input ref")?;
@@ -1458,7 +1446,7 @@ fn validate_key_input(input: &EvalCacheKeyInput) -> Result<()> {
     validate_refs(&input.assumption_refs, "eval cache assumption ref")
 }
 
-fn validate_value_input(input: &EvalCacheValueInput) -> Result<()> {
+fn validate_value_input(input: &ValueInput) -> Result<()> {
     validate_tier(&input.tier)?;
     validate_status(&input.status)?;
     validate_refs(&input.dependency_refs, "eval cache value dependency ref")?;
@@ -1482,7 +1470,7 @@ fn validate_value_input(input: &EvalCacheValueInput) -> Result<()> {
     Ok(())
 }
 
-fn validate_value_against_key(key: &EvalCacheKey, input: &EvalCacheValueInput) -> Result<()> {
+fn validate_value_against_key(key: &Key, input: &ValueInput) -> Result<()> {
     if !input.dependency_refs.iter().all(|reference| key.dependency_refs.contains(reference)) {
         return Err(MoltenError::invalid_harness("eval cache value dependencies must be represented in key"));
     }
@@ -1508,11 +1496,11 @@ fn validate_value_against_key(key: &EvalCacheKey, input: &EvalCacheValueInput) -
     Ok(())
 }
 
-fn validate_output_ref(output: &EvalCacheOutputRef) -> Result<()> {
+fn validate_output_ref(output: &OutputRef) -> Result<()> {
     match output {
-        EvalCacheOutputRef::None => Ok(()),
-        EvalCacheOutputRef::Inline { output_ref, .. } => validate_ref(output_ref, "eval cache inline output ref"),
-        EvalCacheOutputRef::ContentRef {
+        OutputRef::None => Ok(()),
+        OutputRef::Inline { output_ref, .. } => validate_ref(output_ref, "eval cache inline output ref"),
+        OutputRef::ContentRef {
             manifest_ref,
             output_ref,
             ..
@@ -1523,7 +1511,7 @@ fn validate_output_ref(output: &EvalCacheOutputRef) -> Result<()> {
     }
 }
 
-fn validate_invalidate_input(input: &EvalCacheInvalidateInput) -> Result<()> {
+fn validate_invalidate_input(input: &InvalidateInput) -> Result<()> {
     if let Some(key_ref) = input.key_ref.as_ref() {
         validate_ref(key_ref, "invalidate key ref")?;
     }
@@ -1574,13 +1562,11 @@ fn validate_status(status: &str) -> Result<()> {
     }
 }
 
-fn output_ref_value(output: &EvalCacheOutputRef) -> IoValue {
+fn output_ref_value(output: &OutputRef) -> IoValue {
     record("output", vec![match output {
-        EvalCacheOutputRef::None => record("none", Vec::new()),
-        EvalCacheOutputRef::Inline { output_ref, length } => {
-            record("inline", vec![string(output_ref), u64_value(*length)])
-        }
-        EvalCacheOutputRef::ContentRef {
+        OutputRef::None => record("none", Vec::new()),
+        OutputRef::Inline { output_ref, length } => record("inline", vec![string(output_ref), u64_value(*length)]),
+        OutputRef::ContentRef {
             manifest_ref,
             output_ref,
             length,
@@ -1588,21 +1574,21 @@ fn output_ref_value(output: &EvalCacheOutputRef) -> IoValue {
     }])
 }
 
-fn parse_output_ref(value: &Value<IoValue>) -> Result<EvalCacheOutputRef> {
+fn parse_output_ref(value: &PreservesValue<IoValue>) -> Result<OutputRef> {
     let value = value_to_iovalue(value);
     let output = simple_record(&value, "output", 1)?;
     let payload = value_to_iovalue(&output[0]);
     if payload.collect_simple_record("none", Some(0)).is_some() {
-        return Ok(EvalCacheOutputRef::None);
+        return Ok(OutputRef::None);
     }
     if let Some(inline) = payload.collect_simple_record("inline", Some(2)) {
-        return Ok(EvalCacheOutputRef::Inline {
+        return Ok(OutputRef::Inline {
             output_ref: required_ref(&inline[0], "inline output ref")?,
             length: required_u64(&inline[1], "inline output length")?,
         });
     }
     if let Some(content) = payload.collect_simple_record("content-ref", Some(3)) {
-        return Ok(EvalCacheOutputRef::ContentRef {
+        return Ok(OutputRef::ContentRef {
             manifest_ref: required_ref(&content[0], "content output manifest ref")?,
             output_ref: required_ref(&content[1], "content output ref")?,
             length: required_u64(&content[2], "content output length")?,
@@ -1687,7 +1673,7 @@ fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &PreservesValue<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1697,38 +1683,38 @@ fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
+fn record_string(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
+fn record_ref(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &PreservesValue<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
 }
 
-fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     items.iter().map(|item| required_string(item, label)).collect()
 }
 
-fn parse_ref_sequence_value(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_value(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     let mut refs = Vec::with_capacity(items.len());
     for item in items.iter() {
@@ -1747,7 +1733,7 @@ fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     )])
 }
 
-fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &PreservesValue<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
@@ -1773,7 +1759,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &PreservesValue<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -1786,33 +1772,36 @@ fn simple_record<'a>(
     value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<PreservesValue<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
+fn required_sequence<'a>(
+    value: &'a PreservesValue<IoValue>,
+    field: &str,
+) -> Result<std::borrow::Cow<'a, Vec<PreservesValue<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
+fn required_string(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
+fn required_ref(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
 }
 
-fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &PreservesValue<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -1912,19 +1901,18 @@ mod tests {
         let key = key_input("schema-fingerprint", "input", &[]);
         let output = record("fingerprint", vec![string("ok")]);
         let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[])).expect("put");
-        let hit = get(&root, &put.key.key_ref, &EvalCacheGetInput::default()).expect("hit");
+        let hit = get(&root, &put.key.key_ref, &GetInput::default()).expect("hit");
         assert_eq!(hit.output, Some(output));
         assert_eq!(hit.key.operation, "schema-fingerprint");
-        let miss_key = eval_cache_key_value(&key_input("schema-fingerprint", "changed-input", &[])).expect("miss key");
-        let miss = parse_eval_cache_key(&miss_key).expect("parse miss key");
-        let error = get(&root, &miss.key_ref, &EvalCacheGetInput::default()).expect_err("miss denied");
+        let miss_key = key_value(&key_input("schema-fingerprint", "changed-input", &[])).expect("miss key");
+        let miss = parse_key(&miss_key).expect("parse miss key");
+        let error = get(&root, &miss.key_ref, &GetInput::default()).expect_err("miss denied");
         assert!(error.to_string().contains("miss"), "{error}");
-        let renamed_key = EvalCacheKeyInput {
+        let renamed_key = KeyInput {
             assumption_refs: vec![test_ref("display-name-not-key")],
             ..key.clone()
         };
-        let renamed_ref =
-            canonical_hash(&eval_cache_key_value(&renamed_key).expect("renamed key")).expect("renamed ref");
+        let renamed_ref = canonical_hash(&key_value(&renamed_key).expect("renamed key")).expect("renamed ref");
         assert_ne!(put.key.key_ref, renamed_ref);
     }
 
@@ -1932,13 +1920,13 @@ mod tests {
     fn policy_current_revalidates_and_negative_results_require_key_evidence() {
         let root = temp_dir("eval-cache-policy-current");
         let denial_ref = test_ref("denial-input");
-        let key = EvalCacheKeyInput {
+        let key = KeyInput {
             policy_refs: vec![test_ref("policy-v1")],
             assumption_refs: vec![denial_ref.clone()],
             ..key_input("schema-compat", "input", &[])
         };
         let output = record("denied", vec![string("policy")]);
-        let policy_put = put(&root, &key, &EvalCacheValueInput {
+        let policy_put = put(&root, &key, &ValueInput {
             tier: TIER_POLICY_CURRENT.to_string(),
             status: STATUS_DENY.to_string(),
             output: Some(output),
@@ -1948,20 +1936,20 @@ mod tests {
             diagnostics: vec!["policy denied".to_string()],
         })
         .expect("put policy current denial");
-        let current = EvalCacheGetInput {
+        let current = GetInput {
             current_policy_refs: key.policy_refs.clone(),
             semantic: true,
-            ..EvalCacheGetInput::default()
+            ..GetInput::default()
         };
         get(&root, &policy_put.key.key_ref, &current).expect("policy current hit");
-        let stale = EvalCacheGetInput {
+        let stale = GetInput {
             current_policy_refs: vec![test_ref("policy-v2")],
             semantic: true,
-            ..EvalCacheGetInput::default()
+            ..GetInput::default()
         };
         let error = get(&root, &policy_put.key.key_ref, &stale).expect_err("stale denied");
         assert!(error.to_string().contains("stale"), "{error}");
-        let bad = put(&root, &key_input("schema-compat", "bad-negative", &[]), &EvalCacheValueInput {
+        let bad = put(&root, &key_input("schema-compat", "bad-negative", &[]), &ValueInput {
             tier: TIER_PURE.to_string(),
             status: STATUS_DENY.to_string(),
             output: Some(record("denied", vec![string("bad")])),
@@ -1979,7 +1967,7 @@ mod tests {
         let root = temp_dir("eval-cache-trace");
         let dependency = test_ref("dependency");
         let key = key_input("transcript-run", "trace", std::slice::from_ref(&dependency));
-        let trace = put(&root, &key, &EvalCacheValueInput {
+        let trace = put(&root, &key, &ValueInput {
             tier: TIER_PRODUCTION_TRACE_ONLY.to_string(),
             status: STATUS_TRACE_ONLY.to_string(),
             output: None,
@@ -1989,23 +1977,22 @@ mod tests {
             diagnostics: vec!["production trace only".to_string()],
         })
         .expect("put trace-only");
-        let error =
-            get(&root, &trace.key.key_ref, &EvalCacheGetInput::default()).expect_err("trace-only semantic denied");
+        let error = get(&root, &trace.key.key_ref, &GetInput::default()).expect_err("trace-only semantic denied");
         assert!(error.to_string().contains("trace-only"), "{error}");
         let retention_evidence = retention_evidence(&root, "trace-invalidate");
-        let apply_refs = vec![eval_cache_apply_ref(&root, &trace.key.key_ref, &retention_evidence)];
-        let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
+        let apply_refs = vec![apply_ref(&root, &trace.key.key_ref, &retention_evidence)];
+        let invalidated = invalidate(&root, &InvalidateInput {
             dependency_ref: Some(dependency),
             reason: "dependency changed".to_string(),
             retention_evidence,
             apply_refs,
-            ..EvalCacheInvalidateInput::default()
+            ..InvalidateInput::default()
         })
         .expect("invalidate dependency");
         assert!(invalidated.invalidated_key_refs.contains(&trace.key.key_ref));
-        let miss = get(&root, &trace.key.key_ref, &EvalCacheGetInput {
+        let miss = get(&root, &trace.key.key_ref, &GetInput {
             semantic: false,
-            ..EvalCacheGetInput::default()
+            ..GetInput::default()
         })
         .expect_err("tombstone miss");
         assert!(miss.to_string().contains("tombstoned"), "{miss}");
@@ -2031,17 +2018,17 @@ mod tests {
             has_authority: true,
         })
         .expect("retention pin");
-        let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
+        let invalidated = invalidate(&root, &InvalidateInput {
             key_ref: Some(put.key.key_ref.clone()),
             reason: "retained".to_string(),
             retention_evidence: retention_evidence(&root, "retained-invalidate"),
-            ..EvalCacheInvalidateInput::default()
+            ..InvalidateInput::default()
         })
         .expect("invalidate retained key");
         assert_eq!(invalidated.decision, "deny");
         assert!(invalidated.invalidated_key_refs.is_empty());
         assert!(!invalidated.retention_receipt_refs.is_empty());
-        let hit = get(&root, &put.key.key_ref, &EvalCacheGetInput::default()).expect("retained cache hit");
+        let hit = get(&root, &put.key.key_ref, &GetInput::default()).expect("retained cache hit");
         assert_eq!(hit.output, Some(output));
     }
 
@@ -2054,16 +2041,16 @@ mod tests {
             .expect("put cache value");
         let mut retention_evidence = retention_evidence(&root, "missing-authority");
         retention_evidence.authority_refs.clear();
-        let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
+        let invalidated = invalidate(&root, &InvalidateInput {
             key_ref: Some(put.key.key_ref.clone()),
             reason: "missing authority".to_string(),
             retention_evidence,
-            ..EvalCacheInvalidateInput::default()
+            ..InvalidateInput::default()
         })
         .expect("invalidate denied");
         assert_eq!(invalidated.decision, "deny");
         assert!(invalidated.invalidated_key_refs.is_empty());
-        let hit = get(&root, &put.key.key_ref, &EvalCacheGetInput::default()).expect("cache value remains");
+        let hit = get(&root, &put.key.key_ref, &GetInput::default()).expect("cache value remains");
         assert_eq!(hit.output, Some(output));
     }
 
@@ -2076,16 +2063,16 @@ mod tests {
             .expect("put cache value");
         let mut retention_evidence = retention_evidence(&root, "retained-ref");
         retention_evidence.retained_refs = vec![test_ref("retained-dependent-receipt")];
-        let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
+        let invalidated = invalidate(&root, &InvalidateInput {
             key_ref: Some(put.key.key_ref.clone()),
             reason: "retained ref".to_string(),
             retention_evidence,
-            ..EvalCacheInvalidateInput::default()
+            ..InvalidateInput::default()
         })
         .expect("invalidate denied");
         assert_eq!(invalidated.decision, "deny");
         assert!(invalidated.invalidated_key_refs.is_empty());
-        let hit = get(&root, &put.key.key_ref, &EvalCacheGetInput::default()).expect("cache value remains");
+        let hit = get(&root, &put.key.key_ref, &GetInput::default()).expect("cache value remains");
         assert_eq!(hit.output, Some(output));
     }
 
@@ -2153,34 +2140,34 @@ mod tests {
         let dependency = test_ref(&format!("dep-{salt}"));
         let root = temp_dir("eval-cache-hegel");
         let key = key_input("artifact-closure", &format!("input-{salt}"), std::slice::from_ref(&dependency));
-        let first_key_ref = canonical_hash(&eval_cache_key_value(&key).expect("first key")).expect("first key ref");
-        let second_key_ref = canonical_hash(&eval_cache_key_value(&key).expect("second key")).expect("second key ref");
+        let first_key_ref = canonical_hash(&key_value(&key).expect("first key")).expect("first key ref");
+        let second_key_ref = canonical_hash(&key_value(&key).expect("second key")).expect("second key ref");
         assert_eq!(first_key_ref, second_key_ref);
         let output = record("closure", vec![string(&dependency)]);
         let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output), &key, &[])).expect("put");
         let retention_evidence = retention_evidence(&root, "hegel-invalidate");
-        let apply_refs = vec![eval_cache_apply_ref(&root, &put.key.key_ref, &retention_evidence)];
-        let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
+        let apply_refs = vec![apply_ref(&root, &put.key.key_ref, &retention_evidence)];
+        let invalidated = invalidate(&root, &InvalidateInput {
             dependency_ref: Some(dependency),
             reason: "property dependency invalidation".to_string(),
             retention_evidence,
             apply_refs,
-            ..EvalCacheInvalidateInput::default()
+            ..InvalidateInput::default()
         })
         .expect("invalidate");
         assert!(invalidated.invalidated_key_refs.contains(&put.key.key_ref));
-        let display_name_key = EvalCacheKeyInput {
+        let display_name_key = KeyInput {
             assumption_refs: vec![test_ref(&format!("name-{salt}"))],
             ..key
         };
         let display_name_key_ref =
-            canonical_hash(&eval_cache_key_value(&display_name_key).expect("display key")).expect("display key ref");
+            canonical_hash(&key_value(&display_name_key).expect("display key")).expect("display key ref");
         assert_ne!(put.key.key_ref, display_name_key_ref);
     }
 
-    fn key_input(operation: &str, input_label: &str, dependency_refs: &[String]) -> EvalCacheKeyInput {
+    fn key_input(operation: &str, input_label: &str, dependency_refs: &[String]) -> KeyInput {
         let deps = dependency_refs.to_vec();
-        EvalCacheKeyInput {
+        KeyInput {
             operation: operation.to_string(),
             version: "v1".to_string(),
             input_ref: test_ref(input_label),
@@ -2201,10 +2188,10 @@ mod tests {
         tier: &str,
         status: &str,
         output: Option<IoValue>,
-        key: &EvalCacheKeyInput,
+        key: &KeyInput,
         evidence_refs: &[String],
-    ) -> EvalCacheValueInput {
-        EvalCacheValueInput {
+    ) -> ValueInput {
+        ValueInput {
             tier: tier.to_string(),
             status: status.to_string(),
             output,
@@ -2215,11 +2202,7 @@ mod tests {
         }
     }
 
-    fn eval_cache_apply_ref(
-        root: &std::path::Path,
-        key_ref: &str,
-        evidence: &crate::retention::DestructiveEvidence,
-    ) -> String {
+    fn apply_ref(root: &std::path::Path, key_ref: &str, evidence: &crate::retention::DestructiveEvidence) -> String {
         let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
             root,
             subsystem: "eval-cache-invalidate",
@@ -2240,7 +2223,7 @@ mod tests {
 
     fn retention_evidence(root: &std::path::Path, label: &str) -> crate::retention::DestructiveEvidence {
         let requester_ref = test_ref(&format!("retention-requester-{label}"));
-        let summaries = list(root, &EvalCacheListFilter::default()).expect("list cache for retention evidence");
+        let summaries = list(root, &ListFilter::default()).expect("list cache for retention evidence");
         let mut policy_refs = Vec::with_capacity(summaries.len());
         let mut authority_refs = Vec::with_capacity(summaries.len());
         let mut evidence_refs = Vec::with_capacity(summaries.len());
