@@ -4214,11 +4214,11 @@ struct GcSeed<'a> {
 }
 
 struct GcAdmissions {
-    policy: crate::retention::RetentionEvidenceAdmission,
-    authority: crate::retention::RetentionEvidenceAdmission,
-    support: crate::retention::RetentionEvidenceAdmission,
-    index: crate::retention::RetentionEvidenceAdmission,
-    remote_gc: crate::retention::RetentionEvidenceAdmission,
+    policy: crate::retention::EvidenceAdmission,
+    authority: crate::retention::EvidenceAdmission,
+    support: crate::retention::EvidenceAdmission,
+    index: crate::retention::EvidenceAdmission,
+    remote_gc: crate::retention::EvidenceAdmission,
     clearance: crate::retention::RetentionRemoteGcClearance,
     evidence: crate::retention::DestructiveRetentionEvidence,
 }
@@ -4248,7 +4248,7 @@ fn store_gc_fixture(
     kind: &str,
     label: &str,
     remote_refs: &[String],
-) -> Result<crate::retention::RetentionEvidenceAdmission> {
+) -> Result<crate::retention::EvidenceAdmission> {
     store_retention_admission_fixture(RetentionAdmissionFixtureInput {
         root: seed.root,
         kind,
@@ -4506,27 +4506,24 @@ fn finish_gc_run(input: GcFinishInput) -> GcRun {
 
 fn store_retention_admission_fixture(
     input: RetentionAdmissionFixtureInput<'_>,
-) -> Result<crate::retention::RetentionEvidenceAdmission> {
+) -> Result<crate::retention::EvidenceAdmission> {
     let bound_refs = vec![dogfood_ref(&format!("retention-{}-bound", input.label))?];
-    crate::retention::store_retention_evidence_admission(
-        input.root,
-        &crate::retention::RetentionEvidenceAdmissionInput {
-            kind: input.kind,
-            decision: "pass",
-            requester_ref: input.requester_ref,
-            object_ref: input.object_ref,
-            object_kind: input.object_kind,
-            retention_class: input.retention_class,
-            action: input.action,
-            bound_refs: &bound_refs,
-            retained_refs: &[],
-            remote_refs: input.remote_refs,
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-            diagnostics: &[],
-        },
-    )
+    crate::retention::store_evidence_admission(input.root, &crate::retention::EvidenceAdmissionInput {
+        kind: input.kind,
+        decision: "pass",
+        requester_ref: input.requester_ref,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        bound_refs: &bound_refs,
+        retained_refs: &[],
+        remote_refs: input.remote_refs,
+        is_reference_index_complete: true,
+        is_current: true,
+        revoked_refs: &[],
+        diagnostics: &[],
+    })
 }
 
 fn append_dogfood_diagnostics(sink: &mut impl PushLimited<String>, label: &str, diagnostics: &[String]) -> Result<()> {

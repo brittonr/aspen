@@ -2385,25 +2385,22 @@ fn admission(
     label: &str,
     remote_refs: &[String],
 ) -> CliResult<String> {
-    Ok(molten::retention::store_retention_evidence_admission(
-        root,
-        &molten::retention::RetentionEvidenceAdmissionInput {
-            kind,
-            decision: "pass",
-            requester_ref: &refs.requester,
-            object_ref: &refs.object,
-            object_kind: "chunk",
-            retention_class: molten::retention::CLASS_DURABLE_VALUE,
-            action: molten::retention::ACTION_DELETE,
-            bound_refs: &[test_ref(label)?],
-            retained_refs: &[],
-            remote_refs,
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-            diagnostics: &[],
-        },
-    )?
+    Ok(molten::retention::store_evidence_admission(root, &molten::retention::EvidenceAdmissionInput {
+        kind,
+        decision: "pass",
+        requester_ref: &refs.requester,
+        object_ref: &refs.object,
+        object_kind: "chunk",
+        retention_class: molten::retention::CLASS_DURABLE_VALUE,
+        action: molten::retention::ACTION_DELETE,
+        bound_refs: &[test_ref(label)?],
+        retained_refs: &[],
+        remote_refs,
+        is_reference_index_complete: true,
+        is_current: true,
+        revoked_refs: &[],
+        diagnostics: &[],
+    })?
     .admission_ref)
 }
 
@@ -3100,9 +3097,9 @@ fn setup_retention_cli_candidate(input: RetentionCandidateInput<'_>) -> CliResul
 }
 
 fn store_retention_cli_admission(input: RetentionAdmissionInput<'_>) -> CliResult<String> {
-    Ok(molten::retention::store_retention_evidence_admission(
+    Ok(molten::retention::store_evidence_admission(
         &input.candidate.root,
-        &molten::retention::RetentionEvidenceAdmissionInput {
+        &molten::retention::EvidenceAdmissionInput {
             kind: input.kind,
             decision: "pass",
             requester_ref: &input.candidate.requester_ref,

@@ -489,7 +489,7 @@ pub struct RetentionCandidateBundleVerify {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionEvidenceAdmissionInput<'a> {
+pub struct EvidenceAdmissionInput<'a> {
     pub kind: &'a str,
     pub decision: &'a str,
     pub requester_ref: &'a str,
@@ -507,7 +507,7 @@ pub struct RetentionEvidenceAdmissionInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionEvidenceAdmission {
+pub struct EvidenceAdmission {
     pub admission_ref: String,
     pub kind: String,
     pub decision: String,
@@ -1229,7 +1229,7 @@ pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
     })
 }
 
-pub fn retention_evidence_admission_value(input: &RetentionEvidenceAdmissionInput<'_>) -> Result<IoValue> {
+pub fn evidence_admission_value(input: &EvidenceAdmissionInput<'_>) -> Result<IoValue> {
     validate_evidence_admission_input(input)?;
     Ok(crate::preserves_rail::record("retention-evidence-admission-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA),
@@ -1257,7 +1257,7 @@ pub fn retention_evidence_admission_value(input: &RetentionEvidenceAdmissionInpu
     ]))
 }
 
-pub fn parse_retention_evidence_admission(value: &IoValue) -> Result<RetentionEvidenceAdmission> {
+pub fn parse_evidence_admission(value: &IoValue) -> Result<EvidenceAdmission> {
     let fields = value
         .collect_simple_record("retention-evidence-admission-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-evidence-admission-v1 ...>"))?;
@@ -1284,7 +1284,7 @@ pub fn parse_retention_evidence_admission(value: &IoValue) -> Result<RetentionEv
     let revoked_refs = record_ref_sequence(&fields[12], "revoked")?;
     let diagnostics = record_string_sequence(&fields[13], "diagnostics")?;
     require_check(&parse_checks(&fields[14])?, "typed-admission", "retention evidence admission")?;
-    Ok(RetentionEvidenceAdmission {
+    Ok(EvidenceAdmission {
         admission_ref: crate::preserves_rail::canonical_hash(value)?,
         kind,
         decision,
@@ -1304,13 +1304,10 @@ pub fn parse_retention_evidence_admission(value: &IoValue) -> Result<RetentionEv
     })
 }
 
-pub fn store_retention_evidence_admission(
-    root: &Path,
-    input: &RetentionEvidenceAdmissionInput<'_>,
-) -> Result<RetentionEvidenceAdmission> {
+pub fn store_evidence_admission(root: &Path, input: &EvidenceAdmissionInput<'_>) -> Result<EvidenceAdmission> {
     ensure_store(root)?;
-    let value = retention_evidence_admission_value(input)?;
-    let admission = parse_retention_evidence_admission(&value)?;
+    let value = evidence_admission_value(input)?;
+    let admission = parse_evidence_admission(&value)?;
     write_store_value(&admission_path(root, &admission.admission_ref)?, &admission.value)?;
     Ok(admission)
 }
@@ -3282,7 +3279,7 @@ where S: VecSink<String> {
 fn check_admission_basics<S>(
     input: &AdmissionRefsInput<'_>,
     reference: &str,
-    admission: &RetentionEvidenceAdmission,
+    admission: &EvidenceAdmission,
     diagnostics: &mut S,
 ) -> Result<bool>
 where
@@ -3325,7 +3322,7 @@ where
     Ok(is_admitted)
 }
 
-fn admission_scope_mismatch_count(scope: &AdmissionScope<'_>, admission: &RetentionEvidenceAdmission) -> usize {
+fn admission_scope_mismatch_count(scope: &AdmissionScope<'_>, admission: &EvidenceAdmission) -> usize {
     let mut count = 0usize;
     if scope.requester_ref != Some(admission.requester_ref.as_str()) {
         count += 1;
@@ -3345,7 +3342,7 @@ fn admission_scope_mismatch_count(scope: &AdmissionScope<'_>, admission: &Retent
 fn check_admission_required_refs<S>(
     input: &AdmissionRefsInput<'_>,
     reference: &str,
-    admission: &RetentionEvidenceAdmission,
+    admission: &EvidenceAdmission,
     diagnostics: &mut S,
 ) -> Result<bool>
 where
@@ -3373,7 +3370,7 @@ where
 fn check_admission_ref<S>(
     input: &AdmissionRefsInput<'_>,
     reference: &str,
-    admission: &RetentionEvidenceAdmission,
+    admission: &EvidenceAdmission,
     diagnostics: &mut S,
 ) -> Result<AdmissionCheck>
 where
@@ -3399,7 +3396,7 @@ fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsRes
     let mut remote_refs = Vec::new();
     let mut scope_mismatches = 0usize;
     for reference in input.refs {
-        let admission = match read_retention_evidence_admission(input.root, reference) {
+        let admission = match read_evidence_admission(input.root, reference) {
             Ok(admission) => admission,
             Err(error) => {
                 push_admission_diagnostic(
@@ -3587,10 +3584,10 @@ fn admit_remote_clearance_refs(input: RemoteClearanceRefsInput<'_>) -> Result<Re
     })
 }
 
-fn read_retention_evidence_admission(root: &Path, admission_ref: &str) -> Result<RetentionEvidenceAdmission> {
+fn read_evidence_admission(root: &Path, admission_ref: &str) -> Result<EvidenceAdmission> {
     require_ref(admission_ref, "retention evidence admission ref")?;
     let value = read_store_value(&admission_path(root, admission_ref)?)?;
-    parse_retention_evidence_admission(&value)
+    parse_evidence_admission(&value)
 }
 
 fn read_retention_remote_gc_clearance(root: &Path, clearance_ref: &str) -> Result<RetentionRemoteGcClearance> {
@@ -5166,7 +5163,7 @@ fn pins_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<St
 fn admissions_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &admissions_dir(root),
-        parse_retention_evidence_admission,
+        parse_evidence_admission,
         |admission| {
             filter.matches_retention(
                 &admission.object_ref,
@@ -6995,7 +6992,7 @@ fn base(value: &IoValue) -> Option<String> {
 }
 
 fn admission(value: &IoValue) -> Option<String> {
-    if let Ok(admission) = parse_retention_evidence_admission(value) {
+    if let Ok(admission) = parse_evidence_admission(value) {
         return Some(format!(
             "retention admission ref={} kind={} decision={} object={} class={} action={} current={} revoked={} diagnostics={}",
             admission.admission_ref,
@@ -7643,7 +7640,7 @@ fn validate_decision(value: &str) -> Result<()> {
     }
 }
 
-fn validate_evidence_admission_input(input: &RetentionEvidenceAdmissionInput<'_>) -> Result<()> {
+fn validate_evidence_admission_input(input: &EvidenceAdmissionInput<'_>) -> Result<()> {
     validate_admission_kind(input.kind)?;
     validate_decision(input.decision)?;
     require_ref(input.requester_ref, "retention admission requester ref")?;
@@ -10478,7 +10475,7 @@ mod tests {
     }
 
     fn store_test_admission(input: TestAdmissionInput<'_>) -> String {
-        store_retention_evidence_admission(input.root, &RetentionEvidenceAdmissionInput {
+        store_evidence_admission(input.root, &EvidenceAdmissionInput {
             kind: input.kind,
             decision: "pass",
             requester_ref: input.requester_ref,

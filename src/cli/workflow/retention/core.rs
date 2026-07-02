@@ -114,25 +114,22 @@ pub(crate) fn admit(args: super::command::base::Admit) -> molten::error::Result<
         diagnostics,
         out,
     } = args;
-    let admission = molten::retention::store_retention_evidence_admission(
-        &root,
-        &molten::retention::RetentionEvidenceAdmissionInput {
-            kind: &kind,
-            decision: &decision,
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: &object_kind,
-            retention_class: &retention_class,
-            action: &action,
-            bound_refs: &bound_refs,
-            retained_refs: &retained_refs,
-            remote_refs: &remote_refs,
-            is_reference_index_complete,
-            is_current: !is_stale,
-            revoked_refs: &revoked_refs,
-            diagnostics: &diagnostics,
-        },
-    )?;
+    let admission = molten::retention::store_evidence_admission(&root, &molten::retention::EvidenceAdmissionInput {
+        kind: &kind,
+        decision: &decision,
+        requester_ref: &requester_ref,
+        object_ref: &object_ref,
+        object_kind: &object_kind,
+        retention_class: &retention_class,
+        action: &action,
+        bound_refs: &bound_refs,
+        retained_refs: &retained_refs,
+        remote_refs: &remote_refs,
+        is_reference_index_complete,
+        is_current: !is_stale,
+        revoked_refs: &revoked_refs,
+        diagnostics: &diagnostics,
+    })?;
     let is_written_to_file = super::io::write_optional_preserves(out.as_ref(), &admission.value)?;
     super::io::print_or_log_summary(
         is_written_to_file,

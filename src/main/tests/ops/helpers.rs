@@ -86,7 +86,7 @@
     }
 
     fn store_cli_admission(input: RetentionCliObject<'_>, kind: &str, requester_ref: &str) -> String {
-        molten::retention::store_retention_evidence_admission(input.root, &molten::retention::RetentionEvidenceAdmissionInput {
+        molten::retention::store_evidence_admission(input.root, &molten::retention::EvidenceAdmissionInput {
             kind,
             decision: "pass",
             requester_ref,

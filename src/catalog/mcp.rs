@@ -1432,25 +1432,22 @@ mod tests {
     }
 
     fn seed_admission(seed: &GcSeed<'_>, kind: &str, suffix: &str) -> String {
-        crate::retention::store_retention_evidence_admission(
-            seed.root,
-            &crate::retention::RetentionEvidenceAdmissionInput {
-                kind,
-                decision: "pass",
-                requester_ref: &seed.requester_ref,
-                object_ref: &seed.object_ref,
-                object_kind: seed.object_kind,
-                retention_class: seed.retention_class,
-                action: seed.action,
-                bound_refs: &[test_ref(&format!("{}-{suffix}", seed.label))],
-                retained_refs: &[],
-                remote_refs: &[],
-                is_reference_index_complete: true,
-                is_current: true,
-                revoked_refs: &[],
-                diagnostics: &[],
-            },
-        )
+        crate::retention::store_evidence_admission(seed.root, &crate::retention::EvidenceAdmissionInput {
+            kind,
+            decision: "pass",
+            requester_ref: &seed.requester_ref,
+            object_ref: &seed.object_ref,
+            object_kind: seed.object_kind,
+            retention_class: seed.retention_class,
+            action: seed.action,
+            bound_refs: &[test_ref(&format!("{}-{suffix}", seed.label))],
+            retained_refs: &[],
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
         .expect("store retention GC catalog MCP admission")
         .admission_ref
     }

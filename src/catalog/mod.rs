@@ -3229,25 +3229,22 @@ mod tests {
         }
 
         fn admission(&self, kind: &str, suffix: &str) -> String {
-            crate::retention::store_retention_evidence_admission(
-                self.root,
-                &crate::retention::RetentionEvidenceAdmissionInput {
-                    kind,
-                    decision: "pass",
-                    requester_ref: &self.requester_ref,
-                    object_ref: &self.object_ref,
-                    object_kind: self.object_kind,
-                    retention_class: self.retention_class,
-                    action: self.action,
-                    bound_refs: &[test_ref(&format!("{}-{suffix}", self.label))],
-                    retained_refs: &[],
-                    remote_refs: &[],
-                    is_reference_index_complete: true,
-                    is_current: true,
-                    revoked_refs: &[],
-                    diagnostics: &[],
-                },
-            )
+            crate::retention::store_evidence_admission(self.root, &crate::retention::EvidenceAdmissionInput {
+                kind,
+                decision: "pass",
+                requester_ref: &self.requester_ref,
+                object_ref: &self.object_ref,
+                object_kind: self.object_kind,
+                retention_class: self.retention_class,
+                action: self.action,
+                bound_refs: &[test_ref(&format!("{}-{suffix}", self.label))],
+                retained_refs: &[],
+                remote_refs: &[],
+                is_reference_index_complete: true,
+                is_current: true,
+                revoked_refs: &[],
+                diagnostics: &[],
+            })
             .expect("store retention GC catalog admission")
             .admission_ref
         }

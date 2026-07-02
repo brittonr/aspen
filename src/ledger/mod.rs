@@ -1442,7 +1442,7 @@ mod tests {
         remote_refs: &[String],
         is_reference_index_complete: bool,
     ) -> String {
-        crate::retention::store_retention_evidence_admission(root, &crate::retention::RetentionEvidenceAdmissionInput {
+        crate::retention::store_evidence_admission(root, &crate::retention::EvidenceAdmissionInput {
             kind,
             decision: "pass",
             requester_ref,
