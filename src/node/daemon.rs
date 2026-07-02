@@ -1,17 +1,49 @@
-use std::fs;
-use std::net::Ipv4Addr;
-use std::net::SocketAddr;
-use std::path::Path;
-use std::path::PathBuf;
+type IoValue = preserves::IOValue;
+type Ipv4Addr = std::net::Ipv4Addr;
+type MoltenError = crate::error::MoltenError;
+type Path = std::path::Path;
+type PathBuf = std::path::PathBuf;
+type Result<T> = crate::error::Result<T>;
+type SocketAddr = std::net::SocketAddr;
+
+#[cfg(test)]
+type Counter = std::sync::atomic::AtomicU64;
+
+#[cfg(test)]
+const RELAXED: std::sync::atomic::Ordering = std::sync::atomic::Ordering::Relaxed;
+
+mod fs {
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    pub(super) fn read_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<std::fs::ReadDir> {
+        std::fs::read_dir(path)
+    }
+
+    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
+        std::fs::read_to_string(path)
+    }
+
+    pub(super) fn remove_file(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_file(path)
+    }
+
+    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path, contents)
+    }
+
+    #[cfg(test)]
+    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+}
 
 use n0_future::StreamExt;
-use preserves::IOValue;
 
 use crate::artifacts;
 use crate::bounded::VecSink;
 use crate::delivery_idempotency;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::job_dag;
 use crate::ledger;
 use crate::node_identity;
@@ -92,7 +124,7 @@ pub struct NodeDaemonStopInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlSubmitInput<'a> {
     pub state_root: &'a Path,
-    pub request_value: &'a IOValue,
+    pub request_value: &'a IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -113,7 +145,7 @@ pub struct NodeControlServeInput<'a> {
     pub topic: &'a str,
     pub max_ticks: u64,
     pub max_requests_per_tick: u64,
-    pub supervisor_policy_value: Option<&'a IOValue>,
+    pub supervisor_policy_value: Option<&'a IoValue>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -180,7 +212,7 @@ struct ServiceRunReceiptValueInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlIngressEnvelopeInput<'a> {
-    pub request_value: &'a IOValue,
+    pub request_value: &'a IoValue,
     pub from_peer: &'a str,
     pub to_node: &'a str,
     pub topic: &'a str,
@@ -195,7 +227,7 @@ pub struct NodeControlIngressEnvelopeInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlIngressPublishInput<'a> {
     pub state_root: &'a Path,
-    pub envelope_value: &'a IOValue,
+    pub envelope_value: &'a IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -208,7 +240,7 @@ pub struct NodeControlIngressDeliverInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveIngressPublishInput<'a> {
     pub sender: &'a iroh_gossip::api::GossipSender,
-    pub envelope_value: &'a IOValue,
+    pub envelope_value: &'a IoValue,
     pub node_id: &'a str,
 }
 
@@ -224,7 +256,7 @@ pub struct NodeControlLiveIngressReceiveBytesInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveLoopbackInput<'a> {
     pub state_root: &'a Path,
-    pub request_value: &'a IOValue,
+    pub request_value: &'a IoValue,
     pub from_peer: &'a str,
     pub to_node: &'a str,
     pub topic: &'a str,
@@ -243,13 +275,13 @@ pub struct NodeControlLiveServeInput<'a> {
     pub max_events: u64,
     pub event_timeout_ms: u64,
     pub max_requests_per_tick: u64,
-    pub supervisor_policy_value: Option<&'a IOValue>,
+    pub supervisor_policy_value: Option<&'a IoValue>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveServeLoopbackInput<'a> {
     pub state_root: &'a Path,
-    pub request_value: &'a IOValue,
+    pub request_value: &'a IoValue,
     pub from_peer: &'a str,
     pub to_node: &'a str,
     pub topic: &'a str,
@@ -265,8 +297,8 @@ pub struct NodeControlLiveServeLoopbackInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveSendInput<'a> {
     pub state_root: Option<&'a Path>,
-    pub request_value: &'a IOValue,
-    pub receiver_ticket_value: &'a IOValue,
+    pub request_value: &'a IoValue,
+    pub receiver_ticket_value: &'a IoValue,
     pub from_peer: &'a str,
     pub sequence: u64,
     pub expected_operation_ref: Option<&'a str>,
@@ -285,26 +317,26 @@ pub struct NodeControlLiveSendInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowInput<'a> {
     pub state_root: Option<&'a Path>,
-    pub receiver_ticket_value: &'a IOValue,
-    pub peer_admission_value: &'a IOValue,
-    pub authority_grant_value: &'a IOValue,
-    pub send_receipt_value: &'a IOValue,
-    pub receive_receipt_values: &'a [&'a IOValue],
-    pub listener_receipt_value: Option<&'a IOValue>,
-    pub service_receipt_value: &'a IOValue,
+    pub receiver_ticket_value: &'a IoValue,
+    pub peer_admission_value: &'a IoValue,
+    pub authority_grant_value: &'a IoValue,
+    pub send_receipt_value: &'a IoValue,
+    pub receive_receipt_values: &'a [&'a IoValue],
+    pub listener_receipt_value: Option<&'a IoValue>,
+    pub service_receipt_value: &'a IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleExportInput<'a> {
-    pub receiver_ticket_value: &'a IOValue,
-    pub peer_admission_value: &'a IOValue,
-    pub authority_grant_value: &'a IOValue,
-    pub receipt_values: &'a [&'a IOValue],
+    pub receiver_ticket_value: &'a IoValue,
+    pub peer_admission_value: &'a IoValue,
+    pub authority_grant_value: &'a IoValue,
+    pub receipt_values: &'a [&'a IoValue],
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleVerifyInput<'a> {
-    pub bundle_value: &'a IOValue,
+    pub bundle_value: &'a IoValue,
     pub expected_node: Option<&'a str>,
     pub expected_topic: Option<&'a str>,
     pub expected_endpoint: Option<&'a str>,
@@ -318,8 +350,8 @@ pub struct NodeControlLiveWorkflowBundleVerifyInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleGateInput<'a> {
-    pub bundle_value: &'a IOValue,
-    pub verify_receipt_value: Option<&'a IOValue>,
+    pub bundle_value: &'a IoValue,
+    pub verify_receipt_value: Option<&'a IoValue>,
     pub require_verify_receipt: bool,
     pub expected_node: Option<&'a str>,
     pub expected_topic: Option<&'a str>,
@@ -335,10 +367,10 @@ pub struct NodeControlLiveWorkflowBundleGateInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleApplyInput<'a> {
     pub state_root: &'a Path,
-    pub bundle_value: &'a IOValue,
-    pub gate_receipt_value: Option<&'a IOValue>,
+    pub bundle_value: &'a IoValue,
+    pub gate_receipt_value: Option<&'a IoValue>,
     pub is_gate_receipt_required: bool,
-    pub request_value: Option<&'a IOValue>,
+    pub request_value: Option<&'a IoValue>,
     pub should_send: bool,
     pub from_peer: Option<&'a str>,
     pub sequence: u64,
@@ -363,11 +395,11 @@ pub struct NodeControlLiveWorkflowBundleApplyInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleReconcileInput<'a> {
-    pub apply_receipt_value: &'a IOValue,
-    pub send_receipt_value: Option<&'a IOValue>,
-    pub ingress_receipt_value: Option<&'a IOValue>,
-    pub queue_receipt_value: Option<&'a IOValue>,
-    pub control_receipt_value: Option<&'a IOValue>,
+    pub apply_receipt_value: &'a IoValue,
+    pub send_receipt_value: Option<&'a IoValue>,
+    pub ingress_receipt_value: Option<&'a IoValue>,
+    pub queue_receipt_value: Option<&'a IoValue>,
+    pub control_receipt_value: Option<&'a IoValue>,
     pub expected_envelope_ref: Option<&'a str>,
     pub expected_operation_ref: Option<&'a str>,
     pub expected_request_ref: Option<&'a str>,
@@ -375,18 +407,18 @@ pub struct NodeControlLiveWorkflowBundleReconcileInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleAckExportInput<'a> {
-    pub apply_receipt_value: &'a IOValue,
-    pub send_receipt_value: Option<&'a IOValue>,
-    pub ingress_receipt_value: Option<&'a IOValue>,
-    pub queue_receipt_value: Option<&'a IOValue>,
-    pub control_receipt_value: Option<&'a IOValue>,
-    pub reconcile_receipt_value: &'a IOValue,
+    pub apply_receipt_value: &'a IoValue,
+    pub send_receipt_value: Option<&'a IoValue>,
+    pub ingress_receipt_value: Option<&'a IoValue>,
+    pub queue_receipt_value: Option<&'a IoValue>,
+    pub control_receipt_value: Option<&'a IoValue>,
+    pub reconcile_receipt_value: &'a IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleAckImportInput<'a> {
     pub state_root: &'a Path,
-    pub ack_value: &'a IOValue,
+    pub ack_value: &'a IoValue,
     pub expected_bundle_ref: Option<&'a str>,
     pub expected_envelope_ref: Option<&'a str>,
     pub expected_operation_ref: Option<&'a str>,
@@ -395,11 +427,11 @@ pub struct NodeControlLiveWorkflowBundleAckImportInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowProtocolGateInput<'a> {
-    pub bundle_value: &'a IOValue,
-    pub gate_receipt_value: &'a IOValue,
-    pub apply_receipt_value: &'a IOValue,
-    pub reconcile_receipt_value: &'a IOValue,
-    pub ack_value: &'a IOValue,
+    pub bundle_value: &'a IoValue,
+    pub gate_receipt_value: &'a IoValue,
+    pub apply_receipt_value: &'a IoValue,
+    pub reconcile_receipt_value: &'a IoValue,
+    pub ack_value: &'a IoValue,
     pub expected_envelope_ref: Option<&'a str>,
     pub expected_operation_ref: Option<&'a str>,
     pub expected_request_ref: Option<&'a str>,
@@ -408,7 +440,7 @@ pub struct NodeControlLiveWorkflowProtocolGateInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleImportInput<'a> {
     pub state_root: &'a Path,
-    pub bundle_value: &'a IOValue,
+    pub bundle_value: &'a IoValue,
     pub expected_node: Option<&'a str>,
     pub expected_topic: Option<&'a str>,
     pub expected_endpoint: Option<&'a str>,
@@ -457,8 +489,8 @@ pub struct NodeControlLiveTicketExportInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveTicketImportInput<'a> {
     pub state_root: &'a Path,
-    pub ticket_value: &'a IOValue,
-    pub peer_admission_value: Option<&'a IOValue>,
+    pub ticket_value: &'a IoValue,
+    pub peer_admission_value: Option<&'a IoValue>,
     pub expected_node: Option<&'a str>,
     pub expected_topic: Option<&'a str>,
     pub expected_endpoint: Option<&'a str>,
@@ -469,7 +501,7 @@ pub struct NodeControlLiveTicketImportInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlAuthorityGrantImportInput<'a> {
     pub state_root: &'a Path,
-    pub grant_value: &'a IOValue,
+    pub grant_value: &'a IoValue,
     pub expected_peer: Option<&'a str>,
     pub expected_node: Option<&'a str>,
     pub expected_operations: &'a [String],
@@ -481,7 +513,7 @@ pub struct NodeControlAuthorityGrantImportInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct NodeControlLivePeerAdmitInput<'a> {
     pub state_root: &'a Path,
-    pub ticket_value: &'a IOValue,
+    pub ticket_value: &'a IoValue,
     pub peer_id: &'a str,
     pub sequence: u64,
     pub expires_at: Option<u64>,
@@ -593,10 +625,10 @@ struct LiveWorkflowBundleValueInput<'a> {
     ticket: &'a NodeControlLiveTicket,
     admission: &'a NodeControlLivePeerAdmission,
     authority: &'a NodeControlAuthorityGrant,
-    ticket_value: &'a IOValue,
-    admission_value: &'a IOValue,
-    authority_value: &'a IOValue,
-    receipt_values: &'a [&'a IOValue],
+    ticket_value: &'a IoValue,
+    admission_value: &'a IoValue,
+    authority_value: &'a IoValue,
+    receipt_values: &'a [&'a IoValue],
     diagnostics: &'a [String],
 }
 
@@ -667,12 +699,12 @@ struct LiveWorkflowBundleReconcileReceiptValueInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 struct LiveWorkflowBundleAckValueInput<'a> {
-    apply_receipt_value: &'a IOValue,
-    send_receipt_value: Option<&'a IOValue>,
-    ingress_receipt_value: Option<&'a IOValue>,
-    queue_receipt_value: Option<&'a IOValue>,
-    control_receipt_value: Option<&'a IOValue>,
-    reconcile_receipt_value: &'a IOValue,
+    apply_receipt_value: &'a IoValue,
+    send_receipt_value: Option<&'a IoValue>,
+    ingress_receipt_value: Option<&'a IoValue>,
+    queue_receipt_value: Option<&'a IoValue>,
+    control_receipt_value: Option<&'a IoValue>,
+    reconcile_receipt_value: &'a IoValue,
     apply_receipt_ref: &'a str,
     send_receipt_ref: Option<&'a str>,
     ingress_receipt_ref: Option<&'a str>,
@@ -762,7 +794,7 @@ struct DeniedLiveSendInput<'a> {
     envelope: NodeControlIngressEnvelope,
     diagnostics: Vec<String>,
     retry_receipt_refs: Vec<String>,
-    retry_receipt_values: Vec<IOValue>,
+    retry_receipt_values: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -841,14 +873,14 @@ pub struct NodeDaemonInit {
     pub config_ref: String,
     pub identity_ref: String,
     pub identity_receipt_ref: String,
-    pub config_value: IOValue,
-    pub identity_receipt_value: IOValue,
+    pub config_value: IoValue,
+    pub identity_receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeDaemonRun {
     pub startup_ref: String,
-    pub startup_value: IOValue,
+    pub startup_value: IoValue,
     pub adapter_receipt_refs: Vec<node_runtime::NodeAdapterReceiptRef>,
 }
 
@@ -856,8 +888,8 @@ pub struct NodeDaemonRun {
 pub struct NodeDaemonStatus {
     pub health_ref: String,
     pub control_receipt_ref: String,
-    pub health_value: IOValue,
-    pub control_receipt_value: IOValue,
+    pub health_value: IoValue,
+    pub control_receipt_value: IoValue,
     pub status: String,
 }
 
@@ -865,8 +897,8 @@ pub struct NodeDaemonStatus {
 pub struct NodeDaemonStop {
     pub shutdown_ref: String,
     pub control_receipt_ref: String,
-    pub shutdown_value: IOValue,
-    pub control_receipt_value: IOValue,
+    pub shutdown_value: IoValue,
+    pub control_receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -874,7 +906,7 @@ pub struct NodeControlSubmit {
     pub request_ref: String,
     pub inbox_path: PathBuf,
     pub queue_receipt_ref: String,
-    pub queue_receipt_value: IOValue,
+    pub queue_receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -882,16 +914,16 @@ pub struct NodeControlDispatch {
     pub operation: String,
     pub request_ref: String,
     pub control_receipt_ref: String,
-    pub control_receipt_value: IOValue,
+    pub control_receipt_value: IoValue,
     pub subreceipt_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlLoop {
     pub loop_receipt_ref: String,
-    pub loop_receipt_value: IOValue,
+    pub loop_receipt_value: IoValue,
     pub heartbeat_receipt_ref: String,
-    pub heartbeat_receipt_value: IOValue,
+    pub heartbeat_receipt_value: IoValue,
     pub processed_request_refs: Vec<String>,
     pub dispatch_receipt_refs: Vec<String>,
     pub has_stopped: bool,
@@ -900,7 +932,7 @@ pub struct NodeControlLoop {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlServe {
     pub service_receipt_ref: String,
-    pub service_receipt_value: IOValue,
+    pub service_receipt_value: IoValue,
     pub service_lock_ref: Option<String>,
     pub heartbeat_receipt_refs: Vec<String>,
     pub ingress_receipt_refs: Vec<String>,
@@ -923,7 +955,7 @@ pub struct NodeControlSupervisorPolicy {
     pub stale_lock_recovery: bool,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -933,7 +965,7 @@ pub struct NodeControlSupervisorReceipt {
     pub operation: String,
     pub supervisor_policy_ref: Option<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -951,7 +983,7 @@ pub struct NodeControlIngressEnvelope {
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -959,7 +991,7 @@ pub struct NodeControlIngressPublish {
     pub envelope_ref: String,
     pub envelope_path: PathBuf,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -967,7 +999,7 @@ pub struct NodeControlIngressDeliver {
     pub envelope_ref: String,
     pub request_ref: String,
     pub ingress_receipt_ref: String,
-    pub ingress_receipt_value: IOValue,
+    pub ingress_receipt_value: IoValue,
     pub idempotency_receipt_ref: Option<String>,
     pub queue_receipt_ref: Option<String>,
     pub has_enqueued: bool,
@@ -977,16 +1009,16 @@ pub struct NodeControlIngressDeliver {
 pub struct NodeControlLiveIngressPublish {
     pub envelope_ref: String,
     pub transport_receipt_ref: String,
-    pub transport_receipt_value: IOValue,
+    pub transport_receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlLiveIngressReceive {
     pub envelope_ref: String,
     pub transport_receipt_ref: String,
-    pub transport_receipt_value: IOValue,
+    pub transport_receipt_value: IoValue,
     pub ingress_receipt_ref: String,
-    pub ingress_receipt_value: IOValue,
+    pub ingress_receipt_value: IoValue,
     pub has_enqueued: bool,
 }
 
@@ -994,9 +1026,9 @@ pub struct NodeControlLiveIngressReceive {
 pub struct NodeControlLiveLoopback {
     pub envelope_ref: String,
     pub publish_receipt_ref: String,
-    pub publish_receipt_value: IOValue,
+    pub publish_receipt_value: IoValue,
     pub receive_receipt_ref: String,
-    pub receive_receipt_value: IOValue,
+    pub receive_receipt_value: IoValue,
     pub ingress_receipt_ref: String,
     pub has_enqueued: bool,
 }
@@ -1004,18 +1036,18 @@ pub struct NodeControlLiveLoopback {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlLiveSend {
     pub envelope_ref: String,
-    pub envelope_value: IOValue,
+    pub envelope_value: IoValue,
     pub operation_ref: String,
     pub receiver_ticket_ref: String,
     pub receiver_endpoint_id: String,
     pub transport_receipt_ref: Option<String>,
-    pub transport_receipt_value: Option<IOValue>,
+    pub transport_receipt_value: Option<IoValue>,
     pub retry_receipt_refs: Vec<String>,
-    pub retry_receipt_values: Vec<IOValue>,
+    pub retry_receipt_values: Vec<IoValue>,
     pub duplicate_receipt_ref: Option<String>,
-    pub duplicate_receipt_value: Option<IOValue>,
+    pub duplicate_receipt_value: Option<IoValue>,
     pub send_receipt_ref: String,
-    pub send_receipt_value: IOValue,
+    pub send_receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1031,13 +1063,13 @@ pub struct NodeControlLiveSendReceipt {
     pub envelope_ref: String,
     pub transport_receipt_ref: Option<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlLiveWorkflowReceipt {
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
     pub diagnostics: Vec<String>,
 }
@@ -1045,22 +1077,22 @@ pub struct NodeControlLiveWorkflowReceipt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlLiveWorkflowBundle {
     pub bundle_ref: String,
-    pub bundle_value: IOValue,
+    pub bundle_value: IoValue,
     pub ticket_ref: String,
     pub peer_admission_ref: String,
     pub authority_grant_ref: String,
     pub receipt_refs: Vec<String>,
-    pub ticket_value: IOValue,
-    pub peer_admission_value: IOValue,
-    pub authority_grant_value: IOValue,
-    pub receipt_values: Vec<IOValue>,
+    pub ticket_value: IoValue,
+    pub peer_admission_value: IoValue,
+    pub authority_grant_value: IoValue,
+    pub receipt_values: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlLiveWorkflowBundleExport {
     pub bundle: NodeControlLiveWorkflowBundle,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
     pub diagnostics: Vec<String>,
 }
@@ -1074,7 +1106,7 @@ pub struct NodeControlLiveWorkflowBundleVerify {
     pub receipt_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
 }
 
@@ -1101,7 +1133,7 @@ pub struct NodeControlLiveWorkflowBundleGate {
     pub receipt_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
 }
 
@@ -1138,10 +1170,10 @@ pub struct NodeControlLiveWorkflowBundleApply {
     pub envelope_ref: Option<String>,
     pub operation_ref: Option<String>,
     pub send_receipt_ref: Option<String>,
-    pub send_receipt_value: Option<IOValue>,
+    pub send_receipt_value: Option<IoValue>,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
 }
 
@@ -1203,7 +1235,7 @@ pub struct NodeControlLiveWorkflowBundleReconcile {
     pub request_ref: Option<String>,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
 }
 
@@ -1226,7 +1258,7 @@ pub struct NodeControlLiveWorkflowBundleReconcileReceipt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlLiveWorkflowBundleAck {
     pub ack_ref: String,
-    pub ack_value: IOValue,
+    pub ack_value: IoValue,
     pub apply_receipt_ref: String,
     pub send_receipt_ref: Option<String>,
     pub ingress_receipt_ref: Option<String>,
@@ -1240,19 +1272,19 @@ pub struct NodeControlLiveWorkflowBundleAck {
     pub receiver_decision: String,
     pub receiver_diagnostics: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub apply_receipt_value: IOValue,
-    pub send_receipt_value: Option<IOValue>,
-    pub ingress_receipt_value: Option<IOValue>,
-    pub queue_receipt_value: Option<IOValue>,
-    pub control_receipt_value: Option<IOValue>,
-    pub reconcile_receipt_value: IOValue,
+    pub apply_receipt_value: IoValue,
+    pub send_receipt_value: Option<IoValue>,
+    pub ingress_receipt_value: Option<IoValue>,
+    pub queue_receipt_value: Option<IoValue>,
+    pub control_receipt_value: Option<IoValue>,
+    pub reconcile_receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlLiveWorkflowBundleAckExport {
     pub ack: NodeControlLiveWorkflowBundleAck,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
     pub receiver_decision: String,
     pub diagnostics: Vec<String>,
@@ -1266,7 +1298,7 @@ pub struct NodeControlLiveWorkflowBundleAckImport {
     pub receiver_decision: String,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
 }
 
@@ -1276,17 +1308,17 @@ pub struct NodeControlLiveWorkflowProtocolGate {
     pub install_receipt_ref: String,
     pub protocol_ref: String,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
     pub operation_count: usize,
     pub message_count: usize,
     pub diagnostics: Vec<String>,
-    pub manifest_value: IOValue,
-    pub install_receipt_value: IOValue,
-    pub initial_state_values: Vec<IOValue>,
-    pub operation_receipt_values: Vec<IOValue>,
-    pub message_values: Vec<IOValue>,
-    pub next_state_values: Vec<IOValue>,
+    pub manifest_value: IoValue,
+    pub install_receipt_value: IoValue,
+    pub initial_state_values: Vec<IoValue>,
+    pub operation_receipt_values: Vec<IoValue>,
+    pub message_values: Vec<IoValue>,
+    pub next_state_values: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1297,21 +1329,21 @@ pub struct NodeControlLiveWorkflowBundleImport {
     pub imported_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub decision: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeControlLiveServe {
     pub listener_receipt_ref: String,
-    pub listener_receipt_value: IOValue,
+    pub listener_receipt_value: IoValue,
     pub service: NodeControlServe,
     pub transport_receipt_refs: Vec<String>,
     pub neighbor_events: Vec<String>,
     pub observed_events: u64,
     pub bound_endpoint_id: String,
     pub live_ticket_ref: Option<String>,
-    pub live_ticket_value: Option<IOValue>,
+    pub live_ticket_value: Option<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1334,7 +1366,7 @@ pub struct NodeControlAuthorityGrant {
     pub policy_refs: Vec<String>,
     pub revocation_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1348,7 +1380,7 @@ pub struct NodeControlLiveTicket {
     pub address_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1364,7 +1396,7 @@ pub struct NodeControlLivePeerAdmission {
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1375,7 +1407,7 @@ pub struct NodeControlLiveTicketImport {
     pub imported_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1385,10 +1417,10 @@ pub struct NodeControlAuthorityGrantImport {
     pub imported_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
-pub fn node_control_authority_grant_value(input: &NodeControlAuthorityGrantInput<'_>) -> Result<IOValue> {
+pub fn node_control_authority_grant_value(input: &NodeControlAuthorityGrantInput<'_>) -> Result<IoValue> {
     validate_node_id(input.peer_id)?;
     validate_node_id(input.node_id)?;
     validate_node_id(input.target_scope)?;
@@ -1445,7 +1477,7 @@ pub fn node_control_authority_grant_value(input: &NodeControlAuthorityGrantInput
     ]))
 }
 
-pub fn parse_node_control_authority_grant(value: &IOValue) -> Result<NodeControlAuthorityGrant> {
+pub fn parse_node_control_authority_grant(value: &IoValue) -> Result<NodeControlAuthorityGrant> {
     let fields = value
         .collect_simple_record("node-control-authority-grant-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-authority-grant-v1 ...>"))?;
@@ -1472,7 +1504,7 @@ pub fn parse_node_control_authority_grant(value: &IOValue) -> Result<NodeControl
 
 pub fn import_node_control_authority_grant(
     state_root: &Path,
-    grant_value: &IOValue,
+    grant_value: &IoValue,
 ) -> Result<NodeControlAuthorityGrant> {
     validate_state_root(state_root)?;
     ensure_state_layout(state_root)?;
@@ -1481,7 +1513,7 @@ pub fn import_node_control_authority_grant(
     Ok(grant)
 }
 
-pub fn node_control_live_ticket_value(input: &NodeControlLiveTicketInput<'_>) -> Result<IOValue> {
+pub fn node_control_live_ticket_value(input: &NodeControlLiveTicketInput<'_>) -> Result<IoValue> {
     validate_node_id(input.node_id)?;
     validate_ingress_ref(input.node_identity_ref, "node control live ticket identity ref")?;
     validate_node_id(input.logical_endpoint_id)?;
@@ -1530,7 +1562,7 @@ pub fn node_control_live_ticket_value(input: &NodeControlLiveTicketInput<'_>) ->
     ]))
 }
 
-pub fn parse_node_control_live_ticket(value: &IOValue) -> Result<NodeControlLiveTicket> {
+pub fn parse_node_control_live_ticket(value: &IoValue) -> Result<NodeControlLiveTicket> {
     let fields = value
         .collect_simple_record("node-control-live-ticket-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-ticket-v1 ...>"))?;
@@ -1620,7 +1652,7 @@ pub fn admit_node_control_live_peer(input: &NodeControlLivePeerAdmitInput<'_>) -
     Ok(admission)
 }
 
-fn node_control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_>) -> Result<IOValue> {
+fn node_control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-live-peer-admission-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA),
@@ -1663,7 +1695,7 @@ fn node_control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_
     ]))
 }
 
-pub fn parse_node_control_live_peer_admission(value: &IOValue) -> Result<NodeControlLivePeerAdmission> {
+pub fn parse_node_control_live_peer_admission(value: &IoValue) -> Result<NodeControlLivePeerAdmission> {
     let fields = value
         .collect_simple_record("node-control-live-peer-admission-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-peer-admission-v1 ...>"))?;
@@ -1970,7 +2002,7 @@ struct TransferStep {
     envelope_ref: Option<String>,
     operation_ref: Option<String>,
     send_receipt_ref: Option<String>,
-    send_receipt_value: Option<IOValue>,
+    send_receipt_value: Option<IoValue>,
     diagnostics: Vec<String>,
 }
 
@@ -1984,7 +2016,7 @@ struct FinishInput<'a> {
     envelope_ref: Option<String>,
     operation_ref: Option<String>,
     send_receipt_ref: Option<String>,
-    send_receipt_value: Option<IOValue>,
+    send_receipt_value: Option<IoValue>,
     diagnostics: Vec<String>,
 }
 
@@ -2400,12 +2432,12 @@ struct RolePair {
 }
 
 struct LegInput<'a> {
-    origin_state: &'a IOValue,
-    target_state: &'a IOValue,
+    origin_state: &'a IoValue,
+    target_state: &'a IoValue,
     target_role: &'a str,
     label: &'a str,
     payload_tag: &'a str,
-    body_or_ref: &'a IOValue,
+    body_or_ref: &'a IoValue,
     authority_refs: &'a [String],
     resource_refs: &'a [String],
     evidence_refs: Vec<String>,
@@ -2424,10 +2456,10 @@ struct LegOutput {
 }
 
 struct RunValues {
-    initial_state_values: Vec<IOValue>,
-    operation_receipt_values: Vec<IOValue>,
-    message_values: Vec<IOValue>,
-    next_state_values: Vec<IOValue>,
+    initial_state_values: Vec<IoValue>,
+    operation_receipt_values: Vec<IoValue>,
+    message_values: Vec<IoValue>,
+    next_state_values: Vec<IoValue>,
 }
 
 fn start_pair(
@@ -2825,7 +2857,7 @@ fn live_workflow_protocol_evidence(
     ))
 }
 
-fn live_workflow_protocol_manifest_value() -> Result<IOValue> {
+fn live_workflow_protocol_manifest_value() -> Result<IoValue> {
     let global = protocol_session::protocol_global_script_value(&[
         protocol_session::ProtocolCommInput {
             from_role: "sender".to_string(),
@@ -3271,7 +3303,7 @@ fn import_live_workflow_bundle_ack_members(
 }
 
 pub fn parse_node_control_live_workflow_bundle_apply_receipt(
-    value: &IOValue,
+    value: &IoValue,
 ) -> Result<NodeControlLiveWorkflowBundleApplyReceipt> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15))
@@ -3309,7 +3341,7 @@ pub fn parse_node_control_live_workflow_bundle_apply_receipt(
 }
 
 pub fn parse_node_control_live_workflow_bundle_reconcile_receipt(
-    value: &IOValue,
+    value: &IoValue,
 ) -> Result<NodeControlLiveWorkflowBundleReconcileReceipt> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-reconcile-receipt-v1", Some(13))
@@ -3347,7 +3379,7 @@ pub fn parse_node_control_live_workflow_bundle_reconcile_receipt(
     })
 }
 
-pub fn parse_node_control_ingress_receipt(value: &IOValue) -> Result<NodeControlIngressReceipt> {
+pub fn parse_node_control_ingress_receipt(value: &IoValue) -> Result<NodeControlIngressReceipt> {
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
@@ -3375,7 +3407,7 @@ pub fn parse_node_control_ingress_receipt(value: &IOValue) -> Result<NodeControl
     })
 }
 
-pub fn parse_node_control_queue_receipt(value: &IOValue) -> Result<NodeControlQueueReceipt> {
+pub fn parse_node_control_queue_receipt(value: &IoValue) -> Result<NodeControlQueueReceipt> {
     let fields = value
         .collect_simple_record("node-control-queue-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-queue-receipt-v1 ...>"))?;
@@ -3395,7 +3427,7 @@ pub fn parse_node_control_queue_receipt(value: &IOValue) -> Result<NodeControlQu
 }
 
 pub fn parse_node_control_live_workflow_bundle_verify_receipt(
-    value: &IOValue,
+    value: &IoValue,
 ) -> Result<NodeControlLiveWorkflowBundleVerifyReceipt> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-verify-receipt-v1", Some(10))
@@ -3436,7 +3468,7 @@ pub fn parse_node_control_live_workflow_bundle_verify_receipt(
 }
 
 pub fn parse_node_control_live_workflow_bundle_gate_receipt(
-    value: &IOValue,
+    value: &IoValue,
 ) -> Result<NodeControlLiveWorkflowBundleGateReceipt> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-gate-receipt-v1", Some(12))
@@ -3480,7 +3512,7 @@ pub fn parse_node_control_live_workflow_bundle_gate_receipt(
     })
 }
 
-pub fn parse_node_control_live_workflow_bundle(value: &IOValue) -> Result<NodeControlLiveWorkflowBundle> {
+pub fn parse_node_control_live_workflow_bundle(value: &IoValue) -> Result<NodeControlLiveWorkflowBundle> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-v1 ...>"))?;
@@ -3541,16 +3573,16 @@ struct AckParts {
     receiver_decision: String,
     receiver_diagnostics: Vec<String>,
     diagnostics: Vec<String>,
-    apply_receipt_value: IOValue,
-    send_receipt_value: Option<IOValue>,
-    ingress_receipt_value: Option<IOValue>,
-    queue_receipt_value: Option<IOValue>,
-    control_receipt_value: Option<IOValue>,
-    reconcile_receipt_value: IOValue,
+    apply_receipt_value: IoValue,
+    send_receipt_value: Option<IoValue>,
+    ingress_receipt_value: Option<IoValue>,
+    queue_receipt_value: Option<IoValue>,
+    control_receipt_value: Option<IoValue>,
+    reconcile_receipt_value: IoValue,
 }
 
 impl AckParts {
-    fn into_ack(self, value: &IOValue) -> Result<NodeControlLiveWorkflowBundleAck> {
+    fn into_ack(self, value: &IoValue) -> Result<NodeControlLiveWorkflowBundleAck> {
         Ok(NodeControlLiveWorkflowBundleAck {
             ack_ref: preserves_rail::canonical_hash(value)?,
             ack_value: value.clone(),
@@ -3656,7 +3688,7 @@ fn validate_ack_reconcile(parts: &AckParts, reconcile: &NodeControlLiveWorkflowB
     Ok(())
 }
 
-pub fn parse_node_control_live_workflow_bundle_ack(value: &IOValue) -> Result<NodeControlLiveWorkflowBundleAck> {
+pub fn parse_node_control_live_workflow_bundle_ack(value: &IoValue) -> Result<NodeControlLiveWorkflowBundleAck> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-ack-v1", Some(22))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-ack-v1 ...>"))?;
@@ -4037,12 +4069,12 @@ fn live_workflow_bundle_binding_diagnostics(
     diagnostics
 }
 
-fn live_workflow_bundle_receipt_refs(values: &[&IOValue]) -> Result<Vec<String>> {
+fn live_workflow_bundle_receipt_refs(values: &[&IoValue]) -> Result<Vec<String>> {
     let owned_values = values.iter().map(|value| (**value).clone()).collect::<Vec<_>>();
     live_workflow_bundle_receipt_refs_from_values(&owned_values)
 }
 
-fn live_workflow_bundle_receipt_refs_from_values(values: &[IOValue]) -> Result<Vec<String>> {
+fn live_workflow_bundle_receipt_refs_from_values(values: &[IoValue]) -> Result<Vec<String>> {
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
         refs.push(preserves_rail::canonical_hash(value)?);
@@ -4050,7 +4082,7 @@ fn live_workflow_bundle_receipt_refs_from_values(values: &[IOValue]) -> Result<V
     Ok(refs)
 }
 
-fn live_workflow_bundle_receipt_diagnostics(values: &[&IOValue]) -> Vec<String> {
+fn live_workflow_bundle_receipt_diagnostics(values: &[&IoValue]) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(values.len());
     for value in values {
         let kind = ledger::artifact_kind(value);
@@ -4227,7 +4259,7 @@ fn authority_grant_import_diagnostics(
     diagnostics
 }
 
-fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-live-ticket-import-receipt-v1", vec![
@@ -4272,7 +4304,7 @@ fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_
     ]))
 }
 
-fn authority_grant_import_receipt_value(input: &AuthorityGrantImportReceiptValueInput<'_>) -> Result<IOValue> {
+fn authority_grant_import_receipt_value(input: &AuthorityGrantImportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-authority-grant-import-receipt-v1", vec![
@@ -4319,7 +4351,7 @@ fn authority_grant_import_receipt_value(input: &AuthorityGrantImportReceiptValue
     ]))
 }
 
-fn live_workflow_bundle_value(input: &LiveWorkflowBundleValueInput<'_>) -> Result<IOValue> {
+fn live_workflow_bundle_value(input: &LiveWorkflowBundleValueInput<'_>) -> Result<IoValue> {
     let binding_status = if input.diagnostics.is_empty() { "pass" } else { "fail" };
     let receipt_refs = live_workflow_bundle_receipt_refs(input.receipt_values)?;
     Ok(preserves_rail::record("node-control-live-workflow-bundle-v1", vec![
@@ -4369,7 +4401,7 @@ fn live_workflow_bundle_value(input: &LiveWorkflowBundleValueInput<'_>) -> Resul
     ]))
 }
 
-fn live_workflow_bundle_export_receipt_value(input: &LiveWorkflowBundleExportReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_workflow_bundle_export_receipt_value(input: &LiveWorkflowBundleExportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-live-workflow-bundle-export-receipt-v1", vec![
@@ -4410,7 +4442,7 @@ fn live_workflow_bundle_export_receipt_value(input: &LiveWorkflowBundleExportRec
     ]))
 }
 
-fn live_workflow_bundle_verify_receipt_value(input: &LiveWorkflowBundleVerifyReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_workflow_bundle_verify_receipt_value(input: &LiveWorkflowBundleVerifyReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-live-workflow-bundle-verify-receipt-v1", vec![
@@ -4456,7 +4488,7 @@ fn live_workflow_bundle_verify_receipt_value(input: &LiveWorkflowBundleVerifyRec
     ]))
 }
 
-fn live_workflow_bundle_gate_receipt_value(input: &LiveWorkflowBundleGateReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_workflow_bundle_gate_receipt_value(input: &LiveWorkflowBundleGateReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let gate_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-live-workflow-bundle-gate-receipt-v1", vec![
@@ -4504,7 +4536,7 @@ fn live_workflow_bundle_gate_receipt_value(input: &LiveWorkflowBundleGateReceipt
     ]))
 }
 
-fn live_workflow_bundle_apply_receipt_value(input: &LiveWorkflowBundleApplyReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_workflow_bundle_apply_receipt_value(input: &LiveWorkflowBundleApplyReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let apply_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-live-workflow-bundle-apply-receipt-v1", vec![
@@ -4557,7 +4589,7 @@ fn live_workflow_bundle_apply_receipt_value(input: &LiveWorkflowBundleApplyRecei
 
 fn live_workflow_bundle_reconcile_receipt_value(
     input: &LiveWorkflowBundleReconcileReceiptValueInput<'_>,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let reconcile_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-live-workflow-bundle-reconcile-receipt-v1", vec![
@@ -4608,7 +4640,7 @@ fn live_workflow_bundle_reconcile_receipt_value(
     ]))
 }
 
-fn live_workflow_bundle_ack_value(input: &LiveWorkflowBundleAckValueInput<'_>) -> Result<IOValue> {
+fn live_workflow_bundle_ack_value(input: &LiveWorkflowBundleAckValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.receiver_decision)?;
     Ok(preserves_rail::record("node-control-live-workflow-bundle-ack-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA),
@@ -4672,7 +4704,7 @@ fn live_workflow_bundle_ack_value(input: &LiveWorkflowBundleAckValueInput<'_>) -
 
 fn live_workflow_bundle_ack_export_receipt_value(
     input: &LiveWorkflowBundleAckExportReceiptValueInput<'_>,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let ack_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-live-workflow-bundle-ack-export-receipt-v1", vec![
@@ -4723,7 +4755,7 @@ fn live_workflow_bundle_ack_export_receipt_value(
 
 fn live_workflow_bundle_ack_import_receipt_value(
     input: &LiveWorkflowBundleAckImportReceiptValueInput<'_>,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let ack_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-live-workflow-bundle-ack-import-receipt-v1", vec![
@@ -4767,7 +4799,7 @@ fn live_workflow_bundle_ack_import_receipt_value(
     ]))
 }
 
-fn live_workflow_bundle_expected_value(input: &LiveWorkflowBundleExpectedInput<'_>) -> IOValue {
+fn live_workflow_bundle_expected_value(input: &LiveWorkflowBundleExpectedInput<'_>) -> IoValue {
     preserves_rail::record("expected", vec![preserves_rail::sequence(vec![
         preserves_rail::record("node", vec![optional_string(input.expected_node)]),
         preserves_rail::record("topic", vec![optional_string(input.expected_topic)]),
@@ -4783,7 +4815,7 @@ fn live_workflow_bundle_expected_value(input: &LiveWorkflowBundleExpectedInput<'
     ])])
 }
 
-fn live_workflow_bundle_import_receipt_value(input: &LiveWorkflowBundleImportReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_workflow_bundle_import_receipt_value(input: &LiveWorkflowBundleImportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
     Ok(preserves_rail::record("node-control-live-workflow-bundle-import-receipt-v1", vec![
@@ -4831,7 +4863,7 @@ fn live_workflow_bundle_import_receipt_value(input: &LiveWorkflowBundleImportRec
     ]))
 }
 
-pub fn node_control_supervisor_policy_value(input: &NodeControlSupervisorPolicyInput<'_>) -> Result<IOValue> {
+pub fn node_control_supervisor_policy_value(input: &NodeControlSupervisorPolicyInput<'_>) -> Result<IoValue> {
     validate_supervisor_policy_bounds(input.max_restarts, "max restarts")?;
     validate_supervisor_policy_bounds(input.restart_window_ticks, "restart window ticks")?;
     validate_supervisor_policy_bounds(input.heartbeat_timeout_ticks, "heartbeat timeout ticks")?;
@@ -4882,7 +4914,7 @@ pub fn node_control_supervisor_policy_value(input: &NodeControlSupervisorPolicyI
     ]))
 }
 
-pub fn parse_node_control_supervisor_policy(value: &IOValue) -> Result<NodeControlSupervisorPolicy> {
+pub fn parse_node_control_supervisor_policy(value: &IoValue) -> Result<NodeControlSupervisorPolicy> {
     let fields = value
         .collect_simple_record("node-control-supervisor-policy-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-policy-v1 ...>"))?;
@@ -4923,7 +4955,7 @@ pub fn parse_node_control_supervisor_policy(value: &IOValue) -> Result<NodeContr
 
 pub fn import_node_control_supervisor_policy(
     state_root: &Path,
-    policy_value: &IOValue,
+    policy_value: &IoValue,
 ) -> Result<NodeControlSupervisorPolicy> {
     validate_state_root(state_root)?;
     ensure_state_layout(state_root)?;
@@ -4932,7 +4964,7 @@ pub fn import_node_control_supervisor_policy(
     Ok(policy)
 }
 
-fn parse_node_control_supervisor_receipt(value: &IOValue) -> Result<NodeControlSupervisorReceipt> {
+fn parse_node_control_supervisor_receipt(value: &IoValue) -> Result<NodeControlSupervisorReceipt> {
     let fields = value
         .collect_simple_record("node-control-supervisor-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-receipt-v1 ...>"))?;
@@ -4951,7 +4983,7 @@ fn parse_node_control_supervisor_receipt(value: &IOValue) -> Result<NodeControlS
     })
 }
 
-fn service_run_supervisor_policy_ref(value: &IOValue) -> Result<Option<String>> {
+fn service_run_supervisor_policy_ref(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(17)) {
         return record_optional_string(&fields[13], "supervisor-policy");
     }
@@ -5860,7 +5892,7 @@ fn remove_service_lock(state_root: &Path, service_lock_ref: &str) -> Result<()> 
     fs::remove_file(path).map_err(MoltenError::from)
 }
 
-fn node_ingress_receipt_decision(value: &IOValue) -> Result<String> {
+fn node_ingress_receipt_decision(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
@@ -6231,7 +6263,7 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
 struct SendRetryOutcome {
     published: Option<NodeControlLiveIngressPublish>,
     retry_receipt_refs: Vec<String>,
-    retry_receipt_values: Vec<IOValue>,
+    retry_receipt_values: Vec<IoValue>,
     diagnostics: Vec<String>,
 }
 
@@ -6242,7 +6274,7 @@ struct FinishSendInput<'a> {
     envelope: NodeControlIngressEnvelope,
     published: NodeControlLiveIngressPublish,
     retry_receipt_refs: Vec<String>,
-    retry_receipt_values: Vec<IOValue>,
+    retry_receipt_values: Vec<IoValue>,
 }
 
 fn validate_send_input(input: &NodeControlLiveSendInput<'_>) -> Result<()> {
@@ -6562,7 +6594,7 @@ fn denied_node_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_
     })
 }
 
-pub fn parse_node_control_live_send_receipt(value: &IOValue) -> Result<NodeControlLiveSendReceipt> {
+pub fn parse_node_control_live_send_receipt(value: &IoValue) -> Result<NodeControlLiveSendReceipt> {
     let fields = value
         .collect_simple_record("node-control-live-send-receipt-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-send-receipt-v1 ...>"))?;
@@ -6684,7 +6716,7 @@ fn import_flow_values(
     state_root: &Path,
     input: &NodeControlLiveWorkflowInput<'_>,
     receipt_ref: &str,
-    receipt_value: &IOValue,
+    receipt_value: &IoValue,
 ) -> Result<()> {
     import_node_artifact(state_root, input.receiver_ticket_value)?;
     import_node_artifact(state_root, input.peer_admission_value)?;
@@ -6748,7 +6780,7 @@ pub fn node_control_live_workflow_receipt(
     })
 }
 
-fn service_run_receipt_ref(value: &IOValue) -> Result<String> {
+fn service_run_receipt_ref(value: &IoValue) -> Result<String> {
     if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(17)) {
         require_schema(
             &fields[0],
@@ -6768,7 +6800,7 @@ fn service_run_receipt_ref(value: &IOValue) -> Result<String> {
     Err(MoltenError::invalid_harness("expected <node-control-service-run-receipt-v1 ...>"))
 }
 
-fn live_transport_receipt_ref(value: &IOValue) -> Result<(String, String, String)> {
+fn live_transport_receipt_ref(value: &IoValue) -> Result<(String, String, String)> {
     let fields = value
         .collect_simple_record("node-control-live-transport-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
@@ -6784,7 +6816,7 @@ fn live_transport_receipt_ref(value: &IOValue) -> Result<(String, String, String
     ))
 }
 
-fn live_listener_receipt_refs(value: &IOValue) -> Result<(String, Vec<String>, String)> {
+fn live_listener_receipt_refs(value: &IoValue) -> Result<(String, Vec<String>, String)> {
     let fields = value
         .collect_simple_record("node-control-live-listener-receipt-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-listener-receipt-v1 ...>"))?;
@@ -6905,7 +6937,7 @@ pub async fn node_control_live_serve_listener_loopback(
 
 struct LoopbackPair {
     ticket_ref: String,
-    ticket_value: IOValue,
+    ticket_value: IoValue,
     bound_endpoint_id: String,
     receiver_topic: iroh_gossip::api::GossipTopic,
     sender: iroh_gossip::api::GossipSender,
@@ -7342,7 +7374,7 @@ fn live_receive_diagnostics(
     diagnostics
 }
 
-pub fn parse_node_control_ingress_envelope(value: &IOValue) -> Result<NodeControlIngressEnvelope> {
+pub fn parse_node_control_ingress_envelope(value: &IoValue) -> Result<NodeControlIngressEnvelope> {
     let fields = value
         .collect_simple_record("node-control-ingress-envelope-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-envelope-v1 ...>"))?;
@@ -7945,7 +7977,7 @@ struct InstallFinishInput<'a> {
     request: &'a node_runtime::NodeControlRequest,
     startup_receipt_ref: &'a str,
     payload_ref: &'a str,
-    payload_value: IOValue,
+    payload_value: IoValue,
     provenance: provenance::ProvenanceEvaluation,
     diagnostics: Vec<String>,
 }
@@ -8089,7 +8121,7 @@ fn dispatch_install_request(
 struct PreparedRun {
     admission_ref: String,
     job_ref: String,
-    execution_request_value: IOValue,
+    execution_request_value: IoValue,
 }
 
 struct RunStart {
@@ -8396,7 +8428,7 @@ fn side_effect_preflight_diagnostics(request: &node_runtime::NodeControlRequest)
     diagnostics
 }
 
-fn read_node_ledger_artifact(state_root: &Path, artifact_ref: &str) -> Result<IOValue> {
+fn read_node_ledger_artifact(state_root: &Path, artifact_ref: &str) -> Result<IoValue> {
     ledger::read_artifact(&state_root.join("ledger"), artifact_ref)
 }
 
@@ -8406,7 +8438,7 @@ fn control_receipt_for_request(
     startup_receipt_ref: &str,
     subreceipt_refs: &[String],
     diagnostics: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     let decision = if diagnostics.is_empty()
         && !request.authority_refs.is_empty()
         && !request.policy_refs.is_empty()
@@ -8453,7 +8485,7 @@ fn control_receipt_for_request(
     })
 }
 
-fn authority_receipt_value(input: &AuthorityReceiptValueInput<'_>) -> Result<IOValue> {
+fn authority_receipt_value(input: &AuthorityReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-authority-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA),
@@ -8488,7 +8520,7 @@ fn authority_receipt_value(input: &AuthorityReceiptValueInput<'_>) -> Result<IOV
     ]))
 }
 
-fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-live-listener-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA),
@@ -8535,7 +8567,7 @@ fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<
     ]))
 }
 
-fn live_transport_receipt_value(input: &LiveTransportReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_transport_receipt_value(input: &LiveTransportReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let has_peer_bootstrap = !input.envelope.peer_bootstrap_refs.is_empty();
     Ok(preserves_rail::record("node-control-live-transport-receipt-v1", vec![
@@ -8576,7 +8608,7 @@ fn live_transport_receipt_value(input: &LiveTransportReceiptValueInput<'_>) -> R
     ]))
 }
 
-fn live_workflow_receipt_value(input: &LiveWorkflowReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_workflow_receipt_value(input: &LiveWorkflowReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-live-workflow-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA),
@@ -8662,7 +8694,7 @@ fn fail_if(condition: bool) -> &'static str {
     if condition { "fail" } else { "pass" }
 }
 
-fn receipt_check_value(name: &str, status: &str) -> IOValue {
+fn receipt_check_value(name: &str, status: &str) -> IoValue {
     preserves_rail::record("check", vec![preserves_rail::string(name), preserves_rail::string(status)])
 }
 
@@ -8686,7 +8718,7 @@ fn live_send_receipt_checks(input: &LiveSendReceiptValueInput<'_>) -> LiveSendRe
     }
 }
 
-fn live_send_check_sequence(checks: &LiveSendReceiptChecks) -> IOValue {
+fn live_send_check_sequence(checks: &LiveSendReceiptChecks) -> IoValue {
     preserves_rail::sequence(vec![
         receipt_check_value("receiver-ticket-bound", "pass"),
         receipt_check_value("receiver-address-bound", pass_if(checks.has_addresses)),
@@ -8702,7 +8734,7 @@ fn live_send_check_sequence(checks: &LiveSendReceiptChecks) -> IOValue {
     ])
 }
 
-fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let checks = live_send_receipt_checks(input);
     Ok(preserves_rail::record("node-control-live-send-receipt-v1", vec![
@@ -8726,7 +8758,7 @@ fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IOVa
     ]))
 }
 
-fn live_send_retry_receipt_value(input: &LiveSendRetryReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_send_retry_receipt_value(input: &LiveSendRetryReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-live-send-retry-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA),
@@ -8761,7 +8793,7 @@ fn live_send_retry_receipt_value(input: &LiveSendRetryReceiptValueInput<'_>) -> 
     ]))
 }
 
-fn live_send_duplicate_receipt_value(input: &LiveSendDuplicateReceiptValueInput<'_>) -> Result<IOValue> {
+fn live_send_duplicate_receipt_value(input: &LiveSendDuplicateReceiptValueInput<'_>) -> Result<IoValue> {
     Ok(preserves_rail::record("node-control-live-send-duplicate-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA),
         preserves_rail::record("decision", vec![preserves_rail::string("pass")]),
@@ -8798,7 +8830,7 @@ fn live_send_duplicate_receipt_value(input: &LiveSendDuplicateReceiptValueInput<
     ]))
 }
 
-fn service_lock_value(input: &ServiceLockValueInput<'_>) -> Result<IOValue> {
+fn service_lock_value(input: &ServiceLockValueInput<'_>) -> Result<IoValue> {
     Ok(preserves_rail::record("node-control-service-lock-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_SERVICE_LOCK_SCHEMA),
         preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(input.state_root)?)]),
@@ -8832,7 +8864,7 @@ fn service_lock_value(input: &ServiceLockValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-fn service_heartbeat_receipt_value(input: &ServiceHeartbeatValueInput<'_>) -> Result<IOValue> {
+fn service_heartbeat_receipt_value(input: &ServiceHeartbeatValueInput<'_>) -> Result<IoValue> {
     Ok(preserves_rail::record("node-control-service-heartbeat-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_SERVICE_HEARTBEAT_RECEIPT_SCHEMA),
         preserves_rail::record("decision", vec![preserves_rail::string(if input.diagnostics.is_empty() {
@@ -8865,7 +8897,7 @@ fn service_heartbeat_receipt_value(input: &ServiceHeartbeatValueInput<'_>) -> Re
     ]))
 }
 
-fn supervisor_receipt_value(input: &SupervisorReceiptValueInput<'_>) -> Result<IOValue> {
+fn supervisor_receipt_value(input: &SupervisorReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-supervisor-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA),
@@ -8903,7 +8935,7 @@ fn supervisor_receipt_value(input: &SupervisorReceiptValueInput<'_>) -> Result<I
     ]))
 }
 
-fn service_run_check_sequence(input: &ServiceRunReceiptValueInput<'_>) -> IOValue {
+fn service_run_check_sequence(input: &ServiceRunReceiptValueInput<'_>) -> IoValue {
     let has_supervisor_policy_binding =
         input.supervisor_policy_ref.is_none() || !input.supervisor_receipt_refs.is_empty();
     preserves_rail::sequence(vec![
@@ -8916,7 +8948,7 @@ fn service_run_check_sequence(input: &ServiceRunReceiptValueInput<'_>) -> IOValu
     ])
 }
 
-fn service_run_receipt_value(input: &ServiceRunReceiptValueInput<'_>) -> Result<IOValue> {
+fn service_run_receipt_value(input: &ServiceRunReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-service-run-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA),
@@ -8963,7 +8995,7 @@ fn ingress_envelope_value(
     operation_ref: &str,
     transport: &str,
     transport_check: &str,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     Ok(preserves_rail::record("node-control-ingress-envelope-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA),
         preserves_rail::record("transport", vec![preserves_rail::string(transport)]),
@@ -9010,7 +9042,7 @@ fn ingress_envelope_value(
     ]))
 }
 
-fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IOValue> {
+fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     let has_peer_bootstrap = !input.envelope.peer_bootstrap_refs.is_empty();
     let has_authority = !input.envelope.authority_refs.is_empty() && !input.envelope.request.authority_refs.is_empty();
@@ -9078,7 +9110,7 @@ fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IOValue
     ]))
 }
 
-fn queue_receipt_value(input: &QueueReceiptValueInput<'_>) -> Result<IOValue> {
+fn queue_receipt_value(input: &QueueReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-queue-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA),
@@ -9108,7 +9140,7 @@ fn queue_receipt_value(input: &QueueReceiptValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-fn operation_receipt_value(input: &OperationReceiptValueInput<'_>) -> Result<IOValue> {
+fn operation_receipt_value(input: &OperationReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-operation-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_OPERATION_RECEIPT_SCHEMA),
@@ -9137,7 +9169,7 @@ fn operation_receipt_value(input: &OperationReceiptValueInput<'_>) -> Result<IOV
     ]))
 }
 
-fn heartbeat_receipt_value(input: &HeartbeatReceiptValueInput<'_>) -> Result<IOValue> {
+fn heartbeat_receipt_value(input: &HeartbeatReceiptValueInput<'_>) -> Result<IoValue> {
     Ok(preserves_rail::record("node-control-heartbeat-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA),
         preserves_rail::record("decision", vec![preserves_rail::string(if input.diagnostics.is_empty() {
@@ -9170,7 +9202,7 @@ fn heartbeat_receipt_value(input: &HeartbeatReceiptValueInput<'_>) -> Result<IOV
     ]))
 }
 
-fn loop_receipt_value(input: &LoopReceiptValueInput<'_>) -> Result<IOValue> {
+fn loop_receipt_value(input: &LoopReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     Ok(preserves_rail::record("node-control-loop-receipt-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_LOOP_RECEIPT_SCHEMA),
@@ -9210,7 +9242,7 @@ fn loop_receipt_value(input: &LoopReceiptValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
+pub fn node_daemon_summary(value: &IoValue) -> Result<String> {
     if let Some(summary) = runtime_summary(value)? {
         return Ok(summary);
     }
@@ -9253,7 +9285,7 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
     Err(MoltenError::invalid_harness("unsupported node daemon artifact for show"))
 }
 
-fn runtime_summary(value: &IOValue) -> Result<Option<String>> {
+fn runtime_summary(value: &IoValue) -> Result<Option<String>> {
     if let Ok(config) = node_runtime::parse_node_config(value) {
         return Ok(Some(format!(
             "node config ref={} identity={} adapters={}",
@@ -9299,7 +9331,7 @@ fn runtime_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn import_summary(value: &IOValue) -> Result<Option<String>> {
+fn import_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-ticket-import-receipt-v1", Some(13)) {
         require_schema(
             &fields[0],
@@ -9329,7 +9361,7 @@ fn import_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn access_summary(value: &IOValue) -> Result<Option<String>> {
+fn access_summary(value: &IoValue) -> Result<Option<String>> {
     if let Ok(ticket) = parse_node_control_live_ticket(value) {
         return Ok(Some(format!(
             "node control live ticket ref={} node={} topic={} endpoint={}",
@@ -9368,7 +9400,7 @@ fn access_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn flow_summary(value: &IOValue) -> Result<Option<String>> {
+fn flow_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-listener-receipt-v1", Some(14)) {
         require_schema(
             &fields[0],
@@ -9401,7 +9433,7 @@ fn flow_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn bundle_summary(value: &IOValue) -> Result<Option<String>> {
+fn bundle_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-v1", Some(10)) {
         require_schema(
             &fields[0],
@@ -9445,7 +9477,7 @@ fn bundle_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn gate_summary(value: &IOValue) -> Result<Option<String>> {
+fn gate_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-verify-receipt-v1", Some(10)) {
         require_schema(
             &fields[0],
@@ -9475,7 +9507,7 @@ fn gate_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn apply_summary(value: &IOValue) -> Result<Option<String>> {
+fn apply_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15)) {
         require_schema(
             &fields[0],
@@ -9509,7 +9541,7 @@ fn apply_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn send_summary(value: &IOValue) -> Result<Option<String>> {
+fn send_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-send-retry-receipt-v1", Some(14)) {
         require_schema(
             &fields[0],
@@ -9568,7 +9600,7 @@ fn send_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn state_summary(value: &IOValue) -> Result<Option<String>> {
+fn state_summary(value: &IoValue) -> Result<Option<String>> {
     if let Ok(health) = node_runtime::parse_node_health_receipt(value) {
         return Ok(Some(format!(
             "node health decision={} receipt={} replay={}",
@@ -9609,7 +9641,7 @@ fn state_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn supervisor_summary(value: &IOValue) -> Result<Option<String>> {
+fn supervisor_summary(value: &IoValue) -> Result<Option<String>> {
     if let Ok(policy) = parse_node_control_supervisor_policy(value) {
         return Ok(Some(format!(
             "node control supervisor policy ref={} restarts={} stale_lock_recovery={}",
@@ -9645,7 +9677,7 @@ fn supervisor_summary(value: &IOValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn control_summary(value: &IOValue) -> Result<Option<String>> {
+fn control_summary(value: &IoValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-queue-receipt-v1", Some(9)) {
         return Ok(Some(format!(
             "node control queue decision={} phase={} request={}",
@@ -9720,7 +9752,7 @@ fn remove_active_lock(state_root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn active_lock_value(state_root: &Path, startup_receipt_ref: &str) -> Result<IOValue> {
+fn active_lock_value(state_root: &Path, startup_receipt_ref: &str) -> Result<IoValue> {
     Ok(preserves_rail::record("node-control-lock-v1", vec![
         preserves_rail::string(preserves_rail::NODE_CONTROL_LOCK_SCHEMA),
         preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(state_root)?)]),
@@ -9747,7 +9779,7 @@ fn active_lock_value(state_root: &Path, startup_receipt_ref: &str) -> Result<IOV
     ]))
 }
 
-fn import_node_artifact(state_root: &Path, value: &IOValue) -> Result<String> {
+fn import_node_artifact(state_root: &Path, value: &IoValue) -> Result<String> {
     let imported = ledger::import_artifact(&state_root.join("ledger"), value)?;
     let receipt_path = state_root
         .join("receipts")
@@ -9784,7 +9816,7 @@ fn pending_control_request_paths(state_root: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn archive_dispatched_request(state_root: &Path, request_path: &Path, request_value: &IOValue) -> Result<()> {
+fn archive_dispatched_request(state_root: &Path, request_path: &Path, request_value: &IoValue) -> Result<()> {
     let request_ref = preserves_rail::canonical_hash(request_value)?;
     let archived = control_outbox_request_path(state_root, &request_ref);
     write_preserves(&archived, request_value)?;
@@ -9958,14 +9990,14 @@ fn ref_file_stem(value_ref: &str) -> String {
     value_ref.replace(':', "-")
 }
 
-fn optional_string(value: Option<&str>) -> IOValue {
+fn optional_string(value: Option<&str>) -> IoValue {
     match value {
         Some(value) => preserves_rail::record("some", vec![preserves_rail::string(value)]),
         None => preserves_rail::record("none", Vec::new()),
     }
 }
 
-fn optional_value(value: Option<&IOValue>) -> IOValue {
+fn optional_value(value: Option<&IoValue>) -> IoValue {
     match value {
         Some(value) => preserves_rail::record("some", vec![value.clone()]),
         None => preserves_rail::record("none", Vec::new()),
@@ -10015,7 +10047,7 @@ fn record_optional_string(value: &preserves::Value<preserves::IOValue>, tag: &st
     Ok(Some(value))
 }
 
-fn record_optional_value(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Option<IOValue>> {
+fn record_optional_value(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Option<IoValue>> {
     let record_value = crate::preserves_rail::value_to_iovalue(value);
     let fields = record_value
         .collect_simple_record(tag, Some(1))
@@ -10145,7 +10177,7 @@ fn record_sequence_len(value: &preserves::Value<preserves::IOValue>, tag: &str) 
         .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} must contain a sequence")))
 }
 
-fn record_value(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<IOValue> {
+fn record_value(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<IoValue> {
     let record_value = crate::preserves_rail::value_to_iovalue(value);
     let fields = record_value
         .collect_simple_record(tag, Some(1))
@@ -10153,7 +10185,7 @@ fn record_value(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Resu
     Ok(crate::preserves_rail::value_to_iovalue(&fields[0]))
 }
 
-fn record_values(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Vec<IOValue>> {
+fn record_values(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Vec<IoValue>> {
     let record_value = crate::preserves_rail::value_to_iovalue(value);
     let fields = record_value
         .collect_simple_record(tag, Some(1))
@@ -10217,7 +10249,7 @@ fn validate_member_ref(actual: &str, expected: &str, label: &str) -> Result<()> 
     }
 }
 
-fn validate_optional_member_ref(value: Option<&IOValue>, expected_ref: Option<&str>, label: &str) -> Result<()> {
+fn validate_optional_member_ref(value: Option<&IoValue>, expected_ref: Option<&str>, label: &str) -> Result<()> {
     match (value, expected_ref) {
         (Some(value), Some(expected)) => validate_member_ref(&preserves_rail::canonical_hash(value)?, expected, label),
         (Some(_), None) => Err(MoltenError::invalid_harness(format!("{label} value present without ref"))),
@@ -10440,14 +10472,14 @@ fn validate_node_id(node_id: &str) -> Result<()> {
     }
 }
 
-fn write_preserves(path: &Path, value: &IOValue) -> Result<()> {
+fn write_preserves(path: &Path, value: &IoValue) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(MoltenError::from)?;
     }
     fs::write(path, preserves_rail::to_text(value)?).map_err(MoltenError::from)
 }
 
-fn read_preserves(path: &Path) -> Result<IOValue> {
+fn read_preserves(path: &Path) -> Result<IoValue> {
     let text = fs::read_to_string(path).map_err(MoltenError::from)?;
     preserves_rail::parse_text(&text)
 }
@@ -10466,9 +10498,6 @@ pub fn shutdown_path(state_root: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
     use super::*;
 
     #[test]
@@ -10560,7 +10589,7 @@ mod tests {
         root
     }
 
-    fn submit_and_dispatch(root: &Path, request_value: &IOValue) -> NodeControlDispatch {
+    fn submit_and_dispatch(root: &Path, request_value: &IoValue) -> NodeControlDispatch {
         let submitted = submit_control_request(&NodeControlSubmitInput {
             state_root: root,
             request_value,
@@ -10786,7 +10815,7 @@ mod tests {
         }
     }
 
-    fn request_value(payload_ref: &str, refs: &CaseRefs, evidence_refs: &[String]) -> IOValue {
+    fn request_value(payload_ref: &str, refs: &CaseRefs, evidence_refs: &[String]) -> IoValue {
         node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
@@ -10924,7 +10953,7 @@ mod tests {
         }
     }
 
-    fn build_record_for(material: &BuildMaterial) -> IOValue {
+    fn build_record_for(material: &BuildMaterial) -> IoValue {
         provenance::provenance_build_record_value(&provenance::ProvenanceBuildRecordInput {
             expected_artifact_ref: &material.payload_ref,
             source_refs: &material.source_refs,
@@ -10939,7 +10968,7 @@ mod tests {
         .expect("build record")
     }
 
-    fn provenance_record_for(material: &BuildMaterial, build_record_refs: &[String]) -> IOValue {
+    fn provenance_record_for(material: &BuildMaterial, build_record_refs: &[String]) -> IoValue {
         provenance::provenance_record_value(&provenance::ProvenanceRecordInput {
             artifact_ref: &material.payload_ref,
             trust_state: provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED,
@@ -10973,7 +11002,7 @@ mod tests {
         vec![provenance_ref, build_verification_ref]
     }
 
-    fn install_request_for(case: &BuildCase) -> IOValue {
+    fn install_request_for(case: &BuildCase) -> IoValue {
         node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
@@ -11159,7 +11188,7 @@ mod tests {
         }
     }
 
-    fn materialized_request_value(root: &Path, refs: &MaterializedIngressRefs) -> IOValue {
+    fn materialized_request_value(root: &Path, refs: &MaterializedIngressRefs) -> IoValue {
         let payload_value =
             preserves_rail::record("node-control-ingress-payload", vec![preserves_rail::string("materialized")]);
         let payload_ref = import_node_artifact(root, &payload_value).expect("import payload");
@@ -11176,7 +11205,7 @@ mod tests {
     }
 
     fn materialized_envelope(
-        request_value: &IOValue,
+        request_value: &IoValue,
         refs: &MaterializedIngressRefs,
         sequence: u64,
     ) -> NodeControlIngressEnvelope {
@@ -11217,8 +11246,8 @@ mod tests {
         request: node_runtime::NodeControlRequest,
         envelope: NodeControlIngressEnvelope,
         delivered: NodeControlIngressDeliver,
-        queue_value: IOValue,
-        control_value: IOValue,
+        queue_value: IoValue,
+        control_value: IoValue,
         control_receipt_ref: String,
         policy_refs: Vec<String>,
         operations: Vec<String>,
@@ -11228,12 +11257,12 @@ mod tests {
         delivery: ReconcileDelivery,
         exported: NodeControlLiveWorkflowBundleExport,
         gated: NodeControlLiveWorkflowBundleGate,
-        apply_receipt_value: IOValue,
+        apply_receipt_value: IoValue,
     }
 
     struct ReconcileDenials {
         missing_receiver: NodeControlLiveWorkflowBundleReconcile,
-        denied_control: IOValue,
+        denied_control: IoValue,
         denied_reconcile: NodeControlLiveWorkflowBundleReconcile,
         wrong_envelope: String,
     }
@@ -11281,7 +11310,7 @@ mod tests {
         }
     }
 
-    fn reconcile_request(seed: &ReconcileSeed) -> (IOValue, node_runtime::NodeControlRequest) {
+    fn reconcile_request(seed: &ReconcileSeed) -> (IoValue, node_runtime::NodeControlRequest) {
         let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "status",
             target_ref: None,
@@ -11298,7 +11327,7 @@ mod tests {
 
     fn deliver_reconcile_envelope(
         seed: &ReconcileSeed,
-        request_value: &IOValue,
+        request_value: &IoValue,
     ) -> (NodeControlIngressEnvelope, NodeControlIngressDeliver) {
         let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
             request_value,
@@ -11332,7 +11361,7 @@ mod tests {
         (envelope, delivered)
     }
 
-    fn dispatched_reconcile(seed: &ReconcileSeed, delivered: &NodeControlIngressDeliver) -> (IOValue, IOValue, String) {
+    fn dispatched_reconcile(seed: &ReconcileSeed, delivered: &NodeControlIngressDeliver) -> (IoValue, IoValue, String) {
         run_control_loop(&NodeControlLoopInput {
             state_root: &seed.root,
             max_requests: 1,
@@ -11396,7 +11425,7 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("reconcile authority value");
-        let receipt_values: Vec<&IOValue> = Vec::new();
+        let receipt_values: Vec<&IoValue> = Vec::new();
         let exported = export_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleExportInput {
             receiver_ticket_value: &ticket.value,
             peer_admission_value: &admission.value,
@@ -11451,7 +11480,7 @@ mod tests {
         verified: &NodeControlLiveWorkflowBundleVerify,
         gated: &NodeControlLiveWorkflowBundleGate,
         expected: &LiveWorkflowBundleExpectedInput<'_>,
-    ) -> IOValue {
+    ) -> IoValue {
         let imported_refs = Vec::new();
         let diagnostics = Vec::new();
         live_workflow_bundle_apply_receipt_value(&LiveWorkflowBundleApplyReceiptValueInput {
@@ -11695,7 +11724,7 @@ mod tests {
     fn assert_protocol_pass(
         case: &ReconcileCase,
         reconciled: &NodeControlLiveWorkflowBundleReconcile,
-        ack_value: &IOValue,
+        ack_value: &IoValue,
     ) {
         let delivery = &case.delivery;
         let protocol_gate = gate_node_control_live_workflow_protocol(&NodeControlLiveWorkflowProtocolGateInput {
@@ -11833,7 +11862,7 @@ mod tests {
 
     struct PeerDelivery<'a> {
         root: &'a Path,
-        request_value: &'a IOValue,
+        request_value: &'a IoValue,
         from_peer: &'a str,
         to_node: &'a str,
         peer_bootstrap_refs: &'a [String],
@@ -12069,8 +12098,8 @@ mod tests {
         operations: Vec<String>,
         ticket: NodeControlLiveTicket,
         admission: NodeControlLivePeerAdmission,
-        authority_value: IOValue,
-        receipt_values: Vec<IOValue>,
+        authority_value: IoValue,
+        receipt_values: Vec<IoValue>,
         authority_import_ref: String,
     }
 
@@ -12086,14 +12115,14 @@ mod tests {
     }
 
     struct FlowImports {
-        receipt_values: Vec<IOValue>,
+        receipt_values: Vec<IoValue>,
         authority_import_ref: String,
     }
 
     struct FlowApplyInput<'a> {
         state_root: &'a Path,
-        gate_receipt_value: Option<&'a IOValue>,
-        request_value: Option<&'a IOValue>,
+        gate_receipt_value: Option<&'a IoValue>,
+        request_value: Option<&'a IoValue>,
         is_send_requested: bool,
         sequence: u64,
         expect_message: &'a str,
@@ -12144,7 +12173,7 @@ mod tests {
         .expect("admit peer")
     }
 
-    fn flow_authority_value(policy_refs: &[String], operations: &[String]) -> IOValue {
+    fn flow_authority_value(policy_refs: &[String], operations: &[String]) -> IoValue {
         node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
             peer_id: "peer:live-bundle",
             node_id: "node:live-bundle",
@@ -12164,7 +12193,7 @@ mod tests {
         staging: &Path,
         ticket: &NodeControlLiveTicket,
         admission: &NodeControlLivePeerAdmission,
-        authority_value: &IOValue,
+        authority_value: &IoValue,
         operations: &[String],
     ) -> FlowImports {
         let ticket_import = import_node_control_live_ticket(&NodeControlLiveTicketImportInput {
@@ -12652,7 +12681,7 @@ mod tests {
             preserves_rail::record("receipt-refs", vec![preserves_rail::sequence(
                 case.exported.bundle.receipt_refs.iter().map(preserves_rail::string).collect(),
             )]),
-            preserves_rail::record("checks", vec![preserves_rail::sequence(Vec::<IOValue>::new())]),
+            preserves_rail::record("checks", vec![preserves_rail::sequence(Vec::<IoValue>::new())]),
         ]);
         let wrong_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
             bundle_value: &wrong_bundle,
@@ -12803,9 +12832,9 @@ mod tests {
     struct ServedCase<'a> {
         root: &'a std::path::Path,
         authority_ref: &'a str,
-        ticket_value: &'a IOValue,
-        admission_value: &'a IOValue,
-        send_receipt_value: &'a IOValue,
+        ticket_value: &'a IoValue,
+        admission_value: &'a IoValue,
+        send_receipt_value: &'a IoValue,
         listener: &'a NodeControlLiveServe,
     }
 
@@ -12843,7 +12872,7 @@ mod tests {
         peer_bootstrap_refs: Vec<String>,
         authority_refs: Vec<String>,
         admission: NodeControlLivePeerAdmission,
-        request_value: IOValue,
+        request_value: IoValue,
     }
 
     fn init_send_case() -> (std::path::PathBuf, node_identity::NodeIdentity) {
@@ -13505,7 +13534,7 @@ mod tests {
         write_preserves(&root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value).expect("write service lock");
     }
 
-    fn recovering_policy(policy_refs: &[String]) -> IOValue {
+    fn recovering_policy(policy_refs: &[String]) -> IoValue {
         node_control_supervisor_policy_value(&NodeControlSupervisorPolicyInput {
             max_restarts: 1,
             restart_window_ticks: 1,
@@ -13518,7 +13547,7 @@ mod tests {
         .expect("recover policy")
     }
 
-    fn bounded_shutdown_policy(policy_refs: &[String]) -> IOValue {
+    fn bounded_shutdown_policy(policy_refs: &[String]) -> IoValue {
         node_control_supervisor_policy_value(&NodeControlSupervisorPolicyInput {
             max_restarts: 0,
             restart_window_ticks: 1,
@@ -13606,7 +13635,7 @@ mod tests {
         }
     }
 
-    fn dispatch_value(case: &OpCase, value: &IOValue) -> node_runtime::NodeControlReceipt {
+    fn dispatch_value(case: &OpCase, value: &IoValue) -> node_runtime::NodeControlReceipt {
         let submitted = submit_control_request(&NodeControlSubmitInput {
             state_root: &case.root,
             request_value: value,
@@ -13709,8 +13738,8 @@ mod tests {
     }
 
     struct NodeJobFixture {
-        execution_request: IOValue,
-        admission_receipt: IOValue,
+        execution_request: IoValue,
+        admission_receipt: IoValue,
         job_ref: String,
     }
 
@@ -13720,7 +13749,7 @@ mod tests {
     }
 
     struct AdmissionParts {
-        receipt_value: IOValue,
+        receipt_value: IoValue,
         receipt_ref: String,
         stage_order: Vec<String>,
         policy_refs: Vec<String>,
@@ -13778,7 +13807,7 @@ mod tests {
         }
     }
 
-    fn source_vertex_value(stage_ref: &str) -> IOValue {
+    fn source_vertex_value(stage_ref: &str) -> IoValue {
         job_dag::job_node_value(job_dag::NodeValueInput {
             id: "source",
             kind: "source",
@@ -13795,7 +13824,7 @@ mod tests {
         .expect("source node")
     }
 
-    fn map_vertex_value(stage_ref: &str) -> IOValue {
+    fn map_vertex_value(stage_ref: &str) -> IoValue {
         job_dag::job_node_value(job_dag::NodeValueInput {
             id: "map",
             kind: "map",
@@ -13810,7 +13839,7 @@ mod tests {
         .expect("map node")
     }
 
-    fn fixture_edge_value() -> IOValue {
+    fn fixture_edge_value() -> IoValue {
         job_dag::job_edge_value(job_dag::EdgeValueInput {
             from_node: "source",
             from_port: "out",
@@ -13823,7 +13852,7 @@ mod tests {
         .expect("edge")
     }
 
-    fn graph_value(stages: &StagePair) -> IOValue {
+    fn graph_value(stages: &StagePair) -> IoValue {
         job_dag::job_dag_value(job_dag::DagValueInput {
             nodes: vec![
                 source_vertex_value(&stages.source_ref),
@@ -13870,7 +13899,7 @@ mod tests {
         }
     }
 
-    fn execution_request_value(graph_ref: &str, admission: &AdmissionParts) -> IOValue {
+    fn execution_request_value(graph_ref: &str, admission: &AdmissionParts) -> IoValue {
         job_dag::job_execution_request_value(job_dag::ExecutionRequestValueInput {
             job_ref: graph_ref,
             admission_ref: &admission.receipt_ref,
@@ -13944,8 +13973,8 @@ mod tests {
 
     fn temp_dir(name: &str) -> PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        static TEMP_DIR_COUNTER: Counter = Counter::new(0);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, RELAXED);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
             fs::remove_dir_all(&dir).expect("remove stale temp dir");
