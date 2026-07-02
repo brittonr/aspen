@@ -1,12 +1,26 @@
 type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::value_to_iovalue;
+fn canonical_hash(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn value_to_iovalue(value: &preserves::Value<IoValue>) -> IoValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const TRUST_STATE_REVIEWED: &str = "reviewed";
 pub const TRUST_STATE_REPRODUCIBLE_VERIFIED: &str = "reproducible-verified";

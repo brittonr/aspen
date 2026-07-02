@@ -1,14 +1,41 @@
-use std::fs;
 use std::io::Write;
 
 type IoValue = preserves::IOValue;
-use preserves::Value;
+type MoltenError = crate::error::MoltenError;
+type OpenOptions = std::fs::OpenOptions;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::record;
-use crate::preserves_rail::string;
-use crate::preserves_rail::value_to_iovalue;
+mod fs {
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
+        std::fs::read_to_string(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+
+    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path, contents)
+    }
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 const SECRET_FILE: &str = "node-endpoint.secret";
 const ENDPOINT_FILE: &str = "node-endpoint.id";
@@ -465,7 +492,7 @@ fn write_secret_restricted(path: &std::path::Path, secret: &str) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        let mut file = fs::OpenOptions::new()
+        let mut file = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
