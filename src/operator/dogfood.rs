@@ -4219,7 +4219,7 @@ struct GcAdmissions {
     support: crate::retention::EvidenceAdmission,
     index: crate::retention::EvidenceAdmission,
     remote_gc: crate::retention::EvidenceAdmission,
-    clearance: crate::retention::RetentionRemoteGcClearance,
+    clearance: crate::retention::RemoteGcClearance,
     evidence: crate::retention::DestructiveRetentionEvidence,
 }
 
@@ -4269,9 +4269,8 @@ fn gc_admissions(seed: GcSeed<'_>) -> Result<GcAdmissions> {
     let index = store_gc_fixture(seed, crate::retention::ADMISSION_KIND_REFERENCE_INDEX, "index", &[])?;
     let remote_gc = store_gc_fixture(seed, crate::retention::ADMISSION_KIND_REMOTE_GC, "remote-gc", seed.remote_refs)?;
     let clearance_evidence = vec![support.admission_ref.clone()];
-    let clearance = crate::retention::store_retention_remote_gc_clearance(
-        seed.root,
-        &crate::retention::RetentionRemoteGcClearanceInput {
+    let clearance =
+        crate::retention::store_remote_gc_clearance(seed.root, &crate::retention::RemoteGcClearanceInput {
             decision: "pass",
             requester_ref: seed.requester_ref,
             peer_ref: seed.peer_ref,
@@ -4287,8 +4286,7 @@ fn gc_admissions(seed: GcSeed<'_>) -> Result<GcAdmissions> {
             is_current: true,
             revoked_refs: &[],
             diagnostics: &[],
-        },
-    )?;
+        })?;
     let evidence = crate::retention::DestructiveRetentionEvidence {
         requester_ref: Some(seed.requester_ref.to_string()),
         policy_refs: vec![policy.admission_ref.clone()],

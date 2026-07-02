@@ -24,8 +24,8 @@ pub(crate) fn import(args: super::command::live::ImportWorkflow) -> molten::erro
     let response_control_value = super::io::read_preserves_file(&response_control)?;
     let response_send_receipt_value = super::io::read_preserves_file(&response_send_receipt)?;
     let response_receive_receipt_value = super::io::read_preserves_file(&response_receive_receipt)?;
-    let imported = molten::retention::import_retention_remote_gc_clearance_live_workflow(
-        molten::retention::RetentionRemoteGcClearanceLiveImportWorkflowInput {
+    let imported = molten::retention::import_remote_gc_clearance_live_workflow(
+        molten::retention::RemoteGcClearanceLiveImportWorkflowInput {
             root: &root,
             request_value: &request_value,
             response_value: &response_value,
@@ -61,8 +61,8 @@ pub(crate) fn import(args: super::command::live::ImportWorkflow) -> molten::erro
 
 pub(crate) fn loopback(args: super::command::live::Loopback) -> molten::error::Result<()> {
     let runtime = runtime()?;
-    let live = runtime.block_on(molten::retention::run_retention_remote_gc_clearance_live_loopback(
-        molten::retention::RetentionRemoteGcClearanceLiveLoopbackInput {
+    let live = runtime.block_on(molten::retention::run_remote_gc_clearance_live_loopback(
+        molten::retention::RemoteGcClearanceLiveLoopbackInput {
             root: &args.root,
             requester_node_root: &args.requester_node_root,
             peer_node_root: &args.peer_node_root,

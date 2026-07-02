@@ -18,26 +18,23 @@ pub(crate) fn record(args: super::command::base::Record) -> molten::error::Resul
         diagnostics,
         out,
     } = args;
-    let clearance = molten::retention::store_retention_remote_gc_clearance(
-        &root,
-        &molten::retention::RetentionRemoteGcClearanceInput {
-            decision: &decision,
-            requester_ref: &requester_ref,
-            peer_ref: &peer_ref,
-            object_ref: &object_ref,
-            object_kind: &object_kind,
-            retention_class: &retention_class,
-            action: &action,
-            remote_ref: &remote_ref,
-            policy_ref: &policy_ref,
-            authority_ref: &authority_ref,
-            evidence_refs: &evidence_refs,
-            retained_refs: &retained_refs,
-            is_current: !is_stale,
-            revoked_refs: &revoked_refs,
-            diagnostics: &diagnostics,
-        },
-    )?;
+    let clearance = molten::retention::store_remote_gc_clearance(&root, &molten::retention::RemoteGcClearanceInput {
+        decision: &decision,
+        requester_ref: &requester_ref,
+        peer_ref: &peer_ref,
+        object_ref: &object_ref,
+        object_kind: &object_kind,
+        retention_class: &retention_class,
+        action: &action,
+        remote_ref: &remote_ref,
+        policy_ref: &policy_ref,
+        authority_ref: &authority_ref,
+        evidence_refs: &evidence_refs,
+        retained_refs: &retained_refs,
+        is_current: !is_stale,
+        revoked_refs: &revoked_refs,
+        diagnostics: &diagnostics,
+    })?;
     let is_written_to_file = super::io::write_optional_preserves(out.as_ref(), &clearance.value)?;
     super::io::print_or_log_summary(
         is_written_to_file,
@@ -66,7 +63,7 @@ pub(crate) fn request(args: super::command::base::Request) -> molten::error::Res
     } = args;
     let request = molten::retention::store_retention_remote_gc_clearance_request(
         &root,
-        &molten::retention::RetentionRemoteGcClearanceRequestInput {
+        &molten::retention::RemoteGcClearanceRequestInput {
             requester_ref: &requester_ref,
             peer_ref: &peer_ref,
             object_ref: &object_ref,
@@ -103,7 +100,7 @@ pub(crate) fn respond(args: super::command::base::Respond) -> molten::error::Res
     } = args;
     let request_value = super::io::read_preserves_file(&request)?;
     let response = molten::retention::store_retention_remote_gc_clearance_response(
-        molten::retention::RetentionRemoteGcClearanceResponseInput {
+        molten::retention::RemoteGcClearanceResponseInput {
             root: &root,
             request_value: &request_value,
             evidence_refs: &evidence_refs,
@@ -135,15 +132,14 @@ pub(crate) fn import(args: super::command::base::Import) -> molten::error::Resul
     } = args;
     let request_value = super::io::read_preserves_file(&request)?;
     let response_value = super::io::read_preserves_file(&response)?;
-    let import = molten::retention::import_retention_remote_gc_clearance_response(
-        molten::retention::RetentionRemoteGcClearanceImportInput {
+    let import =
+        molten::retention::import_remote_gc_clearance_response(molten::retention::RemoteGcClearanceImportInput {
             root: &root,
             request_value: &request_value,
             response_value: &response_value,
             expected_peer_ref: expected_peer_ref.as_deref(),
             expected_remote_ref: expected_remote_ref.as_deref(),
-        },
-    )?;
+        })?;
     let is_written_to_file = super::io::write_optional_preserves(out.as_ref(), &import.value)?;
     super::io::print_or_log_summary(
         is_written_to_file,

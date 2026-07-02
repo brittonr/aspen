@@ -527,7 +527,7 @@ pub struct EvidenceAdmission {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceInput<'a> {
+pub struct RemoteGcClearanceInput<'a> {
     pub decision: &'a str,
     pub requester_ref: &'a str,
     pub peer_ref: &'a str,
@@ -546,7 +546,7 @@ pub struct RetentionRemoteGcClearanceInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearance {
+pub struct RemoteGcClearance {
     pub clearance_ref: String,
     pub decision: String,
     pub requester_ref: String,
@@ -567,7 +567,7 @@ pub struct RetentionRemoteGcClearance {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceRequestInput<'a> {
+pub struct RemoteGcClearanceRequestInput<'a> {
     pub requester_ref: &'a str,
     pub peer_ref: &'a str,
     pub object_ref: &'a str,
@@ -581,7 +581,7 @@ pub struct RetentionRemoteGcClearanceRequestInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceRequest {
+pub struct RemoteGcClearanceRequest {
     pub request_ref: String,
     pub requester_ref: String,
     pub peer_ref: String,
@@ -597,7 +597,7 @@ pub struct RetentionRemoteGcClearanceRequest {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionRemoteGcClearanceResponseInput<'a> {
+pub struct RemoteGcClearanceResponseInput<'a> {
     pub root: &'a Path,
     pub request_value: &'a IoValue,
     pub evidence_refs: &'a [String],
@@ -608,19 +608,19 @@ pub struct RetentionRemoteGcClearanceResponseInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceResponse {
+pub struct RemoteGcClearanceResponse {
     pub response_ref: String,
     pub decision: String,
     pub request_ref: String,
-    pub request: RetentionRemoteGcClearanceRequest,
+    pub request: RemoteGcClearanceRequest,
     pub clearance_ref: String,
-    pub clearance: RetentionRemoteGcClearance,
+    pub clearance: RemoteGcClearance,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionRemoteGcClearanceImportInput<'a> {
+pub struct RemoteGcClearanceImportInput<'a> {
     pub root: &'a Path,
     pub request_value: &'a IoValue,
     pub response_value: &'a IoValue,
@@ -629,7 +629,7 @@ pub struct RetentionRemoteGcClearanceImportInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionRemoteGcClearanceImportValueInput<'a> {
+pub struct RemoteGcClearanceImportValueInput<'a> {
     pub decision: &'a str,
     pub request_ref: &'a str,
     pub response_ref: &'a str,
@@ -640,7 +640,7 @@ pub struct RetentionRemoteGcClearanceImportValueInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceImport {
+pub struct RemoteGcClearanceImport {
     pub import_ref: String,
     pub decision: String,
     pub request_ref: String,
@@ -653,7 +653,7 @@ pub struct RetentionRemoteGcClearanceImport {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionRemoteGcClearanceLiveLoopbackInput<'a> {
+pub struct RemoteGcClearanceLiveLoopbackInput<'a> {
     pub root: &'a Path,
     pub requester_node_root: &'a Path,
     pub peer_node_root: &'a Path,
@@ -690,7 +690,7 @@ pub struct RetentionRemoteGcClearanceLiveLoopbackInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionRemoteGcClearanceLiveRequestSendInput<'a> {
+pub struct RemoteGcClearanceLiveRequestSendInput<'a> {
     pub root: &'a Path,
     pub requester_node_root: Option<&'a Path>,
     pub peer_ticket_value: &'a IoValue,
@@ -718,7 +718,7 @@ pub struct RetentionRemoteGcClearanceLiveRequestSendInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionRemoteGcClearanceLiveResponseSendInput<'a> {
+pub struct RemoteGcClearanceLiveResponseSendInput<'a> {
     pub root: &'a Path,
     pub peer_node_root: Option<&'a Path>,
     pub requester_ticket_value: &'a IoValue,
@@ -742,7 +742,7 @@ pub struct RetentionRemoteGcClearanceLiveResponseSendInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionRemoteGcClearanceLiveImportWorkflowInput<'a> {
+pub struct RemoteGcClearanceLiveImportWorkflowInput<'a> {
     pub root: &'a Path,
     pub request_value: &'a IoValue,
     pub response_value: &'a IoValue,
@@ -759,7 +759,7 @@ pub struct RetentionRemoteGcClearanceLiveImportWorkflowInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionRemoteGcClearanceLiveWorkflowValueInput<'a> {
+pub struct RemoteGcClearanceLiveWorkflowValueInput<'a> {
     pub request_value: &'a IoValue,
     pub response_value: &'a IoValue,
     pub import_value: &'a IoValue,
@@ -775,7 +775,7 @@ pub struct RetentionRemoteGcClearanceLiveWorkflowValueInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceLiveWorkflow {
+pub struct RemoteGcClearanceLiveWorkflow {
     pub workflow_ref: String,
     pub decision: String,
     pub request_ref: String,
@@ -791,11 +791,11 @@ pub struct RetentionRemoteGcClearanceLiveWorkflow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceLiveLoopback {
-    pub request: RetentionRemoteGcClearanceRequest,
-    pub response: RetentionRemoteGcClearanceResponse,
-    pub import: RetentionRemoteGcClearanceImport,
-    pub workflow: RetentionRemoteGcClearanceLiveWorkflow,
+pub struct RemoteGcClearanceLiveLoopback {
+    pub request: RemoteGcClearanceRequest,
+    pub response: RemoteGcClearanceResponse,
+    pub import: RemoteGcClearanceImport,
+    pub workflow: RemoteGcClearanceLiveWorkflow,
     pub request_publish_receipt_value: IoValue,
     pub request_receive_receipt_value: IoValue,
     pub response_publish_receipt_value: IoValue,
@@ -803,25 +803,25 @@ pub struct RetentionRemoteGcClearanceLiveLoopback {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceLiveRequestSend {
-    pub request: RetentionRemoteGcClearanceRequest,
+pub struct RemoteGcClearanceLiveRequestSend {
+    pub request: RemoteGcClearanceRequest,
     pub control_ref: String,
     pub control_value: IoValue,
     pub send: crate::node_daemon::NodeControlLiveSend,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceLiveResponseSend {
-    pub response: RetentionRemoteGcClearanceResponse,
+pub struct RemoteGcClearanceLiveResponseSend {
+    pub response: RemoteGcClearanceResponse,
     pub control_ref: String,
     pub control_value: IoValue,
     pub send: crate::node_daemon::NodeControlLiveSend,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionRemoteGcClearanceLiveImportWorkflow {
-    pub import: RetentionRemoteGcClearanceImport,
-    pub workflow: RetentionRemoteGcClearanceLiveWorkflow,
+pub struct RemoteGcClearanceLiveImportWorkflow {
+    pub import: RemoteGcClearanceImport,
+    pub workflow: RemoteGcClearanceLiveWorkflow,
     pub request_send_receipt_ref: String,
     pub response_send_receipt_ref: String,
 }
@@ -1312,7 +1312,7 @@ pub fn store_evidence_admission(root: &Path, input: &EvidenceAdmissionInput<'_>)
     Ok(admission)
 }
 
-pub fn retention_remote_gc_clearance_value(input: &RetentionRemoteGcClearanceInput<'_>) -> Result<IoValue> {
+pub fn remote_gc_clearance_value(input: &RemoteGcClearanceInput<'_>) -> Result<IoValue> {
     validate_remote_gc_clearance_input(input)?;
     Ok(crate::preserves_rail::record("retention-remote-gc-clearance-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_SCHEMA),
@@ -1340,7 +1340,7 @@ pub fn retention_remote_gc_clearance_value(input: &RetentionRemoteGcClearanceInp
     ]))
 }
 
-pub fn parse_retention_remote_gc_clearance(value: &IoValue) -> Result<RetentionRemoteGcClearance> {
+pub fn parse_remote_gc_clearance(value: &IoValue) -> Result<RemoteGcClearance> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-v1", Some(16))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-v1 ...>"))?;
@@ -1367,7 +1367,7 @@ pub fn parse_retention_remote_gc_clearance(value: &IoValue) -> Result<RetentionR
     let revoked_refs = record_ref_sequence(&fields[13], "revoked")?;
     let diagnostics = record_string_sequence(&fields[14], "diagnostics")?;
     require_check(&parse_checks(&fields[15])?, "peer-bound", "retention remote GC clearance")?;
-    Ok(RetentionRemoteGcClearance {
+    Ok(RemoteGcClearance {
         clearance_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         requester_ref,
@@ -1388,20 +1388,15 @@ pub fn parse_retention_remote_gc_clearance(value: &IoValue) -> Result<RetentionR
     })
 }
 
-pub fn store_retention_remote_gc_clearance(
-    root: &Path,
-    input: &RetentionRemoteGcClearanceInput<'_>,
-) -> Result<RetentionRemoteGcClearance> {
+pub fn store_remote_gc_clearance(root: &Path, input: &RemoteGcClearanceInput<'_>) -> Result<RemoteGcClearance> {
     ensure_store(root)?;
-    let value = retention_remote_gc_clearance_value(input)?;
-    let clearance = parse_retention_remote_gc_clearance(&value)?;
+    let value = remote_gc_clearance_value(input)?;
+    let clearance = parse_remote_gc_clearance(&value)?;
     write_store_value(&remote_clearance_path(root, &clearance.clearance_ref)?, &clearance.value)?;
     Ok(clearance)
 }
 
-pub fn retention_remote_gc_clearance_request_value(
-    input: &RetentionRemoteGcClearanceRequestInput<'_>,
-) -> Result<IoValue> {
+pub fn remote_gc_clearance_request_value(input: &RemoteGcClearanceRequestInput<'_>) -> Result<IoValue> {
     validate_remote_gc_clearance_request_input(input)?;
     Ok(crate::preserves_rail::record("retention-remote-gc-clearance-request-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA),
@@ -1418,7 +1413,7 @@ pub fn retention_remote_gc_clearance_request_value(
     ]))
 }
 
-pub fn parse_retention_remote_gc_clearance_request(value: &IoValue) -> Result<RetentionRemoteGcClearanceRequest> {
+pub fn parse_retention_remote_gc_clearance_request(value: &IoValue) -> Result<RemoteGcClearanceRequest> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-request-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-request-v1 ...>"))?;
@@ -1429,7 +1424,7 @@ pub fn parse_retention_remote_gc_clearance_request(value: &IoValue) -> Result<Re
     )?;
     require_check(&parse_checks(&fields[10])?, "request-scope-bound", "retention remote clearance request")?;
     let (object_ref, object_kind) = parse_object_value(&fields[3])?;
-    let request = RetentionRemoteGcClearanceRequest {
+    let request = RemoteGcClearanceRequest {
         request_ref: crate::preserves_rail::canonical_hash(value)?,
         requester_ref: record_ref(&fields[1], "requester")?,
         peer_ref: record_ref(&fields[2], "peer")?,
@@ -1449,18 +1444,18 @@ pub fn parse_retention_remote_gc_clearance_request(value: &IoValue) -> Result<Re
 
 pub fn store_retention_remote_gc_clearance_request(
     root: &Path,
-    input: &RetentionRemoteGcClearanceRequestInput<'_>,
-) -> Result<RetentionRemoteGcClearanceRequest> {
+    input: &RemoteGcClearanceRequestInput<'_>,
+) -> Result<RemoteGcClearanceRequest> {
     ensure_store(root)?;
-    let value = retention_remote_gc_clearance_request_value(input)?;
+    let value = remote_gc_clearance_request_value(input)?;
     let request = parse_retention_remote_gc_clearance_request(&value)?;
     write_store_value(&remote_clearance_request_path(root, &request.request_ref)?, &request.value)?;
     Ok(request)
 }
 
 pub fn store_retention_remote_gc_clearance_response(
-    input: RetentionRemoteGcClearanceResponseInput<'_>,
-) -> Result<RetentionRemoteGcClearanceResponse> {
+    input: RemoteGcClearanceResponseInput<'_>,
+) -> Result<RemoteGcClearanceResponse> {
     ensure_store(input.root)?;
     let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
     let diagnostics = remote_clearance_response_diagnostics(input)?;
@@ -1474,7 +1469,7 @@ pub fn store_retention_remote_gc_clearance_response(
             "retention remote clearance response evidence refs",
         )?;
     }
-    let clearance_value = retention_remote_gc_clearance_value(&RetentionRemoteGcClearanceInput {
+    let clearance_value = remote_gc_clearance_value(&RemoteGcClearanceInput {
         decision,
         requester_ref: &request.requester_ref,
         peer_ref: &request.peer_ref,
@@ -1491,16 +1486,16 @@ pub fn store_retention_remote_gc_clearance_response(
         revoked_refs: input.revoked_refs,
         diagnostics: &diagnostics,
     })?;
-    let clearance = parse_retention_remote_gc_clearance(&clearance_value)?;
-    let value = retention_remote_gc_clearance_response_value(&request, &clearance, decision, &diagnostics)?;
+    let clearance = parse_remote_gc_clearance(&clearance_value)?;
+    let value = remote_gc_clearance_response_value(&request, &clearance, decision, &diagnostics)?;
     let response = parse_retention_remote_gc_clearance_response(&value)?;
     write_store_value(&remote_clearance_response_path(input.root, &response.response_ref)?, &response.value)?;
     Ok(response)
 }
 
-pub fn retention_remote_gc_clearance_response_value(
-    request: &RetentionRemoteGcClearanceRequest,
-    clearance: &RetentionRemoteGcClearance,
+pub fn remote_gc_clearance_response_value(
+    request: &RemoteGcClearanceRequest,
+    clearance: &RemoteGcClearance,
     decision: &str,
     diagnostics: &[String],
 ) -> Result<IoValue> {
@@ -1533,7 +1528,7 @@ pub fn retention_remote_gc_clearance_response_value(
     ]))
 }
 
-pub fn parse_retention_remote_gc_clearance_response(value: &IoValue) -> Result<RetentionRemoteGcClearanceResponse> {
+pub fn parse_retention_remote_gc_clearance_response(value: &IoValue) -> Result<RemoteGcClearanceResponse> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-response-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-response-v1 ...>"))?;
@@ -1554,7 +1549,7 @@ pub fn parse_retention_remote_gc_clearance_response(value: &IoValue) -> Result<R
         return Err(MoltenError::invalid_harness("remote clearance response decision does not match clearance"));
     }
     validate_remote_gc_clearance_workflow_scope(&request, &clearance)?;
-    Ok(RetentionRemoteGcClearanceResponse {
+    Ok(RemoteGcClearanceResponse {
         response_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         request_ref: request.request_ref.clone(),
@@ -1566,9 +1561,7 @@ pub fn parse_retention_remote_gc_clearance_response(value: &IoValue) -> Result<R
     })
 }
 
-pub fn import_retention_remote_gc_clearance_response(
-    input: RetentionRemoteGcClearanceImportInput<'_>,
-) -> Result<RetentionRemoteGcClearanceImport> {
+pub fn import_remote_gc_clearance_response(input: RemoteGcClearanceImportInput<'_>) -> Result<RemoteGcClearanceImport> {
     ensure_store(input.root)?;
     if let Some(peer_ref) = input.expected_peer_ref {
         require_ref(peer_ref, "retention remote clearance import expected peer ref")?;
@@ -1582,7 +1575,7 @@ pub fn import_retention_remote_gc_clearance_response(
         Err(error) => {
             let diagnostics = vec![format!("remote-clearance-tampered-response:{error}")];
             let response_ref = crate::preserves_rail::canonical_hash(input.response_value)?;
-            let value = retention_remote_gc_clearance_import_value(&RetentionRemoteGcClearanceImportValueInput {
+            let value = remote_gc_clearance_import_value(&RemoteGcClearanceImportValueInput {
                 decision: "deny",
                 request_ref: &request.request_ref,
                 response_ref: &response_ref,
@@ -1608,7 +1601,7 @@ pub fn import_retention_remote_gc_clearance_response(
     } else {
         None
     };
-    let value = retention_remote_gc_clearance_import_value(&RetentionRemoteGcClearanceImportValueInput {
+    let value = remote_gc_clearance_import_value(&RemoteGcClearanceImportValueInput {
         decision,
         request_ref: &request.request_ref,
         response_ref: &response.response_ref,
@@ -1622,9 +1615,7 @@ pub fn import_retention_remote_gc_clearance_response(
     Ok(import)
 }
 
-pub fn retention_remote_gc_clearance_import_value(
-    input: &RetentionRemoteGcClearanceImportValueInput<'_>,
-) -> Result<IoValue> {
+pub fn remote_gc_clearance_import_value(input: &RemoteGcClearanceImportValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     require_ref(input.request_ref, "retention remote clearance import request ref")?;
     require_ref(input.response_ref, "retention remote clearance import response ref")?;
@@ -1656,7 +1647,7 @@ pub fn retention_remote_gc_clearance_import_value(
     ]))
 }
 
-pub fn parse_retention_remote_gc_clearance_import(value: &IoValue) -> Result<RetentionRemoteGcClearanceImport> {
+pub fn parse_retention_remote_gc_clearance_import(value: &IoValue) -> Result<RemoteGcClearanceImport> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-import-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-import-v1 ...>"))?;
@@ -1674,7 +1665,7 @@ pub fn parse_retention_remote_gc_clearance_import(value: &IoValue) -> Result<Ret
     let peer_ref = record_ref(&fields[5], "peer")?;
     let remote_ref = record_ref(&fields[6], "remote")?;
     let diagnostics = record_string_sequence(&fields[7], "diagnostics")?;
-    Ok(RetentionRemoteGcClearanceImport {
+    Ok(RemoteGcClearanceImport {
         import_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         request_ref,
@@ -1687,12 +1678,12 @@ pub fn parse_retention_remote_gc_clearance_import(value: &IoValue) -> Result<Ret
     })
 }
 
-pub async fn run_retention_remote_gc_clearance_live_loopback(
-    input: RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
-) -> Result<RetentionRemoteGcClearanceLiveLoopback> {
+pub async fn run_remote_gc_clearance_live_loopback(
+    input: RemoteGcClearanceLiveLoopbackInput<'_>,
+) -> Result<RemoteGcClearanceLiveLoopback> {
     ensure_store(input.root)?;
     validate_remote_gc_clearance_live_loopback_input(&input)?;
-    let request = store_retention_remote_gc_clearance_request(input.root, &RetentionRemoteGcClearanceRequestInput {
+    let request = store_retention_remote_gc_clearance_request(input.root, &RemoteGcClearanceRequestInput {
         requester_ref: input.requester_ref,
         peer_ref: input.peer_ref,
         object_ref: input.object_ref,
@@ -1709,7 +1700,7 @@ pub async fn run_retention_remote_gc_clearance_live_loopback(
         request_control(&input, &request.request_ref, &request_control_evidence)?;
     let request_live = request_leg(&input, &request_control_value, &request_control_evidence).await?;
 
-    let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
+    let response = store_retention_remote_gc_clearance_response(RemoteGcClearanceResponseInput {
         root: input.root,
         request_value: &request.value,
         evidence_refs: input.response_evidence_refs,
@@ -1723,7 +1714,7 @@ pub async fn run_retention_remote_gc_clearance_live_loopback(
         response_control(&input, &request.request_ref, &response.response_ref, &response_control_evidence)?;
     let response_live = response_leg(&input, &response_control_value, &response_control_evidence).await?;
 
-    let import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+    let import = import_remote_gc_clearance_response(RemoteGcClearanceImportInput {
         root: input.root,
         request_value: &request.value,
         response_value: &response.value,
@@ -1742,7 +1733,7 @@ pub async fn run_retention_remote_gc_clearance_live_loopback(
         transport_diagnostics: &transport_diagnostics,
     })?;
     let workflow = store_retention_remote_gc_clearance_live_workflow(input.root, &workflow_value)?;
-    Ok(RetentionRemoteGcClearanceLiveLoopback {
+    Ok(RemoteGcClearanceLiveLoopback {
         request,
         response,
         import,
@@ -1754,12 +1745,12 @@ pub async fn run_retention_remote_gc_clearance_live_loopback(
     })
 }
 
-pub async fn send_retention_remote_gc_clearance_live_request(
-    input: RetentionRemoteGcClearanceLiveRequestSendInput<'_>,
-) -> Result<RetentionRemoteGcClearanceLiveRequestSend> {
+pub async fn send_remote_gc_clearance_live_request(
+    input: RemoteGcClearanceLiveRequestSendInput<'_>,
+) -> Result<RemoteGcClearanceLiveRequestSend> {
     ensure_store(input.root)?;
     validate_remote_gc_clearance_live_request_send_input(&input)?;
-    let request = store_retention_remote_gc_clearance_request(input.root, &RetentionRemoteGcClearanceRequestInput {
+    let request = store_retention_remote_gc_clearance_request(input.root, &RemoteGcClearanceRequestInput {
         requester_ref: input.requester_ref,
         peer_ref: input.peer_ref,
         object_ref: input.object_ref,
@@ -1803,7 +1794,7 @@ pub async fn send_retention_remote_gc_clearance_live_request(
         join_timeout_ms: input.join_timeout_ms,
     })
     .await?;
-    Ok(RetentionRemoteGcClearanceLiveRequestSend {
+    Ok(RemoteGcClearanceLiveRequestSend {
         request,
         control_ref,
         control_value,
@@ -1811,13 +1802,13 @@ pub async fn send_retention_remote_gc_clearance_live_request(
     })
 }
 
-pub async fn send_retention_remote_gc_clearance_live_response(
-    input: RetentionRemoteGcClearanceLiveResponseSendInput<'_>,
-) -> Result<RetentionRemoteGcClearanceLiveResponseSend> {
+pub async fn send_remote_gc_clearance_live_response(
+    input: RemoteGcClearanceLiveResponseSendInput<'_>,
+) -> Result<RemoteGcClearanceLiveResponseSend> {
     ensure_store(input.root)?;
     validate_remote_gc_clearance_live_response_send_input(&input)?;
     let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
-    let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
+    let response = store_retention_remote_gc_clearance_response(RemoteGcClearanceResponseInput {
         root: input.root,
         request_value: input.request_value,
         evidence_refs: input.response_evidence_refs,
@@ -1858,7 +1849,7 @@ pub async fn send_retention_remote_gc_clearance_live_response(
         join_timeout_ms: input.join_timeout_ms,
     })
     .await?;
-    Ok(RetentionRemoteGcClearanceLiveResponseSend {
+    Ok(RemoteGcClearanceLiveResponseSend {
         response,
         control_ref,
         control_value,
@@ -1866,14 +1857,14 @@ pub async fn send_retention_remote_gc_clearance_live_response(
     })
 }
 
-pub fn import_retention_remote_gc_clearance_live_workflow(
-    input: RetentionRemoteGcClearanceLiveImportWorkflowInput<'_>,
-) -> Result<RetentionRemoteGcClearanceLiveImportWorkflow> {
+pub fn import_remote_gc_clearance_live_workflow(
+    input: RemoteGcClearanceLiveImportWorkflowInput<'_>,
+) -> Result<RemoteGcClearanceLiveImportWorkflow> {
     ensure_store(input.root)?;
     validate_remote_gc_clearance_live_import_workflow_input(&input)?;
     let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
     let response_ref = crate::preserves_rail::canonical_hash(input.response_value)?;
-    let import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+    let import = import_remote_gc_clearance_response(RemoteGcClearanceImportInput {
         root: input.root,
         request_value: input.request_value,
         response_value: input.response_value,
@@ -1904,23 +1895,22 @@ pub fn import_retention_remote_gc_clearance_live_workflow(
     let response_publish_ref = live_send_publish_ref(&response_send);
     let request_receive_ref = request_receive.receipt_ref.clone();
     let response_receive_ref = response_receive.receipt_ref.clone();
-    let workflow_value =
-        retention_remote_gc_clearance_live_workflow_value(&RetentionRemoteGcClearanceLiveWorkflowValueInput {
-            request_value: input.request_value,
-            response_value: input.response_value,
-            import_value: &import.value,
-            request_control_ref: &request_control_ref,
-            request_publish_ref: &request_publish_ref,
-            request_receive_ref: &request_receive_ref,
-            request_ingress_ref: input.request_ingress_ref,
-            response_control_ref: &response_control_ref,
-            response_publish_ref: &response_publish_ref,
-            response_receive_ref: &response_receive_ref,
-            response_ingress_ref: input.response_ingress_ref,
-            transport_diagnostics: &diagnostics,
-        })?;
+    let workflow_value = remote_gc_clearance_live_workflow_value(&RemoteGcClearanceLiveWorkflowValueInput {
+        request_value: input.request_value,
+        response_value: input.response_value,
+        import_value: &import.value,
+        request_control_ref: &request_control_ref,
+        request_publish_ref: &request_publish_ref,
+        request_receive_ref: &request_receive_ref,
+        request_ingress_ref: input.request_ingress_ref,
+        response_control_ref: &response_control_ref,
+        response_publish_ref: &response_publish_ref,
+        response_receive_ref: &response_receive_ref,
+        response_ingress_ref: input.response_ingress_ref,
+        transport_diagnostics: &diagnostics,
+    })?;
     let workflow = store_retention_remote_gc_clearance_live_workflow(input.root, &workflow_value)?;
-    Ok(RetentionRemoteGcClearanceLiveImportWorkflow {
+    Ok(RemoteGcClearanceLiveImportWorkflow {
         import,
         workflow,
         request_send_receipt_ref: request_send.receipt_ref,
@@ -1929,7 +1919,7 @@ pub fn import_retention_remote_gc_clearance_live_workflow(
 }
 
 struct LiveImportDiagnosticsInput<'a> {
-    request: &'a RetentionRemoteGcClearanceRequest,
+    request: &'a RemoteGcClearanceRequest,
     response_ref: &'a str,
     request_control: &'a crate::node_runtime::NodeControlRequest,
     response_control: &'a crate::node_runtime::NodeControlRequest,
@@ -2025,9 +2015,7 @@ fn live_import_response_diagnostics(input: &LiveImportDiagnosticsInput<'_>) -> R
     Ok(diagnostics)
 }
 
-pub fn retention_remote_gc_clearance_live_workflow_value(
-    input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>,
-) -> Result<IoValue> {
+pub fn remote_gc_clearance_live_workflow_value(input: &RemoteGcClearanceLiveWorkflowValueInput<'_>) -> Result<IoValue> {
     validate_remote_gc_clearance_live_workflow_value_input(input)?;
     let parts = flow_parts(input)?;
     let refs = flow_refs(input);
@@ -2080,10 +2068,10 @@ pub fn retention_remote_gc_clearance_live_workflow_value(
 }
 
 struct FlowParts {
-    request: RetentionRemoteGcClearanceRequest,
+    request: RemoteGcClearanceRequest,
     response_ref: String,
-    response: Option<RetentionRemoteGcClearanceResponse>,
-    import: RetentionRemoteGcClearanceImport,
+    response: Option<RemoteGcClearanceResponse>,
+    import: RemoteGcClearanceImport,
     diagnostics: Vec<String>,
 }
 
@@ -2093,15 +2081,15 @@ struct FlowRefs {
 }
 
 struct FlowDiagnosticsInput<'a> {
-    request: &'a RetentionRemoteGcClearanceRequest,
-    response: Option<&'a RetentionRemoteGcClearanceResponse>,
+    request: &'a RemoteGcClearanceRequest,
+    response: Option<&'a RemoteGcClearanceResponse>,
     response_ref: &'a str,
-    import: &'a RetentionRemoteGcClearanceImport,
+    import: &'a RemoteGcClearanceImport,
     parse_diagnostic: Option<String>,
     transport_diagnostics: &'a [String],
 }
 
-fn flow_parts(input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>) -> Result<FlowParts> {
+fn flow_parts(input: &RemoteGcClearanceLiveWorkflowValueInput<'_>) -> Result<FlowParts> {
     let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
     let response_ref = crate::preserves_rail::canonical_hash(input.response_value)?;
     let (response, parse_diagnostic) = match parse_retention_remote_gc_clearance_response(input.response_value) {
@@ -2159,8 +2147,8 @@ fn flow_diagnostics(input: FlowDiagnosticsInput<'_>) -> Result<Vec<String>> {
 }
 
 fn response_notes(
-    request: &RetentionRemoteGcClearanceRequest,
-    response: Option<&RetentionRemoteGcClearanceResponse>,
+    request: &RemoteGcClearanceRequest,
+    response: Option<&RemoteGcClearanceResponse>,
 ) -> Result<Vec<String>> {
     let mut notes = Vec::new();
     if let Some(response) = response {
@@ -2185,9 +2173,9 @@ fn response_notes(
 }
 
 fn import_notes(
-    request: &RetentionRemoteGcClearanceRequest,
+    request: &RemoteGcClearanceRequest,
     response_ref: &str,
-    import: &RetentionRemoteGcClearanceImport,
+    import: &RemoteGcClearanceImport,
 ) -> Result<Vec<String>> {
     let mut notes = Vec::new();
     if import.request_ref != request.request_ref {
@@ -2233,7 +2221,7 @@ fn import_notes(
     Ok(notes)
 }
 
-fn flow_refs(input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>) -> FlowRefs {
+fn flow_refs(input: &RemoteGcClearanceLiveWorkflowValueInput<'_>) -> FlowRefs {
     FlowRefs {
         request: vec![
             input.request_control_ref.to_string(),
@@ -2250,9 +2238,7 @@ fn flow_refs(input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>) -> Fl
     }
 }
 
-pub fn parse_retention_remote_gc_clearance_live_workflow(
-    value: &IoValue,
-) -> Result<RetentionRemoteGcClearanceLiveWorkflow> {
+pub fn parse_retention_remote_gc_clearance_live_workflow(value: &IoValue) -> Result<RemoteGcClearanceLiveWorkflow> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-live-workflow-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-live-workflow-v1 ...>"))?;
@@ -2285,7 +2271,7 @@ pub fn parse_retention_remote_gc_clearance_live_workflow(
             "retention remote clearance live workflow pass import binding mismatch",
         ));
     }
-    Ok(RetentionRemoteGcClearanceLiveWorkflow {
+    Ok(RemoteGcClearanceLiveWorkflow {
         workflow_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         request_ref: request.request_ref,
@@ -2304,7 +2290,7 @@ pub fn parse_retention_remote_gc_clearance_live_workflow(
 pub fn store_retention_remote_gc_clearance_live_workflow(
     root: &Path,
     value: &IoValue,
-) -> Result<RetentionRemoteGcClearanceLiveWorkflow> {
+) -> Result<RemoteGcClearanceLiveWorkflow> {
     ensure_store(root)?;
     let workflow = parse_retention_remote_gc_clearance_live_workflow(value)?;
     write_store_value(&remote_clearance_live_workflow_path(root, &workflow.workflow_ref)?, &workflow.value)?;
@@ -2632,13 +2618,13 @@ struct LoopbackValueInput<'a> {
     transport_diagnostics: &'a [String],
 }
 
-fn request_evidence(input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>, request_ref: &str) -> Result<Vec<String>> {
+fn request_evidence(input: &RemoteGcClearanceLiveLoopbackInput<'_>, request_ref: &str) -> Result<Vec<String>> {
     let extra_refs = [request_ref.to_string()];
     refs_with_extra(input.request_transport_evidence_refs, &extra_refs, "retention live request transport evidence ref")
 }
 
 fn response_evidence(
-    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    input: &RemoteGcClearanceLiveLoopbackInput<'_>,
     request_ref: &str,
     response_ref: &str,
 ) -> Result<Vec<String>> {
@@ -2651,7 +2637,7 @@ fn response_evidence(
 }
 
 fn request_control(
-    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    input: &RemoteGcClearanceLiveLoopbackInput<'_>,
     request_ref: &str,
     evidence_refs: &[String],
 ) -> Result<(String, IoValue)> {
@@ -2666,7 +2652,7 @@ fn request_control(
 }
 
 fn response_control(
-    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    input: &RemoteGcClearanceLiveLoopbackInput<'_>,
     request_ref: &str,
     response_ref: &str,
     evidence_refs: &[String],
@@ -2682,7 +2668,7 @@ fn response_control(
 }
 
 async fn request_leg(
-    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    input: &RemoteGcClearanceLiveLoopbackInput<'_>,
     control_value: &IoValue,
     evidence_refs: &[String],
 ) -> Result<crate::node_daemon::NodeControlLiveLoopback> {
@@ -2703,7 +2689,7 @@ async fn request_leg(
 }
 
 async fn response_leg(
-    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    input: &RemoteGcClearanceLiveLoopbackInput<'_>,
     control_value: &IoValue,
     evidence_refs: &[String],
 ) -> Result<crate::node_daemon::NodeControlLiveLoopback> {
@@ -2756,7 +2742,7 @@ fn transport_notes(
 }
 
 fn loopback_value(input: &LoopbackValueInput<'_>) -> Result<IoValue> {
-    retention_remote_gc_clearance_live_workflow_value(&RetentionRemoteGcClearanceLiveWorkflowValueInput {
+    remote_gc_clearance_live_workflow_value(&RemoteGcClearanceLiveWorkflowValueInput {
         request_value: input.request_value,
         response_value: input.response_value,
         import_value: input.import_value,
@@ -3435,7 +3421,7 @@ where S: VecSink<String> {
     push_bounded(diagnostics, message, MAX_RETENTION_DIAGNOSTICS, "retention remote clearance diagnostics")
 }
 
-fn check_state<S>(reference: &str, clearance: &RetentionRemoteGcClearance, diagnostics: &mut S) -> Result<bool>
+fn check_state<S>(reference: &str, clearance: &RemoteGcClearance, diagnostics: &mut S) -> Result<bool>
 where S: VecSink<String> {
     let mut is_admitted = true;
     if clearance.clearance_ref != *reference {
@@ -3461,7 +3447,7 @@ where S: VecSink<String> {
     Ok(is_admitted)
 }
 
-fn check_scope(input: &RemoteClearanceRefsInput<'_>, clearance: &RetentionRemoteGcClearance) -> Check {
+fn check_scope(input: &RemoteClearanceRefsInput<'_>, clearance: &RemoteGcClearance) -> Check {
     let mut scope_mismatches = 0usize;
     if input.scope.requester_ref != Some(clearance.requester_ref.as_str()) {
         scope_mismatches += 1;
@@ -3483,7 +3469,7 @@ fn check_scope(input: &RemoteClearanceRefsInput<'_>, clearance: &RetentionRemote
 
 fn check_bindings<S>(
     input: &RemoteClearanceRefsInput<'_>,
-    clearance: &RetentionRemoteGcClearance,
+    clearance: &RemoteGcClearance,
     diagnostics: &mut S,
 ) -> Result<bool>
 where
@@ -3504,7 +3490,7 @@ where
 fn check_clear_ref<S>(
     input: &RemoteClearanceRefsInput<'_>,
     reference: &str,
-    clearance: &RetentionRemoteGcClearance,
+    clearance: &RemoteGcClearance,
     diagnostics: &mut S,
 ) -> Result<Check>
 where
@@ -3523,7 +3509,7 @@ fn collect_clear_refs(
     admitted_refs: &mut impl VecSink<String>,
     remote_refs: &mut impl VecSink<String>,
     peer_refs: &mut impl VecSink<String>,
-    clearance: RetentionRemoteGcClearance,
+    clearance: RemoteGcClearance,
 ) -> Result<()> {
     push_bounded(admitted_refs, clearance.clearance_ref, MAX_RETENTION_REFS, "retention remote clearance refs")?;
     push_bounded(remote_refs, clearance.remote_ref, MAX_RETENTION_REFS, "retention remote clearance remote refs")?;
@@ -3559,7 +3545,7 @@ fn admit_remote_clearance_refs(input: RemoteClearanceRefsInput<'_>) -> Result<Re
     let mut peer_refs = Vec::new();
     let mut scope_mismatches = 0usize;
     for reference in input.refs {
-        let clearance = match read_retention_remote_gc_clearance(input.root, reference) {
+        let clearance = match read_remote_gc_clearance(input.root, reference) {
             Ok(clearance) => clearance,
             Err(error) => {
                 push_clear_note(&mut diagnostics, format!("remote-clearance-unreadable:{}:{}", reference, error))?;
@@ -3590,10 +3576,10 @@ fn read_evidence_admission(root: &Path, admission_ref: &str) -> Result<EvidenceA
     parse_evidence_admission(&value)
 }
 
-fn read_retention_remote_gc_clearance(root: &Path, clearance_ref: &str) -> Result<RetentionRemoteGcClearance> {
+fn read_remote_gc_clearance(root: &Path, clearance_ref: &str) -> Result<RemoteGcClearance> {
     require_ref(clearance_ref, "retention remote GC clearance ref")?;
     let value = read_store_value(&remote_clearance_path(root, clearance_ref)?)?;
-    parse_retention_remote_gc_clearance(&value)
+    parse_remote_gc_clearance(&value)
 }
 
 fn admit_refs<'a>(
@@ -5180,7 +5166,7 @@ fn admissions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<Strin
 fn clearances_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &remote_clearances_dir(root),
-        parse_retention_remote_gc_clearance,
+        parse_remote_gc_clearance,
         |clearance| {
             filter.matches_retention(
                 &clearance.object_ref,
@@ -7054,7 +7040,7 @@ fn live(value: &IoValue) -> Option<String> {
             workflow.diagnostics.join(",")
         ));
     }
-    if let Ok(clearance) = parse_retention_remote_gc_clearance(value) {
+    if let Ok(clearance) = parse_remote_gc_clearance(value) {
         return Some(format!(
             "retention remote clearance ref={} decision={} peer={} remote={} object={} class={} action={} current={} retained={} revoked={} diagnostics={}",
             clearance.clearance_ref,
@@ -7643,7 +7629,7 @@ fn validate_evidence_admission_input(input: &EvidenceAdmissionInput<'_>) -> Resu
     ensure_count_at_most(input.diagnostics.len(), MAX_RETENTION_DIAGNOSTICS, "retention admission diagnostics")
 }
 
-fn validate_remote_gc_clearance_input(input: &RetentionRemoteGcClearanceInput<'_>) -> Result<()> {
+fn validate_remote_gc_clearance_input(input: &RemoteGcClearanceInput<'_>) -> Result<()> {
     validate_decision(input.decision)?;
     require_ref(input.requester_ref, "retention remote clearance requester ref")?;
     require_ref(input.peer_ref, "retention remote clearance peer ref")?;
@@ -7660,7 +7646,7 @@ fn validate_remote_gc_clearance_input(input: &RetentionRemoteGcClearanceInput<'_
     ensure_count_at_most(input.diagnostics.len(), MAX_RETENTION_DIAGNOSTICS, "retention remote clearance diagnostics")
 }
 
-fn validate_remote_gc_clearance_request_input(input: &RetentionRemoteGcClearanceRequestInput<'_>) -> Result<()> {
+fn validate_remote_gc_clearance_request_input(input: &RemoteGcClearanceRequestInput<'_>) -> Result<()> {
     require_ref(input.requester_ref, "retention remote clearance request requester ref")?;
     require_ref(input.peer_ref, "retention remote clearance request peer ref")?;
     require_ref(input.object_ref, "retention remote clearance request object ref")?;
@@ -7673,8 +7659,8 @@ fn validate_remote_gc_clearance_request_input(input: &RetentionRemoteGcClearance
     validate_refs(input.evidence_refs, "retention remote clearance request evidence ref")
 }
 
-fn validate_remote_gc_clearance_request(request: &RetentionRemoteGcClearanceRequest) -> Result<()> {
-    validate_remote_gc_clearance_request_input(&RetentionRemoteGcClearanceRequestInput {
+fn validate_remote_gc_clearance_request(request: &RemoteGcClearanceRequest) -> Result<()> {
+    validate_remote_gc_clearance_request_input(&RemoteGcClearanceRequestInput {
         requester_ref: &request.requester_ref,
         peer_ref: &request.peer_ref,
         object_ref: &request.object_ref,
@@ -7688,10 +7674,8 @@ fn validate_remote_gc_clearance_request(request: &RetentionRemoteGcClearanceRequ
     })
 }
 
-fn validate_remote_gc_clearance_live_loopback_input(
-    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
-) -> Result<()> {
-    validate_remote_gc_clearance_request_input(&RetentionRemoteGcClearanceRequestInput {
+fn validate_remote_gc_clearance_live_loopback_input(input: &RemoteGcClearanceLiveLoopbackInput<'_>) -> Result<()> {
+    validate_remote_gc_clearance_request_input(&RemoteGcClearanceRequestInput {
         requester_ref: input.requester_ref,
         peer_ref: input.peer_ref,
         object_ref: input.object_ref,
@@ -7728,9 +7712,9 @@ fn validate_remote_gc_clearance_live_loopback_input(
 }
 
 fn validate_remote_gc_clearance_live_request_send_input(
-    input: &RetentionRemoteGcClearanceLiveRequestSendInput<'_>,
+    input: &RemoteGcClearanceLiveRequestSendInput<'_>,
 ) -> Result<()> {
-    validate_remote_gc_clearance_request_input(&RetentionRemoteGcClearanceRequestInput {
+    validate_remote_gc_clearance_request_input(&RemoteGcClearanceRequestInput {
         requester_ref: input.requester_ref,
         peer_ref: input.peer_ref,
         object_ref: input.object_ref,
@@ -7753,7 +7737,7 @@ fn validate_remote_gc_clearance_live_request_send_input(
 }
 
 fn validate_remote_gc_clearance_live_response_send_input(
-    input: &RetentionRemoteGcClearanceLiveResponseSendInput<'_>,
+    input: &RemoteGcClearanceLiveResponseSendInput<'_>,
 ) -> Result<()> {
     parse_retention_remote_gc_clearance_request(input.request_value)?;
     validate_refs(input.response_evidence_refs, "retention live response evidence ref")?;
@@ -7775,7 +7759,7 @@ fn validate_remote_gc_clearance_live_response_send_input(
 }
 
 fn validate_remote_gc_clearance_live_import_workflow_input(
-    input: &RetentionRemoteGcClearanceLiveImportWorkflowInput<'_>,
+    input: &RemoteGcClearanceLiveImportWorkflowInput<'_>,
 ) -> Result<()> {
     require_ref(input.request_ingress_ref, "retention live request ingress ref")?;
     require_ref(input.response_ingress_ref, "retention live response ingress ref")?;
@@ -7789,7 +7773,7 @@ fn validate_remote_gc_clearance_live_import_workflow_input(
 }
 
 fn validate_remote_gc_clearance_live_workflow_value_input(
-    input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>,
+    input: &RemoteGcClearanceLiveWorkflowValueInput<'_>,
 ) -> Result<()> {
     require_ref(input.request_control_ref, "retention live request control ref")?;
     require_ref(input.request_publish_ref, "retention live request publish ref")?;
@@ -7806,7 +7790,7 @@ fn validate_remote_gc_clearance_live_workflow_value_input(
     )
 }
 
-fn remote_clearance_response_diagnostics(input: RetentionRemoteGcClearanceResponseInput<'_>) -> Result<Vec<String>> {
+fn remote_clearance_response_diagnostics(input: RemoteGcClearanceResponseInput<'_>) -> Result<Vec<String>> {
     validate_refs(input.evidence_refs, "retention remote clearance response evidence ref")?;
     validate_refs(input.retained_refs, "retention remote clearance response retained ref")?;
     validate_refs(input.revoked_refs, "retention remote clearance response revoked ref")?;
@@ -7844,8 +7828,8 @@ fn remote_clearance_response_diagnostics(input: RetentionRemoteGcClearanceRespon
 }
 
 fn validate_remote_gc_clearance_workflow_scope(
-    request: &RetentionRemoteGcClearanceRequest,
-    clearance: &RetentionRemoteGcClearance,
+    request: &RemoteGcClearanceRequest,
+    clearance: &RemoteGcClearance,
 ) -> Result<()> {
     if clearance.requester_ref != request.requester_ref
         || clearance.peer_ref != request.peer_ref
@@ -7862,7 +7846,7 @@ fn validate_remote_gc_clearance_workflow_scope(
     Ok(())
 }
 
-fn parse_embedded_remote_clearance_request(value: &Value<IoValue>) -> Result<RetentionRemoteGcClearanceRequest> {
+fn parse_embedded_remote_clearance_request(value: &Value<IoValue>) -> Result<RemoteGcClearanceRequest> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("request", Some(2))
@@ -7877,7 +7861,7 @@ fn parse_embedded_remote_clearance_request(value: &Value<IoValue>) -> Result<Ret
     Ok(request)
 }
 
-fn parse_embedded_remote_clearance(value: &Value<IoValue>) -> Result<RetentionRemoteGcClearance> {
+fn parse_embedded_remote_clearance(value: &Value<IoValue>) -> Result<RemoteGcClearance> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("clearance", Some(2))
@@ -7885,14 +7869,14 @@ fn parse_embedded_remote_clearance(value: &Value<IoValue>) -> Result<RetentionRe
     let clearance_ref = required_string(&fields[0], "remote clearance ref")?;
     require_ref(&clearance_ref, "remote clearance ref")?;
     let clearance_value = crate::preserves_rail::value_to_iovalue(&fields[1]);
-    let clearance = parse_retention_remote_gc_clearance(&clearance_value)?;
+    let clearance = parse_remote_gc_clearance(&clearance_value)?;
     if clearance.clearance_ref != clearance_ref {
         return Err(MoltenError::invalid_harness("embedded remote clearance ref mismatch"));
     }
     Ok(clearance)
 }
 
-fn parse_embedded_remote_clearance_import(value: &Value<IoValue>) -> Result<RetentionRemoteGcClearanceImport> {
+fn parse_embedded_remote_clearance_import(value: &Value<IoValue>) -> Result<RemoteGcClearanceImport> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("import", Some(2))
@@ -7933,9 +7917,9 @@ where S: VecSink<String> {
 
 fn push_remote_clearance_import_diagnostics<S>(
     diagnostics: &mut S,
-    request: &RetentionRemoteGcClearanceRequest,
-    response: &RetentionRemoteGcClearanceResponse,
-    input: RetentionRemoteGcClearanceImportInput<'_>,
+    request: &RemoteGcClearanceRequest,
+    response: &RemoteGcClearanceResponse,
+    input: RemoteGcClearanceImportInput<'_>,
 ) -> Result<()>
 where
     S: VecSink<String>,
@@ -9426,7 +9410,7 @@ mod tests {
         let case = live_case(&root, "workflow");
         let pair = pair_with_label(&root, &case, "workflow-peer-evidence");
 
-        let import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+        let import = import_remote_gc_clearance_response(RemoteGcClearanceImportInput {
             root: &root,
             request_value: &pair.request_value,
             response_value: &pair.response_value,
@@ -9438,21 +9422,20 @@ mod tests {
         let clearance_ref = import.clearance_ref.clone().expect("clearance imported");
         assert_case_pass(&root, &case, clearance_ref);
 
-        let wrong_request =
-            store_retention_remote_gc_clearance_request(&root, &RetentionRemoteGcClearanceRequestInput {
-                requester_ref: &case.requester,
-                peer_ref: &case.peer,
-                object_ref: &fake_ref("workflow-wrong-object"),
-                object_kind: "chunk",
-                retention_class: CLASS_DURABLE_VALUE,
-                action: ACTION_DELETE,
-                remote_ref: &case.remote,
-                policy_ref: &fake_ref("workflow-wrong-policy"),
-                authority_ref: &fake_ref("workflow-wrong-authority"),
-                evidence_refs: &[],
-            })
-            .expect("store wrong request");
-        let wrong_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+        let wrong_request = store_retention_remote_gc_clearance_request(&root, &RemoteGcClearanceRequestInput {
+            requester_ref: &case.requester,
+            peer_ref: &case.peer,
+            object_ref: &fake_ref("workflow-wrong-object"),
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &case.remote,
+            policy_ref: &fake_ref("workflow-wrong-policy"),
+            authority_ref: &fake_ref("workflow-wrong-authority"),
+            evidence_refs: &[],
+        })
+        .expect("store wrong request");
+        let wrong_import = import_remote_gc_clearance_response(RemoteGcClearanceImportInput {
             root: &root,
             request_value: &wrong_request.value,
             response_value: &pair.response_value,
@@ -9468,7 +9451,7 @@ mod tests {
             crate::preserves_rail::record("not-a-remote-clearance-response", vec![crate::preserves_rail::string(
                 "tampered",
             )]);
-        let tampered_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+        let tampered_import = import_remote_gc_clearance_response(RemoteGcClearanceImportInput {
             root: &root,
             request_value: &pair.request_value,
             response_value: &tampered_response,
@@ -9508,7 +9491,7 @@ mod tests {
         let case = live_case(&root, "live");
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
         let live = runtime
-            .block_on(run_retention_remote_gc_clearance_live_loopback(RetentionRemoteGcClearanceLiveLoopbackInput {
+            .block_on(run_remote_gc_clearance_live_loopback(RemoteGcClearanceLiveLoopbackInput {
                 root: &root,
                 requester_node_root: &requester_node_root,
                 peer_node_root: &peer_node_root,
@@ -9603,7 +9586,7 @@ mod tests {
         let remote_ref = fake_ref("live-deny-remote");
         let policy = fake_ref("live-deny-policy");
         let authority = fake_ref("live-deny-authority");
-        let request = store_retention_remote_gc_clearance_request(&root, &RetentionRemoteGcClearanceRequestInput {
+        let request = store_retention_remote_gc_clearance_request(&root, &RemoteGcClearanceRequestInput {
             requester_ref: &requester_ref,
             peer_ref: &peer_ref,
             object_ref: &object_ref,
@@ -9622,14 +9605,9 @@ mod tests {
         assert_tampered(&root, &request, &peer_ref, &remote_ref, &live_refs);
     }
 
-    fn assert_retained(
-        root: &Path,
-        request: &RetentionRemoteGcClearanceRequest,
-        remote_ref: &str,
-        live_refs: &[String],
-    ) {
+    fn assert_retained(root: &Path, request: &RemoteGcClearanceRequest, remote_ref: &str, live_refs: &[String]) {
         let retained_ref = fake_ref("live-deny-retained");
-        let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
+        let response = store_retention_remote_gc_clearance_response(RemoteGcClearanceResponseInput {
             root,
             request_value: &request.value,
             evidence_refs: &[],
@@ -9639,7 +9617,7 @@ mod tests {
             diagnostics: &[],
         })
         .expect("store retained response");
-        let wrong_peer_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+        let wrong_peer_import = import_remote_gc_clearance_response(RemoteGcClearanceImportInput {
             root,
             request_value: &request.value,
             response_value: &response.value,
@@ -9647,22 +9625,21 @@ mod tests {
             expected_remote_ref: Some(remote_ref),
         })
         .expect("wrong peer import");
-        let retained_workflow =
-            retention_remote_gc_clearance_live_workflow_value(&RetentionRemoteGcClearanceLiveWorkflowValueInput {
-                request_value: &request.value,
-                response_value: &response.value,
-                import_value: &wrong_peer_import.value,
-                request_control_ref: &live_refs[0],
-                request_publish_ref: &live_refs[1],
-                request_receive_ref: &live_refs[2],
-                request_ingress_ref: &live_refs[3],
-                response_control_ref: &live_refs[4],
-                response_publish_ref: &live_refs[5],
-                response_receive_ref: &live_refs[6],
-                response_ingress_ref: &live_refs[7],
-                transport_diagnostics: &[],
-            })
-            .expect("retained live workflow value");
+        let retained_workflow = remote_gc_clearance_live_workflow_value(&RemoteGcClearanceLiveWorkflowValueInput {
+            request_value: &request.value,
+            response_value: &response.value,
+            import_value: &wrong_peer_import.value,
+            request_control_ref: &live_refs[0],
+            request_publish_ref: &live_refs[1],
+            request_receive_ref: &live_refs[2],
+            request_ingress_ref: &live_refs[3],
+            response_control_ref: &live_refs[4],
+            response_publish_ref: &live_refs[5],
+            response_receive_ref: &live_refs[6],
+            response_ingress_ref: &live_refs[7],
+            transport_diagnostics: &[],
+        })
+        .expect("retained live workflow value");
         let retained =
             parse_retention_remote_gc_clearance_live_workflow(&retained_workflow).expect("parse retained live");
         assert_eq!(retained.decision, "deny");
@@ -9677,7 +9654,7 @@ mod tests {
 
     fn assert_tampered(
         root: &Path,
-        request: &RetentionRemoteGcClearanceRequest,
+        request: &RemoteGcClearanceRequest,
         peer_ref: &str,
         remote_ref: &str,
         live_refs: &[String],
@@ -9686,7 +9663,7 @@ mod tests {
             crate::preserves_rail::record("not-a-remote-clearance-response", vec![crate::preserves_rail::string(
                 "tampered",
             )]);
-        let tampered_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+        let tampered_import = import_remote_gc_clearance_response(RemoteGcClearanceImportInput {
             root,
             request_value: &request.value,
             response_value: &tampered_response,
@@ -9694,22 +9671,21 @@ mod tests {
             expected_remote_ref: Some(remote_ref),
         })
         .expect("tampered import");
-        let tampered_workflow =
-            retention_remote_gc_clearance_live_workflow_value(&RetentionRemoteGcClearanceLiveWorkflowValueInput {
-                request_value: &request.value,
-                response_value: &tampered_response,
-                import_value: &tampered_import.value,
-                request_control_ref: &live_refs[0],
-                request_publish_ref: &live_refs[1],
-                request_receive_ref: &live_refs[2],
-                request_ingress_ref: &live_refs[3],
-                response_control_ref: &live_refs[4],
-                response_publish_ref: &live_refs[5],
-                response_receive_ref: &live_refs[6],
-                response_ingress_ref: &live_refs[7],
-                transport_diagnostics: &[],
-            })
-            .expect("tampered live workflow value");
+        let tampered_workflow = remote_gc_clearance_live_workflow_value(&RemoteGcClearanceLiveWorkflowValueInput {
+            request_value: &request.value,
+            response_value: &tampered_response,
+            import_value: &tampered_import.value,
+            request_control_ref: &live_refs[0],
+            request_publish_ref: &live_refs[1],
+            request_receive_ref: &live_refs[2],
+            request_ingress_ref: &live_refs[3],
+            response_control_ref: &live_refs[4],
+            response_publish_ref: &live_refs[5],
+            response_receive_ref: &live_refs[6],
+            response_ingress_ref: &live_refs[7],
+            transport_diagnostics: &[],
+        })
+        .expect("tampered live workflow value");
         let tampered =
             parse_retention_remote_gc_clearance_live_workflow(&tampered_workflow).expect("parse tampered live");
         assert_eq!(tampered.decision, "deny");
@@ -9782,12 +9758,12 @@ mod tests {
     }
 
     struct SentRequest {
-        send: RetentionRemoteGcClearanceLiveRequestSend,
+        send: RemoteGcClearanceLiveRequestSend,
         receive: crate::node_daemon::NodeControlLiveIngressReceive,
     }
 
     struct SentResponse {
-        send: RetentionRemoteGcClearanceLiveResponseSend,
+        send: RemoteGcClearanceLiveResponseSend,
         receive: crate::node_daemon::NodeControlLiveIngressReceive,
     }
 
@@ -9939,7 +9915,7 @@ mod tests {
     }
 
     async fn send_two_node_request(live: &mut TwoNodeLive, refs: &TwoNodeRefs) -> SentRequest {
-        let send = send_retention_remote_gc_clearance_live_request(RetentionRemoteGcClearanceLiveRequestSendInput {
+        let send = send_remote_gc_clearance_live_request(RemoteGcClearanceLiveRequestSendInput {
             root: &live.roots.requester_store,
             requester_node_root: Some(&live.roots.requester_node),
             peer_ticket_value: &live.peer_live.ticket.value,
@@ -9980,7 +9956,7 @@ mod tests {
 
     async fn send_two_node_response(live: &mut TwoNodeLive, request: &SentRequest) -> SentResponse {
         let peer_response_evidence = vec![fake_ref("two-node-peer-reference-index")];
-        let send = send_retention_remote_gc_clearance_live_response(RetentionRemoteGcClearanceLiveResponseSendInput {
+        let send = send_remote_gc_clearance_live_response(RemoteGcClearanceLiveResponseSendInput {
             root: &live.roots.peer_store,
             peer_node_root: Some(&live.roots.peer_node),
             requester_ticket_value: &live.requester_live.ticket.value,
@@ -10025,8 +10001,8 @@ mod tests {
         refs: &TwoNodeRefs,
         request: &SentRequest,
         response: &SentResponse,
-    ) -> RetentionRemoteGcClearanceLiveImportWorkflow {
-        import_retention_remote_gc_clearance_live_workflow(RetentionRemoteGcClearanceLiveImportWorkflowInput {
+    ) -> RemoteGcClearanceLiveImportWorkflow {
+        import_remote_gc_clearance_live_workflow(RemoteGcClearanceLiveImportWorkflowInput {
             root,
             request_value: &request.send.request.value,
             response_value: &response.send.response.value,
@@ -10045,7 +10021,7 @@ mod tests {
     }
 
     fn assert_two_node_import(
-        imported: &RetentionRemoteGcClearanceLiveImportWorkflow,
+        imported: &RemoteGcClearanceLiveImportWorkflow,
         request: &SentRequest,
         response: &SentResponse,
     ) {
@@ -10064,11 +10040,7 @@ mod tests {
         assert_eq!(imported.workflow.response_live_refs[2], response.receive.transport_receipt_ref);
     }
 
-    fn assert_two_node_admission(
-        root: &Path,
-        refs: TwoNodeRefs,
-        imported: RetentionRemoteGcClearanceLiveImportWorkflow,
-    ) {
+    fn assert_two_node_admission(root: &Path, refs: TwoNodeRefs, imported: RemoteGcClearanceLiveImportWorkflow) {
         let clearance_ref = imported.import.clearance_ref.expect("clearance stored");
         let TwoNodeRefs {
             requester_ref,
@@ -10416,7 +10388,7 @@ mod tests {
     }
 
     fn store_test_remote_clearance(input: TestRemoteClearanceInput<'_>) -> String {
-        store_retention_remote_gc_clearance(input.root, &RetentionRemoteGcClearanceInput {
+        store_remote_gc_clearance(input.root, &RemoteGcClearanceInput {
             decision: "pass",
             requester_ref: input.requester_ref,
             peer_ref: input.peer_ref,
@@ -10863,7 +10835,7 @@ mod tests {
     }
 
     fn pair_with_label(root: &Path, case: &LiveCase, label: &str) -> Pair {
-        let request = store_retention_remote_gc_clearance_request(root, &RetentionRemoteGcClearanceRequestInput {
+        let request = store_retention_remote_gc_clearance_request(root, &RemoteGcClearanceRequestInput {
             requester_ref: &case.requester,
             peer_ref: &case.peer,
             object_ref: &case.object,
@@ -10876,7 +10848,7 @@ mod tests {
             evidence_refs: std::slice::from_ref(&case.support),
         })
         .expect("request");
-        let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
+        let response = store_retention_remote_gc_clearance_response(RemoteGcClearanceResponseInput {
             root,
             request_value: &request.value,
             evidence_refs: &[fake_ref(label)],
@@ -11024,12 +10996,9 @@ mod tests {
         }
     }
 
-    fn case_request(
-        runtime: &tokio::runtime::Runtime,
-        case: &NoEndpointCase,
-    ) -> RetentionRemoteGcClearanceLiveRequestSend {
+    fn case_request(runtime: &tokio::runtime::Runtime, case: &NoEndpointCase) -> RemoteGcClearanceLiveRequestSend {
         runtime
-            .block_on(send_retention_remote_gc_clearance_live_request(RetentionRemoteGcClearanceLiveRequestSendInput {
+            .block_on(send_remote_gc_clearance_live_request(RemoteGcClearanceLiveRequestSendInput {
                 root: &case.root,
                 requester_node_root: Some(&case.nodes.requester_root),
                 peer_ticket_value: &case.nodes.peer_ticket.value,
@@ -11061,33 +11030,31 @@ mod tests {
     fn case_response(
         runtime: &tokio::runtime::Runtime,
         case: &NoEndpointCase,
-        request: &RetentionRemoteGcClearanceLiveRequestSend,
-    ) -> RetentionRemoteGcClearanceLiveResponseSend {
+        request: &RemoteGcClearanceLiveRequestSend,
+    ) -> RemoteGcClearanceLiveResponseSend {
         runtime
-            .block_on(send_retention_remote_gc_clearance_live_response(
-                RetentionRemoteGcClearanceLiveResponseSendInput {
-                    root: &case.root,
-                    peer_node_root: Some(&case.nodes.peer_root),
-                    requester_ticket_value: &case.nodes.requester_ticket.value,
-                    request_value: &request.request.value,
-                    peer_node_id: "peer-node",
-                    requester_node_id: "requester-node",
-                    topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
-                    sequence: 1,
-                    max_attempts: 1,
-                    join_timeout_ms: 1,
-                    response_evidence_refs: std::slice::from_ref(&case.evidence),
-                    retained_refs: &[],
-                    is_current: true,
-                    revoked_refs: &[],
-                    response_diagnostics: &[],
-                    peer_bootstrap_refs: &[],
-                    authority_refs: &[],
-                    policy_refs: &[],
-                    resource_refs: &[],
-                    transport_evidence_refs: &[],
-                },
-            ))
+            .block_on(send_remote_gc_clearance_live_response(RemoteGcClearanceLiveResponseSendInput {
+                root: &case.root,
+                peer_node_root: Some(&case.nodes.peer_root),
+                requester_ticket_value: &case.nodes.requester_ticket.value,
+                request_value: &request.request.value,
+                peer_node_id: "peer-node",
+                requester_node_id: "requester-node",
+                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                sequence: 1,
+                max_attempts: 1,
+                join_timeout_ms: 1,
+                response_evidence_refs: std::slice::from_ref(&case.evidence),
+                retained_refs: &[],
+                is_current: true,
+                revoked_refs: &[],
+                response_diagnostics: &[],
+                peer_bootstrap_refs: &[],
+                authority_refs: &[],
+                policy_refs: &[],
+                resource_refs: &[],
+                transport_evidence_refs: &[],
+            }))
             .expect("response send")
     }
 
@@ -11118,12 +11085,8 @@ mod tests {
         }
     }
 
-    fn import_with(
-        root: &Path,
-        material: &Material,
-        request_receive: &IoValue,
-    ) -> RetentionRemoteGcClearanceLiveImportWorkflow {
-        import_retention_remote_gc_clearance_live_workflow(RetentionRemoteGcClearanceLiveImportWorkflowInput {
+    fn import_with(root: &Path, material: &Material, request_receive: &IoValue) -> RemoteGcClearanceLiveImportWorkflow {
+        import_remote_gc_clearance_live_workflow(RemoteGcClearanceLiveImportWorkflowInput {
             root,
             request_value: &material.request_value,
             response_value: &material.response_value,

@@ -2405,26 +2405,23 @@ fn admission(
 }
 
 fn clearance(root: &std::path::Path, refs: &Refs) -> CliResult<String> {
-    Ok(molten::retention::store_retention_remote_gc_clearance(
-        root,
-        &molten::retention::RetentionRemoteGcClearanceInput {
-            decision: "pass",
-            requester_ref: &refs.requester,
-            peer_ref: &refs.peer,
-            object_ref: &refs.object,
-            object_kind: "chunk",
-            retention_class: molten::retention::CLASS_DURABLE_VALUE,
-            action: molten::retention::ACTION_DELETE,
-            remote_ref: &refs.remote,
-            policy_ref: &refs.policy,
-            authority_ref: &refs.authority,
-            evidence_refs: std::slice::from_ref(&refs.support),
-            retained_refs: &[],
-            is_current: true,
-            revoked_refs: &[],
-            diagnostics: &[],
-        },
-    )?
+    Ok(molten::retention::store_remote_gc_clearance(root, &molten::retention::RemoteGcClearanceInput {
+        decision: "pass",
+        requester_ref: &refs.requester,
+        peer_ref: &refs.peer,
+        object_ref: &refs.object,
+        object_kind: "chunk",
+        retention_class: molten::retention::CLASS_DURABLE_VALUE,
+        action: molten::retention::ACTION_DELETE,
+        remote_ref: &refs.remote,
+        policy_ref: &refs.policy,
+        authority_ref: &refs.authority,
+        evidence_refs: std::slice::from_ref(&refs.support),
+        retained_refs: &[],
+        is_current: true,
+        revoked_refs: &[],
+        diagnostics: &[],
+    })?
     .clearance_ref)
 }
 

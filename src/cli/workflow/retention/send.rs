@@ -1,8 +1,8 @@
 pub(crate) fn request(args: super::command::live::RequestSend) -> molten::error::Result<()> {
     let ticket_value = super::io::read_preserves_file(&args.peer_ticket)?;
     let runtime = runtime()?;
-    let sent = runtime.block_on(molten::retention::send_retention_remote_gc_clearance_live_request(
-        molten::retention::RetentionRemoteGcClearanceLiveRequestSendInput {
+    let sent = runtime.block_on(molten::retention::send_remote_gc_clearance_live_request(
+        molten::retention::RemoteGcClearanceLiveRequestSendInput {
             root: &args.root,
             requester_node_root: args.requester_node_root.as_deref(),
             peer_ticket_value: &ticket_value,
@@ -46,8 +46,8 @@ pub(crate) fn response(args: super::command::live::ResponseSend) -> molten::erro
     let ticket_value = super::io::read_preserves_file(&args.requester_ticket)?;
     let request_value = super::io::read_preserves_file(&args.request)?;
     let runtime = runtime()?;
-    let sent = runtime.block_on(molten::retention::send_retention_remote_gc_clearance_live_response(
-        molten::retention::RetentionRemoteGcClearanceLiveResponseSendInput {
+    let sent = runtime.block_on(molten::retention::send_remote_gc_clearance_live_response(
+        molten::retention::RemoteGcClearanceLiveResponseSendInput {
             root: &args.root,
             peer_node_root: args.peer_node_root.as_deref(),
             requester_ticket_value: &ticket_value,

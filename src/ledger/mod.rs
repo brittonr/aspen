@@ -1281,26 +1281,23 @@ mod tests {
         evidence: &crate::retention::DestructiveRetentionEvidence,
         peer: &PeerCase,
     ) -> String {
-        crate::retention::store_retention_remote_gc_clearance(
-            root,
-            &crate::retention::RetentionRemoteGcClearanceInput {
-                decision: "pass",
-                requester_ref: evidence.requester_ref.as_deref().expect("requester"),
-                peer_ref: &peer.peer,
-                object_ref: &imported.artifact_ref,
-                object_kind: &imported.artifact_kind,
-                retention_class,
-                action: crate::retention::ACTION_DELETE,
-                remote_ref: &peer.remote,
-                policy_ref: &evidence.policy_refs[0],
-                authority_ref: &evidence.authority_refs[0],
-                evidence_refs: &evidence.evidence_refs,
-                retained_refs: &[],
-                is_current: true,
-                revoked_refs: &[],
-                diagnostics: &[],
-            },
-        )
+        crate::retention::store_remote_gc_clearance(root, &crate::retention::RemoteGcClearanceInput {
+            decision: "pass",
+            requester_ref: evidence.requester_ref.as_deref().expect("requester"),
+            peer_ref: &peer.peer,
+            object_ref: &imported.artifact_ref,
+            object_kind: &imported.artifact_kind,
+            retention_class,
+            action: crate::retention::ACTION_DELETE,
+            remote_ref: &peer.remote,
+            policy_ref: &evidence.policy_refs[0],
+            authority_ref: &evidence.authority_refs[0],
+            evidence_refs: &evidence.evidence_refs,
+            retained_refs: &[],
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
         .expect("store remote clearance")
         .clearance_ref
     }
