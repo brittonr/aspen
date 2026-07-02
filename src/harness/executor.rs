@@ -1,8 +1,8 @@
-use super::schema::ActorDecl;
-use super::schema::ActorExecutorConfig;
-use super::schema::ActorKind;
-use crate::error::MoltenError;
-use crate::error::Result;
+type ActorDecl = super::schema::ActorDecl;
+type ActorExecutorConfig = super::schema::ActorExecutorConfig;
+type ActorKind = super::schema::ActorKind;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActorExecutorKind {
