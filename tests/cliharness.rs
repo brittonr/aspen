@@ -2529,7 +2529,7 @@ fn missing_plan_case(dir: &std::path::Path) -> CliResult<()> {
 
 fn stale_plan_case(dir: &std::path::Path) -> CliResult<()> {
     let root = dir.join("stale-plan-root");
-    let candidate = setup_retention_cli_candidate(RetentionCandidateInput {
+    let candidate = setup_retention_cli_candidate(CandidateInput {
         root: &root,
         label: "stale-plan",
         object_ref: test_ref("retention-stale-object")?,
@@ -2573,7 +2573,7 @@ fn missing_apply_case(dir: &std::path::Path) -> CliResult<()> {
     let root = dir.join("missing-apply-ledger");
     let artifact =
         molten::ledger::import_artifact(&root, &molten::preserves_rail::parse_text("<artifact \"missing-apply\">")?)?;
-    let candidate = setup_retention_cli_candidate(RetentionCandidateInput {
+    let candidate = setup_retention_cli_candidate(CandidateInput {
         root: &root,
         label: "missing-apply",
         object_ref: artifact.artifact_ref.clone(),
@@ -2598,7 +2598,7 @@ fn wrong_apply_case(dir: &std::path::Path) -> CliResult<()> {
     let root = dir.join("wrong-apply-ledger");
     let artifact =
         molten::ledger::import_artifact(&root, &molten::preserves_rail::parse_text("<artifact \"wrong-apply\">")?)?;
-    let candidate = setup_retention_cli_candidate(RetentionCandidateInput {
+    let candidate = setup_retention_cli_candidate(CandidateInput {
         root: &root,
         label: "wrong-apply",
         object_ref: artifact.artifact_ref.clone(),
@@ -2681,7 +2681,7 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     let registry = dir.join("registry");
     let ledger_root = dir.join("ledger");
     let retention_root = dir.join("retention-root");
-    let candidate = setup_retention_cli_candidate(RetentionCandidateInput {
+    let candidate = setup_retention_cli_candidate(CandidateInput {
         root: &retention_root,
         label: "catalog-audit",
         object_ref: test_ref("retention-catalog-audit-object")?,
@@ -2966,7 +2966,7 @@ fn run_mcp(
     Ok(())
 }
 
-struct RetentionCandidateInput<'a> {
+struct CandidateInput<'a> {
     root: &'a std::path::Path,
     label: &'a str,
     object_ref: String,
@@ -3059,7 +3059,7 @@ fn setup_retention_gc_catalog_fixture(
     })
 }
 
-fn setup_retention_cli_candidate(input: RetentionCandidateInput<'_>) -> CliResult<RetentionCliCandidate> {
+fn setup_retention_cli_candidate(input: CandidateInput<'_>) -> CliResult<RetentionCliCandidate> {
     let requester_ref = test_ref(&format!("{}-requester", input.label))?;
     let mut candidate = RetentionCliCandidate {
         root: input.root.to_path_buf(),

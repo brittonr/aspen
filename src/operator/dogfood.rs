@@ -4228,10 +4228,10 @@ struct GcFlow {
     apply: crate::retention::GcApply,
     execution: crate::retention::GcExecutionGate,
     audit: crate::retention::GcAudit,
-    explain: crate::retention::RetentionCandidateExplain,
-    bundle: crate::retention::RetentionCandidateBundle,
-    profile: crate::retention::RetentionCandidateBundleProfile,
-    verify: crate::retention::RetentionCandidateBundleVerify,
+    explain: crate::retention::CandidateExplain,
+    bundle: crate::retention::CandidateBundle,
+    profile: crate::retention::CandidateBundleProfile,
+    verify: crate::retention::CandidateBundleVerify,
 }
 
 struct GcFinishInput {
@@ -4344,7 +4344,7 @@ fn gc_flow(
         root: input.root,
         execution_ref: &execution.execution_ref,
     })?;
-    let explain = crate::retention::explain_retention_candidate(crate::retention::RetentionCandidateExplainInput {
+    let explain = crate::retention::explain_candidate(crate::retention::CandidateExplainInput {
         root: input.root,
         object_ref: seed.object_ref,
         object_kind: Some(seed.object_kind),
@@ -4352,21 +4352,19 @@ fn gc_flow(
         action: Some(seed.action),
         subsystem: Some("ledger-gc"),
     })?;
-    let bundle =
-        crate::retention::export_retention_candidate_bundle(crate::retention::RetentionCandidateBundleExportInput {
-            root: input.root,
-            explain_value: &explain.value,
-            out: input.bundle_dir,
-            profile: crate::retention::RetentionCandidateBundleExportProfile::Public,
-        })?;
+    let bundle = crate::retention::export_candidate_bundle(crate::retention::CandidateBundleExportInput {
+        root: input.root,
+        explain_value: &explain.value,
+        out: input.bundle_dir,
+        profile: crate::retention::CandidateBundleExportProfile::Public,
+    })?;
     let profile_value = crate::preserves_rail::parse_text(
         &std::fs::read_to_string(input.bundle_dir.join("bundle-profile.preserves")).map_err(MoltenError::from)?,
     )?;
     let profile = crate::retention::parse_retention_candidate_bundle_profile(&profile_value)?;
-    let verify =
-        crate::retention::verify_retention_candidate_bundle(crate::retention::RetentionCandidateBundleVerifyInput {
-            bundle_dir: input.bundle_dir,
-        })?;
+    let verify = crate::retention::verify_candidate_bundle(crate::retention::CandidateBundleVerifyInput {
+        bundle_dir: input.bundle_dir,
+    })?;
     Ok(GcFlow {
         plan,
         apply,

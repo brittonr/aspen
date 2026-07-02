@@ -993,7 +993,7 @@ const CLASSIFICATION_PROBES: &[ClassificationProbe] = &[
     retention_core_labels,
     retention_plan_apply_labels,
     retention_execute_audit_labels,
-    retention_candidate_labels,
+    candidate_labels,
     retention_tail_labels,
     lifecycle_labels,
     provenance_labels,
@@ -1216,7 +1216,7 @@ fn retention_execute_audit_labels(value: &IoValue) -> Result<Option<Vec<String>>
     Ok(None)
 }
 
-fn retention_candidate_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
+fn candidate_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Ok(explain) = crate::retention::parse_retention_candidate_explain(value) {
         let mut classifications = vec![
             "retention:explain".to_string(),

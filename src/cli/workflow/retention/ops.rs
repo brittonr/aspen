@@ -8,7 +8,7 @@ pub(crate) fn explain(args: super::command::ops::Explain) -> molten::error::Resu
         subsystem,
         out,
     } = args;
-    let explain = molten::retention::explain_retention_candidate(molten::retention::RetentionCandidateExplainInput {
+    let explain = molten::retention::explain_candidate(molten::retention::CandidateExplainInput {
         root: &root,
         object_ref: &object_ref,
         object_kind: object_kind.as_deref(),
@@ -46,14 +46,13 @@ pub(crate) fn bundle_export(args: super::command::ops::BundleExport) -> molten::
         profile,
     } = args;
     let explain_value = super::io::read_preserves_file(&explain)?;
-    let profile = molten::retention::RetentionCandidateBundleExportProfile::parse(&profile)?;
-    let bundle =
-        molten::retention::export_retention_candidate_bundle(molten::retention::RetentionCandidateBundleExportInput {
-            root: &root,
-            explain_value: &explain_value,
-            out: &out,
-            profile,
-        })?;
+    let profile = molten::retention::CandidateBundleExportProfile::parse(&profile)?;
+    let bundle = molten::retention::export_candidate_bundle(molten::retention::CandidateBundleExportInput {
+        root: &root,
+        explain_value: &explain_value,
+        out: &out,
+        profile,
+    })?;
     eprintln!(
         "retention bundle ref={} explain={} profile={} artifacts={} diagnostics={} out={}",
         bundle.bundle_ref,
@@ -68,10 +67,9 @@ pub(crate) fn bundle_export(args: super::command::ops::BundleExport) -> molten::
 
 pub(crate) fn bundle_verify(args: super::command::ops::BundleVerify) -> molten::error::Result<()> {
     let super::command::ops::BundleVerify { bundle, receipt_out } = args;
-    let verify =
-        molten::retention::verify_retention_candidate_bundle(molten::retention::RetentionCandidateBundleVerifyInput {
-            bundle_dir: &bundle,
-        })?;
+    let verify = molten::retention::verify_candidate_bundle(molten::retention::CandidateBundleVerifyInput {
+        bundle_dir: &bundle,
+    })?;
     let text = molten::preserves_rail::to_text(&verify.value)?;
     if let Some(path) = receipt_out {
         super::io::write_file(&path, &text)?;

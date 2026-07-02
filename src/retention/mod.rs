@@ -359,7 +359,7 @@ pub struct GcAudit {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionCandidateExplainInput<'a> {
+pub struct CandidateExplainInput<'a> {
     pub root: &'a Path,
     pub object_ref: &'a str,
     pub object_kind: Option<&'a str>,
@@ -369,7 +369,7 @@ pub struct RetentionCandidateExplainInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionCandidateExplain {
+pub struct CandidateExplain {
     pub explain_ref: String,
     pub object_ref: String,
     pub object_kind: Option<String>,
@@ -391,13 +391,13 @@ pub struct RetentionCandidateExplain {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RetentionCandidateBundleExportProfile {
+pub enum CandidateBundleExportProfile {
     Internal,
     Public,
     Diagnostic,
 }
 
-impl RetentionCandidateBundleExportProfile {
+impl CandidateBundleExportProfile {
     pub fn parse(value: &str) -> Result<Self> {
         match value {
             "internal" => Ok(Self::Internal),
@@ -427,15 +427,15 @@ impl RetentionCandidateBundleExportProfile {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionCandidateBundleExportInput<'a> {
+pub struct CandidateBundleExportInput<'a> {
     pub root: &'a Path,
     pub explain_value: &'a IoValue,
     pub out: &'a Path,
-    pub profile: RetentionCandidateBundleExportProfile,
+    pub profile: CandidateBundleExportProfile,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionCandidateBundle {
+pub struct CandidateBundle {
     pub bundle_ref: String,
     pub explain_ref: String,
     pub object_ref: String,
@@ -455,7 +455,7 @@ pub struct RetentionCandidateBundle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionCandidateBundleProfile {
+pub struct CandidateBundleProfile {
     pub profile_ref: String,
     pub decision: String,
     pub profile: String,
@@ -467,12 +467,12 @@ pub struct RetentionCandidateBundleProfile {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionCandidateBundleVerifyInput<'a> {
+pub struct CandidateBundleVerifyInput<'a> {
     pub bundle_dir: &'a Path,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionCandidateBundleVerify {
+pub struct CandidateBundleVerify {
     pub verify_ref: String,
     pub decision: String,
     pub bundle_ref: String,
@@ -2415,7 +2415,7 @@ struct AuditValueInput<'a> {
     diagnostics: &'a [String],
 }
 
-struct RetentionCandidateExplainValueInput<'a> {
+struct CandidateExplainValueInput<'a> {
     object_ref: &'a str,
     object_kind: Option<&'a str>,
     retention_class: Option<&'a str>,
@@ -2447,7 +2447,7 @@ struct MatchRefs {
     tombstone_refs: Vec<String>,
 }
 
-struct RetentionCandidateFilter<'a> {
+struct CandidateFilter<'a> {
     object_ref: &'a str,
     object_kind: Option<&'a str>,
     retention_class: Option<&'a str>,
@@ -2455,14 +2455,14 @@ struct RetentionCandidateFilter<'a> {
     subsystem: Option<&'a str>,
 }
 
-struct RetentionCandidateBundleValueInput<'a> {
-    explain: &'a RetentionCandidateExplain,
+struct CandidateBundleValueInput<'a> {
+    explain: &'a CandidateExplain,
     artifact_refs: &'a [String],
     diagnostics: &'a [String],
 }
 
-struct RetentionCandidateBundleProfileValueInput<'a> {
-    profile: RetentionCandidateBundleExportProfile,
+struct CandidateBundleProfileValueInput<'a> {
+    profile: CandidateBundleExportProfile,
     decision: &'a str,
     bundle_ref: &'a str,
     marker_refs: &'a [String],
@@ -2483,8 +2483,8 @@ struct GroupSpec<'a> {
     read: fn(&Path, &str) -> Result<IoValue>,
 }
 
-struct RetentionCandidateBundleVerifyValueInput<'a> {
-    bundle: &'a RetentionCandidateBundle,
+struct CandidateBundleVerifyValueInput<'a> {
+    bundle: &'a CandidateBundle,
     decision: &'a str,
     file_refs: &'a [String],
     diagnostics: &'a [String],
@@ -5083,9 +5083,9 @@ pub fn read_retention_gc_audit(root: &Path, audit_ref: &str) -> Result<GcAudit> 
     Ok(audit)
 }
 
-pub fn explain_retention_candidate(input: RetentionCandidateExplainInput<'_>) -> Result<RetentionCandidateExplain> {
+pub fn explain_candidate(input: CandidateExplainInput<'_>) -> Result<CandidateExplain> {
     validate_retention_candidate_explain_input(&input)?;
-    let filter = RetentionCandidateFilter {
+    let filter = CandidateFilter {
         object_ref: input.object_ref,
         object_kind: input.object_kind,
         retention_class: input.retention_class,
@@ -5093,13 +5093,13 @@ pub fn explain_retention_candidate(input: RetentionCandidateExplainInput<'_>) ->
         subsystem: input.subsystem,
     };
     let refs = MatchRefs::collect(input.root, &filter)?;
-    let diagnostics = retention_candidate_explain_diagnostics(&refs.value_input(input, &[]))?;
-    let value = retention_candidate_explain_value(&refs.value_input(input, &diagnostics))?;
+    let diagnostics = candidate_explain_diagnostics(&refs.value_input(input, &[]))?;
+    let value = candidate_explain_value(&refs.value_input(input, &diagnostics))?;
     parse_retention_candidate_explain(&value)
 }
 
 impl MatchRefs {
-    fn collect(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Self> {
+    fn collect(root: &Path, filter: &CandidateFilter<'_>) -> Result<Self> {
         let pin_refs = pins_for(root, filter)?;
         let admission_refs = admissions_for(root, filter)?;
         let remote_clearance_refs = clearances_for(root, filter)?;
@@ -5126,10 +5126,10 @@ impl MatchRefs {
 
     fn value_input<'a>(
         &'a self,
-        input: RetentionCandidateExplainInput<'a>,
+        input: CandidateExplainInput<'a>,
         diagnostics: &'a [String],
-    ) -> RetentionCandidateExplainValueInput<'a> {
-        RetentionCandidateExplainValueInput {
+    ) -> CandidateExplainValueInput<'a> {
+        CandidateExplainValueInput {
             object_ref: input.object_ref,
             object_kind: input.object_kind,
             retention_class: input.retention_class,
@@ -5150,7 +5150,7 @@ impl MatchRefs {
     }
 }
 
-fn pins_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
+fn pins_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &pins_dir(root),
         parse_pin,
@@ -5160,7 +5160,7 @@ fn pins_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<St
     )
 }
 
-fn admissions_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
+fn admissions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &admissions_dir(root),
         parse_evidence_admission,
@@ -5177,7 +5177,7 @@ fn admissions_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<
     )
 }
 
-fn clearances_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
+fn clearances_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &remote_clearances_dir(root),
         parse_retention_remote_gc_clearance,
@@ -5204,7 +5204,7 @@ fn imports_for(root: &Path, remote_clearance_refs: &[String]) -> Result<Vec<Stri
     )
 }
 
-fn plans_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
+fn plans_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &gc_plans_dir(root),
         parse_gc_plan,
@@ -5216,7 +5216,7 @@ fn plans_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<S
     )
 }
 
-fn applies_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
+fn applies_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &gc_applies_dir(root),
         parse_gc_apply,
@@ -5234,7 +5234,7 @@ fn applies_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec
     )
 }
 
-fn executions_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
+fn executions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &gc_executes_dir(root),
         parse_gc_execution_gate,
@@ -5252,7 +5252,7 @@ fn executions_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<
     )
 }
 
-fn audits_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
+fn audits_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &gc_audits_dir(root),
         parse_gc_audit,
@@ -5270,7 +5270,7 @@ fn audits_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<
     )
 }
 
-fn receipts_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
+fn receipts_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &receipts_dir(root),
         parse_retention_receipt,
@@ -5287,7 +5287,7 @@ fn receipts_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Ve
     )
 }
 
-fn tombstones_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
+fn tombstones_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &tombstones_dir(root),
         parse_tombstone,
@@ -5304,7 +5304,7 @@ fn tombstones_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<
     )
 }
 
-fn retention_candidate_explain_diagnostics(input: &RetentionCandidateExplainValueInput<'_>) -> Result<Vec<String>> {
+fn candidate_explain_diagnostics(input: &CandidateExplainValueInput<'_>) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     if input.pin_refs.is_empty()
         && input.admission_refs.is_empty()
@@ -5337,7 +5337,7 @@ fn retention_candidate_explain_diagnostics(input: &RetentionCandidateExplainValu
     Ok(diagnostics)
 }
 
-fn retention_candidate_explain_value(input: &RetentionCandidateExplainValueInput<'_>) -> Result<IoValue> {
+fn candidate_explain_value(input: &CandidateExplainValueInput<'_>) -> Result<IoValue> {
     validate_retention_candidate_explain_value_input(input)?;
     Ok(crate::preserves_rail::record("retention-candidate-explain-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_CANDIDATE_EXPLAIN_SCHEMA),
@@ -5373,7 +5373,7 @@ fn retention_candidate_explain_value(input: &RetentionCandidateExplainValueInput
     ]))
 }
 
-pub fn parse_retention_candidate_explain(value: &IoValue) -> Result<RetentionCandidateExplain> {
+pub fn parse_retention_candidate_explain(value: &IoValue) -> Result<CandidateExplain> {
     let fields = value
         .collect_simple_record("retention-candidate-explain-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-explain-v1 ...>"))?;
@@ -5422,7 +5422,7 @@ pub fn parse_retention_candidate_explain(value: &IoValue) -> Result<RetentionCan
     require_check(&checks, "normal-admission-still-required", "retention candidate explain")?;
     require_check(&checks, "plan-apply-execute-still-required", "retention candidate explain")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention candidate explain")?;
-    Ok(RetentionCandidateExplain {
+    Ok(CandidateExplain {
         explain_ref: crate::preserves_rail::canonical_hash(value)?,
         object_ref,
         object_kind,
@@ -5444,35 +5444,29 @@ pub fn parse_retention_candidate_explain(value: &IoValue) -> Result<RetentionCan
     })
 }
 
-pub fn export_retention_candidate_bundle(
-    input: RetentionCandidateBundleExportInput<'_>,
-) -> Result<RetentionCandidateBundle> {
+pub fn export_candidate_bundle(input: CandidateBundleExportInput<'_>) -> Result<CandidateBundle> {
     let explain = parse_retention_candidate_explain(input.explain_value)?;
     fs::create_dir_all(input.out).map_err(MoltenError::from)?;
     let artifact_dir = input.out.join("artifacts");
     fs::create_dir_all(&artifact_dir).map_err(MoltenError::from)?;
     write_store_value(&input.out.join("explain.preserves"), &explain.value)?;
     let (artifact_refs, diagnostics) = export_groups(input.root, &artifact_dir, &explain)?;
-    let value = retention_candidate_bundle_value(&RetentionCandidateBundleValueInput {
+    let value = candidate_bundle_value(&CandidateBundleValueInput {
         explain: &explain,
         artifact_refs: &artifact_refs,
         diagnostics: &diagnostics,
     })?;
     write_store_value(&input.out.join("bundle.preserves"), &value)?;
     let bundle = parse_retention_candidate_bundle(&value)?;
-    let profile = profile_retention_candidate_bundle(input.out, input.profile, &bundle)?;
+    let profile = profile_candidate_bundle(input.out, input.profile, &bundle)?;
     write_store_value(&input.out.join(BUNDLE_PROFILE_FILE), &profile.value)?;
-    if input.profile == RetentionCandidateBundleExportProfile::Diagnostic {
-        write_retention_candidate_bundle_redacted_view(input.out, &bundle)?;
+    if input.profile == CandidateBundleExportProfile::Diagnostic {
+        write_candidate_bundle_redacted_view(input.out, &bundle)?;
     }
     Ok(bundle)
 }
 
-fn export_groups(
-    root: &Path,
-    artifact_dir: &Path,
-    explain: &RetentionCandidateExplain,
-) -> Result<(Vec<String>, Vec<String>)> {
+fn export_groups(root: &Path, artifact_dir: &Path, explain: &CandidateExplain) -> Result<(Vec<String>, Vec<String>)> {
     let groups = [
         GroupSpec {
             dir_name: "gc-plans",
@@ -5551,14 +5545,14 @@ fn export_retention_bundle_artifact_group(
     Ok(())
 }
 
-fn profile_retention_candidate_bundle(
+fn profile_candidate_bundle(
     bundle_dir: &Path,
-    profile: RetentionCandidateBundleExportProfile,
-    bundle: &RetentionCandidateBundle,
-) -> Result<RetentionCandidateBundleProfile> {
+    profile: CandidateBundleExportProfile,
+    bundle: &CandidateBundle,
+) -> Result<CandidateBundleProfile> {
     let mut marker_refs = Vec::new();
     let mut diagnostics = Vec::new();
-    if profile != RetentionCandidateBundleExportProfile::Internal {
+    if profile != CandidateBundleExportProfile::Internal {
         collect_retention_bundle_sensitive_markers(&bundle.value, "/bundle", &bundle.bundle_ref, &mut marker_refs)?;
         let explain_value = read_store_value(&bundle_dir.join("explain.preserves"))?;
         collect_retention_bundle_sensitive_markers(&explain_value, "/explain", &bundle.bundle_ref, &mut marker_refs)?;
@@ -5567,8 +5561,8 @@ fn profile_retention_candidate_bundle(
         marker_refs.dedup();
     }
     match profile {
-        RetentionCandidateBundleExportProfile::Internal => {}
-        RetentionCandidateBundleExportProfile::Public => {
+        CandidateBundleExportProfile::Internal => {}
+        CandidateBundleExportProfile::Public => {
             if !marker_refs.is_empty() {
                 push_bounded(
                     &mut diagnostics,
@@ -5578,7 +5572,7 @@ fn profile_retention_candidate_bundle(
                 )?;
             }
         }
-        RetentionCandidateBundleExportProfile::Diagnostic => {
+        CandidateBundleExportProfile::Diagnostic => {
             push_bounded(
                 &mut diagnostics,
                 format!("retention-bundle-diagnostic-redacted-markers:{}", marker_refs.len()),
@@ -5587,12 +5581,12 @@ fn profile_retention_candidate_bundle(
             )?;
         }
     }
-    let decision = if profile == RetentionCandidateBundleExportProfile::Public && !marker_refs.is_empty() {
+    let decision = if profile == CandidateBundleExportProfile::Public && !marker_refs.is_empty() {
         "deny"
     } else {
         "pass"
     };
-    let value = retention_candidate_bundle_profile_value(&RetentionCandidateBundleProfileValueInput {
+    let value = candidate_bundle_profile_value(&CandidateBundleProfileValueInput {
         profile,
         decision,
         bundle_ref: &bundle.bundle_ref,
@@ -5698,7 +5692,7 @@ fn collect_retention_bundle_sensitive_markers(
     Ok(())
 }
 
-fn write_retention_candidate_bundle_redacted_view(bundle_dir: &Path, bundle: &RetentionCandidateBundle) -> Result<()> {
+fn write_candidate_bundle_redacted_view(bundle_dir: &Path, bundle: &CandidateBundle) -> Result<()> {
     let redacted_dir = bundle_dir.join(BUNDLE_REDACTED_DIR);
     let mut ignored_markers = Vec::new();
     let bundle_value = read_store_value(&bundle_dir.join("bundle.preserves"))?;
@@ -5939,7 +5933,7 @@ fn record_label_string(value: &IoValue) -> Option<String> {
     value.label().as_symbol().map(std::borrow::Cow::into_owned)
 }
 
-fn retention_candidate_bundle_profile_value(input: &RetentionCandidateBundleProfileValueInput<'_>) -> Result<IoValue> {
+fn candidate_bundle_profile_value(input: &CandidateBundleProfileValueInput<'_>) -> Result<IoValue> {
     validate_retention_candidate_bundle_profile_value_input(input)?;
     Ok(crate::preserves_rail::record("retention-candidate-bundle-profile-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA),
@@ -5961,7 +5955,7 @@ fn retention_candidate_bundle_profile_value(input: &RetentionCandidateBundleProf
     ]))
 }
 
-pub fn parse_retention_candidate_bundle_profile(value: &IoValue) -> Result<RetentionCandidateBundleProfile> {
+pub fn parse_retention_candidate_bundle_profile(value: &IoValue) -> Result<CandidateBundleProfile> {
     let fields = value
         .collect_simple_record("retention-candidate-bundle-profile-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-profile-v1 ...>"))?;
@@ -5971,7 +5965,7 @@ pub fn parse_retention_candidate_bundle_profile(value: &IoValue) -> Result<Reten
         "retention candidate bundle profile schema",
     )?;
     let profile = record_string(&fields[1], "profile")?;
-    let parsed_profile = RetentionCandidateBundleExportProfile::parse(&profile)?;
+    let parsed_profile = CandidateBundleExportProfile::parse(&profile)?;
     let loss_classification = record_string(&fields[2], "loss-classification")?;
     if loss_classification != parsed_profile.loss_classification() {
         return Err(MoltenError::invalid_harness("retention bundle profile loss classification mismatch"));
@@ -5987,7 +5981,7 @@ pub fn parse_retention_candidate_bundle_profile(value: &IoValue) -> Result<Reten
     require_check(&checks, "normal-admission-still-required", "retention candidate bundle profile")?;
     require_check(&checks, "plan-apply-execute-still-required", "retention candidate bundle profile")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention candidate bundle profile")?;
-    Ok(RetentionCandidateBundleProfile {
+    Ok(CandidateBundleProfile {
         profile_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         profile,
@@ -5999,16 +5993,14 @@ pub fn parse_retention_candidate_bundle_profile(value: &IoValue) -> Result<Reten
     })
 }
 
-fn validate_retention_candidate_bundle_profile_value_input(
-    input: &RetentionCandidateBundleProfileValueInput<'_>,
-) -> Result<()> {
+fn validate_retention_candidate_bundle_profile_value_input(input: &CandidateBundleProfileValueInput<'_>) -> Result<()> {
     validate_decision(input.decision)?;
     require_ref(input.bundle_ref, "retention bundle profile bundle ref")?;
     validate_refs(input.marker_refs, "retention bundle profile marker ref")?;
     validate_diagnostics(input.diagnostics, "retention bundle profile diagnostics")
 }
 
-fn retention_candidate_bundle_value(input: &RetentionCandidateBundleValueInput<'_>) -> Result<IoValue> {
+fn candidate_bundle_value(input: &CandidateBundleValueInput<'_>) -> Result<IoValue> {
     validate_retention_candidate_bundle_value_input(input)?;
     Ok(crate::preserves_rail::record("retention-candidate-bundle-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_SCHEMA),
@@ -6044,7 +6036,7 @@ fn retention_candidate_bundle_value(input: &RetentionCandidateBundleValueInput<'
     ]))
 }
 
-pub fn parse_retention_candidate_bundle(value: &IoValue) -> Result<RetentionCandidateBundle> {
+pub fn parse_retention_candidate_bundle(value: &IoValue) -> Result<CandidateBundle> {
     let fields = value
         .collect_simple_record("retention-candidate-bundle-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-v1 ...>"))?;
@@ -6092,7 +6084,7 @@ pub fn parse_retention_candidate_bundle(value: &IoValue) -> Result<RetentionCand
     require_check(&checks, "normal-admission-still-required", "retention candidate bundle")?;
     require_check(&checks, "plan-apply-execute-still-required", "retention candidate bundle")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention candidate bundle")?;
-    Ok(RetentionCandidateBundle {
+    Ok(CandidateBundle {
         bundle_ref: crate::preserves_rail::canonical_hash(value)?,
         explain_ref,
         object_ref,
@@ -6112,16 +6104,14 @@ pub fn parse_retention_candidate_bundle(value: &IoValue) -> Result<RetentionCand
     })
 }
 
-pub fn verify_retention_candidate_bundle(
-    input: RetentionCandidateBundleVerifyInput<'_>,
-) -> Result<RetentionCandidateBundleVerify> {
+pub fn verify_candidate_bundle(input: CandidateBundleVerifyInput<'_>) -> Result<CandidateBundleVerify> {
     let bundle_value = read_store_value(&input.bundle_dir.join("bundle.preserves"))?;
     let bundle = parse_retention_candidate_bundle(&bundle_value)?;
     let explain_value = read_store_value(&input.bundle_dir.join("explain.preserves"))?;
     let explain = parse_retention_candidate_explain(&explain_value)?;
     let mut diagnostics = Vec::new();
     push_retention_bundle_scope_diagnostics(&bundle, &explain, &mut diagnostics)?;
-    let expected_refs = retention_candidate_bundle_expected_refs(&bundle)?;
+    let expected_refs = candidate_bundle_expected_refs(&bundle)?;
     let expected_ref_set = push_expected_ref_notes(&bundle, &expected_refs, &mut diagnostics)?;
     let mut file_refs = Vec::new();
     scan_retention_bundle_artifact_files(
@@ -6138,7 +6128,7 @@ pub fn verify_retention_candidate_bundle(
     diagnostics.sort();
     diagnostics.dedup();
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = retention_candidate_bundle_verify_value(&RetentionCandidateBundleVerifyValueInput {
+    let value = candidate_bundle_verify_value(&CandidateBundleVerifyValueInput {
         bundle: &bundle,
         decision,
         file_refs: &file_refs,
@@ -6148,7 +6138,7 @@ pub fn verify_retention_candidate_bundle(
 }
 
 fn push_expected_ref_notes(
-    bundle: &RetentionCandidateBundle,
+    bundle: &CandidateBundle,
     expected_refs: &[String],
     diagnostics: &mut impl VecSink<String>,
 ) -> Result<OrderedSet<String>> {
@@ -6181,7 +6171,7 @@ fn push_expected_ref_notes(
 
 fn verify_artifact_groups(
     bundle_dir: &Path,
-    bundle: &RetentionCandidateBundle,
+    bundle: &CandidateBundle,
     diagnostics: &mut impl VecSink<String>,
 ) -> Result<()> {
     let groups = [
@@ -6231,7 +6221,7 @@ fn verify_artifact_groups(
 }
 
 fn push_file_ref_notes(
-    bundle: &RetentionCandidateBundle,
+    bundle: &CandidateBundle,
     file_refs: &[String],
     diagnostics: &mut impl VecSink<String>,
 ) -> Result<()> {
@@ -6287,8 +6277,8 @@ fn push_mismatch_notes(checks: &[MismatchNote], diagnostics: &mut impl VecSink<S
 }
 
 fn push_retention_bundle_scope_diagnostics(
-    bundle: &RetentionCandidateBundle,
-    explain: &RetentionCandidateExplain,
+    bundle: &CandidateBundle,
+    explain: &CandidateExplain,
     diagnostics: &mut impl VecSink<String>,
 ) -> Result<()> {
     let checks = [
@@ -6314,7 +6304,7 @@ fn push_retention_bundle_scope_diagnostics(
     push_mismatch_notes(&checks, diagnostics)
 }
 
-fn retention_candidate_bundle_expected_refs(bundle: &RetentionCandidateBundle) -> Result<Vec<String>> {
+fn candidate_bundle_expected_refs(bundle: &CandidateBundle) -> Result<Vec<String>> {
     let mut refs = Vec::new();
     push_ref_slice(&mut refs, &bundle.gc_plan_refs)?;
     push_ref_slice(&mut refs, &bundle.gc_apply_refs)?;
@@ -6523,7 +6513,7 @@ fn retention_bundle_artifact_dirs() -> &'static [&'static str] {
     ]
 }
 
-fn retention_candidate_bundle_verify_value(input: &RetentionCandidateBundleVerifyValueInput<'_>) -> Result<IoValue> {
+fn candidate_bundle_verify_value(input: &CandidateBundleVerifyValueInput<'_>) -> Result<IoValue> {
     validate_retention_candidate_bundle_verify_value_input(input)?;
     Ok(crate::preserves_rail::record("retention-candidate-bundle-verify-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA),
@@ -6554,7 +6544,7 @@ fn retention_candidate_bundle_verify_value(input: &RetentionCandidateBundleVerif
     ]))
 }
 
-pub fn parse_retention_candidate_bundle_verify(value: &IoValue) -> Result<RetentionCandidateBundleVerify> {
+pub fn parse_retention_candidate_bundle_verify(value: &IoValue) -> Result<CandidateBundleVerify> {
     let fields = value
         .collect_simple_record("retention-candidate-bundle-verify-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-verify-v1 ...>"))?;
@@ -6600,7 +6590,7 @@ pub fn parse_retention_candidate_bundle_verify(value: &IoValue) -> Result<Retent
     require_check(&checks, "normal-admission-still-required", "retention candidate bundle verify")?;
     require_check(&checks, "plan-apply-execute-still-required", "retention candidate bundle verify")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention candidate bundle verify")?;
-    Ok(RetentionCandidateBundleVerify {
+    Ok(CandidateBundleVerify {
         verify_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         bundle_ref,
@@ -6617,9 +6607,7 @@ pub fn parse_retention_candidate_bundle_verify(value: &IoValue) -> Result<Retent
     })
 }
 
-fn validate_retention_candidate_bundle_verify_value_input(
-    input: &RetentionCandidateBundleVerifyValueInput<'_>,
-) -> Result<()> {
+fn validate_retention_candidate_bundle_verify_value_input(input: &CandidateBundleVerifyValueInput<'_>) -> Result<()> {
     validate_decision(input.decision)?;
     require_ref(&input.bundle.bundle_ref, "retention bundle verify bundle ref")?;
     require_ref(&input.bundle.explain_ref, "retention bundle verify explain ref")?;
@@ -6652,9 +6640,9 @@ fn parse_retention_tombstone_kind(value: &IoValue) -> Result<()> {
     parse_tombstone(value).map(|_| ())
 }
 
-fn validate_retention_candidate_bundle_value_input(input: &RetentionCandidateBundleValueInput<'_>) -> Result<()> {
+fn validate_retention_candidate_bundle_value_input(input: &CandidateBundleValueInput<'_>) -> Result<()> {
     require_ref(&input.explain.explain_ref, "retention bundle explain ref")?;
-    validate_retention_candidate_explain_value_input(&RetentionCandidateExplainValueInput {
+    validate_retention_candidate_explain_value_input(&CandidateExplainValueInput {
         object_ref: &input.explain.object_ref,
         object_kind: input.explain.object_kind.as_deref(),
         retention_class: input.explain.retention_class.as_deref(),
@@ -6700,7 +6688,7 @@ fn read_retention_tombstone_value(root: &Path, reference: &str) -> Result<IoValu
     Ok(read_retention_tombstone(root, reference)?.value)
 }
 
-fn validate_retention_candidate_explain_input(input: &RetentionCandidateExplainInput<'_>) -> Result<()> {
+fn validate_retention_candidate_explain_input(input: &CandidateExplainInput<'_>) -> Result<()> {
     require_ref(input.object_ref, "retention candidate object ref")?;
     if let Some(object_kind) = input.object_kind {
         validate_name(object_kind, "retention candidate object kind")?;
@@ -6717,8 +6705,8 @@ fn validate_retention_candidate_explain_input(input: &RetentionCandidateExplainI
     Ok(())
 }
 
-fn validate_retention_candidate_explain_value_input(input: &RetentionCandidateExplainValueInput<'_>) -> Result<()> {
-    validate_retention_candidate_explain_input(&RetentionCandidateExplainInput {
+fn validate_retention_candidate_explain_value_input(input: &CandidateExplainValueInput<'_>) -> Result<()> {
+    validate_retention_candidate_explain_input(&CandidateExplainInput {
         root: Path::new("."),
         object_ref: input.object_ref,
         object_kind: input.object_kind,
@@ -6739,7 +6727,7 @@ fn validate_retention_candidate_explain_value_input(input: &RetentionCandidateEx
     validate_diagnostics(input.diagnostics, "retention candidate explain diagnostics")
 }
 
-impl RetentionCandidateFilter<'_> {
+impl CandidateFilter<'_> {
     fn matches_object(&self, object_ref: &str, object_kind: &str, retention_class: &str) -> bool {
         object_ref == self.object_ref
             && self.object_kind.is_none_or(|expected| expected == object_kind)
@@ -9140,7 +9128,7 @@ mod tests {
         let root = temp_dir("retention-candidate-explain");
         let fixture = store_passing_plan_fixture(&root, "explain-pass");
         let flow = passing_flow(&root, &fixture, "ledger-gc");
-        let explain = explain_retention_candidate(RetentionCandidateExplainInput {
+        let explain = explain_candidate(CandidateExplainInput {
             root: &root,
             object_ref: &fixture.object_ref,
             object_kind: Some("chunk"),
@@ -9161,11 +9149,11 @@ mod tests {
         assert!(explain.diagnostics.is_empty());
         assert_retention_summary_contains(&explain.value, "retention candidate explain");
         let bundle_dir = root.join("bundle");
-        let bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
+        let bundle = export_candidate_bundle(CandidateBundleExportInput {
             root: &root,
             explain_value: &explain.value,
             out: &bundle_dir,
-            profile: RetentionCandidateBundleExportProfile::Internal,
+            profile: CandidateBundleExportProfile::Internal,
         })
         .expect("export retention candidate bundle");
         assert_eq!(bundle.explain_ref, explain.explain_ref);
@@ -9175,7 +9163,7 @@ mod tests {
         assert!(bundle_dir.join("explain.preserves").exists());
         assert!(bundle_dir.join("artifacts/gc-plans").exists());
         assert_retention_summary_contains(&bundle.value, "retention candidate bundle");
-        let verify = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
+        let verify = verify_candidate_bundle(CandidateBundleVerifyInput {
             bundle_dir: &bundle_dir,
         })
         .expect("verify intact retention candidate bundle");
@@ -9194,7 +9182,7 @@ mod tests {
             &crate::preserves_rail::record("tampered", vec![crate::preserves_rail::string("plan")]),
         )
         .expect("tamper bundle plan");
-        let tampered = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
+        let tampered = verify_candidate_bundle(CandidateBundleVerifyInput {
             bundle_dir: &bundle_dir,
         })
         .expect("verify tampered retention candidate bundle");
@@ -9212,7 +9200,7 @@ mod tests {
         let root = temp_dir("retention-bundle-missing");
         let missing_ref = fake_ref("missing-plan");
         let object_ref = fake_ref("bundle-object");
-        let explain_value = retention_candidate_explain_value(&RetentionCandidateExplainValueInput {
+        let explain_value = candidate_explain_value(&CandidateExplainValueInput {
             object_ref: &object_ref,
             object_kind: Some("encrypted-ref"),
             retention_class: Some("private-secret-ref"),
@@ -9231,16 +9219,16 @@ mod tests {
             diagnostics: &[],
         })
         .expect("explain value");
-        let bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
+        let bundle = export_candidate_bundle(CandidateBundleExportInput {
             root: &root,
             explain_value: &explain_value,
             out: &root.join("bundle"),
-            profile: RetentionCandidateBundleExportProfile::Internal,
+            profile: CandidateBundleExportProfile::Internal,
         })
         .expect("bundle with missing artifact diagnostic");
         assert!(bundle.artifact_refs.is_empty());
         assert_eq!(bundle.diagnostics, vec![format!("retention-bundle-missing-artifact:{missing_ref}")]);
-        let verify = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
+        let verify = verify_candidate_bundle(CandidateBundleVerifyInput {
             bundle_dir: &root.join("bundle"),
         })
         .expect("verify missing artifact bundle");
@@ -9260,11 +9248,11 @@ mod tests {
         let plan_ref = fake_ref("bundle-profile-plan");
         let explain_value = sensitive_explain_value(&object_ref, &plan_ref);
         let public_dir = root.join("public");
-        let public_bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
+        let public_bundle = export_candidate_bundle(CandidateBundleExportInput {
             root: &root,
             explain_value: &explain_value,
             out: &public_dir,
-            profile: RetentionCandidateBundleExportProfile::Public,
+            profile: CandidateBundleExportProfile::Public,
         })
         .expect("public profile bundle export");
         let public_profile = parse_retention_candidate_bundle_profile(
@@ -9283,11 +9271,11 @@ mod tests {
         );
 
         let diagnostic_dir = root.join("diagnostic");
-        let diagnostic_bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
+        let diagnostic_bundle = export_candidate_bundle(CandidateBundleExportInput {
             root: &root,
             explain_value: &explain_value,
             out: &diagnostic_dir,
-            profile: RetentionCandidateBundleExportProfile::Diagnostic,
+            profile: CandidateBundleExportProfile::Diagnostic,
         })
         .expect("diagnostic profile bundle export");
         let diagnostic_profile = parse_retention_candidate_bundle_profile(
@@ -9302,7 +9290,7 @@ mod tests {
             .expect("read redacted explain");
         assert!(!redacted_explain.contains(CLASS_PRIVATE_SECRET_REF));
         assert!(!redacted_explain.contains("encrypted-ref"));
-        let verify = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
+        let verify = verify_candidate_bundle(CandidateBundleVerifyInput {
             bundle_dir: &diagnostic_dir,
         })
         .expect("verify diagnostic source bundle");
@@ -10334,7 +10322,7 @@ mod tests {
 
     fn sensitive_explain_value(object_ref: &str, plan_ref: &str) -> IoValue {
         let plan_refs = vec![plan_ref.to_string()];
-        retention_candidate_explain_value(&RetentionCandidateExplainValueInput {
+        candidate_explain_value(&CandidateExplainValueInput {
             object_ref,
             object_kind: Some("encrypted-ref"),
             retention_class: Some(CLASS_PRIVATE_SECRET_REF),
