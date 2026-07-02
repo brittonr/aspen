@@ -1,38 +1,46 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
-use super::ActorId;
-use super::Envelope;
-use super::EnvelopeBoundary;
-use super::PendingTurn;
-use super::PredicateDecision;
-use super::RuntimeAssertion;
-use super::RuntimeEffect;
-use super::RuntimeEvent;
-use super::RuntimeMessage;
-use super::RuntimeObserver;
-use super::RuntimePredicateReceipt;
-use super::RuntimeStep;
-use super::RuntimeValue;
-use super::TurnAction;
-use super::TurnOutcome;
-use super::evaluate_turn_transition;
+type ActorId = super::ActorId;
+type Envelope = super::Envelope;
+type EnvelopeBoundary = super::EnvelopeBoundary;
+type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
+type OrderedMap<Key, Value> = std::collections::BTreeMap<Key, Value>;
+type OrderedSet<Value> = std::collections::BTreeSet<Value>;
+type PendingTurn = super::PendingTurn;
+type PredicateDecision = super::PredicateDecision;
 type Result<T> = crate::error::Result<T>;
+type RuntimeAssertion = super::RuntimeAssertion;
+type RuntimeEffect = super::RuntimeEffect;
+type RuntimeEvent = super::RuntimeEvent;
+type RuntimeMessage = super::RuntimeMessage;
+type RuntimeObserver = super::RuntimeObserver;
+type RuntimePredicateReceipt = super::RuntimePredicateReceipt;
+type RuntimeStep = super::RuntimeStep;
+type RuntimeValue = super::RuntimeValue;
+type TurnAction = super::TurnAction;
+type TurnOutcome = super::TurnOutcome;
 
-fn canonical_hash(value: &preserves::IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
+fn evaluate_turn_transition(
+    before: &RuntimeSnapshot,
+    turn: &PendingTurn,
+    after: &RuntimeSnapshot,
+    outcome: TurnOutcome,
+) -> Result<RuntimePredicateReceipt> {
+    super::evaluate_turn_transition(before, turn, after, outcome)
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn u64_value(value: u64) -> preserves::IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -41,13 +49,13 @@ pub struct RuntimeSnapshot {
     pub logical_time: u64,
     pub rng_state: u64,
     pub effect_sequence: u64,
-    pub messages: BTreeSet<RuntimeMessage>,
-    pub assertions: BTreeSet<RuntimeAssertion>,
-    pub observers: BTreeSet<RuntimeObserver>,
+    pub messages: OrderedSet<RuntimeMessage>,
+    pub assertions: OrderedSet<RuntimeAssertion>,
+    pub observers: OrderedSet<RuntimeObserver>,
 }
 
 impl RuntimeSnapshot {
-    pub fn to_value(&self) -> preserves::IOValue {
+    pub fn to_value(&self) -> IoValue {
         record("runtime-snapshot-v1", vec![
             u64_value(self.logical_time),
             u64_value(self.rng_state),
@@ -68,9 +76,9 @@ pub struct RuntimeState {
     logical_time: u64,
     rng_state: u64,
     effect_sequence: u64,
-    messages: BTreeSet<RuntimeMessage>,
-    assertions: BTreeSet<RuntimeAssertion>,
-    observers: BTreeSet<RuntimeObserver>,
+    messages: OrderedSet<RuntimeMessage>,
+    assertions: OrderedSet<RuntimeAssertion>,
+    observers: OrderedSet<RuntimeObserver>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,7 +97,7 @@ pub struct LocalEnvelopeDelivery {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalDataspaceAdapter {
-    subscriptions: BTreeMap<String, BTreeSet<String>>,
+    subscriptions: OrderedMap<String, OrderedSet<String>>,
 }
 
 impl LocalDataspaceAdapter {
@@ -151,9 +159,9 @@ impl RuntimeState {
             logical_time: 0,
             rng_state: seed.max(1),
             effect_sequence: 0,
-            messages: BTreeSet::new(),
-            assertions: BTreeSet::new(),
-            observers: BTreeSet::new(),
+            messages: OrderedSet::new(),
+            assertions: OrderedSet::new(),
+            observers: OrderedSet::new(),
         }
     }
 
@@ -447,10 +455,11 @@ impl RuntimeState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::Capability;
-    use crate::runtime::ContentRef;
-    use crate::runtime::EnvelopeInput;
-    use crate::runtime::EvidenceRef;
+
+    type Capability = crate::runtime::Capability;
+    type ContentRef = crate::runtime::ContentRef;
+    type EnvelopeInput = crate::runtime::EnvelopeInput;
+    type EvidenceRef = crate::runtime::EvidenceRef;
 
     #[test]
     fn local_dataspace_routes_matching_envelope_subject() {
