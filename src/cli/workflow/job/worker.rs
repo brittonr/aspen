@@ -1,5 +1,6 @@
-use super::command::worker;
-
+type RequestCommand = super::command::worker::Request;
+type RunLocalCommand = super::command::worker::RunLocal;
+type ScheduleLocalCommand = super::command::worker::ScheduleLocal;
 type CliError = molten::error::MoltenError;
 type FsPath = std::path::Path;
 type IoValue = preserves::IOValue;
@@ -34,7 +35,7 @@ pub(super) struct RunInput<'a> {
     pub(super) out: &'a FsPath,
 }
 
-pub(crate) fn request(args: worker::Request) -> Result<(), CliError> {
+pub(crate) fn request(args: RequestCommand) -> Result<(), CliError> {
     let admission_value = super::io::read_preserves_file(&args.admission_receipt)?;
     let execution_request_value = super::io::read_preserves_file(&args.execution_request)?;
     let request_value = request_value(RequestInput {
@@ -61,7 +62,7 @@ pub(crate) fn request(args: worker::Request) -> Result<(), CliError> {
     Ok(())
 }
 
-pub(crate) fn run_local(args: worker::RunLocal) -> Result<(), CliError> {
+pub(crate) fn run_local(args: RunLocalCommand) -> Result<(), CliError> {
     let request_value = super::io::read_preserves_file(&args.request)?;
     let admission_value = super::io::read_preserves_file(&args.admission_receipt)?;
     let execution_request_value = super::io::read_preserves_file(&args.execution_request)?;
@@ -99,7 +100,7 @@ pub(crate) fn run_local(args: worker::RunLocal) -> Result<(), CliError> {
     }
 }
 
-pub(crate) fn schedule_local(args: worker::ScheduleLocal) -> Result<(), CliError> {
+pub(crate) fn schedule_local(args: ScheduleLocalCommand) -> Result<(), CliError> {
     super::schedule::local(args)
 }
 

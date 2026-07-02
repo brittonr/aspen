@@ -1,4 +1,6 @@
-use super::io;
+fn synthetic_ref(kind: &str, subject: &str) -> molten::error::Result<String> {
+    super::io::synthetic_ref(kind, subject)
+}
 
 pub(super) struct AdmissionInput<'a> {
     pub(super) target_registry: &'a std::path::Path,
@@ -42,14 +44,14 @@ pub(super) fn request(
     extra_evidence_refs: &[String],
 ) -> molten::error::Result<preserves::IOValue> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(source_registry, job)?;
-    let mut evidence_refs = vec![io::synthetic_ref("sync-evidence", &dag.job_ref)?];
+    let mut evidence_refs = vec![synthetic_ref("sync-evidence", &dag.job_ref)?];
     evidence_refs.extend(extra_evidence_refs.iter().cloned());
     molten::job_dag::job_sync_request_value(molten::job_dag::SyncRequestValueInput {
         job_ref: &dag.job_ref,
         stage_ids: stages,
         target_peer,
-        policy_refs: &[io::synthetic_ref("sync-policy", &dag.job_ref)?],
-        capability_refs: &[io::synthetic_ref("sync-capability", &dag.job_ref)?],
+        policy_refs: &[synthetic_ref("sync-policy", &dag.job_ref)?],
+        capability_refs: &[synthetic_ref("sync-capability", &dag.job_ref)?],
         evidence_refs: &evidence_refs,
     })
 }
@@ -62,19 +64,19 @@ pub(super) fn admission(input: AdmissionInput<'_>) -> molten::error::Result<pres
     let dag = molten::job_dag::read_job_dag_file_or_registry(input.target_registry, input.job)?;
     let sync_ref = match input.sync_ref {
         Some(value) => value.to_string(),
-        None => io::synthetic_ref("sync-evidence", &dag.job_ref)?,
+        None => synthetic_ref("sync-evidence", &dag.job_ref)?,
     };
     if policy_refs.is_empty() {
-        policy_refs.push(io::synthetic_ref("admission-policy", &dag.job_ref)?);
+        policy_refs.push(synthetic_ref("admission-policy", &dag.job_ref)?);
     }
     if capability_refs.is_empty() {
-        capability_refs.push(io::synthetic_ref("admission-capability", &dag.job_ref)?);
+        capability_refs.push(synthetic_ref("admission-capability", &dag.job_ref)?);
     }
     if !evidence_refs.iter().any(|reference| reference == &sync_ref) {
         evidence_refs.push(sync_ref.clone());
     }
     if !evidence_refs.iter().any(|reference| reference != &sync_ref) {
-        evidence_refs.push(io::synthetic_ref("strict-octet-gate", &dag.job_ref)?);
+        evidence_refs.push(synthetic_ref("strict-octet-gate", &dag.job_ref)?);
     }
     if resource_refs.is_empty() {
         let selected = if input.stages.is_empty() {
@@ -83,7 +85,7 @@ pub(super) fn admission(input: AdmissionInput<'_>) -> molten::error::Result<pres
             input.stages.len()
         };
         for index in 0..selected.max(1) {
-            resource_refs.push(io::synthetic_ref("admission-resource", &format!("{}:{index}", dag.job_ref))?);
+            resource_refs.push(synthetic_ref("admission-resource", &format!("{}:{index}", dag.job_ref))?);
         }
     }
     molten::job_dag::job_admission_request_value(molten::job_dag::AdmissionRequestValueInput {
@@ -125,11 +127,11 @@ pub(super) fn from_admission_ref(input: ExecutionFromAdmissionInput<'_>) -> molt
     let dag = molten::job_dag::read_job_dag_file_or_registry(input.target_registry, input.job)?;
     let admission_ref = match input.admission_ref {
         Some(value) => value.to_string(),
-        None => io::synthetic_ref("missing-admission-receipt", &dag.job_ref)?,
+        None => synthetic_ref("missing-admission-receipt", &dag.job_ref)?,
     };
-    let storage_profile = io::synthetic_ref("target-storage-profile", &dag.job_ref)?;
-    let cache_profile = io::synthetic_ref("target-cache-profile", &dag.job_ref)?;
-    let chunk_profile = io::synthetic_ref("target-chunk-profile", &dag.job_ref)?;
+    let storage_profile = synthetic_ref("target-storage-profile", &dag.job_ref)?;
+    let cache_profile = synthetic_ref("target-cache-profile", &dag.job_ref)?;
+    let chunk_profile = synthetic_ref("target-chunk-profile", &dag.job_ref)?;
     molten::job_dag::job_execution_request_value(molten::job_dag::ExecutionRequestValueInput {
         job_ref: &dag.job_ref,
         admission_ref: &admission_ref,
