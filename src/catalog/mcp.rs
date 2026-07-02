@@ -2,8 +2,8 @@ type Path = std::path::Path;
 type IoValue = preserves::IOValue;
 type PreservesRecord<T> = preserves::Record<T>;
 type PreservesValue<T> = preserves::Value<T>;
-type CatalogFilter = crate::catalog::CatalogFilter;
-type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+type Filter = crate::catalog::Filter;
+type VisibilityInput = crate::catalog::VisibilityInput;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 
@@ -48,7 +48,7 @@ pub struct CatalogMcpRequest {
     pub request_ref: String,
     pub tool: String,
     pub args: Vec<IoValue>,
-    pub visibility: CatalogVisibilityInput,
+    pub visibility: VisibilityInput,
     pub value: IoValue,
 }
 
@@ -269,7 +269,7 @@ fn dispatch_read_only(
 
 fn list_result(registry_root: &Path, ledger_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
     let kind = optional_arg_string(&request.args, "kind");
-    crate::catalog::list(registry_root, ledger_root, &crate::catalog::CatalogListInput {
+    crate::catalog::list(registry_root, ledger_root, &crate::catalog::ListInput {
         kind,
         visibility: request.visibility.clone(),
     })
@@ -280,7 +280,7 @@ fn view_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Catal
     let reference = required_arg_string(&request.args, "reference")?;
     let should_include_payload = arg_bool(&request.args, "payload", false)?;
     let should_redact_payload = arg_bool(&request.args, "redacted", true)?;
-    crate::catalog::view(registry_root, ledger_root, &crate::catalog::CatalogViewInput {
+    crate::catalog::view(registry_root, ledger_root, &crate::catalog::ViewInput {
         reference,
         include_payload: should_include_payload,
         redacted: should_redact_payload,
@@ -295,7 +295,7 @@ fn chunk_store_result(chunk_root: Option<&Path>, request: &CatalogMcpRequest) ->
             "catalog MCP chunk-store tool requires a chunk store root supplied by the caller",
         ));
     };
-    crate::catalog::chunk_store(chunk_root, &crate::catalog::CatalogChunkStoreInput {
+    crate::catalog::chunk_store(chunk_root, &crate::catalog::ChunkStoreInput {
         visibility: request.visibility.clone(),
     })
     .map(CoreResult::Query)
@@ -324,8 +324,8 @@ fn receipts_result(
     crate::catalog::receipts(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
 }
 
-fn graph_input(request: &CatalogMcpRequest) -> Result<crate::catalog::CatalogGraphInput> {
-    Ok(crate::catalog::CatalogGraphInput {
+fn graph_input(request: &CatalogMcpRequest) -> Result<crate::catalog::GraphInput> {
+    Ok(crate::catalog::GraphInput {
         reference: required_arg_string(&request.args, "reference")?,
         transitive: arg_bool(&request.args, "transitive", false)?,
         visibility: request.visibility.clone(),
@@ -341,7 +341,7 @@ fn short_id_result(
     let min_length =
         usize::try_from(arg_u64(&request.args, "min-length", crate::catalog::DEFAULT_SHORT_ID_MIN_LENGTH as u64)?)
             .map_err(|error| MoltenError::invalid_harness(format!("catalog MCP min-length is unsupported: {error}")))?;
-    crate::catalog::resolve_short_id(registry_root, ledger_root, &crate::catalog::CatalogShortIdInput {
+    crate::catalog::resolve_short_id(registry_root, ledger_root, &crate::catalog::ShortIdInput {
         prefix,
         min_length,
         visibility: request.visibility.clone(),
@@ -356,7 +356,7 @@ fn schema_search_result(
 ) -> Result<CoreResult> {
     let schema_ref = required_arg_string(&request.args, "schema-ref")?;
     let mut filters = filters_from_args(&request.args)?;
-    push_bounded(&mut filters, CatalogFilter::SchemaRef(schema_ref), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
+    push_bounded(&mut filters, Filter::SchemaRef(schema_ref), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
     search_result(registry_root, ledger_root, request, filters)
 }
 
@@ -367,7 +367,7 @@ fn effect_search_result(
 ) -> Result<CoreResult> {
     let effect_ref = required_arg_string(&request.args, "effect-ref")?;
     let mut filters = filters_from_args(&request.args)?;
-    push_bounded(&mut filters, CatalogFilter::EffectRef(effect_ref), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
+    push_bounded(&mut filters, Filter::EffectRef(effect_ref), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
     search_result(registry_root, ledger_root, request, filters)
 }
 
@@ -380,7 +380,7 @@ fn upgrade_search_result(
     if filters.is_empty() {
         push_bounded(
             &mut filters,
-            CatalogFilter::UpgradeStatus("planned".to_string()),
+            Filter::UpgradeStatus("planned".to_string()),
             MAX_CATALOG_MCP_FILTERS,
             "catalog MCP filters",
         )?;
@@ -396,14 +396,14 @@ fn provenance_search_result(
     let mut filters = filters_from_args(&request.args)?;
     push_bounded(
         &mut filters,
-        CatalogFilter::Text("provenance:".to_string()),
+        Filter::Text("provenance:".to_string()),
         MAX_CATALOG_MCP_FILTERS,
         "catalog MCP filters",
     )?;
     if let Some(trust_state) = optional_arg_string(&request.args, "trust-state") {
         push_bounded(
             &mut filters,
-            CatalogFilter::Text(format!("provenance-trust-state:{trust_state}")),
+            Filter::Text(format!("provenance-trust-state:{trust_state}")),
             MAX_CATALOG_MCP_FILTERS,
             "catalog MCP filters",
         )?;
@@ -411,7 +411,7 @@ fn provenance_search_result(
     if let Some(decision) = optional_arg_string(&request.args, "decision") {
         push_bounded(
             &mut filters,
-            CatalogFilter::Text(format!("provenance-decision:{decision}")),
+            Filter::Text(format!("provenance-decision:{decision}")),
             MAX_CATALOG_MCP_FILTERS,
             "catalog MCP filters",
         )?;
@@ -427,7 +427,7 @@ fn retention_search_result(
     let mut filters = filters_from_args(&request.args)?;
     push_bounded(
         &mut filters,
-        CatalogFilter::Text("retention-gc:".to_string()),
+        Filter::Text("retention-gc:".to_string()),
         MAX_CATALOG_MCP_FILTERS,
         "catalog MCP filters",
     )?;
@@ -449,7 +449,7 @@ fn replay_search_result(
     let mut filters = filters_from_args(&request.args)?;
     push_bounded(
         &mut filters,
-        CatalogFilter::Text("deterministic-replay:".to_string()),
+        Filter::Text("deterministic-replay:".to_string()),
         MAX_CATALOG_MCP_FILTERS,
         "catalog MCP filters",
     )?;
@@ -492,9 +492,9 @@ fn search_result(
     registry_root: &Path,
     ledger_root: Option<&Path>,
     request: &CatalogMcpRequest,
-    filters: Vec<CatalogFilter>,
+    filters: Vec<Filter>,
 ) -> Result<CoreResult> {
-    crate::catalog::search(registry_root, ledger_root, &crate::catalog::CatalogSearchInput {
+    crate::catalog::search(registry_root, ledger_root, &crate::catalog::SearchInput {
         root_refs: arg_strings(&request.args, "root")?,
         include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
         include_dependents: arg_bool(&request.args, "include-dependents", true)?,
@@ -605,8 +605,8 @@ fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IoValue> {
 }
 
 enum CoreResult {
-    Query(crate::catalog::CatalogQueryResult),
-    ShortId(crate::catalog::CatalogShortIdResolution),
+    Query(crate::catalog::QueryResult),
+    ShortId(crate::catalog::ShortIdResolution),
 }
 
 impl From<CoreResult> for DispatchPayload {
@@ -633,33 +633,29 @@ impl From<CoreResult> for DispatchPayload {
     }
 }
 
-fn filters_from_args(args: &[IoValue]) -> Result<Vec<CatalogFilter>> {
+fn filters_from_args(args: &[IoValue]) -> Result<Vec<Filter>> {
     let mut filters = Vec::new();
-    append_filter_args(&mut filters, arg_strings(args, "ref")?, CatalogFilter::Ref)?;
-    append_filter_args(&mut filters, arg_strings(args, "kind")?, CatalogFilter::ArtifactKind)?;
-    append_filter_args(&mut filters, arg_strings(args, "ledger-kind")?, CatalogFilter::LedgerKind)?;
-    append_filter_args(&mut filters, arg_strings(args, "schema-ref")?, CatalogFilter::SchemaRef)?;
-    append_filter_args(
-        &mut filters,
-        arg_strings(args, "structural-fingerprint")?,
-        CatalogFilter::StructuralFingerprint,
-    )?;
-    append_filter_args(&mut filters, arg_strings(args, "effect-ref")?, CatalogFilter::EffectRef)?;
-    append_filter_args(&mut filters, arg_strings(args, "policy-ref")?, CatalogFilter::PolicyRef)?;
-    append_filter_args(&mut filters, arg_strings(args, "capability-ref")?, CatalogFilter::CapabilityRef)?;
-    append_filter_args(&mut filters, arg_strings(args, "evidence-ref")?, CatalogFilter::EvidenceRef)?;
-    append_filter_args(&mut filters, arg_strings(args, "dependency-ref")?, CatalogFilter::DependencyRef)?;
-    append_filter_args(&mut filters, arg_strings(args, "dependent-ref")?, CatalogFilter::DependentRef)?;
-    append_filter_args(&mut filters, arg_strings(args, "receipt-operation")?, CatalogFilter::ReceiptOperation)?;
-    append_filter_args(&mut filters, arg_strings(args, "receipt-decision")?, CatalogFilter::ReceiptDecision)?;
-    append_filter_args(&mut filters, arg_strings(args, "transcript-status")?, CatalogFilter::TranscriptStatus)?;
-    append_filter_args(&mut filters, arg_strings(args, "upgrade-status")?, CatalogFilter::UpgradeStatus)?;
-    append_filter_args(&mut filters, arg_strings(args, "text")?, CatalogFilter::Text)?;
+    append_filter_args(&mut filters, arg_strings(args, "ref")?, Filter::Ref)?;
+    append_filter_args(&mut filters, arg_strings(args, "kind")?, Filter::ArtifactKind)?;
+    append_filter_args(&mut filters, arg_strings(args, "ledger-kind")?, Filter::LedgerKind)?;
+    append_filter_args(&mut filters, arg_strings(args, "schema-ref")?, Filter::SchemaRef)?;
+    append_filter_args(&mut filters, arg_strings(args, "structural-fingerprint")?, Filter::StructuralFingerprint)?;
+    append_filter_args(&mut filters, arg_strings(args, "effect-ref")?, Filter::EffectRef)?;
+    append_filter_args(&mut filters, arg_strings(args, "policy-ref")?, Filter::PolicyRef)?;
+    append_filter_args(&mut filters, arg_strings(args, "capability-ref")?, Filter::CapabilityRef)?;
+    append_filter_args(&mut filters, arg_strings(args, "evidence-ref")?, Filter::EvidenceRef)?;
+    append_filter_args(&mut filters, arg_strings(args, "dependency-ref")?, Filter::DependencyRef)?;
+    append_filter_args(&mut filters, arg_strings(args, "dependent-ref")?, Filter::DependentRef)?;
+    append_filter_args(&mut filters, arg_strings(args, "receipt-operation")?, Filter::ReceiptOperation)?;
+    append_filter_args(&mut filters, arg_strings(args, "receipt-decision")?, Filter::ReceiptDecision)?;
+    append_filter_args(&mut filters, arg_strings(args, "transcript-status")?, Filter::TranscriptStatus)?;
+    append_filter_args(&mut filters, arg_strings(args, "upgrade-status")?, Filter::UpgradeStatus)?;
+    append_filter_args(&mut filters, arg_strings(args, "text")?, Filter::Text)?;
     Ok(filters)
 }
 
 fn push_optional_text_filter(
-    filters: &mut impl crate::bounded::VecSink<CatalogFilter>,
+    filters: &mut impl crate::bounded::VecSink<Filter>,
     args: &[IoValue],
     arg_name: &str,
     prefix: &str,
@@ -667,7 +663,7 @@ fn push_optional_text_filter(
     if let Some(value) = optional_arg_string(args, arg_name) {
         push_bounded(
             filters,
-            CatalogFilter::Text(format!("{prefix}:{value}")),
+            Filter::Text(format!("{prefix}:{value}")),
             MAX_CATALOG_MCP_FILTERS,
             "catalog MCP filters",
         )?;
@@ -676,9 +672,9 @@ fn push_optional_text_filter(
 }
 
 fn append_filter_args(
-    filters: &mut impl crate::bounded::VecSink<CatalogFilter>,
+    filters: &mut impl crate::bounded::VecSink<Filter>,
     values: Vec<String>,
-    convert: impl Fn(String) -> CatalogFilter,
+    convert: impl Fn(String) -> Filter,
 ) -> Result<()> {
     for value in values {
         push_bounded(&mut *filters, convert(value), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
@@ -686,8 +682,8 @@ fn append_filter_args(
     Ok(())
 }
 
-fn visibility_from_args(args: &[IoValue]) -> Result<CatalogVisibilityInput> {
-    Ok(CatalogVisibilityInput {
+fn visibility_from_args(args: &[IoValue]) -> Result<VisibilityInput> {
+    Ok(VisibilityInput {
         policy_refs: arg_strings(args, "policy-ref")?,
         capability_refs: arg_strings(args, "capability-ref")?,
         hidden_refs: arg_strings(args, "hidden-ref")?,

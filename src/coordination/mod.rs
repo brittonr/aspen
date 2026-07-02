@@ -2625,9 +2625,9 @@ mod tests {
         let ledger_root = root.join("ledger");
         std::fs::create_dir_all(&registry_root).expect("registry root");
         crate::ledger::import_artifact(&ledger_root, &result.receipt.value).expect("import receipt");
-        let list = crate::catalog::list(&registry_root, Some(&ledger_root), &crate::catalog::CatalogListInput {
+        let list = crate::catalog::list(&registry_root, Some(&ledger_root), &crate::catalog::ListInput {
             kind: Some("coordination-receipt".to_string()),
-            visibility: crate::catalog::CatalogVisibilityInput::default(),
+            visibility: crate::catalog::VisibilityInput::default(),
         })
         .expect("catalog list");
         assert_eq!(list.decision, "pass");

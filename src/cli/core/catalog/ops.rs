@@ -27,7 +27,7 @@ fn list(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("list"));
     };
-    let result = molten::catalog::list(&registry, ledger.as_deref(), &molten::catalog::CatalogListInput {
+    let result = molten::catalog::list(&registry, ledger.as_deref(), &molten::catalog::ListInput {
         kind,
         visibility: catalog_visibility(hidden_refs),
     })?;
@@ -50,7 +50,7 @@ fn view(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("view"));
     };
-    let result = molten::catalog::view(&registry, ledger.as_deref(), &molten::catalog::CatalogViewInput {
+    let result = molten::catalog::view(&registry, ledger.as_deref(), &molten::catalog::ViewInput {
         reference,
         include_payload: payload_inclusion_enabled,
         redacted: redaction_enabled,
@@ -106,7 +106,7 @@ fn search(command: Command) -> Outcome<()> {
         upgrade_status,
         text,
     });
-    let result = molten::catalog::search(&registry, ledger.as_deref(), &molten::catalog::CatalogSearchInput {
+    let result = molten::catalog::search(&registry, ledger.as_deref(), &molten::catalog::SearchInput {
         root_refs,
         include_dependencies: dependency_inclusion_enabled,
         include_dependents: dependent_inclusion_enabled,
@@ -131,7 +131,7 @@ fn deps(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("deps"));
     };
-    let result = molten::catalog::dependencies(&registry, ledger.as_deref(), &molten::catalog::CatalogGraphInput {
+    let result = molten::catalog::dependencies(&registry, ledger.as_deref(), &molten::catalog::GraphInput {
         reference,
         transitive,
         visibility: catalog_visibility(hidden_refs),
@@ -153,7 +153,7 @@ fn dependents(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("dependents"));
     };
-    let result = molten::catalog::dependents(&registry, ledger.as_deref(), &molten::catalog::CatalogGraphInput {
+    let result = molten::catalog::dependents(&registry, ledger.as_deref(), &molten::catalog::GraphInput {
         reference,
         transitive,
         visibility: catalog_visibility(hidden_refs),
@@ -175,12 +175,11 @@ fn short_id(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("short-id"));
     };
-    let resolution =
-        molten::catalog::resolve_short_id(&registry, ledger.as_deref(), &molten::catalog::CatalogShortIdInput {
-            prefix,
-            min_length,
-            visibility: catalog_visibility(hidden_refs),
-        })?;
+    let resolution = molten::catalog::resolve_short_id(&registry, ledger.as_deref(), &molten::catalog::ShortIdInput {
+        prefix,
+        min_length,
+        visibility: catalog_visibility(hidden_refs),
+    })?;
     super::io::emit_named_receipt(receipt_out.as_ref(), "catalog receipt", &resolution.receipt_value)?;
     println!("{}", molten::preserves_rail::to_text(&resolution.value)?);
     if let Some(full_ref) = resolution.full_ref.as_ref() {
@@ -200,7 +199,7 @@ fn chunks(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("chunks"));
     };
-    let result = molten::catalog::chunk_store(&chunks, &molten::catalog::CatalogChunkStoreInput {
+    let result = molten::catalog::chunk_store(&chunks, &molten::catalog::ChunkStoreInput {
         visibility: catalog_visibility(hidden_refs),
     })?;
     super::io::emit_named_receipt(receipt_out.as_ref(), "catalog receipt", &result.receipt_value)?;
@@ -236,15 +235,15 @@ fn mcp_call(command: Command) -> Outcome<()> {
 
 fn show(artifact: FilePath) -> Outcome<()> {
     let value = super::io::read_preserves_file(&artifact)?;
-    match molten::catalog::catalog_summary(&value) {
+    match molten::catalog::summary(&value) {
         Ok(summary) => println!("{summary}"),
         Err(_) => println!("{}", molten::catalog_mcp::catalog_mcp_summary(&value)?),
     }
     Ok(())
 }
 
-fn catalog_visibility(hidden_refs: Vec<String>) -> molten::catalog::CatalogVisibilityInput {
-    molten::catalog::CatalogVisibilityInput {
+fn catalog_visibility(hidden_refs: Vec<String>) -> molten::catalog::VisibilityInput {
+    molten::catalog::VisibilityInput {
         policy_refs: Vec::new(),
         capability_refs: Vec::new(),
         hidden_refs,

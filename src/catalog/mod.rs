@@ -57,7 +57,7 @@ const _: () = assert!(MAX_CATALOG_REFS <= 100_000);
 const _: () = assert!(MAX_CATALOG_CHECKS <= 1_000);
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct CatalogVisibilityInput {
+pub struct VisibilityInput {
     pub policy_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub hidden_refs: Vec<String>,
@@ -65,7 +65,7 @@ pub struct CatalogVisibilityInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CatalogFilter {
+pub enum Filter {
     Ref(String),
     ArtifactKind(String),
     LedgerKind(String),
@@ -85,49 +85,49 @@ pub enum CatalogFilter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogListInput {
+pub struct ListInput {
     pub kind: Option<String>,
-    pub visibility: CatalogVisibilityInput,
+    pub visibility: VisibilityInput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogSearchInput {
+pub struct SearchInput {
     pub root_refs: Vec<String>,
     pub include_dependencies: bool,
     pub include_dependents: bool,
-    pub filters: Vec<CatalogFilter>,
-    pub visibility: CatalogVisibilityInput,
+    pub filters: Vec<Filter>,
+    pub visibility: VisibilityInput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogViewInput {
+pub struct ViewInput {
     pub reference: String,
     pub include_payload: bool,
     pub redacted: bool,
-    pub visibility: CatalogVisibilityInput,
+    pub visibility: VisibilityInput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogGraphInput {
+pub struct GraphInput {
     pub reference: String,
     pub transitive: bool,
-    pub visibility: CatalogVisibilityInput,
+    pub visibility: VisibilityInput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogShortIdInput {
+pub struct ShortIdInput {
     pub prefix: String,
     pub min_length: usize,
-    pub visibility: CatalogVisibilityInput,
+    pub visibility: VisibilityInput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogChunkStoreInput {
-    pub visibility: CatalogVisibilityInput,
+pub struct ChunkStoreInput {
+    pub visibility: VisibilityInput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogSummary {
+pub struct Summary {
     pub artifact_ref: String,
     pub artifact_kind: String,
     pub payload_ref: String,
@@ -144,7 +144,7 @@ pub struct CatalogSummary {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogQueryResult {
+pub struct QueryResult {
     pub query_ref: String,
     pub result_ref: String,
     pub decision: String,
@@ -155,7 +155,7 @@ pub struct CatalogQueryResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogShortIdResolution {
+pub struct ShortIdResolution {
     pub prefix: String,
     pub full_ref: Option<String>,
     pub candidates: Vec<String>,
@@ -165,7 +165,7 @@ pub struct CatalogShortIdResolution {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CatalogReceipt {
+pub struct Receipt {
     pub receipt_ref: String,
     pub operation: String,
     pub decision: String,
@@ -176,12 +176,12 @@ pub struct CatalogReceipt {
     pub value: IoValue,
 }
 
-pub fn list(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogListInput) -> Result<CatalogQueryResult> {
+pub fn list(registry_root: &Path, ledger_root: Option<&Path>, input: &ListInput) -> Result<QueryResult> {
     validate_visibility(&input.visibility)?;
     if let Some(kind) = input.kind.as_deref() {
         validate_non_empty(kind, "catalog list kind")?;
     }
-    let filters = input.kind.as_ref().map(|kind| vec![CatalogFilter::ArtifactKind(kind.clone())]).unwrap_or_default();
+    let filters = input.kind.as_ref().map(|kind| vec![Filter::ArtifactKind(kind.clone())]).unwrap_or_default();
     let query_value = build_query_value(&QueryValueInput {
         operation: "list",
         root_refs: &[],
@@ -202,11 +202,7 @@ pub fn list(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogLis
     finish_query("list", query_value, items, Vec::new())
 }
 
-pub fn search(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    input: &CatalogSearchInput,
-) -> Result<CatalogQueryResult> {
+pub fn search(registry_root: &Path, ledger_root: Option<&Path>, input: &SearchInput) -> Result<QueryResult> {
     validate_visibility(&input.visibility)?;
     validate_refs(&input.root_refs, "catalog search root ref")?;
     validate_filters(&input.filters)?;
@@ -234,7 +230,7 @@ pub fn search(
     finish_query("search", query_value, items, Vec::new())
 }
 
-pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogViewInput) -> Result<CatalogQueryResult> {
+pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &ViewInput) -> Result<QueryResult> {
     validate_visibility(&input.visibility)?;
     let full_ref = resolve_reference(registry_root, ledger_root, &input.reference, &input.visibility)?;
     let query_value = build_query_value(&QueryValueInput {
@@ -242,7 +238,7 @@ pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogVie
         root_refs: std::slice::from_ref(&full_ref),
         include_dependencies: false,
         include_dependents: false,
-        filters: &[CatalogFilter::Ref(full_ref.clone())],
+        filters: &[Filter::Ref(full_ref.clone())],
         visibility: &input.visibility,
         render_mode: if input.redacted { "redacted" } else { "raw" },
         include_payload: input.include_payload,
@@ -259,7 +255,7 @@ pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogVie
         } else {
             record("none", Vec::new())
         };
-        catalog_view_value(&summary, &summary.value, &payload, input.include_payload, input.redacted)?
+        view_value(&summary, &summary.value, &payload, input.include_payload, input.redacted)?
     } else if let Some(ledger_root) = ledger_root {
         let value = crate::ledger::read_artifact(ledger_root, &full_ref)?;
         let summary = ledger_summary(registry_root, ledger_root, &full_ref, value.clone(), &input.visibility)?;
@@ -268,7 +264,7 @@ pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogVie
         } else {
             value
         };
-        catalog_view_value(&summary, &summary.value, &rendered, true, input.redacted)?
+        view_value(&summary, &summary.value, &rendered, true, input.redacted)?
     } else {
         return Err(MoltenError::invalid_harness(format!(
             "catalog ref {full_ref} not found in registry and no ledger was supplied"
@@ -277,27 +273,15 @@ pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogVie
     finish_query("view", query_value, vec![item], Vec::new())
 }
 
-pub fn dependencies(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    input: &CatalogGraphInput,
-) -> Result<CatalogQueryResult> {
+pub fn dependencies(registry_root: &Path, ledger_root: Option<&Path>, input: &GraphInput) -> Result<QueryResult> {
     graph_query(registry_root, ledger_root, input, "deps")
 }
 
-pub fn dependents(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    input: &CatalogGraphInput,
-) -> Result<CatalogQueryResult> {
+pub fn dependents(registry_root: &Path, ledger_root: Option<&Path>, input: &GraphInput) -> Result<QueryResult> {
     graph_query(registry_root, ledger_root, input, "dependents")
 }
 
-pub fn receipts(
-    registry_root: &Path,
-    ledger_root: Option<&Path>,
-    input: &CatalogGraphInput,
-) -> Result<CatalogQueryResult> {
+pub fn receipts(registry_root: &Path, ledger_root: Option<&Path>, input: &GraphInput) -> Result<QueryResult> {
     validate_visibility(&input.visibility)?;
     let full_ref = resolve_reference(registry_root, ledger_root, &input.reference, &input.visibility)?;
     let query_value = build_query_value(&QueryValueInput {
@@ -305,7 +289,7 @@ pub fn receipts(
         root_refs: std::slice::from_ref(&full_ref),
         include_dependencies: false,
         include_dependents: false,
-        filters: &[CatalogFilter::Ref(full_ref.clone())],
+        filters: &[Filter::Ref(full_ref.clone())],
         visibility: &input.visibility,
         render_mode: "redacted-receipts",
         include_payload: true,
@@ -318,7 +302,7 @@ pub fn receipts(
     finish_query("receipts", query_value, items, Vec::new())
 }
 
-pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<CatalogQueryResult> {
+pub fn chunk_store(chunk_root: &Path, input: &ChunkStoreInput) -> Result<QueryResult> {
     validate_visibility(&input.visibility)?;
     let scan = StoreScan::new(chunk_root, hidden_set(&input.visibility))?.scan()?;
     let dedup_hits = scan.dedup_hits();
@@ -343,7 +327,7 @@ pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<
         root_refs: &scan.visible_manifest_refs,
         include_dependencies: false,
         include_dependents: false,
-        filters: &[CatalogFilter::Text("chunk-store:".to_string())],
+        filters: &[Filter::Text("chunk-store:".to_string())],
         visibility: &input.visibility,
         render_mode: "chunk-store-status",
         include_payload: false,
@@ -507,8 +491,8 @@ impl<'a> StoreScan<'a> {
 pub fn resolve_short_id(
     registry_root: &Path,
     ledger_root: Option<&Path>,
-    input: &CatalogShortIdInput,
-) -> Result<CatalogShortIdResolution> {
+    input: &ShortIdInput,
+) -> Result<ShortIdResolution> {
     validate_visibility(&input.visibility)?;
     validate_non_empty(&input.prefix, "catalog short id prefix")?;
     let query_value = build_query_value(&QueryValueInput {
@@ -516,7 +500,7 @@ pub fn resolve_short_id(
         root_refs: &[],
         include_dependencies: false,
         include_dependents: false,
-        filters: &[CatalogFilter::Text(input.prefix.clone())],
+        filters: &[Filter::Text(input.prefix.clone())],
         visibility: &input.visibility,
         render_mode: "resolution",
         include_payload: false,
@@ -544,7 +528,7 @@ pub fn resolve_short_id(
     let result_ref = canonical_hash(&result_value)?;
     let refs = short_id_refs(&candidates, &query_ref, &result_ref)?;
     let receipt_value = short_id_receipt_value(&query_ref, &result_ref, &refs, &outcome)?;
-    Ok(CatalogShortIdResolution {
+    Ok(ShortIdResolution {
         prefix: input.prefix.clone(),
         full_ref: outcome.full_ref,
         candidates,
@@ -619,7 +603,7 @@ struct ShortIdResultInput<'a, 'p> {
 }
 
 fn short_id_result_value(input: ShortIdResultInput<'_, '_>) -> Result<IoValue> {
-    catalog_result_value(
+    result_value(
         input.query_ref,
         &input.outcome.decision,
         std::slice::from_ref(input.value),
@@ -671,14 +655,14 @@ fn short_id_receipt_value(
     })
 }
 
-pub fn parse_catalog_receipt(value: &IoValue) -> Result<CatalogReceipt> {
+pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     let fields = value
         .collect_simple_record("catalog-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::CATALOG_RECEIPT_SCHEMA, "catalog receipt")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-receipt", "catalog receipt")?;
-    Ok(CatalogReceipt {
+    Ok(Receipt {
         receipt_ref: canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision: record_string(&fields[2], "decision")?,
@@ -690,8 +674,8 @@ pub fn parse_catalog_receipt(value: &IoValue) -> Result<CatalogReceipt> {
     })
 }
 
-pub fn catalog_summary(value: &IoValue) -> Result<String> {
-    if let Ok(receipt) = parse_catalog_receipt(value) {
+pub fn summary(value: &IoValue) -> Result<String> {
+    if let Ok(receipt) = parse_receipt(value) {
         return Ok(format!(
             "catalog receipt operation={} decision={} query={} result={}",
             receipt.operation,
@@ -725,9 +709,9 @@ pub fn catalog_summary(value: &IoValue) -> Result<String> {
 fn graph_query(
     registry_root: &Path,
     ledger_root: Option<&Path>,
-    input: &CatalogGraphInput,
+    input: &GraphInput,
     operation: &str,
-) -> Result<CatalogQueryResult> {
+) -> Result<QueryResult> {
     validate_visibility(&input.visibility)?;
     let full_ref = resolve_reference(registry_root, ledger_root, &input.reference, &input.visibility)?;
     let query_value = build_query_value(&QueryValueInput {
@@ -735,7 +719,7 @@ fn graph_query(
         root_refs: std::slice::from_ref(&full_ref),
         include_dependencies: operation == "deps" && input.transitive,
         include_dependents: operation == "dependents" && input.transitive,
-        filters: &[CatalogFilter::Ref(full_ref.clone())],
+        filters: &[Filter::Ref(full_ref.clone())],
         visibility: &input.visibility,
         render_mode: "summary",
         include_payload: false,
@@ -769,7 +753,7 @@ fn graph_query(
 fn append_registry_receipt_views(
     registry_root: &Path,
     subject_ref: &str,
-    visibility: &CatalogVisibilityInput,
+    visibility: &VisibilityInput,
     items: &mut impl crate::bounded::VecSink<IoValue>,
 ) -> Result<()> {
     for receipt in crate::artifacts::list_receipts(registry_root)? {
@@ -793,7 +777,7 @@ fn append_registry_receipt_views(
 fn append_ledger_receipt_views(
     ledger_root: &Path,
     subject_ref: &str,
-    visibility: &CatalogVisibilityInput,
+    visibility: &VisibilityInput,
     items: &mut impl crate::bounded::VecSink<IoValue>,
 ) -> Result<()> {
     for entry in crate::ledger::list_artifacts(ledger_root)? {
@@ -822,8 +806,8 @@ fn append_ledger_receipt_views(
 fn collect_summaries(
     registry_root: &Path,
     ledger_root: Option<&Path>,
-    visibility: &CatalogVisibilityInput,
-) -> Result<Vec<CatalogSummary>> {
+    visibility: &VisibilityInput,
+) -> Result<Vec<Summary>> {
     let hidden = hidden_set(visibility);
     let mut summaries = Vec::new();
     let mut seen = Set::new();
@@ -862,8 +846,8 @@ fn registry_summary(
     registry_root: &Path,
     ledger_root: Option<&Path>,
     artifact: crate::artifacts::ArtifactRecord,
-    visibility: &CatalogVisibilityInput,
-) -> Result<CatalogSummary> {
+    visibility: &VisibilityInput,
+) -> Result<Summary> {
     let payload_ref = payload_identity(&artifact.payload);
     let mut name_refs = Vec::new();
     for pointer in crate::artifacts::list_name_pointers(registry_root)? {
@@ -910,7 +894,7 @@ fn registry_summary(
         visibility_decision: "visible",
         redaction_profile_ref: visibility.redaction_profile_ref.as_deref(),
     })?;
-    Ok(CatalogSummary {
+    Ok(Summary {
         artifact_ref: artifact.artifact_ref,
         artifact_kind: artifact.kind,
         payload_ref,
@@ -932,8 +916,8 @@ fn ledger_summary(
     ledger_root: &Path,
     artifact_ref: &str,
     value: IoValue,
-    visibility: &CatalogVisibilityInput,
-) -> Result<CatalogSummary> {
+    visibility: &VisibilityInput,
+) -> Result<Summary> {
     let kind = crate::ledger::artifact_kind(&value).to_string();
     let mut classifications = Vec::new();
     push_bounded(&mut classifications, "ledger-artifact".to_string(), MAX_CATALOG_REFS, "catalog classifications")?;
@@ -964,7 +948,7 @@ fn ledger_summary(
         redaction_profile_ref: visibility.redaction_profile_ref.as_deref(),
     })?;
     let _ = ledger_root;
-    Ok(CatalogSummary {
+    Ok(Summary {
         artifact_ref: artifact_ref.to_string(),
         artifact_kind: kind,
         payload_ref: artifact_ref.to_string(),
@@ -1681,9 +1665,9 @@ fn deterministic_replay_verify_fixture_classifications(
 fn summary_matches_filters(
     registry_root: &Path,
     ledger_root: Option<&Path>,
-    summary: &CatalogSummary,
-    filters: &[CatalogFilter],
-    visibility: &CatalogVisibilityInput,
+    summary: &Summary,
+    filters: &[Filter],
+    visibility: &VisibilityInput,
 ) -> Result<bool> {
     if filters.is_empty() {
         return Ok(true);
@@ -1691,34 +1675,32 @@ fn summary_matches_filters(
     let public_text = summary_public_text(registry_root, ledger_root, summary, visibility)?;
     for filter in filters {
         let has_matching_filter = match filter {
-            CatalogFilter::Ref(value_ref) => &summary.artifact_ref == value_ref || public_text.contains(value_ref),
-            CatalogFilter::ArtifactKind(kind) => &summary.artifact_kind == kind,
-            CatalogFilter::LedgerKind(kind) => {
+            Filter::Ref(value_ref) => &summary.artifact_ref == value_ref || public_text.contains(value_ref),
+            Filter::ArtifactKind(kind) => &summary.artifact_kind == kind,
+            Filter::LedgerKind(kind) => {
                 summary.classifications.iter().any(|item| item == &format!("ledger-kind:{kind}"))
             }
-            CatalogFilter::SchemaRef(value_ref) => summary.schema_refs.contains(value_ref),
-            CatalogFilter::StructuralFingerprint(value_ref) => public_text.contains(value_ref),
-            CatalogFilter::EffectRef(value_ref) => summary.effect_manifest_ref.as_deref() == Some(value_ref.as_str()),
-            CatalogFilter::PolicyRef(value_ref) => {
-                summary.policy_refs.contains(value_ref) || public_text.contains(value_ref)
-            }
-            CatalogFilter::CapabilityRef(value_ref) => public_text.contains(value_ref),
-            CatalogFilter::EvidenceRef(value_ref) => {
+            Filter::SchemaRef(value_ref) => summary.schema_refs.contains(value_ref),
+            Filter::StructuralFingerprint(value_ref) => public_text.contains(value_ref),
+            Filter::EffectRef(value_ref) => summary.effect_manifest_ref.as_deref() == Some(value_ref.as_str()),
+            Filter::PolicyRef(value_ref) => summary.policy_refs.contains(value_ref) || public_text.contains(value_ref),
+            Filter::CapabilityRef(value_ref) => public_text.contains(value_ref),
+            Filter::EvidenceRef(value_ref) => {
                 summary.evidence_refs.contains(value_ref) || public_text.contains(value_ref)
             }
-            CatalogFilter::DependencyRef(value_ref) => summary.dependency_refs.contains(value_ref),
-            CatalogFilter::DependentRef(value_ref) => summary.dependent_refs.contains(value_ref),
-            CatalogFilter::ReceiptOperation(operation) => {
+            Filter::DependencyRef(value_ref) => summary.dependency_refs.contains(value_ref),
+            Filter::DependentRef(value_ref) => summary.dependent_refs.contains(value_ref),
+            Filter::ReceiptOperation(operation) => {
                 receipt_field_matches(&public_text, "operation", operation)
                     || public_text.contains(&format!("receipt-operation:{operation}"))
             }
-            CatalogFilter::ReceiptDecision(decision) => {
+            Filter::ReceiptDecision(decision) => {
                 receipt_field_matches(&public_text, "decision", decision)
                     || public_text.contains(&format!("receipt-decision:{decision}"))
             }
-            CatalogFilter::TranscriptStatus(status) => public_text.contains(&format!("transcript-status:{status}")),
-            CatalogFilter::UpgradeStatus(status) => public_text.contains(&format!("upgrade-status:{status}")),
-            CatalogFilter::Text(term) => !term.is_empty() && public_text.contains(term),
+            Filter::TranscriptStatus(status) => public_text.contains(&format!("transcript-status:{status}")),
+            Filter::UpgradeStatus(status) => public_text.contains(&format!("upgrade-status:{status}")),
+            Filter::Text(term) => !term.is_empty() && public_text.contains(term),
         };
         if !has_matching_filter {
             return Ok(false);
@@ -1730,8 +1712,8 @@ fn summary_matches_filters(
 fn summary_public_text(
     registry_root: &Path,
     ledger_root: Option<&Path>,
-    summary: &CatalogSummary,
-    visibility: &CatalogVisibilityInput,
+    summary: &Summary,
+    visibility: &VisibilityInput,
 ) -> Result<String> {
     let mut parts = Vec::new();
     push_bounded(&mut parts, to_text(&summary.value)?, MAX_CATALOG_ITEMS, "catalog public text parts")?;
@@ -1802,7 +1784,7 @@ fn resolve_reference(
     registry_root: &Path,
     ledger_root: Option<&Path>,
     reference: &str,
-    visibility: &CatalogVisibilityInput,
+    visibility: &VisibilityInput,
 ) -> Result<String> {
     if is_full_ref(reference) {
         if hidden_set(visibility).contains(reference) {
@@ -1814,7 +1796,7 @@ fn resolve_reference(
         let error = validate_content_ref(reference).expect_err("invalid content ref after failed full-ref check");
         return Err(MoltenError::invalid_harness(format!("malformed full content ref: {error}")));
     }
-    let resolution = resolve_short_id(registry_root, ledger_root, &CatalogShortIdInput {
+    let resolution = resolve_short_id(registry_root, ledger_root, &ShortIdInput {
         prefix: reference.to_string(),
         min_length: DEFAULT_SHORT_ID_MIN_LENGTH,
         visibility: visibility.clone(),
@@ -1827,7 +1809,7 @@ fn resolve_reference(
 fn visible_candidate_refs(
     registry_root: &Path,
     ledger_root: Option<&Path>,
-    visibility: &CatalogVisibilityInput,
+    visibility: &VisibilityInput,
 ) -> Result<Vec<String>> {
     let hidden = hidden_set(visibility);
     let mut candidates = Set::new();
@@ -1855,10 +1837,10 @@ fn finish_query(
     query_value: IoValue,
     items: Vec<IoValue>,
     diagnostics: Vec<String>,
-) -> Result<CatalogQueryResult> {
+) -> Result<QueryResult> {
     let query_ref = canonical_hash(&query_value)?;
     let decision = "pass";
-    let result_value = catalog_result_value(&query_ref, decision, &items, &diagnostics, &[
+    let result_value = result_value(&query_ref, decision, &items, &diagnostics, &[
         ("visibility-filtered", "pass"),
         ("canonical-result-ref", "pass"),
         ("no-name-identity", "pass"),
@@ -1883,7 +1865,7 @@ fn finish_query(
             ("no-name-identity", "pass"),
         ],
     })?;
-    Ok(CatalogQueryResult {
+    Ok(QueryResult {
         query_ref,
         result_ref,
         decision: decision.to_string(),
@@ -1915,8 +1897,8 @@ struct QueryValueInput<'a> {
     root_refs: &'a [String],
     include_dependencies: bool,
     include_dependents: bool,
-    filters: &'a [CatalogFilter],
-    visibility: &'a CatalogVisibilityInput,
+    filters: &'a [Filter],
+    visibility: &'a VisibilityInput,
     render_mode: &'a str,
     include_payload: bool,
 }
@@ -1972,8 +1954,8 @@ fn build_summary_value(input: &SummaryValueInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-fn catalog_view_value(
-    summary: &CatalogSummary,
+fn view_value(
+    summary: &Summary,
     summary_value: &IoValue,
     payload_or_value: &IoValue,
     include_payload: bool,
@@ -2025,7 +2007,7 @@ fn build_query_value(input: &QueryValueInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-fn catalog_result_value(
+fn result_value(
     query_ref: &str,
     decision: &str,
     items: &[IoValue],
@@ -2217,24 +2199,24 @@ fn usize_to_u64(value: usize, label: &str) -> Result<u64> {
     u64::try_from(value).map_err(|_| MoltenError::invalid_harness(format!("{label} count exceeds u64")))
 }
 
-fn filter_value(filter: &CatalogFilter) -> Result<IoValue> {
+fn filter_value(filter: &Filter) -> Result<IoValue> {
     let (kind, value) = match filter {
-        CatalogFilter::Ref(value) => ("ref", value.as_str()),
-        CatalogFilter::ArtifactKind(value) => ("artifact-kind", value.as_str()),
-        CatalogFilter::LedgerKind(value) => ("ledger-kind", value.as_str()),
-        CatalogFilter::SchemaRef(value) => ("schema-ref", value.as_str()),
-        CatalogFilter::StructuralFingerprint(value) => ("structural-fingerprint", value.as_str()),
-        CatalogFilter::EffectRef(value) => ("effect-ref", value.as_str()),
-        CatalogFilter::PolicyRef(value) => ("policy-ref", value.as_str()),
-        CatalogFilter::CapabilityRef(value) => ("capability-ref", value.as_str()),
-        CatalogFilter::EvidenceRef(value) => ("evidence-ref", value.as_str()),
-        CatalogFilter::DependencyRef(value) => ("dependency-ref", value.as_str()),
-        CatalogFilter::DependentRef(value) => ("dependent-ref", value.as_str()),
-        CatalogFilter::ReceiptOperation(value) => ("receipt-operation", value.as_str()),
-        CatalogFilter::ReceiptDecision(value) => ("receipt-decision", value.as_str()),
-        CatalogFilter::TranscriptStatus(value) => ("transcript-status", value.as_str()),
-        CatalogFilter::UpgradeStatus(value) => ("upgrade-status", value.as_str()),
-        CatalogFilter::Text(value) => ("text", value.as_str()),
+        Filter::Ref(value) => ("ref", value.as_str()),
+        Filter::ArtifactKind(value) => ("artifact-kind", value.as_str()),
+        Filter::LedgerKind(value) => ("ledger-kind", value.as_str()),
+        Filter::SchemaRef(value) => ("schema-ref", value.as_str()),
+        Filter::StructuralFingerprint(value) => ("structural-fingerprint", value.as_str()),
+        Filter::EffectRef(value) => ("effect-ref", value.as_str()),
+        Filter::PolicyRef(value) => ("policy-ref", value.as_str()),
+        Filter::CapabilityRef(value) => ("capability-ref", value.as_str()),
+        Filter::EvidenceRef(value) => ("evidence-ref", value.as_str()),
+        Filter::DependencyRef(value) => ("dependency-ref", value.as_str()),
+        Filter::DependentRef(value) => ("dependent-ref", value.as_str()),
+        Filter::ReceiptOperation(value) => ("receipt-operation", value.as_str()),
+        Filter::ReceiptDecision(value) => ("receipt-decision", value.as_str()),
+        Filter::TranscriptStatus(value) => ("transcript-status", value.as_str()),
+        Filter::UpgradeStatus(value) => ("upgrade-status", value.as_str()),
+        Filter::Text(value) => ("text", value.as_str()),
     };
     Ok(record("filter", vec![string(kind), string(value)]))
 }
@@ -2254,11 +2236,11 @@ fn receipt_field_matches(text: &str, field: &str, value: &str) -> bool {
     text.contains(&format!("<{field} \"{value}\">")) || text.contains(&format!("<{field} {value}"))
 }
 
-fn hidden_set(visibility: &CatalogVisibilityInput) -> Set<String> {
+fn hidden_set(visibility: &VisibilityInput) -> Set<String> {
     visibility.hidden_refs.iter().cloned().collect()
 }
 
-fn contains_hidden_ref(text: &str, visibility: &CatalogVisibilityInput) -> bool {
+fn contains_hidden_ref(text: &str, visibility: &VisibilityInput) -> bool {
     visibility.hidden_refs.iter().any(|hidden_ref| text.contains(hidden_ref))
 }
 
@@ -2442,31 +2424,31 @@ fn required_u64(value: &PreservesValue<IoValue>, field: &str) -> Result<u64> {
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
-fn validate_filters(filters: &[CatalogFilter]) -> Result<()> {
+fn validate_filters(filters: &[Filter]) -> Result<()> {
     for filter in filters {
         match filter {
-            CatalogFilter::Ref(value)
-            | CatalogFilter::SchemaRef(value)
-            | CatalogFilter::StructuralFingerprint(value)
-            | CatalogFilter::EffectRef(value)
-            | CatalogFilter::PolicyRef(value)
-            | CatalogFilter::CapabilityRef(value)
-            | CatalogFilter::EvidenceRef(value)
-            | CatalogFilter::DependencyRef(value)
-            | CatalogFilter::DependentRef(value) => validate_ref(value, "catalog filter ref")?,
-            CatalogFilter::ArtifactKind(value)
-            | CatalogFilter::LedgerKind(value)
-            | CatalogFilter::ReceiptOperation(value)
-            | CatalogFilter::ReceiptDecision(value)
-            | CatalogFilter::TranscriptStatus(value)
-            | CatalogFilter::UpgradeStatus(value)
-            | CatalogFilter::Text(value) => validate_non_empty(value, "catalog filter value")?,
+            Filter::Ref(value)
+            | Filter::SchemaRef(value)
+            | Filter::StructuralFingerprint(value)
+            | Filter::EffectRef(value)
+            | Filter::PolicyRef(value)
+            | Filter::CapabilityRef(value)
+            | Filter::EvidenceRef(value)
+            | Filter::DependencyRef(value)
+            | Filter::DependentRef(value) => validate_ref(value, "catalog filter ref")?,
+            Filter::ArtifactKind(value)
+            | Filter::LedgerKind(value)
+            | Filter::ReceiptOperation(value)
+            | Filter::ReceiptDecision(value)
+            | Filter::TranscriptStatus(value)
+            | Filter::UpgradeStatus(value)
+            | Filter::Text(value) => validate_non_empty(value, "catalog filter value")?,
         }
     }
     Ok(())
 }
 
-fn validate_visibility(visibility: &CatalogVisibilityInput) -> Result<()> {
+fn validate_visibility(visibility: &VisibilityInput) -> Result<()> {
     validate_refs(&visibility.policy_refs, "catalog visibility policy ref")?;
     validate_refs(&visibility.capability_refs, "catalog visibility capability ref")?;
     validate_refs(&visibility.hidden_refs, "catalog visibility hidden ref")?;
@@ -2580,9 +2562,9 @@ mod tests {
         })
         .expect("set name");
         crate::ledger::import_artifact(&ledger_root, &dependent.artifact.value).expect("ledger import");
-        let listed = list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = list(&registry, Some(&ledger_root), &ListInput {
             kind: Some("doc".to_string()),
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("catalog list");
         assert_eq!(listed.items.len(), 1);
@@ -2600,8 +2582,8 @@ mod tests {
         let second = crate::chunk_store::put_bytes(&chunks, "artifact", b"aaaacccc", 4).expect("second chunk put");
         crate::chunk_store::pin_manifest(&chunks, &first.manifest_ref).expect("pin manifest");
         crate::chunk_store::pin_chunk(&chunks, &first.chunk_refs[0]).expect("pin chunk");
-        let result = chunk_store(&chunks, &CatalogChunkStoreInput {
-            visibility: CatalogVisibilityInput::default(),
+        let result = chunk_store(&chunks, &ChunkStoreInput {
+            visibility: VisibilityInput::default(),
         })
         .expect("catalog chunk store");
         assert_eq!(result.decision, "pass");
@@ -2614,10 +2596,10 @@ mod tests {
         assert!(text.contains(&second.manifest_ref));
         assert!(text.contains(&first.chunk_refs[0]));
 
-        let hidden = chunk_store(&chunks, &CatalogChunkStoreInput {
-            visibility: CatalogVisibilityInput {
+        let hidden = chunk_store(&chunks, &ChunkStoreInput {
+            visibility: VisibilityInput {
                 hidden_refs: vec![first.chunk_refs[0].clone()],
-                ..CatalogVisibilityInput::default()
+                ..VisibilityInput::default()
             },
         })
         .expect("catalog chunk store with hidden chunk");
@@ -2654,28 +2636,28 @@ mod tests {
         ]);
         let receipt =
             install_fixture(&registry, "receipt", receipt_payload, std::slice::from_ref(&base.artifact_ref), &[]);
-        let found = search(&registry, None, &CatalogSearchInput {
+        let found = search(&registry, None, &SearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
             filters: vec![
-                CatalogFilter::ArtifactKind("receipt".to_string()),
-                CatalogFilter::DependencyRef(base.artifact_ref.clone()),
-                CatalogFilter::ReceiptDecision("pass".to_string()),
-                CatalogFilter::Text("apply".to_string()),
+                Filter::ArtifactKind("receipt".to_string()),
+                Filter::DependencyRef(base.artifact_ref.clone()),
+                Filter::ReceiptDecision("pass".to_string()),
+                Filter::Text("apply".to_string()),
             ],
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("search receipt");
         assert_eq!(found.items.len(), 1);
-        let hidden = search(&registry, None, &CatalogSearchInput {
+        let hidden = search(&registry, None, &SearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
-            filters: vec![CatalogFilter::Text("apply".to_string())],
-            visibility: CatalogVisibilityInput {
+            filters: vec![Filter::Text("apply".to_string())],
+            visibility: VisibilityInput {
                 hidden_refs: vec![receipt.artifact_ref],
-                ..CatalogVisibilityInput::default()
+                ..VisibilityInput::default()
             },
         })
         .expect("hidden search");
@@ -2712,12 +2694,12 @@ mod tests {
             checks_value(&["canonical-receipt"]),
         ]);
         let upgrade_artifact = install_fixture(&registry, "upgrade-receipt", upgrade_receipt, &[], &[]);
-        let transcript = search(&registry, None, &CatalogSearchInput {
+        let transcript = search(&registry, None, &SearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
-            filters: vec![CatalogFilter::TranscriptStatus("pass".to_string())],
-            visibility: CatalogVisibilityInput::default(),
+            filters: vec![Filter::TranscriptStatus("pass".to_string())],
+            visibility: VisibilityInput::default(),
         })
         .expect("transcript search");
         assert_eq!(transcript.items.len(), 1);
@@ -2726,20 +2708,20 @@ mod tests {
                 .expect("transcript result text")
                 .contains(&transcript_artifact.artifact_ref)
         );
-        let upgrade = search(&registry, None, &CatalogSearchInput {
+        let upgrade = search(&registry, None, &SearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
-            filters: vec![CatalogFilter::UpgradeStatus("pass".to_string())],
-            visibility: CatalogVisibilityInput::default(),
+            filters: vec![Filter::UpgradeStatus("pass".to_string())],
+            visibility: VisibilityInput::default(),
         })
         .expect("upgrade search");
         assert_eq!(upgrade.items.len(), 1);
         assert!(to_text(&upgrade.value).expect("upgrade result text").contains(&upgrade_artifact.artifact_ref));
-        let receipt_view = receipts(&registry, None, &CatalogGraphInput {
+        let receipt_view = receipts(&registry, None, &GraphInput {
             reference: transcript_artifact.artifact_ref,
             transitive: false,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("receipt view");
         assert!(!receipt_view.items.is_empty());
@@ -2819,15 +2801,15 @@ mod tests {
     fn assert_found_text(
         registry: &std::path::Path,
         ledger_root: &std::path::Path,
-        filters: Vec<CatalogFilter>,
+        filters: Vec<Filter>,
         needles: &[&str],
     ) {
-        let found = search(registry, Some(ledger_root), &CatalogSearchInput {
+        let found = search(registry, Some(ledger_root), &SearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
             filters,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("catalog search");
         assert_eq!(found.items.len(), 1);
@@ -2852,9 +2834,9 @@ mod tests {
             &registry,
             &ledger_root,
             vec![
-                CatalogFilter::LedgerKind("deterministic-replay-verify-receipt".to_string()),
-                CatalogFilter::ReceiptDecision("pass".to_string()),
-                CatalogFilter::Text(format!("replay-final-state:{final_state_ref}")),
+                Filter::LedgerKind("deterministic-replay-verify-receipt".to_string()),
+                Filter::ReceiptDecision("pass".to_string()),
+                Filter::Text(format!("replay-final-state:{final_state_ref}")),
             ],
             &[
                 "deterministic-replay:verify",
@@ -2866,16 +2848,16 @@ mod tests {
         assert_found_text(
             &registry,
             &ledger_root,
-            vec![CatalogFilter::Text("replay-divergence:effect-response".to_string())],
+            vec![Filter::Text("replay-divergence:effect-response".to_string())],
             &["deterministic-replay:first-divergence"],
         );
         assert_found_text(
             &registry,
             &ledger_root,
             vec![
-                CatalogFilter::LedgerKind("deterministic-replay-rollup".to_string()),
-                CatalogFilter::Text("replay-rollup-decision:pass".to_string()),
-                CatalogFilter::Text("replay-rollup-total:1".to_string()),
+                Filter::LedgerKind("deterministic-replay-rollup".to_string()),
+                Filter::Text("replay-rollup-decision:pass".to_string()),
+                Filter::Text("replay-rollup-total:1".to_string()),
             ],
             &["deterministic-replay:rollup"],
         );
@@ -2883,10 +2865,10 @@ mod tests {
             &registry,
             &ledger_root,
             vec![
-                CatalogFilter::LedgerKind("deterministic-replay-index".to_string()),
-                CatalogFilter::Text("replay-index-decision:pass".to_string()),
-                CatalogFilter::Text("replay-index-rollups:1".to_string()),
-                CatalogFilter::Text(format!("replay-index-final-state:{final_state_ref}")),
+                Filter::LedgerKind("deterministic-replay-index".to_string()),
+                Filter::Text("replay-index-decision:pass".to_string()),
+                Filter::Text("replay-index-rollups:1".to_string()),
+                Filter::Text(format!("replay-index-final-state:{final_state_ref}")),
             ],
             &["deterministic-replay:index"],
         );
@@ -2910,12 +2892,12 @@ mod tests {
         .expect("evaluate provenance");
         crate::ledger::import_artifact(&ledger_root, &record).expect("import record");
         crate::ledger::import_artifact(&ledger_root, &evaluation.receipt_value).expect("import receipt");
-        let found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
+        let found = search(&registry, Some(&ledger_root), &SearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
-            filters: vec![CatalogFilter::Text("provenance-trust-state:reviewed".to_string())],
-            visibility: CatalogVisibilityInput::default(),
+            filters: vec![Filter::Text("provenance-trust-state:reviewed".to_string())],
+            visibility: VisibilityInput::default(),
         })
         .expect("provenance search");
         assert!(!found.items.is_empty());
@@ -2936,15 +2918,15 @@ mod tests {
         crate::ledger::import_artifact(&ledger_root, &fixture.execution.value).expect("import execution");
         crate::ledger::import_artifact(&ledger_root, &fixture.audit.value).expect("import audit");
 
-        let found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
+        let found = search(&registry, Some(&ledger_root), &SearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
             filters: vec![
-                CatalogFilter::Text(format!("retention-gc-object:{}", fixture.object_ref)),
-                CatalogFilter::Text("retention-gc-subsystem:ledger-gc".to_string()),
+                Filter::Text(format!("retention-gc-object:{}", fixture.object_ref)),
+                Filter::Text("retention-gc-subsystem:ledger-gc".to_string()),
             ],
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("search retention GC chain");
         assert_eq!(found.items.len(), 4);
@@ -2957,12 +2939,12 @@ mod tests {
         assert!(text.contains(&fixture.apply.apply_ref));
         assert!(text.contains(&fixture.execution.execution_ref));
 
-        let audit = search(&registry, Some(&ledger_root), &CatalogSearchInput {
+        let audit = search(&registry, Some(&ledger_root), &SearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
-            filters: vec![CatalogFilter::LedgerKind("retention-gc-audit".to_string())],
-            visibility: CatalogVisibilityInput::default(),
+            filters: vec![Filter::LedgerKind("retention-gc-audit".to_string())],
+            visibility: VisibilityInput::default(),
         })
         .expect("search retention GC audit by ledger kind");
         assert_eq!(audit.items.len(), 1);
@@ -2987,27 +2969,27 @@ mod tests {
         }
         let (first_ref, second_ref) = ambiguous_pair.expect("fixture collision within hex alphabet");
         let shared_prefix = first_ref[7..8].to_string();
-        let too_short = resolve_short_id(&registry, None, &CatalogShortIdInput {
+        let too_short = resolve_short_id(&registry, None, &ShortIdInput {
             prefix: shared_prefix.clone(),
             min_length: DEFAULT_SHORT_ID_MIN_LENGTH,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("too short resolution receipt");
         assert_eq!(too_short.decision, "deny");
-        let ambiguous = resolve_short_id(&registry, None, &CatalogShortIdInput {
+        let ambiguous = resolve_short_id(&registry, None, &ShortIdInput {
             prefix: shared_prefix.clone(),
             min_length: 0,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("ambiguous resolution receipt");
         assert_eq!(ambiguous.decision, "deny");
         assert!(ambiguous.candidates.len() >= 2);
-        let visible = resolve_short_id(&registry, None, &CatalogShortIdInput {
+        let visible = resolve_short_id(&registry, None, &ShortIdInput {
             prefix: shared_prefix,
             min_length: 0,
-            visibility: CatalogVisibilityInput {
+            visibility: VisibilityInput {
                 hidden_refs: vec![second_ref],
-                ..CatalogVisibilityInput::default()
+                ..VisibilityInput::default()
             },
         })
         .expect("hidden candidate filtered");
@@ -3020,32 +3002,32 @@ mod tests {
         let registry = dir.join("registry");
         let artifact = install_fixture(&registry, "doc", parse_text("<doc \"canonical\">").expect("doc"), &[], &[]);
 
-        let malformed_ref = resolve_short_id(&registry, None, &CatalogShortIdInput {
+        let malformed_ref = resolve_short_id(&registry, None, &ShortIdInput {
             prefix: "blake3:".to_string(),
             min_length: 0,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("malformed ref resolution receipt");
         assert_eq!(malformed_ref.decision, "deny");
         assert!(malformed_ref.candidates.is_empty());
         assert!(to_text(&malformed_ref.value).expect("malformed ref text").contains("malformed full content ref"));
 
-        let uppercase = resolve_short_id(&registry, None, &CatalogShortIdInput {
+        let uppercase = resolve_short_id(&registry, None, &ShortIdInput {
             prefix: "ABCDEF".to_string(),
             min_length: 0,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("uppercase resolution receipt");
         assert_eq!(uppercase.decision, "deny");
         assert!(uppercase.candidates.is_empty());
         assert!(to_text(&uppercase.value).expect("uppercase text").contains("lowercase hex"));
 
-        let hidden_only = resolve_short_id(&registry, None, &CatalogShortIdInput {
+        let hidden_only = resolve_short_id(&registry, None, &ShortIdInput {
             prefix: artifact.artifact_ref[7..19].to_string(),
             min_length: 0,
-            visibility: CatalogVisibilityInput {
+            visibility: VisibilityInput {
                 hidden_refs: vec![artifact.artifact_ref.clone()],
-                ..CatalogVisibilityInput::default()
+                ..VisibilityInput::default()
             },
         })
         .expect("hidden-only resolution receipt");
@@ -3053,10 +3035,10 @@ mod tests {
         assert!(hidden_only.candidates.is_empty());
         assert_eq!(hidden_only.full_ref, None);
 
-        let full_ref = resolve_short_id(&registry, None, &CatalogShortIdInput {
+        let full_ref = resolve_short_id(&registry, None, &ShortIdInput {
             prefix: artifact.artifact_ref.clone(),
             min_length: DEFAULT_SHORT_ID_MIN_LENGTH,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("full ref resolution receipt");
         assert_eq!(full_ref.decision, "pass");
@@ -3070,11 +3052,11 @@ mod tests {
         let secret =
             install_fixture(&registry, "doc", parse_text("<doc <secret \"do-not-render\">>").expect("secret"), &[], &[
             ]);
-        let viewed = view(&registry, None, &CatalogViewInput {
+        let viewed = view(&registry, None, &ViewInput {
             reference: secret.artifact_ref,
             include_payload: true,
             redacted: true,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("view redacted");
         let text = to_text(&viewed.value).expect("render view");
@@ -3125,11 +3107,11 @@ mod tests {
             checks_value(&["baseline-findings-keyed"]),
         ]);
         let imported = crate::ledger::import_artifact(&ledger_root, &baseline).expect("import baseline");
-        let viewed = view(&registry, Some(&ledger_root), &CatalogViewInput {
+        let viewed = view(&registry, Some(&ledger_root), &ViewInput {
             reference: imported.artifact_ref,
             include_payload: true,
             redacted: true,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("view octet baseline");
         let text = to_text(&viewed.value).expect("render catalog view");
@@ -3149,9 +3131,9 @@ mod tests {
         let registry = dir.join("registry");
         let payload = record("doc", vec![string(format!("payload-{salt}"))]);
         let installed = install_fixture(&registry, "doc", payload, &[], &[]);
-        let first = list(&registry, None, &CatalogListInput {
+        let first = list(&registry, None, &ListInput {
             kind: Some("doc".to_string()),
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("first list");
         let display_name = format!("display-{salt}");
@@ -3163,26 +3145,26 @@ mod tests {
             evidence_refs: &[test_ref("evidence")],
         })
         .expect("set display name");
-        let second = list(&registry, None, &CatalogListInput {
+        let second = list(&registry, None, &ListInput {
             kind: Some("doc".to_string()),
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("second list");
         assert_eq!(first.items.len(), second.items.len());
         assert!(first.items[0].collect_simple_record("catalog-summary-v1", None).is_some());
-        let resolved = resolve_short_id(&registry, None, &CatalogShortIdInput {
+        let resolved = resolve_short_id(&registry, None, &ShortIdInput {
             prefix: installed.artifact_ref[7..19].to_string(),
             min_length: 8,
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("resolve stable short id");
         assert_eq!(resolved.full_ref, Some(installed.artifact_ref.clone()));
-        let hidden = resolve_short_id(&registry, None, &CatalogShortIdInput {
+        let hidden = resolve_short_id(&registry, None, &ShortIdInput {
             prefix: installed.artifact_ref[7..19].to_string(),
             min_length: 8,
-            visibility: CatalogVisibilityInput {
+            visibility: VisibilityInput {
                 hidden_refs: vec![installed.artifact_ref],
-                ..CatalogVisibilityInput::default()
+                ..VisibilityInput::default()
             },
         })
         .expect("hidden short id");

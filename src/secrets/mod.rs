@@ -2068,11 +2068,11 @@ mod tests {
             capability_refs: vec![fixture_ref("catalog-capability")],
         })
         .expect("install");
-        let viewed = crate::catalog::view(&registry, None, &crate::catalog::CatalogViewInput {
+        let viewed = crate::catalog::view(&registry, None, &crate::catalog::ViewInput {
             reference: artifact.artifact_ref.clone(),
             include_payload: true,
             redacted: true,
-            visibility: crate::catalog::CatalogVisibilityInput::default(),
+            visibility: crate::catalog::VisibilityInput::default(),
         })
         .expect("view");
         let text = to_text(&viewed.value).expect("view text");
@@ -2129,9 +2129,9 @@ mod tests {
         let ledger_root = root.join("ledger");
         std::fs::create_dir_all(&registry).expect("registry");
         crate::ledger::import_artifact(&ledger_root, &run.secret.value).expect("import");
-        let list = crate::catalog::list(&registry, Some(&ledger_root), &crate::catalog::CatalogListInput {
+        let list = crate::catalog::list(&registry, Some(&ledger_root), &crate::catalog::ListInput {
             kind: Some("secret-ref".to_string()),
-            visibility: crate::catalog::CatalogVisibilityInput::default(),
+            visibility: crate::catalog::VisibilityInput::default(),
         })
         .expect("list");
         assert_eq!(list.items.len(), 1);

@@ -1311,8 +1311,8 @@ mod tests {
 
     use super::*;
 
-    type CatalogListInput = crate::catalog::CatalogListInput;
-    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+    type ListInput = crate::catalog::ListInput;
+    type VisibilityInput = crate::catalog::VisibilityInput;
 
     fn content_ref_from_bytes(bytes: &[u8]) -> String {
         crate::preserves_rail::content_ref_from_bytes(bytes)
@@ -1619,9 +1619,9 @@ mod tests {
         let manifest = service_manifest_value(&manifest_input()).expect("manifest");
         let imported = crate::ledger::import_artifact(&ledger_root, &manifest).expect("ledger import");
         assert_eq!(imported.artifact_kind, "service-manifest");
-        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &ListInput {
             kind: Some("service-manifest".to_string()),
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("catalog list service manifest");
         assert_eq!(listed.items.len(), 1);

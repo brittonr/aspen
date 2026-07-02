@@ -16,52 +16,52 @@ pub(super) struct Input {
     pub(super) text: Option<String>,
 }
 
-pub(super) fn filters(input: Input) -> Vec<molten::catalog::CatalogFilter> {
+pub(super) fn filters(input: Input) -> Vec<molten::catalog::Filter> {
     let mut filters = Vec::new();
     if let Some(value) = input.artifact_kind {
-        filters.push(molten::catalog::CatalogFilter::ArtifactKind(value));
+        filters.push(molten::catalog::Filter::ArtifactKind(value));
     }
     if let Some(value) = input.ledger_kind {
-        filters.push(molten::catalog::CatalogFilter::LedgerKind(value));
+        filters.push(molten::catalog::Filter::LedgerKind(value));
     }
     if let Some(value) = input.schema_ref {
-        filters.push(molten::catalog::CatalogFilter::SchemaRef(value));
+        filters.push(molten::catalog::Filter::SchemaRef(value));
     }
     if let Some(value) = input.structural_fingerprint {
-        filters.push(molten::catalog::CatalogFilter::StructuralFingerprint(value));
+        filters.push(molten::catalog::Filter::StructuralFingerprint(value));
     }
     if let Some(value) = input.effect_ref {
-        filters.push(molten::catalog::CatalogFilter::EffectRef(value));
+        filters.push(molten::catalog::Filter::EffectRef(value));
     }
     if let Some(value) = input.policy_ref {
-        filters.push(molten::catalog::CatalogFilter::PolicyRef(value));
+        filters.push(molten::catalog::Filter::PolicyRef(value));
     }
     if let Some(value) = input.capability_ref {
-        filters.push(molten::catalog::CatalogFilter::CapabilityRef(value));
+        filters.push(molten::catalog::Filter::CapabilityRef(value));
     }
     if let Some(value) = input.evidence_ref {
-        filters.push(molten::catalog::CatalogFilter::EvidenceRef(value));
+        filters.push(molten::catalog::Filter::EvidenceRef(value));
     }
     if let Some(value) = input.dependency_ref {
-        filters.push(molten::catalog::CatalogFilter::DependencyRef(value));
+        filters.push(molten::catalog::Filter::DependencyRef(value));
     }
     if let Some(value) = input.dependent_ref {
-        filters.push(molten::catalog::CatalogFilter::DependentRef(value));
+        filters.push(molten::catalog::Filter::DependentRef(value));
     }
     if let Some(value) = input.receipt_operation {
-        filters.push(molten::catalog::CatalogFilter::ReceiptOperation(value));
+        filters.push(molten::catalog::Filter::ReceiptOperation(value));
     }
     if let Some(value) = input.receipt_decision {
-        filters.push(molten::catalog::CatalogFilter::ReceiptDecision(value));
+        filters.push(molten::catalog::Filter::ReceiptDecision(value));
     }
     if let Some(value) = input.transcript_status {
-        filters.push(molten::catalog::CatalogFilter::TranscriptStatus(value));
+        filters.push(molten::catalog::Filter::TranscriptStatus(value));
     }
     if let Some(value) = input.upgrade_status {
-        filters.push(molten::catalog::CatalogFilter::UpgradeStatus(value));
+        filters.push(molten::catalog::Filter::UpgradeStatus(value));
     }
     if let Some(value) = input.text {
-        filters.push(molten::catalog::CatalogFilter::Text(value));
+        filters.push(molten::catalog::Filter::Text(value));
     }
     filters
 }

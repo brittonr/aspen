@@ -2557,8 +2557,8 @@ mod tests {
 
     use super::*;
 
-    type CatalogListInput = crate::catalog::CatalogListInput;
-    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+    type ListInput = crate::catalog::ListInput;
+    type VisibilityInput = crate::catalog::VisibilityInput;
 
     fn to_text(value: &IoValue) -> Result<String> {
         crate::preserves_rail::to_text(value)
@@ -2886,9 +2886,9 @@ mod tests {
         let ledger_root = dir.join("ledger");
         let imported = crate::ledger::import_artifact(&ledger_root, &lifecycle.install.value).expect("ledger import");
         assert_eq!(imported.artifact_kind, "protocol-install-receipt");
-        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &ListInput {
             kind: Some("protocol-install-receipt".to_string()),
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("catalog list");
         assert_eq!(listed.items.len(), 1);

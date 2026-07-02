@@ -1462,8 +1462,8 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
 mod tests {
     use super::*;
 
-    type CatalogListInput = crate::catalog::CatalogListInput;
-    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+    type ListInput = crate::catalog::ListInput;
+    type VisibilityInput = crate::catalog::VisibilityInput;
 
     fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
@@ -1676,9 +1676,9 @@ mod tests {
         .expect("manifest");
         let imported = crate::ledger::import_artifact(&ledger_root, &manifest).expect("ledger import");
         assert_eq!(imported.artifact_kind, "plugin-manifest");
-        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &ListInput {
             kind: Some("plugin-manifest".to_string()),
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("catalog list plugin manifest");
         assert_eq!(listed.items.len(), 1);

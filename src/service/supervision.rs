@@ -1476,8 +1476,8 @@ mod tests {
 
     use super::*;
 
-    type CatalogListInput = crate::catalog::CatalogListInput;
-    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+    type ListInput = crate::catalog::ListInput;
+    type VisibilityInput = crate::catalog::VisibilityInput;
 
     fn test_ref(label: &str) -> String {
         crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("service-supervision-test-ref", vec![
@@ -1716,9 +1716,9 @@ mod tests {
         let imported =
             crate::ledger::import_artifact(&ledger_root, &run.value).expect("ledger import supervision report");
         assert_eq!(imported.artifact_kind, "service-supervision-report");
-        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &ListInput {
             kind: Some("service-supervision-report".to_string()),
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("catalog list supervision report");
         assert_eq!(listed.items.len(), 1);

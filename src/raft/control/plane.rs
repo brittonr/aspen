@@ -1839,8 +1839,8 @@ fn synthetic_ref(label: &str) -> Result<String> {
 mod tests {
     use super::*;
 
-    type CatalogListInput = crate::catalog::CatalogListInput;
-    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+    type ListInput = crate::catalog::ListInput;
+    type VisibilityInput = crate::catalog::VisibilityInput;
 
     fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
@@ -2080,9 +2080,9 @@ mod tests {
         crate::ledger::import_artifact(&ledger_root, &runtime.registry_receipts[0].value)
             .expect("import registry receipt");
         let registry = temp_dir("catalog");
-        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &ListInput {
             kind: Some("control-registry-receipt".to_string()),
-            visibility: CatalogVisibilityInput::default(),
+            visibility: VisibilityInput::default(),
         })
         .expect("catalog list");
         assert_eq!(listed.items.len(), 1);
