@@ -1,7 +1,6 @@
 type IoValue = preserves::IOValue;
 
 use crate::evidence_chain;
-use crate::harness;
 use crate::ledger;
 
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
@@ -201,7 +200,7 @@ struct ExchangeReceiptValueInput<'a> {
 
 pub fn publish_bundle(root: &Path, bundle: &IoValue, node: &str) -> Result<ReproExchange> {
     fs::create_dir_all(root.join("blobs")).map_err(MoltenError::from)?;
-    let verify_receipt = harness::repro_verify_receipt_value(bundle)?;
+    let verify_receipt = crate::harness::repro_verify_receipt_value(bundle)?;
     let bundle_ref = canonical_hash(bundle)?;
     let bytes = canonical_bytes(bundle)?;
     let blob_ref = content_ref_from_bytes(&bytes);
@@ -246,7 +245,7 @@ pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<ReproExchange> {
             "Iroh fetched blob content hashes to {bundle_ref}, expected advertised bundle {advertised_ref}"
         )));
     }
-    let verify_receipt = harness::repro_verify_receipt_value(&bundle)?;
+    let verify_receipt = crate::harness::repro_verify_receipt_value(&bundle)?;
     if let Some(out) = input.out {
         if let Some(parent) = out.parent() {
             fs::create_dir_all(parent).map_err(MoltenError::from)?;
