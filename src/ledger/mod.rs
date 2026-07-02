@@ -982,7 +982,7 @@ mod tests {
             ]))
             .expect("evidence ref"),
         ];
-        crate::retention::pin_object(&root, crate::retention::RetentionPinInput {
+        crate::retention::pin_object(&root, crate::retention::PinInput {
             object_ref: imported.artifact_ref.clone(),
             object_kind: imported.artifact_kind.clone(),
             retention_class: crate::retention::CLASS_AUDIT_RECEIPT.to_string(),
@@ -1206,7 +1206,7 @@ mod tests {
             retention_class,
             &retention_evidence,
         )];
-        crate::retention::pin_object(&root, crate::retention::RetentionPinInput {
+        crate::retention::pin_object(&root, crate::retention::PinInput {
             object_ref: imported.artifact_ref.clone(),
             object_kind: imported.artifact_kind.clone(),
             retention_class: retention_class.to_string(),

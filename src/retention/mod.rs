@@ -128,7 +128,7 @@ pub struct ClassProfile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionPinInput {
+pub struct PinInput {
     pub object_ref: String,
     pub object_kind: String,
     pub retention_class: String,
@@ -142,7 +142,7 @@ pub struct RetentionPinInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionPin {
+pub struct Pin {
     pub pin_ref: String,
     pub object_ref: String,
     pub object_kind: String,
@@ -877,7 +877,7 @@ pub struct RetentionTombstone {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinOperation {
-    pub pin: RetentionPin,
+    pub pin: Pin,
     pub receipt: RetentionReceipt,
 }
 
@@ -947,7 +947,7 @@ pub fn parse_class_profile(value: &IoValue) -> Result<ClassProfile> {
     })
 }
 
-pub fn retention_pin_value(input: &RetentionPinInput) -> Result<IoValue> {
+pub fn pin_value(input: &PinInput) -> Result<IoValue> {
     validate_pin_input(input)?;
     let authority_status = if input.has_authority { "pass" } else { "deny" };
     Ok(crate::preserves_rail::record("retention-pin-v1", vec![
@@ -969,7 +969,7 @@ pub fn retention_pin_value(input: &RetentionPinInput) -> Result<IoValue> {
     ]))
 }
 
-pub fn parse_retention_pin(value: &IoValue) -> Result<RetentionPin> {
+pub fn parse_pin(value: &IoValue) -> Result<Pin> {
     let fields = value
         .collect_simple_record("retention-pin-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-pin-v1 ...>"))?;
@@ -987,7 +987,7 @@ pub fn parse_retention_pin(value: &IoValue) -> Result<RetentionPin> {
     require_check(&checks, "pin-source-bound", "retention pin")?;
     validate_retention_class(&retention_class)?;
     validate_pin_source(&source)?;
-    Ok(RetentionPin {
+    Ok(Pin {
         pin_ref: crate::preserves_rail::canonical_hash(value)?,
         object_ref,
         object_kind,
@@ -1002,10 +1002,10 @@ pub fn parse_retention_pin(value: &IoValue) -> Result<RetentionPin> {
     })
 }
 
-pub fn pin_object(root: &Path, input: RetentionPinInput) -> Result<PinOperation> {
+pub fn pin_object(root: &Path, input: PinInput) -> Result<PinOperation> {
     ensure_store(root)?;
-    let pin_value = retention_pin_value(&input)?;
-    let pin = parse_retention_pin(&pin_value)?;
+    let pin_value = pin_value(&input)?;
+    let pin = parse_pin(&pin_value)?;
     write_store_value(&pin_path(root, &pin.pin_ref)?, &pin.value)?;
     let index = reference_index_for_object(ReferenceIndexForObjectInput {
         root,
@@ -1048,7 +1048,7 @@ pub fn unpin_object(input: UnpinObjectInput<'_>) -> Result<RetentionReceipt> {
     validate_refs(input.policy_refs, "unpin policy ref")?;
     validate_refs(input.evidence_refs, "unpin evidence ref")?;
     let pin_file = pin_path(input.root, input.pin_ref)?;
-    let pin_result = read_store_value(&pin_file).and_then(|value| parse_retention_pin(&value));
+    let pin_result = read_store_value(&pin_file).and_then(|value| parse_pin(&value));
     let (decision, object_ref, object_kind, retention_class, diagnostics) = match pin_result {
         Ok(pin) if input.has_authority => {
             fs::remove_file(&pin_file).map_err(MoltenError::from)?;
@@ -5173,7 +5173,7 @@ impl MatchRefs {
 fn pins_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &pins_dir(root),
-        parse_retention_pin,
+        parse_pin,
         |pin| filter.matches_object(&pin.object_ref, &pin.object_kind, &pin.retention_class),
         |pin| pin.pin_ref.clone(),
         "retention candidate pins",
@@ -6990,7 +6990,7 @@ fn base(value: &IoValue) -> Option<String> {
             profile.diagnostics.join(",")
         ));
     }
-    if let Ok(pin) = parse_retention_pin(value) {
+    if let Ok(pin) = parse_pin(value) {
         return Some(format!(
             "retention pin ref={} object={} kind={} class={} source={} owner={}",
             pin.pin_ref, pin.object_ref, pin.object_kind, pin.retention_class, pin.source, pin.owner_ref
@@ -7342,7 +7342,7 @@ fn class_value(seed: &SeedRefs) -> Result<IoValue> {
 }
 
 fn pin_step(root: &Path, seed: &SeedRefs) -> Result<PinOperation> {
-    pin_object(root, RetentionPinInput {
+    pin_object(root, PinInput {
         object_ref: seed.object_ref.clone(),
         object_kind: "encrypted-ref".to_string(),
         retention_class: CLASS_PRIVATE_SECRET_REF.to_string(),
@@ -7571,7 +7571,7 @@ fn validate_class_profile_input(input: &ClassProfileInput) -> Result<()> {
     Ok(())
 }
 
-fn validate_pin_input(input: &RetentionPinInput) -> Result<()> {
+fn validate_pin_input(input: &PinInput) -> Result<()> {
     require_ref(&input.object_ref, "retention pin object ref")?;
     validate_name(&input.object_kind, "retention pin object kind")?;
     validate_retention_class(&input.retention_class)?;
@@ -8029,7 +8029,7 @@ fn ensure_store(root: &Path) -> Result<()> {
     fs::create_dir_all(tombstones_dir(root)).map_err(MoltenError::from)
 }
 
-fn pins_for_object(root: &Path, object_ref: &str) -> Result<Vec<RetentionPin>> {
+fn pins_for_object(root: &Path, object_ref: &str) -> Result<Vec<Pin>> {
     let mut pins = Vec::new();
     let dir = pins_dir(root);
     if !dir.exists() {
@@ -8041,7 +8041,7 @@ fn pins_for_object(root: &Path, object_ref: &str) -> Result<Vec<RetentionPin>> {
             continue;
         }
         let value = read_store_value(&entry.path())?;
-        let pin = parse_retention_pin(&value)?;
+        let pin = parse_pin(&value)?;
         if pin.object_ref == object_ref {
             push_bounded(&mut pins, pin, MAX_RETENTION_REFS, "retention pins")?;
         }
@@ -8653,7 +8653,7 @@ mod tests {
         let owner_ref = fake_ref("owner");
         let policy_refs = vec![fake_ref("policy")];
         let evidence_refs = vec![fake_ref("evidence")];
-        let pin = pin_object(&root, RetentionPinInput {
+        let pin = pin_object(&root, PinInput {
             object_ref: object_ref.clone(),
             object_kind: "artifact".to_string(),
             retention_class: CLASS_PUBLIC_ARTIFACT.to_string(),
@@ -9371,7 +9371,7 @@ mod tests {
             evidence: &fixture.evidence,
         })
         .expect("store drift plan");
-        let pin = pin_object(&root, RetentionPinInput {
+        let pin = pin_object(&root, PinInput {
             object_ref: fixture.object_ref.clone(),
             object_kind: "chunk".to_string(),
             retention_class: CLASS_DURABLE_VALUE.to_string(),

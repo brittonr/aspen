@@ -2545,7 +2545,7 @@ fn stale_plan_case(dir: &std::path::Path) -> CliResult<()> {
         action: molten::retention::ACTION_DELETE,
     })?;
     let plan = run_retention_gc_plan_cli(&candidate, "ledger-gc", &dir.join("stale-plan.preserves"))?;
-    molten::retention::pin_object(&root, molten::retention::RetentionPinInput {
+    molten::retention::pin_object(&root, molten::retention::PinInput {
         object_ref: candidate.object_ref.clone(),
         object_kind: candidate.object_kind.clone(),
         retention_class: candidate.retention_class.clone(),

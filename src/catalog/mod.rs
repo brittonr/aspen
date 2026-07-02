@@ -1115,7 +1115,7 @@ fn retention_core_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
             format!("retention-policies:{}", profile.policy_refs.len()),
         ]));
     }
-    if let Ok(pin) = crate::retention::parse_retention_pin(value) {
+    if let Ok(pin) = crate::retention::parse_pin(value) {
         return Ok(Some(vec![
             "retention:pin".to_string(),
             format!("retention-object:{}", pin.object_ref),

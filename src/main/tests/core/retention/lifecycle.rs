@@ -16,7 +16,7 @@ fn pin_unpin_and_tombstone(dir: &Path, fixture: &RetentionFixture) {
         receipt_out: Some(dir.join("pin-receipt.preserves")),
     }))
     .expect("pin retention object");
-    let pin = molten::retention::parse_retention_pin(&read_preserves_file(&pin_out).expect("read pin")).expect("parse pin");
+    let pin = molten::retention::parse_pin(&read_preserves_file(&pin_out).expect("read pin")).expect("parse pin");
     deny_pinned_delete(dir, fixture);
     unpin_retention_object(dir, fixture, pin.pin_ref);
     tombstone_retention_object(dir, fixture);

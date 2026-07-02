@@ -4588,7 +4588,7 @@ mod tests {
         let policy_refs = vec![canonical_hash(&record("chunk-test-ref", vec![string("policy")])).expect("policy ref")];
         let evidence_refs =
             vec![canonical_hash(&record("chunk-test-ref", vec![string("evidence")])).expect("evidence ref")];
-        crate::retention::pin_object(&root, crate::retention::RetentionPinInput {
+        crate::retention::pin_object(&root, crate::retention::PinInput {
             object_ref: put.manifest_ref.clone(),
             object_kind: "chunk-manifest".to_string(),
             retention_class: crate::retention::CLASS_PUBLIC_ARTIFACT.to_string(),

@@ -2019,7 +2019,7 @@ mod tests {
         let output = record("fingerprint", vec![string("retained")]);
         let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[]))
             .expect("put retained cache value");
-        crate::retention::pin_object(&root, crate::retention::RetentionPinInput {
+        crate::retention::pin_object(&root, crate::retention::PinInput {
             object_ref: put.key.key_ref.clone(),
             object_kind: "eval-cache-key".to_string(),
             retention_class: crate::retention::CLASS_EPHEMERAL_CACHE.to_string(),

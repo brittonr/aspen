@@ -45,7 +45,7 @@ pub(crate) fn pin(args: super::command::base::Pin) -> molten::error::Result<()> 
         pin_out,
         receipt_out,
     } = args;
-    let operation = molten::retention::pin_object(&root, molten::retention::RetentionPinInput {
+    let operation = molten::retention::pin_object(&root, molten::retention::PinInput {
         object_ref,
         object_kind,
         retention_class,
