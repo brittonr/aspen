@@ -1,5 +1,3 @@
-use crate::preserves_rail;
-
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
 type PendingTurn = super::PendingTurn;
@@ -78,12 +76,14 @@ impl RuntimePattern {
 
     fn to_value(&self) -> IoValue {
         match self {
-            Self::Exact(value) => preserves_rail::record("runtime-pattern-exact-v1", vec![
+            Self::Exact(value) => crate::preserves_rail::record("runtime-pattern-exact-v1", vec![
                 value.as_iovalue().clone(),
-                preserves_rail::record("value-ref", vec![preserves_rail::string(value.value_ref())]),
+                crate::preserves_rail::record("value-ref", vec![crate::preserves_rail::string(value.value_ref())]),
             ]),
             Self::Wildcard { binding } => {
-                preserves_rail::record("runtime-pattern-wildcard-v1", vec![preserves_rail::string(binding)])
+                crate::preserves_rail::record("runtime-pattern-wildcard-v1", vec![crate::preserves_rail::string(
+                    binding,
+                )])
             }
         }
     }
@@ -207,16 +207,16 @@ impl RuntimePromiseState {
     }
 
     pub fn promise_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-promise-state-v1", vec![
-            preserves_rail::string(&self.promise_id),
-            preserves_rail::string(self.status.as_str()),
+        crate::preserves_rail::record("runtime-promise-state-v1", vec![
+            crate::preserves_rail::string(&self.promise_id),
+            crate::preserves_rail::string(self.status.as_str()),
             optional_string_value(self.value_ref.as_deref()),
             optional_string_value(self.reason.as_deref()),
-            preserves_rail::sequence(self.caused_by.iter().map(preserves_rail::string).collect()),
+            crate::preserves_rail::sequence(self.caused_by.iter().map(crate::preserves_rail::string).collect()),
         ])
     }
 }
@@ -244,10 +244,10 @@ impl RuntimePromisePipelineEntry {
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-promise-pipeline-entry-v1", vec![
+        crate::preserves_rail::record("runtime-promise-pipeline-entry-v1", vec![
             crate::preserves_rail::u64_value(self.sequence),
-            preserves_rail::record("target-ref", vec![preserves_rail::string(&self.target_ref)]),
-            preserves_rail::string(&self.operation),
+            crate::preserves_rail::record("target-ref", vec![crate::preserves_rail::string(&self.target_ref)]),
+            crate::preserves_rail::string(&self.operation),
         ])
     }
 }
@@ -269,14 +269,14 @@ impl RuntimePromisePipelineState {
     }
 
     pub fn pipeline_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-promise-pipeline-state-v1", vec![
+        crate::preserves_rail::record("runtime-promise-pipeline-state-v1", vec![
             self.source.to_value(),
             crate::preserves_rail::u64_value(self.max_queue),
-            preserves_rail::sequence(self.entries.iter().map(RuntimePromisePipelineEntry::to_value).collect()),
+            crate::preserves_rail::sequence(self.entries.iter().map(RuntimePromisePipelineEntry::to_value).collect()),
         ])
     }
 }
@@ -299,11 +299,11 @@ pub struct RuntimeRevocationCleanupState {
 
 impl RuntimeRevocationCleanupState {
     pub fn cleanup_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-revocation-cleanup-state-v1", vec![
+        crate::preserves_rail::record("runtime-revocation-cleanup-state-v1", vec![
             ref_list_value("revoked-refs", &self.revoked_refs),
             ref_list_value("attempted-use-refs", &self.attempted_use_refs),
             ref_list_value("remaining-assertion-refs", &self.remaining_assertion_refs),
@@ -348,12 +348,12 @@ pub struct RuntimeActormapTransactionState {
 
 impl RuntimeActormapTransactionState {
     pub fn transaction_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-actormap-transaction-state-v1", vec![
-            preserves_rail::string(self.outcome.as_str()),
+        crate::preserves_rail::record("runtime-actormap-transaction-state-v1", vec![
+            crate::preserves_rail::string(self.outcome.as_str()),
             ref_list_value("before-object-refs", &self.before_object_refs),
             ref_list_value("after-object-refs", &self.after_object_refs),
             ref_list_value("spawned-object-refs", &self.spawned_object_refs),
@@ -412,17 +412,17 @@ pub struct RuntimeNearFarRefState {
 
 impl RuntimeNearFarRefState {
     pub fn call_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-near-far-ref-state-v1", vec![
-            preserves_rail::record("reference-ref", vec![preserves_rail::string(&self.reference_ref)]),
-            preserves_rail::string(self.reference_kind.as_str()),
-            preserves_rail::bool_value(self.is_live),
-            preserves_rail::string(&self.caller_vat_id),
-            preserves_rail::string(&self.target_vat_id),
-            preserves_rail::string(self.call_mode.as_str()),
+        crate::preserves_rail::record("runtime-near-far-ref-state-v1", vec![
+            crate::preserves_rail::record("reference-ref", vec![crate::preserves_rail::string(&self.reference_ref)]),
+            crate::preserves_rail::string(self.reference_kind.as_str()),
+            crate::preserves_rail::bool_value(self.is_live),
+            crate::preserves_rail::string(&self.caller_vat_id),
+            crate::preserves_rail::string(&self.target_vat_id),
+            crate::preserves_rail::string(self.call_mode.as_str()),
         ])
     }
 }
@@ -475,16 +475,16 @@ pub struct RuntimeObjectAuthorityState {
 
 impl RuntimeObjectAuthorityState {
     pub fn authority_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-object-authority-state-v1", vec![
-            preserves_rail::record("object-ref", vec![preserves_rail::string(&self.object_ref)]),
-            preserves_rail::record("requested-authority-ref", vec![preserves_rail::string(
+        crate::preserves_rail::record("runtime-object-authority-state-v1", vec![
+            crate::preserves_rail::record("object-ref", vec![crate::preserves_rail::string(&self.object_ref)]),
+            crate::preserves_rail::record("requested-authority-ref", vec![crate::preserves_rail::string(
                 &self.requested_authority_ref,
             )]),
-            preserves_rail::string(self.requested_authority_kind.as_str()),
+            crate::preserves_rail::string(self.requested_authority_kind.as_str()),
             ref_list_value("endowed-authority-refs", &self.endowed_authority_refs),
             ref_list_value("admitted-authority-refs", &self.admitted_authority_refs),
         ])
@@ -509,15 +509,23 @@ pub struct RuntimeRightsAmplificationState {
 
 impl RuntimeRightsAmplificationState {
     pub fn amplification_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-rights-amplification-state-v1", vec![
-            preserves_rail::record("holder-object-ref", vec![preserves_rail::string(&self.holder_object_ref)]),
-            preserves_rail::record("sealed-value-ref", vec![preserves_rail::string(&self.sealed_value_ref)]),
-            preserves_rail::record("sealer-brand-ref", vec![preserves_rail::string(&self.sealer_brand_ref)]),
-            preserves_rail::record("unsealer-brand-ref", vec![preserves_rail::string(&self.unsealer_brand_ref)]),
+        crate::preserves_rail::record("runtime-rights-amplification-state-v1", vec![
+            crate::preserves_rail::record("holder-object-ref", vec![crate::preserves_rail::string(
+                &self.holder_object_ref,
+            )]),
+            crate::preserves_rail::record("sealed-value-ref", vec![crate::preserves_rail::string(
+                &self.sealed_value_ref,
+            )]),
+            crate::preserves_rail::record("sealer-brand-ref", vec![crate::preserves_rail::string(
+                &self.sealer_brand_ref,
+            )]),
+            crate::preserves_rail::record("unsealer-brand-ref", vec![crate::preserves_rail::string(
+                &self.unsealer_brand_ref,
+            )]),
             ref_list_value("sealed-authority-refs", &self.sealed_authority_refs),
             ref_list_value("recovered-authority-refs", &self.recovered_authority_refs),
         ])
@@ -544,16 +552,16 @@ pub struct RuntimeDistributedRefLifetimeState {
 
 impl RuntimeDistributedRefLifetimeState {
     pub fn lifetime_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-distributed-ref-lifetime-state-v1", vec![
-            preserves_rail::record("far-ref", vec![preserves_rail::string(&self.far_ref)]),
-            preserves_rail::record("session-ref", vec![preserves_rail::string(&self.session_ref)]),
+        crate::preserves_rail::record("runtime-distributed-ref-lifetime-state-v1", vec![
+            crate::preserves_rail::record("far-ref", vec![crate::preserves_rail::string(&self.far_ref)]),
+            crate::preserves_rail::record("session-ref", vec![crate::preserves_rail::string(&self.session_ref)]),
             optional_ref_record("replacement-ref", self.replacement_ref.as_deref()),
-            preserves_rail::bool_value(self.is_session_live),
-            preserves_rail::bool_value(self.is_handoff_admitted),
+            crate::preserves_rail::bool_value(self.is_session_live),
+            crate::preserves_rail::bool_value(self.is_handoff_admitted),
             ref_list_value("pending-call-refs", &self.pending_call_refs),
             ref_list_value("failed-pending-call-refs", &self.failed_pending_call_refs),
             ref_list_value("attempted-use-refs", &self.attempted_use_refs),
@@ -579,12 +587,12 @@ pub struct RuntimeSnapshotAuthorityState {
 
 impl RuntimeSnapshotAuthorityState {
     pub fn authority_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-snapshot-authority-state-v1", vec![
-            preserves_rail::record("snapshot-ref", vec![preserves_rail::string(&self.snapshot_ref)]),
+        crate::preserves_rail::record("runtime-snapshot-authority-state-v1", vec![
+            crate::preserves_rail::record("snapshot-ref", vec![crate::preserves_rail::string(&self.snapshot_ref)]),
             ref_list_value("admitted-authority-refs", &self.admitted_authority_refs),
             ref_list_value("claimed-authority-refs", &self.claimed_authority_refs),
             ref_list_value("requested-assertion-refs", &self.requested_assertion_refs),
@@ -615,12 +623,12 @@ pub struct RuntimeServiceDependenciesState {
 
 impl RuntimeServiceDependenciesState {
     pub fn dependency_ref(&self) -> Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+        crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        preserves_rail::record("runtime-service-dependencies-state-v1", vec![
-            preserves_rail::record("service-ref", vec![preserves_rail::string(&self.service_ref)]),
+        crate::preserves_rail::record("runtime-service-dependencies-state-v1", vec![
+            crate::preserves_rail::record("service-ref", vec![crate::preserves_rail::string(&self.service_ref)]),
             ref_list_value("demanded-service-refs", &self.demanded_service_refs),
             ref_list_value("dependency-refs", &self.dependency_refs),
             ref_list_value("ready-service-refs", &self.ready_service_refs),
@@ -652,10 +660,12 @@ pub fn evaluate_assertion_visibility(
     }
     visible_owner_refs.sort();
 
-    let input_value = preserves_rail::record("runtime-predicate-assertion-visibility-input-v1", vec![
-        preserves_rail::record("snapshot-ref", vec![preserves_rail::string(snapshot.snapshot_ref()?)]),
-        preserves_rail::record("assertion-value-ref", vec![preserves_rail::string(assertion_value.value_ref())]),
-        preserves_rail::sequence(live_owner_ids.iter().map(preserves_rail::string).collect()),
+    let input_value = crate::preserves_rail::record("runtime-predicate-assertion-visibility-input-v1", vec![
+        crate::preserves_rail::record("snapshot-ref", vec![crate::preserves_rail::string(snapshot.snapshot_ref()?)]),
+        crate::preserves_rail::record("assertion-value-ref", vec![crate::preserves_rail::string(
+            assertion_value.value_ref(),
+        )]),
+        crate::preserves_rail::sequence(live_owner_ids.iter().map(crate::preserves_rail::string).collect()),
     ]);
     let checks = vec![
         "trellis-bounded-owner-set".to_string(),
@@ -701,11 +711,11 @@ pub fn evaluate_turn_transition(
     } else {
         vec!["turn-transition-state-mismatch".to_string()]
     };
-    let input_value = preserves_rail::record("runtime-predicate-turn-transition-input-v1", vec![
-        preserves_rail::record("before-ref", vec![preserves_rail::string(before.snapshot_ref()?)]),
-        preserves_rail::record("after-ref", vec![preserves_rail::string(after.snapshot_ref()?)]),
-        preserves_rail::string(outcome.as_str()),
-        preserves_rail::sequence(turn.actions.iter().map(action_summary_value).collect()),
+    let input_value = crate::preserves_rail::record("runtime-predicate-turn-transition-input-v1", vec![
+        crate::preserves_rail::record("before-ref", vec![crate::preserves_rail::string(before.snapshot_ref()?)]),
+        crate::preserves_rail::record("after-ref", vec![crate::preserves_rail::string(after.snapshot_ref()?)]),
+        crate::preserves_rail::string(outcome.as_str()),
+        crate::preserves_rail::sequence(turn.actions.iter().map(action_summary_value).collect()),
     ]);
     let checks = vec![
         "trellis-bounded-turn-delta".to_string(),
@@ -734,10 +744,10 @@ pub fn evaluate_pattern_match(pattern: &RuntimePattern, value: &RuntimeValue) ->
     } else {
         PredicateDecision::Deny
     };
-    let input_value = preserves_rail::record("runtime-predicate-pattern-input-v1", vec![
+    let input_value = crate::preserves_rail::record("runtime-predicate-pattern-input-v1", vec![
         pattern.to_value(),
         value.as_iovalue().clone(),
-        preserves_rail::record("value-ref", vec![preserves_rail::string(value.value_ref())]),
+        crate::preserves_rail::record("value-ref", vec![crate::preserves_rail::string(value.value_ref())]),
     ]);
     let checks = vec![
         "bounded-preserves-pattern-subset".to_string(),
@@ -771,10 +781,10 @@ pub fn evaluate_observe_initial_delivery(
         }
     }
     delivered_assertion_refs.sort();
-    let input_value = preserves_rail::record("runtime-predicate-observe-delivery-input-v1", vec![
-        preserves_rail::record("snapshot-ref", vec![preserves_rail::string(snapshot.snapshot_ref()?)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-observe-delivery-input-v1", vec![
+        crate::preserves_rail::record("snapshot-ref", vec![crate::preserves_rail::string(snapshot.snapshot_ref()?)]),
         observer.to_value(),
-        preserves_rail::sequence(delivered_assertion_refs.iter().map(preserves_rail::string).collect()),
+        crate::preserves_rail::sequence(delivered_assertion_refs.iter().map(crate::preserves_rail::string).collect()),
     ]);
     let checks = vec![
         "trellis-bounded-current-assertion-set".to_string(),
@@ -823,9 +833,9 @@ pub fn evaluate_promise_state_transition(
     };
     let before_ref = before.promise_ref()?;
     let after_ref = after.promise_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-promise-state-input-v1", vec![
-        preserves_rail::record("before-ref", vec![preserves_rail::string(&before_ref)]),
-        preserves_rail::record("after-ref", vec![preserves_rail::string(&after_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-promise-state-input-v1", vec![
+        crate::preserves_rail::record("before-ref", vec![crate::preserves_rail::string(&before_ref)]),
+        crate::preserves_rail::record("after-ref", vec![crate::preserves_rail::string(&after_ref)]),
         before.to_value(),
         after.to_value(),
     ]);
@@ -858,9 +868,9 @@ pub fn evaluate_promise_pipeline(state: &RuntimePromisePipelineState) -> Result<
     };
     let pipeline_ref = state.pipeline_ref()?;
     let source_ref = state.source.promise_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-promise-pipeline-input-v1", vec![
-        preserves_rail::record("pipeline-ref", vec![preserves_rail::string(&pipeline_ref)]),
-        preserves_rail::record("source-promise-ref", vec![preserves_rail::string(&source_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-promise-pipeline-input-v1", vec![
+        crate::preserves_rail::record("pipeline-ref", vec![crate::preserves_rail::string(&pipeline_ref)]),
+        crate::preserves_rail::record("source-promise-ref", vec![crate::preserves_rail::string(&source_ref)]),
         state.to_value(),
     ]);
     let checks = vec![
@@ -891,8 +901,8 @@ pub fn evaluate_revocation_cleanup(state: &RuntimeRevocationCleanupState) -> Res
         PredicateDecision::Deny
     };
     let cleanup_ref = state.cleanup_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-revocation-cleanup-input-v1", vec![
-        preserves_rail::record("cleanup-ref", vec![preserves_rail::string(&cleanup_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-revocation-cleanup-input-v1", vec![
+        crate::preserves_rail::record("cleanup-ref", vec![crate::preserves_rail::string(&cleanup_ref)]),
         state.to_value(),
     ]);
     let checks = vec![
@@ -924,8 +934,8 @@ pub fn evaluate_actormap_transaction(state: &RuntimeActormapTransactionState) ->
         PredicateDecision::Deny
     };
     let transaction_ref = state.transaction_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-actormap-transaction-input-v1", vec![
-        preserves_rail::record("transaction-ref", vec![preserves_rail::string(&transaction_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-actormap-transaction-input-v1", vec![
+        crate::preserves_rail::record("transaction-ref", vec![crate::preserves_rail::string(&transaction_ref)]),
         state.to_value(),
     ]);
     let checks = vec![
@@ -956,8 +966,8 @@ pub fn evaluate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Res
         PredicateDecision::Deny
     };
     let authority_ref = state.authority_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-snapshot-authority-input-v1", vec![
-        preserves_rail::record("authority-ref", vec![preserves_rail::string(&authority_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-snapshot-authority-input-v1", vec![
+        crate::preserves_rail::record("authority-ref", vec![crate::preserves_rail::string(&authority_ref)]),
         state.to_value(),
     ]);
     let checks = vec![
@@ -969,7 +979,7 @@ pub fn evaluate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Res
     ];
     let mut state_refs = Vec::with_capacity(2);
     state_refs.push(authority_ref);
-    if preserves_rail::validate_content_ref(&state.snapshot_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.snapshot_ref).is_ok() {
         state_refs.push(state.snapshot_ref.clone());
     }
     let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
@@ -993,8 +1003,8 @@ pub fn evaluate_object_authority(state: &RuntimeObjectAuthorityState) -> Result<
         PredicateDecision::Deny
     };
     let authority_ref = state.authority_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-object-authority-input-v1", vec![
-        preserves_rail::record("authority-ref", vec![preserves_rail::string(&authority_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-object-authority-input-v1", vec![
+        crate::preserves_rail::record("authority-ref", vec![crate::preserves_rail::string(&authority_ref)]),
         state.to_value(),
     ]);
     let checks = vec![
@@ -1005,10 +1015,10 @@ pub fn evaluate_object_authority(state: &RuntimeObjectAuthorityState) -> Result<
     ];
     let mut state_refs = Vec::with_capacity(3);
     state_refs.push(authority_ref);
-    if preserves_rail::validate_content_ref(&state.object_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.object_ref).is_ok() {
         state_refs.push(state.object_ref.clone());
     }
-    if preserves_rail::validate_content_ref(&state.requested_authority_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.requested_authority_ref).is_ok() {
         state_refs.push(state.requested_authority_ref.clone());
     }
     let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
@@ -1032,8 +1042,8 @@ pub fn evaluate_rights_amplification(state: &RuntimeRightsAmplificationState) ->
         PredicateDecision::Deny
     };
     let amplification_ref = state.amplification_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-rights-amplification-input-v1", vec![
-        preserves_rail::record("amplification-ref", vec![preserves_rail::string(&amplification_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-rights-amplification-input-v1", vec![
+        crate::preserves_rail::record("amplification-ref", vec![crate::preserves_rail::string(&amplification_ref)]),
         state.to_value(),
     ]);
     let checks = vec![
@@ -1044,13 +1054,13 @@ pub fn evaluate_rights_amplification(state: &RuntimeRightsAmplificationState) ->
     ];
     let mut state_refs = Vec::with_capacity(4);
     state_refs.push(amplification_ref);
-    if preserves_rail::validate_content_ref(&state.holder_object_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.holder_object_ref).is_ok() {
         state_refs.push(state.holder_object_ref.clone());
     }
-    if preserves_rail::validate_content_ref(&state.sealed_value_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.sealed_value_ref).is_ok() {
         state_refs.push(state.sealed_value_ref.clone());
     }
-    if preserves_rail::validate_content_ref(&state.sealer_brand_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.sealer_brand_ref).is_ok() {
         state_refs.push(state.sealer_brand_ref.clone());
     }
     let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
@@ -1076,8 +1086,8 @@ pub fn evaluate_distributed_ref_lifetime(
         PredicateDecision::Deny
     };
     let lifetime_ref = state.lifetime_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-distributed-ref-lifetime-input-v1", vec![
-        preserves_rail::record("lifetime-ref", vec![preserves_rail::string(&lifetime_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-distributed-ref-lifetime-input-v1", vec![
+        crate::preserves_rail::record("lifetime-ref", vec![crate::preserves_rail::string(&lifetime_ref)]),
         state.to_value(),
     ]);
     let checks = vec![
@@ -1088,16 +1098,16 @@ pub fn evaluate_distributed_ref_lifetime(
     ];
     let mut state_refs = Vec::with_capacity(4);
     state_refs.push(lifetime_ref);
-    if preserves_rail::validate_content_ref(&state.far_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.far_ref).is_ok() {
         state_refs.push(state.far_ref.clone());
     }
-    if preserves_rail::validate_content_ref(&state.session_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.session_ref).is_ok() {
         state_refs.push(state.session_ref.clone());
     }
     if let Some(replacement_ref) = state
         .replacement_ref
         .as_ref()
-        .filter(|reference| preserves_rail::validate_content_ref(reference).is_ok())
+        .filter(|reference| crate::preserves_rail::validate_content_ref(reference).is_ok())
     {
         state_refs.push(replacement_ref.clone());
     }
@@ -1122,8 +1132,8 @@ pub fn evaluate_service_dependencies(state: &RuntimeServiceDependenciesState) ->
         PredicateDecision::Deny
     };
     let dependency_ref = state.dependency_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-service-dependencies-input-v1", vec![
-        preserves_rail::record("dependency-ref", vec![preserves_rail::string(&dependency_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-service-dependencies-input-v1", vec![
+        crate::preserves_rail::record("dependency-ref", vec![crate::preserves_rail::string(&dependency_ref)]),
         state.to_value(),
     ]);
     let checks = vec![
@@ -1135,7 +1145,7 @@ pub fn evaluate_service_dependencies(state: &RuntimeServiceDependenciesState) ->
     ];
     let mut state_refs = Vec::with_capacity(2);
     state_refs.push(dependency_ref);
-    if preserves_rail::validate_content_ref(&state.service_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.service_ref).is_ok() {
         state_refs.push(state.service_ref.clone());
     }
     let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
@@ -1159,8 +1169,8 @@ pub fn evaluate_near_far_refs(state: &RuntimeNearFarRefState) -> Result<NearFarR
         PredicateDecision::Deny
     };
     let call_ref = state.call_ref()?;
-    let input_value = preserves_rail::record("runtime-predicate-near-far-refs-input-v1", vec![
-        preserves_rail::record("call-ref", vec![preserves_rail::string(&call_ref)]),
+    let input_value = crate::preserves_rail::record("runtime-predicate-near-far-refs-input-v1", vec![
+        crate::preserves_rail::record("call-ref", vec![crate::preserves_rail::string(&call_ref)]),
         state.to_value(),
     ]);
     let checks = vec![
@@ -1171,7 +1181,7 @@ pub fn evaluate_near_far_refs(state: &RuntimeNearFarRefState) -> Result<NearFarR
     ];
     let mut state_refs = Vec::with_capacity(2);
     state_refs.push(call_ref);
-    if preserves_rail::validate_content_ref(&state.reference_ref).is_ok() {
+    if crate::preserves_rail::validate_content_ref(&state.reference_ref).is_ok() {
         state_refs.push(state.reference_ref.clone());
     }
     let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
@@ -1188,10 +1198,10 @@ pub fn evaluate_near_far_refs(state: &RuntimeNearFarRefState) -> Result<NearFarR
 
 fn validate_object_authority(state: &RuntimeObjectAuthorityState) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(16);
-    if preserves_rail::validate_content_ref(&state.object_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.object_ref).is_err() {
         diagnostics.push("object-authority-object-ref-noncanonical".to_string());
     }
-    if preserves_rail::validate_content_ref(&state.requested_authority_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.requested_authority_ref).is_err() {
         diagnostics.push("object-authority-requested-ref-noncanonical".to_string());
     }
     diagnostics.extend(validate_sorted_content_refs(&state.endowed_authority_refs, "object-authority", "endowed"));
@@ -1214,16 +1224,16 @@ fn validate_object_authority(state: &RuntimeObjectAuthorityState) -> Vec<String>
 
 fn validate_rights_amplification(state: &RuntimeRightsAmplificationState) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(16);
-    if preserves_rail::validate_content_ref(&state.holder_object_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.holder_object_ref).is_err() {
         diagnostics.push("rights-amplification-holder-ref-noncanonical".to_string());
     }
-    if preserves_rail::validate_content_ref(&state.sealed_value_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.sealed_value_ref).is_err() {
         diagnostics.push("rights-amplification-sealed-value-ref-noncanonical".to_string());
     }
-    if preserves_rail::validate_content_ref(&state.sealer_brand_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.sealer_brand_ref).is_err() {
         diagnostics.push("rights-amplification-sealer-brand-ref-noncanonical".to_string());
     }
-    if preserves_rail::validate_content_ref(&state.unsealer_brand_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.unsealer_brand_ref).is_err() {
         diagnostics.push("rights-amplification-unsealer-brand-ref-noncanonical".to_string());
     }
     diagnostics.extend(validate_sorted_content_refs(
@@ -1256,16 +1266,16 @@ fn validate_rights_amplification(state: &RuntimeRightsAmplificationState) -> Vec
 
 fn validate_distributed_ref_lifetime(state: &RuntimeDistributedRefLifetimeState) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(24);
-    if preserves_rail::validate_content_ref(&state.far_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.far_ref).is_err() {
         diagnostics.push("distributed-ref-far-ref-noncanonical".to_string());
     }
-    if preserves_rail::validate_content_ref(&state.session_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.session_ref).is_err() {
         diagnostics.push("distributed-ref-session-ref-noncanonical".to_string());
     }
     if state
         .replacement_ref
         .as_ref()
-        .is_some_and(|replacement_ref| preserves_rail::validate_content_ref(replacement_ref).is_err())
+        .is_some_and(|replacement_ref| crate::preserves_rail::validate_content_ref(replacement_ref).is_err())
     {
         diagnostics.push("distributed-ref-replacement-ref-noncanonical".to_string());
     }
@@ -1311,7 +1321,7 @@ fn validate_distributed_ref_lifetime(state: &RuntimeDistributedRefLifetimeState)
 
 fn validate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(32);
-    if preserves_rail::validate_content_ref(&state.service_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.service_ref).is_err() {
         diagnostics.push("service-ref-noncanonical".to_string());
     }
     diagnostics.extend(validate_sorted_content_refs(&state.demanded_service_refs, "service", "demanded"));
@@ -1362,7 +1372,7 @@ fn validate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Vec
 
 fn validate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(24);
-    if preserves_rail::validate_content_ref(&state.snapshot_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.snapshot_ref).is_err() {
         diagnostics.push("snapshot-ref-noncanonical".to_string());
     }
     diagnostics.extend(validate_sorted_content_refs(&state.admitted_authority_refs, "snapshot", "admitted-authority"));
@@ -1404,7 +1414,7 @@ fn validate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Vec<Str
 
 fn validate_near_far_refs(state: &RuntimeNearFarRefState) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(8);
-    if preserves_rail::validate_content_ref(&state.reference_ref).is_err() {
+    if crate::preserves_rail::validate_content_ref(&state.reference_ref).is_err() {
         diagnostics.push("reference-ref-noncanonical".to_string());
     }
     if state.caller_vat_id.is_empty() {
@@ -1464,7 +1474,7 @@ fn validate_promise_pipeline(state: &RuntimePromisePipelineState) -> Vec<String>
         if entry.operation.is_empty() {
             diagnostics.push("pipeline-operation-empty".to_string());
         }
-        if preserves_rail::validate_content_ref(&entry.target_ref).is_err() {
+        if crate::preserves_rail::validate_content_ref(&entry.target_ref).is_err() {
             diagnostics.push("pipeline-target-ref-noncanonical".to_string());
         }
     }
@@ -1640,7 +1650,7 @@ fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<Strin
                 diagnostics.push(format!("{label}-resolved-promise-has-failure-data"));
             }
             match state.value_ref.as_deref() {
-                Some(value_ref) if preserves_rail::validate_content_ref(value_ref).is_ok() => {}
+                Some(value_ref) if crate::preserves_rail::validate_content_ref(value_ref).is_ok() => {}
                 Some(_) => diagnostics.push(format!("{label}-resolved-value-ref-noncanonical")),
                 None => diagnostics.push(format!("{label}-resolved-value-ref-missing")),
             }
@@ -1667,22 +1677,22 @@ fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<Strin
 }
 
 fn ref_list_value(label: &'static str, refs: &[String]) -> IoValue {
-    preserves_rail::record(label, vec![preserves_rail::sequence(
-        refs.iter().map(preserves_rail::string).collect(),
+    crate::preserves_rail::record(label, vec![crate::preserves_rail::sequence(
+        refs.iter().map(crate::preserves_rail::string).collect(),
     )])
 }
 
 fn optional_ref_record(label: &'static str, reference: Option<&str>) -> IoValue {
     match reference {
-        Some(reference) => preserves_rail::record(label, vec![preserves_rail::string(reference)]),
-        None => preserves_rail::record(label, Vec::new()),
+        Some(reference) => crate::preserves_rail::record(label, vec![crate::preserves_rail::string(reference)]),
+        None => crate::preserves_rail::record(label, Vec::new()),
     }
 }
 
 fn validate_sorted_content_refs(refs: &[String], label: &str, field: &str) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(refs.len() + 1);
     for reference in refs {
-        if preserves_rail::validate_content_ref(reference).is_err() {
+        if crate::preserves_rail::validate_content_ref(reference).is_err() {
             diagnostics.push(format!("{label}-{field}-ref-noncanonical"));
         }
     }
@@ -1705,18 +1715,18 @@ struct RuntimePredicateReceiptInput {
 }
 
 fn build_runtime_predicate_receipt(input: RuntimePredicateReceiptInput) -> Result<RuntimePredicateReceipt> {
-    let input_ref = preserves_rail::canonical_hash(&input.input_value)?;
-    let value = preserves_rail::record("runtime-predicate-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::RUNTIME_PREDICATE_RECEIPT_SCHEMA),
-        preserves_rail::string(input.predicate),
-        preserves_rail::string(PREDICATE_ENGINE),
-        preserves_rail::record("input-ref", vec![preserves_rail::string(&input_ref)]),
-        preserves_rail::string(input.decision.as_str()),
-        preserves_rail::sequence(input.state_refs.iter().map(preserves_rail::string).collect()),
-        preserves_rail::sequence(input.checks.iter().map(preserves_rail::string).collect()),
-        preserves_rail::sequence(input.diagnostics.iter().map(preserves_rail::string).collect()),
+    let input_ref = crate::preserves_rail::canonical_hash(&input.input_value)?;
+    let value = crate::preserves_rail::record("runtime-predicate-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::RUNTIME_PREDICATE_RECEIPT_SCHEMA),
+        crate::preserves_rail::string(input.predicate),
+        crate::preserves_rail::string(PREDICATE_ENGINE),
+        crate::preserves_rail::record("input-ref", vec![crate::preserves_rail::string(&input_ref)]),
+        crate::preserves_rail::string(input.decision.as_str()),
+        crate::preserves_rail::sequence(input.state_refs.iter().map(crate::preserves_rail::string).collect()),
+        crate::preserves_rail::sequence(input.checks.iter().map(crate::preserves_rail::string).collect()),
+        crate::preserves_rail::sequence(input.diagnostics.iter().map(crate::preserves_rail::string).collect()),
     ]);
-    let receipt_ref = preserves_rail::canonical_hash(&value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(RuntimePredicateReceipt {
         receipt_ref,
         predicate: input.predicate.to_string(),
@@ -1731,17 +1741,23 @@ fn build_runtime_predicate_receipt(input: RuntimePredicateReceiptInput) -> Resul
 
 fn optional_string_value(value: Option<&str>) -> IoValue {
     match value {
-        Some(value) => preserves_rail::record("some", vec![preserves_rail::string(value)]),
-        None => preserves_rail::record("none", Vec::new()),
+        Some(value) => crate::preserves_rail::record("some", vec![crate::preserves_rail::string(value)]),
+        None => crate::preserves_rail::record("none", Vec::new()),
     }
 }
 
 fn action_summary_value(action: &TurnAction) -> IoValue {
     match action {
-        TurnAction::Send(message) => preserves_rail::record("turn-action-send-v1", vec![message.to_value()]),
-        TurnAction::Observe(observer) => preserves_rail::record("turn-action-observe-v1", vec![observer.to_value()]),
-        TurnAction::Assert(assertion) => preserves_rail::record("turn-action-assert-v1", vec![assertion.to_value()]),
-        TurnAction::Retract(assertion) => preserves_rail::record("turn-action-retract-v1", vec![assertion.to_value()]),
+        TurnAction::Send(message) => crate::preserves_rail::record("turn-action-send-v1", vec![message.to_value()]),
+        TurnAction::Observe(observer) => {
+            crate::preserves_rail::record("turn-action-observe-v1", vec![observer.to_value()])
+        }
+        TurnAction::Assert(assertion) => {
+            crate::preserves_rail::record("turn-action-assert-v1", vec![assertion.to_value()])
+        }
+        TurnAction::Retract(assertion) => {
+            crate::preserves_rail::record("turn-action-retract-v1", vec![assertion.to_value()])
+        }
     }
 }
 
@@ -1795,11 +1811,11 @@ mod tests {
     }
 
     fn deterministic_ref(label: &str) -> String {
-        preserves_rail::canonical_hash(&preserves_rail::string(label)).expect("deterministic ref")
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::string(label)).expect("deterministic ref")
     }
 
     fn property_ref(label: &str, salt: u64, index: usize) -> String {
-        preserves_rail::canonical_hash(&preserves_rail::string(format!("{label}-{salt}-{index}")))
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::string(format!("{label}-{salt}-{index}")))
             .expect("property ref")
     }
 
@@ -1827,7 +1843,7 @@ mod tests {
         let both = evaluate_assertion_visibility(&state.snapshot(), &ready, &live).expect("visibility");
         assert!(both.is_visible);
         assert_eq!(both.visible_owner_refs.len(), 2);
-        preserves_rail::validate_content_ref(&both.receipt.receipt_ref).expect("receipt ref");
+        crate::preserves_rail::validate_content_ref(&both.receipt.receipt_ref).expect("receipt ref");
 
         state.apply_step(&RuntimeStep::Retract {
             actor: "owner-a".into(),
@@ -1905,14 +1921,16 @@ mod tests {
 
     #[test]
     fn promise_state_predicate_enforces_terminal_and_causal_rules() {
-        let value_ref = preserves_rail::canonical_hash(&preserves_rail::string("resolved-value")).expect("value ref");
-        let cause_ref = preserves_rail::canonical_hash(&preserves_rail::string("upstream-promise")).expect("cause ref");
+        let value_ref =
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("resolved-value")).expect("value ref");
+        let cause_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("upstream-promise"))
+            .expect("cause ref");
         let pending = RuntimePromiseState::pending("promise-1");
         let resolved = RuntimePromiseState::resolved("promise-1", value_ref.clone());
         let pass = evaluate_promise_state_transition(&pending, &resolved).expect("promise transition");
         assert!(pass.is_allowed);
         assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
-        preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+        crate::preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
 
         let changed_terminal = RuntimePromiseState::broken("promise-1", "late failure", vec![cause_ref.clone()]);
         let terminal = evaluate_promise_state_transition(&resolved, &changed_terminal).expect("terminal transition");
@@ -1922,7 +1940,7 @@ mod tests {
 
         let mut unsorted_causes = vec![
             cause_ref,
-            preserves_rail::canonical_hash(&preserves_rail::string("aaa")).expect("second cause"),
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("aaa")).expect("second cause"),
         ];
         unsorted_causes.sort();
         unsorted_causes.reverse();
@@ -1941,8 +1959,10 @@ mod tests {
 
     #[test]
     fn promise_pipeline_predicate_bounds_order_and_cleanup() {
-        let target_a = preserves_rail::canonical_hash(&preserves_rail::string("target-a")).expect("target a");
-        let target_b = preserves_rail::canonical_hash(&preserves_rail::string("target-b")).expect("target b");
+        let target_a =
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("target-a")).expect("target a");
+        let target_b =
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("target-b")).expect("target b");
         let pending = RuntimePromiseState::pending("promise-pipeline");
         let pipeline = RuntimePromisePipelineState::new(pending.clone(), 2, vec![
             RuntimePromisePipelineEntry::new(1, target_a.clone(), "get:field"),
@@ -1951,7 +1971,7 @@ mod tests {
         let pass = evaluate_promise_pipeline(&pipeline).expect("pipeline predicate");
         assert!(pass.is_allowed);
         assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
-        preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+        crate::preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
 
         let over_bound = RuntimePromisePipelineState::new(pending, 1, vec![
             RuntimePromisePipelineEntry::new(2, target_a.clone(), "second"),
@@ -1988,13 +2008,17 @@ mod tests {
 
     #[test]
     fn revocation_cleanup_predicate_denies_future_use_and_requires_cleanup() {
-        let revoked = preserves_rail::canonical_hash(&preserves_rail::string("revoked-ref")).expect("revoked ref");
-        let live_assertion =
-            preserves_rail::canonical_hash(&preserves_rail::string("live-assertion")).expect("live assertion");
+        let revoked =
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("revoked-ref")).expect("revoked ref");
+        let live_assertion = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("live-assertion"))
+            .expect("live assertion");
         let live_subscription =
-            preserves_rail::canonical_hash(&preserves_rail::string("live-subscription")).expect("live subscription");
-        let live_call = preserves_rail::canonical_hash(&preserves_rail::string("live-call")).expect("live call");
-        let live_child = preserves_rail::canonical_hash(&preserves_rail::string("live-child")).expect("live child");
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("live-subscription"))
+                .expect("live subscription");
+        let live_call =
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("live-call")).expect("live call");
+        let live_child =
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("live-child")).expect("live child");
         let pass_state = RuntimeRevocationCleanupState {
             revoked_refs: vec![revoked.clone()],
             attempted_use_refs: Vec::new(),
@@ -2006,7 +2030,7 @@ mod tests {
         let pass = evaluate_revocation_cleanup(&pass_state).expect("revocation cleanup predicate");
         assert!(pass.is_allowed);
         assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
-        preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+        crate::preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
 
         let denied_state = RuntimeRevocationCleanupState {
             revoked_refs: vec![revoked.clone()],
@@ -2045,12 +2069,15 @@ mod tests {
 
     #[test]
     fn service_dependencies_predicate_enforces_readiness_restart_and_shutdown_order() {
-        let service = preserves_rail::canonical_hash(&preserves_rail::string("frontend-service")).expect("service ref");
-        let database =
-            preserves_rail::canonical_hash(&preserves_rail::string("database-service")).expect("database ref");
-        let cache = preserves_rail::canonical_hash(&preserves_rail::string("cache-service")).expect("cache ref");
+        let service = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("frontend-service"))
+            .expect("service ref");
+        let database = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("database-service"))
+            .expect("database ref");
+        let cache =
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("cache-service")).expect("cache ref");
         let reverse =
-            preserves_rail::canonical_hash(&preserves_rail::string("reverse-dependent-service")).expect("reverse ref");
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("reverse-dependent-service"))
+                .expect("reverse ref");
         let pass_state = RuntimeServiceDependenciesState {
             service_ref: service.clone(),
             demanded_service_refs: vec![service.clone()],
@@ -2065,10 +2092,10 @@ mod tests {
         let pass = evaluate_service_dependencies(&pass_state).expect("service dependencies predicate");
         assert!(pass.is_allowed);
         assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
-        preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+        crate::preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
 
-        let stale_restart =
-            preserves_rail::canonical_hash(&preserves_rail::string("stale-restart")).expect("stale restart ref");
+        let stale_restart = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("stale-restart"))
+            .expect("stale restart ref");
         let denied_state = RuntimeServiceDependenciesState {
             service_ref: service.clone(),
             demanded_service_refs: vec![service.clone()],
@@ -2102,13 +2129,14 @@ mod tests {
 
     #[test]
     fn snapshot_authority_predicate_requires_admitted_claims_and_redaction_coverage() {
-        let snapshot_ref = preserves_rail::canonical_hash(&preserves_rail::string("snapshot")).expect("snapshot ref");
-        let admitted =
-            preserves_rail::canonical_hash(&preserves_rail::string("admitted-authority")).expect("admitted authority");
-        let readable =
-            preserves_rail::canonical_hash(&preserves_rail::string("readable-assertion")).expect("readable assertion");
-        let redacted =
-            preserves_rail::canonical_hash(&preserves_rail::string("redacted-assertion")).expect("redacted assertion");
+        let snapshot_ref =
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("snapshot")).expect("snapshot ref");
+        let admitted = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("admitted-authority"))
+            .expect("admitted authority");
+        let readable = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("readable-assertion"))
+            .expect("readable assertion");
+        let redacted = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("redacted-assertion"))
+            .expect("redacted assertion");
         let pass_state = RuntimeSnapshotAuthorityState {
             snapshot_ref: snapshot_ref.clone(),
             admitted_authority_refs: vec![readable.clone()],
@@ -2120,11 +2148,11 @@ mod tests {
         let pass = evaluate_snapshot_authority(&pass_state).expect("snapshot authority predicate");
         assert!(pass.is_allowed);
         assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
-        preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+        crate::preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
 
-        let unadmitted = preserves_rail::canonical_hash(&preserves_rail::string("unadmitted-authority"))
+        let unadmitted = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("unadmitted-authority"))
             .expect("unadmitted authority");
-        let uncovered = preserves_rail::canonical_hash(&preserves_rail::string("uncovered-assertion"))
+        let uncovered = crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("uncovered-assertion"))
             .expect("uncovered assertion");
         let denied_state = RuntimeSnapshotAuthorityState {
             snapshot_ref: "not-a-ref".to_string(),
@@ -2170,7 +2198,7 @@ mod tests {
     #[test]
     fn near_far_refs_predicate_denies_dead_far_sync_and_cross_vat_near_refs() {
         let reference_ref =
-            preserves_rail::canonical_hash(&preserves_rail::string("object-ref")).expect("reference ref");
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("object-ref")).expect("reference ref");
         let sync_near = RuntimeNearFarRefState {
             reference_ref: reference_ref.clone(),
             reference_kind: RuntimeReferenceKind::Near,
@@ -2182,7 +2210,7 @@ mod tests {
         let pass = evaluate_near_far_refs(&sync_near).expect("near/far predicate");
         assert!(pass.is_allowed);
         assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
-        preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+        crate::preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
 
         let far_sync = RuntimeNearFarRefState {
             reference_ref: reference_ref.clone(),
@@ -2245,7 +2273,7 @@ mod tests {
         let pass = evaluate_actormap_transaction(&committed).expect("actormap transaction predicate");
         assert!(pass.is_allowed);
         assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
-        preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+        crate::preserves_rail::validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
 
         let stale_removed = RuntimeActormapTransactionState {
             outcome: RuntimeActormapTransactionOutcome::Committed,
