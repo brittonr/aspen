@@ -72,7 +72,7 @@ fn run_two_peer(transport_root: FilePath, out: FilePath) -> Outcome<()> {
     println!(
         "remote run-two-peer ok delivery_log={} gate_receipt={} out={}",
         harness.delivery_log.log_ref,
-        molten::preserves_rail::canonical_hash(&harness.gate_receipt_value)?,
+        molten::preserves_rail::canonical_hash(&harness.receipt_value)?,
         out.display()
     );
     Ok(())
@@ -89,9 +89,9 @@ fn write_two_peer_outputs(out: &FilePathRef, harness: &molten::remote_dataspace:
     )?;
     super::io::write_file(
         &out.join("gate-receipt.preserves"),
-        &molten::preserves_rail::to_text(&harness.gate_receipt_value)?,
+        &molten::preserves_rail::to_text(&harness.receipt_value)?,
     )?;
-    let turn_context_ref = remote_gate_turn_context_ref(&harness.gate_receipt_value)?;
+    let turn_context_ref = remote_gate_turn_context_ref(&harness.receipt_value)?;
     let summary = two_peer_summary(harness, &turn_context_ref)?;
     super::io::write_file(
         &out.join("turn-context-ref.preserves"),
@@ -112,7 +112,7 @@ fn two_peer_summary(
             &molten::preserves_rail::canonical_hash(&harness.admission_receipt_value)?,
         )]),
         molten::preserves_rail::record("gate-receipt", vec![molten::preserves_rail::string(
-            &molten::preserves_rail::canonical_hash(&harness.gate_receipt_value)?,
+            &molten::preserves_rail::canonical_hash(&harness.receipt_value)?,
         )]),
         molten::preserves_rail::record("turn-context-ref", vec![molten::preserves_rail::string(turn_context_ref)]),
     ]))

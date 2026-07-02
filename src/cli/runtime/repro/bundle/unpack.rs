@@ -139,7 +139,7 @@ fn write(input: Write<'_>) -> Outcome<()> {
 }
 
 fn write_optional(source: &Source, verify_receipt: Option<&Value>, out: &Path) -> Outcome<()> {
-    if let Some(value) = source.gate_receipt_value.as_ref() {
+    if let Some(value) = source.receipt_value.as_ref() {
         write_preserves(out, "gate-receipt.preserves", value)?;
     }
     if let Some(value) = verify_receipt {

@@ -14,14 +14,14 @@ pub type HarnessStep = core::CoreStep;
 pub use executor::ActorExecutorDecl;
 pub use executor::ActorExecutorKind;
 pub use executor::actor_executor_registry;
-pub use gate::GateCheck;
-pub use gate::GateReceipt;
-pub use gate::gate_check_summary;
-pub use gate::gate_check_value;
-pub use gate::gate_receipt_summary;
-pub use gate::gate_receipt_value;
-pub use gate::parse_gate_receipt;
+pub use gate::Check;
+pub use gate::Receipt;
+pub use gate::check_summary;
+pub use gate::check_value;
+pub use gate::parse_receipt;
 pub use gate::parse_repro_verify_receipt;
+pub use gate::receipt_summary;
+pub use gate::receipt_value;
 pub use gate::repro_bundle_value_with_export_profile;
 pub use gate::repro_verify_receipt_summary;
 pub use gate::repro_verify_receipt_value;
@@ -382,13 +382,13 @@ mod tests {
         assert!(report_text.contains("effect-binding-receipt-ref"));
         assert!(report_text.contains("hostcall-decision-v1"));
         assert!(report_text.contains("actor-output-v1"));
-        let gate = gate_check_value(&run.report_value).expect("gate report");
-        let gate_receipt = gate_receipt_value(&gate);
+        let gate = check_value(&run.report_value).expect("gate report");
+        let gate_receipt = receipt_value(&gate);
         let receipt_text = to_text(&gate_receipt).expect("render gate receipt");
         assert!(receipt_text.contains("deterministic-replay-verify-v1"));
         assert!(receipt_text.contains("deterministic-replay-verify"));
         assert!(receipt_text.contains("no-divergence"));
-        let receipt = parse_gate_receipt(&gate_receipt).expect("parse gate receipt");
+        let receipt = parse_receipt(&gate_receipt).expect("parse gate receipt");
         assert!(receipt.checks.iter().any(|check| check == "executor-preflight"));
         assert!(receipt.checks.iter().any(|check| check == "executor-kind-binding"));
         assert!(receipt.checks.iter().any(|check| check == "allowed-hostcall-binding"));
@@ -458,19 +458,19 @@ mod tests {
     fn gate_receipt_requires_executor_resource_checks() {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");
-        let gate = gate_check_value(&run.report_value).expect("gate report");
-        let receipt_value = gate_receipt_value(&gate);
+        let gate = check_value(&run.report_value).expect("gate report");
+        let receipt_value = receipt_value(&gate);
         let receipt_text = to_text(&receipt_value).expect("render receipt");
         assert!(receipt_text.contains("executor-execution-receipts"));
         let tampered_text = receipt_text.replacen("executor-execution-receipt-binding", "executor-execution-stale", 1);
         let tampered = parse_text(&tampered_text).expect("parse tampered gate receipt");
-        let error = parse_gate_receipt(&tampered).expect_err("missing executor execution binding check fails");
+        let error = parse_receipt(&tampered).expect_err("missing executor execution binding check fails");
         assert!(error.to_string().contains("executor-execution-receipt-binding"), "{error}");
 
         let tampered_replay_text =
             receipt_text.replacen("<divergence \"none\">", "<divergence \"effect-response\">", 1);
         let tampered_replay = parse_text(&tampered_replay_text).expect("parse tampered replay receipt");
-        let error = parse_gate_receipt(&tampered_replay).expect_err("tampered generic replay receipt fails");
+        let error = parse_receipt(&tampered_replay).expect_err("tampered generic replay receipt fails");
         assert!(error.to_string().contains("replay verify ref"), "{error}");
     }
 
@@ -478,14 +478,14 @@ mod tests {
     fn gate_receipt_binds_chain_continuity_anchor_and_checkpoint_evidence() {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");
-        let gate = gate_check_value(&run.report_value).expect("gate report");
-        let receipt_value = gate_receipt_value(&gate);
+        let gate = check_value(&run.report_value).expect("gate report");
+        let receipt_value = receipt_value(&gate);
         let receipt_text = to_text(&receipt_value).expect("render receipt");
         assert!(receipt_text.contains("chain-evidence"));
         assert!(receipt_text.contains("chain-link-v1"));
         assert!(receipt_text.contains("chain-verify-receipt-v1"));
         assert!(receipt_text.contains("chain-checkpoint-v1"));
-        let receipt = parse_gate_receipt(&receipt_value).expect("parse chained gate receipt");
+        let receipt = parse_receipt(&receipt_value).expect("parse chained gate receipt");
         assert!(receipt.checks.iter().any(|check| check == "chain-continuity"));
         assert!(receipt.checks.iter().any(|check| check == "chain-anchor-descent"));
         assert!(receipt.checks.iter().any(|check| check == "chain-checkpoint-freshness"));
@@ -493,7 +493,7 @@ mod tests {
 
         let missing_check = parse_text(&receipt_text.replacen("chain-continuity", "chain-stale", 1))
             .expect("parse missing chain check receipt");
-        let error = parse_gate_receipt(&missing_check).expect_err("missing chain continuity check fails");
+        let error = parse_receipt(&missing_check).expect_err("missing chain continuity check fails");
         assert!(error.to_string().contains("chain-continuity"), "{error}");
 
         let tampered_predicate = parse_text(&receipt_text.replacen(
@@ -502,7 +502,7 @@ mod tests {
             1,
         ))
         .expect("parse tampered range predicate receipt");
-        let error = parse_gate_receipt(&tampered_predicate).expect_err("tampered range predicate fails");
+        let error = parse_receipt(&tampered_predicate).expect_err("tampered range predicate fails");
         assert!(error_contains_any(&error, &["range predicate", "checkpoint"]), "{error}");
     }
 
@@ -510,13 +510,13 @@ mod tests {
     fn gate_receipt_binds_actor_scoped_turn_journals() {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");
-        let gate = gate_check_value(&run.report_value).expect("gate report");
-        let receipt_value = gate_receipt_value(&gate);
+        let gate = check_value(&run.report_value).expect("gate report");
+        let receipt_value = receipt_value(&gate);
         let receipt_text = to_text(&receipt_value).expect("render receipt");
         assert!(receipt_text.contains("turn-journals"));
         assert!(receipt_text.contains("turn-journal"));
         assert!(receipt_text.contains("harness-turn-journal"));
-        let receipt = parse_gate_receipt(&receipt_value).expect("parse turn journal gate receipt");
+        let receipt = parse_receipt(&receipt_value).expect("parse turn journal gate receipt");
         assert!(receipt.checks.iter().any(|check| check == "turn-journal-chains"));
         assert!(receipt.checks.iter().any(|check| check == "turn-journal-input-binding"));
         assert!(receipt.checks.iter().any(|check| check == "turn-journal-admission-binding"));
@@ -525,7 +525,7 @@ mod tests {
 
         let global_scope = parse_text(&receipt_text.replacen("harness-turn-journal", "harness-global-journal", 1))
             .expect("parse global turn journal tamper");
-        let error = parse_gate_receipt(&global_scope).expect_err("global turn journal scope fails");
+        let error = parse_receipt(&global_scope).expect_err("global turn journal scope fails");
         assert!(error_contains_any(&error, &["not global", "turn journal"]), "{error}");
 
         let start = receipt_text.find("turn-journals").expect("turn journals text");
@@ -536,7 +536,7 @@ mod tests {
             &receipt_text[admission + "\"admission\"".len()..]
         );
         let missing_admission = parse_text(&missing_admission).expect("parse missing admission tamper");
-        let error = parse_gate_receipt(&missing_admission).expect_err("missing admission context fails");
+        let error = parse_receipt(&missing_admission).expect_err("missing admission context fails");
         assert!(error.to_string().contains("admission"), "{error}");
     }
 
@@ -1216,14 +1216,14 @@ mod tests {
     fn gate_accepts_report_and_report_repro_bundle() {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");
-        let report_check = gate_check_value(&run.report_value).expect("gate accepts report");
+        let report_check = check_value(&run.report_value).expect("gate accepts report");
         assert_eq!(report_check.artifact_kind, "report");
         assert_eq!(report_check.report_ref, run.report_ref);
 
         let bundle = repro_bundle_value(&run.report_value).expect("bundle report");
         let parsed_bundle = parse_repro_bundle(&bundle).expect("parse report bundle");
         assert_eq!(parsed_bundle.kind, super::HarnessReproBundleKind::Report);
-        let unsealed_error = gate_check_value(&bundle).expect_err("unsealed report bundle lacks redaction preflight");
+        let unsealed_error = check_value(&bundle).expect_err("unsealed report bundle lacks redaction preflight");
         assert!(error_contains_any(&unsealed_error, &["redaction preflight", "gate receipt"]));
 
         let sealed_bundle =
@@ -1235,11 +1235,11 @@ mod tests {
         assert!(parsed_sealed.redaction_policy_ref.is_some());
         assert!(parsed_sealed.redaction_gate_ref.is_some());
         let embedded_receipt =
-            parse_gate_receipt(parsed_sealed.gate_receipt_value.as_ref().expect("sealed bundle embeds gate receipt"))
+            parse_receipt(parsed_sealed.receipt_value.as_ref().expect("sealed bundle embeds gate receipt"))
                 .expect("parse embedded gate receipt");
         assert_eq!(embedded_receipt.artifact_kind, "report");
         assert_eq!(embedded_receipt.report_ref, run.report_ref);
-        let sealed_check = gate_check_value(&sealed_bundle).expect("gate accepts sealed report bundle");
+        let sealed_check = check_value(&sealed_bundle).expect("gate accepts sealed report bundle");
         assert_eq!(sealed_check.artifact_kind, "repro-bundle");
         assert_eq!(sealed_check.report_ref, run.report_ref);
         let verify_receipt_value = repro_verify_receipt_value(&sealed_bundle).expect("verify sealed report bundle");
@@ -1291,7 +1291,7 @@ mod tests {
                 .expect("redacted report text")
                 .contains("redaction-marker-v1")
         );
-        let gate_error = gate_check_value(&bundle).expect_err("diagnostic bundle cannot satisfy pass gate");
+        let gate_error = check_value(&bundle).expect_err("diagnostic bundle cannot satisfy pass gate");
         assert!(gate_error.to_string().contains("diagnostic-only"));
         let verify_error = repro_verify_receipt_value(&bundle).expect_err("diagnostic bundle cannot verify as pass");
         assert!(verify_error.to_string().contains("diagnostic-only"));
@@ -1383,7 +1383,7 @@ mod tests {
         let bundle_text = to_text(&bundle).expect("render sealed bundle");
         let tampered_text = bundle_text.replacen("redaction-gate-v1", "redaction-gate-v0", 1);
         let tampered_bundle = parse_text(&tampered_text).expect("parse tampered redaction bundle");
-        let error = gate_check_value(&tampered_bundle).expect_err("tampered redaction gate fails sealed gate");
+        let error = check_value(&tampered_bundle).expect_err("tampered redaction gate fails sealed gate");
         assert!(error_contains_any(&error, &["redaction-gate", "redaction gate"]));
     }
 
@@ -1404,7 +1404,7 @@ mod tests {
             &bundle_text[final_hash_start + run.final_state_hash.len()..]
         );
         let tampered_bundle = parse_text(&tampered_text).expect("parse tampered sealed bundle");
-        let error = gate_check_value(&tampered_bundle).expect_err("tampered embedded report fails sealed gate");
+        let error = check_value(&tampered_bundle).expect_err("tampered embedded report fails sealed gate");
         assert!(error_contains_any(&error, &[
             "repro bundle report ref mismatch",
             "repro bundle state refs do not match embedded report",
@@ -1428,7 +1428,7 @@ mod tests {
             &bundle_text[decision_start + "<decision \"pass\">".len()..]
         );
         let tampered_bundle = parse_text(&tampered_text).expect("parse tampered receipt bundle");
-        let error = gate_check_value(&tampered_bundle).expect_err("tampered embedded receipt fails sealed gate");
+        let error = check_value(&tampered_bundle).expect_err("tampered embedded receipt fails sealed gate");
         assert!(error_contains_any(&error, &[
             "sealed repro bundle gate receipt ref mismatch",
             "unsupported gate receipt decision",
@@ -1448,7 +1448,7 @@ mod tests {
             1,
         );
         let tampered_bundle = parse_text(&tampered_text).expect("parse mismatched suite bundle");
-        let error = gate_check_value(&tampered_bundle).expect_err("mismatched suite ref fails sealed gate");
+        let error = check_value(&tampered_bundle).expect_err("mismatched suite ref fails sealed gate");
         assert!(error_contains_any(&error, &[
             "artifact refs missing suite ref",
             "repro bundle suite ref does not match embedded report",
@@ -1460,9 +1460,9 @@ mod tests {
     fn gate_receipt_is_canonical_pass_decision_artifact() {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");
-        let check = gate_check_value(&run.report_value).expect("gate accepts report");
-        let receipt_value = gate_receipt_value(&check);
-        let receipt = parse_gate_receipt(&receipt_value).expect("parse gate receipt");
+        let check = check_value(&run.report_value).expect("gate accepts report");
+        let receipt_value = receipt_value(&check);
+        let receipt = parse_receipt(&receipt_value).expect("parse gate receipt");
         assert_eq!(receipt.decision, "pass");
         assert_eq!(receipt.artifact_kind, "report");
         assert_eq!(receipt.report_ref, run.report_ref);
@@ -1476,7 +1476,7 @@ mod tests {
             .filter(|event| event.collect_simple_record("runtime-predicate-receipt-v1", None).is_some())
             .count();
         assert!(runtime_predicates >= 3);
-        assert!(gate_receipt_summary(&receipt_value).expect("receipt summary").contains("decision=pass"));
+        assert!(receipt_summary(&receipt_value).expect("receipt summary").contains("decision=pass"));
         let rendered = to_text(&receipt_value).expect("render receipt");
         let reparsed = parse_text(&rendered).expect("reparse receipt");
         assert_eq!(canonical_hash(&receipt_value).unwrap(), canonical_hash(&reparsed).unwrap());
@@ -1543,13 +1543,13 @@ mod tests {
     fn gate_rejects_failure_and_failure_repro_bundle_as_pass_evidence() {
         let error = MoltenError::invalid_harness("synthetic preflight failure");
         let failure = failure_value("preflight", &error, Vec::new());
-        let gate_error = gate_check_value(&failure).expect_err("failure cannot satisfy gate");
+        let gate_error = check_value(&failure).expect_err("failure cannot satisfy gate");
         assert!(gate_error.to_string().contains("cannot satisfy pass evidence gate"));
 
         let failure_bundle = failure_repro_bundle_value(&failure).expect("failure bundle");
         let parsed_bundle = parse_repro_bundle(&failure_bundle).expect("parse failure bundle");
         assert_eq!(parsed_bundle.kind, super::HarnessReproBundleKind::Failure);
-        let gate_error = gate_check_value(&failure_bundle).expect_err("failure bundle cannot satisfy gate");
+        let gate_error = check_value(&failure_bundle).expect_err("failure bundle cannot satisfy gate");
         assert!(gate_error.to_string().contains("cannot satisfy pass evidence gate"));
     }
 
@@ -1704,8 +1704,8 @@ mod tests {
         let exploratory_text = report_text.replacen("\"deterministic\"", "\"non-replayable\"", 1);
         let exploratory_report = parse_text(&exploratory_text).expect("parse exploratory report");
 
-        let error = gate_check_value(&exploratory_report)
-            .expect_err("non-replayable pass report cannot satisfy deterministic gate");
+        let error =
+            check_value(&exploratory_report).expect_err("non-replayable pass report cannot satisfy deterministic gate");
         assert!(error.to_string().contains("unsupported evidence replay status non-replayable"), "{error}");
     }
 
@@ -1919,8 +1919,8 @@ mod tests {
         assert_eq!(native.conformance_refs, wasm.conformance_refs);
         assert_eq!(native.conformance_refs.len(), 1);
         validate_report_value(&run.report_value).expect("validate cross-kind conformance report");
-        let gate = gate_check_value(&run.report_value).expect("gate cross-kind conformance report");
-        let receipt = parse_gate_receipt(&gate_receipt_value(&gate)).expect("parse conformance gate receipt");
+        let gate = check_value(&run.report_value).expect("gate cross-kind conformance report");
+        let receipt = parse_receipt(&receipt_value(&gate)).expect("parse conformance gate receipt");
         assert!(receipt.checks.iter().any(|check| check == "executor-conformance-suite-binding"));
         assert!(receipt.checks.iter().any(|check| check == "cross-kind-hostcall-conformance"));
         assert!(receipt.checks.iter().any(|check| check == "executor-execution-receipt-binding"));

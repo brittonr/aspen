@@ -66,12 +66,12 @@ fn run_source_gate(command: SourceGate) -> Outcome<()> {
             source_scope,
             receipt_out,
         } => {
-            let gate_receipt_value = super::io::read_preserves_file(&gate_receipt)?;
+            let receipt_value = super::io::read_preserves_file(&gate_receipt)?;
             let validation =
                 molten::octet_gate::validate_octet_source_gate(&molten::octet_gate::OctetSourceGateValidationInput {
                     consumer,
                     subject_ref: subject,
-                    gate_receipt_value: Some(gate_receipt_value),
+                    receipt_value: Some(receipt_value),
                     source_scope,
                 })?;
             super::io::emit_named_receipt(receipt_out.as_ref(), "octet source gate validation", &validation.value)?;

@@ -28,10 +28,10 @@ fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
     let gate = molten_cmd().args(["test", "gate", "check"]).arg(&report).output()?;
     assert_success(&gate, "test gate check");
     let receipt_value = molten::preserves_rail::parse_text(&stdout(&gate))?;
-    let receipt = molten::harness::parse_gate_receipt(&receipt_value)?;
+    let receipt = molten::harness::parse_receipt(&receipt_value)?;
     assert_eq!(receipt.decision, "pass");
     assert_eq!(receipt.artifact_kind, "report");
-    assert!(molten::harness::gate_receipt_summary(&receipt_value)?.contains("decision=pass"));
+    assert!(molten::harness::receipt_summary(&receipt_value)?.contains("decision=pass"));
 
     assert_report_repro_flow(&dir, &report, &report_value, &receipt.report_ref)?;
     Ok(())
@@ -53,13 +53,12 @@ fn assert_report_repro_flow(
     assert_eq!(parsed_bundle.kind, molten::harness::HarnessReproBundleKind::Report);
     assert!(parsed_bundle.gate_receipt_ref.is_some());
     let embedded_value = parsed_bundle
-        .gate_receipt_value
+        .receipt_value
         .as_ref()
         .ok_or_else(|| test_error("sealed repro bundle missing embedded report gate receipt"))?;
-    let embedded_receipt = molten::harness::parse_gate_receipt(embedded_value)?;
+    let embedded_receipt = molten::harness::parse_receipt(embedded_value)?;
     assert_eq!(embedded_receipt.artifact_kind, "report");
-    let exported_receipt =
-        molten::harness::parse_gate_receipt(&read_preserves(&repro.join("gate-receipt.preserves"))?)?;
+    let exported_receipt = molten::harness::parse_receipt(&read_preserves(&repro.join("gate-receipt.preserves"))?)?;
     assert_eq!(exported_receipt.receipt_ref, embedded_receipt.receipt_ref);
 
     let verify_receipt = dir.join("verify-receipt.preserves");
@@ -99,7 +98,7 @@ fn assert_report_repro_flow(
         .output()?;
     assert_success(&gate_bundle, "test gate check repro bundle");
     assert!(stdout(&gate_bundle).contains("gate receipt blake3:"));
-    let receipt = molten::harness::parse_gate_receipt(&read_preserves(&bundle_receipt)?)?;
+    let receipt = molten::harness::parse_receipt(&read_preserves(&bundle_receipt)?)?;
     assert_eq!(receipt.artifact_kind, "repro-bundle");
     Ok(())
 }

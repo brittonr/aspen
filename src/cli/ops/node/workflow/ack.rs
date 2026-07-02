@@ -143,14 +143,14 @@ pub(crate) fn protocol_gate(input: super::super::command::live::ProtocolGate) ->
         receipt_out,
     } = input;
     let bundle_value = super::super::core::read_preserves_file(&bundle)?;
-    let gate_receipt_value = super::super::core::read_preserves_file(&gate_receipt)?;
+    let receipt_value = super::super::core::read_preserves_file(&gate_receipt)?;
     let apply_receipt_value = super::super::core::read_preserves_file(&apply_receipt)?;
     let reconcile_receipt_value = super::super::core::read_preserves_file(&reconcile_receipt)?;
     let ack_value = super::super::core::read_preserves_file(&ack)?;
     let gated = molten::node_daemon::gate_control_live_workflow_protocol(
         &molten::node_daemon::ControlLiveWorkflowProtocolGateInput {
             bundle_value: &bundle_value,
-            gate_receipt_value: &gate_receipt_value,
+            receipt_value: &receipt_value,
             apply_receipt_value: &apply_receipt_value,
             reconcile_receipt_value: &reconcile_receipt_value,
             ack_value: &ack_value,

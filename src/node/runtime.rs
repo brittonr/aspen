@@ -384,7 +384,7 @@ fn scan_gates(config_ref: &str, input: &NodeRuntimeStartInput) -> Result<GateSca
             crate::octet_gate::validate_octet_source_gate(&crate::octet_gate::OctetSourceGateValidationInput {
                 consumer: "node-startup".to_string(),
                 subject_ref: config_ref.to_string(),
-                gate_receipt_value: Some(value.clone()),
+                receipt_value: Some(value.clone()),
                 source_scope: Vec::new(),
             })?;
         if let Some(expected_ref) = input.source_gate_receipt_refs.get(index)

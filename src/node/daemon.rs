@@ -358,7 +358,7 @@ pub struct ControlLiveWorkflowBundleGateInput<'a> {
 pub struct ControlLiveWorkflowBundleApplyInput<'a> {
     pub state_root: &'a Path,
     pub bundle_value: &'a IoValue,
-    pub gate_receipt_value: Option<&'a IoValue>,
+    pub receipt_value: Option<&'a IoValue>,
     pub is_gate_receipt_required: bool,
     pub request_value: Option<&'a IoValue>,
     pub should_send: bool,
@@ -418,7 +418,7 @@ pub struct ControlLiveWorkflowBundleAckImportInput<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct ControlLiveWorkflowProtocolGateInput<'a> {
     pub bundle_value: &'a IoValue,
-    pub gate_receipt_value: &'a IoValue,
+    pub receipt_value: &'a IoValue,
     pub apply_receipt_value: &'a IoValue,
     pub reconcile_receipt_value: &'a IoValue,
     pub ack_value: &'a IoValue,
@@ -1978,7 +1978,7 @@ pub fn gate_control_live_workflow_bundle(
 }
 
 #[derive(Debug, Default)]
-struct GateCheck {
+struct Check {
     receipt_ref: Option<String>,
     diagnostics: Vec<String>,
 }
@@ -2016,9 +2016,9 @@ struct FinishInput<'a> {
 fn apply_gate_check(
     input: &ControlLiveWorkflowBundleApplyInput<'_>,
     verified: &ControlLiveWorkflowBundleVerify,
-) -> Result<GateCheck> {
+) -> Result<Check> {
     let mut diagnostics = Vec::new();
-    let receipt_ref = match input.gate_receipt_value {
+    let receipt_ref = match input.receipt_value {
         Some(value) => match parse_control_live_workflow_bundle_gate_receipt(value) {
             Ok(receipt) => {
                 if receipt.decision != "pass" {
@@ -2054,7 +2054,7 @@ fn apply_gate_check(
             None
         }
     };
-    Ok(GateCheck {
+    Ok(Check {
         receipt_ref,
         diagnostics,
     })
@@ -2194,7 +2194,7 @@ pub async fn apply_control_live_workflow_bundle(
     let verify_input = live_workflow_bundle_verify_input_from_apply(input);
     let verified = verify_control_live_workflow_bundle(&verify_input)?;
     let expected = live_workflow_bundle_expected_input_from_verify(&verify_input);
-    let GateCheck {
+    let Check {
         receipt_ref: gate_receipt_ref,
         diagnostics: gate_diagnostics,
     } = apply_gate_check(input, &verified)?;
@@ -2787,7 +2787,7 @@ fn live_workflow_protocol_evidence(
 ) -> Result<(LiveWorkflowProtocolEvidence, Vec<String>)> {
     let mut diagnostics = Vec::with_capacity(16);
     let bundle_ref = crate::preserves_rail::canonical_hash(input.bundle_value)?;
-    let gate_receipt_ref = crate::preserves_rail::canonical_hash(input.gate_receipt_value)?;
+    let gate_receipt_ref = crate::preserves_rail::canonical_hash(input.receipt_value)?;
     let apply_receipt_ref = crate::preserves_rail::canonical_hash(input.apply_receipt_value)?;
     let reconcile_receipt_ref = crate::preserves_rail::canonical_hash(input.reconcile_receipt_value)?;
     let ack_ref = crate::preserves_rail::canonical_hash(input.ack_value)?;
@@ -2795,7 +2795,7 @@ fn live_workflow_protocol_evidence(
         parse_control_live_workflow_bundle(input.bundle_value)
     });
     let gate = parsed_or_note(&mut diagnostics, "node control live workflow protocol gate receipt", || {
-        parse_control_live_workflow_bundle_gate_receipt(input.gate_receipt_value)
+        parse_control_live_workflow_bundle_gate_receipt(input.receipt_value)
     });
     let apply = parsed_or_note(&mut diagnostics, "node control live workflow protocol apply receipt", || {
         parse_control_live_workflow_bundle_apply_receipt(input.apply_receipt_value)
@@ -8402,7 +8402,7 @@ fn dispatch_gate_request(state_root: &Path, request: &crate::node_runtime::Contr
         crate::octet_gate::validate_octet_source_gate(&crate::octet_gate::OctetSourceGateValidationInput {
             consumer: "node-control-gate".to_string(),
             subject_ref: subject_ref.to_string(),
-            gate_receipt_value: Some(gate_value),
+            receipt_value: Some(gate_value),
             source_scope: crate::octet_gate::default_source_scope("node-control-gate")?,
         })?;
     write_preserves(
@@ -11785,7 +11785,7 @@ mod tests {
         let delivery = &case.delivery;
         let protocol_gate = gate_control_live_workflow_protocol(&ControlLiveWorkflowProtocolGateInput {
             bundle_value: &case.exported.bundle.bundle_value,
-            gate_receipt_value: &case.gated.receipt_value,
+            receipt_value: &case.gated.receipt_value,
             apply_receipt_value: &case.apply_receipt_value,
             reconcile_receipt_value: &reconciled.receipt_value,
             ack_value,
@@ -11851,7 +11851,7 @@ mod tests {
         assert_eq!(denied_ack_import.receiver_decision, "deny");
         let denied_protocol_gate = gate_control_live_workflow_protocol(&ControlLiveWorkflowProtocolGateInput {
             bundle_value: &case.exported.bundle.bundle_value,
-            gate_receipt_value: &case.gated.receipt_value,
+            receipt_value: &case.gated.receipt_value,
             apply_receipt_value: &case.apply_receipt_value,
             reconcile_receipt_value: &denials.denied_reconcile.receipt_value,
             ack_value: &denied_ack_export.ack.ack_value,
@@ -12180,7 +12180,7 @@ mod tests {
 
     struct FlowApplyInput<'a> {
         state_root: &'a Path,
-        gate_receipt_value: Option<&'a IoValue>,
+        receipt_value: Option<&'a IoValue>,
         request_value: Option<&'a IoValue>,
         is_send_requested: bool,
         sequence: u64,
@@ -12441,7 +12441,7 @@ mod tests {
             .block_on(apply_control_live_workflow_bundle(&ControlLiveWorkflowBundleApplyInput {
                 state_root: input.state_root,
                 bundle_value: &case.exported.bundle.bundle_value,
-                gate_receipt_value: input.gate_receipt_value,
+                receipt_value: input.receipt_value,
                 is_gate_receipt_required: true,
                 request_value: input.request_value,
                 should_send: input.is_send_requested,
@@ -12471,7 +12471,7 @@ mod tests {
     fn assert_flow_apply_pass(case: &FlowCase, runtime: &tokio::runtime::Runtime) -> ControlLiveWorkflowBundleApply {
         let applied = run_flow_apply(runtime, case, FlowApplyInput {
             state_root: &case.bundle_sender,
-            gate_receipt_value: Some(&case.gated.receipt_value),
+            receipt_value: Some(&case.gated.receipt_value),
             request_value: None,
             is_send_requested: false,
             sequence: 1,
@@ -12501,7 +12501,7 @@ mod tests {
         );
         let receipt = run_flow_apply(runtime, case, FlowApplyInput {
             state_root: &root,
-            gate_receipt_value: None,
+            receipt_value: None,
             request_value: None,
             is_send_requested: false,
             sequence: 1,
@@ -12529,7 +12529,7 @@ mod tests {
             .expect("apply send request");
         let receipt = run_flow_apply(runtime, case, FlowApplyInput {
             state_root: &root,
-            gate_receipt_value: Some(&case.gated.receipt_value),
+            receipt_value: Some(&case.gated.receipt_value),
             request_value: Some(&request_value),
             is_send_requested: true,
             sequence: 7,
@@ -12634,7 +12634,7 @@ mod tests {
             init_flow_root("node-control-live-workflow-bundle-apply-stale-gate", "node:live-bundle-apply-stale-gate");
         let receipt = run_flow_apply(runtime, case, FlowApplyInput {
             state_root: &root,
-            gate_receipt_value: Some(&stale_gate.receipt_value),
+            receipt_value: Some(&stale_gate.receipt_value),
             request_value: None,
             is_send_requested: false,
             sequence: 1,

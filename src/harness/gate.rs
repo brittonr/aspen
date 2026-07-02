@@ -146,7 +146,7 @@ const REQUIRED_KINDS: &[&str] = &[
 const REDACTION_KINDS: &[&str] = &["redaction-policy", "redaction-gate"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GateCheck {
+pub struct Check {
     pub artifact_kind: String,
     pub artifact_ref: String,
     pub report_ref: String,
@@ -178,12 +178,12 @@ pub struct GateCheck {
     pub observations: u64,
     pub actors: Vec<super::schema::ActorDecl>,
     pub budget: super::schema::BudgetEvidence,
-    pub chain_evidence: GateChainEvidence,
+    pub chain_evidence: ChainEvidence,
     pub turn_journals: TurnJournalEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GateChainEvidence {
+pub struct ChainEvidence {
     pub link_ref: String,
     pub anchor_ref: String,
     pub verify_receipt_ref: String,
@@ -216,7 +216,7 @@ pub struct TurnJournalChainEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GateReceipt {
+pub struct Receipt {
     pub receipt_ref: String,
     pub decision: String,
     pub artifact_kind: String,
@@ -238,7 +238,7 @@ pub struct ReproVerifyReceipt {
     pub checks: Vec<String>,
 }
 
-pub fn gate_check_value(value: &IoValue) -> Result<GateCheck> {
+pub fn check_value(value: &IoValue) -> Result<Check> {
     if value.collect_simple_record("harness-failure-v1", None).is_some() {
         let failure = super::schema::parse_failure(value)?;
         return Err(MoltenError::invalid_harness(format!(
@@ -248,7 +248,7 @@ pub fn gate_check_value(value: &IoValue) -> Result<GateCheck> {
     }
 
     if value.collect_simple_record("harness-report-v1", None).is_some() {
-        return gate_check_report(value, "report".to_string(), None);
+        return check_report(value, "report".to_string(), None);
     }
 
     if value.collect_simple_record("harness-repro-bundle-v1", None).is_some() {
@@ -269,7 +269,7 @@ pub fn gate_check_value(value: &IoValue) -> Result<GateCheck> {
                     .clone()
                     .ok_or_else(|| MoltenError::invalid_harness("report repro bundle missing report value"))?;
                 validate_sealed_report_bundle(&report_value, &bundle)?;
-                let mut check = gate_check_report(&report_value, "repro-bundle".to_string(), Some(bundle.bundle_ref))?;
+                let mut check = check_report(&report_value, "repro-bundle".to_string(), Some(bundle.bundle_ref))?;
                 check.redaction_policy_ref = bundle.redaction_policy_ref;
                 check.redaction_gate_ref = bundle.redaction_gate_ref;
                 Ok(check)
@@ -287,8 +287,8 @@ pub fn gate_check_value(value: &IoValue) -> Result<GateCheck> {
 }
 
 pub fn sealed_repro_bundle_value_with_command(report_value: &IoValue, command: &[String]) -> Result<IoValue> {
-    let report_check = gate_check_report(report_value, "report".to_string(), None)?;
-    let report_receipt_value = gate_receipt_value(&report_check);
+    let report_check = check_report(report_value, "report".to_string(), None)?;
+    let report_receipt_value = receipt_value(&report_check);
     super::schema::sealed_repro_bundle_value_with_command_and_receipt(report_value, command, &report_receipt_value)
 }
 
@@ -324,11 +324,11 @@ pub fn repro_verify_receipt_value(bundle_value: &IoValue) -> Result<IoValue> {
             bundle.bundle_ref
         )));
     }
-    let embedded_receipt_value = bundle.gate_receipt_value.as_ref().ok_or_else(|| {
+    let embedded_receipt_value = bundle.receipt_value.as_ref().ok_or_else(|| {
         MoltenError::invalid_harness("unsealed report repro bundle cannot satisfy sealed repro verification")
     })?;
-    let embedded_receipt = parse_gate_receipt(embedded_receipt_value)?;
-    let check = gate_check_value(bundle_value)?;
+    let embedded_receipt = parse_receipt(embedded_receipt_value)?;
+    let check = check_value(bundle_value)?;
     if check.artifact_kind != "repro-bundle" || check.artifact_ref != bundle.bundle_ref {
         return Err(MoltenError::invalid_harness("repro verify gate check did not bind bundle artifact"));
     }
@@ -350,7 +350,7 @@ pub fn repro_verify_receipt_value(bundle_value: &IoValue) -> Result<IoValue> {
     ]))
 }
 
-pub fn gate_receipt_value(check: &GateCheck) -> IoValue {
+pub fn receipt_value(check: &Check) -> IoValue {
     let mut refs = vec![
         ("artifact", check.artifact_ref.as_str()),
         ("report", check.report_ref.as_str()),
@@ -404,7 +404,7 @@ pub fn gate_receipt_value(check: &GateCheck) -> IoValue {
     ])
 }
 
-pub fn parse_gate_receipt(value: &IoValue) -> Result<GateReceipt> {
+pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     let receipt = simple_record(value, "gate-receipt-v1", 14)?;
     let schema = required_string(&receipt[0], "gate receipt schema")?;
     if schema != HARNESS_GATE_RECEIPT_SCHEMA {
@@ -459,7 +459,7 @@ pub fn parse_gate_receipt(value: &IoValue) -> Result<GateReceipt> {
         require_kinds(&artifact_refs, REDACTION_KINDS)?;
     }
 
-    Ok(GateReceipt {
+    Ok(Receipt {
         receipt_ref: canonical_hash(value)?,
         decision,
         artifact_kind,
@@ -471,15 +471,15 @@ pub fn parse_gate_receipt(value: &IoValue) -> Result<GateReceipt> {
     })
 }
 
-pub fn gate_check_summary(check: &GateCheck) -> String {
+pub fn check_summary(check: &Check) -> String {
     format!(
         "gate check ok\nartifact_kind={}\nartifact={}\nreport={}\nsuite={}\nfinal_state={}",
         check.artifact_kind, check.artifact_ref, check.report_ref, check.suite_ref, check.final_state_hash
     )
 }
 
-pub fn gate_receipt_summary(value: &IoValue) -> Result<String> {
-    let receipt = parse_gate_receipt(value)?;
+pub fn receipt_summary(value: &IoValue) -> Result<String> {
+    let receipt = parse_receipt(value)?;
     Ok(format!(
         "gate receipt {}\ndecision={}\nartifact_kind={}\nartifact={}\nreport={}\nsuite={}\nfinal_state={}\nchecks={}",
         receipt.receipt_ref,
@@ -551,14 +551,14 @@ fn validate_sealed_report_bundle(report_value: &IoValue, bundle: &super::schema:
         return Err(MoltenError::invalid_harness("sealed report repro bundle missing redaction preflight evidence"));
     }
     let embedded_receipt_value = bundle
-        .gate_receipt_value
+        .receipt_value
         .as_ref()
         .ok_or_else(|| MoltenError::invalid_harness("sealed report repro bundle missing embedded gate receipt"))?;
     let embedded_receipt_ref = bundle
         .gate_receipt_ref
         .as_ref()
         .ok_or_else(|| MoltenError::invalid_harness("sealed report repro bundle missing gate receipt ref"))?;
-    let receipt = parse_gate_receipt(embedded_receipt_value)?;
+    let receipt = parse_receipt(embedded_receipt_value)?;
     if &receipt.receipt_ref != embedded_receipt_ref {
         return Err(MoltenError::invalid_harness(
             "sealed repro bundle gate receipt ref does not match embedded receipt",
@@ -575,8 +575,8 @@ fn validate_sealed_report_bundle(report_value: &IoValue, bundle: &super::schema:
             "sealed repro bundle gate receipt does not bind the embedded report ref",
         ));
     }
-    let expected_report_check = gate_check_report(report_value, "report".to_string(), None)?;
-    let expected_receipt_value = gate_receipt_value(&expected_report_check);
+    let expected_report_check = check_report(report_value, "report".to_string(), None)?;
+    let expected_receipt_value = receipt_value(&expected_report_check);
     let expected_receipt_ref = canonical_hash(&expected_receipt_value)?;
     let actual_receipt_ref = canonical_hash(embedded_receipt_value)?;
     if actual_receipt_ref != expected_receipt_ref {
@@ -607,7 +607,7 @@ struct EvidenceRefs {
     capability_proofset_ref: String,
 }
 
-fn gate_check_report(value: &IoValue, artifact_kind: String, artifact_ref: Option<String>) -> Result<GateCheck> {
+fn check_report(value: &IoValue, artifact_kind: String, artifact_ref: Option<String>) -> Result<Check> {
     let validation = super::replay::validate_report_value(value)?;
     let replay = super::replay::replay_report_value(value)?;
     let report = super::schema::parse_report(value)?;
@@ -628,7 +628,7 @@ fn gate_check_report(value: &IoValue, artifact_kind: String, artifact_ref: Optio
         &report.profile,
     )?;
     let turn_journals = build_turn_journals(&report)?;
-    Ok(GateCheck {
+    Ok(Check {
         artifact_kind,
         artifact_ref: artifact_ref.unwrap_or_else(|| validation.report_ref.clone()),
         report_ref: validation.report_ref,
@@ -740,7 +740,7 @@ fn artifact_refs_value(refs: &[(&str, &str)]) -> IoValue {
     )])
 }
 
-fn validation_value(check: &GateCheck) -> IoValue {
+fn validation_value(check: &Check) -> IoValue {
     record("validation", vec![
         record("status", vec![string("pass")]),
         record("report", vec![string(&check.report_ref)]),
@@ -768,7 +768,7 @@ fn harness_replay_verify_value(expected_report_ref: &str, actual_report_ref: &st
     ])
 }
 
-fn replay_value(check: &GateCheck) -> IoValue {
+fn replay_value(check: &Check) -> IoValue {
     record("replay", vec![
         record("status", vec![string("pass")]),
         record("expected-report", vec![string(&check.report_ref)]),
@@ -817,11 +817,11 @@ fn build_gate_chain_evidence(
     suite_ref: &str,
     final_state_hash: &str,
     profile: &str,
-) -> Result<GateChainEvidence> {
+) -> Result<ChainEvidence> {
     let link = pass_link(report_ref, suite_ref, final_state_hash, profile)?;
     let predicates = pass_predicates(&link)?;
     let artifacts = pass_artifacts(&link, &predicates, suite_ref)?;
-    Ok(GateChainEvidence {
+    Ok(ChainEvidence {
         link_ref: link.link_ref,
         anchor_ref: artifacts.anchor_ref,
         verify_receipt_ref: artifacts.verify_ref,
@@ -1024,7 +1024,7 @@ fn pass_artifacts(link: &PassLink, predicates: &PassPredicates, suite_ref: &str)
     })
 }
 
-fn chain_evidence_value(evidence: &GateChainEvidence) -> IoValue {
+fn chain_evidence_value(evidence: &ChainEvidence) -> IoValue {
     record("chain-evidence", vec![
         record("profile", vec![string("local-pass-evidence-chain")]),
         record("link", vec![evidence.link_value.clone()]),
@@ -1059,7 +1059,7 @@ struct ParsedPredicates {
     refs: Vec<String>,
 }
 
-fn parse_chain_evidence(value: &Value<IoValue>) -> Result<GateChainEvidence> {
+fn parse_chain_evidence(value: &Value<IoValue>) -> Result<ChainEvidence> {
     let parts = evidence_parts(value)?;
     let link = crate::evidence_chain::parse_chain_link(&parts.link_value)?;
     let link_ref = link.link_ref.clone();
@@ -1085,7 +1085,7 @@ fn parse_chain_evidence(value: &Value<IoValue>) -> Result<GateChainEvidence> {
         &predicates.refs,
     )?;
 
-    Ok(GateChainEvidence {
+    Ok(ChainEvidence {
         link_ref,
         anchor_ref: anchor.anchor_ref,
         verify_receipt_ref,

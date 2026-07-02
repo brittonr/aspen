@@ -48,7 +48,7 @@ fn report_show_summary(report_value: &preserves::IOValue) -> Outcome<String> {
     if let Ok(summary) = molten::harness::repro_bundle_summary(report_value) {
         return Ok(summary);
     }
-    if let Ok(summary) = molten::harness::gate_receipt_summary(report_value) {
+    if let Ok(summary) = molten::harness::receipt_summary(report_value) {
         return Ok(summary);
     }
     if let Ok(summary) = molten::harness::repro_verify_receipt_summary(report_value) {

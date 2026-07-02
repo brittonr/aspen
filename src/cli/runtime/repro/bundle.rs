@@ -36,10 +36,10 @@ pub(crate) fn export_report(
         super::io::write_file(&out.join("suite.preserves"), &molten::preserves_rail::to_text(&suite_value)?)?;
         super::io::write_file(&out.join("summary.txt"), &molten::harness::report_summary(exported_report_value)?)?;
         super::io::write_file(&out.join("commands.txt"), REPORT_COMMANDS)?;
-        if let Some(gate_receipt_value) = bundle.gate_receipt_value.as_ref() {
+        if let Some(receipt_value) = bundle.receipt_value.as_ref() {
             super::io::write_file(
                 &out.join("gate-receipt.preserves"),
-                &molten::preserves_rail::to_text(gate_receipt_value)?,
+                &molten::preserves_rail::to_text(receipt_value)?,
             )?;
         }
         if let Some(value) = bundle.export_profile_value.as_ref() {

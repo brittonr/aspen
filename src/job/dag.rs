@@ -3246,7 +3246,7 @@ fn source_gate_evidence_bound(
                     &crate::octet_gate::OctetSourceGateValidationInput {
                         consumer: "job-remote-admission".to_string(),
                         subject_ref: request.job_ref.clone(),
-                        gate_receipt_value: Some(value),
+                        receipt_value: Some(value),
                         source_scope: Vec::new(),
                     },
                 )?;

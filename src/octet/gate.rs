@@ -192,7 +192,7 @@ pub struct OctetArtifactLedgerImport {
 pub struct OctetSourceGateValidationInput {
     pub consumer: String,
     pub subject_ref: String,
-    pub gate_receipt_value: Option<IoValue>,
+    pub receipt_value: Option<IoValue>,
     pub source_scope: Vec<String>,
 }
 
@@ -248,109 +248,109 @@ struct SourceSetup {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct GateCheck {
+struct Check {
     name: &'static str,
     status: &'static str,
 }
 
-const PASS_CHECKS: &[GateCheck] = &[
-    GateCheck {
+const PASS_CHECKS: &[Check] = &[
+    Check {
         name: "artifacts-dir-present",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "profile-supported",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "command-artifact-present",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "status-artifact-present",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "summary-artifact-present",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "object-corpus-artifact-present",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "status-json-parse",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "status-metadata-complete",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "status-tool-version-supported",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "status-exit-consistent",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "summary-lints-parse",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "object-corpus-json-parse",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "object-corpus-schema",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "object-corpus-nonempty",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "object-corpus-fingerprint",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "object-corpus-critical-paths",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "command-shape",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "status-config-current",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "status-profile-current",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "strict-status-clean",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "no-critical-findings",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "artifact-ref-binding",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "structured-findings-bound",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "structured-findings-keyed",
         status: "pass",
     },
-    GateCheck {
+    Check {
         name: "fingerprint-evidence-bound",
         status: "pass",
     },
@@ -585,7 +585,7 @@ pub fn evaluate_octet_gate(input: &OctetGateInput) -> Result<OctetGateEvaluation
 
 fn push_initial_checks(
     input: &OctetGateInput,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     let has_artifacts_dir = input.artifacts_dir.is_dir();
@@ -603,7 +603,7 @@ fn push_initial_checks(
 
 fn read_required_inputs(
     artifacts_dir: &Path,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> InputFiles {
     InputFiles {
@@ -647,7 +647,7 @@ fn derive_evidence(input: EvidenceInput<'_>) -> Result<DerivedEvidence> {
 
 fn push_outcome_checks(
     facts: OutcomeFacts<'_>,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     let is_strict_status_clean = facts.status.is_some_and(|status| status.status == "clean");
@@ -786,7 +786,7 @@ pub fn import_octet_artifacts_to_ledger(input: &OctetArtifactLedgerInput) -> Res
 
 fn read_import_files(
     artifacts_dir: &Path,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> InputFiles {
     InputFiles {
@@ -861,7 +861,7 @@ fn raw_values(files: &InputFiles) -> Vec<IoValue> {
 fn add_structured_value(
     values: &mut impl crate::bounded::VecSink<IoValue>,
     files: &InputFiles,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     let status = parse_status(files.status_file.as_ref(), checks, diagnostics);
@@ -883,7 +883,7 @@ fn add_structured_value(
 fn add_fingerprint_value(
     values: &mut impl crate::bounded::VecSink<IoValue>,
     files: &InputFiles,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     if let Some((object_corpus_receipt, object_corpus)) =
@@ -907,11 +907,11 @@ pub fn build_octet_review_manifest(input: &OctetReviewManifestInput) -> Result<O
         record("finding-keys", vec![sequence(input.finding_keys.iter().map(string).collect())]),
         record("rationale", vec![string(&input.rationale)]),
         checks_value(&[
-            GateCheck {
+            Check {
                 name: "exact-finding-keys",
                 status: "pass",
             },
-            GateCheck {
+            Check {
                 name: "temporary-review",
                 status: "pass",
             },
@@ -994,7 +994,7 @@ pub fn check_octet_warning_baseline(input: &OctetBaselineCheckInput) -> Result<O
 }
 
 fn push_baseline_checks(
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     facts: &BaselineFacts,
     new_findings: &[FindingEntry],
     critical_unreviewed: &[FindingEntry],
@@ -1076,7 +1076,7 @@ pub fn validate_octet_source_gate(input: &OctetSourceGateValidationInput) -> Res
         &checks,
     );
     let requirement_ref = canonical_hash(&requirement_value)?;
-    let parsed = parse_source_receipt(input.gate_receipt_value.as_ref(), &mut checks, &mut diagnostics);
+    let parsed = parse_source_receipt(input.receipt_value.as_ref(), &mut checks, &mut diagnostics);
     let validation_refs = validate_source_receipt(
         ReceiptCheckInput {
             parsed: parsed.as_ref(),
@@ -1128,7 +1128,7 @@ fn normalized_source_scope(input: &OctetSourceGateValidationInput) -> Result<Vec
 
 fn prepare_source_validation(
     input: &OctetSourceGateValidationInput,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<SourceSetup> {
     let source_scope = normalized_source_scope(input)?;
@@ -1152,7 +1152,7 @@ fn prepare_source_validation(
 
 fn parse_source_receipt(
     value: Option<&IoValue>,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Option<ParsedOctetGateReceipt> {
     match value {
@@ -1178,7 +1178,7 @@ fn parse_source_receipt(
 
 fn validate_source_receipt(
     input: ReceiptCheckInput<'_>,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> ValidationRefs {
     let Some(parsed) = input.parsed else {
@@ -1206,7 +1206,7 @@ fn receipt_refs(parsed: &ParsedOctetGateReceipt) -> ValidationRefs {
 
 fn check_receipt_basics(
     parsed: &ParsedOctetGateReceipt,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     let is_receipt_pass = parsed.decision == "pass";
@@ -1255,7 +1255,7 @@ fn check_receipt_basics(
 fn check_receipt_freshness(
     parsed: &ParsedOctetGateReceipt,
     expected: Option<&ExpectedMetadata>,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     let is_config_hash_current = expected
@@ -1291,7 +1291,7 @@ fn check_receipt_freshness(
     }
 }
 
-fn push_missing_receipt_checks(checks: &mut impl crate::bounded::VecSink<GateCheck>) {
+fn push_missing_receipt_checks(checks: &mut impl crate::bounded::VecSink<Check>) {
     push_check(checks, "gate-receipt-pass", false);
     push_check(checks, "strict-profile-required", false);
     push_check(checks, "required-artifact-refs", false);
@@ -1307,7 +1307,7 @@ fn octet_source_gate_requirement_value(
     subject_ref: &str,
     source_scope: &[String],
     expected: Option<&ExpectedMetadata>,
-    checks: &[GateCheck],
+    checks: &[Check],
 ) -> IoValue {
     record("octet-source-gate-requirement-v1", vec![
         string(crate::preserves_rail::OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA),
@@ -1373,15 +1373,15 @@ pub fn octet_gate_policy_value(input: &OctetGateInput) -> IoValue {
         record("critical-lints", vec![sequence(CRITICAL_LINTS.iter().map(string).collect())]),
         record("quarantine-policy", vec![record("none", Vec::new())]),
         checks_value(&[
-            GateCheck {
+            Check {
                 name: "strict-profile",
                 status: "pass",
             },
-            GateCheck {
+            Check {
                 name: "warning-only-denies",
                 status: "pass",
             },
-            GateCheck {
+            Check {
                 name: "required-artifacts-bound",
                 status: "pass",
             },
@@ -1403,7 +1403,7 @@ struct OctetGateReceiptInput<'a> {
     toolchain: Option<&'a str>,
     counts: &'a FindingCounts,
     diagnostics: &'a [String],
-    checks: &'a [GateCheck],
+    checks: &'a [Check],
 }
 
 struct OctetSourceGateValidationValueInput<'a> {
@@ -1418,7 +1418,7 @@ struct OctetSourceGateValidationValueInput<'a> {
     fingerprint_ref: Option<&'a str>,
     counts: &'a FindingCounts,
     diagnostics: &'a [String],
-    checks: &'a [GateCheck],
+    checks: &'a [Check],
 }
 
 fn octet_source_gate_validation_value(input: OctetSourceGateValidationValueInput<'_>) -> IoValue {
@@ -1537,11 +1537,11 @@ fn octet_raw_artifact_value(label: &'static str, schema: &str, name: &str, file:
         record("content-ref", vec![string(&file.artifact_ref)]),
         record("content", vec![string(&file.text)]),
         checks_value(&[
-            GateCheck {
+            Check {
                 name: "raw-content-ref-bound",
                 status: "pass",
             },
-            GateCheck {
+            Check {
                 name: "diagnostic-artifact",
                 status: "pass",
             },
@@ -1554,7 +1554,7 @@ fn octet_artifact_ledger_receipt_value(
     artifacts_dir: &str,
     imported_refs: &[String],
     diagnostics: &[String],
-    checks: &[GateCheck],
+    checks: &[Check],
 ) -> IoValue {
     record("octet-artifact-ledger-receipt-v1", vec![
         string(crate::preserves_rail::OCTET_ARTIFACT_LEDGER_RECEIPT_SCHEMA),
@@ -1594,7 +1594,7 @@ fn read_required_file(
     artifacts_dir: &Path,
     name: &'static str,
     check_name: &'static str,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Option<GateFile> {
     let path = artifacts_dir.join(name);
@@ -1623,7 +1623,7 @@ fn read_required_file(
 
 fn parse_status(
     status_file: Option<&GateFile>,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Option<OctetStatusArtifact> {
     let Some(status_file) = status_file else {
@@ -1672,7 +1672,7 @@ fn parse_status(
 
 fn parse_summary_lints(
     summary: Option<&GateFile>,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> OrderedMap<String, u64> {
     let Some(summary) = summary else {
@@ -1712,7 +1712,7 @@ fn parse_summary_lints(
 
 fn validate_object_corpus(
     object_corpus: Option<&GateFile>,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Option<OctetObjectCorpusReceipt> {
     let Some(object_corpus) = object_corpus else {
@@ -1787,11 +1787,11 @@ fn octet_fingerprint_evidence_value(object_corpus: &GateFile, receipt: &OctetObj
         record("object-count", vec![u64_value(object_count)]),
         record("pure-cache-blocked", vec![u64_value(pure_cache_blocked)]),
         checks_value(&[
-            GateCheck {
+            Check {
                 name: "object-corpus-fingerprint",
                 status: "pass",
             },
-            GateCheck {
+            Check {
                 name: "critical-path-coverage",
                 status: "pass",
             },
@@ -1805,7 +1805,7 @@ fn is_b3_ref(value: &str) -> bool {
 
 fn validate_command(
     command: Option<&GateFile>,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> bool {
     let Some(command) = command else {
@@ -1825,7 +1825,7 @@ fn validate_command(
 fn validate_metadata_binding(
     command: Option<&GateFile>,
     status: Option<&OctetStatusArtifact>,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> bool {
     let Some(command) = command else {
@@ -2059,7 +2059,7 @@ struct OctetBaselineReceiptInput<'a> {
     review_refs: &'a [String],
     expired: bool,
     diagnostics: &'a [String],
-    checks: &'a [GateCheck],
+    checks: &'a [Check],
 }
 
 struct OctetWarningBaselineValueInput<'a> {
@@ -2068,12 +2068,12 @@ struct OctetWarningBaselineValueInput<'a> {
     expires_at: &'a str,
     target_next: u64,
     source_snapshot_ref: &'a str,
-    checks: &'a [GateCheck],
+    checks: &'a [Check],
 }
 
 fn load_current_octet_run(
     artifacts_dir: &Path,
-    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<CurrentOctetRun> {
     let command =
@@ -2491,7 +2491,7 @@ fn counts_value(counts: &FindingCounts) -> IoValue {
     ])
 }
 
-fn checks_value(checks: &[GateCheck]) -> IoValue {
+fn checks_value(checks: &[Check]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|check| record("check", vec![string(check.name), string(check.status)])).collect(),
     )])
@@ -2545,8 +2545,8 @@ fn push_token_bounded(
     Ok(())
 }
 
-fn push_check(checks: &mut impl crate::bounded::VecSink<GateCheck>, name: &'static str, pass: bool) {
-    checks.push_item(GateCheck {
+fn push_check(checks: &mut impl crate::bounded::VecSink<Check>, name: &'static str, pass: bool) {
+    checks.push_item(Check {
         name,
         status: if pass { "pass" } else { "fail" },
     });
@@ -2607,7 +2607,7 @@ mod tests {
         let validation = validate_octet_source_gate(&OctetSourceGateValidationInput {
             consumer: "node-startup".to_string(),
             subject_ref: test_ref("node-config"),
-            gate_receipt_value: Some(gate),
+            receipt_value: Some(gate),
             source_scope: Vec::new(),
         })
         .expect("validate source gate");
@@ -2625,7 +2625,7 @@ mod tests {
         let denied = validate_octet_source_gate(&OctetSourceGateValidationInput {
             consumer: "job-remote-admission".to_string(),
             subject_ref: test_ref("job"),
-            gate_receipt_value: Some(gate.receipt_value),
+            receipt_value: Some(gate.receipt_value),
             source_scope: Vec::new(),
         })
         .expect("validate warning gate");
@@ -2635,7 +2635,7 @@ mod tests {
         let missing = validate_octet_source_gate(&OctetSourceGateValidationInput {
             consumer: "upgrade-plan".to_string(),
             subject_ref: test_ref("plan"),
-            gate_receipt_value: None,
+            receipt_value: None,
             source_scope: Vec::new(),
         })
         .expect("validate missing gate");
@@ -2659,27 +2659,27 @@ mod tests {
             counts: &FindingCounts::default(),
             diagnostics: &[],
             checks: &[
-                GateCheck {
+                Check {
                     name: "profile-supported",
                     status: "pass",
                 },
-                GateCheck {
+                Check {
                     name: "strict-status-clean",
                     status: "pass",
                 },
-                GateCheck {
+                Check {
                     name: "no-critical-findings",
                     status: "pass",
                 },
-                GateCheck {
+                Check {
                     name: "object-corpus-critical-paths",
                     status: "pass",
                 },
-                GateCheck {
+                Check {
                     name: "object-corpus-fingerprint",
                     status: "pass",
                 },
-                GateCheck {
+                Check {
                     name: "fingerprint-evidence-bound",
                     status: "pass",
                 },
@@ -2688,7 +2688,7 @@ mod tests {
         let stale_validation = validate_octet_source_gate(&OctetSourceGateValidationInput {
             consumer: "node-startup".to_string(),
             subject_ref: test_ref("node"),
-            gate_receipt_value: Some(stale),
+            receipt_value: Some(stale),
             source_scope: Vec::new(),
         })
         .expect("validate stale gate");
@@ -2704,7 +2704,7 @@ mod tests {
         let tampered_validation = validate_octet_source_gate(&OctetSourceGateValidationInput {
             consumer: "node-startup".to_string(),
             subject_ref: test_ref("node"),
-            gate_receipt_value: Some(tampered),
+            receipt_value: Some(tampered),
             source_scope: Vec::new(),
         })
         .expect("validate tampered gate");

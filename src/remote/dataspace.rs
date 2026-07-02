@@ -179,7 +179,7 @@ pub struct RemoteDeliveryLog {
 pub struct RemoteTwoPeerHarness {
     pub delivery_log: RemoteDeliveryLog,
     pub admission_receipt_value: IoValue,
-    pub gate_receipt_value: IoValue,
+    pub receipt_value: IoValue,
     pub observed_events: Vec<RuntimeEvent>,
     pub replayed_events: Vec<RuntimeEvent>,
 }
@@ -824,7 +824,7 @@ pub fn two_peer_service_ready_harness(root: &Path, evidence: RemoteDeliveryEvide
         pattern,
     });
     let replayed_events = replay_delivery_log(&mut replay_peer_b, &delivery_log)?;
-    let gate_receipt_value = remote_dataspace_gate_receipt_value(
+    let receipt_value = remote_dataspace_gate_receipt_value(
         &delivery_log,
         std::slice::from_ref(&applied.admission_receipt_value),
         std::slice::from_ref(&applied.turn_journal_context_ref),
@@ -832,7 +832,7 @@ pub fn two_peer_service_ready_harness(root: &Path, evidence: RemoteDeliveryEvide
     Ok(RemoteTwoPeerHarness {
         delivery_log,
         admission_receipt_value: applied.admission_receipt_value,
-        gate_receipt_value,
+        receipt_value,
         observed_events: applied.events,
         replayed_events,
     })
@@ -1499,7 +1499,7 @@ mod tests {
         let harness = two_peer_service_ready_harness(&root, evidence_fixture()).expect("two peer harness");
         assert!(harness.observed_events.iter().any(|event| matches!(event, RuntimeEvent::AssertionObserved { .. })));
         assert!(harness.replayed_events.iter().any(|event| matches!(event, RuntimeEvent::AssertionObserved { .. })));
-        assert_eq!(crate::ledger::artifact_kind(&harness.gate_receipt_value), "remote-dataspace-gate-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&harness.receipt_value), "remote-dataspace-gate-receipt");
     }
 
     #[test]

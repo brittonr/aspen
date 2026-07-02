@@ -180,7 +180,7 @@ pub struct HarnessReproBundle {
     pub report_value: Option<IoValue>,
     pub failure_value: Option<IoValue>,
     pub gate_receipt_ref: Option<String>,
-    pub gate_receipt_value: Option<IoValue>,
+    pub receipt_value: Option<IoValue>,
     pub redaction_policy_ref: Option<String>,
     pub redaction_gate_ref: Option<String>,
     pub export_profile: Option<String>,
@@ -3433,10 +3433,10 @@ pub fn repro_bundle_value_with_command(report_value: &IoValue, command: &[String
 pub fn sealed_repro_bundle_value_with_command_and_receipt(
     report_value: &IoValue,
     command: &[String],
-    gate_receipt_value: &IoValue,
+    receipt_value: &IoValue,
 ) -> Result<IoValue> {
     let report = parse_report(report_value)?;
-    let gate_receipt_ref = canonical_hash(gate_receipt_value)?;
+    let gate_receipt_ref = canonical_hash(receipt_value)?;
     let redaction_policy = redaction_policy_value();
     let redaction_policy_ref = canonical_hash(&redaction_policy)?;
     let redaction_gate = redaction_gate_value(report_value, &report)?;
@@ -3472,7 +3472,7 @@ pub fn sealed_repro_bundle_value_with_command_and_receipt(
         redaction_policy,
         redaction_gate,
         seal,
-        gate_receipt_value.clone(),
+        receipt_value.clone(),
         sealed_checks,
     ]))
 }
@@ -6731,7 +6731,7 @@ fn parse_legacy_report_repro_bundle(
         report_value: Some(report_value),
         failure_value: None,
         gate_receipt_ref: None,
-        gate_receipt_value: None,
+        receipt_value: None,
         redaction_policy_ref: None,
         redaction_gate_ref: None,
         export_profile: None,
@@ -6827,7 +6827,7 @@ fn report_bundle_from_body(bundle_value: &IoValue, body: ReportBundleBody) -> Re
         report_value: Some(body.report_value),
         failure_value: None,
         gate_receipt_ref: None,
-        gate_receipt_value: None,
+        receipt_value: None,
         redaction_policy_ref: None,
         redaction_gate_ref: None,
         export_profile: None,
@@ -6862,10 +6862,10 @@ fn parse_sealed_report_repro_bundle(
         &body.replay_status,
     )?;
     require_artifact_ref(&body.artifact_refs, "gate-receipt", &seal.gate_receipt_ref)?;
-    let gate_receipt_value = embedded_gate_receipt(bundle, redaction.receipt_index, &seal.gate_receipt_ref)?;
+    let receipt_value = embedded_gate_receipt(bundle, redaction.receipt_index, &seal.gate_receipt_ref)?;
     let seal_checks = parse_seal_checks(&bundle[redaction.checks_index])?;
     require_report_seal_checks(&seal_checks, redaction.has_redaction)?;
-    sealed_report_bundle(bundle_value, body, seal, gate_receipt_value, redaction)
+    sealed_report_bundle(bundle_value, body, seal, receipt_value, redaction)
 }
 
 fn parse_sealed_redaction(
@@ -6900,14 +6900,14 @@ fn parse_sealed_redaction(
 }
 
 fn embedded_gate_receipt(bundle: &Record<Value<IoValue>>, index: usize, expected_ref: &str) -> Result<IoValue> {
-    let gate_receipt_value = value_to_iovalue(&bundle[index]);
-    let actual_gate_receipt_ref = canonical_hash(&gate_receipt_value)?;
+    let receipt_value = value_to_iovalue(&bundle[index]);
+    let actual_gate_receipt_ref = canonical_hash(&receipt_value)?;
     if actual_gate_receipt_ref != expected_ref {
         return Err(MoltenError::invalid_harness(format!(
             "sealed repro bundle gate receipt ref mismatch: seal has {expected_ref}, embedded receipt hashes to {actual_gate_receipt_ref}"
         )));
     }
-    Ok(gate_receipt_value)
+    Ok(receipt_value)
 }
 
 fn require_report_seal_checks(checks: &[String], has_redaction: bool) -> Result<()> {
@@ -6936,7 +6936,7 @@ fn sealed_report_bundle(
     bundle_value: &IoValue,
     body: ReportBundleBody,
     seal: ReproSeal,
-    gate_receipt_value: IoValue,
+    receipt_value: IoValue,
     redaction: SealedRedaction,
 ) -> Result<HarnessReproBundle> {
     Ok(HarnessReproBundle {
@@ -6946,7 +6946,7 @@ fn sealed_report_bundle(
         report_value: Some(body.report_value),
         failure_value: None,
         gate_receipt_ref: Some(seal.gate_receipt_ref),
-        gate_receipt_value: Some(gate_receipt_value),
+        receipt_value: Some(receipt_value),
         redaction_policy_ref: redaction.redaction_policy_ref,
         redaction_gate_ref: redaction.redaction_gate_ref,
         export_profile: Some(ReproExportProfile::DenySensitive.as_str().to_string()),
@@ -7203,7 +7203,7 @@ fn profiled_report_bundle(
         report_value: Some(body.report_value),
         failure_value: None,
         gate_receipt_ref: None,
-        gate_receipt_value: None,
+        receipt_value: None,
         redaction_policy_ref: Some(evidence.policy_ref),
         redaction_gate_ref: None,
         export_profile: Some(body.export_profile.profile.as_str().to_string()),
@@ -7324,7 +7324,7 @@ fn parse_failure_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoVa
         report_value: None,
         failure_value: Some(failure_value),
         gate_receipt_ref: None,
-        gate_receipt_value: None,
+        receipt_value: None,
         redaction_policy_ref: None,
         redaction_gate_ref: None,
         export_profile: None,

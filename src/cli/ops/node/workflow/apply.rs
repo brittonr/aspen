@@ -8,20 +8,20 @@ pub(crate) fn run(input: super::super::command::live::Apply) -> molten::error::R
 
 struct Loaded {
     bundle_value: preserves::IOValue,
-    gate_receipt_value: Option<preserves::IOValue>,
+    receipt_value: Option<preserves::IOValue>,
     request_value: Option<preserves::IOValue>,
 }
 
 impl Loaded {
     fn read(input: &super::super::command::live::Apply) -> molten::error::Result<Self> {
         let bundle_value = super::super::core::read_preserves_file(&input.bundle)?;
-        let gate_receipt_value =
+        let receipt_value =
             input.gate_receipt.as_ref().map(|path| super::super::core::read_preserves_file(path)).transpose()?;
         let request_value =
             input.request.as_ref().map(|path| super::super::core::read_preserves_file(path)).transpose()?;
         Ok(Self {
             bundle_value,
-            gate_receipt_value,
+            receipt_value,
             request_value,
         })
     }
@@ -39,7 +39,7 @@ fn execute(
         &molten::node_daemon::ControlLiveWorkflowBundleApplyInput {
             state_root: &input.state_root,
             bundle_value: &loaded.bundle_value,
-            gate_receipt_value: loaded.gate_receipt_value.as_ref(),
+            receipt_value: loaded.receipt_value.as_ref(),
             is_gate_receipt_required: input.require_gate_receipt,
             request_value: loaded.request_value.as_ref(),
             should_send: input.send,

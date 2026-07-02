@@ -974,7 +974,7 @@ fn validate_upgrade_source_gates(input: &UpgradePlanInput) -> Result<Vec<String>
             crate::octet_gate::validate_octet_source_gate(&crate::octet_gate::OctetSourceGateValidationInput {
                 consumer: "upgrade-plan".to_string(),
                 subject_ref: subject_ref.clone(),
-                gate_receipt_value: Some(value.clone()),
+                receipt_value: Some(value.clone()),
                 source_scope: Vec::new(),
             })?;
         push_bounded(

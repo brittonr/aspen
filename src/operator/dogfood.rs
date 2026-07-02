@@ -2532,7 +2532,7 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
     let remote = run.record_remote()?;
     let job = run.record_job()?;
     let retention_gc = run.record_gc()?;
-    run.record_catalog(&installed, &remote.run.gate_receipt_value)?;
+    run.record_catalog(&installed, &remote.run.receipt_value)?;
     run.record_repro(&remote.gate_ref)?;
     run.finish(&start, &installed, &job, &retention_gc)
 }
@@ -3738,7 +3738,7 @@ fn record_remote_step(input: RemoteStepInput<'_>) -> Result<RemoteStep> {
             authority_refs: vec![dogfood_ref("remote-authority")?],
         },
     )?;
-    let gate_ref = crate::preserves_rail::canonical_hash(&remote.gate_receipt_value)?;
+    let gate_ref = crate::preserves_rail::canonical_hash(&remote.receipt_value)?;
     push_step_checkpoint(input.checkpoints, StepCheckpointInput {
         name: "publish-remote-assertion",
         request_ref: Some(&remote.delivery_log.log_ref),
@@ -4598,7 +4598,7 @@ struct DogfoodRepro {
 fn build_dogfood_repro() -> Result<DogfoodRepro> {
     let suite = crate::preserves_rail::parse_text(DOGFOOD_HARNESS_SUITE)?;
     let run = crate::harness::run_suite_value(&suite)?;
-    let gate = crate::harness::gate_receipt_value(&crate::harness::gate_check_value(&run.report_value)?);
+    let gate = crate::harness::receipt_value(&crate::harness::check_value(&run.report_value)?);
     let gate_ref = crate::preserves_rail::canonical_hash(&gate)?;
     let bundle = crate::harness::sealed_repro_bundle_value_with_command(&run.report_value, &[
         "molten".to_string(),
