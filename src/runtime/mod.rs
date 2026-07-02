@@ -8,7 +8,7 @@ mod envelope;
 mod execution;
 mod predicates;
 mod spine;
-mod turn;
+pub(crate) mod turn;
 mod vat;
 
 pub use admission::AdmissionAction;
@@ -125,7 +125,6 @@ pub use turn::RuntimeMessage;
 pub use turn::RuntimeObserver;
 pub use turn::RuntimeStep;
 pub use turn::RuntimeValue;
-pub(crate) use turn::TurnAction;
 pub use vat::VatAmbientAuthorityFixture;
 pub use vat::VatDebugFixture;
 pub use vat::VatDistributedRefFixture;

@@ -5,7 +5,7 @@ type PendingTurn = crate::runtime::PendingTurn;
 type RuntimeScopeCleanup = crate::runtime::RuntimeScopeCleanup;
 type RuntimeSnapshot = crate::runtime::RuntimeSnapshot;
 type RuntimeValue = crate::runtime::RuntimeValue;
-type TurnAction = crate::runtime::TurnAction;
+type TurnAction = crate::runtime::turn::TurnAction;
 
 fn bool_value(value: bool) -> IoValue {
     crate::preserves_rail::bool_value(value)

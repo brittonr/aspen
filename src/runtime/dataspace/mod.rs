@@ -16,7 +16,7 @@ type RuntimeObserver = super::RuntimeObserver;
 type RuntimePredicateReceipt = super::RuntimePredicateReceipt;
 type RuntimeStep = super::RuntimeStep;
 type RuntimeValue = super::RuntimeValue;
-type TurnAction = super::TurnAction;
+type TurnAction = super::turn::TurnAction;
 type TurnOutcome = super::TurnOutcome;
 
 fn canonical_hash(value: &IoValue) -> Result<String> {

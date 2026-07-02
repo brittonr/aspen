@@ -7,7 +7,7 @@ type Result<T> = crate::error::Result<T>;
 type RuntimeObserver = super::RuntimeObserver;
 type RuntimeSnapshot = super::RuntimeSnapshot;
 type RuntimeValue = super::RuntimeValue;
-type TurnAction = super::TurnAction;
+type TurnAction = super::turn::TurnAction;
 
 const PREDICATE_ENGINE: &str = "trellis-bounded-local";
 const ASSERTION_VISIBILITY_PREDICATE: &str = "molten.trellis-runtime.assertion-visibility.v1";

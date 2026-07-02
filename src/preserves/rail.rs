@@ -1,5 +1,4 @@
-use preserves::IOValue;
-
+type IOValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
