@@ -34,21 +34,20 @@ fn range_fixture(root: std::path::PathBuf, out: Option<std::path::PathBuf>) -> O
     let put = molten::chunk_store::put_bytes(&root, "operator-gateway-artifact", body, GATEWAY_CHUNK_SIZE)?;
     let manifest = molten::chunk_store::parse_manifest_value(&put.manifest_value, Some(&put.manifest_ref))?;
     let chunk_bytes = collect_fixture_chunks(body, &manifest)?;
-    let verification =
-        molten::operator_gateway::verify_gateway_range(&molten::operator_gateway::GatewayRangeVerificationInput {
-            read: molten::operator_gateway::GatewayReadInput {
-                object_ref: manifest.manifest_ref.clone(),
-                member: None,
-                requested_range: Some(molten::operator_gateway::GatewayRange {
-                    offset: GATEWAY_RANGE_OFFSET,
-                    length: GATEWAY_RANGE_LENGTH,
-                }),
-                requester_ref: fixture_ref("gateway-operator"),
-                manifest: Some(&manifest),
-                visibility: visibility(),
-            },
-            chunk_bytes,
-        })?;
+    let verification = molten::operator_gateway::verify_range(&molten::operator_gateway::RangeVerificationInput {
+        read: molten::operator_gateway::ReadInput {
+            object_ref: manifest.manifest_ref.clone(),
+            member: None,
+            requested_range: Some(molten::operator_gateway::Range {
+                offset: GATEWAY_RANGE_OFFSET,
+                length: GATEWAY_RANGE_LENGTH,
+            }),
+            requester_ref: fixture_ref("gateway-operator"),
+            manifest: Some(&manifest),
+            visibility: visibility(),
+        },
+        chunk_bytes,
+    })?;
     emit(out.as_ref(), "operator-gateway-range-fixture", &verification.receipt_value)
 }
 
@@ -95,15 +94,15 @@ fn ensure_fixture_chunk_count(body: &[u8], chunk_count: usize) -> Outcome<()> {
 
 fn index_fixture(out: Option<std::path::PathBuf>) -> Outcome<()> {
     let hidden_ref = fixture_ref("gateway-hidden");
-    let index = molten::operator_gateway::decide_index(&molten::operator_gateway::GatewayIndexInput {
+    let index = molten::operator_gateway::decide_index(&molten::operator_gateway::IndexInput {
         bundle_ref: fixture_ref("gateway-bundle"),
         requester_ref: fixture_ref("gateway-operator"),
-        visibility: molten::operator_gateway::GatewayVisibility {
+        visibility: molten::operator_gateway::Visibility {
             hidden_refs: vec![hidden_ref.clone()],
             ..visibility()
         },
         members: vec![
-            molten::operator_gateway::GatewayMember {
+            molten::operator_gateway::Member {
                 name: "release-evidence.preserves".to_string(),
                 object_ref: fixture_ref("gateway-visible"),
                 size: GATEWAY_MEMBER_SIZE,
@@ -111,7 +110,7 @@ fn index_fixture(out: Option<std::path::PathBuf>) -> Outcome<()> {
                 sensitive: false,
                 visible: true,
             },
-            molten::operator_gateway::GatewayMember {
+            molten::operator_gateway::Member {
                 name: "secret.txt".to_string(),
                 object_ref: hidden_ref,
                 size: GATEWAY_MEMBER_SIZE,
@@ -124,8 +123,8 @@ fn index_fixture(out: Option<std::path::PathBuf>) -> Outcome<()> {
     emit(out.as_ref(), "operator-gateway-index-fixture", &index.receipt_value)
 }
 
-fn visibility() -> molten::operator_gateway::GatewayVisibility {
-    molten::operator_gateway::GatewayVisibility {
+fn visibility() -> molten::operator_gateway::Visibility {
+    molten::operator_gateway::Visibility {
         profile: "public".to_string(),
         visibility_policy_refs: vec![fixture_ref("gateway-visibility")],
         retention_refs: vec![fixture_ref("gateway-retention")],

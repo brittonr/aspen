@@ -30,13 +30,13 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-pub const OPERATOR_GATEWAY_READ_SCHEMA: &str = "molten.operator.gateway-read-receipt.v1";
-pub const OPERATOR_GATEWAY_RANGE_SCHEMA: &str = "molten.operator.gateway-range-receipt.v1";
-pub const OPERATOR_GATEWAY_INDEX_SCHEMA: &str = "molten.operator.gateway-index-receipt.v1";
+pub const READ_SCHEMA: &str = "molten.operator.gateway-read-receipt.v1";
+pub const RANGE_SCHEMA: &str = "molten.operator.gateway-range-receipt.v1";
+pub const INDEX_SCHEMA: &str = "molten.operator.gateway-index-receipt.v1";
 
-const MAX_GATEWAY_REFS: usize = 256;
-const MAX_GATEWAY_DIAGNOSTICS: usize = 64;
-const MAX_GATEWAY_MEMBERS: usize = 512;
+const MAX_REFS: usize = 256;
+const MAX_DIAGNOSTICS: usize = 64;
+const MAX_MEMBERS: usize = 512;
 const MAX_MEMBER_NAME_BYTES: usize = 256;
 const MAX_MIME_BYTES: usize = 128;
 const MIN_CHUNK_SIZE: usize = 1;
@@ -48,21 +48,21 @@ const PUBLIC_PROFILE: &str = "public";
 const DIAGNOSTIC_PROFILE: &str = "diagnostic";
 const INTERNAL_PROFILE: &str = "internal";
 
-const _: () = assert!(MAX_GATEWAY_REFS > 0);
-const _: () = assert!(MAX_GATEWAY_DIAGNOSTICS > 0);
-const _: () = assert!(MAX_GATEWAY_MEMBERS > 0);
+const _: () = assert!(MAX_REFS > 0);
+const _: () = assert!(MAX_DIAGNOSTICS > 0);
+const _: () = assert!(MAX_MEMBERS > 0);
 const _: () = assert!(MAX_MEMBER_NAME_BYTES > 0);
 const _: () = assert!(MAX_MIME_BYTES > 0);
 const _: () = assert!(MIN_CHUNK_SIZE > 0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GatewayRange {
+pub struct Range {
     pub offset: u64,
     pub length: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GatewayVisibility {
+pub struct Visibility {
     pub profile: String,
     pub visibility_policy_refs: Vec<String>,
     pub retention_refs: Vec<String>,
@@ -73,37 +73,37 @@ pub struct GatewayVisibility {
 }
 
 #[derive(Debug, Clone)]
-pub struct GatewayReadInput<'a> {
+pub struct ReadInput<'a> {
     pub object_ref: String,
     pub member: Option<String>,
-    pub requested_range: Option<GatewayRange>,
+    pub requested_range: Option<Range>,
     pub requester_ref: String,
     pub manifest: Option<&'a ChunkManifest>,
-    pub visibility: GatewayVisibility,
+    pub visibility: Visibility,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GatewayReadDecision {
+pub struct ReadDecision {
     pub decision: String,
     pub object_ref: String,
     pub member: Option<String>,
-    pub normalized_range: Option<GatewayRange>,
+    pub normalized_range: Option<Range>,
     pub required_chunk_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone)]
-pub struct GatewayRangeVerificationInput<'a> {
-    pub read: GatewayReadInput<'a>,
+pub struct RangeVerificationInput<'a> {
+    pub read: ReadInput<'a>,
     pub chunk_bytes: Map<String, Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GatewayRangeVerification {
+pub struct RangeVerification {
     pub decision: String,
     pub manifest_ref: String,
-    pub normalized_range: GatewayRange,
+    pub normalized_range: Range,
     pub chunk_refs: Vec<String>,
     pub bytes: Vec<u8>,
     pub diagnostics: Vec<String>,
@@ -111,7 +111,7 @@ pub struct GatewayRangeVerification {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GatewayMember {
+pub struct Member {
     pub name: String,
     pub object_ref: String,
     pub size: u64,
@@ -121,15 +121,15 @@ pub struct GatewayMember {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GatewayIndexInput {
+pub struct IndexInput {
     pub bundle_ref: String,
     pub requester_ref: String,
-    pub visibility: GatewayVisibility,
-    pub members: Vec<GatewayMember>,
+    pub visibility: Visibility,
+    pub members: Vec<Member>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GatewayIndexEntry {
+pub struct IndexEntry {
     pub name: String,
     pub object_ref: Option<String>,
     pub size: Option<u64>,
@@ -138,10 +138,10 @@ pub struct GatewayIndexEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GatewayIndexDecision {
+pub struct IndexDecision {
     pub decision: String,
     pub bundle_ref: String,
-    pub entries: Vec<GatewayIndexEntry>,
+    pub entries: Vec<IndexEntry>,
     pub diagnostics: Vec<String>,
     pub receipt_value: IoValue,
 }
@@ -156,13 +156,13 @@ impl DiagnosticSink for Vec<String> {
             .len()
             .checked_add(1)
             .ok_or_else(|| MoltenError::invalid_harness("gateway diagnostic count overflow"))?;
-        validate_count(next, MAX_GATEWAY_DIAGNOSTICS, "gateway diagnostic")?;
+        validate_count(next, MAX_DIAGNOSTICS, "gateway diagnostic")?;
         self.push(diagnostic);
         Ok(())
     }
 }
 
-pub fn decide_readback(input: &GatewayReadInput<'_>) -> Result<GatewayReadDecision> {
+pub fn decide_readback(input: &ReadInput<'_>) -> Result<ReadDecision> {
     let mut diagnostics = Vec::new();
     collect_ref_diagnostics(std::slice::from_ref(&input.object_ref), "object", &mut diagnostics)?;
     collect_ref_diagnostics(std::slice::from_ref(&input.requester_ref), "requester", &mut diagnostics)?;
@@ -200,7 +200,7 @@ pub fn decide_readback(input: &GatewayReadInput<'_>) -> Result<GatewayReadDecisi
         visibility: &input.visibility,
         diagnostics: &diagnostics,
     })?;
-    Ok(GatewayReadDecision {
+    Ok(ReadDecision {
         decision,
         object_ref: input.object_ref.clone(),
         member: input.member.clone(),
@@ -211,13 +211,13 @@ pub fn decide_readback(input: &GatewayReadInput<'_>) -> Result<GatewayReadDecisi
     })
 }
 
-pub fn verify_gateway_range(input: &GatewayRangeVerificationInput<'_>) -> Result<GatewayRangeVerification> {
+pub fn verify_range(input: &RangeVerificationInput<'_>) -> Result<RangeVerification> {
     let read = decide_readback(&input.read)?;
     let manifest = input
         .read
         .manifest
         .ok_or_else(|| MoltenError::invalid_harness("gateway range verification requires a chunk manifest"))?;
-    let range = read.normalized_range.unwrap_or(GatewayRange {
+    let range = read.normalized_range.unwrap_or(Range {
         offset: RANGE_START,
         length: EMPTY_RANGE_LENGTH,
     });
@@ -230,7 +230,7 @@ pub fn verify_gateway_range(input: &GatewayRangeVerificationInput<'_>) -> Result
             chunk_refs: &read.required_chunk_refs,
             diagnostics: &diagnostics,
         })?;
-        return Ok(GatewayRangeVerification {
+        return Ok(RangeVerification {
             decision: "deny".to_string(),
             manifest_ref: manifest.manifest_ref.clone(),
             normalized_range: range,
@@ -262,7 +262,7 @@ pub fn verify_gateway_range(input: &GatewayRangeVerificationInput<'_>) -> Result
         chunk_refs: &read.required_chunk_refs,
         diagnostics: &diagnostics,
     })?;
-    Ok(GatewayRangeVerification {
+    Ok(RangeVerification {
         decision,
         manifest_ref: manifest.manifest_ref.clone(),
         normalized_range: range,
@@ -273,14 +273,14 @@ pub fn verify_gateway_range(input: &GatewayRangeVerificationInput<'_>) -> Result
     })
 }
 
-pub fn decide_index(input: &GatewayIndexInput) -> Result<GatewayIndexDecision> {
+pub fn decide_index(input: &IndexInput) -> Result<IndexDecision> {
     let mut diagnostics = Vec::new();
     collect_ref_diagnostics(std::slice::from_ref(&input.bundle_ref), "bundle", &mut diagnostics)?;
     collect_ref_diagnostics(std::slice::from_ref(&input.requester_ref), "requester", &mut diagnostics)?;
     collect_visibility_diagnostics(&input.visibility, &mut diagnostics)?;
-    validate_count(input.members.len(), MAX_GATEWAY_MEMBERS, "gateway index member")?;
+    validate_count(input.members.len(), MAX_MEMBERS, "gateway index member")?;
     let hidden = input.visibility.hidden_refs.iter().collect::<Set<_>>();
-    let entry_capacity = input.members.len().min(MAX_GATEWAY_MEMBERS);
+    let entry_capacity = input.members.len().min(MAX_MEMBERS);
     let mut entries = Vec::with_capacity(entry_capacity);
     for member in &input.members {
         validate_member(member, &mut diagnostics)?;
@@ -292,7 +292,7 @@ pub fn decide_index(input: &GatewayIndexInput) -> Result<GatewayIndexDecision> {
             && (input.visibility.profile == PUBLIC_PROFILE || input.visibility.profile == DIAGNOSTIC_PROFILE)
             && !input.visibility.allow_sensitive_names;
         if should_redact {
-            entries.push(GatewayIndexEntry {
+            entries.push(IndexEntry {
                 name: "redacted".to_string(),
                 object_ref: None,
                 size: None,
@@ -300,7 +300,7 @@ pub fn decide_index(input: &GatewayIndexInput) -> Result<GatewayIndexDecision> {
                 redacted: true,
             });
         } else {
-            entries.push(GatewayIndexEntry {
+            entries.push(IndexEntry {
                 name: member.name.clone(),
                 object_ref: Some(member.object_ref.clone()),
                 size: Some(member.size),
@@ -323,7 +323,7 @@ pub fn decide_index(input: &GatewayIndexInput) -> Result<GatewayIndexDecision> {
         entries: &entries,
         diagnostics: &diagnostics,
     })?;
-    Ok(GatewayIndexDecision {
+    Ok(IndexDecision {
         decision,
         bundle_ref: input.bundle_ref.clone(),
         entries,
@@ -332,15 +332,15 @@ pub fn decide_index(input: &GatewayIndexInput) -> Result<GatewayIndexDecision> {
     })
 }
 
-pub fn gateway_receipt_authorizes_mutation(_receipt: &IoValue) -> bool {
+pub fn receipt_authorizes_mutation(_receipt: &IoValue) -> bool {
     false
 }
 
 fn normalize_range(
     manifest: Option<&ChunkManifest>,
-    requested: Option<GatewayRange>,
+    requested: Option<Range>,
     diagnostics: &mut impl DiagnosticSink,
-) -> Result<Option<GatewayRange>> {
+) -> Result<Option<Range>> {
     let Some(manifest) = manifest else {
         if requested.is_some() {
             push_diagnostic(diagnostics, "range request requires a chunk manifest before lookup")?;
@@ -348,7 +348,7 @@ fn normalize_range(
         return Ok(None);
     };
     let total_len = manifest.total_len;
-    let range = requested.unwrap_or(GatewayRange {
+    let range = requested.unwrap_or(Range {
         offset: RANGE_START,
         length: total_len,
     });
@@ -364,7 +364,7 @@ fn normalize_range(
 
 fn required_chunks_for_range(
     manifest: &ChunkManifest,
-    range: GatewayRange,
+    range: Range,
     diagnostics: &mut impl DiagnosticSink,
 ) -> Result<Vec<String>> {
     if range.length == EMPTY_RANGE_LENGTH {
@@ -398,7 +398,7 @@ fn required_chunks_for_range(
 
 fn reconstruct_verified_range(
     manifest: &ChunkManifest,
-    range: GatewayRange,
+    range: Range,
     chunks: &Map<String, Vec<u8>>,
     chunk_size: usize,
     diagnostics: &mut impl DiagnosticSink,
@@ -462,15 +462,15 @@ struct ReadReceiptInput<'a> {
     object_ref: &'a str,
     member: Option<&'a str>,
     requester_ref: &'a str,
-    normalized_range: Option<GatewayRange>,
+    normalized_range: Option<Range>,
     required_chunk_refs: &'a [String],
-    visibility: &'a GatewayVisibility,
+    visibility: &'a Visibility,
     diagnostics: &'a [String],
 }
 
 fn read_receipt_value(input: ReadReceiptInput<'_>) -> Result<IoValue> {
     Ok(record("operator-gateway-read-receipt-v1", vec![
-        string(OPERATOR_GATEWAY_READ_SCHEMA),
+        string(READ_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("object", vec![string(input.object_ref)]),
         record("member", vec![optional_string_value(input.member)]),
@@ -491,14 +491,14 @@ fn read_receipt_value(input: ReadReceiptInput<'_>) -> Result<IoValue> {
 struct RangeReceiptInput<'a> {
     decision: &'a str,
     manifest_ref: &'a str,
-    normalized_range: GatewayRange,
+    normalized_range: Range,
     chunk_refs: &'a [String],
     diagnostics: &'a [String],
 }
 
 fn range_receipt_value(input: RangeReceiptInput<'_>) -> Result<IoValue> {
     Ok(record("operator-gateway-range-receipt-v1", vec![
-        string(OPERATOR_GATEWAY_RANGE_SCHEMA),
+        string(RANGE_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("manifest", vec![string(input.manifest_ref)]),
         record("range", vec![range_value(Some(input.normalized_range))]),
@@ -517,14 +517,14 @@ struct IndexReceiptInput<'a> {
     decision: &'a str,
     bundle_ref: &'a str,
     requester_ref: &'a str,
-    visibility: &'a GatewayVisibility,
-    entries: &'a [GatewayIndexEntry],
+    visibility: &'a Visibility,
+    entries: &'a [IndexEntry],
     diagnostics: &'a [String],
 }
 
 fn index_receipt_value(input: IndexReceiptInput<'_>) -> Result<IoValue> {
     Ok(record("operator-gateway-index-receipt-v1", vec![
-        string(OPERATOR_GATEWAY_INDEX_SCHEMA),
+        string(INDEX_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("bundle", vec![string(input.bundle_ref)]),
         record("requester", vec![string(input.requester_ref)]),
@@ -541,7 +541,7 @@ fn index_receipt_value(input: IndexReceiptInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-fn visibility_value(visibility: &GatewayVisibility) -> Result<IoValue> {
+fn visibility_value(visibility: &Visibility) -> Result<IoValue> {
     Ok(record("visibility", vec![
         record("profile", vec![string(&visibility.profile)]),
         record("policy", vec![refs_value(&visibility.visibility_policy_refs)?]),
@@ -551,7 +551,7 @@ fn visibility_value(visibility: &GatewayVisibility) -> Result<IoValue> {
     ]))
 }
 
-fn index_entry_value(entry: &GatewayIndexEntry) -> IoValue {
+fn index_entry_value(entry: &IndexEntry) -> IoValue {
     record("entry", vec![
         record("name", vec![string(&entry.name)]),
         record("object", vec![optional_string_value(entry.object_ref.as_deref())]),
@@ -561,7 +561,7 @@ fn index_entry_value(entry: &GatewayIndexEntry) -> IoValue {
     ])
 }
 
-fn range_value(range: Option<GatewayRange>) -> IoValue {
+fn range_value(range: Option<Range>) -> IoValue {
     match range {
         Some(range) => record("some", vec![
             record("offset", vec![u64_value(range.offset)]),
@@ -571,7 +571,7 @@ fn range_value(range: Option<GatewayRange>) -> IoValue {
     }
 }
 
-fn validate_member(member: &GatewayMember, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn validate_member(member: &Member, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     validate_text(&member.name, "member name", MAX_MEMBER_NAME_BYTES, diagnostics)?;
     collect_ref_diagnostics(std::slice::from_ref(&member.object_ref), "member object", diagnostics)?;
     if let Some(mime) = &member.mime_hint {
@@ -580,7 +580,7 @@ fn validate_member(member: &GatewayMember, diagnostics: &mut impl DiagnosticSink
     Ok(())
 }
 
-fn collect_visibility_diagnostics(visibility: &GatewayVisibility, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn collect_visibility_diagnostics(visibility: &Visibility, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     if !matches!(visibility.profile.as_str(), PUBLIC_PROFILE | DIAGNOSTIC_PROFILE | INTERNAL_PROFILE) {
         push_diagnostic(diagnostics, "unsupported gateway visibility profile")?;
     }
@@ -596,7 +596,7 @@ fn collect_visibility_diagnostics(visibility: &GatewayVisibility, diagnostics: &
 }
 
 fn collect_ref_diagnostics(refs: &[String], label: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
-    validate_count(refs.len(), MAX_GATEWAY_REFS, label)?;
+    validate_count(refs.len(), MAX_REFS, label)?;
     for reference in refs {
         if let Err(error) = validate_content_ref(reference) {
             push_diagnostic(diagnostics, format!("invalid {label} ref: {error}"))?;
@@ -628,12 +628,12 @@ fn push_diagnostic(diagnostics: &mut impl DiagnosticSink, diagnostic: impl Into<
 }
 
 fn refs_value(refs: &[String]) -> Result<IoValue> {
-    validate_count(refs.len(), MAX_GATEWAY_REFS, "gateway ref")?;
+    validate_count(refs.len(), MAX_REFS, "gateway ref")?;
     Ok(sequence(refs.iter().map(string).collect()))
 }
 
 fn strings_value(values: &[String]) -> Result<IoValue> {
-    validate_count(values.len(), MAX_GATEWAY_DIAGNOSTICS, "gateway string")?;
+    validate_count(values.len(), MAX_DIAGNOSTICS, "gateway string")?;
     Ok(sequence(values.iter().map(string).collect()))
 }
 
@@ -700,8 +700,8 @@ mod tests {
         root
     }
 
-    fn visibility() -> GatewayVisibility {
-        GatewayVisibility {
+    fn visibility() -> Visibility {
+        Visibility {
             profile: PUBLIC_PROFILE.to_string(),
             visibility_policy_refs: vec![fixture_ref("visibility")],
             retention_refs: vec![fixture_ref("retention")],
@@ -735,10 +735,10 @@ mod tests {
     #[test]
     fn readback_decision_normalizes_range_and_requires_chunks_before_io() {
         let (_root, manifest, _chunks) = manifest_fixture();
-        let read = decide_readback(&GatewayReadInput {
+        let read = decide_readback(&ReadInput {
             object_ref: manifest.manifest_ref.clone(),
             member: None,
-            requested_range: Some(GatewayRange {
+            requested_range: Some(Range {
                 offset: RANGE_OFFSET,
                 length: RANGE_LENGTH,
             }),
@@ -754,7 +754,7 @@ mod tests {
 
     #[test]
     fn malformed_ref_denies_before_lookup() {
-        let read = decide_readback(&GatewayReadInput {
+        let read = decide_readback(&ReadInput {
             object_ref: "not-a-ref".to_string(),
             member: None,
             requested_range: None,
@@ -770,11 +770,11 @@ mod tests {
     #[test]
     fn verified_range_returns_bytes_and_denies_corrupt_chunks() {
         let (_root, manifest, chunks) = manifest_fixture();
-        let input = GatewayRangeVerificationInput {
-            read: GatewayReadInput {
+        let input = RangeVerificationInput {
+            read: ReadInput {
                 object_ref: manifest.manifest_ref.clone(),
                 member: None,
-                requested_range: Some(GatewayRange {
+                requested_range: Some(Range {
                     offset: RANGE_OFFSET,
                     length: RANGE_LENGTH,
                 }),
@@ -784,14 +784,14 @@ mod tests {
             },
             chunk_bytes: chunks.clone(),
         };
-        let pass = verify_gateway_range(&input).expect("range pass");
+        let pass = verify_range(&input).expect("range pass");
         assert_eq!(pass.decision, "pass");
         assert_eq!(pass.bytes, b"cdefg");
 
         let mut corrupt = chunks;
         let first = manifest.chunks.first().expect("first chunk").chunk_ref.clone();
         corrupt.insert(first, b"xxxx".to_vec());
-        let deny = verify_gateway_range(&GatewayRangeVerificationInput {
+        let deny = verify_range(&RangeVerificationInput {
             chunk_bytes: corrupt,
             ..input
         })
@@ -805,8 +805,8 @@ mod tests {
     fn protected_object_denies_without_reveal_evidence() {
         let (_root, mut manifest, chunks) = manifest_fixture();
         manifest.transforms = ChunkTransforms::confidential_protected(fixture_ref("commitment"));
-        let deny = verify_gateway_range(&GatewayRangeVerificationInput {
-            read: GatewayReadInput {
+        let deny = verify_range(&RangeVerificationInput {
+            read: ReadInput {
                 object_ref: manifest.manifest_ref.clone(),
                 member: None,
                 requested_range: None,
@@ -825,15 +825,15 @@ mod tests {
     fn index_omits_hidden_and_redacts_sensitive_members() {
         let hidden_ref = fixture_ref("hidden");
         let visible_ref = fixture_ref("visible");
-        let decision = decide_index(&GatewayIndexInput {
+        let decision = decide_index(&IndexInput {
             bundle_ref: fixture_ref("bundle"),
             requester_ref: fixture_ref("operator"),
-            visibility: GatewayVisibility {
+            visibility: Visibility {
                 hidden_refs: vec![hidden_ref.clone()],
                 ..visibility()
             },
             members: vec![
-                GatewayMember {
+                Member {
                     name: "secret-name".to_string(),
                     object_ref: visible_ref,
                     size: MEMBER_SIZE,
@@ -841,7 +841,7 @@ mod tests {
                     sensitive: true,
                     visible: true,
                 },
-                GatewayMember {
+                Member {
                     name: "hidden".to_string(),
                     object_ref: hidden_ref,
                     size: MEMBER_SIZE,
@@ -860,14 +860,14 @@ mod tests {
     }
 
     #[test]
-    fn gateway_receipt_never_authorizes_mutation() {
-        let decision = decide_index(&GatewayIndexInput {
+    fn receipt_never_authorizes_mutation() {
+        let decision = decide_index(&IndexInput {
             bundle_ref: fixture_ref("bundle"),
             requester_ref: fixture_ref("operator"),
             visibility: visibility(),
             members: Vec::new(),
         })
         .expect("index");
-        assert!(!gateway_receipt_authorizes_mutation(&decision.receipt_value));
+        assert!(!receipt_authorizes_mutation(&decision.receipt_value));
     }
 }
