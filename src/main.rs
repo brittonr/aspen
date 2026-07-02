@@ -69,15 +69,21 @@ mod cli_upgrade;
 #[path = "cli/runtime/vat.rs"]
 mod cli_vat;
 
-pub(crate) use cli_root::RetentionEvidenceArgs;
+pub(crate) type RetentionEvidenceArgs = cli_root::RetentionEvidenceArgs;
 #[cfg(test)]
-pub(crate) use cli_root::RuntimeCommand;
+pub(crate) type RuntimeCommand = cli_root::RuntimeCommand;
 #[cfg(test)]
-pub(crate) use cli_root::TestCommand;
+pub(crate) type TestCommand = cli_root::TestCommand;
+
 #[cfg(test)]
-pub(crate) use cli_root::run_runtime_command;
+pub(crate) fn run_runtime_command(command: RuntimeCommand) -> molten::error::Result<()> {
+    cli_root::run_runtime_command(command)
+}
+
 #[cfg(test)]
-pub(crate) use cli_root::run_test_command;
+pub(crate) fn run_test_command(command: TestCommand) -> molten::error::Result<()> {
+    cli_root::run_test_command(command)
+}
 
 fn main() {
     if let Err(error) = cli_root::run() {
