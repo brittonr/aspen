@@ -1,11 +1,9 @@
-use std::collections::BTreeMap;
-use std::collections::VecDeque;
-
+type BTreeMap<K, V> = std::collections::BTreeMap<K, V>;
 type IoValue = preserves::IOValue;
-use preserves::Value;
-
-use crate::error::MoltenError;
-use crate::error::Result;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
+type VecDeque<T> = std::collections::VecDeque<T>;
 
 const RESOURCE_CONSUMPTION_SCHEMA: &str = crate::preserves_rail::RESOURCE_CONSUMPTION_SCHEMA;
 const RESOURCE_GRANT_SCHEMA: &str = crate::preserves_rail::RESOURCE_GRANT_SCHEMA;

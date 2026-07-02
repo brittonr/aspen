@@ -1,6 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
+type BTreeMap<K, V> = std::collections::BTreeMap<K, V>;
+type BTreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
@@ -4359,8 +4358,14 @@ fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
+
+    fn parse_text(source: &str) -> Result<IoValue> {
+        crate::preserves_rail::parse_text(source)
+    }
+
+    fn to_text(value: &IoValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     #[test]
     fn fixed_v1_chunking_has_stable_manifest_identity() {

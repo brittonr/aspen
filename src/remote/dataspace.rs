@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-use preserves::Value;
+type Value<T> = preserves::Value<T>;
 
 use crate::delivery_idempotency;
 

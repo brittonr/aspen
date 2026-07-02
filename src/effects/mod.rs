@@ -1,9 +1,8 @@
 type IoValue = preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
-
-use crate::error::MoltenError;
-use crate::error::Result;
+type MoltenError = crate::error::MoltenError;
+type Record<T> = preserves::Record<T>;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
 const EFFECT_BINDING_RECEIPT_SCHEMA: &str = crate::preserves_rail::EFFECT_BINDING_RECEIPT_SCHEMA;
 const EFFECT_COMPOUND_HANDLER_SCHEMA: &str = crate::preserves_rail::EFFECT_COMPOUND_HANDLER_SCHEMA;
