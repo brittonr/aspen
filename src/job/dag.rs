@@ -1737,11 +1737,8 @@ fn collect_final_run_outputs(input: &CompleteInput<'_>, roots: Vec<String>) -> R
         }
     }
     let value = crate::preserves_rail::sequence(final_values.clone());
-    ensure_final_output_ref(&mut final_refs, &value)?;
-    Ok(FinalRunOutputs {
-        refs: final_refs,
-        value,
-    })
+    let refs = ensure_final_output_ref(final_refs, &value)?;
+    Ok(FinalRunOutputs { refs, value })
 }
 
 fn output_root_index(plan: &TrellisExecutionPlan, root: &str) -> Result<usize> {
@@ -1762,11 +1759,16 @@ fn output_values_for_root<'a>(
         .ok_or_else(|| MoltenError::invalid_harness(format!("job output root {root} was not executed")))
 }
 
-fn ensure_final_output_ref(final_refs: &mut Vec<String>, output_value: &IoValue) -> Result<()> {
+fn ensure_final_output_ref(mut final_refs: Vec<String>, output_value: &IoValue) -> Result<Vec<String>> {
     if final_refs.is_empty() {
-        push_bounded(final_refs, crate::preserves_rail::canonical_hash(output_value)?, MAX_JOB_REFS, "job final refs")?;
+        push_bounded(
+            &mut final_refs,
+            crate::preserves_rail::canonical_hash(output_value)?,
+            MAX_JOB_REFS,
+            "job final refs",
+        )?;
     }
-    Ok(())
+    Ok(final_refs)
 }
 
 fn collect_run_evidence_refs(dag: &JobDag, stage_receipt_refs: &[String]) -> Result<Vec<String>> {
