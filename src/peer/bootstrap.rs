@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 use preserves::Value;
 
 use crate::error::MoltenError;
@@ -11,23 +11,23 @@ const PEER_BOOTSTRAP_INPUT_SCHEMA: &str = crate::preserves_rail::PEER_BOOTSTRAP_
 const PEER_BOOTSTRAP_RECEIPT_SCHEMA: &str = crate::preserves_rail::PEER_BOOTSTRAP_RECEIPT_SCHEMA;
 const PEER_HANDSHAKE_SCHEMA: &str = crate::preserves_rail::PEER_HANDSHAKE_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -35,7 +35,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -99,7 +99,7 @@ pub struct HandshakeRecord {
     pub resource_limits: ResourceLimits,
     pub policy_refs: Vec<String>,
     pub receipt_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,8 +141,8 @@ pub struct PeerAgreement {
     pub accepted_capabilities: Vec<CapabilityOffer>,
     pub resource_limits: ResourceLimits,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
-    pub value: IOValue,
+    pub receipt_value: IoValue,
+    pub value: IoValue,
 }
 
 pub struct HandshakeValueInput<'a> {
@@ -180,7 +180,7 @@ struct AgreementValueInput<'a> {
     resource_limits: &'a ResourceLimits,
 }
 
-pub fn bootstrap_input_value(input: &BootstrapInput) -> Result<IOValue> {
+pub fn bootstrap_input_value(input: &BootstrapInput) -> Result<IoValue> {
     validate_bootstrap_input(input)?;
     Ok(record("peer-bootstrap-input-v1", vec![
         string(PEER_BOOTSTRAP_INPUT_SCHEMA),
@@ -196,7 +196,7 @@ pub fn bootstrap_input_value(input: &BootstrapInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn handshake_value(input: &HandshakeValueInput<'_>) -> Result<IOValue> {
+pub fn handshake_value(input: &HandshakeValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.node_id, "peer handshake node id")?;
     require_ref(input.node_identity_ref, "peer handshake node identity ref")?;
     validate_endpoint(input.endpoint_id)?;
@@ -232,7 +232,7 @@ pub fn handshake_value(input: &HandshakeValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_handshake(value: &IOValue) -> Result<HandshakeRecord> {
+pub fn parse_handshake(value: &IoValue) -> Result<HandshakeRecord> {
     let fields = value
         .collect_simple_record("peer-handshake-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <peer-handshake-v1 ...>"))?;
@@ -267,8 +267,8 @@ pub fn parse_handshake(value: &IOValue) -> Result<HandshakeRecord> {
 }
 
 pub fn negotiate_peers(
-    local_value: &IOValue,
-    remote_value: &IOValue,
+    local_value: &IoValue,
+    remote_value: &IoValue,
     policy: &NegotiationPolicy,
 ) -> Result<PeerAgreement> {
     let local = parse_handshake(local_value)?;
@@ -338,7 +338,7 @@ pub fn negotiate_peers(
     })
 }
 
-pub fn bootstrap_receipt_value(input: &ReceiptValueInput<'_>) -> IOValue {
+pub fn bootstrap_receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
     record("peer-bootstrap-receipt-v1", vec![
         string(PEER_BOOTSTRAP_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -361,7 +361,7 @@ pub fn bootstrap_receipt_value(input: &ReceiptValueInput<'_>) -> IOValue {
     ])
 }
 
-fn agreement_value(input: AgreementValueInput<'_>) -> IOValue {
+fn agreement_value(input: AgreementValueInput<'_>) -> IoValue {
     record("peer-agreement-v1", vec![
         string(PEER_AGREEMENT_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -458,7 +458,7 @@ fn join_admitted(join: &JoinRequest, offers: &[CapabilityOffer]) -> bool {
     })
 }
 
-fn feature_vector_value(features: &FeatureVector) -> IOValue {
+fn feature_vector_value(features: &FeatureVector) -> IoValue {
     record("features", vec![
         record("runtime", vec![sequence(features.runtime_versions.iter().map(string).collect())]),
         record("registry", vec![sequence(features.registry_protocols.iter().map(string).collect())]),
@@ -470,7 +470,7 @@ fn feature_vector_value(features: &FeatureVector) -> IOValue {
     ])
 }
 
-fn parse_feature_vector(value: &IOValue) -> Result<FeatureVector> {
+fn parse_feature_vector(value: &IoValue) -> Result<FeatureVector> {
     let fields = value
         .collect_simple_record("features", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected peer features"))?;
@@ -485,7 +485,7 @@ fn parse_feature_vector(value: &IOValue) -> Result<FeatureVector> {
     })
 }
 
-fn offer_value(offer: &CapabilityOffer) -> IOValue {
+fn offer_value(offer: &CapabilityOffer) -> IoValue {
     record("capability-offer", vec![
         record("capability", vec![string(&offer.capability)]),
         record("scope", vec![string(&offer.scope)]),
@@ -495,7 +495,7 @@ fn offer_value(offer: &CapabilityOffer) -> IOValue {
     ])
 }
 
-fn parse_offer(value: &IOValue) -> Result<CapabilityOffer> {
+fn parse_offer(value: &IoValue) -> Result<CapabilityOffer> {
     let fields = value
         .collect_simple_record("capability-offer", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected capability offer"))?;
@@ -510,12 +510,12 @@ fn parse_offer(value: &IOValue) -> Result<CapabilityOffer> {
     Ok(offer)
 }
 
-fn parse_offer_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<CapabilityOffer>> {
+fn parse_offer_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<CapabilityOffer>> {
     let values = field_sequence(value, label)?;
     values.iter().map(|value| parse_offer(&value_to_iovalue(value))).collect()
 }
 
-fn join_value(join: &JoinRequest) -> IOValue {
+fn join_value(join: &JoinRequest) -> IoValue {
     record("join-request", vec![
         record("kind", vec![string(&join.kind)]),
         record("target", vec![string(&join.target)]),
@@ -523,7 +523,7 @@ fn join_value(join: &JoinRequest) -> IOValue {
     ])
 }
 
-fn parse_join(value: &IOValue) -> Result<JoinRequest> {
+fn parse_join(value: &IoValue) -> Result<JoinRequest> {
     let fields = value
         .collect_simple_record("join-request", Some(3))
         .ok_or_else(|| MoltenError::invalid_harness("expected join request"))?;
@@ -536,12 +536,12 @@ fn parse_join(value: &IOValue) -> Result<JoinRequest> {
     Ok(join)
 }
 
-fn parse_join_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<JoinRequest>> {
+fn parse_join_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<JoinRequest>> {
     let values = field_sequence(value, label)?;
     values.iter().map(|value| parse_join(&value_to_iovalue(value))).collect()
 }
 
-fn resource_limits_value(limits: &ResourceLimits) -> IOValue {
+fn resource_limits_value(limits: &ResourceLimits) -> IoValue {
     record("resource-limits", vec![
         record("max-inflight", vec![u64_value(limits.max_inflight)]),
         record("max-bytes", vec![u64_value(limits.max_bytes)]),
@@ -550,7 +550,7 @@ fn resource_limits_value(limits: &ResourceLimits) -> IOValue {
     ])
 }
 
-fn parse_resource_limits(value: &IOValue) -> Result<ResourceLimits> {
+fn parse_resource_limits(value: &IoValue) -> Result<ResourceLimits> {
     let fields = value
         .collect_simple_record("resource-limits", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected resource limits"))?;
@@ -643,15 +643,15 @@ fn require_ref(reference: &str, field: &str) -> Result<()> {
     })
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_u64_value(value: Option<u64>) -> IOValue {
+fn optional_u64_value(value: Option<u64>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![u64_value(value)]))
 }
 
-fn parse_optional_u64(value: &Value<IOValue>, label: &str) -> Result<Option<u64>> {
+fn parse_optional_u64(value: &Value<IoValue>, label: &str) -> Result<Option<u64>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -666,7 +666,7 @@ fn parse_optional_u64(value: &Value<IOValue>, label: &str) -> Result<Option<u64>
     }
 }
 
-fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     values
         .iter()
@@ -678,12 +678,12 @@ fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>
         .collect()
 }
 
-fn parse_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     values.iter().map(|value| required_string(value, label)).collect()
 }
 
-fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
+fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoValue>>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -694,7 +694,7 @@ fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOVal
     Ok(values.iter().cloned().collect())
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let values = field_sequence(value, "checks")?;
     values
         .iter()
@@ -716,7 +716,7 @@ fn require_check(checks: &[(String, String)], name: &str) -> Result<()> {
     }
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -724,7 +724,7 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&fields[0], label)
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -732,7 +732,7 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     required_u64(&fields[0], label)
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
         return Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")));
@@ -740,14 +740,14 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     Ok(())
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -868,7 +868,7 @@ mod tests {
         }
     }
 
-    fn sample_handshake(name: &str, offers: Vec<CapabilityOffer>, joins: Vec<JoinRequest>) -> IOValue {
+    fn sample_handshake(name: &str, offers: Vec<CapabilityOffer>, joins: Vec<JoinRequest>) -> IoValue {
         handshake_value(&HandshakeValueInput {
             node_id: name,
             node_identity_ref: &ref_for(&format!("identity-{name}")),

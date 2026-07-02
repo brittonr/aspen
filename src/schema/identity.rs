@@ -1,4 +1,4 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 use preserves::Record;
 use preserves::Value;
 use preserves::ValueImpl;
@@ -6,19 +6,19 @@ use preserves::ValueImpl;
 use crate::error::MoltenError;
 use crate::error::Result;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
@@ -26,7 +26,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -49,7 +49,7 @@ const _: () = assert!(MAX_SCHEMA_SEARCH_MATCHES > 0);
 pub struct SchemaIdentityInput {
     pub mode: String,
     pub schema_ref: String,
-    pub shape: IOValue,
+    pub shape: IoValue,
     pub brand_ref: Option<String>,
     pub metadata_refs: Vec<String>,
     pub policy_refs: Vec<String>,
@@ -67,7 +67,7 @@ pub struct SchemaIdentity {
     pub metadata_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,7 +87,7 @@ pub struct SchemaAlias {
     pub scope: String,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,7 +111,7 @@ pub struct SchemaCompatibility {
     pub actual_schema_ref: String,
     pub alias_ref: Option<String>,
     pub migration_ref: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,10 +120,10 @@ pub struct SchemaCompatibilityReceipt {
     pub operation: String,
     pub decision: String,
     pub compatibility_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
-pub fn normalize_shape(shape: &IOValue) -> Result<IOValue> {
+pub fn normalize_shape(shape: &IoValue) -> Result<IoValue> {
     if let Some(fields) = shape.collect_simple_record("shape", None) {
         if fields.len() == 0 {
             return Err(MoltenError::invalid_harness("schema shape record requires kind"));
@@ -148,7 +148,7 @@ pub fn normalize_shape(shape: &IOValue) -> Result<IOValue> {
     }
 }
 
-pub fn structural_fingerprint(shape: &IOValue) -> Result<(IOValue, String, String)> {
+pub fn structural_fingerprint(shape: &IoValue) -> Result<(IoValue, String, String)> {
     let normalized = normalize_shape(shape)?;
     let normalized_shape_ref = canonical_hash(&normalized)?;
     let fingerprint = canonical_hash(&record("schema-structural-fingerprint-v1", vec![
@@ -158,7 +158,7 @@ pub fn structural_fingerprint(shape: &IOValue) -> Result<(IOValue, String, Strin
     Ok((normalized, normalized_shape_ref, fingerprint))
 }
 
-pub fn schema_identity_value(input: &SchemaIdentityInput) -> Result<IOValue> {
+pub fn schema_identity_value(input: &SchemaIdentityInput) -> Result<IoValue> {
     validate_mode(&input.mode)?;
     validate_ref(&input.schema_ref, "schema identity schema ref")?;
     validate_refs(&input.metadata_refs, "schema identity metadata ref")?;
@@ -192,7 +192,7 @@ pub fn schema_identity_value(input: &SchemaIdentityInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_schema_identity(value: &IOValue) -> Result<SchemaIdentity> {
+pub fn parse_schema_identity(value: &IoValue) -> Result<SchemaIdentity> {
     let fields = value
         .collect_simple_record("schema-identity-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-identity-v1 ...>"))?;
@@ -231,7 +231,7 @@ pub fn parse_schema_identity(value: &IOValue) -> Result<SchemaIdentity> {
     })
 }
 
-pub fn schema_alias_value(input: &SchemaAliasInput) -> Result<IOValue> {
+pub fn schema_alias_value(input: &SchemaAliasInput) -> Result<IoValue> {
     validate_ref(&input.from_schema_ref, "schema alias from ref")?;
     validate_ref(&input.to_schema_ref, "schema alias to ref")?;
     validate_alias_scope(&input.scope)?;
@@ -248,7 +248,7 @@ pub fn schema_alias_value(input: &SchemaAliasInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_schema_alias(value: &IOValue) -> Result<SchemaAlias> {
+pub fn parse_schema_alias(value: &IoValue) -> Result<SchemaAlias> {
     let fields = value
         .collect_simple_record("schema-alias-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-alias-v1 ...>"))?;
@@ -268,7 +268,7 @@ pub fn parse_schema_alias(value: &IOValue) -> Result<SchemaAlias> {
     })
 }
 
-pub fn compatibility_decision_value(input: &SchemaCompatibilityInput) -> Result<IOValue> {
+pub fn compatibility_decision_value(input: &SchemaCompatibilityInput) -> Result<IoValue> {
     validate_refs(&input.policy_refs, "schema compatibility policy ref")?;
     validate_refs(&input.evidence_refs, "schema compatibility evidence ref")?;
     if let Some(migration_ref) = input.migration_ref.as_ref() {
@@ -295,7 +295,7 @@ pub fn compatibility_decision_value(input: &SchemaCompatibilityInput) -> Result<
     ]))
 }
 
-pub fn parse_schema_compatibility(value: &IOValue) -> Result<SchemaCompatibility> {
+pub fn parse_schema_compatibility(value: &IoValue) -> Result<SchemaCompatibility> {
     let fields = value
         .collect_simple_record("schema-compatibility-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-compatibility-v1 ...>"))?;
@@ -318,7 +318,7 @@ pub fn parse_schema_compatibility(value: &IOValue) -> Result<SchemaCompatibility
 }
 
 pub fn compatibility_admits_storage(
-    value: &IOValue,
+    value: &IoValue,
     expected_schema_ref: &str,
     actual_schema_ref: &str,
 ) -> Result<bool> {
@@ -326,7 +326,7 @@ pub fn compatibility_admits_storage(
 }
 
 pub fn compatibility_admits_protocol_payload(
-    value: &IOValue,
+    value: &IoValue,
     expected_schema_ref: &str,
     actual_schema_ref: &str,
 ) -> Result<bool> {
@@ -334,7 +334,7 @@ pub fn compatibility_admits_protocol_payload(
 }
 
 pub fn compatibility_admits_effect_schema(
-    value: &IOValue,
+    value: &IoValue,
     expected_schema_ref: &str,
     actual_schema_ref: &str,
 ) -> Result<bool> {
@@ -342,7 +342,7 @@ pub fn compatibility_admits_effect_schema(
 }
 
 pub fn compatibility_admits_policy_contract_schema(
-    value: &IOValue,
+    value: &IoValue,
     expected_schema_ref: &str,
     actual_schema_ref: &str,
 ) -> Result<bool> {
@@ -350,7 +350,7 @@ pub fn compatibility_admits_policy_contract_schema(
 }
 
 fn compatibility_admits_scope(
-    value: &IOValue,
+    value: &IoValue,
     expected_schema_ref: &str,
     actual_schema_ref: &str,
     context: &str,
@@ -369,7 +369,7 @@ fn compatibility_admits_scope(
     ))
 }
 
-pub fn compatibility_receipt_value(operation: &str, compatibility_value: &IOValue) -> Result<IOValue> {
+pub fn compatibility_receipt_value(operation: &str, compatibility_value: &IoValue) -> Result<IoValue> {
     validate_non_empty(operation, "schema compatibility receipt operation")?;
     let compatibility = parse_schema_compatibility(compatibility_value)?;
     let decision = if matches!(
@@ -395,7 +395,7 @@ pub fn compatibility_receipt_value(operation: &str, compatibility_value: &IOValu
     ]))
 }
 
-pub fn parse_compatibility_receipt(value: &IOValue) -> Result<SchemaCompatibilityReceipt> {
+pub fn parse_compatibility_receipt(value: &IoValue) -> Result<SchemaCompatibilityReceipt> {
     let fields = value
         .collect_simple_record("schema-compatibility-receipt-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-compatibility-receipt-v1 ...>"))?;
@@ -466,7 +466,7 @@ fn compatibility_decision(input: &SchemaCompatibilityInput) -> Result<String> {
     Ok(DECISION_MISMATCH_REQUIRES_MIGRATION.to_string())
 }
 
-fn normalize_record_shape(fields: &Record<Value<IOValue>>) -> Result<IOValue> {
+fn normalize_record_shape(fields: &Record<Value<IoValue>>) -> Result<IoValue> {
     if fields.len() != 3 {
         return Err(MoltenError::invalid_harness("record shape expects label and field sequence"));
     }
@@ -480,7 +480,7 @@ fn normalize_record_shape(fields: &Record<Value<IOValue>>) -> Result<IOValue> {
     Ok(record("shape", vec![string("record"), string(label), sequence(normalized_fields)]))
 }
 
-fn normalize_field_shape(fields: &Record<Value<IOValue>>) -> Result<IOValue> {
+fn normalize_field_shape(fields: &Record<Value<IoValue>>) -> Result<IoValue> {
     if fields.len() != 3 {
         return Err(MoltenError::invalid_harness("field shape expects name and nested shape"));
     }
@@ -491,14 +491,14 @@ fn normalize_field_shape(fields: &Record<Value<IOValue>>) -> Result<IOValue> {
     ]))
 }
 
-fn normalize_unary_shape(kind: &'static str, fields: &Record<Value<IOValue>>) -> Result<IOValue> {
+fn normalize_unary_shape(kind: &'static str, fields: &Record<Value<IoValue>>) -> Result<IoValue> {
     if fields.len() != 2 {
         return Err(MoltenError::invalid_harness(format!("{kind} shape expects one nested shape")));
     }
     Ok(record("shape", vec![string(kind), normalize_shape(&value_to_iovalue(&fields[1]))?]))
 }
 
-fn normalize_binary_shape(kind: &'static str, fields: &Record<Value<IOValue>>) -> Result<IOValue> {
+fn normalize_binary_shape(kind: &'static str, fields: &Record<Value<IoValue>>) -> Result<IoValue> {
     if fields.len() != 3 {
         return Err(MoltenError::invalid_harness(format!("{kind} shape expects two nested shapes")));
     }
@@ -509,7 +509,7 @@ fn normalize_binary_shape(kind: &'static str, fields: &Record<Value<IOValue>>) -
     ]))
 }
 
-fn compatibility_identity_record(label: &'static str, identity: &SchemaIdentity) -> IOValue {
+fn compatibility_identity_record(label: &'static str, identity: &SchemaIdentity) -> IoValue {
     record(label, vec![
         string(&identity.identity_ref),
         string(&identity.schema_ref),
@@ -519,7 +519,7 @@ fn compatibility_identity_record(label: &'static str, identity: &SchemaIdentity)
     ])
 }
 
-fn parse_compatibility_identity(value: &Value<IOValue>, label: &str) -> Result<(String, String)> {
+fn parse_compatibility_identity(value: &Value<IoValue>, label: &str) -> Result<(String, String)> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 5)?;
     Ok((
@@ -548,15 +548,15 @@ fn validate_alias_scope(scope: &str) -> Result<()> {
     }
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -566,31 +566,31 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
 }
 
-fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_value(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     let mut refs = Vec::with_capacity(items.len());
     for item in items.iter() {
@@ -599,17 +599,17 @@ fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<S
     Ok(refs)
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
 }
 
-fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
@@ -635,7 +635,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -645,30 +645,30 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
@@ -712,7 +712,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn parse_text(source: &str) -> Result<IOValue> {
+    fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
     }
 
@@ -845,7 +845,7 @@ mod tests {
         let expected = identity(MODE_UNIQUE, "expected-event", &shape, None);
         let actual = identity(MODE_UNIQUE, "actual-event", &shape, None);
         for (scope, admits) in [
-            ("storage", compatibility_admits_storage as fn(&IOValue, &str, &str) -> Result<bool>),
+            ("storage", compatibility_admits_storage as fn(&IoValue, &str, &str) -> Result<bool>),
             ("protocol", compatibility_admits_protocol_payload),
             ("effect", compatibility_admits_effect_schema),
             ("policy", compatibility_admits_policy_contract_schema),
@@ -974,14 +974,14 @@ mod tests {
         assert_eq!(parse_schema_compatibility(&denied).expect("parse denied").decision, DECISION_DENIED_BY_POLICY);
     }
 
-    fn identity(mode: &str, label: &str, shape: &IOValue, brand_ref: Option<String>) -> SchemaIdentity {
+    fn identity(mode: &str, label: &str, shape: &IoValue, brand_ref: Option<String>) -> SchemaIdentity {
         identity_with_schema(mode, &test_ref(&format!("schema-{label}")), shape, brand_ref)
     }
 
     fn identity_with_schema(
         mode: &str,
         schema_ref: &str,
-        shape: &IOValue,
+        shape: &IoValue,
         brand_ref: Option<String>,
     ) -> SchemaIdentity {
         let value = schema_identity_value(&SchemaIdentityInput {

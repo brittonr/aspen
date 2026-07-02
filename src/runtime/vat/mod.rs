@@ -1,4 +1,4 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 
 use crate::deterministic_replay;
 use crate::runtime;
@@ -23,24 +23,24 @@ const RUNTIME_VAT_RIGHTS_FIXTURE_SCHEMA: &str = crate::preserves_rail::RUNTIME_V
 const RUNTIME_VAT_SNAPSHOT_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_SNAPSHOT_SCHEMA;
 const RUNTIME_VAT_TIME_TRAVEL_FIXTURE_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_TIME_TRAVEL_FIXTURE_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
 #[cfg(test)]
-fn to_text(value: &IOValue) -> Result<String> {
+fn to_text(value: &IoValue) -> Result<String> {
     crate::preserves_rail::to_text(value)
 }
 
@@ -96,7 +96,7 @@ impl VatObjectRef {
         }
     }
 
-    pub fn value(&self) -> IOValue {
+    pub fn value(&self) -> IoValue {
         record("vat-object-ref-v1", vec![
             string(RUNTIME_VAT_OBJECT_REF_SCHEMA),
             string(&self.vat_id),
@@ -118,7 +118,7 @@ pub struct VatCallEvidence {
 }
 
 impl VatCallEvidence {
-    fn value(&self) -> IOValue {
+    fn value(&self) -> IoValue {
         record("vat-call-evidence-v1", vec![
             string(&self.name),
             record("receipt-ref", vec![string(&self.receipt.receipt_ref)]),
@@ -128,7 +128,7 @@ impl VatCallEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatFixtureRun {
-    pub value: IOValue,
+    pub value: IoValue,
     pub run_ref: String,
     pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
@@ -136,7 +136,7 @@ pub struct VatFixtureRun {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatSnapshotFixture {
-    pub value: IOValue,
+    pub value: IoValue,
     pub snapshot_ref: String,
     pub fixture_ref: String,
     pub receipts: Vec<runtime::RuntimePredicateReceipt>,
@@ -145,15 +145,15 @@ pub struct VatSnapshotFixture {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatRestoreFixture {
-    pub value: IOValue,
+    pub value: IoValue,
     pub fixture_ref: String,
-    pub receipts: Vec<IOValue>,
+    pub receipts: Vec<IoValue>,
     pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatPromiseFixture {
-    pub value: IOValue,
+    pub value: IoValue,
     pub fixture_ref: String,
     pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
@@ -161,7 +161,7 @@ pub struct VatPromiseFixture {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatAmbientAuthorityFixture {
-    pub value: IOValue,
+    pub value: IoValue,
     pub fixture_ref: String,
     pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
@@ -169,7 +169,7 @@ pub struct VatAmbientAuthorityFixture {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatRightsFixture {
-    pub value: IOValue,
+    pub value: IoValue,
     pub fixture_ref: String,
     pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
@@ -177,7 +177,7 @@ pub struct VatRightsFixture {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatDistributedRefFixture {
-    pub value: IOValue,
+    pub value: IoValue,
     pub fixture_ref: String,
     pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
@@ -185,23 +185,23 @@ pub struct VatDistributedRefFixture {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatDebugFixture {
-    pub value: IOValue,
+    pub value: IoValue,
     pub fixture_ref: String,
-    pub receipts: Vec<IOValue>,
+    pub receipts: Vec<IoValue>,
     pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatReplayFixture {
-    pub value: IOValue,
+    pub value: IoValue,
     pub fixture_ref: String,
-    pub receipts: Vec<IOValue>,
+    pub receipts: Vec<IoValue>,
     pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct VatReplayRun {
-    value: IOValue,
+    value: IoValue,
     run_ref: String,
     trace_ref: String,
     effect_request_ref: String,
@@ -249,7 +249,7 @@ struct FixtureObjects {
 }
 
 impl FixtureObjects {
-    fn object_values(&self) -> Vec<IOValue> {
+    fn object_values(&self) -> Vec<IoValue> {
         [&self.root, &self.helper, &self.spawned, &self.far, &self.proxy]
             .iter()
             .map(|object| object.value())
@@ -1026,7 +1026,7 @@ pub fn run_vat_portable_storage_fixture() -> Result<VatDebugFixture> {
     })
 }
 
-pub fn vat_fixture_summary(value: &IOValue) -> Result<String> {
+pub fn vat_fixture_summary(value: &IoValue) -> Result<String> {
     let artifact_ref = canonical_hash(value)?;
     Ok(format!("vat artifact: {artifact_ref}"))
 }
@@ -1048,7 +1048,7 @@ struct VatDebugReceiptInput<'a> {
     diagnostics: Vec<String>,
 }
 
-fn vat_debug_receipt_value(input: VatDebugReceiptInput<'_>) -> IOValue {
+fn vat_debug_receipt_value(input: VatDebugReceiptInput<'_>) -> IoValue {
     record(input.kind, vec![
         string(input.schema),
         string(input.decision),
@@ -1219,7 +1219,7 @@ fn tail(run_input: &RunInput, objects: &Objects, inputs: &Inputs, effects: &Effe
     })
 }
 
-fn run_value(run_input: &RunInput, inputs: &Inputs, effects: &Effects, tail: &Tail) -> IOValue {
+fn run_value(run_input: &RunInput, inputs: &Inputs, effects: &Effects, tail: &Tail) -> IoValue {
     let Effects {
         effect_request_ref,
         effect_response_ref,
@@ -1301,7 +1301,7 @@ fn vat_replay_divergence(expected: &VatReplayRun, actual: &VatReplayRun) -> VatR
     VatReplayDivergenceKind::StateHash
 }
 
-fn vat_replay_receipt_value(expected: &VatReplayRun, actual: &VatReplayRun) -> Result<IOValue> {
+fn vat_replay_receipt_value(expected: &VatReplayRun, actual: &VatReplayRun) -> Result<IoValue> {
     let divergence = vat_replay_divergence(expected, actual);
     let decision = if divergence == VatReplayDivergenceKind::None {
         "pass"
@@ -1346,7 +1346,7 @@ fn vat_replay_diagnostics(divergence: VatReplayDivergenceKind) -> Vec<String> {
     diagnostics
 }
 
-fn authority_edge_value(from_ref: &str, to_ref: &str, edge_kind: &str) -> IOValue {
+fn authority_edge_value(from_ref: &str, to_ref: &str, edge_kind: &str) -> IoValue {
     record("authority-edge-v1", vec![string(from_ref), string(to_ref), string(edge_kind)])
 }
 
@@ -1354,7 +1354,7 @@ fn authority_descriptor_ref(authority_kind: runtime::RuntimeObjectAuthorityKind)
     canonical_hash(&record("vat-authority-descriptor-v1", vec![string(authority_kind.as_str())]))
 }
 
-fn versioned_object_value(object_id: &'static str, schema_version: &'static str, state: &'static str) -> IOValue {
+fn versioned_object_value(object_id: &'static str, schema_version: &'static str, state: &'static str) -> IoValue {
     record("vat-versioned-object-v1", vec![string(object_id), string(schema_version), string(state)])
 }
 
@@ -1363,7 +1363,7 @@ fn vat_upgrade_recipe_value(
     target_schema: &'static str,
     transformer: &'static str,
     evidence_ref: &str,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     Ok(record("vat-object-upgrade-recipe-v1", vec![
         string(RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA),
         string(source_schema),
@@ -1373,7 +1373,7 @@ fn vat_upgrade_recipe_value(
     ]))
 }
 
-fn vat_restore_receipt_value(input: VatRestoreReceiptInput<'_>) -> IOValue {
+fn vat_restore_receipt_value(input: VatRestoreReceiptInput<'_>) -> IoValue {
     record("vat-restore-receipt-v1", vec![
         string(RUNTIME_VAT_RESTORE_RECEIPT_SCHEMA),
         string(input.decision),
@@ -1384,14 +1384,14 @@ fn vat_restore_receipt_value(input: VatRestoreReceiptInput<'_>) -> IOValue {
     ])
 }
 
-fn optional_ref_value(label: &'static str, value: Option<&str>) -> IOValue {
+fn optional_ref_value(label: &'static str, value: Option<&str>) -> IoValue {
     match value {
         Some(reference) => record(label, vec![string(reference)]),
         None => record(label, Vec::new()),
     }
 }
 
-fn restore_diagnostics(receipts: &[IOValue]) -> Result<Vec<String>> {
+fn restore_diagnostics(receipts: &[IoValue]) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(receipts.len());
     for receipt in receipts {
         let receipt_ref = canonical_hash(receipt)?;
@@ -1400,7 +1400,7 @@ fn restore_diagnostics(receipts: &[IOValue]) -> Result<Vec<String>> {
     Ok(diagnostics)
 }
 
-fn debug_diagnostics(receipts: &[IOValue]) -> Result<Vec<String>> {
+fn debug_diagnostics(receipts: &[IoValue]) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(receipts.len() + 1);
     for receipt in receipts {
         let receipt_ref = canonical_hash(receipt)?;

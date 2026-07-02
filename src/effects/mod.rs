@@ -1,4 +1,4 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 use preserves::Record;
 use preserves::Value;
 
@@ -16,23 +16,23 @@ const EFFECT_MANIFEST_SCHEMA: &str = crate::preserves_rail::EFFECT_MANIFEST_SCHE
 const EFFECT_REQUEST_SCHEMA: &str = crate::preserves_rail::EFFECT_REQUEST_SCHEMA;
 const EFFECT_RESPONSE_SCHEMA: &str = crate::preserves_rail::EFFECT_RESPONSE_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -40,7 +40,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -92,7 +92,7 @@ pub struct EffectManifest {
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,7 +115,7 @@ pub struct HandlerProfile {
     pub resource_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,7 +140,7 @@ pub struct EffectRequest {
     pub capability_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,7 +161,7 @@ pub struct EffectResponse {
     pub diagnostics: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,7 +190,7 @@ pub struct EffectBindingReceipt {
     pub diagnostics: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,7 +231,7 @@ pub struct HandlerBinding {
     pub operations: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -268,7 +268,7 @@ pub struct EffectHandle {
     pub parent_handle_ref: Option<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -321,7 +321,7 @@ pub struct CompoundHandlerProfile {
     pub resource_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -350,7 +350,7 @@ pub struct DynamicOperationRecord {
     pub resource_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -371,10 +371,10 @@ pub struct HandleCleanupReceipt {
     pub preserve_artifact: bool,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
-pub fn effect_manifest_value(input: &EffectManifestInput) -> Result<IOValue> {
+pub fn effect_manifest_value(input: &EffectManifestInput) -> Result<IoValue> {
     validate_non_empty(&input.artifact_kind, "effect manifest artifact kind")?;
     require_ref(&input.artifact_ref, "effect manifest artifact ref")?;
     validate_executor_kind(&input.executor_kind)?;
@@ -399,7 +399,7 @@ pub fn effect_manifest_value(input: &EffectManifestInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_effect_manifest(value: &IOValue) -> Result<EffectManifest> {
+pub fn parse_effect_manifest(value: &IoValue) -> Result<EffectManifest> {
     let fields = simple_record(value, "effect-manifest-v1", 7)?;
     require_schema(&fields[0], EFFECT_MANIFEST_SCHEMA, "effect manifest schema")?;
     let artifact = value_to_iovalue(&fields[1]);
@@ -429,7 +429,7 @@ pub fn parse_effect_manifest(value: &IOValue) -> Result<EffectManifest> {
     })
 }
 
-pub fn handler_profile_value(input: &HandlerProfileInput) -> Result<IOValue> {
+pub fn handler_profile_value(input: &HandlerProfileInput) -> Result<IoValue> {
     validate_handler_profile(&input.profile)?;
     validate_refs(&input.handler_binding_refs, "handler profile binding ref")?;
     validate_unique_refs(&input.handler_binding_refs, "handler profile binding ref")?;
@@ -452,7 +452,7 @@ pub fn handler_profile_value(input: &HandlerProfileInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_handler_profile(value: &IOValue) -> Result<HandlerProfile> {
+pub fn parse_handler_profile(value: &IoValue) -> Result<HandlerProfile> {
     let fields = simple_record(value, "handler-profile-v1", 7)?;
     require_schema(&fields[0], EFFECT_HANDLER_PROFILE_SCHEMA, "handler profile schema")?;
     let profile = required_record_string(&fields[1], "profile", "handler profile")?;
@@ -474,7 +474,7 @@ pub fn parse_handler_profile(value: &IOValue) -> Result<HandlerProfile> {
     })
 }
 
-pub fn effect_request_value(input: &EffectRequestInput) -> Result<IOValue> {
+pub fn effect_request_value(input: &EffectRequestInput) -> Result<IoValue> {
     require_ref(&input.artifact_ref, "effect request artifact ref")?;
     validate_effect_id(&input.effect_id)?;
     validate_operation(&input.operation)?;
@@ -498,7 +498,7 @@ pub fn effect_request_value(input: &EffectRequestInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_effect_request(value: &IOValue) -> Result<EffectRequest> {
+pub fn parse_effect_request(value: &IoValue) -> Result<EffectRequest> {
     let fields = simple_record(value, "effect-request-v1", 8)?;
     require_schema(&fields[0], EFFECT_REQUEST_SCHEMA, "effect request schema")?;
     let effect = value_to_iovalue(&fields[2]);
@@ -525,7 +525,7 @@ pub fn parse_effect_request(value: &IOValue) -> Result<EffectRequest> {
     })
 }
 
-pub fn effect_response_value(input: &EffectResponseInput) -> Result<IOValue> {
+pub fn effect_response_value(input: &EffectResponseInput) -> Result<IoValue> {
     validate_decision(&input.decision)?;
     require_ref(&input.request_ref, "effect response request ref")?;
     if let Some(output_ref) = input.output_ref.as_deref() {
@@ -543,7 +543,7 @@ pub fn effect_response_value(input: &EffectResponseInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_effect_response(value: &IOValue) -> Result<EffectResponse> {
+pub fn parse_effect_response(value: &IoValue) -> Result<EffectResponse> {
     let fields = simple_record(value, "effect-response-v1", 7)?;
     require_schema(&fields[0], EFFECT_RESPONSE_SCHEMA, "effect response schema")?;
     let decision = required_record_string(&fields[2], "decision", "effect response decision")?;
@@ -562,7 +562,7 @@ pub fn parse_effect_response(value: &IOValue) -> Result<EffectResponse> {
     })
 }
 
-pub fn effect_binding_receipt_value(input: &EffectBindingReceiptInput) -> Result<IOValue> {
+pub fn effect_binding_receipt_value(input: &EffectBindingReceiptInput) -> Result<IoValue> {
     validate_decision(&input.decision)?;
     require_ref(&input.manifest_ref, "effect binding manifest ref")?;
     require_ref(&input.handler_profile_ref, "effect binding profile ref")?;
@@ -589,7 +589,7 @@ pub fn effect_binding_receipt_value(input: &EffectBindingReceiptInput) -> Result
     ]))
 }
 
-pub fn parse_effect_binding_receipt(value: &IOValue) -> Result<EffectBindingReceipt> {
+pub fn parse_effect_binding_receipt(value: &IoValue) -> Result<EffectBindingReceipt> {
     let fields = simple_record(value, "effect-binding-receipt-v1", 9)?;
     require_schema(&fields[0], EFFECT_BINDING_RECEIPT_SCHEMA, "effect binding receipt schema")?;
     let decision = required_record_string(&fields[1], "decision", "effect binding decision")?;
@@ -623,9 +623,9 @@ pub fn parse_effect_binding_receipt(value: &IOValue) -> Result<EffectBindingRece
 }
 
 pub fn admit_effect_request(
-    manifest_value: &IOValue,
-    handler_profile_value: &IOValue,
-    request_value: &IOValue,
+    manifest_value: &IoValue,
+    handler_profile_value: &IoValue,
+    request_value: &IoValue,
     evidence_refs: &[String],
 ) -> Result<EffectBindingReceipt> {
     let manifest = parse_effect_manifest(manifest_value)?;
@@ -660,7 +660,7 @@ pub fn admit_effect_request(
     parse_effect_binding_receipt(&receipt_value)
 }
 
-pub fn handler_binding_value(input: &HandlerBindingInput) -> Result<IOValue> {
+pub fn handler_binding_value(input: &HandlerBindingInput) -> Result<IoValue> {
     validate_non_empty(&input.profile, "handler profile")?;
     validate_non_empty(&input.adapter_kind, "handler adapter kind")?;
     require_ref(&input.adapter_ref, "handler adapter ref")?;
@@ -702,7 +702,7 @@ pub fn handler_binding_value(input: &HandlerBindingInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn effect_handle_value(input: &EffectHandleInput) -> Result<IOValue> {
+pub fn effect_handle_value(input: &EffectHandleInput) -> Result<IoValue> {
     validate_non_empty(&input.kind, "effect handle kind")?;
     validate_scope(&input.scope)?;
     require_ref(&input.handler_binding_ref, "effect handle handler binding ref")?;
@@ -751,7 +751,7 @@ pub fn effect_handle_value(input: &EffectHandleInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_handler_binding(value: &IOValue) -> Result<HandlerBinding> {
+pub fn parse_handler_binding(value: &IoValue) -> Result<HandlerBinding> {
     let binding = simple_record(value, "handler-binding-v1", 9)?;
     require_schema(&binding[0], EFFECT_HANDLER_BINDING_SCHEMA, "handler binding schema")?;
     let implementation = value_to_iovalue(&binding[3]);
@@ -779,7 +779,7 @@ pub fn parse_handler_binding(value: &IOValue) -> Result<HandlerBinding> {
     })
 }
 
-pub fn parse_effect_handle(value: &IOValue) -> Result<EffectHandle> {
+pub fn parse_effect_handle(value: &IoValue) -> Result<EffectHandle> {
     let handle = simple_record(value, "effect-handle-v1", 12)?;
     require_schema(&handle[0], EFFECT_HANDLE_SCHEMA, "effect handle schema")?;
     let authority = value_to_iovalue(&handle[5]);
@@ -824,8 +824,8 @@ pub fn parse_effect_handle(value: &IOValue) -> Result<EffectHandle> {
 }
 
 pub fn validate_handle_for_request(
-    handler_value: &IOValue,
-    handle_value: &IOValue,
+    handler_value: &IoValue,
+    handle_value: &IoValue,
     request: &EffectHandleRequest<'_>,
 ) -> Result<EffectHandleValidation> {
     let handler = parse_handler_binding(handler_value)?;
@@ -833,7 +833,7 @@ pub fn validate_handle_for_request(
     validate_parsed_handle_for_request(&handler, &handle, request)
 }
 
-pub fn compound_handler_profile_value(input: &CompoundHandlerProfileInput) -> Result<IOValue> {
+pub fn compound_handler_profile_value(input: &CompoundHandlerProfileInput) -> Result<IoValue> {
     validate_non_empty(&input.profile, "compound handler profile")?;
     validate_scope(&input.scope)?;
     validate_refs(&input.handler_binding_refs, "compound handler binding ref")?;
@@ -872,7 +872,7 @@ pub fn compound_handler_profile_value(input: &CompoundHandlerProfileInput) -> Re
     ]))
 }
 
-pub fn parse_compound_handler_profile(value: &IOValue) -> Result<CompoundHandlerProfile> {
+pub fn parse_compound_handler_profile(value: &IoValue) -> Result<CompoundHandlerProfile> {
     let profile = simple_record(value, "compound-handler-profile-v1", 9)?;
     require_schema(&profile[0], EFFECT_COMPOUND_HANDLER_SCHEMA, "compound handler schema")?;
     let policy = value_to_iovalue(&profile[5]);
@@ -903,7 +903,7 @@ pub fn parse_compound_handler_profile(value: &IOValue) -> Result<CompoundHandler
     })
 }
 
-pub fn dynamic_operation_record_value(input: &DynamicOperationRecordInput) -> Result<IOValue> {
+pub fn dynamic_operation_record_value(input: &DynamicOperationRecordInput) -> Result<IoValue> {
     validate_operation(&input.operation)?;
     require_ref(&input.adapter_ref, "dynamic operation adapter ref")?;
     require_ref(&input.callable_ref, "dynamic operation callable ref")?;
@@ -931,7 +931,7 @@ pub fn dynamic_operation_record_value(input: &DynamicOperationRecordInput) -> Re
     ]))
 }
 
-pub fn parse_dynamic_operation_record(value: &IOValue) -> Result<DynamicOperationRecord> {
+pub fn parse_dynamic_operation_record(value: &IoValue) -> Result<DynamicOperationRecord> {
     let operation = simple_record(value, "dynamic-operation-v1", 10)?;
     require_schema(&operation[0], EFFECT_DYNAMIC_OPERATION_SCHEMA, "dynamic operation schema")?;
     let policy = value_to_iovalue(&operation[6]);
@@ -955,7 +955,7 @@ pub fn parse_dynamic_operation_record(value: &IOValue) -> Result<DynamicOperatio
     })
 }
 
-pub fn attenuated_handle_value(parent_handle_value: &IOValue, input: &HandleAttenuationInput) -> Result<IOValue> {
+pub fn attenuated_handle_value(parent_handle_value: &IoValue, input: &HandleAttenuationInput) -> Result<IoValue> {
     let parent = parse_effect_handle(parent_handle_value)?;
     validate_scope_narrows(&parent.scope, &input.scope)?;
     validate_operation_subset(&parent.operations, &input.operations)?;
@@ -992,7 +992,7 @@ pub fn handle_cleanup_receipt_value(
     live_usable: bool,
     preserve_artifact: bool,
     evidence_refs: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     require_ref(handle_ref, "cleanup handle ref")?;
     validate_non_empty(action, "cleanup action")?;
     validate_refs(evidence_refs, "cleanup evidence ref")?;
@@ -1011,7 +1011,7 @@ pub fn handle_cleanup_receipt_value(
     ]))
 }
 
-pub fn parse_handle_cleanup_receipt(value: &IOValue) -> Result<HandleCleanupReceipt> {
+pub fn parse_handle_cleanup_receipt(value: &IoValue) -> Result<HandleCleanupReceipt> {
     let receipt = simple_record(value, "handle-cleanup-v1", 7)?;
     require_schema(&receipt[0], EFFECT_HANDLE_CLEANUP_SCHEMA, "handle cleanup schema")?;
     let checks = parse_checks(&receipt[6])?;
@@ -1131,7 +1131,7 @@ fn require_lifetime_match(handle: &EffectHandle, request: &EffectHandleRequest<'
     Ok(())
 }
 
-fn scope_value(scope: &EffectScope) -> IOValue {
+fn scope_value(scope: &EffectScope) -> IoValue {
     record("scope", vec![
         record("run", vec![string(&scope.run_ref)]),
         record("session", vec![string(&scope.session_ref)]),
@@ -1140,7 +1140,7 @@ fn scope_value(scope: &EffectScope) -> IOValue {
     ])
 }
 
-fn parse_scope(value: &Value<IOValue>) -> Result<EffectScope> {
+fn parse_scope(value: &Value<IoValue>) -> Result<EffectScope> {
     let value = value_to_iovalue(value);
     let scope = simple_record(&value, "scope", 4)?;
     Ok(EffectScope {
@@ -1179,7 +1179,7 @@ fn require_scope_match(scope: &EffectScope, request: &EffectHandleRequest<'_>, l
     Ok(())
 }
 
-fn declared_effect_value(effect: &DeclaredEffect) -> IOValue {
+fn declared_effect_value(effect: &DeclaredEffect) -> IoValue {
     record("declared-effect", vec![
         record("effect-id", vec![string(&effect.effect_id)]),
         record("operation", vec![string(&effect.operation)]),
@@ -1188,39 +1188,39 @@ fn declared_effect_value(effect: &DeclaredEffect) -> IOValue {
     ])
 }
 
-fn operations_record(operations: &[String]) -> IOValue {
+fn operations_record(operations: &[String]) -> IoValue {
     record("operations", vec![sequence(operations.iter().map(string).collect())])
 }
 
-fn refs_record(label: &'static str, refs: &[String]) -> IOValue {
+fn refs_record(label: &'static str, refs: &[String]) -> IoValue {
     record(label, vec![sequence(refs.iter().map(string).collect())])
 }
 
-fn checks_value(checks: &[&str]) -> IOValue {
+fn checks_value(checks: &[&str]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|check| record("check", vec![string(*check), string("pass")])).collect(),
     )])
 }
 
-fn diagnostics_record(diagnostics: &[String]) -> IOValue {
+fn diagnostics_record(diagnostics: &[String]) -> IoValue {
     record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())])
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_u64_value(value: Option<u64>) -> IOValue {
+fn optional_u64_value(value: Option<u64>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![u64_value(value)]))
 }
 
-fn parse_optional_ref_record(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn parse_optional_ref_record(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1230,7 +1230,7 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn parse_optional_u64_value(value: &Value<IOValue>) -> Result<Option<u64>> {
+fn parse_optional_u64_value(value: &Value<IoValue>) -> Result<Option<u64>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1240,7 +1240,7 @@ fn parse_optional_u64_value(value: &Value<IOValue>) -> Result<Option<u64>> {
     required_u64(value, "optional u64").map(Some)
 }
 
-fn parse_ref_sequence_record(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_record(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let sequence = required_sequence(&record[0], label)?;
@@ -1251,13 +1251,13 @@ fn parse_ref_sequence_record(value: &Value<IOValue>, label: &str) -> Result<Vec<
     Ok(refs)
 }
 
-fn parse_string_sequence_record(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_string_sequence_record(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let strings = parse_string_sequence_record_unvalidated(value, label)?;
     validate_operations(&strings)?;
     Ok(strings)
 }
 
-fn parse_string_sequence_record_unvalidated(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_string_sequence_record_unvalidated(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let sequence = required_sequence(&record[0], label)?;
@@ -1268,7 +1268,7 @@ fn parse_string_sequence_record_unvalidated(value: &Value<IOValue>, label: &str)
     Ok(strings)
 }
 
-fn parse_declared_effects(value: &Value<IOValue>) -> Result<Vec<DeclaredEffect>> {
+fn parse_declared_effects(value: &Value<IoValue>) -> Result<Vec<DeclaredEffect>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, "effects", 1)?;
     let sequence = required_sequence(&record[0], "declared effects")?;
@@ -1290,7 +1290,7 @@ fn parse_declared_effects(value: &Value<IOValue>) -> Result<Vec<DeclaredEffect>>
     Ok(effects)
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks_record = simple_record(&value, "checks", 1)?;
     let check_values = required_sequence(&checks_record[0], "effect checks")?;
@@ -1487,7 +1487,7 @@ fn require_operation(operations: &[String], operation: &str, label: &str) -> Res
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual == expected {
         Ok(())
@@ -1497,37 +1497,37 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let reference = required_string(value, field)?;
     require_ref(&reference, field)?;
     Ok(reference)
@@ -1539,13 +1539,13 @@ fn require_ref(value: &str, field: &str) -> Result<()> {
     })
 }
 
-fn required_record_string(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+fn required_record_string(value: &Value<IoValue>, label: &str, field: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], field)
 }
 
-fn required_record_bool(value: &Value<IOValue>, label: &str, field: &str) -> Result<bool> {
+fn required_record_bool(value: &Value<IoValue>, label: &str, field: &str) -> Result<bool> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     record[0]
@@ -1553,7 +1553,7 @@ fn required_record_bool(value: &Value<IOValue>, label: &str, field: &str) -> Res
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected boolean for {field}")))
 }
 
-fn required_record_ref(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+fn required_record_ref(value: &Value<IoValue>, label: &str, field: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], field)
@@ -1586,7 +1586,7 @@ mod tests {
         }
     }
 
-    fn manifest_profile_and_request(effect_id: &str, operation: &str) -> (IOValue, IOValue, IOValue) {
+    fn manifest_profile_and_request(effect_id: &str, operation: &str) -> (IoValue, IoValue, IoValue) {
         let artifact_ref = fake_ref("artifact");
         let manifest = effect_manifest_value(&EffectManifestInput {
             artifact_kind: "wasm".to_string(),
@@ -1619,7 +1619,7 @@ mod tests {
         (manifest, profile, request)
     }
 
-    fn binding_and_handle(operation: &str) -> (IOValue, IOValue, EffectScope, String, String) {
+    fn binding_and_handle(operation: &str) -> (IoValue, IoValue, EffectScope, String, String) {
         let actor_ref = fake_ref("actor-a");
         let scope = scope(Some(actor_ref.clone()));
         let policy_ref = fake_ref("policy");
@@ -1664,7 +1664,7 @@ mod tests {
         policy_ref: &str,
         capability_ref: &str,
         suffix: &str,
-    ) -> (IOValue, IOValue, Vec<String>) {
+    ) -> (IoValue, IoValue, Vec<String>) {
         let resource_refs = vec![fake_ref(&format!("resource-{suffix}"))];
         let binding = handler_binding_value(&HandlerBindingInput {
             profile: "local".to_string(),
@@ -1871,8 +1871,8 @@ mod tests {
 
     struct Bundle {
         seed: Seed,
-        parent: IOValue,
-        child: IOValue,
+        parent: IoValue,
+        child: IoValue,
     }
 
     fn seed() -> Seed {
@@ -1904,7 +1904,7 @@ mod tests {
         }
     }
 
-    fn parent(seed: &Seed) -> IOValue {
+    fn parent(seed: &Seed) -> IoValue {
         effect_handle_value(&EffectHandleInput {
             kind: ADAPTER_KIND_STORAGE.to_string(),
             scope: seed.scope.clone(),
@@ -1923,7 +1923,7 @@ mod tests {
         .expect("parent handle")
     }
 
-    fn child(seed: &Seed, parent: &IOValue) -> IOValue {
+    fn child(seed: &Seed, parent: &IoValue) -> IoValue {
         attenuated_handle_value(parent, &HandleAttenuationInput {
             scope: seed.scope.clone(),
             operations: vec!["read".to_string()],
@@ -1977,7 +1977,7 @@ mod tests {
         assert_eq!(parse_dynamic_operation_record(&dynamic).expect("parse dynamic").operation, "read");
     }
 
-    fn check_cleanup(child: &IOValue) {
+    fn check_cleanup(child: &IoValue) {
         let cleanup = handle_cleanup_receipt_value(
             &canonical_hash(child).expect("child ref"),
             "revoke-live-cache",
@@ -2003,7 +2003,7 @@ mod tests {
         capability_ref: String,
         resource_refs: Vec<String>,
         operations: Vec<String>,
-        binding: IOValue,
+        binding: IoValue,
         binding_ref: String,
     }
 
@@ -2058,7 +2058,7 @@ mod tests {
         assert_eq!(parse_handler_profile(&handler_profile).expect("parse handler profile").profile, case.profile);
     }
 
-    fn handle_for(case: &Case, material: &Material) -> IOValue {
+    fn handle_for(case: &Case, material: &Material) -> IoValue {
         effect_handle_value(&EffectHandleInput {
             kind: case.adapter_kind.to_string(),
             scope: material.scope.clone(),
@@ -2080,7 +2080,7 @@ mod tests {
         .expect("effect handle")
     }
 
-    fn assert_operations(case: &Case, material: &Material, handle: &IOValue) {
+    fn assert_operations(case: &Case, material: &Material, handle: &IoValue) {
         for operation in &material.operations {
             validate_handle_for_request(&material.binding, handle, &EffectHandleRequest {
                 kind: case.adapter_kind,
@@ -2163,7 +2163,7 @@ mod tests {
         }
     }
 
-    fn chaos_binding(env: &Env) -> IOValue {
+    fn chaos_binding(env: &Env) -> IoValue {
         handler_binding_value(&HandlerBindingInput {
             profile: HANDLER_PROFILE_CHAOS.to_string(),
             scope: env.scope.clone(),
@@ -2180,7 +2180,7 @@ mod tests {
         .expect("chaos binding")
     }
 
-    fn chaos_handle(env: &Env, binding_ref: String) -> IOValue {
+    fn chaos_handle(env: &Env, binding_ref: String) -> IoValue {
         effect_handle_value(&EffectHandleInput {
             kind: ADAPTER_KIND_DATASPACE.to_string(),
             scope: env.scope.clone(),
@@ -2231,7 +2231,7 @@ mod tests {
         .expect("bounded chaos delay validates");
     }
 
-    fn metric_binding(env: &Env) -> IOValue {
+    fn metric_binding(env: &Env) -> IoValue {
         handler_binding_value(&HandlerBindingInput {
             profile: HANDLER_PROFILE_PROFILING.to_string(),
             scope: env.scope.clone(),

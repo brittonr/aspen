@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 use redb::ReadableTableMetadata;
@@ -56,15 +56,15 @@ mod fs {
     }
 }
 
-fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
 }
 
-fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IoValue> {
     crate::preserves_rail::parse_canonical_bytes(bytes)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
@@ -84,19 +84,19 @@ fn content_ref_hex(value: &str) -> Result<&str> {
     crate::preserves_rail::content_ref_hex(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -104,7 +104,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -172,7 +172,7 @@ pub struct ChunkManifest {
     pub chunks: Vec<ChunkRef>,
     pub root_ref: String,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -182,8 +182,8 @@ pub struct ChunkStorePut {
     pub total_len: u64,
     pub chunk_refs: Vec<String>,
     pub dedup_hits: usize,
-    pub manifest_value: IOValue,
-    pub receipt_value: IOValue,
+    pub manifest_value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,14 +191,14 @@ pub struct ChunkStoreVerify {
     pub manifest_ref: String,
     pub total_len: u64,
     pub chunk_refs: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChunkStoreRead {
     pub manifest_ref: String,
     pub bytes: Vec<u8>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -207,7 +207,7 @@ pub struct ChunkStoreRangeRead {
     pub offset: u64,
     pub length: u64,
     pub bytes: Vec<u8>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -215,7 +215,7 @@ pub struct ChunkStoreSync {
     pub manifest_ref: String,
     pub missing_before: Vec<String>,
     pub fetched_chunks: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,7 +224,7 @@ pub struct ChunkStoreIrohPublish {
     pub manifest_ref: String,
     pub manifest_blob_ref: String,
     pub chunk_blob_refs: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,7 +234,7 @@ pub struct ChunkStoreIrohFetch {
     pub manifest_blob_ref: String,
     pub missing_before: Vec<String>,
     pub fetched_chunks: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -259,7 +259,7 @@ pub struct ChunkStoreGc {
     pub removed_chunks: Vec<String>,
     pub retention_receipt_refs: Vec<String>,
     pub execution_gate_refs: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -274,7 +274,7 @@ pub struct ChunkStorePin {
     pub kind: String,
     pub reference: String,
     pub pinned: bool,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -292,7 +292,7 @@ pub struct ChunkStoreIndexStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChunkStoreIndexRebuild {
     pub status: ChunkStoreIndexStatus,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -309,8 +309,8 @@ pub struct ChunkStoreReceipt {
     pub manifest_ref: Option<String>,
     pub chunk_refs: Vec<String>,
     pub checks: Vec<ChunkStoreReceiptCheck>,
-    pub details: Vec<IOValue>,
-    pub value: IOValue,
+    pub details: Vec<IoValue>,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -322,7 +322,7 @@ pub struct ChunkLineage {
     pub receipt_refs: Vec<String>,
     pub verify_receipt_ref: String,
     pub predicate_receipt_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 pub struct PutBytesWithMetadataInput<'a> {
@@ -330,7 +330,7 @@ pub struct PutBytesWithMetadataInput<'a> {
     pub object_kind: &'a str,
     pub bytes: &'a [u8],
     pub chunk_size: u64,
-    pub metadata: &'a IOValue,
+    pub metadata: &'a IoValue,
     pub policy_refs: &'a [String],
 }
 
@@ -339,7 +339,7 @@ pub struct PutBytesWithTransformsInput<'a> {
     pub object_kind: &'a str,
     pub bytes: &'a [u8],
     pub chunk_size: u64,
-    pub metadata: &'a IOValue,
+    pub metadata: &'a IoValue,
     pub policy_refs: &'a [String],
     pub transforms: &'a ChunkTransforms,
 }
@@ -377,7 +377,7 @@ struct Ready {
 }
 
 struct Written {
-    values: Vec<IOValue>,
+    values: Vec<IoValue>,
     refs: Vec<ChunkRef>,
     dedup_refs: Vec<String>,
     dedup_hits: usize,
@@ -617,7 +617,7 @@ pub fn read_manifest(root: &Path, manifest_ref: &str) -> Result<ChunkManifest> {
     parse_manifest_value(&value, Some(manifest_ref))
 }
 
-pub fn parse_manifest_value(value: &IOValue, expected_manifest_ref: Option<&str>) -> Result<ChunkManifest> {
+pub fn parse_manifest_value(value: &IoValue, expected_manifest_ref: Option<&str>) -> Result<ChunkManifest> {
     let fields = simple_record_any(value, "chunk-manifest-v1")?;
     let arity = record_arity(&fields);
     if arity != 10 && arity != 11 {
@@ -683,7 +683,7 @@ pub fn parse_manifest_value(value: &IOValue, expected_manifest_ref: Option<&str>
     })
 }
 
-fn refs_from_values(values: &[IOValue], chunk_size: u64, transforms: &ChunkTransforms) -> Result<Vec<ChunkRef>> {
+fn refs_from_values(values: &[IoValue], chunk_size: u64, transforms: &ChunkTransforms) -> Result<Vec<ChunkRef>> {
     let mut chunks = Vec::new();
     for value in values {
         let chunk = parse_chunk_ref_value(value, chunk_size)?;
@@ -710,7 +710,7 @@ fn ensure_distinct_commitments(chunks: &[ChunkRef]) -> Result<()> {
     Ok(())
 }
 
-pub fn parse_chunk_ref_value(value: &IOValue, expected_chunk_size: u64) -> Result<ChunkRef> {
+pub fn parse_chunk_ref_value(value: &IoValue, expected_chunk_size: u64) -> Result<ChunkRef> {
     let fields = simple_record_any(value, "chunk-ref-v1")?;
     let arity = record_arity(&fields);
     if arity != 7 && arity != 8 {
@@ -2138,10 +2138,10 @@ struct GcReceiptInput<'a> {
     removed_manifests: &'a [String],
     removed_chunks: &'a [String],
     notes: &'a GcNotes,
-    evidence_summary: &'a IOValue,
+    evidence_summary: &'a IoValue,
 }
 
-fn gc_receipt_value(input: GcReceiptInput<'_>) -> IOValue {
+fn gc_receipt_value(input: GcReceiptInput<'_>) -> IoValue {
     receipt_value(ChunkStoreReceiptValueInput {
         operation: "gc",
         decision: input.decision,
@@ -2177,7 +2177,7 @@ fn gc_receipt_value(input: GcReceiptInput<'_>) -> IOValue {
     })
 }
 
-fn gc_tombstone_value(input: GcReceiptInput<'_>) -> Option<IOValue> {
+fn gc_tombstone_value(input: GcReceiptInput<'_>) -> Option<IoValue> {
     if input.is_dry_run
         || input.decision != "pass"
         || (input.removed_manifests.is_empty() && input.removed_chunks.is_empty())
@@ -2213,7 +2213,7 @@ struct GcFinishInput<'a> {
     is_dry_run: bool,
     targets: GcTargets,
     notes: GcNotes,
-    evidence_summary: IOValue,
+    evidence_summary: IoValue,
 }
 
 fn finish_gc(input: GcFinishInput<'_>) -> Result<ChunkStoreGc> {
@@ -2390,9 +2390,9 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
 
 struct LinkSeries {
     refs: Vec<String>,
-    values: Vec<IOValue>,
+    values: Vec<IoValue>,
     receipt_refs: Vec<String>,
-    receipt_values: Vec<IOValue>,
+    receipt_values: Vec<IoValue>,
 }
 
 fn link_series(
@@ -2461,9 +2461,9 @@ fn link_series(
 }
 
 struct PassEvidence {
-    predicate_values: Vec<IOValue>,
+    predicate_values: Vec<IoValue>,
     predicate_refs: Vec<String>,
-    verify_value: IOValue,
+    verify_value: IoValue,
     verify_ref: String,
 }
 
@@ -2527,7 +2527,7 @@ struct PredicateInput<'a> {
     ends: &'a Ends,
 }
 
-fn predicate_set(input: PredicateInput<'_>) -> Vec<IOValue> {
+fn predicate_set(input: PredicateInput<'_>) -> Vec<IoValue> {
     let context_refs = vec![
         input.manifest.manifest_ref.clone(),
         input.manifest.root_ref.clone(),
@@ -2594,7 +2594,7 @@ struct VerifyInput<'a> {
     predicate_refs: &'a [String],
 }
 
-fn verify_value(input: VerifyInput<'_>) -> IOValue {
+fn verify_value(input: VerifyInput<'_>) -> IoValue {
     let verify_diagnostics = Vec::new();
     let verify_receipt = evidence_chain::ChainVerifyReceiptValueInput {
         decision: "pass",
@@ -2613,7 +2613,7 @@ fn verify_value(input: VerifyInput<'_>) -> IOValue {
     })
 }
 
-pub fn parse_chunk_lineage_value(value: &IOValue) -> Result<ChunkLineage> {
+pub fn parse_chunk_lineage_value(value: &IoValue) -> Result<ChunkLineage> {
     let fields = simple_record(value, "chunk-lineage-v1", 8)?;
     require_schema(&fields[0], CHUNK_LINEAGE_SCHEMA, "chunk lineage")?;
     let manifest_ref = record_string(&fields[1], "manifest")?;
@@ -2687,7 +2687,7 @@ pub fn parse_chunk_lineage_value(value: &IOValue) -> Result<ChunkLineage> {
 struct EntryInput<'a> {
     manifest_ref: &'a str,
     root_ref: &'a str,
-    link_values: &'a [IOValue],
+    link_values: &'a [IoValue],
     receipts: &'a [ChunkStoreReceipt],
 }
 
@@ -2739,7 +2739,7 @@ struct LinkInput<'a> {
     root_ref: &'a str,
     position: usize,
     previous_ref: Option<&'a str>,
-    value: &'a IOValue,
+    value: &'a IoValue,
     receipt: &'a ChunkStoreReceipt,
 }
 
@@ -2840,7 +2840,7 @@ fn lineage_context_refs(
 }
 
 struct DetailContextRefsInput<'a> {
-    value: &'a IOValue,
+    value: &'a IoValue,
     refs: &'a mut Vec<evidence_chain::ChainContextRef>,
 }
 
@@ -2892,8 +2892,8 @@ fn collect_detail_context_refs_push_text(input: DetailTextInput<'_>) -> Result<(
 }
 
 struct DetailChildInput<'a> {
-    value: &'a IOValue,
-    pending: &'a mut Vec<IOValue>,
+    value: &'a IoValue,
+    pending: &'a mut Vec<IoValue>,
 }
 
 fn collect_detail_context_refs_push_children(input: DetailChildInput<'_>) -> Result<()> {
@@ -2949,8 +2949,8 @@ fn collect_detail_context_refs_push_children(input: DetailChildInput<'_>) -> Res
 }
 
 struct DetailPushInput<'a> {
-    values: &'a mut Vec<IOValue>,
-    value: IOValue,
+    values: &'a mut Vec<IoValue>,
+    value: IoValue,
 }
 
 fn collect_detail_context_refs_push_child(input: DetailPushInput<'_>) -> Result<()> {
@@ -2960,13 +2960,13 @@ fn collect_detail_context_refs_push_child(input: DetailPushInput<'_>) -> Result<
 struct LineageValueInput<'a> {
     manifest_ref: &'a str,
     root_ref: &'a str,
-    link_values: &'a [IOValue],
-    receipt_values: &'a [IOValue],
-    verify_receipt_value: &'a IOValue,
-    predicate_values: &'a [IOValue],
+    link_values: &'a [IoValue],
+    receipt_values: &'a [IoValue],
+    verify_receipt_value: &'a IoValue,
+    predicate_values: &'a [IoValue],
 }
 
-fn lineage_value(input: &LineageValueInput<'_>) -> IOValue {
+fn lineage_value(input: &LineageValueInput<'_>) -> IoValue {
     record("chunk-lineage-v1", vec![
         string(CHUNK_LINEAGE_SCHEMA),
         record("manifest", vec![string(input.manifest_ref)]),
@@ -2990,7 +2990,7 @@ fn lineage_value(input: &LineageValueInput<'_>) -> IOValue {
     ])
 }
 
-fn parse_lineage_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_lineage_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let checks = value
         .collect_simple_record("checks", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected <checks ...> field"))?;
@@ -3019,7 +3019,7 @@ fn require_lineage_check(checks: &[String], expected: &str) -> Result<()> {
     }
 }
 
-fn lineage_record_value(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
+fn lineage_record_value(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let record = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
@@ -3051,7 +3051,7 @@ fn require_chunk_lineage_predicate<'a>(
 }
 
 fn validate_chunk_lineage_verify_receipt(
-    value: &IOValue,
+    value: &IoValue,
     chain: &evidence_chain::ChainScope,
     link_refs: &[String],
     receipt_refs: &[String],
@@ -3096,7 +3096,7 @@ fn validate_chunk_lineage_verify_receipt(
     Ok(())
 }
 
-fn parse_lineage_chain_scope(value: &Value<IOValue>) -> Result<evidence_chain::ChainScope> {
+fn parse_lineage_chain_scope(value: &Value<IoValue>) -> Result<evidence_chain::ChainScope> {
     let chain = value
         .collect_simple_record("chain", Some(3))
         .ok_or_else(|| MoltenError::invalid_harness("expected chain scope field"))?;
@@ -3107,7 +3107,7 @@ fn parse_lineage_chain_scope(value: &Value<IOValue>) -> Result<evidence_chain::C
     ))
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let record = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
@@ -3229,7 +3229,7 @@ fn scan_manifest_chunks(
     Ok(())
 }
 
-fn write_inputs(root: &Path, inputs: &IndexInputs) -> Result<IOValue> {
+fn write_inputs(root: &Path, inputs: &IndexInputs) -> Result<IoValue> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     clear_index_tables_in_tx(&write_txn)?;
@@ -3280,7 +3280,7 @@ fn write_pin_entries(
     Ok(())
 }
 
-fn rebuild_receipt(inputs: &IndexInputs) -> IOValue {
+fn rebuild_receipt(inputs: &IndexInputs) -> IoValue {
     let chunk_refs = inputs.chunk_entries.keys().cloned().collect::<Vec<_>>();
     receipt_value(ChunkStoreReceiptValueInput {
         operation: "index-rebuild",
@@ -3309,12 +3309,12 @@ struct ChunkManifestValueInput<'a> {
     transforms: &'a ChunkTransforms,
     metadata_ref: &'a str,
     policy_refs: &'a [String],
-    chunks: &'a [IOValue],
+    chunks: &'a [IoValue],
     root_ref: &'a str,
     evidence_refs: &'a [String],
 }
 
-fn manifest_value(input: &ChunkManifestValueInput<'_>) -> IOValue {
+fn manifest_value(input: &ChunkManifestValueInput<'_>) -> IoValue {
     record("chunk-manifest-v1", vec![
         string(CHUNK_MANIFEST_SCHEMA),
         record("object-kind", vec![string(input.object_kind)]),
@@ -3330,7 +3330,7 @@ fn manifest_value(input: &ChunkManifestValueInput<'_>) -> IOValue {
     ])
 }
 
-fn chunk_ref_value(chunk_ref: &str, length: u64, chunk_size: usize, transforms: &ChunkTransforms) -> IOValue {
+fn chunk_ref_value(chunk_ref: &str, length: u64, chunk_size: usize, transforms: &ChunkTransforms) -> IoValue {
     record("chunk-ref-v1", vec![
         string(CHUNK_REF_SCHEMA),
         record("hash", vec![string(chunk_ref)]),
@@ -3367,7 +3367,7 @@ impl ChunkTransforms {
     }
 }
 
-fn transforms_value(transforms: &ChunkTransforms) -> IOValue {
+fn transforms_value(transforms: &ChunkTransforms) -> IoValue {
     record("transforms-v1", vec![
         string(CHUNK_TRANSFORMS_SCHEMA),
         record("compression", vec![string(&transforms.compression)]),
@@ -3380,7 +3380,7 @@ fn transforms_value(transforms: &ChunkTransforms) -> IOValue {
     ])
 }
 
-fn parse_transforms_field(value: &Value<IOValue>) -> Result<ChunkTransforms> {
+fn parse_transforms_field(value: &Value<IoValue>) -> Result<ChunkTransforms> {
     let fields = value
         .collect_simple_record("transforms", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected <transforms ...> field"))?;
@@ -3521,10 +3521,10 @@ struct ChunkStoreReceiptValueInput<'a> {
     manifest_ref: Option<&'a str>,
     chunk_refs: &'a [String],
     checks: Vec<(&'a str, &'a str)>,
-    details: Vec<IOValue>,
+    details: Vec<IoValue>,
 }
 
-fn receipt_value(input: ChunkStoreReceiptValueInput<'_>) -> IOValue {
+fn receipt_value(input: ChunkStoreReceiptValueInput<'_>) -> IoValue {
     record("chunk-store-receipt-v1", vec![
         string(CHUNK_STORE_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -3548,7 +3548,7 @@ fn denial_receipt_value(
     chunk_refs: &[String],
     reason: impl Into<String>,
     checks: Vec<(&str, &str)>,
-) -> IOValue {
+) -> IoValue {
     let reason = reason.into();
     receipt_value(ChunkStoreReceiptValueInput {
         operation,
@@ -3560,7 +3560,7 @@ fn denial_receipt_value(
     })
 }
 
-pub fn parse_receipt_value(value: &IOValue, expected_receipt_ref: Option<&str>) -> Result<ChunkStoreReceipt> {
+pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) -> Result<ChunkStoreReceipt> {
     let fields = simple_record(value, "chunk-store-receipt-v1", 7)?;
     require_schema(&fields[0], CHUNK_STORE_RECEIPT_SCHEMA, "chunk store receipt")?;
     let operation = record_string(&fields[1], "operation")?;
@@ -3623,7 +3623,7 @@ pub fn parse_receipt_value(value: &IOValue, expected_receipt_ref: Option<&str>) 
     })
 }
 
-fn chunk_index_value(chunk: &ChunkRef) -> IOValue {
+fn chunk_index_value(chunk: &ChunkRef) -> IoValue {
     record("chunk-index-v1", vec![
         string(CHUNK_INDEX_SCHEMA),
         record("chunk-ref", vec![string(&chunk.chunk_ref)]),
@@ -3634,7 +3634,7 @@ fn chunk_index_value(chunk: &ChunkRef) -> IOValue {
     ])
 }
 
-fn partial_fetch_value(manifest_ref: &str, status: &str, missing_before: &[String], fetched: &[String]) -> IOValue {
+fn partial_fetch_value(manifest_ref: &str, status: &str, missing_before: &[String], fetched: &[String]) -> IoValue {
     record("partial-fetch-v1", vec![
         string(PARTIAL_FETCH_SCHEMA),
         record("manifest", vec![string(manifest_ref)]),
@@ -3644,7 +3644,7 @@ fn partial_fetch_value(manifest_ref: &str, status: &str, missing_before: &[Strin
     ])
 }
 
-fn iroh_ticket_value(manifest_ref: &str, manifest_blob_ref: &str, chunks: &[IrohChunkBlob]) -> IOValue {
+fn iroh_ticket_value(manifest_ref: &str, manifest_blob_ref: &str, chunks: &[IrohChunkBlob]) -> IoValue {
     record("chunk-store-iroh-ticket-v1", vec![
         string(CHUNK_IROH_TICKET_SCHEMA),
         record("adapter", vec![string("iroh-local")]),
@@ -3665,7 +3665,7 @@ fn iroh_ticket_value(manifest_ref: &str, manifest_blob_ref: &str, chunks: &[Iroh
     ])
 }
 
-fn parse_iroh_ticket_value(value: &IOValue) -> Result<IrohChunkTicket> {
+fn parse_iroh_ticket_value(value: &IoValue) -> Result<IrohChunkTicket> {
     let fields = simple_record(value, "chunk-store-iroh-ticket-v1", 5)?;
     require_schema(&fields[0], CHUNK_IROH_TICKET_SCHEMA, "chunk-store Iroh ticket")?;
     let adapter = record_string(&fields[1], "adapter")?;
@@ -3719,7 +3719,7 @@ fn parse_iroh_ticket_value(value: &IOValue) -> Result<IrohChunkTicket> {
     })
 }
 
-fn read_iroh_ticket(root: &Path, manifest_ref: &str) -> Result<IOValue> {
+fn read_iroh_ticket(root: &Path, manifest_ref: &str) -> Result<IoValue> {
     let bytes = fs::read(iroh_ticket_path(root, manifest_ref)?).map_err(MoltenError::from)?;
     parse_canonical_bytes(&bytes)
 }
@@ -3733,13 +3733,13 @@ fn read_iroh_blob(root: &Path, blob_ref: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn index_put(root: &Path, manifest_value: &IOValue, chunks: &[ChunkRef], receipt_value: &IOValue) -> Result<()> {
+fn index_put(root: &Path, manifest_value: &IoValue, chunks: &[ChunkRef], receipt_value: &IoValue) -> Result<()> {
     let manifest = parse_manifest_value(manifest_value, None)?;
     let chunk_refs = chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
     index_set_manifest_chunk_availability(root, &manifest, &chunk_refs, &[], Some(receipt_value))
 }
 
-fn index_manifest_available(root: &Path, manifest: &ChunkManifest, receipt_value: &IOValue) -> Result<()> {
+fn index_manifest_available(root: &Path, manifest: &ChunkManifest, receipt_value: &IoValue) -> Result<()> {
     let chunk_refs = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
     index_set_manifest_chunk_availability(root, manifest, &chunk_refs, &[], Some(receipt_value))
 }
@@ -3749,7 +3749,7 @@ fn index_set_manifest_chunk_availability(
     manifest: &ChunkManifest,
     available: &[String],
     missing: &[String],
-    receipt_value: Option<&IOValue>,
+    receipt_value: Option<&IoValue>,
 ) -> Result<()> {
     let available = available.iter().cloned().collect::<BTreeSet<_>>();
     let missing = missing.iter().cloned().collect::<BTreeSet<_>>();
@@ -3804,7 +3804,7 @@ fn index_set_pin(
     kind: &str,
     reference: &str,
     pinned: bool,
-    receipt_value: Option<&IOValue>,
+    receipt_value: Option<&IoValue>,
 ) -> Result<()> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
@@ -3828,8 +3828,8 @@ struct IndexApplyGcInput<'a> {
     dry_run: bool,
     removed_manifests: &'a [String],
     removed_chunks: &'a [String],
-    receipt_value: &'a IOValue,
-    tombstone_receipt: Option<&'a IOValue>,
+    receipt_value: &'a IoValue,
+    tombstone_receipt: Option<&'a IoValue>,
 }
 
 fn index_apply_gc(input: &IndexApplyGcInput<'_>) -> Result<()> {
@@ -3862,14 +3862,14 @@ fn index_apply_gc(input: &IndexApplyGcInput<'_>) -> Result<()> {
     write_txn.commit().map_err(index_error)
 }
 
-fn store_receipt(root: &Path, receipt_value: &IOValue) -> Result<()> {
+fn store_receipt(root: &Path, receipt_value: &IoValue) -> Result<()> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     store_receipt_in_tx(&write_txn, receipt_value)?;
     write_txn.commit().map_err(index_error)
 }
 
-fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IOValue) -> Result<()> {
+fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IoValue) -> Result<()> {
     let parsed = parse_receipt_value(receipt_value, None)?;
     let receipt_bytes = canonical_bytes(receipt_value)?;
     let mut receipts = write_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
@@ -4241,7 +4241,7 @@ fn write_immutable_bytes(
     path: &Path,
     bytes: &[u8],
     expected_ref: &str,
-    parser: fn(&[u8]) -> Result<IOValue>,
+    parser: fn(&[u8]) -> Result<IoValue>,
 ) -> Result<()> {
     if path.exists() {
         let existing = fs::read(path).map_err(MoltenError::from)?;
@@ -4274,40 +4274,40 @@ fn write_immutable_blob(path: &Path, bytes: &[u8], expected_ref: &str) -> Result
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
-fn simple_record_any<'a>(value: &'a IOValue, label: &str) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+fn simple_record_any<'a>(value: &'a IoValue, label: &str) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, None)
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> record")))
 }
 
-fn record_arity(record: &Record<Value<IOValue>>) -> usize {
+fn record_arity(record: &Record<Value<IoValue>>) -> usize {
     record._vec().len().saturating_sub(1)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let record = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
     required_string(&record[0], label)
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let record = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
     required_u64(&record[0], label)
 }
 
-fn record_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
+fn record_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<IoValue>> {
     let record = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
@@ -4317,11 +4317,11 @@ fn record_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> 
     Ok(sequence.iter().map(value_to_iovalue).collect())
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     record_sequence(value, label)?.iter().map(|value| required_string(value, label)).collect()
 }
 
-fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let record = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
@@ -4334,7 +4334,7 @@ fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
         return Err(MoltenError::invalid_harness(format!("expected {field} schema {expected}, got {actual}")));
@@ -4342,14 +4342,14 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     Ok(())
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?

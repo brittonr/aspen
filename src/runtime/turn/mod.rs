@@ -1,17 +1,17 @@
 use std::cmp::Ordering;
 use std::fmt;
 
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 
 use super::AdmissionDecision;
 use super::AdmissionRequest;
 use crate::error::Result;
 
-fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
@@ -19,27 +19,27 @@ fn content_ref_from_bytes(bytes: &[u8]) -> String {
     crate::preserves_rail::content_ref_from_bytes(bytes)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
 #[derive(Clone)]
 pub struct RuntimeValue {
-    value: IOValue,
+    value: IoValue,
     canonical: Vec<u8>,
     value_ref: String,
 }
 
 impl RuntimeValue {
-    pub fn new(value: IOValue) -> Result<Self> {
+    pub fn new(value: IoValue) -> Result<Self> {
         let canonical = canonical_bytes(&value)?;
         let value_ref = content_ref_from_bytes(&canonical);
         Ok(Self {
@@ -50,14 +50,14 @@ impl RuntimeValue {
     }
 
     pub fn string(value: impl AsRef<str>) -> Result<Self> {
-        Self::new(IOValue::new(value.as_ref().to_owned()))
+        Self::new(IoValue::new(value.as_ref().to_owned()))
     }
 
-    pub fn as_iovalue(&self) -> &IOValue {
+    pub fn as_iovalue(&self) -> &IoValue {
         &self.value
     }
 
-    pub fn into_iovalue(self) -> IOValue {
+    pub fn into_iovalue(self) -> IoValue {
         self.value
     }
 
@@ -109,7 +109,7 @@ pub struct RuntimeMessage {
 }
 
 impl RuntimeMessage {
-    pub fn to_value(&self) -> IOValue {
+    pub fn to_value(&self) -> IoValue {
         record("runtime-message-v1", vec![
             string(&self.from),
             string(&self.to),
@@ -130,7 +130,7 @@ pub struct RuntimeAssertion {
 }
 
 impl RuntimeAssertion {
-    pub fn to_value(&self) -> IOValue {
+    pub fn to_value(&self) -> IoValue {
         record("runtime-assertion-v1", vec![
             string(&self.actor),
             self.value.as_iovalue().clone(),
@@ -150,7 +150,7 @@ pub struct RuntimeObserver {
 }
 
 impl RuntimeObserver {
-    pub fn to_value(&self) -> IOValue {
+    pub fn to_value(&self) -> IoValue {
         record("runtime-observer-v1", vec![
             string(&self.actor),
             self.pattern.as_iovalue().clone(),
@@ -192,7 +192,7 @@ pub enum RuntimeStep {
 }
 
 impl RuntimeStep {
-    pub fn to_value(&self) -> IOValue {
+    pub fn to_value(&self) -> IoValue {
         match self {
             RuntimeStep::Send { from, to, body } => record("runtime-step-send-v1", vec![
                 string(from),
@@ -317,7 +317,7 @@ impl RuntimeEffect {
 }
 
 impl RuntimeEvent {
-    pub fn to_value(&self) -> IOValue {
+    pub fn to_value(&self) -> IoValue {
         match self {
             RuntimeEvent::MessageDelivered { from, to, body } => record("runtime-event-message-delivered-v1", vec![
                 string(from),
@@ -409,7 +409,7 @@ struct OptionalUpperEventValueInput<'a> {
     value: Option<u64>,
 }
 
-fn optional_upper_event_value(input: &OptionalUpperEventValueInput<'_>) -> IOValue {
+fn optional_upper_event_value(input: &OptionalUpperEventValueInput<'_>) -> IoValue {
     let mut fields = vec![
         string(input.effect.as_str()),
         string(input.actor),
@@ -424,7 +424,7 @@ fn optional_upper_event_value(input: &OptionalUpperEventValueInput<'_>) -> IOVal
     record(input.name, fields)
 }
 
-fn admission_request_ref_value(request: &AdmissionRequest) -> IOValue {
+fn admission_request_ref_value(request: &AdmissionRequest) -> IoValue {
     let mut fields = vec![string(&request.actor), string(request.action.as_str())];
     if let Some(target) = request.target.as_ref() {
         fields.push(record("target", vec![string(target)]));

@@ -1,4 +1,4 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
@@ -16,23 +16,23 @@ const PROTOCOL_OPERATION_RECEIPT_SCHEMA: &str = crate::preserves_rail::PROTOCOL_
 const PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA;
 const PROTOCOL_SESSION_STATE_SCHEMA: &str = crate::preserves_rail::PROTOCOL_SESSION_STATE_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: &str) -> IOValue {
+fn string(value: &str) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -40,7 +40,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -66,7 +66,7 @@ pub struct ProtocolManifestInput {
     pub roles: Vec<String>,
     pub labels: Vec<String>,
     pub payloads: Vec<ProtocolPayloadInput>,
-    pub global: IOValue,
+    pub global: IoValue,
     pub policy_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -113,11 +113,11 @@ pub struct ProtocolManifest {
     pub labels: Vec<String>,
     pub payloads: Vec<ProtocolPayload>,
     pub global: ProtocolGlobal,
-    pub global_value: IOValue,
+    pub global_value: IoValue,
     pub policy_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub resource_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -170,7 +170,7 @@ pub struct ProtocolEndpoint {
     pub role: String,
     pub role_id: u32,
     pub local_state: ProtocolLocalState,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -181,7 +181,7 @@ pub struct ProtocolInstallReceipt {
     pub registries: ProtocolRegistries,
     pub endpoints: Vec<ProtocolEndpoint>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,8 +190,8 @@ pub struct ProtocolSessionStateInput {
     pub session_id: String,
     pub role: String,
     pub sequence: u64,
-    pub endpoint: IOValue,
-    pub local_state: IOValue,
+    pub endpoint: IoValue,
+    pub local_state: IoValue,
     pub seen_message_refs: Vec<String>,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -209,7 +209,7 @@ pub struct ProtocolSessionState {
     pub seen_message_refs: Vec<String>,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -220,7 +220,7 @@ pub struct ProtocolMessageInput {
     pub to_role: String,
     pub label: String,
     pub payload_tag: String,
-    pub body_or_ref: IOValue,
+    pub body_or_ref: IoValue,
     pub sequence: u64,
     pub evidence_refs: Vec<String>,
 }
@@ -234,10 +234,10 @@ pub struct ProtocolMessage {
     pub to_role: String,
     pub label: String,
     pub payload_tag: String,
-    pub body_or_ref: IOValue,
+    pub body_or_ref: IoValue,
     pub sequence: u64,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -256,16 +256,16 @@ pub struct ProtocolOperationReceipt {
     pub resource_refs: Vec<String>,
     pub carrier_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolSessionGateInput {
-    pub install_receipt: IOValue,
-    pub initial_states: Vec<IOValue>,
-    pub operation_receipts: Vec<IOValue>,
-    pub messages: Vec<IOValue>,
-    pub next_states: Vec<IOValue>,
+    pub install_receipt: IoValue,
+    pub initial_states: Vec<IoValue>,
+    pub operation_receipts: Vec<IoValue>,
+    pub messages: Vec<IoValue>,
+    pub next_states: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -280,7 +280,7 @@ pub struct ProtocolSessionGate {
     pub message_count: usize,
     pub final_state_count: usize,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -307,11 +307,11 @@ pub struct ProtocolOperationRun {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolSendInput {
-    pub state: IOValue,
+    pub state: IoValue,
     pub to_role: String,
     pub label: String,
     pub payload_tag: String,
-    pub body_or_ref: IOValue,
+    pub body_or_ref: IoValue,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -319,8 +319,8 @@ pub struct ProtocolSendInput {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolReceiveInput {
-    pub state: IOValue,
-    pub message: IOValue,
+    pub state: IoValue,
+    pub message: IoValue,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub carrier_refs: Vec<String>,
@@ -328,7 +328,7 @@ pub struct ProtocolReceiveInput {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolBranchOperationInput {
-    pub state: IOValue,
+    pub state: IoValue,
     pub label: String,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -341,7 +341,7 @@ pub struct ProtocolRemoteEnvelopeInput {
     pub from_actor: String,
     pub to_peer: String,
     pub topic: String,
-    pub message: IOValue,
+    pub message: IoValue,
     pub capability_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
@@ -382,7 +382,7 @@ struct ProtocolSessionGateParsed {
     next_states: Vec<ProtocolSessionState>,
 }
 
-pub fn protocol_comm_value(input: &ProtocolCommInput) -> Result<IOValue> {
+pub fn protocol_comm_value(input: &ProtocolCommInput) -> Result<IoValue> {
     validate_name(&input.from_role, "protocol comm from role")?;
     validate_name(&input.to_role, "protocol comm to role")?;
     validate_name(&input.label, "protocol comm label")?;
@@ -395,7 +395,7 @@ pub fn protocol_comm_value(input: &ProtocolCommInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn protocol_global_script_value(steps: &[ProtocolCommInput]) -> Result<IOValue> {
+pub fn protocol_global_script_value(steps: &[ProtocolCommInput]) -> Result<IoValue> {
     ensure_count_at_most(steps.len(), MAX_PROTOCOL_STEPS, "protocol script steps")?;
     let mut values = Vec::with_capacity(steps.len());
     for step in steps {
@@ -404,7 +404,7 @@ pub fn protocol_global_script_value(steps: &[ProtocolCommInput]) -> Result<IOVal
     Ok(record("global-script", vec![sequence(values)]))
 }
 
-pub fn protocol_global_choice_value(input: &ProtocolChoiceInput) -> Result<IOValue> {
+pub fn protocol_global_choice_value(input: &ProtocolChoiceInput) -> Result<IoValue> {
     validate_name(&input.decider, "protocol choice decider")?;
     ensure_count_at_most(input.branches.len(), MAX_PROTOCOL_ITEMS, "protocol choice branches")?;
     let mut branches = Vec::with_capacity(input.branches.len());
@@ -423,7 +423,7 @@ pub fn protocol_global_choice_value(input: &ProtocolChoiceInput) -> Result<IOVal
     ]))
 }
 
-pub fn protocol_manifest_value(input: &ProtocolManifestInput) -> Result<IOValue> {
+pub fn protocol_manifest_value(input: &ProtocolManifestInput) -> Result<IoValue> {
     validate_protocol_manifest_input(input)?;
     let mut payloads = Vec::with_capacity(input.payloads.len());
     for payload in &input.payloads {
@@ -443,7 +443,7 @@ pub fn protocol_manifest_value(input: &ProtocolManifestInput) -> Result<IOValue>
     ]))
 }
 
-pub fn parse_protocol_manifest(value: &IOValue) -> Result<ProtocolManifest> {
+pub fn parse_protocol_manifest(value: &IoValue) -> Result<ProtocolManifest> {
     let fields = value
         .collect_simple_record("protocol-manifest-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-manifest-v1 ...>"))?;
@@ -477,7 +477,7 @@ pub fn parse_protocol_manifest(value: &IOValue) -> Result<ProtocolManifest> {
     Ok(manifest)
 }
 
-pub fn install_protocol_manifest_value(value: &IOValue) -> Result<ProtocolInstallReceipt> {
+pub fn install_protocol_manifest_value(value: &IoValue) -> Result<ProtocolInstallReceipt> {
     let manifest = parse_protocol_manifest(value)?;
     install_protocol_manifest(&manifest)
 }
@@ -507,7 +507,7 @@ pub fn install_protocol_manifest(manifest: &ProtocolManifest) -> Result<Protocol
     install_receipt(manifest, &registries, endpoints, "pass", Vec::new())
 }
 
-pub fn protocol_session_state_value(input: &ProtocolSessionStateInput) -> Result<IOValue> {
+pub fn protocol_session_state_value(input: &ProtocolSessionStateInput) -> Result<IoValue> {
     validate_protocol_ref(&input.protocol_ref, "protocol session protocol ref")?;
     validate_session_id(&input.session_id)?;
     validate_name(&input.role, "protocol session role")?;
@@ -541,7 +541,7 @@ pub fn protocol_session_state_value(input: &ProtocolSessionStateInput) -> Result
     ]))
 }
 
-pub fn parse_protocol_session_state(value: &IOValue) -> Result<ProtocolSessionState> {
+pub fn parse_protocol_session_state(value: &IoValue) -> Result<ProtocolSessionState> {
     let fields = value
         .collect_simple_record("protocol-session-state-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-session-state-v1 ...>"))?;
@@ -604,7 +604,7 @@ pub fn start_protocol_session(
     parse_protocol_session_state(&state_value)
 }
 
-pub fn protocol_message_value(input: &ProtocolMessageInput) -> Result<IOValue> {
+pub fn protocol_message_value(input: &ProtocolMessageInput) -> Result<IoValue> {
     validate_protocol_ref(&input.protocol_ref, "protocol message protocol ref")?;
     validate_session_id(&input.session_id)?;
     validate_name(&input.from_role, "protocol message from role")?;
@@ -627,7 +627,7 @@ pub fn protocol_message_value(input: &ProtocolMessageInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_protocol_message(value: &IOValue) -> Result<ProtocolMessage> {
+pub fn parse_protocol_message(value: &IoValue) -> Result<ProtocolMessage> {
     let fields = value
         .collect_simple_record("protocol-message-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-message-v1 ...>"))?;
@@ -793,7 +793,7 @@ pub fn protocol_message_remote_envelope(input: ProtocolRemoteEnvelopeInput) -> R
     })
 }
 
-pub fn parse_protocol_install_receipt(value: &IOValue) -> Result<ProtocolInstallReceipt> {
+pub fn parse_protocol_install_receipt(value: &IoValue) -> Result<ProtocolInstallReceipt> {
     let fields = value
         .collect_simple_record("protocol-install-receipt-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-install-receipt-v1 ...>"))?;
@@ -815,7 +815,7 @@ pub fn parse_protocol_install_receipt(value: &IOValue) -> Result<ProtocolInstall
     })
 }
 
-pub fn parse_protocol_operation_receipt(value: &IOValue) -> Result<ProtocolOperationReceipt> {
+pub fn parse_protocol_operation_receipt(value: &IoValue) -> Result<ProtocolOperationReceipt> {
     let fields = value
         .collect_simple_record("protocol-operation-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-operation-receipt-v1 ...>"))?;
@@ -883,7 +883,7 @@ pub fn gate_protocol_session_lifecycle_with_diagnostics(
     })
 }
 
-pub fn parse_protocol_session_gate_receipt(value: &IOValue) -> Result<ProtocolSessionGateReceipt> {
+pub fn parse_protocol_session_gate_receipt(value: &IoValue) -> Result<ProtocolSessionGateReceipt> {
     let fields = value
         .collect_simple_record("protocol-session-gate-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-session-gate-receipt-v1 ...>"))?;
@@ -910,7 +910,7 @@ pub fn parse_protocol_session_gate_receipt(value: &IOValue) -> Result<ProtocolSe
     })
 }
 
-pub fn protocol_summary(value: &IOValue) -> Result<String> {
+pub fn protocol_summary(value: &IoValue) -> Result<String> {
     if value.collect_simple_record("protocol-install-receipt-v1", Some(12)).is_some() {
         let install = parse_protocol_install_receipt(value)?;
         return Ok(format!(
@@ -949,7 +949,7 @@ pub fn protocol_summary(value: &IOValue) -> Result<String> {
     Err(MoltenError::invalid_harness("unsupported protocol summary record"))
 }
 
-pub fn request_response_manifest_value() -> Result<IOValue> {
+pub fn request_response_manifest_value() -> Result<IoValue> {
     let request_schema = synthetic_ref("request-schema")?;
     let response_schema = synthetic_ref("response-schema")?;
     let policy_ref = synthetic_ref("policy")?;
@@ -1051,7 +1051,7 @@ pub fn request_response_lifecycle() -> Result<RequestResponseLifecycle> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestResponseLifecycle {
-    pub manifest_value: IOValue,
+    pub manifest_value: IoValue,
     pub install: ProtocolInstallReceipt,
     pub initial_states: Vec<ProtocolSessionState>,
     pub operations: Vec<ProtocolOperationRun>,
@@ -1071,7 +1071,7 @@ fn parse_protocol_session_gate_input(input: ProtocolSessionGateInput) -> Result<
     })
 }
 
-fn parse_protocol_states(values: &[IOValue]) -> Result<Vec<ProtocolSessionState>> {
+fn parse_protocol_states(values: &[IoValue]) -> Result<Vec<ProtocolSessionState>> {
     let mut states = Vec::with_capacity(values.len());
     for value in values {
         states.push(parse_protocol_session_state(value)?);
@@ -1079,7 +1079,7 @@ fn parse_protocol_states(values: &[IOValue]) -> Result<Vec<ProtocolSessionState>
     Ok(states)
 }
 
-fn parse_protocol_operation_receipts(values: &[IOValue]) -> Result<Vec<ProtocolOperationReceipt>> {
+fn parse_protocol_operation_receipts(values: &[IoValue]) -> Result<Vec<ProtocolOperationReceipt>> {
     let mut receipts = Vec::with_capacity(values.len());
     for value in values {
         receipts.push(parse_protocol_operation_receipt(value)?);
@@ -1087,7 +1087,7 @@ fn parse_protocol_operation_receipts(values: &[IOValue]) -> Result<Vec<ProtocolO
     Ok(receipts)
 }
 
-fn parse_protocol_messages(values: &[IOValue]) -> Result<Vec<ProtocolMessage>> {
+fn parse_protocol_messages(values: &[IoValue]) -> Result<Vec<ProtocolMessage>> {
     let mut messages = Vec::with_capacity(values.len());
     for value in values {
         messages.push(parse_protocol_message(value)?);
@@ -1483,7 +1483,7 @@ fn terminal_state_refs(states: &[ProtocolSessionState]) -> Vec<String> {
         .collect()
 }
 
-fn protocol_session_gate_receipt_value(input: &ProtocolSessionGateValueInput<'_>) -> Result<IOValue> {
+fn protocol_session_gate_receipt_value(input: &ProtocolSessionGateValueInput<'_>) -> Result<IoValue> {
     validate_gate_decision(input.decision, "protocol session gate receipt decision")?;
     validate_refs(input.initial_state_refs, "protocol gate initial state ref")?;
     validate_refs(input.operation_refs, "protocol gate operation ref")?;
@@ -1569,7 +1569,7 @@ fn validate_steps(steps: &[ProtocolCommInput], manifest: &ProtocolManifest) -> R
     Ok(())
 }
 
-fn parse_protocol_global(value: &IOValue) -> Result<ProtocolGlobal> {
+fn parse_protocol_global(value: &IoValue) -> Result<ProtocolGlobal> {
     if value.collect_simple_record("global-script", Some(1)).is_some() {
         return Ok(ProtocolGlobal::Script(parse_step_sequence(value, "global-script")?));
     }
@@ -1596,14 +1596,14 @@ fn parse_protocol_global(value: &IOValue) -> Result<ProtocolGlobal> {
     Ok(ProtocolGlobal::Choice(ProtocolChoiceInput { decider, branches }))
 }
 
-fn parse_step_sequence(value: &IOValue, label: &str) -> Result<Vec<ProtocolCommInput>> {
+fn parse_step_sequence(value: &IoValue, label: &str) -> Result<Vec<ProtocolCommInput>> {
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} [...]>")))?;
     parse_comm_sequence_value(&fields[0], label)
 }
 
-fn parse_comm_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<ProtocolCommInput>> {
+fn parse_comm_sequence_value(value: &Value<IoValue>, label: &str) -> Result<Vec<ProtocolCommInput>> {
     let steps = value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected protocol comm sequence for {label}")))?;
@@ -1615,7 +1615,7 @@ fn parse_comm_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<
     Ok(parsed)
 }
 
-fn parse_comm_step(value: &Value<IOValue>) -> Result<ProtocolCommInput> {
+fn parse_comm_step(value: &Value<IoValue>) -> Result<ProtocolCommInput> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("comm", Some(4))
@@ -1835,7 +1835,7 @@ fn protocol_endpoint(
     parse_protocol_endpoint(&endpoint_value)
 }
 
-fn parse_protocol_endpoint(value: &IOValue) -> Result<ProtocolEndpoint> {
+fn parse_protocol_endpoint(value: &IoValue) -> Result<ProtocolEndpoint> {
     let fields = value
         .collect_simple_record("protocol-endpoint-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-endpoint-v1 ...>"))?;
@@ -1856,7 +1856,7 @@ fn parse_protocol_endpoint(value: &IOValue) -> Result<ProtocolEndpoint> {
     })
 }
 
-fn protocol_local_state_value(state: &ProtocolLocalState) -> Result<IOValue> {
+fn protocol_local_state_value(state: &ProtocolLocalState) -> Result<IoValue> {
     ensure_count_at_most(state.actions.len(), MAX_PROTOCOL_STEPS, "protocol local actions")?;
     let mut actions = Vec::with_capacity(state.actions.len());
     for action in &state.actions {
@@ -1870,7 +1870,7 @@ fn protocol_local_state_value(state: &ProtocolLocalState) -> Result<IOValue> {
     ]))
 }
 
-fn parse_protocol_local_state(value: &IOValue) -> Result<ProtocolLocalState> {
+fn parse_protocol_local_state(value: &IoValue) -> Result<ProtocolLocalState> {
     let fields = value
         .collect_simple_record("protocol-local-state-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-local-state-v1 ...>"))?;
@@ -1881,7 +1881,7 @@ fn parse_protocol_local_state(value: &IOValue) -> Result<ProtocolLocalState> {
     })
 }
 
-fn local_action_value(action: &ProtocolLocalAction) -> Result<IOValue> {
+fn local_action_value(action: &ProtocolLocalAction) -> Result<IoValue> {
     validate_direction(&action.direction)?;
     validate_name(&action.peer, "protocol local action peer")?;
     validate_name(&action.label, "protocol local action label")?;
@@ -1890,7 +1890,7 @@ fn local_action_value(action: &ProtocolLocalAction) -> Result<IOValue> {
     Ok(record(record_label, vec![string(&action.peer), string(&action.label), string(&action.payload_tag)]))
 }
 
-fn local_terminal_value(terminal: &ProtocolLocalTerminal) -> Result<IOValue> {
+fn local_terminal_value(terminal: &ProtocolLocalTerminal) -> Result<IoValue> {
     match terminal {
         ProtocolLocalTerminal::End => Ok(record("end", Vec::new())),
         ProtocolLocalTerminal::InternalChoice(branches) => {
@@ -1903,7 +1903,7 @@ fn local_terminal_value(terminal: &ProtocolLocalTerminal) -> Result<IOValue> {
     }
 }
 
-fn local_branch_sequence(branches: &[ProtocolLocalBranch]) -> Result<IOValue> {
+fn local_branch_sequence(branches: &[ProtocolLocalBranch]) -> Result<IoValue> {
     ensure_count_at_most(branches.len(), MAX_PROTOCOL_ITEMS, "protocol local branches")?;
     let mut values = Vec::with_capacity(branches.len());
     for branch in branches {
@@ -1916,14 +1916,14 @@ fn local_branch_sequence(branches: &[ProtocolLocalBranch]) -> Result<IOValue> {
     Ok(sequence(values))
 }
 
-fn parse_local_actions(value: &Value<IOValue>) -> Result<Vec<ProtocolLocalAction>> {
+fn parse_local_actions(value: &Value<IoValue>) -> Result<Vec<ProtocolLocalAction>> {
     let fields = value
         .collect_simple_record("actions", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected protocol local actions"))?;
     parse_local_action_sequence(&fields[0])
 }
 
-fn parse_local_action_sequence(value: &Value<IOValue>) -> Result<Vec<ProtocolLocalAction>> {
+fn parse_local_action_sequence(value: &Value<IoValue>) -> Result<Vec<ProtocolLocalAction>> {
     let values = value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness("expected protocol local action sequence"))?;
@@ -1935,7 +1935,7 @@ fn parse_local_action_sequence(value: &Value<IOValue>) -> Result<Vec<ProtocolLoc
     Ok(actions)
 }
 
-fn parse_local_action(value: &Value<IOValue>) -> Result<ProtocolLocalAction> {
+fn parse_local_action(value: &Value<IoValue>) -> Result<ProtocolLocalAction> {
     if let Some(fields) = value.collect_simple_record("send", Some(3)) {
         return Ok(ProtocolLocalAction {
             direction: "send".to_string(),
@@ -1955,7 +1955,7 @@ fn parse_local_action(value: &Value<IOValue>) -> Result<ProtocolLocalAction> {
     })
 }
 
-fn parse_local_terminal(value: &Value<IOValue>) -> Result<ProtocolLocalTerminal> {
+fn parse_local_terminal(value: &Value<IoValue>) -> Result<ProtocolLocalTerminal> {
     let fields = value
         .collect_simple_record("terminal", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected protocol local terminal"))?;
@@ -1974,14 +1974,14 @@ fn parse_local_terminal(value: &Value<IOValue>) -> Result<ProtocolLocalTerminal>
     })
 }
 
-fn parse_local_branches_record(value: &Value<IOValue>) -> Result<Vec<ProtocolLocalBranch>> {
+fn parse_local_branches_record(value: &Value<IoValue>) -> Result<Vec<ProtocolLocalBranch>> {
     let fields = value
         .collect_simple_record("branches", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected protocol local branch record"))?;
     parse_local_branches(&fields[0])
 }
 
-fn parse_local_branches(value: &Value<IOValue>) -> Result<Vec<ProtocolLocalBranch>> {
+fn parse_local_branches(value: &Value<IoValue>) -> Result<Vec<ProtocolLocalBranch>> {
     let values = value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness("expected protocol local branch sequence"))?;
@@ -2031,7 +2031,7 @@ fn install_receipt(
     parse_protocol_install_receipt(&value)
 }
 
-fn registry_value(label: &str, entries: &[RegistryEntry]) -> IOValue {
+fn registry_value(label: &str, entries: &[RegistryEntry]) -> IoValue {
     let mut values = Vec::with_capacity(entries.len());
     for entry in entries {
         values.push(record("entry", vec![string(&entry.name), u64_value(u64::from(entry.id))]));
@@ -2045,7 +2045,7 @@ fn registry_value(label: &str, entries: &[RegistryEntry]) -> IOValue {
     record("payload-registry", vec![sequence(values)])
 }
 
-fn parse_registry(value: &Value<IOValue>, label: &str) -> Result<Vec<RegistryEntry>> {
+fn parse_registry(value: &Value<IoValue>, label: &str) -> Result<Vec<RegistryEntry>> {
     let values = field_sequence(value, label)?;
     let mut entries = Vec::with_capacity(values.len());
     for entry in values.iter() {
@@ -2061,7 +2061,7 @@ fn parse_registry(value: &Value<IOValue>, label: &str) -> Result<Vec<RegistryEnt
     Ok(entries)
 }
 
-fn parse_endpoint_sequence(value: &Value<IOValue>) -> Result<Vec<ProtocolEndpoint>> {
+fn parse_endpoint_sequence(value: &Value<IoValue>) -> Result<Vec<ProtocolEndpoint>> {
     let values = field_sequence(value, "endpoints")?;
     let mut endpoints = Vec::with_capacity(values.len());
     for endpoint in values.iter() {
@@ -2070,7 +2070,7 @@ fn parse_endpoint_sequence(value: &Value<IOValue>) -> Result<Vec<ProtocolEndpoin
     Ok(endpoints)
 }
 
-fn operation_receipt_value(input: &OperationReceiptValueInput<'_>) -> Result<IOValue> {
+fn operation_receipt_value(input: &OperationReceiptValueInput<'_>) -> Result<IoValue> {
     validate_refs(input.authority_refs, "protocol operation authority ref")?;
     validate_refs(input.resource_refs, "protocol operation resource ref")?;
     validate_refs(input.carrier_refs, "protocol operation carrier ref")?;
@@ -2264,7 +2264,7 @@ fn branch_for_label<'a>(branches: &'a [ProtocolLocalBranch], label: &str) -> Opt
     branches.iter().find(|branch| branch.label == label)
 }
 
-fn parse_payloads(value: &Value<IOValue>) -> Result<Vec<ProtocolPayload>> {
+fn parse_payloads(value: &Value<IoValue>) -> Result<Vec<ProtocolPayload>> {
     let values = field_sequence(value, "payloads")?;
     let mut payloads = Vec::with_capacity(values.len());
     for (index, payload) in values.iter().enumerate() {
@@ -2283,7 +2283,7 @@ fn parse_payloads(value: &Value<IOValue>) -> Result<Vec<ProtocolPayload>> {
     Ok(payloads)
 }
 
-fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
+fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoValue>>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -2295,7 +2295,7 @@ fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOVal
     Ok(values.iter().cloned().collect())
 }
 
-fn parse_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     let mut strings = Vec::with_capacity(values.len());
     for value in &values {
@@ -2304,7 +2304,7 @@ fn parse_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Stri
     Ok(strings)
 }
 
-fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     let mut refs = Vec::with_capacity(values.len());
     for value in &values {
@@ -2313,7 +2313,7 @@ fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>
     Ok(refs)
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let values = field_sequence(value, "checks")?;
     let mut checks = Vec::with_capacity(values.len());
     for value in &values {
@@ -2332,15 +2332,15 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
     Err(MoltenError::invalid_harness(format!("missing passing check {name} for {label}")))
 }
 
-fn strings_sequence(values: &[String]) -> IOValue {
+fn strings_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(|value| string(value)).collect())
 }
 
-fn refs_sequence(values: &[String]) -> IOValue {
+fn refs_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(|value| string(value)).collect())
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     let mut checks = Vec::with_capacity(names.len());
     for name in names {
         checks.push(record("check", vec![string(name), string("pass")]));
@@ -2348,14 +2348,14 @@ fn checks_value(names: &[&str]) -> IOValue {
     record("checks", vec![sequence(checks)])
 }
 
-fn optional_ref_value(reference: Option<&str>) -> IOValue {
+fn optional_ref_value(reference: Option<&str>) -> IoValue {
     match reference {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
+fn record_iovalue(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -2363,7 +2363,7 @@ fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
     Ok(value_to_iovalue(&fields[0]))
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -2371,13 +2371,13 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&fields[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let reference = record_string(value, label)?;
     require_ref(&reference, label)?;
     Ok(reference)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
@@ -2390,7 +2390,7 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
     Ok(Some(required_ref(&some[0], label)?))
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -2398,27 +2398,27 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     required_u64(&fields[0], label)
 }
 
-fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
 }
 
-fn required_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
-fn required_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let reference = required_string(value, label)?;
     require_ref(&reference, label)?;
     Ok(reference)
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, label: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result<()> {
     let actual = required_string(value, label)?;
     if actual == expected {
         return Ok(());

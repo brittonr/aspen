@@ -1,4 +1,4 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
@@ -46,8 +46,8 @@ pub struct ProvenanceEvaluationInput<'a> {
     pub operation: &'a str,
     pub profile: &'a str,
     pub artifact_ref: &'a str,
-    pub provenance_values: &'a [IOValue],
-    pub build_verification_values: &'a [IOValue],
+    pub provenance_values: &'a [IoValue],
+    pub build_verification_values: &'a [IoValue],
     pub prior_diagnostics: &'a [String],
 }
 
@@ -72,7 +72,7 @@ pub struct ProvenanceBuildRecordInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ProvenanceBuildVerificationInput<'a> {
-    pub build_record_value: &'a IOValue,
+    pub build_record_value: &'a IoValue,
     pub actual_artifact_ref: &'a str,
     pub prior_diagnostics: &'a [String],
 }
@@ -132,14 +132,14 @@ pub struct ProvenanceRecord {
     pub source_gate_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub build_record_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProvenanceEvaluation {
     pub decision: String,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub matched_record_ref: Option<String>,
     pub diagnostics: Vec<String>,
 }
@@ -156,14 +156,14 @@ pub struct ProvenanceBuildRecord {
     pub nix_derivation_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProvenanceBuildVerification {
     pub decision: String,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub build_record_ref: String,
     pub expected_artifact_ref: String,
     pub actual_artifact_ref: String,
@@ -178,10 +178,10 @@ pub struct ProvenanceBuildVerificationReceipt {
     pub actual_artifact_ref: String,
     pub build_record_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
-pub fn provenance_record_value(input: &ProvenanceRecordInput<'_>) -> Result<IOValue> {
+pub fn provenance_record_value(input: &ProvenanceRecordInput<'_>) -> Result<IoValue> {
     validate_ref(input.artifact_ref, "provenance artifact ref")?;
     validate_trust_state(input.trust_state)?;
     validate_refs(input.source_refs, "provenance source ref")?;
@@ -209,7 +209,7 @@ pub fn provenance_record_value(input: &ProvenanceRecordInput<'_>) -> Result<IOVa
     ]))
 }
 
-pub fn synthetic_reviewed_provenance_record(artifact_ref: &str) -> Result<IOValue> {
+pub fn synthetic_reviewed_provenance_record(artifact_ref: &str) -> Result<IoValue> {
     let source_refs = vec![synthetic_ref("source", artifact_ref)?];
     let toolchain_refs = vec![synthetic_ref("toolchain", env!("CARGO_PKG_VERSION"))?];
     let review_refs = vec![synthetic_ref("review", artifact_ref)?];
@@ -233,7 +233,7 @@ pub fn synthetic_reviewed_provenance_record(artifact_ref: &str) -> Result<IOValu
     })
 }
 
-pub fn provenance_build_record_value(input: &ProvenanceBuildRecordInput<'_>) -> Result<IOValue> {
+pub fn provenance_build_record_value(input: &ProvenanceBuildRecordInput<'_>) -> Result<IoValue> {
     validate_ref(input.expected_artifact_ref, "provenance expected artifact ref")?;
     validate_refs(input.source_refs, "provenance build source ref")?;
     validate_ref(input.dependency_closure_ref, "provenance build dependency closure ref")?;
@@ -354,7 +354,7 @@ fn evaluation_diagnostic_capacity(input: &ProvenanceEvaluationInput<'_>) -> usiz
         .saturating_add(4)
 }
 
-fn parse_build_checks(values: &[IOValue]) -> BuildChecks {
+fn parse_build_checks(values: &[IoValue]) -> BuildChecks {
     let mut receipts = Vec::with_capacity(values.len());
     let mut refs = Vec::with_capacity(values.len());
     let mut diagnostics = Vec::with_capacity(values.len());
@@ -374,7 +374,7 @@ fn parse_build_checks(values: &[IOValue]) -> BuildChecks {
     }
 }
 
-fn find_matching_record(values: &[IOValue], artifact_ref: &str) -> RecordMatch {
+fn find_matching_record(values: &[IoValue], artifact_ref: &str) -> RecordMatch {
     let mut diagnostics = Vec::with_capacity(values.len().saturating_add(1));
     let mut matched: Option<ProvenanceRecord> = None;
     let mut has_mismatched_record = false;
@@ -416,7 +416,7 @@ fn trust_status<'a>(record: Option<&'a ProvenanceRecord>, profile: &str) -> (&'a
     (trust_state, admission)
 }
 
-pub fn parse_provenance_record(value: &IOValue) -> Result<ProvenanceRecord> {
+pub fn parse_provenance_record(value: &IoValue) -> Result<ProvenanceRecord> {
     if let Some(fields) = value.collect_simple_record("provenance-record-v1", Some(12)) {
         require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECORD_SCHEMA, "provenance record")?;
         let trust_state = record_string(&fields[2], "trust-state")?;
@@ -460,7 +460,7 @@ pub fn parse_provenance_record(value: &IOValue) -> Result<ProvenanceRecord> {
     })
 }
 
-pub fn parse_provenance_build_record(value: &IOValue) -> Result<ProvenanceBuildRecord> {
+pub fn parse_provenance_build_record(value: &IoValue) -> Result<ProvenanceBuildRecord> {
     let fields = value
         .collect_simple_record("provenance-build-record-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-build-record-v1 ...>"))?;
@@ -481,7 +481,7 @@ pub fn parse_provenance_build_record(value: &IOValue) -> Result<ProvenanceBuildR
     })
 }
 
-pub fn parse_provenance_build_verification_receipt(value: &IOValue) -> Result<ProvenanceBuildVerificationReceipt> {
+pub fn parse_provenance_build_verification_receipt(value: &IoValue) -> Result<ProvenanceBuildVerificationReceipt> {
     let fields = value
         .collect_simple_record("provenance-build-verify-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-build-verify-receipt-v1 ...>"))?;
@@ -507,7 +507,7 @@ pub fn parse_provenance_build_verification_receipt(value: &IOValue) -> Result<Pr
     })
 }
 
-pub fn provenance_summary(value: &IOValue) -> Result<String> {
+pub fn provenance_summary(value: &IoValue) -> Result<String> {
     if let Ok(record) = parse_provenance_record(value) {
         return Ok(format!(
             "provenance record artifact={} trust_state={} build_records={} record={}",
@@ -561,7 +561,7 @@ pub fn provenance_summary(value: &IOValue) -> Result<String> {
     Err(MoltenError::invalid_harness("unsupported provenance artifact"))
 }
 
-fn provenance_receipt_value(input: &ProvenanceReceiptValueInput<'_>) -> Result<IOValue> {
+fn provenance_receipt_value(input: &ProvenanceReceiptValueInput<'_>) -> Result<IoValue> {
     let reproducible_check = if input.trust_state == TRUST_STATE_REPRODUCIBLE_VERIFIED {
         input.decision
     } else {
@@ -587,7 +587,7 @@ fn provenance_receipt_value(input: &ProvenanceReceiptValueInput<'_>) -> Result<I
     ]))
 }
 
-fn build_verify_receipt_value(input: &BuildVerifyReceiptValueInput<'_>) -> Result<IOValue> {
+fn build_verify_receipt_value(input: &BuildVerifyReceiptValueInput<'_>) -> Result<IoValue> {
     Ok(record("provenance-build-verify-receipt-v1", vec![
         string(crate::preserves_rail::PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -745,7 +745,7 @@ fn validate_build_param_token(value: &str, context: &str) -> Result<()> {
     Ok(())
 }
 
-fn build_params_sequence(params: &[BuildParam]) -> IOValue {
+fn build_params_sequence(params: &[BuildParam]) -> IoValue {
     let mut sorted = params.to_vec();
     sorted.sort();
     sequence(
@@ -789,11 +789,11 @@ fn required_build_param(value: &preserves::Value<preserves::IOValue>, tag: &str)
     Ok(BuildParam { key, value })
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     match value {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
@@ -1035,8 +1035,8 @@ mod tests {
         dependency_ref: String,
         toolchain_refs: Vec<String>,
         builder_ref: String,
-        build_record: IOValue,
-        provenance: IOValue,
+        build_record: IoValue,
+        provenance: IoValue,
     }
 
     fn seed() -> Case {
@@ -1083,7 +1083,7 @@ mod tests {
         }
     }
 
-    fn wrong_value(case: &Case) -> IOValue {
+    fn wrong_value(case: &Case) -> IoValue {
         let wrong_record_refs = vec![synthetic_ref("build-record", "wrong").expect("wrong build record ref")];
         provenance_record_value(&ProvenanceRecordInput {
             artifact_ref: &case.artifact_ref,

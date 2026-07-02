@@ -4,7 +4,7 @@
 //! not grant runtime authority, activation requires separate permission and
 //! executor evidence, and hostcalls are admitted only through declared refs.
 
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 use preserves::Value;
 
 use crate::artifacts;
@@ -24,23 +24,23 @@ const _: () = assert!(MAX_PLUGIN_REFS > MAX_PLUGIN_CALLBACKS);
 const _: () = assert!(MAX_PLUGIN_DIAGNOSTICS > 0);
 const _: () = assert!(MAX_PLUGIN_CHECKS > 0);
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -60,7 +60,7 @@ pub struct PluginManifestInput<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PermissionReviewInput<'a> {
-    pub manifest_value: &'a IOValue,
+    pub manifest_value: &'a IoValue,
     pub authority_refs: &'a [String],
     pub policy_refs: &'a [String],
     pub resource_refs: &'a [String],
@@ -71,7 +71,7 @@ pub struct PermissionReviewInput<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LifecycleReceiptInput<'a> {
     pub operation: &'a str,
-    pub manifest_value: &'a IOValue,
+    pub manifest_value: &'a IoValue,
     pub permission_receipt_ref: &'a str,
     pub executor_receipt_ref: &'a str,
     pub authority_refs: &'a [String],
@@ -82,7 +82,7 @@ pub struct LifecycleReceiptInput<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HostcallReceiptInput<'a> {
-    pub manifest_value: &'a IOValue,
+    pub manifest_value: &'a IoValue,
     pub operation: &'a str,
     pub hostcall_ref: &'a str,
     pub executor_receipt_ref: &'a str,
@@ -93,7 +93,7 @@ pub struct HostcallReceiptInput<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HealthReceiptInput<'a> {
-    pub manifest_value: &'a IOValue,
+    pub manifest_value: &'a IoValue,
     pub lifecycle_receipt_ref: &'a str,
     pub service_refs: &'a [String],
     pub health_status: &'a str,
@@ -102,8 +102,8 @@ pub struct HealthReceiptInput<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UpgradeReceiptInput<'a> {
-    pub old_manifest_value: &'a IOValue,
-    pub new_manifest_value: &'a IOValue,
+    pub old_manifest_value: &'a IoValue,
+    pub new_manifest_value: &'a IoValue,
     pub rollback_ref: &'a str,
     pub cleanup_refs: &'a [String],
     pub diagnostics: &'a [String],
@@ -111,7 +111,7 @@ pub struct UpgradeReceiptInput<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemovalReceiptInput<'a> {
-    pub manifest_value: &'a IOValue,
+    pub manifest_value: &'a IoValue,
     pub lifecycle_receipt_ref: &'a str,
     pub owned_service_refs: &'a [String],
     pub assertion_refs: &'a [String],
@@ -142,7 +142,7 @@ pub struct PluginManifest {
     pub resource_refs: Vec<String>,
     pub supply_chain_refs: Vec<String>,
     pub checks: Vec<(String, String)>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -153,7 +153,7 @@ pub struct PluginInstallReceipt {
     pub manifest_ref: String,
     pub artifact_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,7 +163,7 @@ pub struct PluginPermissionReceipt {
     pub plugin_ref: String,
     pub manifest_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -174,7 +174,7 @@ pub struct PluginLifecycleReceipt {
     pub plugin_ref: String,
     pub manifest_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,7 +185,7 @@ pub struct PluginHostcallReceipt {
     pub plugin_ref: String,
     pub hostcall_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -194,7 +194,7 @@ pub struct PluginHealthReceipt {
     pub decision: String,
     pub plugin_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -203,7 +203,7 @@ pub struct PluginRemovalReceipt {
     pub decision: String,
     pub plugin_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,7 +213,7 @@ pub struct PluginUpgradeReceipt {
     pub old_manifest_ref: String,
     pub new_manifest_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -228,11 +228,11 @@ pub struct PluginFixtureRun {
     pub stop_receipt_ref: String,
     pub removal_receipt_ref: String,
     pub upgrade_receipt_ref: String,
-    pub report_value: IOValue,
-    pub evidence_values: Vec<IOValue>,
+    pub report_value: IoValue,
+    pub evidence_values: Vec<IoValue>,
 }
 
-pub fn plugin_manifest_value(input: &PluginManifestInput<'_>) -> Result<IOValue> {
+pub fn plugin_manifest_value(input: &PluginManifestInput<'_>) -> Result<IoValue> {
     validate_plugin_id(input.plugin_id)?;
     validate_ref(input.artifact_ref, "plugin artifact ref")?;
     validate_abi(input.abi)?;
@@ -269,7 +269,7 @@ pub fn plugin_manifest_value(input: &PluginManifestInput<'_>) -> Result<IOValue>
     ]))
 }
 
-pub fn parse_plugin_manifest(value: &IOValue) -> Result<PluginManifest> {
+pub fn parse_plugin_manifest(value: &IoValue) -> Result<PluginManifest> {
     let fields = simple_record(value, "plugin-manifest-v1", 12)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_MANIFEST_SCHEMA, "plugin manifest")?;
     let plugin_id = record_string(&fields[1], "plugin-id")?;
@@ -312,7 +312,7 @@ pub fn parse_plugin_manifest(value: &IOValue) -> Result<PluginManifest> {
     })
 }
 
-pub fn install_plugin(registry_root: &std::path::Path, manifest_value: &IOValue) -> Result<PluginInstallReceipt> {
+pub fn install_plugin(registry_root: &std::path::Path, manifest_value: &IoValue) -> Result<PluginInstallReceipt> {
     let manifest = parse_plugin_manifest(manifest_value)?;
     let mut diagnostics = Vec::new();
     let has_artifact = artifacts::read_artifact(registry_root, &manifest.artifact_ref).is_ok();
@@ -342,7 +342,7 @@ pub fn install_plugin(registry_root: &std::path::Path, manifest_value: &IOValue)
     parse_plugin_install_receipt(&value)
 }
 
-pub fn parse_plugin_install_receipt(value: &IOValue) -> Result<PluginInstallReceipt> {
+pub fn parse_plugin_install_receipt(value: &IoValue) -> Result<PluginInstallReceipt> {
     let fields = simple_record(value, "plugin-install-receipt-v1", 7)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_INSTALL_RECEIPT_SCHEMA, "plugin install receipt")?;
     let diagnostics = record_string_sequence(&fields[5], "diagnostics")?;
@@ -360,7 +360,7 @@ pub fn parse_plugin_install_receipt(value: &IOValue) -> Result<PluginInstallRece
     })
 }
 
-pub fn plugin_permission_receipt_value(input: &PermissionReviewInput<'_>) -> Result<IOValue> {
+pub fn plugin_permission_receipt_value(input: &PermissionReviewInput<'_>) -> Result<IoValue> {
     let manifest = parse_plugin_manifest(input.manifest_value)?;
     validate_refs(input.authority_refs, "plugin authority ref")?;
     validate_refs(input.policy_refs, "plugin policy review ref")?;
@@ -414,7 +414,7 @@ pub fn plugin_permission_receipt_value(input: &PermissionReviewInput<'_>) -> Res
     ]))
 }
 
-pub fn parse_plugin_permission_receipt(value: &IOValue) -> Result<PluginPermissionReceipt> {
+pub fn parse_plugin_permission_receipt(value: &IoValue) -> Result<PluginPermissionReceipt> {
     let fields = simple_record(value, "plugin-permission-receipt-v1", 11)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_PERMISSION_RECEIPT_SCHEMA, "plugin permission receipt")?;
     let checks = parse_checks(&fields[10])?;
@@ -430,7 +430,7 @@ pub fn parse_plugin_permission_receipt(value: &IOValue) -> Result<PluginPermissi
     })
 }
 
-pub fn plugin_lifecycle_receipt_value(input: &LifecycleReceiptInput<'_>) -> Result<IOValue> {
+pub fn plugin_lifecycle_receipt_value(input: &LifecycleReceiptInput<'_>) -> Result<IoValue> {
     let manifest = parse_plugin_manifest(input.manifest_value)?;
     validate_lifecycle_operation(input.operation)?;
     validate_ref(input.permission_receipt_ref, "plugin permission receipt ref")?;
@@ -496,7 +496,7 @@ pub fn plugin_lifecycle_receipt_value(input: &LifecycleReceiptInput<'_>) -> Resu
     ]))
 }
 
-pub fn parse_plugin_lifecycle_receipt(value: &IOValue) -> Result<PluginLifecycleReceipt> {
+pub fn parse_plugin_lifecycle_receipt(value: &IoValue) -> Result<PluginLifecycleReceipt> {
     let fields = simple_record(value, "plugin-lifecycle-receipt-v1", 11)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA, "plugin lifecycle receipt")?;
     let checks = parse_checks(&fields[10])?;
@@ -513,7 +513,7 @@ pub fn parse_plugin_lifecycle_receipt(value: &IOValue) -> Result<PluginLifecycle
     })
 }
 
-pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result<IOValue> {
+pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result<IoValue> {
     let manifest = parse_plugin_manifest(input.manifest_value)?;
     validate_non_empty(input.operation, "plugin hostcall operation")?;
     validate_ref(input.hostcall_ref, "plugin hostcall ref")?;
@@ -577,7 +577,7 @@ pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result
     ]))
 }
 
-pub fn parse_plugin_hostcall_receipt(value: &IOValue) -> Result<PluginHostcallReceipt> {
+pub fn parse_plugin_hostcall_receipt(value: &IoValue) -> Result<PluginHostcallReceipt> {
     let fields = simple_record(value, "plugin-hostcall-receipt-v1", 11)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA, "plugin hostcall receipt")?;
     let checks = parse_checks(&fields[10])?;
@@ -594,7 +594,7 @@ pub fn parse_plugin_hostcall_receipt(value: &IOValue) -> Result<PluginHostcallRe
     })
 }
 
-pub fn plugin_health_receipt_value(input: &HealthReceiptInput<'_>) -> Result<IOValue> {
+pub fn plugin_health_receipt_value(input: &HealthReceiptInput<'_>) -> Result<IoValue> {
     let manifest = parse_plugin_manifest(input.manifest_value)?;
     validate_ref(input.lifecycle_receipt_ref, "plugin health lifecycle receipt ref")?;
     validate_refs(input.service_refs, "plugin health service ref")?;
@@ -632,7 +632,7 @@ pub fn plugin_health_receipt_value(input: &HealthReceiptInput<'_>) -> Result<IOV
     ]))
 }
 
-pub fn parse_plugin_health_receipt(value: &IOValue) -> Result<PluginHealthReceipt> {
+pub fn parse_plugin_health_receipt(value: &IoValue) -> Result<PluginHealthReceipt> {
     let fields = simple_record(value, "plugin-health-receipt-v1", 9)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_HEALTH_RECEIPT_SCHEMA, "plugin health receipt")?;
     let checks = parse_checks(&fields[8])?;
@@ -647,7 +647,7 @@ pub fn parse_plugin_health_receipt(value: &IOValue) -> Result<PluginHealthReceip
     })
 }
 
-pub fn plugin_removal_receipt_value(input: &RemovalReceiptInput<'_>) -> Result<IOValue> {
+pub fn plugin_removal_receipt_value(input: &RemovalReceiptInput<'_>) -> Result<IoValue> {
     let manifest = parse_plugin_manifest(input.manifest_value)?;
     validate_ref(input.lifecycle_receipt_ref, "plugin removal lifecycle receipt ref")?;
     validate_refs(input.owned_service_refs, "plugin removal service ref")?;
@@ -690,7 +690,7 @@ pub fn plugin_removal_receipt_value(input: &RemovalReceiptInput<'_>) -> Result<I
     ]))
 }
 
-pub fn parse_plugin_removal_receipt(value: &IOValue) -> Result<PluginRemovalReceipt> {
+pub fn parse_plugin_removal_receipt(value: &IoValue) -> Result<PluginRemovalReceipt> {
     let fields = simple_record(value, "plugin-removal-receipt-v1", 11)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_REMOVAL_RECEIPT_SCHEMA, "plugin removal receipt")?;
     let checks = parse_checks(&fields[10])?;
@@ -704,7 +704,7 @@ pub fn parse_plugin_removal_receipt(value: &IOValue) -> Result<PluginRemovalRece
     })
 }
 
-pub fn plugin_upgrade_receipt_value(input: &UpgradeReceiptInput<'_>) -> Result<IOValue> {
+pub fn plugin_upgrade_receipt_value(input: &UpgradeReceiptInput<'_>) -> Result<IoValue> {
     let old_manifest = parse_plugin_manifest(input.old_manifest_value)?;
     let new_manifest = parse_plugin_manifest(input.new_manifest_value)?;
     validate_ref(input.rollback_ref, "plugin upgrade rollback ref")?;
@@ -761,7 +761,7 @@ pub fn plugin_upgrade_receipt_value(input: &UpgradeReceiptInput<'_>) -> Result<I
     ]))
 }
 
-pub fn parse_plugin_upgrade_receipt(value: &IOValue) -> Result<PluginUpgradeReceipt> {
+pub fn parse_plugin_upgrade_receipt(value: &IoValue) -> Result<PluginUpgradeReceipt> {
     let fields = simple_record(value, "plugin-upgrade-receipt-v1", 8)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_UPGRADE_RECEIPT_SCHEMA, "plugin upgrade receipt")?;
     let checks = parse_checks(&fields[7])?;
@@ -776,7 +776,7 @@ pub fn parse_plugin_upgrade_receipt(value: &IOValue) -> Result<PluginUpgradeRece
     })
 }
 
-pub fn plugin_host_abi_result_value(input: &HostAbiResultInput<'_>) -> Result<IOValue> {
+pub fn plugin_host_abi_result_value(input: &HostAbiResultInput<'_>) -> Result<IoValue> {
     validate_host_abi_status(input.status)?;
     validate_optional_ref(input.payload_ref, "plugin ABI payload ref")?;
     if input.status == "ok" && input.error.is_some() {
@@ -901,7 +901,7 @@ fn seed_refs() -> Result<SeedRefs> {
     })
 }
 
-fn executor_manifest(registry: &std::path::Path, seed: &SeedRefs, payload: &str) -> Result<IOValue> {
+fn executor_manifest(registry: &std::path::Path, seed: &SeedRefs, payload: &str) -> Result<IoValue> {
     let installed = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
         kind: "plugin-executor".to_string(),
         payload: record("reviewed-plugin-executor", vec![string(payload)]),
@@ -927,7 +927,7 @@ fn executor_manifest(registry: &std::path::Path, seed: &SeedRefs, payload: &str)
     })
 }
 
-fn permission_step(manifest_value: &IOValue, seed: &SeedRefs) -> Result<PluginPermissionReceipt> {
+fn permission_step(manifest_value: &IoValue, seed: &SeedRefs) -> Result<PluginPermissionReceipt> {
     let value = plugin_permission_receipt_value(&PermissionReviewInput {
         manifest_value,
         authority_refs: std::slice::from_ref(&seed.authority_ref),
@@ -941,7 +941,7 @@ fn permission_step(manifest_value: &IOValue, seed: &SeedRefs) -> Result<PluginPe
 
 fn life_step(
     operation: &str,
-    manifest_value: &IOValue,
+    manifest_value: &IoValue,
     permission_ref: &str,
     seed: &SeedRefs,
 ) -> Result<PluginLifecycleReceipt> {
@@ -958,7 +958,7 @@ fn life_step(
     parse_plugin_lifecycle_receipt(&value)
 }
 
-fn life_steps(manifest_value: &IOValue, permission_ref: &str, seed: &SeedRefs) -> Result<LifeSteps> {
+fn life_steps(manifest_value: &IoValue, permission_ref: &str, seed: &SeedRefs) -> Result<LifeSteps> {
     Ok(LifeSteps {
         init: life_step("init", manifest_value, permission_ref, seed)?,
         start: life_step("start", manifest_value, permission_ref, seed)?,
@@ -967,7 +967,7 @@ fn life_steps(manifest_value: &IOValue, permission_ref: &str, seed: &SeedRefs) -
     })
 }
 
-fn call_step(manifest_value: &IOValue, seed: &SeedRefs) -> Result<PluginHostcallReceipt> {
+fn call_step(manifest_value: &IoValue, seed: &SeedRefs) -> Result<PluginHostcallReceipt> {
     let value = plugin_hostcall_receipt_value(&HostcallReceiptInput {
         manifest_value,
         operation: "storage.read",
@@ -980,7 +980,7 @@ fn call_step(manifest_value: &IOValue, seed: &SeedRefs) -> Result<PluginHostcall
     parse_plugin_hostcall_receipt(&value)
 }
 
-fn health_step(manifest_value: &IOValue, lifecycle_ref: &str, service_ref: &str) -> Result<PluginHealthReceipt> {
+fn health_step(manifest_value: &IoValue, lifecycle_ref: &str, service_ref: &str) -> Result<PluginHealthReceipt> {
     let service_ref = service_ref.to_string();
     let value = plugin_health_receipt_value(&HealthReceiptInput {
         manifest_value,
@@ -992,7 +992,7 @@ fn health_step(manifest_value: &IOValue, lifecycle_ref: &str, service_ref: &str)
     parse_plugin_health_receipt(&value)
 }
 
-fn removal_step(manifest_value: &IOValue, lifecycle_ref: &str, service_ref: &str) -> Result<PluginRemovalReceipt> {
+fn removal_step(manifest_value: &IoValue, lifecycle_ref: &str, service_ref: &str) -> Result<PluginRemovalReceipt> {
     let service_ref = service_ref.to_string();
     let assertion_ref = plugin_ref("assertion-retraction")?;
     let handle_ref = plugin_ref("handle-revocation")?;
@@ -1009,7 +1009,7 @@ fn removal_step(manifest_value: &IOValue, lifecycle_ref: &str, service_ref: &str
     parse_plugin_removal_receipt(&value)
 }
 
-fn upgrade_step(old_value: &IOValue, new_value: &IOValue, cleanup_ref: &str) -> Result<PluginUpgradeReceipt> {
+fn upgrade_step(old_value: &IoValue, new_value: &IoValue, cleanup_ref: &str) -> Result<PluginUpgradeReceipt> {
     let rollback_ref = plugin_ref("rollback")?;
     let cleanup_ref = cleanup_ref.to_string();
     let value = plugin_upgrade_receipt_value(&UpgradeReceiptInput {
@@ -1031,7 +1031,7 @@ fn run_decision(decisions: &[&str]) -> String {
     .to_string()
 }
 
-pub fn plugin_summary(value: &IOValue) -> Result<String> {
+pub fn plugin_summary(value: &IoValue) -> Result<String> {
     if let Some(summary) = core_summary(value) {
         return Ok(summary);
     }
@@ -1044,7 +1044,7 @@ pub fn plugin_summary(value: &IOValue) -> Result<String> {
     Err(MoltenError::invalid_harness("unsupported plugin host artifact for summary"))
 }
 
-fn core_summary(value: &IOValue) -> Option<String> {
+fn core_summary(value: &IoValue) -> Option<String> {
     if let Ok(manifest) = parse_plugin_manifest(value) {
         return Some(format!(
             "plugin manifest ref={} id={} artifact={} hostcalls={} lifecycle={} (summary is non-normative)",
@@ -1086,7 +1086,7 @@ fn core_summary(value: &IOValue) -> Option<String> {
     None
 }
 
-fn receipt_summary(value: &IOValue) -> Option<String> {
+fn receipt_summary(value: &IoValue) -> Option<String> {
     if let Ok(hostcall) = parse_plugin_hostcall_receipt(value) {
         return Some(format!(
             "plugin hostcall receipt ref={} operation={} decision={} diagnostics={} (summary is non-normative)",
@@ -1138,7 +1138,7 @@ struct PluginFixtureReportInput<'a> {
     upgrade_receipt_ref: &'a str,
 }
 
-fn plugin_fixture_report_value(input: &PluginFixtureReportInput<'_>) -> Result<IOValue> {
+fn plugin_fixture_report_value(input: &PluginFixtureReportInput<'_>) -> Result<IoValue> {
     let refs = [
         input.manifest_ref,
         input.install_receipt_ref,
@@ -1346,39 +1346,39 @@ fn status(value: bool) -> &'static str {
     if value { "pass" } else { "fail" }
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn strings_sequence(values: &[String]) -> IOValue {
+fn strings_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_text_value(value: Option<&str>) -> IOValue {
+fn optional_text_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn checks_value(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "plugin checks")?;
@@ -1407,7 +1407,7 @@ fn require_check(checks: &[(String, String)], expected: &str, context: &str) -> 
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -1417,25 +1417,25 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_string(&fields[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let reference = record_string(value, label)?;
     validate_ref(&reference, label)?;
     Ok(reference)
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     let items = required_sequence(&fields[0], label)?;
@@ -1447,13 +1447,13 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
     Ok(values)
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = record_string_sequence(value, label)?;
     validate_refs(&values, label)?;
     Ok(values)
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.to_string())
@@ -1474,7 +1474,7 @@ mod tests {
         crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
     }
 
-    fn manifest_value_for_artifact(artifact_ref: &str) -> IOValue {
+    fn manifest_value_for_artifact(artifact_ref: &str) -> IoValue {
         let lifecycle_callbacks = string_vec(&["init", "start", "health", "stop", "remove"]);
         let effect_refs = vec![test_ref("effect")];
         let hostcall_refs = vec![storage_read_hostcall_ref().expect("hostcall ref")];

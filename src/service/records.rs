@@ -1,4 +1,4 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
@@ -15,23 +15,23 @@ const SERVICE_RESTART_POLICY_SCHEMA: &str = crate::preserves_rail::SERVICE_RESTA
 const SERVICE_STATUS_SCHEMA: &str = crate::preserves_rail::SERVICE_STATUS_SCHEMA;
 const SERVICE_SUPERVISOR_SCHEMA: &str = crate::preserves_rail::SERVICE_SUPERVISOR_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: &str) -> IOValue {
+fn string(value: &str) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -39,7 +39,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -78,7 +78,7 @@ pub struct ServiceManifest {
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub effect_profile_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,7 +98,7 @@ pub struct ServiceDemand {
     pub requester_ref: String,
     pub manifest_ref: Option<String>,
     pub policy_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,7 +128,7 @@ pub struct ServiceStatus {
     pub restart_count: u64,
     pub monitor_refs: Vec<String>,
     pub replay_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,7 +148,7 @@ pub struct ServiceSupervisor {
     pub link_refs: Vec<String>,
     pub monitor_refs: Vec<String>,
     pub policy_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,7 +168,7 @@ pub struct ServiceLink {
     pub child_service_id: String,
     pub propagation: String,
     pub policy_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -188,7 +188,7 @@ pub struct ServiceMonitor {
     pub observer_ref: String,
     pub notification_policy: String,
     pub policy_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -208,7 +208,7 @@ pub struct ServiceRestartPolicy {
     pub window_steps: u64,
     pub backoff_steps: u64,
     pub resource_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -242,7 +242,7 @@ pub struct ServiceRestartDecision {
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -272,7 +272,7 @@ pub struct ServiceLifecycleReceipt {
     pub effect_profile_refs: Vec<String>,
     pub supervision_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -308,7 +308,7 @@ pub struct ServiceCleanupReceipt {
     pub revocation_refs: Vec<String>,
     pub retention_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -325,7 +325,7 @@ pub enum ServiceRecord {
     CleanupReceipt(ServiceCleanupReceipt),
 }
 
-pub fn service_manifest_value(input: &ServiceManifestInput) -> Result<IOValue> {
+pub fn service_manifest_value(input: &ServiceManifestInput) -> Result<IoValue> {
     validate_manifest_input(input)?;
     Ok(record("service-manifest-v1", vec![
         string(SERVICE_MANIFEST_SCHEMA),
@@ -348,7 +348,7 @@ pub fn service_manifest_value(input: &ServiceManifestInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_service_manifest(value: &IOValue) -> Result<ServiceManifest> {
+pub fn parse_service_manifest(value: &IoValue) -> Result<ServiceManifest> {
     let fields = value
         .collect_simple_record("service-manifest-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-manifest-v1 ...>"))?;
@@ -373,7 +373,7 @@ pub fn parse_service_manifest(value: &IOValue) -> Result<ServiceManifest> {
     Ok(manifest)
 }
 
-pub fn service_demand_value(input: &ServiceDemandInput) -> Result<IOValue> {
+pub fn service_demand_value(input: &ServiceDemandInput) -> Result<IoValue> {
     validate_demand_input(input)?;
     Ok(record("service-demand-v1", vec![
         string(SERVICE_DEMAND_SCHEMA),
@@ -386,7 +386,7 @@ pub fn service_demand_value(input: &ServiceDemandInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_service_demand(value: &IOValue) -> Result<ServiceDemand> {
+pub fn parse_service_demand(value: &IoValue) -> Result<ServiceDemand> {
     let fields = value
         .collect_simple_record("service-demand-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-demand-v1 ...>"))?;
@@ -407,7 +407,7 @@ pub fn parse_service_demand(value: &IOValue) -> Result<ServiceDemand> {
     Ok(demand)
 }
 
-pub fn service_status_value(input: &ServiceStatusInput) -> Result<IOValue> {
+pub fn service_status_value(input: &ServiceStatusInput) -> Result<IoValue> {
     validate_status_input(input)?;
     Ok(record("service-status-v1", vec![
         string(SERVICE_STATUS_SCHEMA),
@@ -425,7 +425,7 @@ pub fn service_status_value(input: &ServiceStatusInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_service_status(value: &IOValue) -> Result<ServiceStatus> {
+pub fn parse_service_status(value: &IoValue) -> Result<ServiceStatus> {
     let fields = value
         .collect_simple_record("service-status-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-status-v1 ...>"))?;
@@ -451,7 +451,7 @@ pub fn parse_service_status(value: &IOValue) -> Result<ServiceStatus> {
     Ok(status)
 }
 
-pub fn service_supervisor_value(input: &ServiceSupervisorInput) -> Result<IOValue> {
+pub fn service_supervisor_value(input: &ServiceSupervisorInput) -> Result<IoValue> {
     validate_supervisor_input(input)?;
     Ok(record("service-supervisor-v1", vec![
         string(SERVICE_SUPERVISOR_SCHEMA),
@@ -464,7 +464,7 @@ pub fn service_supervisor_value(input: &ServiceSupervisorInput) -> Result<IOValu
     ]))
 }
 
-pub fn parse_service_supervisor(value: &IOValue) -> Result<ServiceSupervisor> {
+pub fn parse_service_supervisor(value: &IoValue) -> Result<ServiceSupervisor> {
     let fields = value
         .collect_simple_record("service-supervisor-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervisor-v1 ...>"))?;
@@ -484,7 +484,7 @@ pub fn parse_service_supervisor(value: &IOValue) -> Result<ServiceSupervisor> {
     Ok(supervisor)
 }
 
-pub fn service_link_value(input: &ServiceLinkInput) -> Result<IOValue> {
+pub fn service_link_value(input: &ServiceLinkInput) -> Result<IoValue> {
     validate_link_input(input)?;
     Ok(record("service-link-v1", vec![
         string(SERVICE_LINK_SCHEMA),
@@ -497,7 +497,7 @@ pub fn service_link_value(input: &ServiceLinkInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_service_link(value: &IOValue) -> Result<ServiceLink> {
+pub fn parse_service_link(value: &IoValue) -> Result<ServiceLink> {
     let fields = value
         .collect_simple_record("service-link-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-link-v1 ...>"))?;
@@ -517,7 +517,7 @@ pub fn parse_service_link(value: &IOValue) -> Result<ServiceLink> {
     Ok(link)
 }
 
-pub fn service_monitor_value(input: &ServiceMonitorInput) -> Result<IOValue> {
+pub fn service_monitor_value(input: &ServiceMonitorInput) -> Result<IoValue> {
     validate_monitor_input(input)?;
     Ok(record("service-monitor-v1", vec![
         string(SERVICE_MONITOR_SCHEMA),
@@ -530,7 +530,7 @@ pub fn service_monitor_value(input: &ServiceMonitorInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_service_monitor(value: &IOValue) -> Result<ServiceMonitor> {
+pub fn parse_service_monitor(value: &IoValue) -> Result<ServiceMonitor> {
     let fields = value
         .collect_simple_record("service-monitor-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-monitor-v1 ...>"))?;
@@ -550,7 +550,7 @@ pub fn parse_service_monitor(value: &IOValue) -> Result<ServiceMonitor> {
     Ok(monitor)
 }
 
-pub fn service_restart_policy_value(input: &ServiceRestartPolicyInput) -> Result<IOValue> {
+pub fn service_restart_policy_value(input: &ServiceRestartPolicyInput) -> Result<IoValue> {
     validate_restart_policy_input(input)?;
     Ok(record("service-restart-policy-v1", vec![
         string(SERVICE_RESTART_POLICY_SCHEMA),
@@ -563,7 +563,7 @@ pub fn service_restart_policy_value(input: &ServiceRestartPolicyInput) -> Result
     ]))
 }
 
-pub fn parse_service_restart_policy(value: &IOValue) -> Result<ServiceRestartPolicy> {
+pub fn parse_service_restart_policy(value: &IoValue) -> Result<ServiceRestartPolicy> {
     let fields = value
         .collect_simple_record("service-restart-policy-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-restart-policy-v1 ...>"))?;
@@ -583,7 +583,7 @@ pub fn parse_service_restart_policy(value: &IOValue) -> Result<ServiceRestartPol
     Ok(policy)
 }
 
-pub fn service_restart_decision_value(input: &ServiceRestartDecisionInput) -> Result<IOValue> {
+pub fn service_restart_decision_value(input: &ServiceRestartDecisionInput) -> Result<IoValue> {
     validate_restart_decision_input(input)?;
     Ok(record("service-restart-decision-v1", vec![
         string(SERVICE_RESTART_DECISION_SCHEMA),
@@ -603,7 +603,7 @@ pub fn service_restart_decision_value(input: &ServiceRestartDecisionInput) -> Re
     ]))
 }
 
-pub fn parse_service_restart_decision(value: &IOValue) -> Result<ServiceRestartDecision> {
+pub fn parse_service_restart_decision(value: &IoValue) -> Result<ServiceRestartDecision> {
     let fields = value
         .collect_simple_record("service-restart-decision-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-restart-decision-v1 ...>"))?;
@@ -630,7 +630,7 @@ pub fn parse_service_restart_decision(value: &IOValue) -> Result<ServiceRestartD
     Ok(decision)
 }
 
-pub fn service_lifecycle_receipt_value(input: &ServiceLifecycleReceiptInput) -> Result<IOValue> {
+pub fn service_lifecycle_receipt_value(input: &ServiceLifecycleReceiptInput) -> Result<IoValue> {
     validate_lifecycle_input(input)?;
     Ok(record("service-lifecycle-receipt-v1", vec![
         string(SERVICE_LIFECYCLE_RECEIPT_SCHEMA),
@@ -648,7 +648,7 @@ pub fn service_lifecycle_receipt_value(input: &ServiceLifecycleReceiptInput) -> 
     ]))
 }
 
-pub fn parse_service_lifecycle_receipt(value: &IOValue) -> Result<ServiceLifecycleReceipt> {
+pub fn parse_service_lifecycle_receipt(value: &IoValue) -> Result<ServiceLifecycleReceipt> {
     let fields = value
         .collect_simple_record("service-lifecycle-receipt-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-lifecycle-receipt-v1 ...>"))?;
@@ -673,7 +673,7 @@ pub fn parse_service_lifecycle_receipt(value: &IOValue) -> Result<ServiceLifecyc
     Ok(receipt)
 }
 
-pub fn service_cleanup_receipt_value(input: &ServiceCleanupReceiptInput) -> Result<IOValue> {
+pub fn service_cleanup_receipt_value(input: &ServiceCleanupReceiptInput) -> Result<IoValue> {
     validate_cleanup_input(input)?;
     Ok(record("service-cleanup-receipt-v1", vec![
         string(SERVICE_CLEANUP_RECEIPT_SCHEMA),
@@ -694,7 +694,7 @@ pub fn service_cleanup_receipt_value(input: &ServiceCleanupReceiptInput) -> Resu
     ]))
 }
 
-pub fn parse_service_cleanup_receipt(value: &IOValue) -> Result<ServiceCleanupReceipt> {
+pub fn parse_service_cleanup_receipt(value: &IoValue) -> Result<ServiceCleanupReceipt> {
     let fields = value
         .collect_simple_record("service-cleanup-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-cleanup-receipt-v1 ...>"))?;
@@ -722,7 +722,7 @@ pub fn parse_service_cleanup_receipt(value: &IOValue) -> Result<ServiceCleanupRe
     Ok(receipt)
 }
 
-pub fn parse_service_record(value: &IOValue) -> Result<ServiceRecord> {
+pub fn parse_service_record(value: &IoValue) -> Result<ServiceRecord> {
     if value.collect_simple_record("service-manifest-v1", Some(11)).is_some() {
         return parse_service_manifest(value).map(ServiceRecord::Manifest);
     }
@@ -756,7 +756,7 @@ pub fn parse_service_record(value: &IOValue) -> Result<ServiceRecord> {
     Err(MoltenError::invalid_harness("unknown service record schema"))
 }
 
-pub fn service_summary(value: &IOValue) -> Result<String> {
+pub fn service_summary(value: &IoValue) -> Result<String> {
     let has_sensitive_marker = is_sensitive_marker_present(value)?;
     let redaction = if has_sensitive_marker { " redacted=true" } else { "" };
     Ok(summary_text(parse_service_record(value)?, redaction))
@@ -1141,29 +1141,29 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     }
 }
 
-fn service_id_sequence(values: &[String]) -> IOValue {
+fn service_id_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(|value| string(value)).collect())
 }
 
-fn refs_sequence(values: &[String]) -> IOValue {
+fn refs_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(|value| string(value)).collect())
 }
 
-fn strings_sequence(values: &[String]) -> IOValue {
+fn strings_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(|value| string(value)).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     record("checks", vec![sequence(
         names.iter().map(|name| record("check", vec![string(name), string("pass")])).collect(),
     )])
 }
 
-fn parse_service_id_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_service_id_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     ensure_count_at_most(values.len(), MAX_SERVICE_IDS, label)?;
     values
@@ -1176,7 +1176,7 @@ fn parse_service_id_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<
         .collect()
 }
 
-fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     ensure_count_at_most(values.len(), MAX_SERVICE_REFS, label)?;
     values
@@ -1189,13 +1189,13 @@ fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>
         .collect()
 }
 
-fn parse_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     ensure_count_at_most(values.len(), MAX_SERVICE_DIAGNOSTICS, label)?;
     values.iter().map(|value| required_string(value, label)).collect()
 }
 
-fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
+fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoValue>>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1206,7 +1206,7 @@ fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOVal
     Ok(values.iter().cloned().collect())
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let values = field_sequence(value, "checks")?;
     ensure_count_at_most(values.len(), MAX_SERVICE_CHECKS, "service checks")?;
     values
@@ -1229,7 +1229,7 @@ fn require_check(checks: &[(String, String)], name: &str, context: &str) -> Resu
     }
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1237,13 +1237,13 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&fields[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let reference = record_string(value, label)?;
     require_ref(&reference, label)?;
     Ok(reference)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1251,7 +1251,7 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
     parse_optional_ref_value(&fields[0])
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1261,7 +1261,7 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional service ref").map(Some)
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1269,7 +1269,7 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     required_u64(&fields[0], label)
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual == expected {
         Ok(())
@@ -1278,27 +1278,27 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     }
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let reference = required_string(value, field)?;
     require_ref(&reference, field)?;
     Ok(reference)
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
-fn is_sensitive_marker_present(value: &IOValue) -> Result<bool> {
+fn is_sensitive_marker_present(value: &IoValue) -> Result<bool> {
     let text = crate::preserves_rail::to_text(value)?;
     Ok(["<secret", "<confidential", "<credential", "<private", "<encrypted-ref"]
         .iter()
@@ -1378,39 +1378,39 @@ mod tests {
     }
 
     struct Core {
-        manifest: IOValue,
+        manifest: IoValue,
         manifest_ref: String,
-        demand: IOValue,
-        status: IOValue,
+        demand: IoValue,
+        status: IoValue,
         status_ref: String,
     }
 
     struct Aux {
-        supervisor: IOValue,
-        link: IOValue,
-        monitor: IOValue,
+        supervisor: IoValue,
+        link: IoValue,
+        monitor: IoValue,
         monitor_ref: String,
-        restart: IOValue,
+        restart: IoValue,
         restart_ref: String,
     }
 
     struct Receipts {
-        decision: IOValue,
-        lifecycle: IOValue,
-        cleanup: IOValue,
+        decision: IoValue,
+        lifecycle: IoValue,
+        cleanup: IoValue,
     }
 
     struct Case {
-        manifest: IOValue,
-        demand: IOValue,
-        status: IOValue,
-        supervisor: IOValue,
-        link: IOValue,
-        monitor: IOValue,
-        restart: IOValue,
-        decision: IOValue,
-        lifecycle: IOValue,
-        cleanup: IOValue,
+        manifest: IoValue,
+        demand: IoValue,
+        status: IoValue,
+        supervisor: IoValue,
+        link: IoValue,
+        monitor: IoValue,
+        restart: IoValue,
+        decision: IoValue,
+        lifecycle: IoValue,
+        cleanup: IoValue,
     }
 
     fn base() -> Core {
@@ -1493,7 +1493,7 @@ mod tests {
         }
     }
 
-    fn decision(core: &Core, aux: &Aux) -> IOValue {
+    fn decision(core: &Core, aux: &Aux) -> IoValue {
         service_restart_decision_value(&ServiceRestartDecisionInput {
             decision: "pass".to_string(),
             service_id: "svc:web".to_string(),
@@ -1511,7 +1511,7 @@ mod tests {
         .expect("restart decision")
     }
 
-    fn lifecycle(core: &Core, aux: &Aux) -> IOValue {
+    fn lifecycle(core: &Core, aux: &Aux) -> IoValue {
         service_lifecycle_receipt_value(&ServiceLifecycleReceiptInput {
             operation: "ready".to_string(),
             decision: "pass".to_string(),
@@ -1527,7 +1527,7 @@ mod tests {
         .expect("lifecycle")
     }
 
-    fn cleanup(core: &Core) -> IOValue {
+    fn cleanup(core: &Core) -> IoValue {
         service_cleanup_receipt_value(&ServiceCleanupReceiptInput {
             decision: "pass".to_string(),
             service_id: "svc:web".to_string(),

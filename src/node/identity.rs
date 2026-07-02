@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::Write;
 
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 use preserves::Value;
 
 use crate::error::MoltenError;
@@ -52,14 +52,14 @@ pub struct NodeIdentity {
     pub secret_ref: String,
     pub policy_refs: Vec<String>,
     pub receipt_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeIdentityResolution {
     pub identity: Option<NodeIdentity>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,7 +68,7 @@ pub struct NodeBootstrapHandshake {
     pub node_identity_ref: String,
     pub endpoint_id: String,
     pub peer: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 struct ResolutionInput<'a> {
@@ -168,7 +168,7 @@ pub fn node_identity_value(
     key_source_class: &str,
     backend_ref: &str,
     receipt_refs: &[String],
-) -> IOValue {
+) -> IoValue {
     record("node-identity-v1", vec![
         string(crate::preserves_rail::NODE_IDENTITY_SCHEMA),
         record("node", vec![
@@ -200,7 +200,7 @@ pub fn node_identity_value(
     ])
 }
 
-pub fn parse_node_identity(value: &IOValue) -> Result<NodeIdentity> {
+pub fn parse_node_identity(value: &IoValue) -> Result<NodeIdentity> {
     let fields = value
         .collect_simple_record("node-identity-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-identity-v1 ...>"))?;
@@ -237,7 +237,7 @@ pub fn parse_node_identity(value: &IOValue) -> Result<NodeIdentity> {
     })
 }
 
-pub fn node_bootstrap_handshake_value(identity: &NodeIdentity, peer: &str, policy_refs: &[String]) -> Result<IOValue> {
+pub fn node_bootstrap_handshake_value(identity: &NodeIdentity, peer: &str, policy_refs: &[String]) -> Result<IoValue> {
     if peer.trim().is_empty() {
         return Err(MoltenError::invalid_harness("node bootstrap peer must not be empty"));
     }
@@ -261,7 +261,7 @@ pub fn node_bootstrap_handshake_value(identity: &NodeIdentity, peer: &str, polic
     ]))
 }
 
-pub fn parse_node_bootstrap_handshake(value: &IOValue) -> Result<NodeBootstrapHandshake> {
+pub fn parse_node_bootstrap_handshake(value: &IoValue) -> Result<NodeBootstrapHandshake> {
     let fields = value
         .collect_simple_record("node-identity-bootstrap-v1", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-identity-bootstrap-v1 ...>"))?;
@@ -285,7 +285,7 @@ pub fn parse_node_bootstrap_handshake(value: &IOValue) -> Result<NodeBootstrapHa
     })
 }
 
-pub fn node_identity_startup_evidence_value(identity_ref: &str, receipt_ref: &str) -> Result<IOValue> {
+pub fn node_identity_startup_evidence_value(identity_ref: &str, receipt_ref: &str) -> Result<IoValue> {
     require_ref(identity_ref, "node identity startup identity ref")?;
     require_ref(receipt_ref, "node identity startup receipt ref")?;
     Ok(record("node-identity-startup-v1", vec![
@@ -360,7 +360,7 @@ fn resolution_operation<'a>(input: &ResolutionInput<'a>, is_drift: bool) -> &'a 
     }
 }
 
-fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Option<&str>) -> IOValue {
+fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Option<&str>) -> IoValue {
     const CHECKS: [&str; 6] = [
         "resolution-order",
         "stable-endpoint-id",
@@ -383,7 +383,7 @@ fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Opti
     })
 }
 
-fn node_identity_receipt_value(input: &ReceiptValueInput<'_>) -> IOValue {
+fn node_identity_receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
     record("node-identity-receipt-v1", vec![
         string(crate::preserves_rail::NODE_IDENTITY_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -482,11 +482,11 @@ fn write_secret_restricted(path: &std::path::Path, secret: &str) -> Result<()> {
     }
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
@@ -503,7 +503,7 @@ fn require_ref(reference: &str, field: &str) -> Result<()> {
     })
 }
 
-fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -521,7 +521,7 @@ fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>
         .collect()
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record("checks", Some(1))
@@ -549,7 +549,7 @@ fn require_check(checks: &[(String, String)], name: &str) -> Result<()> {
     }
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -557,7 +557,7 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&record[0], label)
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
         return Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")));
@@ -565,7 +565,7 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     Ok(())
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())

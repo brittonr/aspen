@@ -5,7 +5,7 @@
 //! callers must present canonical coordination requests and receive receipts
 //! with Raft/control-registry evidence before dataspace facts are reflected.
 
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 
 use crate::bounded::VecSink;
 use crate::delivery_idempotency;
@@ -28,7 +28,7 @@ const COORDINATION_SERVICE_MANIFEST_SCHEMA: &str = crate::preserves_rail::COORDI
 const COORDINATION_STATE_SNAPSHOT_SCHEMA: &str = crate::preserves_rail::COORDINATION_STATE_SNAPSHOT_SCHEMA;
 const COORDINATION_STATUS_ASSERTION_SCHEMA: &str = crate::preserves_rail::COORDINATION_STATUS_ASSERTION_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
@@ -36,19 +36,19 @@ fn content_ref_from_bytes(bytes: &[u8]) -> String {
     crate::preserves_rail::content_ref_from_bytes(bytes)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -56,7 +56,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -123,7 +123,7 @@ pub struct CoordinationServiceManifest {
     pub barrier_parties: u64,
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,7 +133,7 @@ pub struct CoordinationRequestInput {
     pub key: String,
     pub client_session: String,
     pub operation_id_ref: String,
-    pub payload: Option<IOValue>,
+    pub payload: Option<IoValue>,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub policy_refs: Vec<String>,
@@ -147,11 +147,11 @@ pub struct CoordinationRequest {
     pub key: String,
     pub client_session: String,
     pub operation_id_ref: String,
-    pub payload: Option<IOValue>,
+    pub payload: Option<IoValue>,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub policy_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -162,7 +162,7 @@ pub struct FencingToken {
     pub token: u64,
     pub lease_epoch: u64,
     pub commit_receipt_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -172,14 +172,14 @@ pub struct CoordinationStatusAssertion {
     pub key: String,
     pub state_ref: String,
     pub receipt_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoordinationStateSnapshot {
     pub state_ref: String,
     pub retention_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -194,7 +194,7 @@ pub struct CoordinationReceipt {
     pub state_ref: String,
     pub dataspace_assertion_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,7 +206,7 @@ pub struct CoordinationApplyResult {
     pub assertions: Vec<CoordinationStatusAssertion>,
     pub raft_commit_ref: Option<String>,
     pub raft_read_receipt: Option<RaftReadReceipt>,
-    pub evidence_values: Vec<IOValue>,
+    pub evidence_values: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -216,8 +216,8 @@ pub struct CoordinationFixtureRun {
     pub final_state_ref: String,
     pub receipt_refs: Vec<String>,
     pub assertion_refs: Vec<String>,
-    pub evidence_values: Vec<IOValue>,
-    pub report_value: IOValue,
+    pub evidence_values: Vec<IoValue>,
+    pub report_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,7 +229,7 @@ pub struct CoordinationApplyReport {
     pub receipt_refs: Vec<String>,
     pub assertion_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -288,7 +288,7 @@ pub struct RegistryEntry {
 struct PreparedMutation {
     state: CoordinationState,
     token: Option<FencingToken>,
-    status_fact: IOValue,
+    status_fact: IoValue,
     checks: Vec<(&'static str, &'static str)>,
 }
 
@@ -310,7 +310,7 @@ pub struct ReceiptValueInput<'a> {
 pub struct StatusAssertionInput<'a> {
     pub service: &'a str,
     pub key: &'a str,
-    pub fact: &'a IOValue,
+    pub fact: &'a IoValue,
     pub state_ref: &'a str,
     pub receipt_ref: &'a str,
 }
@@ -325,7 +325,7 @@ pub struct ApplyReportValueInput<'a> {
     pub evidence_refs: &'a [String],
 }
 
-pub fn coordination_service_manifest_value(input: &CoordinationServiceManifestInput) -> Result<IOValue> {
+pub fn coordination_service_manifest_value(input: &CoordinationServiceManifestInput) -> Result<IoValue> {
     validate_service_id(&input.service_id)?;
     validate_services(&input.services)?;
     validate_ref(&input.control_group_ref, "coordination control group ref")?;
@@ -354,7 +354,7 @@ pub fn coordination_service_manifest_value(input: &CoordinationServiceManifestIn
     ]))
 }
 
-pub fn parse_coordination_service_manifest(value: &IOValue) -> Result<CoordinationServiceManifest> {
+pub fn parse_coordination_service_manifest(value: &IoValue) -> Result<CoordinationServiceManifest> {
     let fields = simple_record(value, "coordination-service-manifest-v1", 11)?;
     require_schema(&fields[0], COORDINATION_SERVICE_MANIFEST_SCHEMA, "coordination manifest schema")?;
     let input = CoordinationServiceManifestInput {
@@ -386,7 +386,7 @@ pub fn parse_coordination_service_manifest(value: &IOValue) -> Result<Coordinati
     })
 }
 
-pub fn coordination_request_value(input: &CoordinationRequestInput) -> Result<IOValue> {
+pub fn coordination_request_value(input: &CoordinationRequestInput) -> Result<IoValue> {
     validate_request_input(input)?;
     Ok(record("coordination-request-v1", vec![
         string(COORDINATION_REQUEST_SCHEMA),
@@ -407,7 +407,7 @@ pub fn coordination_request_value(input: &CoordinationRequestInput) -> Result<IO
     ]))
 }
 
-pub fn parse_coordination_request(value: &IOValue) -> Result<CoordinationRequest> {
+pub fn parse_coordination_request(value: &IoValue) -> Result<CoordinationRequest> {
     let fields = simple_record(value, "coordination-request-v1", 11)?;
     require_schema(&fields[0], COORDINATION_REQUEST_SCHEMA, "coordination request schema")?;
     let input = CoordinationRequestInput {
@@ -444,7 +444,7 @@ pub fn fencing_token_value(
     token: u64,
     lease_epoch: u64,
     commit_receipt_ref: &str,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_key(key)?;
     validate_session(owner)?;
     validate_ref(commit_receipt_ref, "coordination token commit receipt ref")?;
@@ -459,7 +459,7 @@ pub fn fencing_token_value(
     ]))
 }
 
-pub fn parse_fencing_token(value: &IOValue) -> Result<FencingToken> {
+pub fn parse_fencing_token(value: &IoValue) -> Result<FencingToken> {
     let fields = simple_record(value, "fencing-token-v1", 7)?;
     require_schema(&fields[0], COORDINATION_FENCING_TOKEN_SCHEMA, "coordination fencing token schema")?;
     let key = record_string(&fields[1], "key")?;
@@ -479,7 +479,7 @@ pub fn parse_fencing_token(value: &IOValue) -> Result<FencingToken> {
     })
 }
 
-pub fn coordination_state_snapshot_value(state: &CoordinationState) -> Result<IOValue> {
+pub fn coordination_state_snapshot_value(state: &CoordinationState) -> Result<IoValue> {
     let records = state_records(state)?;
     let retention_refs = retention_refs_for_state(state)?;
     Ok(record("coordination-state-snapshot-v1", vec![
@@ -502,13 +502,13 @@ pub fn coordination_state_snapshot_value(state: &CoordinationState) -> Result<IO
 }
 
 struct StateRecords {
-    locks: Vec<IOValue>,
-    queues: Vec<IOValue>,
-    semaphores: Vec<IOValue>,
-    rates: Vec<IOValue>,
-    elections: Vec<IOValue>,
-    barriers: Vec<IOValue>,
-    registry: Vec<IOValue>,
+    locks: Vec<IoValue>,
+    queues: Vec<IoValue>,
+    semaphores: Vec<IoValue>,
+    rates: Vec<IoValue>,
+    elections: Vec<IoValue>,
+    barriers: Vec<IoValue>,
+    registry: Vec<IoValue>,
 }
 
 fn state_records(state: &CoordinationState) -> Result<StateRecords> {
@@ -527,7 +527,7 @@ fn state_records(state: &CoordinationState) -> Result<StateRecords> {
     })
 }
 
-fn lock_records(locks: &OrderedMap<String, LockState>) -> Vec<IOValue> {
+fn lock_records(locks: &OrderedMap<String, LockState>) -> Vec<IoValue> {
     locks
         .iter()
         .map(|(key, lock)| {
@@ -542,14 +542,14 @@ fn lock_records(locks: &OrderedMap<String, LockState>) -> Vec<IOValue> {
         .collect()
 }
 
-fn queue_records(queues: &OrderedMap<String, Vec<String>>) -> Vec<IOValue> {
+fn queue_records(queues: &OrderedMap<String, Vec<String>>) -> Vec<IoValue> {
     queues
         .iter()
         .map(|(key, items)| record("queue", vec![string(key), strings_sequence(items)]))
         .collect()
 }
 
-fn semaphore_records(semaphores: &OrderedMap<String, OrderedSet<String>>) -> Vec<IOValue> {
+fn semaphore_records(semaphores: &OrderedMap<String, OrderedSet<String>>) -> Vec<IoValue> {
     semaphores
         .iter()
         .map(|(key, holders)| {
@@ -559,11 +559,11 @@ fn semaphore_records(semaphores: &OrderedMap<String, OrderedSet<String>>) -> Vec
         .collect()
 }
 
-fn rate_records(rates: &OrderedMap<String, u64>) -> Vec<IOValue> {
+fn rate_records(rates: &OrderedMap<String, u64>) -> Vec<IoValue> {
     rates.iter().map(|(key, used)| record("rate", vec![string(key), u64_value(*used)])).collect()
 }
 
-fn election_records(elections: &OrderedMap<String, ElectionState>) -> Vec<IOValue> {
+fn election_records(elections: &OrderedMap<String, ElectionState>) -> Vec<IoValue> {
     elections
         .iter()
         .map(|(key, election)| {
@@ -577,7 +577,7 @@ fn election_records(elections: &OrderedMap<String, ElectionState>) -> Vec<IOValu
         .collect()
 }
 
-fn barrier_records(barriers: &OrderedMap<String, BarrierState>) -> Vec<IOValue> {
+fn barrier_records(barriers: &OrderedMap<String, BarrierState>) -> Vec<IoValue> {
     barriers
         .iter()
         .map(|(key, barrier)| {
@@ -592,7 +592,7 @@ fn barrier_records(barriers: &OrderedMap<String, BarrierState>) -> Vec<IOValue> 
         .collect()
 }
 
-fn registry_records(registry: &OrderedMap<String, RegistryEntry>) -> Vec<IOValue> {
+fn registry_records(registry: &OrderedMap<String, RegistryEntry>) -> Vec<IoValue> {
     registry
         .iter()
         .map(|(key, entry)| {
@@ -601,7 +601,7 @@ fn registry_records(registry: &OrderedMap<String, RegistryEntry>) -> Vec<IOValue
         .collect()
 }
 
-pub fn parse_coordination_state_snapshot(value: &IOValue) -> Result<CoordinationStateSnapshot> {
+pub fn parse_coordination_state_snapshot(value: &IoValue) -> Result<CoordinationStateSnapshot> {
     let fields = simple_record(value, "coordination-state-snapshot-v1", 11)?;
     require_schema(&fields[0], COORDINATION_STATE_SNAPSHOT_SCHEMA, "coordination state schema")?;
     let retention_refs = record_ref_sequence(&fields[9], "retention")?;
@@ -613,7 +613,7 @@ pub fn parse_coordination_state_snapshot(value: &IOValue) -> Result<Coordination
     })
 }
 
-pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> Result<IOValue> {
+pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> Result<IoValue> {
     validate_service(input.service)?;
     validate_key(input.key)?;
     validate_ref(input.state_ref, "coordination assertion state ref")?;
@@ -632,7 +632,7 @@ pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> R
     ]))
 }
 
-pub fn parse_coordination_status_assertion(value: &IOValue) -> Result<CoordinationStatusAssertion> {
+pub fn parse_coordination_status_assertion(value: &IoValue) -> Result<CoordinationStatusAssertion> {
     let fields = simple_record(value, "coordination-status-assertion-v1", 7)?;
     require_schema(&fields[0], COORDINATION_STATUS_ASSERTION_SCHEMA, "coordination assertion schema")?;
     let service = record_string(&fields[1], "service")?;
@@ -650,7 +650,7 @@ pub fn parse_coordination_status_assertion(value: &IOValue) -> Result<Coordinati
     })
 }
 
-pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IOValue> {
+pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_service(input.service)?;
     validate_operation(input.service, input.operation)?;
@@ -679,7 +679,7 @@ pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IOValu
     ]))
 }
 
-pub fn parse_coordination_receipt(value: &IOValue) -> Result<CoordinationReceipt> {
+pub fn parse_coordination_receipt(value: &IoValue) -> Result<CoordinationReceipt> {
     let fields = simple_record(value, "coordination-receipt-v1", 11)?;
     require_schema(&fields[0], COORDINATION_RECEIPT_SCHEMA, "coordination receipt schema")?;
     let decision = record_string(&fields[1], "decision")?;
@@ -707,7 +707,7 @@ pub fn parse_coordination_receipt(value: &IOValue) -> Result<CoordinationReceipt
     })
 }
 
-pub fn new_coordination_runtime(manifest_value: &IOValue) -> Result<CoordinationRuntime> {
+pub fn new_coordination_runtime(manifest_value: &IoValue) -> Result<CoordinationRuntime> {
     let manifest = parse_coordination_service_manifest(manifest_value)?;
     let raft_manifest = raft_control_plane::control_registry_fixture_manifest_value()?;
     let raft = raft_control_plane::new_control_registry_runtime(&raft_manifest)?;
@@ -728,7 +728,7 @@ pub fn new_coordination_runtime(manifest_value: &IOValue) -> Result<Coordination
 
 pub fn apply_coordination_request(
     runtime: &mut CoordinationRuntime,
-    request_value: &IOValue,
+    request_value: &IoValue,
 ) -> Result<CoordinationApplyResult> {
     let request = parse_coordination_request(request_value)?;
     if let Some(existing) = runtime.applied_operations.get(&request.operation_id_ref) {
@@ -755,7 +755,7 @@ pub fn apply_coordination_request(
     deny_result(runtime, request, current_snapshot, diagnostics, &["admission-gate", "fail"])
 }
 
-pub fn coordination_fixture_manifest_value() -> Result<IOValue> {
+pub fn coordination_fixture_manifest_value() -> Result<IoValue> {
     let group_ref = canonical_hash(&raft_control_plane::control_registry_fixture_manifest_value()?)?;
     coordination_service_manifest_value(&CoordinationServiceManifestInput {
         service_id: DEFAULT_COORDINATION_SERVICE_ID.to_string(),
@@ -816,7 +816,7 @@ pub fn run_coordination_fixture() -> Result<CoordinationFixtureRun> {
     })
 }
 
-fn case_requests(refs: &CoordinationRefSlices<'_>) -> Result<Vec<IOValue>> {
+fn case_requests(refs: &CoordinationRefSlices<'_>) -> Result<Vec<IoValue>> {
     let cases = [
         (SERVICE_LOCK, OP_ACQUIRE, "resource:alpha", "client-a", 1, None),
         (SERVICE_LOCK, OP_ACQUIRE, "resource:alpha", "client-a", 1, None),
@@ -852,11 +852,11 @@ fn case_requests(refs: &CoordinationRefSlices<'_>) -> Result<Vec<IOValue>> {
 }
 
 fn case_report(
-    manifest_value: &IOValue,
+    manifest_value: &IoValue,
     final_state_ref: &str,
     receipt_refs: &[String],
     assertion_refs: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     Ok(record("coordination-fixture-report-v1", vec![
         string("molten.coordination.fixture-report.v1"),
         record("decision", vec![string("pass")]),
@@ -867,7 +867,7 @@ fn case_report(
     ]))
 }
 
-pub fn coordination_apply_report_value(input: ApplyReportValueInput<'_>) -> Result<IOValue> {
+pub fn coordination_apply_report_value(input: ApplyReportValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_ref(input.manifest_ref, "coordination apply report manifest ref")?;
     validate_ref(input.final_state_ref, "coordination apply report state ref")?;
@@ -890,7 +890,7 @@ pub fn coordination_apply_report_value(input: ApplyReportValueInput<'_>) -> Resu
     ]))
 }
 
-pub fn parse_coordination_apply_report(value: &IOValue) -> Result<CoordinationApplyReport> {
+pub fn parse_coordination_apply_report(value: &IoValue) -> Result<CoordinationApplyReport> {
     let fields = simple_record(value, "coordination-apply-report-v1", 8)?;
     require_schema(&fields[0], COORDINATION_APPLY_REPORT_SCHEMA, "coordination apply report schema")?;
     let decision = record_string(&fields[1], "decision")?;
@@ -917,7 +917,7 @@ pub fn coordination_supported_services() -> Vec<String> {
     supported_services()
 }
 
-pub fn coordination_summary(value: &IOValue) -> Result<String> {
+pub fn coordination_summary(value: &IoValue) -> Result<String> {
     if let Ok(report) = parse_coordination_apply_report(value) {
         return Ok(format!(
             "coordination apply report decision={} manifest={} state={} receipts={} assertions={} evidence={}",
@@ -1038,13 +1038,13 @@ fn apply_coordination_read(
 struct ReadAssertionInput<'a> {
     service: &'a str,
     key: &'a str,
-    fact: &'a IOValue,
+    fact: &'a IoValue,
     snapshot_ref: &'a str,
     decision: &'a str,
     diagnostics: Vec<String>,
 }
 
-fn read_assertion_value(input: ReadAssertionInput<'_>) -> Result<(Option<IOValue>, Vec<String>)> {
+fn read_assertion_value(input: ReadAssertionInput<'_>) -> Result<(Option<IoValue>, Vec<String>)> {
     let mut diagnostics = input.diagnostics;
     if input.decision == "pass" {
         let placeholder_receipt_ref = fixture_ref("coordination-read-placeholder");
@@ -1069,7 +1069,7 @@ fn read_assertion_value(input: ReadAssertionInput<'_>) -> Result<(Option<IOValue
 
 fn corrected_read_assertions(
     assertion: Option<CoordinationStatusAssertion>,
-    fact: &IOValue,
+    fact: &IoValue,
     receipt_ref: &str,
 ) -> Result<Vec<CoordinationStatusAssertion>> {
     if let Some(assertion) = assertion {
@@ -1211,7 +1211,7 @@ fn fact_for(
     manifest: &CoordinationServiceManifest,
     request: &CoordinationRequest,
     token: Option<&FencingToken>,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     if let Some(token) = token {
         status_fact_for_token(&prepared.state, manifest, &request.service, &request.key, token)
     } else {
@@ -1221,7 +1221,7 @@ fn fact_for(
 
 fn status_assertion_for(
     request: &CoordinationRequest,
-    fact: &IOValue,
+    fact: &IoValue,
     state_ref: &str,
     receipt_ref: &str,
 ) -> Result<CoordinationStatusAssertion> {
@@ -1296,7 +1296,7 @@ fn success_parts(input: PartsInput<'_>) -> Result<SuccessParts> {
     })
 }
 
-fn success_values(input: ValuesInput<'_>) -> Vec<IOValue> {
+fn success_values(input: ValuesInput<'_>) -> Vec<IoValue> {
     let ValuesInput {
         proposal,
         request,
@@ -1742,7 +1742,7 @@ fn status_fact_for_token(
     service: &str,
     key: &str,
     token: &FencingToken,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     match service {
         SERVICE_LOCK => Ok(record("lock-held", vec![
             string(key),
@@ -1765,7 +1765,7 @@ fn status_fact_for(
     manifest: &CoordinationServiceManifest,
     service: &str,
     key: &str,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     match service {
         SERVICE_LOCK => Ok(state.locks.get(key).map_or_else(
             || record("lock-free", vec![string(key)]),
@@ -1891,7 +1891,7 @@ struct EvidenceValuesInput<'a> {
     read: Option<&'a RaftReadReceipt>,
 }
 
-fn evidence_values_for(input: EvidenceValuesInput<'_>) -> Vec<IOValue> {
+fn evidence_values_for(input: EvidenceValuesInput<'_>) -> Vec<IoValue> {
     let mut values = vec![
         input.request.value.clone(),
         input.snapshot.value.clone(),
@@ -1939,7 +1939,7 @@ fn payload_text(request: &CoordinationRequest, label: &str) -> Result<String> {
     simple_payload_text(payload, label)
 }
 
-fn simple_payload_text(payload: &IOValue, label: &str) -> Result<String> {
+fn simple_payload_text(payload: &IoValue, label: &str) -> Result<String> {
     let fields = simple_record(payload, label, 1)?;
     required_string(&fields[0], label)
 }
@@ -1973,11 +1973,11 @@ struct FixtureRequestInput<'a> {
     key: &'a str,
     client_session: &'a str,
     sequence: u64,
-    payload: Option<IOValue>,
+    payload: Option<IoValue>,
     refs: &'a CoordinationRefSlices<'a>,
 }
 
-fn fixture_request(input: FixtureRequestInput<'_>) -> Result<IOValue> {
+fn fixture_request(input: FixtureRequestInput<'_>) -> Result<IoValue> {
     let scope =
         delivery_idempotency::control_command_scope_ref(&fixture_ref("coordination-group"), input.client_session)?;
     let payload_ref = input.payload.as_ref().map_or_else(
@@ -2018,35 +2018,35 @@ fn supported_services() -> Vec<String> {
     ]
 }
 
-fn strings_sequence(values: &[String]) -> IOValue {
+fn strings_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(string).collect())
 }
 
-fn optional_value(value: Option<&IOValue>) -> IOValue {
+fn optional_value(value: Option<&IoValue>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![value.clone()]))
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn checks_value(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "coordination checks")?;
@@ -2075,7 +2075,7 @@ fn require_check(checks: &[(String, String)], expected: &str, context: &str) -> 
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -2085,31 +2085,31 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_string(&fields[0], label)
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_u64(&fields[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let reference = record_string(value, label)?;
     validate_ref(&reference, label)?;
     Ok(reference)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     let option = value_to_iovalue(&fields[0]);
@@ -2123,7 +2123,7 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
     }
 }
 
-fn record_optional_value(value: &Value<IOValue>, label: &str) -> Result<Option<IOValue>> {
+fn record_optional_value(value: &Value<IoValue>, label: &str) -> Result<Option<IoValue>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     let option = value_to_iovalue(&fields[0]);
@@ -2135,7 +2135,7 @@ fn record_optional_value(value: &Value<IOValue>, label: &str) -> Result<Option<I
     }
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     let items = required_sequence(&fields[0], label)?;
@@ -2147,20 +2147,20 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
     Ok(values)
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = record_string_sequence(value, label)?;
     validate_refs(&values, label)?;
     Ok(values)
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.to_string())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     let number = value.as_u64().ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?;
     number.map_err(|_| MoltenError::invalid_harness(format!("u64 out of range for {field}")))
 }
@@ -2354,8 +2354,8 @@ mod tests {
         key: &str,
         session: &str,
         sequence: u64,
-        payload: Option<IOValue>,
-    ) -> IOValue {
+        payload: Option<IoValue>,
+    ) -> IoValue {
         let (auth, resources, policies) = refs();
         let fixture_refs = CoordinationRefSlices {
             authority_refs: &auth,

@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 
 use crate::ledger;
 
@@ -29,27 +29,27 @@ const EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVI
 const EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
 const EVIDENCE_SIGNED_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IOValue> {
+fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IoValue> {
     crate::evidence::sign_receipt(input)
 }
 
-fn string(value: &str) -> IOValue {
+fn string(value: &str) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -57,12 +57,12 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
 fn verify_signed_receipt(
-    value: &IOValue,
+    value: &IoValue,
     required_purpose: &str,
     trust_root: &str,
     key: &str,
@@ -410,7 +410,7 @@ pub struct ChainAppend {
     pub head_after: String,
     pub predicate_receipt_ref: String,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -442,7 +442,7 @@ pub struct ChainVerify {
     pub diagnostics: Vec<ChainDiagnostic>,
     pub predicate_receipt_refs: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -485,7 +485,7 @@ pub struct ChainForkEvidenceValueInput<'a> {
 
 struct CheckpointVerifyReceiptValidationInput<'a> {
     root: &'a Path,
-    value: &'a IOValue,
+    value: &'a IoValue,
     chain: &'a ChainScope,
     anchor_link_ref: &'a str,
     head_ref: &'a str,
@@ -494,7 +494,7 @@ struct CheckpointVerifyReceiptValidationInput<'a> {
 
 struct RangeBindingInput<'a> {
     root: &'a Path,
-    value: &'a IOValue,
+    value: &'a IoValue,
     chain: &'a ChainScope,
     anchor_link_ref: &'a str,
     head_ref: &'a str,
@@ -592,7 +592,7 @@ pub fn append_checks() -> Vec<ChainCheck> {
     ]
 }
 
-pub fn chain_link_value(input: &ChainLinkInput) -> IOValue {
+pub fn chain_link_value(input: &ChainLinkInput) -> IoValue {
     let context_refs = input
         .context_refs
         .iter()
@@ -632,7 +632,7 @@ pub fn chain_link_value(input: &ChainLinkInput) -> IOValue {
     ])
 }
 
-pub fn chain_link_ref(value: &IOValue) -> Result<String> {
+pub fn chain_link_ref(value: &IoValue) -> Result<String> {
     canonical_hash(value)
 }
 
@@ -646,7 +646,7 @@ fn ensure_entry_ref(kind: &str, entry_ref: &str, parsed_ref: &str) -> Result<()>
     )))
 }
 
-fn index_link_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+fn index_link_entry(index: &mut ChainIndex, entry_ref: &str, value: &IoValue) -> Result<()> {
     let link = parse_chain_link(value)?;
     ensure_entry_ref("chain-link", entry_ref, &link.link_ref)?;
     index.links_by_chain.entry(link.chain.clone()).or_default().insert(link.link_ref.clone());
@@ -667,7 +667,7 @@ fn index_link_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) ->
     Ok(())
 }
 
-fn index_predicate_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+fn index_predicate_entry(index: &mut ChainIndex, entry_ref: &str, value: &IoValue) -> Result<()> {
     let receipt = parse_chain_predicate_receipt(value)?;
     ensure_entry_ref("chain-predicate-receipt", entry_ref, &receipt.receipt_ref)?;
     index
@@ -679,7 +679,7 @@ fn index_predicate_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValu
     Ok(())
 }
 
-fn index_fork_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+fn index_fork_entry(index: &mut ChainIndex, entry_ref: &str, value: &IoValue) -> Result<()> {
     let fork = parse_chain_fork_evidence(value)?;
     ensure_entry_ref("chain-fork-evidence", entry_ref, &fork.evidence_ref)?;
     index
@@ -698,7 +698,7 @@ fn index_fork_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) ->
     Ok(())
 }
 
-fn index_anchor_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+fn index_anchor_entry(index: &mut ChainIndex, entry_ref: &str, value: &IoValue) -> Result<()> {
     let anchor = parse_chain_anchor(value)?;
     ensure_entry_ref("chain-anchor", entry_ref, &anchor.anchor_ref)?;
     index.anchors_by_chain.entry(anchor.chain.clone()).or_default().insert(anchor.anchor_ref.clone());
@@ -707,7 +707,7 @@ fn index_anchor_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) 
     Ok(())
 }
 
-fn index_checkpoint_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+fn index_checkpoint_entry(index: &mut ChainIndex, entry_ref: &str, value: &IoValue) -> Result<()> {
     let checkpoint = parse_chain_checkpoint(value)?;
     ensure_entry_ref("chain-checkpoint", entry_ref, &checkpoint.checkpoint_ref)?;
     index
@@ -820,7 +820,7 @@ fn append_predicate_ref(root: &Path, link: &ChainLink, head_before: Option<&str>
     })
 }
 
-pub fn append_chain_link(root: &Path, value: &IOValue) -> Result<ChainAppend> {
+pub fn append_chain_link(root: &Path, value: &IoValue) -> Result<ChainAppend> {
     let link = parse_chain_link(value)?;
     let index = build_chain_index(root)?;
     if index.links_by_ref.contains_key(&link.link_ref) {
@@ -867,7 +867,7 @@ pub fn append_chain_link(root: &Path, value: &IOValue) -> Result<ChainAppend> {
     })
 }
 
-pub fn chain_append_receipt_value(link: &ChainLink, head_before: Option<&str>, predicate_receipt_ref: &str) -> IOValue {
+pub fn chain_append_receipt_value(link: &ChainLink, head_before: Option<&str>, predicate_receipt_ref: &str) -> IoValue {
     let mut checks = vec![
         record("check", vec![string("canonical-link-ref"), string("pass")]),
         record("check", vec![string("payload-ref-available"), string("pass")]),
@@ -899,7 +899,7 @@ pub fn chain_anchor_value(
     link_ref: &str,
     policy_refs: &[String],
     producer: &ChainProducer,
-) -> IOValue {
+) -> IoValue {
     record("chain-anchor-v1", vec![
         string(EVIDENCE_CHAIN_ANCHOR_SCHEMA),
         chain_record(chain),
@@ -937,7 +937,7 @@ pub fn publish_chain_anchor(
     parse_chain_anchor(&ledger::read_artifact(root, &imported.artifact_ref)?)
 }
 
-pub fn chain_checkpoint_value(input: &ChainCheckpointInput) -> IOValue {
+pub fn chain_checkpoint_value(input: &ChainCheckpointInput) -> IoValue {
     record("chain-checkpoint-v1", vec![
         string(EVIDENCE_CHAIN_CHECKPOINT_SCHEMA),
         chain_record(&input.chain),
@@ -1231,7 +1231,7 @@ fn finish_verify(input: FinishInput<'_>) -> Result<ChainVerify> {
     })
 }
 
-fn finish_value(input: &FinishInput<'_>) -> IOValue {
+fn finish_value(input: &FinishInput<'_>) -> IoValue {
     let receipt = ChainVerifyReceiptValueInput {
         decision: &input.decision,
         chain: input.chain,
@@ -1249,7 +1249,7 @@ fn finish_value(input: &FinishInput<'_>) -> IOValue {
     })
 }
 
-pub fn chain_verify_receipt_value(input: &ChainVerifyReceiptValueInput<'_>) -> IOValue {
+pub fn chain_verify_receipt_value(input: &ChainVerifyReceiptValueInput<'_>) -> IoValue {
     chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
         receipt: *input,
         predicate_receipt_refs: &[],
@@ -1257,7 +1257,7 @@ pub fn chain_verify_receipt_value(input: &ChainVerifyReceiptValueInput<'_>) -> I
     })
 }
 
-pub fn chain_verify_receipt_value_with_policy(input: &ChainVerifyReceiptPolicyValueInput<'_>) -> IOValue {
+pub fn chain_verify_receipt_value_with_policy(input: &ChainVerifyReceiptPolicyValueInput<'_>) -> IoValue {
     let receipt = input.receipt;
     let checks = vec![
         diagnostic_check("no-gap-segment", receipt.diagnostics, &["gap", "genesis-invalid", "append-invalid", "cycle"]),
@@ -1285,7 +1285,7 @@ pub fn chain_verify_receipt_value_with_policy(input: &ChainVerifyReceiptPolicyVa
     ])
 }
 
-pub fn chain_predicate_receipt_value(input: &ChainPredicateReceiptValueInput<'_>) -> IOValue {
+pub fn chain_predicate_receipt_value(input: &ChainPredicateReceiptValueInput<'_>) -> IoValue {
     record("chain-predicate-receipt-v1", vec![
         string(EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA),
         record("predicate", vec![string(input.predicate)]),
@@ -1297,7 +1297,7 @@ pub fn chain_predicate_receipt_value(input: &ChainPredicateReceiptValueInput<'_>
     ])
 }
 
-pub fn parse_chain_predicate_receipt(value: &IOValue) -> Result<ChainPredicateReceipt> {
+pub fn parse_chain_predicate_receipt(value: &IoValue) -> Result<ChainPredicateReceipt> {
     let receipt = value
         .collect_simple_record("chain-predicate-receipt-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-predicate-receipt-v1 ...>"))?;
@@ -1315,7 +1315,7 @@ pub fn parse_chain_predicate_receipt(value: &IOValue) -> Result<ChainPredicateRe
     Ok(parsed)
 }
 
-pub fn chain_fork_evidence_value(input: &ChainForkEvidenceValueInput<'_>) -> IOValue {
+pub fn chain_fork_evidence_value(input: &ChainForkEvidenceValueInput<'_>) -> IoValue {
     record("chain-fork-evidence-v1", vec![
         string(EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA),
         chain_record(input.chain),
@@ -1333,12 +1333,12 @@ pub fn chain_fork_evidence_value(input: &ChainForkEvidenceValueInput<'_>) -> IOV
 }
 
 pub fn sign_chain_receipt(
-    receipt: &IOValue,
+    receipt: &IoValue,
     signer: &str,
     trust_root: &str,
     key: &str,
     parents: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     sign_receipt(&SignReceiptInput {
         receipt,
         signer,
@@ -1349,7 +1349,7 @@ pub fn sign_chain_receipt(
     })
 }
 
-pub fn verify_signed_chain_receipt(value: &IOValue, trust_root: &str, key: &str) -> Result<SignedReceipt> {
+pub fn verify_signed_chain_receipt(value: &IoValue, trust_root: &str, key: &str) -> Result<SignedReceipt> {
     verify_signed_receipt(value, CHAIN_EVIDENCE_PURPOSE, trust_root, key)
 }
 
@@ -1357,7 +1357,7 @@ pub fn signed_receipt_payload(signed_receipt_ref: impl Into<String>) -> ChainPay
     ChainPayload::new("signed-receipt", signed_receipt_ref.into(), EVIDENCE_SIGNED_RECEIPT_SCHEMA)
 }
 
-pub fn parse_chain_link(value: &IOValue) -> Result<ChainLink> {
+pub fn parse_chain_link(value: &IoValue) -> Result<ChainLink> {
     let link = value
         .collect_simple_record("chain-link-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-link-v1 ...>"))?;
@@ -1383,7 +1383,7 @@ pub fn parse_chain_link(value: &IOValue) -> Result<ChainLink> {
     Ok(parsed)
 }
 
-pub fn parse_chain_fork_evidence(value: &IOValue) -> Result<ChainForkEvidence> {
+pub fn parse_chain_fork_evidence(value: &IoValue) -> Result<ChainForkEvidence> {
     let fork = value
         .collect_simple_record("chain-fork-evidence-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-fork-evidence-v1 ...>"))?;
@@ -1402,7 +1402,7 @@ pub fn parse_chain_fork_evidence(value: &IOValue) -> Result<ChainForkEvidence> {
     Ok(parsed)
 }
 
-pub fn parse_chain_anchor(value: &IOValue) -> Result<ChainAnchor> {
+pub fn parse_chain_anchor(value: &IoValue) -> Result<ChainAnchor> {
     let anchor = value
         .collect_simple_record("chain-anchor-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-anchor-v1 ...>"))?;
@@ -1419,7 +1419,7 @@ pub fn parse_chain_anchor(value: &IOValue) -> Result<ChainAnchor> {
     Ok(parsed)
 }
 
-pub fn parse_chain_checkpoint(value: &IOValue) -> Result<ChainCheckpoint> {
+pub fn parse_chain_checkpoint(value: &IoValue) -> Result<ChainCheckpoint> {
     let checkpoint = value
         .collect_simple_record("chain-checkpoint-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-checkpoint-v1 ...>"))?;
@@ -2026,7 +2026,7 @@ fn diagnostic_is_fatal(diagnostic: &ChainDiagnostic, fork_policy: ChainForkPolic
     }
 }
 
-fn diagnostic_check(label: &str, diagnostics: &[ChainDiagnostic], failing_kinds: &[&str]) -> IOValue {
+fn diagnostic_check(label: &str, diagnostics: &[ChainDiagnostic], failing_kinds: &[&str]) -> IoValue {
     let decision = if diagnostics.iter().any(|diagnostic| failing_kinds.contains(&diagnostic.kind.as_str())) {
         "fail"
     } else {
@@ -2035,7 +2035,7 @@ fn diagnostic_check(label: &str, diagnostics: &[ChainDiagnostic], failing_kinds:
     record("check", vec![string(label), string(decision)])
 }
 
-fn fork_policy_check(diagnostics: &[ChainDiagnostic], fork_policy: ChainForkPolicy) -> IOValue {
+fn fork_policy_check(diagnostics: &[ChainDiagnostic], fork_policy: ChainForkPolicy) -> IoValue {
     let has_fork = diagnostics
         .iter()
         .any(|diagnostic| matches!(diagnostic.kind.as_str(), "fork" | "sequence-conflict"));
@@ -2047,7 +2047,7 @@ fn fork_policy_check(diagnostics: &[ChainDiagnostic], fork_policy: ChainForkPoli
     record("check", vec![string("no-fork-policy"), string(decision)])
 }
 
-fn diagnostic_value(diagnostic: &ChainDiagnostic) -> IOValue {
+fn diagnostic_value(diagnostic: &ChainDiagnostic) -> IoValue {
     record("diagnostic", vec![
         string(&diagnostic.kind),
         string(&diagnostic.detail),
@@ -2055,22 +2055,22 @@ fn diagnostic_value(diagnostic: &ChainDiagnostic) -> IOValue {
     ])
 }
 
-fn ref_sequence_value(refs: &[String]) -> IOValue {
+fn ref_sequence_value(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(|reference| string(reference)).collect())
 }
 
-fn check_value(check: &ChainCheck) -> IOValue {
+fn check_value(check: &ChainCheck) -> IoValue {
     record("check", vec![string(&check.name), string(&check.decision)])
 }
 
-fn producer_record(producer: &ChainProducer) -> IOValue {
+fn producer_record(producer: &ChainProducer) -> IoValue {
     record("producer", vec![
         record("id", vec![string(&producer.id)]),
         record("key", vec![string(&producer.key_ref)]),
     ])
 }
 
-fn parse_checkpoint_range(value: &Value<IOValue>) -> Result<(String, String, String, String)> {
+fn parse_checkpoint_range(value: &Value<IoValue>) -> Result<(String, String, String, String)> {
     let value = value_to_iovalue(value);
     let range = value
         .collect_simple_record("range", Some(4))
@@ -2083,7 +2083,7 @@ fn parse_checkpoint_range(value: &Value<IOValue>) -> Result<(String, String, Str
     ))
 }
 
-fn parse_control_plane(value: &Value<IOValue>) -> Result<()> {
+fn parse_control_plane(value: &Value<IoValue>) -> Result<()> {
     let value = value_to_iovalue(value);
     let control = value
         .collect_simple_record("control-plane", Some(2))
@@ -2103,7 +2103,7 @@ fn parse_control_plane(value: &Value<IOValue>) -> Result<()> {
     Ok(())
 }
 
-fn chain_record(chain: &ChainScope) -> IOValue {
+fn chain_record(chain: &ChainScope) -> IoValue {
     record("chain", vec![
         record("scope", vec![string(&chain.scope)]),
         record("id", vec![string(&chain.id)]),
@@ -2127,11 +2127,11 @@ fn sorted_refs(refs: Option<&BTreeSet<String>>) -> Vec<String> {
     refs.map_or_else(Vec::new, |refs| refs.iter().cloned().collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_chain(value: &Value<IOValue>) -> Result<ChainScope> {
+fn parse_chain(value: &Value<IoValue>) -> Result<ChainScope> {
     let value = value_to_iovalue(value);
     let chain = value
         .collect_simple_record("chain", Some(3))
@@ -2143,7 +2143,7 @@ fn parse_chain(value: &Value<IOValue>) -> Result<ChainScope> {
     })
 }
 
-fn parse_previous_link_ref(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_previous_link_ref(value: &Value<IoValue>) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let prev = value
         .collect_simple_record("prev", Some(1))
@@ -2158,7 +2158,7 @@ fn parse_previous_link_ref(value: &Value<IOValue>) -> Result<Option<String>> {
     }
 }
 
-fn parse_payload(value: &Value<IOValue>) -> Result<ChainPayload> {
+fn parse_payload(value: &Value<IoValue>) -> Result<ChainPayload> {
     let value = value_to_iovalue(value);
     let payload = value
         .collect_simple_record("payload", Some(3))
@@ -2170,7 +2170,7 @@ fn parse_payload(value: &Value<IOValue>) -> Result<ChainPayload> {
     })
 }
 
-fn parse_context_refs(value: &Value<IOValue>) -> Result<Vec<ChainContextRef>> {
+fn parse_context_refs(value: &Value<IoValue>) -> Result<Vec<ChainContextRef>> {
     let value = value_to_iovalue(value);
     let context = value
         .collect_simple_record("context", Some(1))
@@ -2192,7 +2192,7 @@ fn parse_context_refs(value: &Value<IOValue>) -> Result<Vec<ChainContextRef>> {
         .collect()
 }
 
-fn parse_producer(value: &Value<IOValue>) -> Result<ChainProducer> {
+fn parse_producer(value: &Value<IoValue>) -> Result<ChainProducer> {
     let value = value_to_iovalue(value);
     let producer = value
         .collect_simple_record("producer", Some(2))
@@ -2203,7 +2203,7 @@ fn parse_producer(value: &Value<IOValue>) -> Result<ChainProducer> {
     })
 }
 
-fn parse_trellis(value: &Value<IOValue>) -> Result<ChainTrellisEvidence> {
+fn parse_trellis(value: &Value<IoValue>) -> Result<ChainTrellisEvidence> {
     let value = value_to_iovalue(value);
     let trellis = value
         .collect_simple_record("trellis", Some(3))
@@ -2215,7 +2215,7 @@ fn parse_trellis(value: &Value<IOValue>) -> Result<ChainTrellisEvidence> {
     })
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<ChainCheck>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<ChainCheck>> {
     let value = value_to_iovalue(value);
     let checks = value
         .collect_simple_record("checks", Some(1))
@@ -2395,7 +2395,7 @@ fn require_pass_check_in(checks: &[ChainCheck], name: &str) -> Result<()> {
     }
 }
 
-fn record_string(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str, field: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -2403,7 +2403,7 @@ fn record_string(value: &Value<IOValue>, label: &str, field: &str) -> Result<Str
     required_string(&record[0], field)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -2418,7 +2418,7 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
     }
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -2429,7 +2429,7 @@ fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String
     sequence.iter().map(|value| required_string(value, label)).collect()
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str, field: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str, field: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -2437,7 +2437,7 @@ fn record_u64(value: &Value<IOValue>, label: &str, field: &str) -> Result<u64> {
     required_u64(&record[0], field)
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual == expected {
         Ok(())
@@ -2446,14 +2446,14 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     }
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?

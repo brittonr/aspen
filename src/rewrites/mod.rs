@@ -1,4 +1,4 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 use preserves::ValueImpl;
 
 use crate::artifacts;
@@ -13,27 +13,27 @@ type ValueClass = preserves::ValueClass;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 
-fn bool_value(value: bool) -> IOValue {
+fn bool_value(value: bool) -> IoValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn to_text(value: &IOValue) -> Result<String> {
+fn to_text(value: &IoValue) -> Result<String> {
     crate::preserves_rail::to_text(value)
 }
 
@@ -41,7 +41,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -101,15 +101,15 @@ pub struct RewriteMatch {
     pub kind: String,
     pub payload_ref: String,
     pub bindings: Vec<RewriteBinding>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RewriteQuery {
     pub query_ref: String,
-    pub query_value: IOValue,
+    pub query_value: IoValue,
     pub matches: Vec<RewriteMatch>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,18 +121,18 @@ pub struct RewriteDiff {
     pub paths: Vec<String>,
     pub old_preview: String,
     pub new_preview: String,
-    pub new_payload: IOValue,
-    pub value: IOValue,
+    pub new_payload: IoValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RewritePreview {
     pub query: RewriteQuery,
     pub plan_ref: String,
-    pub plan_value: IOValue,
+    pub plan_value: IoValue,
     pub diffs: Vec<RewriteDiff>,
     pub impacted_refs: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,7 +146,7 @@ pub struct RewriteInstalledArtifact {
 pub struct RewriteApply {
     pub preview: RewritePreview,
     pub installed: Vec<RewriteInstalledArtifact>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,7 +157,7 @@ pub struct RewriteReceipt {
     pub subject_ref: String,
     pub refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 pub fn default_local_ref(kind: &str, label: &str) -> Result<String> {
@@ -452,7 +452,7 @@ pub fn upgrade_plan_from_apply(
     initiator_ref: &str,
     capability_refs: &[String],
     policy_refs: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_non_empty(session_id, "rewrite upgrade session id")?;
     validate_ref(initiator_ref, "rewrite upgrade initiator ref")?;
     validate_refs(capability_refs, "rewrite upgrade capability ref")?;
@@ -521,7 +521,7 @@ pub fn upgrade_plan_from_apply(
     })
 }
 
-pub fn parse_rewrite_receipt(value: &IOValue) -> Result<RewriteReceipt> {
+pub fn parse_rewrite_receipt(value: &IoValue) -> Result<RewriteReceipt> {
     let fields = value
         .collect_simple_record("rewrite-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <rewrite-receipt-v1 ...>"))?;
@@ -539,7 +539,7 @@ pub fn parse_rewrite_receipt(value: &IOValue) -> Result<RewriteReceipt> {
     })
 }
 
-pub fn rewrite_summary(value: &IOValue) -> Result<String> {
+pub fn rewrite_summary(value: &IoValue) -> Result<String> {
     if let Ok(receipt) = parse_rewrite_receipt(value) {
         return Ok(format!(
             "rewrite receipt operation={} decision={} subject={} refs={}",
@@ -563,7 +563,7 @@ pub fn rewrite_summary(value: &IOValue) -> Result<String> {
     Err(MoltenError::invalid_harness("unsupported rewrite artifact for show"))
 }
 
-pub fn rewrite_query_value(input: &RewriteQueryInput) -> Result<IOValue> {
+pub fn rewrite_query_value(input: &RewriteQueryInput) -> Result<IoValue> {
     validate_query_input(input)?;
     Ok(record("rewrite-query-v1", vec![
         string(crate::preserves_rail::REWRITE_QUERY_SCHEMA),
@@ -596,7 +596,7 @@ fn rewrite_plan_value(
     query: &RewriteQuery,
     diffs: &[RewriteDiff],
     impacted_refs: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     Ok(record("rewrite-plan-v1", vec![
         string(crate::preserves_rail::REWRITE_PLAN_SCHEMA),
         record("planner", vec![string(&input.planner_ref), refs_sequence(&input.capability_refs)]),
@@ -626,7 +626,7 @@ fn rewrite_match_value(
     kind: &str,
     payload_ref: &str,
     bindings: &[RewriteBinding],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_ref(artifact_ref, "rewrite match artifact ref")?;
     validate_ref(payload_ref, "rewrite match payload ref")?;
     validate_non_empty(kind, "rewrite match kind")?;
@@ -669,7 +669,7 @@ struct RewriteReceiptValueInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-fn rewrite_diff_value(input: &RewriteDiffValueInput<'_>) -> Result<IOValue> {
+fn rewrite_diff_value(input: &RewriteDiffValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.artifact_ref, "rewrite diff artifact ref")?;
     validate_ref(input.old_payload_ref, "rewrite diff old payload ref")?;
     validate_ref(input.new_payload_ref, "rewrite diff new payload ref")?;
@@ -683,7 +683,7 @@ fn rewrite_diff_value(input: &RewriteDiffValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-fn pattern_value(pattern: &RewritePattern) -> Result<IOValue> {
+fn pattern_value(pattern: &RewritePattern) -> Result<IoValue> {
     let (kind, needle) = match pattern {
         RewritePattern::Any => ("any", ""),
         RewritePattern::ArtifactKind(value) => ("artifact-kind", value.as_str()),
@@ -701,7 +701,7 @@ fn pattern_value(pattern: &RewritePattern) -> Result<IOValue> {
     ]))
 }
 
-fn replacement_value(replacement: &RewriteReplacement) -> Result<IOValue> {
+fn replacement_value(replacement: &RewriteReplacement) -> Result<IoValue> {
     match replacement {
         RewriteReplacement::StringValue { from, to } => {
             validate_non_empty(from, "rewrite replacement from string")?;
@@ -715,7 +715,7 @@ fn replacement_value(replacement: &RewriteReplacement) -> Result<IOValue> {
     }
 }
 
-fn rewrite_receipt_value(input: &RewriteReceiptValueInput<'_>) -> Result<IOValue> {
+fn rewrite_receipt_value(input: &RewriteReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "rewrite receipt operation")?;
     if !matches!(input.decision, "pass" | "deny") {
         return Err(MoltenError::invalid_harness(format!("unsupported rewrite decision {}", input.decision)));
@@ -737,7 +737,7 @@ fn rewrite_receipt_value(input: &RewriteReceiptValueInput<'_>) -> Result<IOValue
 }
 
 fn collect_bindings(
-    value: &IOValue,
+    value: &IoValue,
     pattern: &RewritePattern,
     path: &str,
     bindings: &mut impl crate::bounded::VecSink<RewriteBinding>,
@@ -805,7 +805,7 @@ fn collect_bindings(
     Ok(())
 }
 
-fn value_matches_pattern(value: &IOValue, pattern: &RewritePattern) -> bool {
+fn value_matches_pattern(value: &IoValue, pattern: &RewritePattern) -> bool {
     match pattern {
         RewritePattern::Any => true,
         RewritePattern::ArtifactKind(_) => false,
@@ -831,14 +831,14 @@ fn value_matches_pattern(value: &IOValue, pattern: &RewritePattern) -> bool {
 }
 
 struct RewriteStringValuesInput<'a> {
-    value: &'a IOValue,
+    value: &'a IoValue,
     from: &'a str,
     to: &'a str,
     path: &'a str,
     changed_paths: &'a mut Vec<String>,
 }
 
-fn rewrite_string_values(input: RewriteStringValuesInput<'_>) -> Result<IOValue> {
+fn rewrite_string_values(input: RewriteStringValuesInput<'_>) -> Result<IoValue> {
     let mut traversal = TextTraversal::new(TextTraversalInput {
         value: input.value,
         from: input.from,
@@ -852,24 +852,24 @@ fn rewrite_string_values(input: RewriteStringValuesInput<'_>) -> Result<IOValue>
 
 enum TextFrame {
     Visit {
-        value: IOValue,
+        value: IoValue,
         path: String,
     },
     FinishRecord {
-        original: IOValue,
-        label: IOValue,
+        original: IoValue,
+        label: IoValue,
         child_count: usize,
         changed_count_before: usize,
     },
     FinishSequence {
-        original: IOValue,
+        original: IoValue,
         child_count: usize,
         changed_count_before: usize,
     },
 }
 
 struct TextTraversalInput<'a> {
-    value: &'a IOValue,
+    value: &'a IoValue,
     from: &'a str,
     to: &'a str,
     path: &'a str,
@@ -881,7 +881,7 @@ struct TextTraversal<'a> {
     to: &'a str,
     changed_paths: &'a mut Vec<String>,
     frames: Vec<TextFrame>,
-    outputs: Vec<IOValue>,
+    outputs: Vec<IoValue>,
 }
 
 impl<'a> TextTraversal<'a> {
@@ -920,7 +920,7 @@ impl<'a> TextTraversal<'a> {
         Ok(())
     }
 
-    fn output(mut self) -> Result<IOValue> {
+    fn output(mut self) -> Result<IoValue> {
         let output_count = self.outputs.len();
         if output_count != 1 {
             return Err(MoltenError::invalid_harness(format!("rewrite traversal produced {output_count} outputs")));
@@ -930,7 +930,7 @@ impl<'a> TextTraversal<'a> {
             .ok_or_else(|| MoltenError::invalid_harness("rewrite traversal produced no output"))
     }
 
-    fn visit(&mut self, current: IOValue, current_path: String) -> Result<()> {
+    fn visit(&mut self, current: IoValue, current_path: String) -> Result<()> {
         if current.as_string().is_some_and(|text| text.as_ref() == self.from) {
             push_bounded(&mut *self.changed_paths, current_path, MAX_REWRITE_ITEMS, "rewrite changed paths")?;
             self.push_output(string(self.to))?;
@@ -946,7 +946,7 @@ impl<'a> TextTraversal<'a> {
         }
     }
 
-    fn visit_record(&mut self, current: IOValue, current_path: String) -> Result<()> {
+    fn visit_record(&mut self, current: IoValue, current_path: String) -> Result<()> {
         let label = value_to_iovalue(&current.label());
         let label_name = record_label_name(&current);
         let changed_count_before = self.changed_paths.len();
@@ -971,7 +971,7 @@ impl<'a> TextTraversal<'a> {
         self.push_children(children)
     }
 
-    fn visit_sequence(&mut self, current: IOValue, current_path: String) -> Result<()> {
+    fn visit_sequence(&mut self, current: IoValue, current_path: String) -> Result<()> {
         let changed_count_before = self.changed_paths.len();
         let mut children = Vec::new();
         for (index, child) in current.iter().enumerate() {
@@ -995,8 +995,8 @@ impl<'a> TextTraversal<'a> {
 
     fn finish_record(
         &mut self,
-        original: IOValue,
-        label: IOValue,
+        original: IoValue,
+        label: IoValue,
         child_count: usize,
         changed_count_before: usize,
     ) -> Result<()> {
@@ -1004,12 +1004,12 @@ impl<'a> TextTraversal<'a> {
         let rewritten = if self.changed_paths.len() == changed_count_before {
             original
         } else {
-            IOValue::record(label, fields)
+            IoValue::record(label, fields)
         };
         self.push_output(rewritten)
     }
 
-    fn finish_sequence(&mut self, original: IOValue, child_count: usize, changed_count_before: usize) -> Result<()> {
+    fn finish_sequence(&mut self, original: IoValue, child_count: usize, changed_count_before: usize) -> Result<()> {
         let items = self.take_child_outputs(child_count, "rewrite sequence output count underflow")?;
         let rewritten = if self.changed_paths.len() == changed_count_before {
             original
@@ -1019,7 +1019,7 @@ impl<'a> TextTraversal<'a> {
         self.push_output(rewritten)
     }
 
-    fn take_child_outputs(&mut self, child_count: usize, label: &str) -> Result<Vec<IOValue>> {
+    fn take_child_outputs(&mut self, child_count: usize, label: &str) -> Result<Vec<IoValue>> {
         let start = self.outputs.len().checked_sub(child_count).ok_or_else(|| MoltenError::invalid_harness(label))?;
         Ok(self.outputs.split_off(start))
     }
@@ -1035,7 +1035,7 @@ impl<'a> TextTraversal<'a> {
         push_bounded(&mut self.frames, frame, MAX_REWRITE_ITEMS, "rewrite traversal frames")
     }
 
-    fn push_output(&mut self, output: IOValue) -> Result<()> {
+    fn push_output(&mut self, output: IoValue) -> Result<()> {
         push_bounded(&mut self.outputs, output, MAX_REWRITE_ITEMS, "rewrite traversal outputs")
     }
 }
@@ -1065,7 +1065,7 @@ fn impacted_refs(root: &Path, diffs: &[RewriteDiff]) -> Result<Vec<String>> {
     Ok(impacted.into_iter().collect())
 }
 
-fn preview_text(value: &IOValue) -> Result<String> {
+fn preview_text(value: &IoValue) -> Result<String> {
     let text = to_text(value)?;
     const LIMIT: usize = 240;
     if text.chars().count() > LIMIT {
@@ -1077,7 +1077,7 @@ fn preview_text(value: &IOValue) -> Result<String> {
     }
 }
 
-fn record_label_name(value: &IOValue) -> String {
+fn record_label_name(value: &IoValue) -> String {
     value.label().as_symbol().map(|label| label.into_owned()).unwrap_or_else(|| "record".to_string())
 }
 
@@ -1122,21 +1122,21 @@ fn validate_pattern(pattern: &RewritePattern) -> Result<()> {
     }
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
 }
 
-fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "rewrite checks")?;
@@ -1162,7 +1162,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -1172,60 +1172,60 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     items.iter().map(|item| required_string(&item, label)).collect()
 }
 
-fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_value(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     items.iter().map(|item| required_ref(&item, label)).collect()
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
@@ -1287,7 +1287,7 @@ mod tests {
 
     type PathBuf = std::path::PathBuf;
 
-    fn parse_text(source: &str) -> Result<IOValue> {
+    fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
     }
 
@@ -1407,7 +1407,7 @@ mod tests {
     fn install_fixture(
         root: &Path,
         kind: &str,
-        payload: IOValue,
+        payload: IoValue,
         dependency_refs: &[String],
     ) -> artifacts::ArtifactInstall {
         artifacts::install_artifact(root, &artifacts::ArtifactInstallInput {

@@ -1,4 +1,4 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 use preserves::Value;
 
 use crate::delivery_idempotency;
@@ -39,11 +39,11 @@ mod fs {
     }
 }
 
-fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
@@ -55,19 +55,19 @@ fn content_ref_hex(value: &str) -> Result<&str> {
     crate::preserves_rail::content_ref_hex(value)
 }
 
-fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IoValue> {
     crate::preserves_rail::parse_canonical_bytes(bytes)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
@@ -75,7 +75,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -122,25 +122,25 @@ pub struct RemoteDataspaceEnvelope {
     pub to_peer: String,
     pub topic: String,
     pub operation: RemoteDataspaceOperation,
-    pub payload: IOValue,
+    pub payload: IoValue,
     pub content_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub sequence: u64,
     pub operation_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteDataspaceExchange {
     pub envelope_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteDataspaceDelivery {
     pub envelope: RemoteDataspaceEnvelope,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -155,16 +155,16 @@ pub struct RemoteDeliveryEvidence {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteDataspaceApplied {
     pub events: Vec<RuntimeEvent>,
-    pub admission_receipt_value: IOValue,
+    pub admission_receipt_value: IoValue,
     pub turn_journal_context_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteDataspaceIdempotentApplied {
     pub events: Vec<RuntimeEvent>,
-    pub admission_receipt_value: IOValue,
+    pub admission_receipt_value: IoValue,
     pub turn_journal_context_ref: String,
-    pub idempotency_receipt_value: IOValue,
+    pub idempotency_receipt_value: IoValue,
     pub operation_ref: String,
     pub prior_semantic_result_ref: Option<String>,
 }
@@ -174,14 +174,14 @@ pub struct RemoteDeliveryLog {
     pub log_ref: String,
     pub replayable: bool,
     pub entries: Vec<RemoteDataspaceDelivery>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteTwoPeerHarness {
     pub delivery_log: RemoteDeliveryLog,
-    pub admission_receipt_value: IOValue,
-    pub gate_receipt_value: IOValue,
+    pub admission_receipt_value: IoValue,
+    pub gate_receipt_value: IoValue,
     pub observed_events: Vec<RuntimeEvent>,
     pub replayed_events: Vec<RuntimeEvent>,
 }
@@ -193,7 +193,7 @@ pub struct RemoteDataspaceEnvelopeInput {
     pub to_peer: String,
     pub topic: String,
     pub operation: RemoteDataspaceOperation,
-    pub payload: IOValue,
+    pub payload: IoValue,
     pub content_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -204,7 +204,7 @@ pub struct AssertEnvelopeInput<'a> {
     pub from_actor: &'a str,
     pub to_peer: &'a str,
     pub topic: &'a str,
-    pub payload: IOValue,
+    pub payload: IoValue,
     pub capability_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
@@ -263,7 +263,7 @@ pub fn assert_envelope(input: AssertEnvelopeInput<'_>) -> Result<RemoteDataspace
     })
 }
 
-pub fn parse_envelope(value: &IOValue) -> Result<RemoteDataspaceEnvelope> {
+pub fn parse_envelope(value: &IoValue) -> Result<RemoteDataspaceEnvelope> {
     let (fields, has_operation_ref) =
         if let Some(fields) = value.collect_simple_record("remote-dataspace-envelope-v1", Some(12)) {
             (fields, true)
@@ -339,7 +339,7 @@ struct RefParts<'a> {
     to_peer: &'a str,
     topic: &'a str,
     operation: RemoteDataspaceOperation,
-    payload: &'a IOValue,
+    payload: &'a IoValue,
     capability_refs: &'a [String],
     evidence_refs: &'a [String],
 }
@@ -666,7 +666,7 @@ pub fn deny_admission_receipt_value(
     envelope: &RemoteDataspaceEnvelope,
     transport_receipt_ref: &str,
     diagnostics: Vec<String>,
-) -> IOValue {
+) -> IoValue {
     remote_admission_receipt_value(AdmissionReceiptInput {
         decision: "deny",
         envelope,
@@ -677,7 +677,7 @@ pub fn deny_admission_receipt_value(
     })
 }
 
-pub fn parse_delivery_log(value: &IOValue) -> Result<RemoteDeliveryLog> {
+pub fn parse_delivery_log(value: &IoValue) -> Result<RemoteDeliveryLog> {
     let fields = value
         .collect_simple_record("remote-dataspace-delivery-log-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <remote-dataspace-delivery-log-v1 ...>"))?;
@@ -699,7 +699,7 @@ pub fn delivery_log(deliveries: &[RemoteDataspaceDelivery], replayable: bool) ->
 
 pub fn delivery_log_with_idempotency_receipts(
     deliveries: &[RemoteDataspaceDelivery],
-    idempotency_receipts: &[IOValue],
+    idempotency_receipts: &[IoValue],
     replayable: bool,
 ) -> Result<RemoteDeliveryLog> {
     if !idempotency_receipts.is_empty() && idempotency_receipts.len() != deliveries.len() {
@@ -761,9 +761,9 @@ pub fn replay_delivery_log(state: &mut RuntimeState, log: &RemoteDeliveryLog) ->
 
 pub fn remote_dataspace_gate_receipt_value(
     delivery_log: &RemoteDeliveryLog,
-    admission_receipts: &[IOValue],
+    admission_receipts: &[IoValue],
     turn_context_refs: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     if !delivery_log.replayable {
         return Err(MoltenError::invalid_harness("remote dataspace gate receipt requires a replayable delivery log"));
     }
@@ -860,7 +860,7 @@ fn remote_actor_id_parts(peer: &str, actor: &str) -> String {
     format!("{peer}/{actor}")
 }
 
-pub fn transport_receipt_value(input: LocalTransportReceiptInput<'_>) -> IOValue {
+pub fn transport_receipt_value(input: LocalTransportReceiptInput<'_>) -> IoValue {
     transport_receipt_value_for_transport(TransportReceiptInput {
         transport: LOCAL_GOSSIP_TRANSPORT,
         operation: input.operation,
@@ -872,7 +872,7 @@ pub fn transport_receipt_value(input: LocalTransportReceiptInput<'_>) -> IOValue
     })
 }
 
-pub fn transport_receipt_value_for_transport(input: TransportReceiptInput<'_>) -> IOValue {
+pub fn transport_receipt_value_for_transport(input: TransportReceiptInput<'_>) -> IoValue {
     record("remote-dataspace-transport-receipt-v1", vec![
         string(REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -897,7 +897,7 @@ pub fn transport_receipt_value_for_transport(input: TransportReceiptInput<'_>) -
     ])
 }
 
-fn remote_admission_receipt_value(input: AdmissionReceiptInput<'_>) -> IOValue {
+fn remote_admission_receipt_value(input: AdmissionReceiptInput<'_>) -> IoValue {
     record("remote-dataspace-admission-receipt-v1", vec![
         string(REMOTE_DATASPACE_ADMISSION_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -966,7 +966,7 @@ struct EnvelopeOperationRefInput<'a> {
     to_peer: &'a str,
     topic: &'a str,
     operation: RemoteDataspaceOperation,
-    payload: &'a IOValue,
+    payload: &'a IoValue,
     capability_refs: &'a [String],
     evidence_refs: &'a [String],
     sequence: u64,
@@ -1001,14 +1001,14 @@ fn envelope_policy_refs(capability_refs: &[String], evidence_refs: &[String]) ->
     Ok(refs)
 }
 
-fn payload_delivery_sequence(payload: &IOValue) -> Result<u64> {
+fn payload_delivery_sequence(payload: &IoValue) -> Result<u64> {
     if let Some(fields) = payload.collect_simple_record("protocol-message-v1", Some(11)) {
         return record_u64(&fields[8], "sequence");
     }
     Ok(1)
 }
 
-fn envelope_value(input: &RemoteDataspaceEnvelopeInput) -> Result<IOValue> {
+fn envelope_value(input: &RemoteDataspaceEnvelopeInput) -> Result<IoValue> {
     let delivery_sequence = payload_delivery_sequence(&input.payload)?;
     let operation_ref = envelope_operation_ref(EnvelopeOperationRefInput {
         from_peer: &input.from_peer,
@@ -1127,7 +1127,7 @@ fn filename_for_ref(reference: &str) -> Result<String> {
     Ok(format!("blake3_{hex}.bin"))
 }
 
-fn parse_delivery_log_entry(value: &Value<IOValue>) -> Result<RemoteDataspaceDelivery> {
+fn parse_delivery_log_entry(value: &Value<IoValue>) -> Result<RemoteDataspaceDelivery> {
     let value = value_to_iovalue(value);
     let (fields, has_operation_ref, has_idempotency_receipt) =
         if let Some(fields) = value.collect_simple_record("entry", Some(5)) {
@@ -1169,7 +1169,7 @@ fn parse_delivery_log_entry(value: &Value<IOValue>) -> Result<RemoteDataspaceDel
     })
 }
 
-fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
+fn record_iovalue(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1177,7 +1177,7 @@ fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
     Ok(value_to_iovalue(&fields[0]))
 }
 
-fn record_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
+fn record_bool(value: &Value<IoValue>, label: &str) -> Result<bool> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1187,7 +1187,7 @@ fn record_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1198,7 +1198,7 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1206,11 +1206,11 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&fields[0], label)
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     field_sequence(value, label)?.iter().map(|value| required_string(value, label)).collect()
 }
 
-fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
+fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoValue>>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1221,7 +1221,7 @@ fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOVal
     Ok(values.iter().cloned().collect())
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
         return Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")));
@@ -1229,7 +1229,7 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     Ok(())
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())

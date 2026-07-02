@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
 
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 use preserves::Value;
 
 use crate::error::MoltenError;
@@ -12,23 +12,23 @@ const RESOURCE_GRANT_SCHEMA: &str = crate::preserves_rail::RESOURCE_GRANT_SCHEMA
 const RESOURCE_RECEIPT_SCHEMA: &str = crate::preserves_rail::RESOURCE_RECEIPT_SCHEMA;
 const RESOURCE_SCHEDULER_SCHEMA: &str = crate::preserves_rail::RESOURCE_SCHEDULER_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(fields: Vec<IOValue>) -> IOValue {
+fn sequence(fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(fields)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -36,7 +36,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -91,7 +91,7 @@ pub struct ResourceGrant {
     pub revocation_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,7 +100,7 @@ pub struct ResourceConsumption {
     pub kind: String,
     pub amount: u64,
     pub sequence: u64,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,7 +108,7 @@ pub struct ResourceDecision {
     pub decision: String,
     pub consumed: u64,
     pub remaining: u64,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,7 +116,7 @@ pub struct MailboxDecision {
     pub accepted: bool,
     pub queue: Vec<String>,
     pub overflow: Option<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,7 +128,7 @@ pub struct SchedulerTask {
 }
 
 pub struct ConsumeInput<'a> {
-    pub grant_value: &'a IOValue,
+    pub grant_value: &'a IoValue,
     pub prior_consumptions: &'a [ResourceConsumption],
     pub amount: u64,
     pub logical_time: u64,
@@ -148,7 +148,7 @@ pub struct ReceiptValueInput<'a> {
     pub consumption_ref: Option<&'a str>,
 }
 
-pub fn resource_grant_value(input: &ResourceGrantInput) -> Result<IOValue> {
+pub fn resource_grant_value(input: &ResourceGrantInput) -> Result<IoValue> {
     require_ref(&input.subject_ref, "resource grant subject ref")?;
     validate_non_empty(&input.scope, "resource grant scope")?;
     validate_resource_kind(&input.kind)?;
@@ -182,7 +182,7 @@ pub fn resource_grant_value(input: &ResourceGrantInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_resource_grant(value: &IOValue) -> Result<ResourceGrant> {
+pub fn parse_resource_grant(value: &IoValue) -> Result<ResourceGrant> {
     let fields = value
         .collect_simple_record("resource-grant-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <resource-grant-v1 ...>"))?;
@@ -256,7 +256,7 @@ pub fn consume_resource(input: &ConsumeInput<'_>) -> Result<ResourceDecision> {
     })
 }
 
-pub fn resource_consumption_value(grant: &ResourceGrant, amount: u64, sequence_number: u64) -> Result<IOValue> {
+pub fn resource_consumption_value(grant: &ResourceGrant, amount: u64, sequence_number: u64) -> Result<IoValue> {
     Ok(record("resource-consumption-v1", vec![
         string(RESOURCE_CONSUMPTION_SCHEMA),
         record("grant", vec![string(&grant.grant_ref)]),
@@ -270,7 +270,7 @@ pub fn resource_consumption_value(grant: &ResourceGrant, amount: u64, sequence_n
     ]))
 }
 
-pub fn parse_consumption(value: &IOValue) -> Result<ResourceConsumption> {
+pub fn parse_consumption(value: &IoValue) -> Result<ResourceConsumption> {
     let fields = value
         .collect_simple_record("resource-consumption-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <resource-consumption-v1 ...>"))?;
@@ -348,7 +348,7 @@ pub fn enforce_assertion_bound(current: u64, limit: u64, assertion_ref: &str) ->
     })
 }
 
-pub fn deterministic_schedule(tasks: &[SchedulerTask], quantum: u64) -> Result<IOValue> {
+pub fn deterministic_schedule(tasks: &[SchedulerTask], quantum: u64) -> Result<IoValue> {
     ensure_count_at_most(tasks.len(), MAX_RESOURCE_SEQUENCE_ITEMS, "scheduler tasks")?;
     let quantum_steps = bounded_positive_count(quantum, MAX_RESOURCE_SEQUENCE_ITEMS_U64, "scheduler quantum")?;
     let mut queues = BTreeMap::<(u64, String), VecDeque<&SchedulerTask>>::new();
@@ -443,7 +443,7 @@ pub fn plan_job_stages(stages: &[(&str, u64)], available_slots: u64) -> Result<V
     Ok(plan)
 }
 
-pub fn resource_receipt_value(input: &ReceiptValueInput<'_>) -> IOValue {
+pub fn resource_receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
     record("resource-receipt-v1", vec![
         string(RESOURCE_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -560,15 +560,15 @@ fn require_ref(reference: &str, field: &str) -> Result<()> {
     })
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_u64_value(value: Option<u64>) -> IOValue {
+fn optional_u64_value(value: Option<u64>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![u64_value(value)]))
 }
 
-fn parse_optional_ref_record(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn parse_optional_ref_record(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let record = value_to_iovalue(value);
     let fields = record
         .collect_simple_record(label, Some(1))
@@ -585,7 +585,7 @@ fn parse_optional_ref_record(value: &Value<IOValue>, label: &str) -> Result<Opti
     }
 }
 
-fn parse_optional_u64_record(value: &Value<IOValue>, label: &str) -> Result<Option<u64>> {
+fn parse_optional_u64_record(value: &Value<IoValue>, label: &str) -> Result<Option<u64>> {
     let record = value_to_iovalue(value);
     let fields = record
         .collect_simple_record(label, Some(1))
@@ -593,7 +593,7 @@ fn parse_optional_u64_record(value: &Value<IOValue>, label: &str) -> Result<Opti
     parse_optional_u64_value(&fields[0])
 }
 
-fn parse_optional_u64_value(value: &Value<IOValue>) -> Result<Option<u64>> {
+fn parse_optional_u64_value(value: &Value<IoValue>) -> Result<Option<u64>> {
     let optional = value_to_iovalue(value);
     if optional.collect_simple_record("none", Some(0)).is_some() {
         Ok(None)
@@ -604,7 +604,7 @@ fn parse_optional_u64_value(value: &Value<IOValue>) -> Result<Option<u64>> {
     }
 }
 
-fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     values
         .iter()
@@ -616,7 +616,7 @@ fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>
         .collect()
 }
 
-fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
+fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoValue>>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -627,7 +627,7 @@ fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOVal
     Ok(values.iter().cloned().collect())
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let values = field_sequence(value, "checks")?;
     values
         .iter()
@@ -649,7 +649,7 @@ fn require_check(checks: &[(String, String)], name: &str) -> Result<()> {
     }
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -657,7 +657,7 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&fields[0], label)
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -665,7 +665,7 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     required_u64(&fields[0], label)
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
         return Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")));
@@ -673,14 +673,14 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     Ok(())
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -870,7 +870,7 @@ mod tests {
         assert!(mailbox.overflow.is_some());
     }
 
-    fn sample_grant(kind: &str, amount: u64, expires_at: Option<u64>) -> Result<IOValue> {
+    fn sample_grant(kind: &str, amount: u64, expires_at: Option<u64>) -> Result<IoValue> {
         resource_grant_value(&ResourceGrantInput {
             subject_ref: ref_for("subject"),
             scope: "scope".to_string(),

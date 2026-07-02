@@ -1,4 +1,4 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 
 use crate::evidence_chain;
 use crate::harness;
@@ -34,11 +34,11 @@ mod fs {
     }
 }
 
-fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
@@ -50,19 +50,19 @@ fn content_ref_hex(value: &str) -> Result<&str> {
     crate::preserves_rail::content_ref_hex(value)
 }
 
-fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IoValue> {
     crate::preserves_rail::parse_canonical_bytes(bytes)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
@@ -70,7 +70,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -84,7 +84,7 @@ const _: () = assert!(MAX_CHAIN_BUNDLE_CHECKPOINTS <= 100_000);
 pub struct ReproExchange {
     pub ticket: String,
     pub bundle_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,7 +94,7 @@ pub struct ChainSegmentExchange {
     pub chain: evidence_chain::ChainScope,
     pub anchor_ref: Option<String>,
     pub head_ref: Option<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,7 +112,7 @@ struct ChainSegmentBundle {
 struct ChainBundleArtifact {
     kind: String,
     artifact_ref: String,
-    value: IOValue,
+    value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,7 +163,7 @@ struct ChainSegmentBundleValueInput<'a> {
     chain: &'a evidence_chain::ChainScope,
     anchor_ref: Option<&'a str>,
     head_ref: Option<&'a str>,
-    artifacts: &'a [IOValue],
+    artifacts: &'a [IoValue],
     verify_receipt_refs: &'a [String],
     checkpoint_refs: &'a [String],
 }
@@ -199,7 +199,7 @@ struct ExchangeReceiptValueInput<'a> {
     verify_ref: Option<&'a str>,
 }
 
-pub fn publish_bundle(root: &Path, bundle: &IOValue, node: &str) -> Result<ReproExchange> {
+pub fn publish_bundle(root: &Path, bundle: &IoValue, node: &str) -> Result<ReproExchange> {
     fs::create_dir_all(root.join("blobs")).map_err(MoltenError::from)?;
     let verify_receipt = harness::repro_verify_receipt_value(bundle)?;
     let bundle_ref = canonical_hash(bundle)?;
@@ -362,11 +362,11 @@ fn build_chain_segment_bundle_value(
     anchor_ref: Option<&str>,
     expected_head: Option<&str>,
     fork_policy: evidence_chain::ChainForkPolicy,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     let verified =
         evidence_chain::verify_chain_segment_with_policy(ledger_root, chain, anchor_ref, expected_head, fork_policy)?;
     let index = evidence_chain::build_chain_index(ledger_root)?;
-    let mut artifacts = OrderedMap::<String, IOValue>::new();
+    let mut artifacts = OrderedMap::<String, IoValue>::new();
     for link_ref in &verified.verified_links {
         add_ledger_artifact(ledger_root, &mut artifacts, link_ref)?;
         if let Some(link) = index.links_by_ref.get(link_ref) {
@@ -423,14 +423,14 @@ fn build_chain_segment_bundle_value(
     }))
 }
 
-fn add_ledger_artifact(root: &Path, artifacts: &mut OrderedMap<String, IOValue>, artifact_ref: &str) -> Result<()> {
+fn add_ledger_artifact(root: &Path, artifacts: &mut OrderedMap<String, IoValue>, artifact_ref: &str) -> Result<()> {
     if !artifacts.contains_key(artifact_ref) {
         artifacts.insert(artifact_ref.to_string(), ledger::read_artifact(root, artifact_ref)?);
     }
     Ok(())
 }
 
-fn chain_segment_bundle_value(input: &ChainSegmentBundleValueInput<'_>) -> IOValue {
+fn chain_segment_bundle_value(input: &ChainSegmentBundleValueInput<'_>) -> IoValue {
     record("chain-segment-bundle-v1", vec![
         string(EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA),
         chain_scope_value(input.chain),
@@ -450,7 +450,7 @@ fn chain_segment_bundle_value(input: &ChainSegmentBundleValueInput<'_>) -> IOVal
 }
 
 fn parse_chain_segment_bundle(
-    value: &IOValue,
+    value: &IoValue,
     fork_policy: evidence_chain::ChainForkPolicy,
 ) -> Result<ChainSegmentBundle> {
     let bundle = value
@@ -739,7 +739,7 @@ fn validate_bundle_checkpoints(
     Ok(())
 }
 
-fn parse_chain_bundle_artifacts(value: &Value<IOValue>) -> Result<Vec<ChainBundleArtifact>> {
+fn parse_chain_bundle_artifacts(value: &Value<IoValue>) -> Result<Vec<ChainBundleArtifact>> {
     let artifacts = value
         .collect_simple_record("artifacts", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected <artifacts ...> field"))?;
@@ -784,7 +784,7 @@ fn parse_chain_bundle_artifacts(value: &Value<IOValue>) -> Result<Vec<ChainBundl
     Ok(parsed)
 }
 
-fn parse_chain_verify_receipt_value(value: &IOValue) -> Result<ParsedChainVerifyReceipt> {
+fn parse_chain_verify_receipt_value(value: &IoValue) -> Result<ParsedChainVerifyReceipt> {
     let receipt = value
         .collect_simple_record("chain-verify-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected chain verify receipt in chain bundle"))?;
@@ -803,7 +803,7 @@ fn parse_chain_verify_receipt_value(value: &IOValue) -> Result<ParsedChainVerify
     })
 }
 
-fn parse_diagnostic_kinds(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_diagnostic_kinds(value: &Value<IoValue>) -> Result<Vec<String>> {
     let diagnostics = value
         .collect_simple_record("diagnostics", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected chain verify diagnostics field"))?;
@@ -822,7 +822,7 @@ fn parse_diagnostic_kinds(value: &Value<IOValue>) -> Result<Vec<String>> {
         .collect()
 }
 
-fn chain_exchange_receipt_value(input: &ChainExchangeReceiptValueInput<'_>) -> IOValue {
+fn chain_exchange_receipt_value(input: &ChainExchangeReceiptValueInput<'_>) -> IoValue {
     let mut refs = vec![record("artifact-ref", vec![
         string("chain-segment-bundle"),
         string(input.bundle_ref),
@@ -857,7 +857,7 @@ fn chain_exchange_receipt_value(input: &ChainExchangeReceiptValueInput<'_>) -> I
     ])
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
         return Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")));
@@ -865,7 +865,7 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     Ok(())
 }
 
-fn parse_chain_scope(value: &Value<IOValue>) -> Result<evidence_chain::ChainScope> {
+fn parse_chain_scope(value: &Value<IoValue>) -> Result<evidence_chain::ChainScope> {
     let value = value_to_iovalue(value);
     let chain = value
         .collect_simple_record("chain", Some(3))
@@ -877,7 +877,7 @@ fn parse_chain_scope(value: &Value<IOValue>) -> Result<evidence_chain::ChainScop
     ))
 }
 
-fn chain_scope_value(chain: &evidence_chain::ChainScope) -> IOValue {
+fn chain_scope_value(chain: &evidence_chain::ChainScope) -> IoValue {
     record("chain", vec![
         record("scope", vec![string(&chain.scope)]),
         record("id", vec![string(&chain.id)]),
@@ -885,11 +885,11 @@ fn chain_scope_value(chain: &evidence_chain::ChainScope) -> IOValue {
     ])
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_field(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn parse_optional_ref_field(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let record = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
@@ -903,7 +903,7 @@ fn parse_optional_ref_field(value: &Value<IOValue>, label: &str) -> Result<Optio
     }
 }
 
-fn parse_ref_sequence_field(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_field(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let record = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
@@ -913,7 +913,7 @@ fn parse_ref_sequence_field(value: &Value<IOValue>, label: &str) -> Result<Vec<S
     values.iter().map(|value| required_ref(value, label)).collect()
 }
 
-fn parse_check_names(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_check_names(value: &Value<IoValue>) -> Result<Vec<String>> {
     let record = value
         .collect_simple_record("checks", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected <checks ...> field"))?;
@@ -945,14 +945,14 @@ fn require_check(checks: &[String], expected: &str) -> Result<()> {
     }
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let record = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
     required_string(&record[0], label)
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
@@ -977,7 +977,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     Ok(())
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let reference = required_string(value, field)?;
     validate_content_ref(&reference).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
@@ -985,7 +985,7 @@ fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
     Ok(reference)
 }
 
-fn exchange_receipt_value(input: &ExchangeReceiptValueInput<'_>) -> IOValue {
+fn exchange_receipt_value(input: &ExchangeReceiptValueInput<'_>) -> IoValue {
     let mut refs = vec![record("artifact-ref", vec![string("bundle"), string(input.bundle_ref)])];
     if let Some(verify_ref) = input.verify_ref {
         refs.push(record("artifact-ref", vec![string("verify-receipt"), string(verify_ref)]));
@@ -1260,7 +1260,7 @@ mod tests {
         assert!(!diagnostic_index.fork_evidence_for_chain(&chain).is_empty());
     }
 
-    fn remove_bundle_artifacts_of_kind(bundle: &IOValue, removed_kind: &str) -> IOValue {
+    fn remove_bundle_artifacts_of_kind(bundle: &IoValue, removed_kind: &str) -> IoValue {
         let fields = bundle.collect_simple_record("chain-segment-bundle-v1", Some(8)).expect("chain segment bundle");
         let artifacts_field = value_to_iovalue(&fields[4]);
         let artifacts = artifacts_field.collect_simple_record("artifacts", Some(1)).expect("artifacts field");
@@ -1315,7 +1315,7 @@ mod tests {
         chain: &evidence_chain::ChainScope,
         previous: Option<&evidence_chain::ChainLink>,
         payload_label: &str,
-    ) -> IOValue {
+    ) -> IoValue {
         let payload = stored_payload(root, payload_label);
         match previous {
             Some(previous) => evidence_chain::chain_link_value(&evidence_chain::ChainLinkInput::append(
