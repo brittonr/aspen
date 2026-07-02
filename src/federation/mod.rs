@@ -1,5 +1,5 @@
-type BTreeSet<T> = std::collections::BTreeSet<T>;
-type IOValue = preserves::IOValue;
+type BtreeSet<T> = std::collections::BTreeSet<T>;
+type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
 type Path = std::path::Path;
 type Result<T> = crate::error::Result<T>;
@@ -48,13 +48,13 @@ mod chunk_store {
 }
 
 mod ledger {
-    pub(super) fn artifact_kind(value: &super::IOValue) -> &'static str {
+    pub(super) fn artifact_kind(value: &super::IoValue) -> &'static str {
         crate::ledger::artifact_kind(value)
     }
 
     pub(super) fn import_artifact(
         root: &super::Path,
-        artifact: &super::IOValue,
+        artifact: &super::IoValue,
     ) -> super::Result<crate::ledger::LedgerImport> {
         crate::ledger::import_artifact(root, artifact)
     }
@@ -63,7 +63,7 @@ mod ledger {
         crate::ledger::list_artifacts(root)
     }
 
-    pub(super) fn read_artifact(root: &super::Path, artifact_ref: &str) -> super::Result<super::IOValue> {
+    pub(super) fn read_artifact(root: &super::Path, artifact_ref: &str) -> super::Result<super::IoValue> {
         crate::ledger::read_artifact(root, artifact_ref)
     }
 }
@@ -73,11 +73,11 @@ const FEDERATION_INVENTORY_SCHEMA: &str = crate::preserves_rail::FEDERATION_INVE
 const FEDERATION_RECEIPT_SCHEMA: &str = crate::preserves_rail::FEDERATION_RECEIPT_SCHEMA;
 const SIGNATURE_ALGORITHM: &str = crate::evidence::SIGNATURE_ALGORITHM;
 
-fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
@@ -85,15 +85,15 @@ fn content_ref_from_bytes(bytes: &[u8]) -> String {
     crate::preserves_rail::content_ref_from_bytes(bytes)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
@@ -101,7 +101,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -158,7 +158,7 @@ pub struct FederationAnnouncement {
     pub resource: FederatedResource,
     pub signer: String,
     pub trust_root: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -169,7 +169,7 @@ pub struct FederationInventory {
     pub delegates: Vec<FederationDelegate>,
     pub signer: String,
     pub trust_root: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -179,7 +179,7 @@ pub struct FederationDelegate {
     pub capability: String,
     pub signer: String,
     pub trust_root: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -218,7 +218,7 @@ pub struct FederationPull {
     pub imported_refs: Vec<String>,
     pub skipped_refs: Vec<String>,
     pub denied_refs: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -245,7 +245,7 @@ pub struct InventoryWithDelegatesInput<'a> {
 pub struct PullLedgerInventoryInput<'a> {
     pub source_root: &'a Path,
     pub dest_root: &'a Path,
-    pub inventory_value: &'a IOValue,
+    pub inventory_value: &'a IoValue,
     pub trust_root: &'a str,
     pub key: &'a str,
     pub allowed_resource_types: &'a [String],
@@ -255,7 +255,7 @@ pub struct PullLedgerInventoryInput<'a> {
 pub struct PullLedgerInventoryPolicyInput<'a> {
     pub source_root: &'a Path,
     pub dest_root: &'a Path,
-    pub inventory_value: &'a IOValue,
+    pub inventory_value: &'a IoValue,
     pub trust_root: &'a str,
     pub key: &'a str,
     pub policy: &'a FederationPullPolicy,
@@ -265,7 +265,7 @@ pub struct PullLedgerInventoryPolicyInput<'a> {
 pub struct PullChunkManifestInput<'a> {
     pub iroh_root: &'a Path,
     pub dest_root: &'a Path,
-    pub announcement_value: &'a IOValue,
+    pub announcement_value: &'a IoValue,
     pub trust_root: &'a str,
     pub key: &'a str,
     pub peer: &'a str,
@@ -388,7 +388,7 @@ pub fn delegate_resource(
 }
 
 pub fn parse_delegate(
-    value: &IOValue,
+    value: &IoValue,
     expected_resource_ref: Option<&str>,
     expected_capability: Option<&str>,
     trust_root: &str,
@@ -425,7 +425,7 @@ pub fn parse_delegate(
     })
 }
 
-fn parse_delegate_unverified(value: &IOValue) -> Result<FederationDelegate> {
+fn parse_delegate_unverified(value: &IoValue) -> Result<FederationDelegate> {
     let fields = value
         .collect_simple_record("federation-delegate-v1", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("expected <federation-delegate-v1 ...>"))?;
@@ -449,7 +449,7 @@ fn parse_delegate_unverified(value: &IOValue) -> Result<FederationDelegate> {
     })
 }
 
-pub fn parse_announcement(value: &IOValue, trust_root: &str, key: &str) -> Result<FederationAnnouncement> {
+pub fn parse_announcement(value: &IoValue, trust_root: &str, key: &str) -> Result<FederationAnnouncement> {
     let fields = value
         .collect_simple_record("federation-announcement-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <federation-announcement-v1 ...>"))?;
@@ -471,7 +471,7 @@ pub fn parse_announcement(value: &IOValue, trust_root: &str, key: &str) -> Resul
     })
 }
 
-pub fn parse_inventory(value: &IOValue, trust_root: &str, key: &str) -> Result<FederationInventory> {
+pub fn parse_inventory(value: &IoValue, trust_root: &str, key: &str) -> Result<FederationInventory> {
     let fields = value
         .collect_simple_record("federation-inventory-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <federation-inventory-v1 ...>"))?;
@@ -553,8 +553,8 @@ impl PullRefs {
 struct PullEnv<'a, 'b> {
     input: &'a PullLedgerInventoryPolicyInput<'b>,
     inventory: &'a FederationInventory,
-    existing: BTreeSet<String>,
-    allowed: BTreeSet<String>,
+    existing: BtreeSet<String>,
+    allowed: BtreeSet<String>,
 }
 
 impl<'a, 'b> PullEnv<'a, 'b> {
@@ -562,9 +562,9 @@ impl<'a, 'b> PullEnv<'a, 'b> {
         let existing = ledger::list_artifacts(input.dest_root)?
             .into_iter()
             .map(|entry| entry.artifact_ref)
-            .collect::<BTreeSet<_>>();
+            .collect::<BtreeSet<_>>();
         ensure_count_at_most(inventory.resources.len(), MAX_FEDERATION_RESOURCES, "federation inventory resources")?;
-        let allowed = input.policy.allowed_resource_types.iter().cloned().collect::<BTreeSet<_>>();
+        let allowed = input.policy.allowed_resource_types.iter().cloned().collect::<BtreeSet<_>>();
         Ok(Self {
             input,
             inventory,
@@ -766,7 +766,7 @@ fn has_valid_delegate(
     Ok(false)
 }
 
-pub fn federation_receipt_value(input: &FederationReceiptValueInput<'_>) -> IOValue {
+pub fn federation_receipt_value(input: &FederationReceiptValueInput<'_>) -> IoValue {
     record("federation-receipt-v1", vec![
         string(FEDERATION_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -789,7 +789,7 @@ pub fn federation_receipt_value(input: &FederationReceiptValueInput<'_>) -> IOVa
     ])
 }
 
-fn announcement_payload_value(peer: &str, resource: &FederatedResource, policy_refs: &[String]) -> IOValue {
+fn announcement_payload_value(peer: &str, resource: &FederatedResource, policy_refs: &[String]) -> IoValue {
     record("federation-announcement-payload", vec![
         record("peer", vec![string(peer)]),
         resource_value(resource),
@@ -801,7 +801,7 @@ fn announcement_payload_value(peer: &str, resource: &FederatedResource, policy_r
     ])
 }
 
-fn inventory_payload_value(peer: &str, resources: &[FederatedResource], delegates: &[FederationDelegate]) -> IOValue {
+fn inventory_payload_value(peer: &str, resources: &[FederatedResource], delegates: &[FederationDelegate]) -> IoValue {
     record("federation-inventory-payload", vec![
         record("peer", vec![string(peer)]),
         record("resources", vec![sequence(resources.iter().map(resource_value).collect())]),
@@ -816,7 +816,7 @@ fn inventory_payload_value(peer: &str, resources: &[FederatedResource], delegate
     ])
 }
 
-fn resource_value(resource: &FederatedResource) -> IOValue {
+fn resource_value(resource: &FederatedResource) -> IoValue {
     record("federated-resource", vec![
         record("type", vec![string(&resource.resource_type)]),
         record("ref", vec![string(&resource.resource_ref)]),
@@ -826,7 +826,7 @@ fn resource_value(resource: &FederatedResource) -> IOValue {
     ])
 }
 
-fn parse_announcement_payload(value: &IOValue) -> Result<(String, FederatedResource, Vec<String>)> {
+fn parse_announcement_payload(value: &IoValue) -> Result<(String, FederatedResource, Vec<String>)> {
     let fields = value
         .collect_simple_record("federation-announcement-payload", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected federation announcement payload"))?;
@@ -838,7 +838,7 @@ fn parse_announcement_payload(value: &IOValue) -> Result<(String, FederatedResou
     Ok((peer, resource, policy_refs))
 }
 
-fn parse_inventory_payload(value: &IOValue) -> Result<(String, Vec<FederatedResource>, Vec<FederationDelegate>)> {
+fn parse_inventory_payload(value: &IoValue) -> Result<(String, Vec<FederatedResource>, Vec<FederationDelegate>)> {
     let fields = value
         .collect_simple_record("federation-inventory-payload", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected federation inventory payload"))?;
@@ -870,7 +870,7 @@ fn parse_inventory_payload(value: &IOValue) -> Result<(String, Vec<FederatedReso
     Ok((peer, resources, delegates))
 }
 
-fn parse_resource(value: &IOValue) -> Result<FederatedResource> {
+fn parse_resource(value: &IoValue) -> Result<FederatedResource> {
     let fields = value
         .collect_simple_record("federated-resource", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected federated resource"))?;
@@ -885,7 +885,7 @@ fn parse_resource(value: &IOValue) -> Result<FederatedResource> {
     Ok(resource)
 }
 
-fn signature_record(payload: &IOValue, signer: &str, purpose: &str, trust_root: &str, key: &str) -> Result<IOValue> {
+fn signature_record(payload: &IoValue, signer: &str, purpose: &str, trust_root: &str, key: &str) -> Result<IoValue> {
     if signer.trim().is_empty() {
         return Err(MoltenError::invalid_harness("federation signer must not be empty"));
     }
@@ -902,8 +902,8 @@ fn signature_record(payload: &IOValue, signer: &str, purpose: &str, trust_root: 
 }
 
 fn verify_signature_record(
-    value: &Value<IOValue>,
-    payload: &IOValue,
+    value: &Value<IoValue>,
+    payload: &IoValue,
     purpose: &str,
     trust_root: &str,
     key: &str,
@@ -937,7 +937,7 @@ fn verify_signature_record(
     Ok((signer, actual_trust_root))
 }
 
-fn signature_for(payload: &IOValue, signer: &str, purpose: &str, trust_root: &str, key: &str) -> Result<String> {
+fn signature_for(payload: &IoValue, signer: &str, purpose: &str, trust_root: &str, key: &str) -> Result<String> {
     let mut material = canonical_bytes(payload)?;
     material.extend_from_slice(signer.as_bytes());
     material.push(0);
@@ -981,7 +981,7 @@ fn require_ref(reference: &str, field: &str) -> Result<()> {
     })
 }
 
-fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -999,7 +999,7 @@ fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>
         .collect()
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record("checks", Some(1))
@@ -1027,7 +1027,7 @@ fn require_check(checks: &[(String, String)], name: &str) -> Result<()> {
     }
 }
 
-fn record_value(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
+fn record_value(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -1035,7 +1035,7 @@ fn record_value(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
     Ok(value_to_iovalue(&record[0]))
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -1043,7 +1043,7 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&record[0], label)
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
         return Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")));
@@ -1051,7 +1051,7 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     Ok(())
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
