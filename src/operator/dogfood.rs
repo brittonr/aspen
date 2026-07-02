@@ -3690,7 +3690,7 @@ struct ServiceStepInput<'a> {
 
 fn record_service_step(input: ServiceStepInput<'_>) -> Result<()> {
     let service_suite = crate::service_runtime::two_service_suite_value()?;
-    let service_run = crate::service_runtime::run_service_runtime_suite_value(&service_suite)?;
+    let service_run = crate::service_runtime::run_suite_value(&service_suite)?;
     let service_decision = if service_run.lifecycle_receipts.iter().all(service_lifecycle_pass) {
         "pass"
     } else {

@@ -6,8 +6,8 @@ type Result<T> = crate::error::Result<T>;
 
 const SERVICE_READINESS_ASSERTION_SCHEMA: &str = crate::preserves_rail::SERVICE_READINESS_ASSERTION_SCHEMA;
 const SERVICE_REPLAY_IDENTITY_SCHEMA: &str = crate::preserves_rail::SERVICE_REPLAY_IDENTITY_SCHEMA;
-const SERVICE_RUNTIME_REPORT_SCHEMA: &str = crate::preserves_rail::SERVICE_RUNTIME_REPORT_SCHEMA;
-const SERVICE_RUNTIME_SUITE_SCHEMA: &str = crate::preserves_rail::SERVICE_RUNTIME_SUITE_SCHEMA;
+const RUNTIME_REPORT_SCHEMA: &str = crate::preserves_rail::SERVICE_RUNTIME_REPORT_SCHEMA;
+const RUNTIME_SUITE_SCHEMA: &str = crate::preserves_rail::SERVICE_RUNTIME_SUITE_SCHEMA;
 const SERVICE_TURN_CONTEXT_SCHEMA: &str = crate::preserves_rail::SERVICE_TURN_CONTEXT_SCHEMA;
 
 fn canonical_hash(value: &preserves::IOValue) -> Result<String> {
@@ -34,16 +34,16 @@ fn value_to_iovalue(value: &Value<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
-const MAX_SERVICE_RUNTIME_ITEMS: usize = 4096;
-const MAX_SERVICE_RUNTIME_CHECKS: usize = 256;
+const MAX_RUNTIME_ITEMS: usize = 4096;
+const MAX_RUNTIME_CHECKS: usize = 256;
 const MAX_DEPENDENCY_PASSES: usize = 4096;
 
-const _: () = assert!(MAX_SERVICE_RUNTIME_ITEMS <= 100_000);
-const _: () = assert!(MAX_SERVICE_RUNTIME_CHECKS <= 10_000);
+const _: () = assert!(MAX_RUNTIME_ITEMS <= 100_000);
+const _: () = assert!(MAX_RUNTIME_CHECKS <= 10_000);
 const _: () = assert!(MAX_DEPENDENCY_PASSES <= 100_000);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServiceRuntimeEvidenceInput {
+pub struct EvidenceInput {
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -54,25 +54,25 @@ pub struct ServiceRuntimeEvidenceInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServiceRuntimeSuiteInput {
+pub struct SuiteInput {
     pub manifests: Vec<preserves::IOValue>,
     pub demands: Vec<preserves::IOValue>,
     pub statuses: Vec<preserves::IOValue>,
-    pub evidence: ServiceRuntimeEvidenceInput,
+    pub evidence: EvidenceInput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServiceRuntimeSuite {
+pub struct Suite {
     pub suite_ref: String,
     pub manifests: Vec<crate::service_records::ServiceManifest>,
     pub demands: Vec<crate::service_records::ServiceDemand>,
     pub statuses: Vec<crate::service_records::ServiceStatus>,
-    pub evidence: ServiceRuntimeEvidenceInput,
+    pub evidence: EvidenceInput,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServiceRuntimeRun {
+pub struct Run {
     pub suite_ref: String,
     pub suite_value: preserves::IOValue,
     pub report_ref: String,
@@ -85,7 +85,7 @@ pub struct ServiceRuntimeRun {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServiceRuntimeReplay {
+pub struct Replay {
     pub expected_report_ref: String,
     pub actual_report_ref: String,
     pub decision: String,
@@ -177,7 +177,7 @@ impl Artifacts {
 }
 
 struct RunCtx<'a> {
-    evidence: &'a ServiceRuntimeEvidenceInput,
+    evidence: &'a EvidenceInput,
     manifests: &'a OrderedMap<String, crate::service_records::ServiceManifest>,
     ready_statuses: OrderedMap<String, String>,
     artifacts: Artifacts,
@@ -197,7 +197,7 @@ enum StepOutcome {
 
 impl<'a> RunCtx<'a> {
     fn new(
-        suite: &'a ServiceRuntimeSuite,
+        suite: &'a Suite,
         manifests: &'a OrderedMap<String, crate::service_records::ServiceManifest>,
     ) -> Result<Self> {
         let ready_statuses = ready_status_map(&suite.statuses)?;
@@ -311,10 +311,10 @@ impl<'a> RunCtx<'a> {
     }
 }
 
-pub fn service_runtime_suite_value(input: &ServiceRuntimeSuiteInput) -> Result<preserves::IOValue> {
+pub fn suite_value(input: &SuiteInput) -> Result<preserves::IOValue> {
     validate_suite_input(input)?;
     Ok(record("service-runtime-suite-v1", vec![
-        string(SERVICE_RUNTIME_SUITE_SCHEMA),
+        string(RUNTIME_SUITE_SCHEMA),
         record("manifests", vec![sequence(input.manifests.clone())]),
         record("demands", vec![sequence(input.demands.clone())]),
         record("statuses", vec![sequence(input.statuses.clone())]),
@@ -328,11 +328,11 @@ pub fn service_runtime_suite_value(input: &ServiceRuntimeSuiteInput) -> Result<p
     ]))
 }
 
-pub fn parse_service_runtime_suite(value: &preserves::IOValue) -> Result<ServiceRuntimeSuite> {
+pub fn parse_suite(value: &preserves::IOValue) -> Result<Suite> {
     let fields = value
         .collect_simple_record("service-runtime-suite-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-runtime-suite-v1 ...>"))?;
-    require_schema(&fields[0], SERVICE_RUNTIME_SUITE_SCHEMA, "service runtime suite schema")?;
+    require_schema(&fields[0], RUNTIME_SUITE_SCHEMA, "service runtime suite schema")?;
     let checks = parse_checks(&fields[5])?;
     require_check(&checks, "canonical-service-runtime-suite", "service runtime suite")?;
     let manifest_values = parse_iovalue_sequence(&fields[1], "manifests")?;
@@ -347,7 +347,7 @@ pub fn parse_service_runtime_suite(value: &preserves::IOValue) -> Result<Service
         status_values.iter().map(crate::service_records::parse_service_status).collect::<Result<Vec<_>>>()?;
     let evidence = parse_evidence(&fields[4])?;
     validate_runtime_evidence(&evidence)?;
-    Ok(ServiceRuntimeSuite {
+    Ok(Suite {
         suite_ref: canonical_hash(value)?,
         manifests,
         demands,
@@ -357,12 +357,12 @@ pub fn parse_service_runtime_suite(value: &preserves::IOValue) -> Result<Service
     })
 }
 
-pub fn run_service_runtime_suite_value(value: &preserves::IOValue) -> Result<ServiceRuntimeRun> {
-    let suite = parse_service_runtime_suite(value)?;
-    run_service_runtime_suite(&suite)
+pub fn run_suite_value(value: &preserves::IOValue) -> Result<Run> {
+    let suite = parse_suite(value)?;
+    run_suite(&suite)
 }
 
-pub fn run_service_runtime_suite(suite: &ServiceRuntimeSuite) -> Result<ServiceRuntimeRun> {
+pub fn run_suite(suite: &Suite) -> Result<Run> {
     let manifests = manifest_map(&suite.manifests)?;
     let is_cycle_present = dependency_cycle_exists(&manifests)?;
     let mut context = RunCtx::new(suite, &manifests)?;
@@ -403,8 +403,8 @@ fn next_pass_count(passes: usize) -> Result<usize> {
     Ok(next)
 }
 
-fn finish_runtime_run(suite: &ServiceRuntimeSuite, artifacts: Artifacts) -> Result<ServiceRuntimeRun> {
-    let report_value = service_runtime_report_value(ReportValueInput {
+fn finish_runtime_run(suite: &Suite, artifacts: Artifacts) -> Result<Run> {
+    let report_value = report_value(ReportValueInput {
         suite_value: &suite.value,
         lifecycle_receipts: artifacts.lifecycle_receipts.as_slice(),
         statuses: artifacts.statuses.as_slice(),
@@ -419,7 +419,7 @@ fn finish_runtime_run(suite: &ServiceRuntimeSuite, artifacts: Artifacts) -> Resu
         replay_identities,
         turn_contexts,
     } = artifacts;
-    Ok(ServiceRuntimeRun {
+    Ok(Run {
         suite_ref: suite.suite_ref.clone(),
         suite_value: suite.value.clone(),
         report_ref: canonical_hash(&report_value)?,
@@ -432,9 +432,9 @@ fn finish_runtime_run(suite: &ServiceRuntimeSuite, artifacts: Artifacts) -> Resu
     })
 }
 
-pub fn replay_service_runtime_report(value: &preserves::IOValue) -> Result<ServiceRuntimeReplay> {
-    let report = parse_service_runtime_report(value)?;
-    let rerun = run_service_runtime_suite_value(&report.suite_value)?;
+pub fn replay_report(value: &preserves::IOValue) -> Result<Replay> {
+    let report = parse_report(value)?;
+    let rerun = run_suite_value(&report.suite_value)?;
     let expected_report_ref = canonical_hash(value)?;
     let decision = if expected_report_ref == rerun.report_ref {
         "pass"
@@ -448,18 +448,18 @@ pub fn replay_service_runtime_report(value: &preserves::IOValue) -> Result<Servi
             rerun.report_ref
         )));
     }
-    Ok(ServiceRuntimeReplay {
+    Ok(Replay {
         expected_report_ref,
         actual_report_ref: rerun.report_ref,
         decision,
     })
 }
 
-pub fn parse_service_runtime_report(value: &preserves::IOValue) -> Result<ServiceRuntimeRun> {
+pub fn parse_report(value: &preserves::IOValue) -> Result<Run> {
     let fields = value
         .collect_simple_record("service-runtime-report-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-runtime-report-v1 ...>"))?;
-    require_schema(&fields[0], SERVICE_RUNTIME_REPORT_SCHEMA, "service runtime report schema")?;
+    require_schema(&fields[0], RUNTIME_REPORT_SCHEMA, "service runtime report schema")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-service-runtime-report", "service runtime report")?;
     let suite_value = record_iovalue(&fields[1], "suite")?;
@@ -469,7 +469,7 @@ pub fn parse_service_runtime_report(value: &preserves::IOValue) -> Result<Servic
     let readiness_assertions = parse_iovalue_sequence(&fields[4], "readiness")?;
     let replay_identities = parse_iovalue_sequence(&fields[5], "replay-identities")?;
     let turn_contexts = parse_iovalue_sequence(&fields[6], "turn-contexts")?;
-    Ok(ServiceRuntimeRun {
+    Ok(Run {
         suite_ref,
         suite_value,
         report_ref: canonical_hash(value)?,
@@ -482,8 +482,8 @@ pub fn parse_service_runtime_report(value: &preserves::IOValue) -> Result<Servic
     })
 }
 
-pub fn service_runtime_summary(value: &preserves::IOValue) -> Result<String> {
-    if let Ok(report) = parse_service_runtime_report(value) {
+pub fn summary(value: &preserves::IOValue) -> Result<String> {
+    if let Ok(report) = parse_report(value) {
         let pass_count = report
             .lifecycle_receipts
             .iter()
@@ -500,7 +500,7 @@ pub fn service_runtime_summary(value: &preserves::IOValue) -> Result<String> {
             report.readiness_assertions.len()
         ));
     }
-    if let Ok(suite) = parse_service_runtime_suite(value) {
+    if let Ok(suite) = parse_suite(value) {
         return Ok(format!(
             "service runtime suite ref={} manifests={} demands={} statuses={}",
             suite.suite_ref,
@@ -513,7 +513,7 @@ pub fn service_runtime_summary(value: &preserves::IOValue) -> Result<String> {
 }
 
 pub fn two_service_suite_value() -> Result<preserves::IOValue> {
-    let evidence = ServiceRuntimeEvidenceInput {
+    let evidence = EvidenceInput {
         authority_refs: vec![synthetic_ref("service-authority")?],
         policy_refs: vec![synthetic_ref("service-policy")?],
         resource_refs: vec![synthetic_ref("service-resource")?],
@@ -560,7 +560,7 @@ pub fn two_service_suite_value() -> Result<preserves::IOValue> {
         manifest_ref: Some(canonical_hash(&frontend_manifest)?),
         policy_refs: evidence.policy_refs.clone(),
     })?;
-    service_runtime_suite_value(&ServiceRuntimeSuiteInput {
+    suite_value(&SuiteInput {
         manifests: vec![backend_manifest, frontend_manifest],
         demands: vec![backend_demand, frontend_demand],
         statuses: Vec::new(),
@@ -577,9 +577,9 @@ struct ReportValueInput<'a> {
     turn_contexts: &'a [preserves::IOValue],
 }
 
-fn service_runtime_report_value(input: ReportValueInput<'_>) -> Result<preserves::IOValue> {
+fn report_value(input: ReportValueInput<'_>) -> Result<preserves::IOValue> {
     Ok(record("service-runtime-report-v1", vec![
-        string(SERVICE_RUNTIME_REPORT_SCHEMA),
+        string(RUNTIME_REPORT_SCHEMA),
         record("suite", vec![input.suite_value.clone()]),
         record("lifecycle", vec![sequence(input.lifecycle_receipts.to_vec())]),
         record("statuses", vec![sequence(input.statuses.to_vec())]),
@@ -597,7 +597,7 @@ fn service_runtime_report_value(input: ReportValueInput<'_>) -> Result<preserves
 
 fn start_outcome(
     runtime: &mut crate::runtime::RuntimeState,
-    evidence: &ServiceRuntimeEvidenceInput,
+    evidence: &EvidenceInput,
     demand: &crate::service_records::ServiceDemand,
     manifest: &crate::service_records::ServiceManifest,
     dependency_status_refs: Vec<String>,
@@ -746,7 +746,7 @@ fn readiness_assertion_value(
 }
 
 fn replay_identity_value(
-    evidence: &ServiceRuntimeEvidenceInput,
+    evidence: &EvidenceInput,
     demand: &crate::service_records::ServiceDemand,
     manifest: &crate::service_records::ServiceManifest,
     dependency_status_refs: &[String],
@@ -848,7 +848,7 @@ fn dependency_cycle_exists(manifests: &OrderedMap<String, crate::service_records
             if !seen.insert(next.clone()) {
                 continue;
             }
-            if seen.len() > MAX_SERVICE_RUNTIME_ITEMS {
+            if seen.len() > MAX_RUNTIME_ITEMS {
                 return Err(MoltenError::invalid_harness("service dependency graph exceeds bound"));
             }
             if let Some(manifest) = manifests.get(&next) {
@@ -861,7 +861,7 @@ fn dependency_cycle_exists(manifests: &OrderedMap<String, crate::service_records
     Ok(false)
 }
 
-fn validate_suite_input(input: &ServiceRuntimeSuiteInput) -> Result<()> {
+fn validate_suite_input(input: &SuiteInput) -> Result<()> {
     ensure_count_at_most(input.manifests.len(), "service manifests")?;
     ensure_count_at_most(input.demands.len(), "service demands")?;
     ensure_count_at_most(input.statuses.len(), "service statuses")?;
@@ -877,7 +877,7 @@ fn validate_suite_input(input: &ServiceRuntimeSuiteInput) -> Result<()> {
     validate_runtime_evidence(&input.evidence)
 }
 
-fn validate_runtime_evidence(evidence: &ServiceRuntimeEvidenceInput) -> Result<()> {
+fn validate_runtime_evidence(evidence: &EvidenceInput) -> Result<()> {
     validate_refs(&evidence.authority_refs, "service runtime authority ref")?;
     validate_refs(&evidence.policy_refs, "service runtime policy ref")?;
     validate_refs(&evidence.resource_refs, "service runtime resource ref")?;
@@ -887,7 +887,7 @@ fn validate_runtime_evidence(evidence: &ServiceRuntimeEvidenceInput) -> Result<(
     validate_refs(&evidence.effect_log_refs, "service runtime effect log ref")
 }
 
-fn startup_admission_diagnostics(evidence: &ServiceRuntimeEvidenceInput) -> Vec<String> {
+fn startup_admission_diagnostics(evidence: &EvidenceInput) -> Vec<String> {
     let mut diagnostics = Vec::new();
     if evidence.authority_refs.is_empty() {
         diagnostics.push("missing startup authority evidence".to_string());
@@ -907,7 +907,7 @@ fn startup_admission_diagnostics(evidence: &ServiceRuntimeEvidenceInput) -> Vec<
     diagnostics
 }
 
-fn evidence_value(evidence: &ServiceRuntimeEvidenceInput) -> preserves::IOValue {
+fn evidence_value(evidence: &EvidenceInput) -> preserves::IOValue {
     record("evidence", vec![
         record("authority", vec![refs_sequence(&evidence.authority_refs)]),
         record("policy", vec![refs_sequence(&evidence.policy_refs)]),
@@ -919,12 +919,12 @@ fn evidence_value(evidence: &ServiceRuntimeEvidenceInput) -> preserves::IOValue 
     ])
 }
 
-fn parse_evidence(value: &Value<preserves::IOValue>) -> Result<ServiceRuntimeEvidenceInput> {
+fn parse_evidence(value: &Value<preserves::IOValue>) -> Result<EvidenceInput> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("evidence", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <evidence ...>"))?;
-    Ok(ServiceRuntimeEvidenceInput {
+    Ok(EvidenceInput {
         authority_refs: parse_ref_sequence(&fields[0], "authority")?,
         policy_refs: parse_ref_sequence(&fields[1], "policy")?,
         resource_refs: parse_ref_sequence(&fields[2], "resource")?,
@@ -1066,12 +1066,10 @@ fn required_string(value: &Value<preserves::IOValue>, field: &str) -> Result<Str
 }
 
 fn ensure_count_at_most(actual: usize, label: &str) -> Result<()> {
-    if actual <= MAX_SERVICE_RUNTIME_ITEMS {
+    if actual <= MAX_RUNTIME_ITEMS {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
-            "{label} count {actual} exceeds bound {MAX_SERVICE_RUNTIME_ITEMS}"
-        )))
+        Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {MAX_RUNTIME_ITEMS}")))
     }
 }
 
@@ -1087,8 +1085,8 @@ mod tests {
         canonical_hash(&record("service-runtime-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    fn evidence() -> ServiceRuntimeEvidenceInput {
-        ServiceRuntimeEvidenceInput {
+    fn evidence() -> EvidenceInput {
+        EvidenceInput {
             authority_refs: vec![test_ref("authority")],
             policy_refs: vec![test_ref("policy")],
             resource_refs: vec![test_ref("resource")],
@@ -1127,7 +1125,7 @@ mod tests {
     }
 
     #[test]
-    fn service_runtime_rejects_malformed_content_refs() {
+    fn rejects_malformed_content_refs() {
         for invalid in [
             "blake3:fixture",
             "blake3:0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -1135,7 +1133,7 @@ mod tests {
         ] {
             let mut evidence = evidence();
             evidence.authority_refs = vec![invalid.to_string()];
-            let error = service_runtime_suite_value(&ServiceRuntimeSuiteInput {
+            let error = suite_value(&SuiteInput {
                 manifests: vec![manifest("svc:bad-ref", Vec::new())],
                 demands: Vec::new(),
                 statuses: Vec::new(),
@@ -1149,7 +1147,7 @@ mod tests {
     #[test]
     fn two_service_demand_starts_dependency_then_frontend() {
         let suite_value = two_service_suite_value().expect("two service suite");
-        let run = run_service_runtime_suite_value(&suite_value).expect("run services");
+        let run = run_suite_value(&suite_value).expect("run services");
         assert_eq!(run.readiness_assertions.len(), 2);
         let receipts = run
             .lifecycle_receipts
@@ -1158,7 +1156,7 @@ mod tests {
             .collect::<Result<Vec<_>>>()
             .expect("parse receipts");
         assert_eq!(receipts.iter().filter(|receipt| receipt.decision == "pass").count(), 2);
-        replay_service_runtime_report(&run.value).expect("replay service runtime report");
+        replay_report(&run.value).expect("replay service runtime report");
     }
 
     #[test]
@@ -1181,34 +1179,34 @@ mod tests {
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("source-gate")));
     }
 
-    fn run_with_missing_evidence(update: impl FnOnce(&mut ServiceRuntimeEvidenceInput)) -> ServiceRuntimeRun {
+    fn run_with_missing_evidence(update: impl FnOnce(&mut EvidenceInput)) -> Run {
         let backend = manifest("svc:backend", Vec::new());
         let demand = demand("svc:backend", &backend);
         let mut evidence = evidence();
         update(&mut evidence);
         let suite_value = record("service-runtime-suite-v1", vec![
-            string(SERVICE_RUNTIME_SUITE_SCHEMA),
+            string(RUNTIME_SUITE_SCHEMA),
             record("manifests", vec![sequence(vec![backend])]),
             record("demands", vec![sequence(vec![demand])]),
             record("statuses", vec![sequence(Vec::new())]),
             evidence_value(&evidence),
             checks_value(&["canonical-service-runtime-suite", "explicit-startup-evidence"]),
         ]);
-        run_service_runtime_suite_value(&suite_value).expect("missing evidence emits deny report")
+        run_suite_value(&suite_value).expect("missing evidence emits deny report")
     }
 
     #[test]
     fn unmet_dependency_waits_without_readiness() {
         let frontend = manifest("svc:frontend", vec!["svc:backend".to_string()]);
         let demand = demand("svc:frontend", &frontend);
-        let suite = service_runtime_suite_value(&ServiceRuntimeSuiteInput {
+        let suite = suite_value(&SuiteInput {
             manifests: vec![frontend],
             demands: vec![demand],
             statuses: Vec::new(),
             evidence: evidence(),
         })
         .expect("suite");
-        let run = run_service_runtime_suite_value(&suite).expect("run services");
+        let run = run_suite_value(&suite).expect("run services");
         assert!(run.readiness_assertions.is_empty());
         let receipt =
             crate::service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("receipt");
@@ -1222,14 +1220,14 @@ mod tests {
         let backend = manifest("svc:backend", vec!["svc:frontend".to_string()]);
         let frontend_demand = demand("svc:frontend", &frontend);
         let backend_demand = demand("svc:backend", &backend);
-        let suite = service_runtime_suite_value(&ServiceRuntimeSuiteInput {
+        let suite = suite_value(&SuiteInput {
             manifests: vec![frontend, backend],
             demands: vec![frontend_demand, backend_demand],
             statuses: Vec::new(),
             evidence: evidence(),
         })
         .expect("suite");
-        let run = run_service_runtime_suite_value(&suite).expect("run services");
+        let run = run_suite_value(&suite).expect("run services");
         assert!(run.readiness_assertions.is_empty());
         let receipts = run
             .lifecycle_receipts
@@ -1252,22 +1250,22 @@ mod tests {
             "<service-manifest-v1 \"molten.service.manifest.v1\" <service-id \"svc:x\">>",
         )
         .expect("malformed manifest shape parses");
-        let suite = ServiceRuntimeSuiteInput {
+        let suite = SuiteInput {
             manifests: vec![malformed],
             demands: Vec::new(),
             statuses: Vec::new(),
             evidence: evidence(),
         };
-        assert!(service_runtime_suite_value(&suite).is_err());
+        assert!(suite_value(&suite).is_err());
     }
 
     #[test]
     fn replay_detects_changed_dependency_identity() {
         let suite_value = two_service_suite_value().expect("two service suite");
-        let run = run_service_runtime_suite_value(&suite_value).expect("run services");
-        let mut report = parse_service_runtime_report(&run.value).expect("parse report");
+        let run = run_suite_value(&suite_value).expect("run services");
+        let mut report = parse_report(&run.value).expect("parse report");
         report.statuses.pop();
-        let tampered = service_runtime_report_value(ReportValueInput {
+        let tampered = report_value(ReportValueInput {
             suite_value: &suite_value,
             lifecycle_receipts: &report.lifecycle_receipts,
             statuses: &report.statuses,
@@ -1276,7 +1274,7 @@ mod tests {
             turn_contexts: &report.turn_contexts,
         })
         .expect("tampered report");
-        assert!(replay_service_runtime_report(&tampered).is_err());
+        assert!(replay_report(&tampered).is_err());
     }
 
     #[hegel::test(test_cases = 16)]
@@ -1286,15 +1284,15 @@ mod tests {
         let dependencies = (0..dependency_count_usize).map(|index| format!("svc:dep-{index}")).collect::<Vec<_>>();
         let service = manifest("svc:generated", dependencies);
         let demand = demand("svc:generated", &service);
-        let suite = service_runtime_suite_value(&ServiceRuntimeSuiteInput {
+        let suite = suite_value(&SuiteInput {
             manifests: vec![service],
             demands: vec![demand],
             statuses: Vec::new(),
             evidence: evidence(),
         })
         .expect("generated suite");
-        let run = run_service_runtime_suite_value(&suite).expect("generated run");
-        let replay = replay_service_runtime_report(&run.value).expect("generated replay");
+        let run = run_suite_value(&suite).expect("generated run");
+        let replay = replay_report(&run.value).expect("generated replay");
         assert_eq!(replay.decision, "pass");
         if dependency_count_usize == 0 {
             assert_eq!(run.readiness_assertions.len(), 1);

@@ -4,12 +4,12 @@ type Outcome<T> = molten::error::Result<T>;
 pub(super) fn write_service_runtime_run(
     out: &std::path::Path,
     suite_value: &preserves::IOValue,
-    run: &molten::service_runtime::ServiceRuntimeRun,
+    run: &molten::service_runtime::Run,
 ) -> Outcome<()> {
     std::fs::create_dir_all(out).map_err(molten::error::MoltenError::from)?;
     write_file(&out.join("suite.preserves"), &molten::preserves_rail::to_text(suite_value)?)?;
     write_file(&out.join("report.preserves"), &molten::preserves_rail::to_text(&run.value)?)?;
-    write_file(&out.join("summary.txt"), &molten::service_runtime::service_runtime_summary(&run.value)?)?;
+    write_file(&out.join("summary.txt"), &molten::service_runtime::summary(&run.value)?)?;
     write_indexed_values(out, "lifecycle", &run.lifecycle_receipts)?;
     write_indexed_values(out, "status", &run.statuses)?;
     write_indexed_values(out, "readiness", &run.readiness_assertions)?;

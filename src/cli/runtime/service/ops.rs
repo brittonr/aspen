@@ -18,7 +18,7 @@ pub(super) fn run(command: Command) -> Outcome<()> {
 
 fn run_runtime_suite(suite: FilePath, out: FilePath) -> Outcome<()> {
     let suite_value = super::io::read_preserves_file(&suite)?;
-    let run = molten::service_runtime::run_service_runtime_suite_value(&suite_value)?;
+    let run = molten::service_runtime::run_suite_value(&suite_value)?;
     super::io::write_service_runtime_run(&out, &suite_value, &run)?;
     println!(
         "service runtime run report={} suite={} lifecycle={} readiness={} out={}",
@@ -33,7 +33,7 @@ fn run_runtime_suite(suite: FilePath, out: FilePath) -> Outcome<()> {
 
 fn run_two_service(out: FilePath) -> Outcome<()> {
     let suite_value = molten::service_runtime::two_service_suite_value()?;
-    let run = molten::service_runtime::run_service_runtime_suite_value(&suite_value)?;
+    let run = molten::service_runtime::run_suite_value(&suite_value)?;
     super::io::write_service_runtime_run(&out, &suite_value, &run)?;
     println!(
         "service runtime two-service report={} suite={} lifecycle={} readiness={} out={}",
@@ -78,7 +78,7 @@ fn run_supervision_fixture(out: FilePath) -> Outcome<()> {
 
 fn show_runtime(report: FilePath) -> Outcome<()> {
     let value = super::io::read_preserves_file(&report)?;
-    println!("{}", molten::service_runtime::service_runtime_summary(&value)?);
+    println!("{}", molten::service_runtime::summary(&value)?);
     Ok(())
 }
 
@@ -107,7 +107,7 @@ fn gate_supervision(report: FilePath, receipt_out: Option<FilePath>) -> Outcome<
 
 fn replay_runtime(report: FilePath) -> Outcome<()> {
     let value = super::io::read_preserves_file(&report)?;
-    let replay = molten::service_runtime::replay_service_runtime_report(&value)?;
+    let replay = molten::service_runtime::replay_report(&value)?;
     println!(
         "service runtime replay {} expected={} actual={}",
         replay.decision, replay.expected_report_ref, replay.actual_report_ref
