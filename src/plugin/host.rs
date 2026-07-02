@@ -12,11 +12,6 @@ use crate::bounded::VecSink;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::value_to_iovalue;
 
 pub const PLUGIN_HOST_ABI_VERSION: &str = "molten.plugin.host-abi.v1";
 
@@ -28,6 +23,26 @@ const _: () = assert!(MAX_PLUGIN_CALLBACKS > 0);
 const _: () = assert!(MAX_PLUGIN_REFS > MAX_PLUGIN_CALLBACKS);
 const _: () = assert!(MAX_PLUGIN_DIAGNOSTICS > 0);
 const _: () = assert!(MAX_PLUGIN_CHECKS > 0);
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PluginManifestInput<'a> {
