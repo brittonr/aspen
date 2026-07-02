@@ -1,7 +1,5 @@
 use preserves::ValueImpl;
 
-use super::core;
-
 type CompoundClass = preserves::CompoundClass;
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
@@ -90,7 +88,7 @@ pub struct HarnessSuite {
     pub capabilities: crate::runtime::CapabilityContext,
     pub capabilities_explicit: bool,
     pub policy: crate::runtime::AdmissionPolicy,
-    pub steps: Vec<core::CoreStep>,
+    pub steps: Vec<super::core::CoreStep>,
     pub source_value: IoValue,
 }
 
@@ -400,7 +398,7 @@ pub struct HarnessObservation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmissionDecisionEvent {
     pub value: IoValue,
-    pub request: core::AdmissionRequest,
+    pub request: super::core::AdmissionRequest,
     pub authority: Option<AdmissionAuthorityEvidence>,
     pub decision: crate::runtime::AdmissionDecision,
 }
@@ -573,42 +571,46 @@ pub fn suite_ref(suite: &HarnessSuite) -> Result<String> {
     canonical_hash(&suite.source_value)
 }
 
-pub fn step_value(step: &core::CoreStep) -> IoValue {
+pub fn step_value(step: &super::core::CoreStep) -> IoValue {
     match step {
-        core::CoreStep::Send { from, to, body } => {
+        super::core::CoreStep::Send { from, to, body } => {
             record("send", vec![string(from), string(to), body.as_iovalue().clone()])
         }
-        core::CoreStep::Observe { actor, pattern } => {
+        super::core::CoreStep::Observe { actor, pattern } => {
             record("observe", vec![string(actor), pattern.as_iovalue().clone()])
         }
-        core::CoreStep::Assert { actor, value } => record("assert", vec![string(actor), value.as_iovalue().clone()]),
-        core::CoreStep::Retract { actor, value } => record("retract", vec![string(actor), value.as_iovalue().clone()]),
-        core::CoreStep::Clock { actor } => record("clock", vec![string(actor)]),
-        core::CoreStep::Random { actor, upper } => record("random", vec![string(actor), u64_value(*upper)]),
+        super::core::CoreStep::Assert { actor, value } => {
+            record("assert", vec![string(actor), value.as_iovalue().clone()])
+        }
+        super::core::CoreStep::Retract { actor, value } => {
+            record("retract", vec![string(actor), value.as_iovalue().clone()])
+        }
+        super::core::CoreStep::Clock { actor } => record("clock", vec![string(actor)]),
+        super::core::CoreStep::Random { actor, upper } => record("random", vec![string(actor), u64_value(*upper)]),
     }
 }
 
-pub fn event_value(event: &core::CoreEvent) -> IoValue {
+pub fn event_value(event: &super::core::CoreEvent) -> IoValue {
     match event {
-        core::CoreEvent::MessageDelivered { from, to, body } => {
+        super::core::CoreEvent::MessageDelivered { from, to, body } => {
             record("message-delivered", vec![string(from), string(to), body.as_iovalue().clone()])
         }
-        core::CoreEvent::ObserveRegistered { actor, pattern } => {
+        super::core::CoreEvent::ObserveRegistered { actor, pattern } => {
             record("observe-registered", vec![string(actor), pattern.as_iovalue().clone()])
         }
-        core::CoreEvent::AssertionObserved { observer, owner, value } => {
+        super::core::CoreEvent::AssertionObserved { observer, owner, value } => {
             record("assertion-observed", vec![string(observer), string(owner), value.as_iovalue().clone()])
         }
-        core::CoreEvent::AssertionCommitted { actor, value } => {
+        super::core::CoreEvent::AssertionCommitted { actor, value } => {
             record("assertion-committed", vec![string(actor), value.as_iovalue().clone()])
         }
-        core::CoreEvent::AssertionRetracted { actor, value } => {
+        super::core::CoreEvent::AssertionRetracted { actor, value } => {
             record("assertion-retracted", vec![string(actor), value.as_iovalue().clone()])
         }
-        core::CoreEvent::AssertionRetractionObserved { observer, owner, value } => {
+        super::core::CoreEvent::AssertionRetractionObserved { observer, owner, value } => {
             record("assertion-retraction-observed", vec![string(observer), string(owner), value.as_iovalue().clone()])
         }
-        core::CoreEvent::EffectRequest {
+        super::core::CoreEvent::EffectRequest {
             effect,
             actor,
             sequence,
@@ -620,7 +622,7 @@ pub fn event_value(event: &core::CoreEvent) -> IoValue {
             }
             record("effect-request", fields)
         }
-        core::CoreEvent::EffectResponse {
+        super::core::CoreEvent::EffectResponse {
             effect,
             actor,
             sequence,
@@ -634,15 +636,17 @@ pub fn event_value(event: &core::CoreEvent) -> IoValue {
             fields.push(u64_value(*value));
             record("effect-response", fields)
         }
-        core::CoreEvent::AdmissionDecision { request, decision } => admission_decision_event_value(request, decision),
-        core::CoreEvent::TurnRolledBack { actor, reason } => {
+        super::core::CoreEvent::AdmissionDecision { request, decision } => {
+            admission_decision_event_value(request, decision)
+        }
+        super::core::CoreEvent::TurnRolledBack { actor, reason } => {
             record("turn-rolled-back", vec![string(actor), string(reason)])
         }
     }
 }
 
 fn admission_decision_event_value(
-    request: &core::AdmissionRequest,
+    request: &super::core::AdmissionRequest,
     decision: &crate::runtime::AdmissionDecision,
 ) -> IoValue {
     record("admission-decision-v1", vec![
@@ -653,7 +657,7 @@ fn admission_decision_event_value(
 }
 
 pub fn admission_decision_event_value_with_authority(
-    request: &core::AdmissionRequest,
+    request: &super::core::AdmissionRequest,
     authority: &AdmissionAuthorityEvidence,
     decision: &crate::runtime::AdmissionDecision,
 ) -> IoValue {
@@ -673,7 +677,7 @@ fn admission_authority_value(authority: &AdmissionAuthorityEvidence) -> IoValue 
     ])
 }
 
-fn admission_request_value(request: &core::AdmissionRequest) -> IoValue {
+fn admission_request_value(request: &super::core::AdmissionRequest) -> IoValue {
     record("request", vec![
         string(&request.actor),
         string(request.action.as_str()),
@@ -687,7 +691,7 @@ fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_runtime_value(value: Option<&core::RuntimeValue>) -> IoValue {
+fn optional_runtime_value(value: Option<&super::core::RuntimeValue>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![value.as_iovalue().clone()]))
 }
 
@@ -697,7 +701,7 @@ fn optional_u64_value(value: Option<u64>) -> IoValue {
 
 pub fn actor_input_value(
     suite: &HarnessSuite,
-    step: &core::CoreStep,
+    step: &super::core::CoreStep,
     context: HostcallEvidenceContext<'_>,
 ) -> Result<IoValue> {
     let actor = step.primary_actor();
@@ -717,11 +721,11 @@ pub fn actor_input_value(
 
 pub fn hostcall_request_value(
     suite: &HarnessSuite,
-    step: &core::CoreStep,
+    step: &super::core::CoreStep,
     context: HostcallEvidenceContext<'_>,
     decision: &crate::runtime::AdmissionDecision,
 ) -> Result<IoValue> {
-    let request = core::AdmissionRequest::from_step(step);
+    let request = super::core::AdmissionRequest::from_step(step);
     let effect_refs = hostcall_effect_refs(suite, step, context, decision.is_allowed())?;
     let checks = if decision.is_allowed() {
         vec![
@@ -810,7 +814,7 @@ struct RequestRefs {
 
 fn hostcall_effect_refs(
     suite: &HarnessSuite,
-    step: &core::CoreStep,
+    step: &super::core::CoreStep,
     context: HostcallEvidenceContext<'_>,
     bind_effect_request: bool,
 ) -> Result<HostcallEffectRefs> {
@@ -832,9 +836,13 @@ fn hostcall_effect_refs(
     })
 }
 
-fn call_base(suite: &HarnessSuite, step: &core::CoreStep, context: HostcallEvidenceContext<'_>) -> Result<CallBase> {
+fn call_base(
+    suite: &HarnessSuite,
+    step: &super::core::CoreStep,
+    context: HostcallEvidenceContext<'_>,
+) -> Result<CallBase> {
     let actor = actor_decl_for_primary_actor(suite, step.primary_actor())?;
-    let operation = core::AdmissionRequest::from_step(step).action.as_str();
+    let operation = super::core::AdmissionRequest::from_step(step).action.as_str();
     let actor_ref = actor_identity_ref(&actor.id)?;
     let session_ref = hostcall_session_ref(context)?;
     let scope = crate::effects::EffectScope {
@@ -1079,7 +1087,7 @@ pub fn hostcall_decision_value(
 }
 
 pub fn actor_output_value(
-    step: &core::CoreStep,
+    step: &super::core::CoreStep,
     context: HostcallEvidenceContext<'_>,
     decision: &crate::runtime::AdmissionDecision,
     runtime_events: &[IoValue],
@@ -1238,7 +1246,7 @@ fn actor_kind_for_primary_actor<'a>(suite: &'a HarnessSuite, actor: &str) -> Res
     actor_decl_for_primary_actor(suite, actor).map(|decl| &decl.kind)
 }
 
-pub fn snapshot_value(snapshot: &core::RuntimeSnapshot) -> IoValue {
+pub fn snapshot_value(snapshot: &super::core::RuntimeSnapshot) -> IoValue {
     record("runtime-state-v1", vec![
         u64_value(snapshot.logical_time),
         u64_value(snapshot.rng_state),
@@ -2105,7 +2113,7 @@ pub fn validate_admission_evidence(
         }
 
         let recorded = parse_admission_decision_event(&observation.events[0])?;
-        let expected_request = core::AdmissionRequest::from_step(step);
+        let expected_request = super::core::AdmissionRequest::from_step(step);
         if recorded.request != expected_request {
             return Err(MoltenError::invalid_harness(format!("admission request mismatch at observation {position}")));
         }
@@ -2190,25 +2198,29 @@ pub fn validate_runtime_predicate_evidence(suite: &HarnessSuite, observations: &
 }
 
 fn expected_runtime_predicates(
-    step: &core::CoreStep,
+    step: &super::core::CoreStep,
     decision: &crate::runtime::AdmissionDecision,
 ) -> Vec<&'static str> {
     let mut expected = Vec::with_capacity(2);
     if !decision.is_allowed()
         || matches!(
             step,
-            core::CoreStep::Send { .. }
-                | core::CoreStep::Observe { .. }
-                | core::CoreStep::Assert { .. }
-                | core::CoreStep::Retract { .. }
+            super::core::CoreStep::Send { .. }
+                | super::core::CoreStep::Observe { .. }
+                | super::core::CoreStep::Assert { .. }
+                | super::core::CoreStep::Retract { .. }
         )
     {
         expected.push(TURN_COMMIT_ROLLBACK_PREDICATE);
     }
     match step {
-        core::CoreStep::Observe { .. } => expected.push(OBSERVE_DELIVERY_PREDICATE),
-        core::CoreStep::Assert { .. } | core::CoreStep::Retract { .. } => expected.push(ASSERTION_VISIBILITY_PREDICATE),
-        core::CoreStep::Send { .. } | core::CoreStep::Clock { .. } | core::CoreStep::Random { .. } => {}
+        super::core::CoreStep::Observe { .. } => expected.push(OBSERVE_DELIVERY_PREDICATE),
+        super::core::CoreStep::Assert { .. } | super::core::CoreStep::Retract { .. } => {
+            expected.push(ASSERTION_VISIBILITY_PREDICATE)
+        }
+        super::core::CoreStep::Send { .. }
+        | super::core::CoreStep::Clock { .. }
+        | super::core::CoreStep::Random { .. } => {}
     }
     expected
 }
@@ -2279,7 +2291,7 @@ struct BoundaryEvidence<'a> {
 
 struct ExpectedBoundary<'a> {
     suite: &'a HarnessSuite,
-    step: &'a core::CoreStep,
+    step: &'a super::core::CoreStep,
     position: usize,
     observation: &'a HarnessObservation,
     context: HostcallEvidenceContext<'a>,
@@ -2289,7 +2301,7 @@ struct ExpectedBoundary<'a> {
 
 struct RuntimeBoundary<'a> {
     suite: &'a HarnessSuite,
-    step: &'a core::CoreStep,
+    step: &'a super::core::CoreStep,
     position: usize,
     observation: &'a HarnessObservation,
     decision: &'a crate::runtime::AdmissionDecision,
@@ -2325,7 +2337,7 @@ pub fn validate_hostcall_evidence(
 fn validate_boundary_observation(
     evidence: BoundaryEvidence<'_>,
     position: usize,
-    step: &core::CoreStep,
+    step: &super::core::CoreStep,
     observation: &HarnessObservation,
 ) -> Result<()> {
     let step_ref = validated_step_ref(position, step, observation)?;
@@ -2368,7 +2380,11 @@ fn validate_boundary_observation(
     require_hostcall_event(position, "actor-output", actor_output_event, &expected_output)
 }
 
-fn validated_step_ref(position: usize, step: &core::CoreStep, observation: &HarnessObservation) -> Result<String> {
+fn validated_step_ref(
+    position: usize,
+    step: &super::core::CoreStep,
+    observation: &HarnessObservation,
+) -> Result<String> {
     let step_ref = canonical_hash(&step_value(step))?;
     if observation.step_ref != step_ref {
         return Err(MoltenError::invalid_harness(format!("hostcall step ref mismatch at observation {position}")));
@@ -2434,7 +2450,7 @@ fn validate_runtime_boundary(input: &RuntimeBoundary<'_>) -> Result<()> {
 
 struct WasmExecutionEvidenceInput<'a> {
     suite: &'a HarnessSuite,
-    step: &'a core::CoreStep,
+    step: &'a super::core::CoreStep,
     position: usize,
     decision: &'a crate::runtime::AdmissionDecision,
     actor_input: &'a IoValue,
@@ -2443,7 +2459,7 @@ struct WasmExecutionEvidenceInput<'a> {
 
 fn validate_steel_execution_evidence(
     suite: &HarnessSuite,
-    step: &core::CoreStep,
+    step: &super::core::CoreStep,
     position: usize,
     decision: &crate::runtime::AdmissionDecision,
     runtime_events: &[IoValue],
@@ -2471,7 +2487,7 @@ fn validate_steel_execution_evidence(
 
 fn validate_steel_execution_receipt(
     actor: &ActorDecl,
-    step: &core::CoreStep,
+    step: &super::core::CoreStep,
     position: usize,
     value: &IoValue,
 ) -> Result<()> {
@@ -2519,7 +2535,7 @@ fn validate_steel_execution_receipt(
             actor.id
         )));
     }
-    let operation = core::AdmissionRequest::from_step(step).action.as_str().to_string();
+    let operation = super::core::AdmissionRequest::from_step(step).action.as_str().to_string();
     let receipt_operation = required_record_string(&receipt[4], "operation", "Steel execution operation")?;
     if receipt_operation != operation {
         return Err(MoltenError::invalid_harness(format!(
@@ -2615,7 +2631,7 @@ fn validate_wasm_execution_evidence(input: &WasmExecutionEvidenceInput<'_>) -> R
 
 fn validate_wasm_execution_receipt(
     actor: &ActorDecl,
-    step: &core::CoreStep,
+    step: &super::core::CoreStep,
     position: usize,
     actor_input: &IoValue,
     value: &IoValue,
@@ -2658,7 +2674,7 @@ fn validate_wasm_execution_receipt(
             actor.id
         )));
     }
-    let operation = core::AdmissionRequest::from_step(step).action.as_str().to_string();
+    let operation = super::core::AdmissionRequest::from_step(step).action.as_str().to_string();
     let expected_export = wasm_executor_export_name(&operation);
     let export = required_record_string(&receipt[3], "export", "Wasm execution export")?;
     if export != expected_export {
@@ -2817,7 +2833,7 @@ pub fn boundary_coverage_value(report_value: &IoValue) -> Result<IoValue> {
     push_boundary_coverage(
         &mut coverage,
         "envelope-routes",
-        suite.steps.iter().any(|step| matches!(step, core::CoreStep::Send { .. })),
+        suite.steps.iter().any(|step| matches!(step, super::core::CoreStep::Send { .. })),
     );
     push_boundary_coverage(
         &mut coverage,
@@ -2825,7 +2841,9 @@ pub fn boundary_coverage_value(report_value: &IoValue) -> Result<IoValue> {
         suite.steps.iter().any(|step| {
             matches!(
                 step,
-                core::CoreStep::Observe { .. } | core::CoreStep::Assert { .. } | core::CoreStep::Retract { .. }
+                super::core::CoreStep::Observe { .. }
+                    | super::core::CoreStep::Assert { .. }
+                    | super::core::CoreStep::Retract { .. }
             )
         }),
     );
@@ -4700,7 +4718,7 @@ fn hostcalls_required_by_steps(suite: &HarnessSuite, actor_id: &str) -> Vec<Stri
     let mut hostcalls = OrderedSet::new();
     for step in &suite.steps {
         if step.primary_actor() == actor_id {
-            hostcalls.insert(core::AdmissionRequest::from_step(step).action.as_str().to_string());
+            hostcalls.insert(super::core::AdmissionRequest::from_step(step).action.as_str().to_string());
         }
     }
     hostcalls.into_iter().collect()
@@ -5253,10 +5271,10 @@ fn is_turn_journal(value: &IoValue) -> bool {
     value.collect_simple_record("turn-journal-v1", None).is_some()
 }
 
-fn parse_admission_request(value: &Value<IoValue>) -> Result<core::AdmissionRequest> {
+fn parse_admission_request(value: &Value<IoValue>) -> Result<super::core::AdmissionRequest> {
     let request_value = value_to_iovalue(value);
     let request = simple_record(&request_value, "request", 5)?;
-    Ok(core::AdmissionRequest {
+    Ok(super::core::AdmissionRequest {
         actor: required_string(&request[0], "admission request actor")?,
         action: parse_admission_action(&required_string(&request[1], "admission request action")?)?,
         target: optional_request_string(&request[2], "admission request target")?,
@@ -5692,7 +5710,7 @@ fn nickel_optional_string(value: Option<&str>) -> String {
     value.map_or_else(|| "null".to_string(), nickel_string)
 }
 
-fn nickel_optional_runtime_value(value: Option<&core::RuntimeValue>) -> Result<String> {
+fn nickel_optional_runtime_value(value: Option<&super::core::RuntimeValue>) -> Result<String> {
     match value {
         Some(value) => {
             let text = to_text(value.as_iovalue())?;
@@ -6100,7 +6118,7 @@ fn parse_ucan_proofset_evidence(value: &Value<IoValue>) -> Result<UcanProofsetEv
 
 pub fn admission_authority_evidence(
     capabilities: &crate::runtime::CapabilityContext,
-    request: &core::AdmissionRequest,
+    request: &super::core::AdmissionRequest,
 ) -> Result<AdmissionAuthorityEvidence> {
     let authorization = capabilities.authorize(request);
     let grant_ref = authorization
@@ -6211,7 +6229,7 @@ fn optional_policy_action(value: Option<&crate::runtime::AdmissionAction>) -> Io
     value.map_or_else(|| bool_value(false), |action| string(action.as_str()))
 }
 
-fn optional_policy_runtime_value(value: Option<&core::RuntimeValue>) -> IoValue {
+fn optional_policy_runtime_value(value: Option<&super::core::RuntimeValue>) -> IoValue {
     value.map_or_else(|| bool_value(false), |value| value.as_iovalue().clone())
 }
 
@@ -6491,7 +6509,7 @@ fn normalize_allowed_hostcalls(values: Vec<String>) -> Result<Vec<String>> {
     Ok(seen.into_iter().collect())
 }
 
-pub fn actor_ids_for_step(step: &core::CoreStep) -> Vec<&str> {
+pub fn actor_ids_for_step(step: &super::core::CoreStep) -> Vec<&str> {
     step.actor_ids()
 }
 
@@ -6640,7 +6658,7 @@ fn require_declared_actor(
     )))
 }
 
-fn infer_actor_registry(steps: &[core::CoreStep]) -> Vec<ActorDecl> {
+fn infer_actor_registry(steps: &[super::core::CoreStep]) -> Vec<ActorDecl> {
     let mut ids = OrderedSet::new();
     for step in steps {
         for actor in actor_ids_for_step(step) {
@@ -8584,39 +8602,39 @@ fn parse_observation(value: &Value<IoValue>) -> Result<HarnessObservation> {
     })
 }
 
-fn parse_step(value: &Value<IoValue>) -> Result<core::CoreStep> {
+fn parse_step(value: &Value<IoValue>) -> Result<super::core::CoreStep> {
     if let Some(record) = value.collect_simple_record("send", Some(3)) {
-        return Ok(core::CoreStep::Send {
+        return Ok(super::core::CoreStep::Send {
             from: required_string(&record[0], "send from")?,
             to: required_string(&record[1], "send to")?,
             body: required_runtime_value(&record[2], "send body")?,
         });
     }
     if let Some(record) = value.collect_simple_record("observe", Some(2)) {
-        return Ok(core::CoreStep::Observe {
+        return Ok(super::core::CoreStep::Observe {
             actor: required_string(&record[0], "observe actor")?,
             pattern: required_runtime_value(&record[1], "observe pattern")?,
         });
     }
     if let Some(record) = value.collect_simple_record("assert", Some(2)) {
-        return Ok(core::CoreStep::Assert {
+        return Ok(super::core::CoreStep::Assert {
             actor: required_string(&record[0], "assert actor")?,
             value: required_runtime_value(&record[1], "assert value")?,
         });
     }
     if let Some(record) = value.collect_simple_record("retract", Some(2)) {
-        return Ok(core::CoreStep::Retract {
+        return Ok(super::core::CoreStep::Retract {
             actor: required_string(&record[0], "retract actor")?,
             value: required_runtime_value(&record[1], "retract value")?,
         });
     }
     if let Some(record) = value.collect_simple_record("clock", Some(1)) {
-        return Ok(core::CoreStep::Clock {
+        return Ok(super::core::CoreStep::Clock {
             actor: required_string(&record[0], "clock actor")?,
         });
     }
     if let Some(record) = value.collect_simple_record("random", Some(2)) {
-        return Ok(core::CoreStep::Random {
+        return Ok(super::core::CoreStep::Random {
             actor: required_string(&record[0], "random actor")?,
             upper: required_u64(&record[1], "random upper bound")?,
         });
@@ -8629,10 +8647,10 @@ where F: FnMut(&T) -> IoValue {
     record(label, vec![sequence(values.iter().map(&mut render).collect())])
 }
 
-fn effect_name(effect: &core::CoreEffect) -> &'static str {
+fn effect_name(effect: &super::core::CoreEffect) -> &'static str {
     match effect {
-        core::CoreEffect::Clock => "clock",
-        core::CoreEffect::Random => "random",
+        super::core::CoreEffect::Clock => "clock",
+        super::core::CoreEffect::Random => "random",
     }
 }
 
@@ -8714,15 +8732,15 @@ fn optional_request_string(value: &Value<IoValue>, field: &str) -> Result<Option
     required_string(value, field).map(Some)
 }
 
-fn optional_request_runtime_value(value: &Value<IoValue>, _field: &str) -> Result<Option<core::RuntimeValue>> {
+fn optional_request_runtime_value(value: &Value<IoValue>, _field: &str) -> Result<Option<super::core::RuntimeValue>> {
     if value.as_boolean() == Some(false) || value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
     if let Some(some) = value.collect_simple_record("some", Some(1)) {
-        return core::RuntimeValue::new(value_to_iovalue(&some[0])).map(Some);
+        return super::core::RuntimeValue::new(value_to_iovalue(&some[0])).map(Some);
     }
     // Compatibility with early reports that encoded present optional values directly.
-    core::RuntimeValue::new(value_to_iovalue(value)).map(Some)
+    super::core::RuntimeValue::new(value_to_iovalue(value)).map(Some)
 }
 
 fn optional_request_u64(value: &Value<IoValue>, field: &str) -> Result<Option<u64>> {
@@ -8744,11 +8762,11 @@ fn optional_action(value: &Value<IoValue>, field: &str) -> Result<Option<crate::
     }
 }
 
-fn optional_runtime_match_value(value: &Value<IoValue>) -> Result<Option<core::RuntimeValue>> {
+fn optional_runtime_match_value(value: &Value<IoValue>) -> Result<Option<super::core::RuntimeValue>> {
     if value.as_boolean() == Some(false) {
         Ok(None)
     } else {
-        core::RuntimeValue::new(value_to_iovalue(value)).map(Some)
+        super::core::RuntimeValue::new(value_to_iovalue(value)).map(Some)
     }
 }
 
@@ -8760,8 +8778,8 @@ fn required_hash(value: &Value<IoValue>, field: &str) -> Result<String> {
     Ok(hash)
 }
 
-fn required_runtime_value(value: &Value<IoValue>, _field: &str) -> Result<core::RuntimeValue> {
-    core::RuntimeValue::new(value_to_iovalue(value))
+fn required_runtime_value(value: &Value<IoValue>, _field: &str) -> Result<super::core::RuntimeValue> {
+    super::core::RuntimeValue::new(value_to_iovalue(value))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
