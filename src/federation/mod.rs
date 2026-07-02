@@ -1,15 +1,72 @@
-use std::collections::BTreeSet;
-use std::path::Path;
+type BTreeSet<T> = std::collections::BTreeSet<T>;
+type IOValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Path = std::path::Path;
+type Result<T> = crate::error::Result<T>;
+type RuntimeAssertion = crate::runtime::RuntimeAssertion;
+type RuntimeValue = crate::runtime::RuntimeValue;
+type Value<T> = preserves::Value<T>;
 
-use preserves::IOValue;
-use preserves::Value;
+mod chunk_store {
+    pub(super) fn fetch_iroh_blobs(
+        iroh_root: &super::Path,
+        dest_root: &super::Path,
+        ticket: &str,
+        expected_manifest_ref: Option<&str>,
+        peer: &str,
+    ) -> super::Result<crate::chunk_store::ChunkStoreIrohFetch> {
+        crate::chunk_store::fetch_iroh_blobs(iroh_root, dest_root, ticket, expected_manifest_ref, peer)
+    }
 
-use crate::chunk_store;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::ledger;
-use crate::runtime::RuntimeAssertion;
-use crate::runtime::RuntimeValue;
+    #[cfg(test)]
+    pub(super) fn publish_iroh_blobs(
+        store_root: &super::Path,
+        iroh_root: &super::Path,
+        manifest_ref: &str,
+        node: &str,
+    ) -> super::Result<crate::chunk_store::ChunkStoreIrohPublish> {
+        crate::chunk_store::publish_iroh_blobs(store_root, iroh_root, manifest_ref, node)
+    }
+
+    #[cfg(test)]
+    pub(super) fn put_bytes(
+        root: &super::Path,
+        object_kind: &str,
+        bytes: &[u8],
+        chunk_size: u64,
+    ) -> super::Result<crate::chunk_store::ChunkStorePut> {
+        crate::chunk_store::put_bytes(root, object_kind, bytes, chunk_size)
+    }
+
+    #[cfg(test)]
+    pub(super) fn read_object(
+        root: &super::Path,
+        manifest_ref: &str,
+    ) -> super::Result<crate::chunk_store::ChunkStoreRead> {
+        crate::chunk_store::read_object(root, manifest_ref)
+    }
+}
+
+mod ledger {
+    pub(super) fn artifact_kind(value: &super::IOValue) -> &'static str {
+        crate::ledger::artifact_kind(value)
+    }
+
+    pub(super) fn import_artifact(
+        root: &super::Path,
+        artifact: &super::IOValue,
+    ) -> super::Result<crate::ledger::LedgerImport> {
+        crate::ledger::import_artifact(root, artifact)
+    }
+
+    pub(super) fn list_artifacts(root: &super::Path) -> super::Result<Vec<crate::ledger::LedgerEntry>> {
+        crate::ledger::list_artifacts(root)
+    }
+
+    pub(super) fn read_artifact(root: &super::Path, artifact_ref: &str) -> super::Result<super::IOValue> {
+        crate::ledger::read_artifact(root, artifact_ref)
+    }
+}
 
 const FEDERATION_ANNOUNCEMENT_SCHEMA: &str = crate::preserves_rail::FEDERATION_ANNOUNCEMENT_SCHEMA;
 const FEDERATION_INVENTORY_SCHEMA: &str = crate::preserves_rail::FEDERATION_INVENTORY_SCHEMA;
@@ -1021,11 +1078,18 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
     use super::*;
+
+    type AtomicCounter = std::sync::atomic::AtomicU64;
+    type AtomicOrdering = std::sync::atomic::Ordering;
+
+    fn create_dir_all(path: &std::path::Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    fn remove_dir_all(path: &std::path::Path) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
 
     #[test]
     fn signed_announcement_binds_resource_and_rejects_wrong_key() {
@@ -1330,13 +1394,13 @@ mod tests {
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        static TEMP_DIR_COUNTER: AtomicCounter = AtomicCounter::new(0);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }
