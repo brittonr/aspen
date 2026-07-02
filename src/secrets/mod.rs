@@ -1,15 +1,13 @@
-use std::borrow::Cow;
-use std::collections::BTreeSet;
-use std::path::PathBuf;
-
-use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
-
-use crate::bounded::VecSink;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::retention;
+
+type BtreeSet<T> = std::collections::BTreeSet<T>;
+type Cow<'a, B> = std::borrow::Cow<'a, B>;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type PathBuf = std::path::PathBuf;
+type Record<T> = preserves::Record<T>;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
 const CONFIDENTIAL_LABEL_SCHEMA: &str = crate::preserves_rail::CONFIDENTIAL_LABEL_SCHEMA;
 const ENCRYPTED_REF_SCHEMA: &str = crate::preserves_rail::ENCRYPTED_REF_SCHEMA;
@@ -23,11 +21,11 @@ const SECRET_REDACTION_TRANSFORM_RECEIPT_SCHEMA: &str =
 const SECRET_REF_SCHEMA: &str = crate::preserves_rail::SECRET_REF_SCHEMA;
 const SECRET_REVEAL_RECEIPT_SCHEMA: &str = crate::preserves_rail::SECRET_REVEAL_RECEIPT_SCHEMA;
 
-fn bool_value(value: bool) -> IOValue {
+fn bool_value(value: bool) -> IoValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
@@ -36,23 +34,23 @@ fn content_ref_from_bytes(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
-fn parse_text(source: &str) -> Result<IOValue> {
+fn parse_text(source: &str) -> Result<IoValue> {
     crate::preserves_rail::parse_text(source)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn to_text(value: &IOValue) -> Result<String> {
+fn to_text(value: &IoValue) -> Result<String> {
     crate::preserves_rail::to_text(value)
 }
 
@@ -60,7 +58,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -98,7 +96,7 @@ pub struct ConfidentialLabel {
     pub classification: String,
     pub schema_ref: String,
     pub policy_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,7 +124,7 @@ pub struct SecretRef {
     pub expiry_ref: Option<String>,
     pub revocation_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,7 +146,7 @@ pub struct EncryptedRef {
     pub schema_ref: String,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -170,7 +168,7 @@ pub struct RedactionMarker {
     pub path_ref: String,
     pub policy_refs: Vec<String>,
     pub receipt_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -199,7 +197,7 @@ pub struct RevealReceipt {
     pub plaintext_ref: Option<String>,
     pub commitment_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,7 +227,7 @@ pub struct DecryptReceipt {
     pub commitment_ref: String,
     pub reveal_receipt_ref: Option<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -252,7 +250,7 @@ pub struct RedactionTransformReceipt {
     pub marker_refs: Vec<String>,
     pub is_gate_preserving: bool,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,7 +269,7 @@ pub struct CommitmentReplayReceipt {
     pub actual_commitment_ref: String,
     pub reveal_receipt_ref: Option<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -280,7 +278,7 @@ pub struct SecretCleanupInput {
     pub revocation_ref: String,
     pub tombstone_ref: String,
     pub retention_refs: Vec<String>,
-    pub retention_receipts: Vec<IOValue>,
+    pub retention_receipts: Vec<IoValue>,
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
 }
@@ -294,7 +292,7 @@ pub struct SecretCleanupReceipt {
     pub tombstone_ref: String,
     pub retention_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -313,19 +311,19 @@ pub struct PrivateBundleProfile {
     pub reveal_receipt_refs: Vec<String>,
     pub transform_receipt_ref: String,
     pub is_gate_preserving: bool,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RedactedValue {
-    pub value: IOValue,
+    pub value: IoValue,
     pub marker: Option<RedactionMarker>,
     pub transform_receipt: Option<RedactionTransformReceipt>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretsFixtureRun {
-    pub value: IOValue,
+    pub value: IoValue,
     pub report_ref: String,
     pub secret: SecretRef,
     pub encrypted: EncryptedRef,
@@ -338,10 +336,10 @@ pub struct SecretsFixtureRun {
     pub replay: CommitmentReplayReceipt,
     pub cleanup: SecretCleanupReceipt,
     pub private_bundle: PrivateBundleProfile,
-    pub evidence_values: Vec<IOValue>,
+    pub evidence_values: Vec<IoValue>,
 }
 
-pub fn confidential_label_value(input: &ConfidentialLabelInput) -> Result<IOValue> {
+pub fn confidential_label_value(input: &ConfidentialLabelInput) -> Result<IoValue> {
     validate_non_empty(&input.surface, "confidential label surface")?;
     validate_non_empty(&input.field_path, "confidential label field path")?;
     validate_classification(&input.classification)?;
@@ -362,7 +360,7 @@ pub fn confidential_label_value(input: &ConfidentialLabelInput) -> Result<IOValu
     ]))
 }
 
-pub fn parse_confidential_label(value: &IOValue) -> Result<ConfidentialLabel> {
+pub fn parse_confidential_label(value: &IoValue) -> Result<ConfidentialLabel> {
     let fields = simple_record(value, "confidential-label-v1", 7)?;
     require_schema(&fields[0], CONFIDENTIAL_LABEL_SCHEMA, "confidential label")?;
     let surface = record_string(&fields[1], "surface", "confidential label surface")?;
@@ -383,7 +381,7 @@ pub fn parse_confidential_label(value: &IOValue) -> Result<ConfidentialLabel> {
     })
 }
 
-pub fn secret_ref_value(input: &SecretRefInput) -> Result<IOValue> {
+pub fn secret_ref_value(input: &SecretRefInput) -> Result<IoValue> {
     validate_non_empty(&input.secret_id, "secret id")?;
     validate_ref(&input.scope_ref, "secret scope ref")?;
     validate_allowed_uses(&input.allowed_uses)?;
@@ -413,7 +411,7 @@ pub fn secret_ref_value(input: &SecretRefInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_secret_ref(value: &IOValue) -> Result<SecretRef> {
+pub fn parse_secret_ref(value: &IoValue) -> Result<SecretRef> {
     let fields = simple_record(value, "secret-ref-v1", 11)?;
     require_schema(&fields[0], SECRET_REF_SCHEMA, "secret ref")?;
     let secret_id = record_string(&fields[1], "secret-id", "secret id")?;
@@ -446,7 +444,7 @@ pub fn parse_secret_ref(value: &IOValue) -> Result<SecretRef> {
     })
 }
 
-pub fn encrypted_ref_value(input: &EncryptedRefInput) -> Result<IOValue> {
+pub fn encrypted_ref_value(input: &EncryptedRefInput) -> Result<IoValue> {
     validate_ref(&input.ciphertext_ref, "encrypted ref ciphertext")?;
     validate_ref(&input.commitment_ref, "encrypted ref commitment")?;
     validate_ref(&input.encryption_ref, "encrypted ref encryption profile")?;
@@ -469,7 +467,7 @@ pub fn encrypted_ref_value(input: &EncryptedRefInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_encrypted_ref(value: &IOValue) -> Result<EncryptedRef> {
+pub fn parse_encrypted_ref(value: &IoValue) -> Result<EncryptedRef> {
     let fields = simple_record(value, "encrypted-ref-v1", 8)?;
     require_schema(&fields[0], ENCRYPTED_REF_SCHEMA, "encrypted ref")?;
     let ciphertext_ref = record_ref(&fields[1], "ciphertext", "encrypted ref ciphertext")?;
@@ -491,7 +489,7 @@ pub fn parse_encrypted_ref(value: &IOValue) -> Result<EncryptedRef> {
     })
 }
 
-pub fn redaction_marker_value(input: &RedactionMarkerInput) -> Result<IOValue> {
+pub fn redaction_marker_value(input: &RedactionMarkerInput) -> Result<IoValue> {
     validate_redaction_reason(&input.reason)?;
     validate_ref(&input.commitment_ref, "redaction marker commitment")?;
     validate_ref(&input.schema_ref, "redaction marker schema")?;
@@ -514,7 +512,7 @@ pub fn redaction_marker_value(input: &RedactionMarkerInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_redaction_marker(value: &IOValue) -> Result<RedactionMarker> {
+pub fn parse_redaction_marker(value: &IoValue) -> Result<RedactionMarker> {
     let fields = simple_record(value, "redaction-marker-v1", 8)?;
     require_schema(&fields[0], SECRET_REDACTION_MARKER_SCHEMA, "redaction marker")?;
     let reason = record_string(&fields[1], "reason", "redaction reason")?;
@@ -537,7 +535,7 @@ pub fn parse_redaction_marker(value: &IOValue) -> Result<RedactionMarker> {
     })
 }
 
-pub fn reveal_receipt_value(input: &RevealReceiptInput) -> Result<IOValue> {
+pub fn reveal_receipt_value(input: &RevealReceiptInput) -> Result<IoValue> {
     validate_ref(&input.secret_ref, "reveal secret ref")?;
     validate_optional_ref(input.encrypted_ref.as_deref(), "reveal encrypted ref")?;
     validate_ref(&input.requester_ref, "reveal requester ref")?;
@@ -581,7 +579,7 @@ pub fn reveal_receipt_value(input: &RevealReceiptInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_reveal_receipt(value: &IOValue) -> Result<RevealReceipt> {
+pub fn parse_reveal_receipt(value: &IoValue) -> Result<RevealReceipt> {
     let fields =
         simple_record(value, "reveal-receipt-v1", 10).or_else(|_| simple_record(value, "reveal-receipt-v1", 9))?;
     let arity = fields.fields_iter().count();
@@ -644,7 +642,7 @@ pub fn parse_reveal_receipt(value: &IOValue) -> Result<RevealReceipt> {
     })
 }
 
-pub fn decrypt_receipt_value(input: &DecryptReceiptInput) -> Result<IOValue> {
+pub fn decrypt_receipt_value(input: &DecryptReceiptInput) -> Result<IoValue> {
     validate_ref(&input.encrypted_ref, "decrypt encrypted ref")?;
     validate_ref(&input.requester_ref, "decrypt requester ref")?;
     validate_purpose(&input.purpose)?;
@@ -702,7 +700,7 @@ pub fn decrypt_receipt_value(input: &DecryptReceiptInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_decrypt_receipt(value: &IOValue) -> Result<DecryptReceipt> {
+pub fn parse_decrypt_receipt(value: &IoValue) -> Result<DecryptReceipt> {
     let fields = simple_record(value, "decrypt-receipt-v1", 10)?;
     require_schema(&fields[0], SECRET_DECRYPT_RECEIPT_SCHEMA, "decrypt receipt")?;
     let decision = record_decision(&fields[1])?;
@@ -744,7 +742,7 @@ pub fn parse_decrypt_receipt(value: &IOValue) -> Result<DecryptReceipt> {
     })
 }
 
-pub fn redaction_transform_receipt_value(input: &RedactionTransformInput) -> Result<IOValue> {
+pub fn redaction_transform_receipt_value(input: &RedactionTransformInput) -> Result<IoValue> {
     validate_ref(&input.source_ref, "redaction source ref")?;
     validate_ref(&input.output_ref, "redaction output ref")?;
     validate_refs(&input.policy_refs, "redaction policy ref")?;
@@ -766,7 +764,7 @@ pub fn redaction_transform_receipt_value(input: &RedactionTransformInput) -> Res
     ]))
 }
 
-pub fn parse_redaction_transform_receipt(value: &IOValue) -> Result<RedactionTransformReceipt> {
+pub fn parse_redaction_transform_receipt(value: &IoValue) -> Result<RedactionTransformReceipt> {
     let fields = simple_record(value, "redaction-transform-receipt-v1", 10)?;
     require_schema(&fields[0], SECRET_REDACTION_TRANSFORM_RECEIPT_SCHEMA, "redaction transform")?;
     let decision = record_decision(&fields[1])?;
@@ -804,7 +802,7 @@ pub fn parse_redaction_transform_receipt(value: &IOValue) -> Result<RedactionTra
     })
 }
 
-pub fn commitment_replay_receipt_value(input: &CommitmentReplayInput) -> Result<IOValue> {
+pub fn commitment_replay_receipt_value(input: &CommitmentReplayInput) -> Result<IoValue> {
     validate_ref(&input.expected_commitment_ref, "expected commitment")?;
     validate_ref(&input.actual_commitment_ref, "actual commitment")?;
     validate_optional_ref(input.reveal_receipt_ref.as_deref(), "commitment replay reveal receipt")?;
@@ -836,7 +834,7 @@ pub fn commitment_replay_receipt_value(input: &CommitmentReplayInput) -> Result<
     ]))
 }
 
-pub fn parse_commitment_replay_receipt(value: &IOValue) -> Result<CommitmentReplayReceipt> {
+pub fn parse_commitment_replay_receipt(value: &IoValue) -> Result<CommitmentReplayReceipt> {
     let fields = simple_record(value, "commitment-replay-receipt-v1", 8)?;
     require_schema(&fields[0], SECRET_COMMITMENT_REPLAY_RECEIPT_SCHEMA, "commitment replay")?;
     let decision = record_decision(&fields[1])?;
@@ -863,7 +861,7 @@ pub fn parse_commitment_replay_receipt(value: &IOValue) -> Result<CommitmentRepl
     })
 }
 
-pub fn secret_cleanup_receipt_value(input: &SecretCleanupInput) -> Result<IOValue> {
+pub fn secret_cleanup_receipt_value(input: &SecretCleanupInput) -> Result<IoValue> {
     validate_ref(&input.secret_ref, "cleanup secret ref")?;
     validate_ref(&input.revocation_ref, "cleanup revocation ref")?;
     validate_ref(&input.tombstone_ref, "cleanup tombstone ref")?;
@@ -901,8 +899,8 @@ pub fn secret_cleanup_receipt_value(input: &SecretCleanupInput) -> Result<IOValu
 
 fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    let expected_refs = input.retention_refs.iter().cloned().collect::<BTreeSet<_>>();
-    let mut actual_refs = BTreeSet::new();
+    let expected_refs = input.retention_refs.iter().cloned().collect::<BtreeSet<_>>();
+    let mut actual_refs = BtreeSet::new();
     let mut has_matching_pass = false;
     let mut has_matching_tombstone = false;
     for receipt_value in &input.retention_receipts {
@@ -961,7 +959,7 @@ fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<Strin
     Ok(diagnostics)
 }
 
-pub fn parse_secret_cleanup_receipt(value: &IOValue) -> Result<SecretCleanupReceipt> {
+pub fn parse_secret_cleanup_receipt(value: &IoValue) -> Result<SecretCleanupReceipt> {
     let fields = simple_record(value, "secret-cleanup-receipt-v1", 8)?;
     require_schema(&fields[0], SECRET_CLEANUP_RECEIPT_SCHEMA, "secret cleanup")?;
     let decision = record_decision(&fields[1])?;
@@ -997,7 +995,7 @@ pub fn parse_secret_cleanup_receipt(value: &IOValue) -> Result<SecretCleanupRece
     })
 }
 
-pub fn private_bundle_profile_value(input: &PrivateBundleProfileInput) -> Result<IOValue> {
+pub fn private_bundle_profile_value(input: &PrivateBundleProfileInput) -> Result<IoValue> {
     validate_ref(&input.profile_ref, "private bundle profile ref")?;
     validate_refs(&input.encrypted_refs, "private bundle encrypted ref")?;
     validate_refs(&input.reveal_receipt_refs, "private bundle reveal receipt")?;
@@ -1028,7 +1026,7 @@ pub fn private_bundle_profile_value(input: &PrivateBundleProfileInput) -> Result
     ]))
 }
 
-pub fn parse_private_bundle_profile(value: &IOValue) -> Result<PrivateBundleProfile> {
+pub fn parse_private_bundle_profile(value: &IoValue) -> Result<PrivateBundleProfile> {
     let fields = simple_record(value, "private-bundle-profile-v1", 7)?;
     require_schema(&fields[0], PRIVATE_BUNDLE_PROFILE_SCHEMA, "private bundle profile")?;
     let profile_ref = record_ref(&fields[1], "profile", "private bundle profile ref")?;
@@ -1061,16 +1059,16 @@ pub fn parse_private_bundle_profile(value: &IOValue) -> Result<PrivateBundleProf
     })
 }
 
-pub fn contains_secret_marker(value: &IOValue) -> Result<bool> {
+pub fn contains_secret_marker(value: &IoValue) -> Result<bool> {
     let text = to_text(value)?;
     Ok(SENSITIVE_RECORD_LABELS.iter().any(|label| text.contains(&format!("<{label}"))))
 }
 
-pub fn redacted_value(value: &IOValue, redaction_profile_ref: Option<&str>) -> Result<IOValue> {
+pub fn redacted_value(value: &IoValue, redaction_profile_ref: Option<&str>) -> Result<IoValue> {
     Ok(redacted_view(value, redaction_profile_ref)?.value)
 }
 
-pub fn redacted_view(value: &IOValue, redaction_profile_ref: Option<&str>) -> Result<RedactedValue> {
+pub fn redacted_view(value: &IoValue, redaction_profile_ref: Option<&str>) -> Result<RedactedValue> {
     if !contains_secret_marker(value)? {
         return Ok(RedactedValue {
             value: value.clone(),
@@ -1112,11 +1110,11 @@ pub fn redacted_view(value: &IOValue, redaction_profile_ref: Option<&str>) -> Re
     })
 }
 
-pub fn redacted_text(value: &IOValue, redaction_profile_ref: Option<&str>) -> Result<String> {
+pub fn redacted_text(value: &IoValue, redaction_profile_ref: Option<&str>) -> Result<String> {
     to_text(&redacted_value(value, redaction_profile_ref)?)
 }
 
-pub fn secrets_summary(value: &IOValue) -> Result<String> {
+pub fn secrets_summary(value: &IoValue) -> Result<String> {
     let kind = crate::ledger::artifact_kind(value);
     if let Some(line) = summary_core(kind, value)? {
         return Ok(line);
@@ -1130,7 +1128,7 @@ pub fn secrets_summary(value: &IOValue) -> Result<String> {
     Err(MoltenError::invalid_harness("not a secrets artifact"))
 }
 
-fn summary_core(kind: &str, value: &IOValue) -> Result<Option<String>> {
+fn summary_core(kind: &str, value: &IoValue) -> Result<Option<String>> {
     match kind {
         "secret-ref" => {
             let secret = parse_secret_ref(value)?;
@@ -1164,7 +1162,7 @@ fn summary_core(kind: &str, value: &IOValue) -> Result<Option<String>> {
     }
 }
 
-fn summary_receipts(kind: &str, value: &IOValue) -> Result<Option<String>> {
+fn summary_receipts(kind: &str, value: &IoValue) -> Result<Option<String>> {
     match kind {
         "reveal-receipt" => {
             let receipt = parse_reveal_receipt(value)?;
@@ -1199,7 +1197,7 @@ fn summary_receipts(kind: &str, value: &IOValue) -> Result<Option<String>> {
     }
 }
 
-fn summary_profiles(kind: &str, value: &IOValue) -> Result<Option<String>> {
+fn summary_profiles(kind: &str, value: &IoValue) -> Result<Option<String>> {
     match kind {
         "private-bundle-profile" => {
             let profile = parse_private_bundle_profile(value)?;
@@ -1515,7 +1513,7 @@ fn fixture_tail(core: &FixtureCore, receipts: &FixtureReceipts) -> Result<Fixtur
     })
 }
 
-fn fixture_evidence_values(core: &FixtureCore, receipts: &FixtureReceipts, tail: &FixtureTail) -> Result<Vec<IOValue>> {
+fn fixture_evidence_values(core: &FixtureCore, receipts: &FixtureReceipts, tail: &FixtureTail) -> Result<Vec<IoValue>> {
     let mut values = Vec::new();
     for label in &core.labels {
         values.push_limited(label.value.clone(), MAX_SECRET_MARKERS, "secrets fixture evidence")?;
@@ -1542,7 +1540,7 @@ fn fixture_evidence_values(core: &FixtureCore, receipts: &FixtureReceipts, tail:
     Ok(values)
 }
 
-fn fixture_report(core: &FixtureCore, receipts: &FixtureReceipts, tail: &FixtureTail) -> Result<(IOValue, String)> {
+fn fixture_report(core: &FixtureCore, receipts: &FixtureReceipts, tail: &FixtureTail) -> Result<(IoValue, String)> {
     let value = record("secrets-fixture-report-v1", vec![
         string("molten.secrets.fixture-report.v1"),
         record("decision", vec![string("pass")]),
@@ -1590,7 +1588,7 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
     })
 }
 
-pub fn fixture_report_summary(value: &IOValue) -> Result<String> {
+pub fn fixture_report_summary(value: &IoValue) -> Result<String> {
     let fields = simple_record(value, "secrets-fixture-report-v1", 11)?;
     require_schema(&fields[0], "molten.secrets.fixture-report.v1", "secrets fixture report")?;
     let decision = record_string(&fields[1], "decision", "secrets fixture decision")?;
@@ -1748,7 +1746,7 @@ fn secret_cleanup_checks(decision: &str) -> [(&'static str, &'static str); 4] {
     }
 }
 
-fn first_redaction_reason(value: &IOValue) -> Result<String> {
+fn first_redaction_reason(value: &IoValue) -> Result<String> {
     let text = to_text(value)?;
     if text.contains("<credential") {
         Ok("credential".to_string())
@@ -1769,33 +1767,33 @@ fn redaction_seed_ref(source_ref: &str, profile_ref: &str, policy_refs: &[String
     ]))
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn strings_sequence(values: &[String]) -> IOValue {
+fn strings_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn checks_value(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn diagnostics_value(diagnostics: &[String]) -> IOValue {
+fn diagnostics_value(diagnostics: &[String]) -> IoValue {
     record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())])
 }
 
-fn parse_diagnostics(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_diagnostics(value: &Value<IoValue>) -> Result<Vec<String>> {
     record_strings(value, "diagnostics", "diagnostics")
 }
 
-fn record_decision(value: &Value<IOValue>) -> Result<String> {
+fn record_decision(value: &Value<IoValue>) -> Result<String> {
     let decision = record_string(value, "decision", "decision")?;
     if decision == "pass" || decision == "deny" {
         Ok(decision)
@@ -1804,25 +1802,25 @@ fn record_decision(value: &Value<IOValue>) -> Result<String> {
     }
 }
 
-fn record_string(value: &Value<IOValue>, record_name: &str, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, record_name: &str, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, record_name, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, record_name: &str, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, record_name: &str, label: &str) -> Result<String> {
     let value = record_string(value, record_name, label)?;
     validate_ref(&value, label)?;
     Ok(value)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, record_name: &str, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, record_name: &str, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, record_name, 1)?;
     parse_optional_ref(&record[0], label)
 }
 
-fn record_bool(value: &Value<IOValue>, record_name: &str, label: &str) -> Result<bool> {
+fn record_bool(value: &Value<IoValue>, record_name: &str, label: &str) -> Result<bool> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, record_name, 1)?;
     record[0]
@@ -1830,7 +1828,7 @@ fn record_bool(value: &Value<IOValue>, record_name: &str, label: &str) -> Result
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
 }
 
-fn record_strings(value: &Value<IOValue>, record_name: &str, label: &str) -> Result<Vec<String>> {
+fn record_strings(value: &Value<IoValue>, record_name: &str, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, record_name, 1)?;
     let values = required_sequence(&record[0], label)?;
@@ -1838,13 +1836,13 @@ fn record_strings(value: &Value<IOValue>, record_name: &str, label: &str) -> Res
     values.iter().map(|value| required_string(value, label)).collect()
 }
 
-fn record_refs(value: &Value<IOValue>, record_name: &str, label: &str) -> Result<Vec<String>> {
+fn record_refs(value: &Value<IoValue>, record_name: &str, label: &str) -> Result<Vec<String>> {
     let refs = record_strings(value, record_name, label)?;
     validate_refs(&refs, label)?;
     Ok(refs)
 }
 
-fn parse_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn parse_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1858,7 +1856,7 @@ fn parse_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Stri
     Ok(Some(item))
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, label: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result<()> {
     let actual = required_string(value, label)?;
     if actual == expected {
         Ok(())
@@ -1867,12 +1865,12 @@ fn require_schema(value: &Value<IOValue>, expected: &str, label: &str) -> Result
     }
 }
 
-fn require_checks(value: &Value<IOValue>, expected: &[&str]) -> Result<()> {
+fn require_checks(value: &Value<IoValue>, expected: &[&str]) -> Result<()> {
     let value = value_to_iovalue(value);
     let check_record = simple_record(&value, "checks", 1)?;
     let values = required_sequence(&check_record[0], "checks")?;
     ensure_count_at_most(values.len(), MAX_SECRET_REFS, "checks")?;
-    let mut seen = BTreeSet::new();
+    let mut seen = BtreeSet::new();
     for value in values.iter() {
         let item = value_to_iovalue(value);
         let check = simple_record(&item, "check", 2)?;
@@ -1891,13 +1889,13 @@ fn require_checks(value: &Value<IOValue>, expected: &[&str]) -> Result<()> {
     Ok(())
 }
 
-fn simple_record<'a>(value: &'a IOValue, label: &str, arity: usize) -> Result<Cow<'a, Record<Value<IOValue>>>> {
+fn simple_record<'a>(value: &'a IoValue, label: &str, arity: usize) -> Result<Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
-fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.to_string())
@@ -1905,7 +1903,7 @@ fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, label: &str) -> Result<Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, label: &str) -> Result<Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))
@@ -1990,7 +1988,7 @@ trait PushLimited<T> {
 }
 
 impl<T, S> PushLimited<T> for S
-where S: VecSink<T>
+where S: crate::bounded::VecSink<T>
 {
     fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> Result<()> {
         ensure_count_at_most(self.item_count().saturating_add(1), maximum, label)?;
