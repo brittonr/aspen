@@ -1,65 +1,61 @@
-use std::fs;
-use std::path::Path;
-
-use preserves::IOValue;
-use preserves::Value;
-use redb::Database;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
-use crate::chunk_store;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::schema_identity;
+type Database = redb::Database;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Path = std::path::Path;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
 const ADAPTER_KIND_STORAGE: &str = crate::effects::ADAPTER_KIND_STORAGE;
 type EffectScope = crate::effects::EffectScope;
 
-fn effect_handle_value(input: &crate::effects::EffectHandleInput) -> Result<IOValue> {
+fn effect_handle_value(input: &crate::effects::EffectHandleInput) -> Result<IoValue> {
     crate::effects::effect_handle_value(input)
 }
 
-fn handler_binding_value(input: &crate::effects::HandlerBindingInput) -> Result<IOValue> {
+fn handler_binding_value(input: &crate::effects::HandlerBindingInput) -> Result<IoValue> {
     crate::effects::handler_binding_value(input)
 }
 
 fn validate_handle_for_request(
-    handler_value: &IOValue,
-    handle_value: &IOValue,
+    handler_value: &IoValue,
+    handle_value: &IoValue,
     request: &crate::effects::EffectHandleRequest<'_>,
 ) -> Result<crate::effects::EffectHandleValidation> {
     crate::effects::validate_handle_for_request(handler_value, handle_value, request)
 }
 
-fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IoValue> {
     crate::preserves_rail::parse_canonical_bytes(bytes)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -101,7 +97,7 @@ pub struct TypedStoragePutInput {
     pub namespace: String,
     pub key: String,
     pub schema_ref: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
     pub producer_ref: String,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -111,25 +107,25 @@ pub struct TypedStoragePutInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedStoragePut {
     pub storage_ref: String,
-    pub typed_ref_value: IOValue,
+    pub typed_ref_value: IoValue,
     pub schema_ref: String,
     pub value_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedStorageGet {
     pub storage_ref: String,
     pub typed_ref: TypedStorageRef,
-    pub value: IOValue,
-    pub receipt_value: IOValue,
+    pub value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedStorageVerify {
     pub storage_ref: String,
     pub typed_ref: TypedStorageRef,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,8 +135,8 @@ pub struct TypedStorageMigrate {
     pub old_value_ref: String,
     pub new_value_ref: String,
     pub recipe_ref: String,
-    pub typed_ref_value: IOValue,
-    pub receipt_value: IOValue,
+    pub typed_ref_value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,7 +161,7 @@ pub struct StorageMigrationRecipe {
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -179,7 +175,7 @@ pub struct TypedStorageReceipt {
     pub schema_ref: Option<String>,
     pub value_ref: Option<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -204,7 +200,7 @@ pub struct TypedStorageRef {
     pub capability_ref: String,
     pub effect_handle_ref: String,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -219,7 +215,7 @@ pub struct SchemaCompatibilityGetInput<'a> {
     pub namespace: &'a str,
     pub key: &'a str,
     pub expected_schema_ref: &'a str,
-    pub schema_compatibility_value: &'a IOValue,
+    pub schema_compatibility_value: &'a IoValue,
     pub admission: &'a TypedStorageAdmission,
 }
 
@@ -228,7 +224,7 @@ pub struct MigrationGetInput<'a> {
     pub namespace: &'a str,
     pub key: &'a str,
     pub expected_schema_ref: &'a str,
-    pub migration_recipe_value: &'a IOValue,
+    pub migration_recipe_value: &'a IoValue,
     pub admission: &'a TypedStorageAdmission,
 }
 
@@ -238,8 +234,8 @@ struct GetValueInnerInput<'a> {
     key: &'a str,
     expected_schema_ref: Option<&'a str>,
     admission: &'a TypedStorageAdmission,
-    migration_receipt_value: Option<&'a IOValue>,
-    schema_compatibility_value: Option<&'a IOValue>,
+    migration_receipt_value: Option<&'a IoValue>,
+    schema_compatibility_value: Option<&'a IoValue>,
 }
 
 struct StorageEffectEvidenceInput<'a> {
@@ -262,7 +258,7 @@ struct ReceiptValueInput<'a> {
     value_ref: Option<&'a str>,
     effect: &'a StorageEffectEvidence,
     checks: Vec<(&'a str, &'a str)>,
-    details: Vec<IOValue>,
+    details: Vec<IoValue>,
 }
 
 struct DenialReceiptValueInput<'a> {
@@ -274,29 +270,29 @@ struct DenialReceiptValueInput<'a> {
     value_ref: Option<&'a str>,
     reason: String,
     checks: Vec<(&'a str, &'a str)>,
-    details: Vec<IOValue>,
+    details: Vec<IoValue>,
 }
 
 struct PayloadParts {
-    value: IOValue,
-    details: Vec<IOValue>,
+    value: IoValue,
+    details: Vec<IoValue>,
 }
 
 struct PersistInput<'a> {
     root: &'a Path,
     storage_key: &'a str,
     storage_ref: &'a str,
-    typed_ref_value: &'a IOValue,
+    typed_ref_value: &'a IoValue,
     value_ref: &'a str,
     value_bytes: &'a [u8],
-    receipt_value: &'a IOValue,
+    receipt_value: &'a IoValue,
 }
 
 struct EntryInput<'a> {
     input: &'a TypedStoragePutInput,
     schema_ref: &'a str,
     value_ref: &'a str,
-    payload: &'a IOValue,
+    payload: &'a IoValue,
     revision: u64,
     effect_handle_ref: &'a str,
 }
@@ -307,7 +303,7 @@ struct PassInput<'a> {
     schema_ref: &'a str,
     value_ref: &'a str,
     effect: &'a StorageEffectEvidence,
-    details: Vec<IOValue>,
+    details: Vec<IoValue>,
 }
 
 struct SourceInput<'a> {
@@ -320,7 +316,7 @@ struct SourceInput<'a> {
 
 struct SourceData {
     typed_ref: TypedStorageRef,
-    value: IOValue,
+    value: IoValue,
 }
 
 struct EntryRefs {
@@ -333,7 +329,7 @@ struct NextInput<'a> {
     key: &'a str,
     recipe: &'a StorageMigrationRecipe,
     value_ref: &'a str,
-    payload: &'a IOValue,
+    payload: &'a IoValue,
     refs: &'a EntryRefs,
     revision: u64,
     admission: &'a TypedStorageAdmission,
@@ -348,7 +344,7 @@ struct StepInput<'a> {
     storage_ref: &'a str,
     value_ref: &'a str,
     effect: &'a StorageEffectEvidence,
-    details: Vec<IOValue>,
+    details: Vec<IoValue>,
 }
 
 pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStoragePut> {
@@ -410,7 +406,7 @@ pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStora
     })
 }
 
-fn entry_value(input: EntryInput<'_>) -> IOValue {
+fn entry_value(input: EntryInput<'_>) -> IoValue {
     ref_value(RefValueInput {
         namespace: &input.input.namespace,
         key: &input.input.key,
@@ -427,7 +423,7 @@ fn entry_value(input: EntryInput<'_>) -> IOValue {
     })
 }
 
-fn pass_receipt(input: PassInput<'_>) -> IOValue {
+fn pass_receipt(input: PassInput<'_>) -> IoValue {
     receipt_value(ReceiptValueInput {
         operation: "put",
         decision: "pass",
@@ -486,11 +482,11 @@ fn payload_parts(root: &Path, value_bytes: &[u8]) -> Result<PayloadParts> {
             details: vec![record("payload", vec![string("inline"), u64_value(value_len)])],
         });
     }
-    let put = chunk_store::put_bytes(
+    let put = crate::chunk_store::put_bytes(
         &chunk_root(root),
         "typed-storage-value",
         value_bytes,
-        chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
+        crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
     )?;
     Ok(PayloadParts {
         value: record("content-ref", vec![string(&put.manifest_ref), u64_value(value_len)]),
@@ -640,7 +636,7 @@ fn get_value_inner(input: GetValueInnerInput<'_>) -> Result<TypedStorageGet> {
     })
 }
 
-fn stored_binding(input: &GetValueInnerInput<'_>, storage_key: &str) -> Result<IOValue> {
+fn stored_binding(input: &GetValueInnerInput<'_>, storage_key: &str) -> Result<IoValue> {
     let db = ensure_index_tables(input.root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let records = read_txn.open_table(INDEX_RECORDS).map_err(index_error)?;
@@ -702,14 +698,14 @@ fn is_binding_admitted(input: &GetValueInnerInput<'_>, typed_ref: &TypedStorageR
     let Some(schema_compatibility_value) = input.schema_compatibility_value else {
         return Ok(false);
     };
-    schema_identity::compatibility_admits_storage(
+    crate::schema_identity::compatibility_admits_storage(
         schema_compatibility_value,
         expected_schema_ref,
         &typed_ref.schema_ref,
     )
 }
 
-fn checked_value(input: &GetValueInnerInput<'_>, typed_ref: &TypedStorageRef) -> Result<IOValue> {
+fn checked_value(input: &GetValueInnerInput<'_>, typed_ref: &TypedStorageRef) -> Result<IoValue> {
     let value_bytes = read_payload_bytes(input.root, typed_ref)?;
     let value = parse_canonical_bytes(&value_bytes)?;
     let actual_value_ref = canonical_hash(&value)?;
@@ -731,7 +727,7 @@ fn checked_value(input: &GetValueInnerInput<'_>, typed_ref: &TypedStorageRef) ->
     Err(MoltenError::invalid_harness("typed storage content integrity check failed"))
 }
 
-fn get_details(input: &GetValueInnerInput<'_>, revision: u64) -> Result<Vec<IOValue>> {
+fn get_details(input: &GetValueInnerInput<'_>, revision: u64) -> Result<Vec<IoValue>> {
     let mut details = vec![record("revision", vec![u64_value(revision)])];
     if let Some(migration_receipt_value) = input.migration_receipt_value {
         details.push(record("migration-receipt", vec![string(canonical_hash(migration_receipt_value)?)]));
@@ -833,7 +829,7 @@ pub fn migrate_value(
     root: &Path,
     namespace: &str,
     key: &str,
-    migration_recipe_value: &IOValue,
+    migration_recipe_value: &IoValue,
     admission: &TypedStorageAdmission,
 ) -> Result<TypedStorageMigrate> {
     ensure_dirs(root)?;
@@ -914,7 +910,7 @@ fn source_data(input: SourceInput<'_>) -> Result<SourceData> {
     Ok(SourceData { typed_ref, value })
 }
 
-fn stored_entry(input: &SourceInput<'_>) -> Result<IOValue> {
+fn stored_entry(input: &SourceInput<'_>) -> Result<IoValue> {
     let db = ensure_index_tables(input.root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let records = read_txn.open_table(INDEX_RECORDS).map_err(index_error)?;
@@ -960,7 +956,7 @@ fn require_match(input: &SourceInput<'_>, typed_ref: &TypedStorageRef) -> Result
     ))
 }
 
-fn source_value(input: &SourceInput<'_>, typed_ref: &TypedStorageRef) -> Result<IOValue> {
+fn source_value(input: &SourceInput<'_>, typed_ref: &TypedStorageRef) -> Result<IoValue> {
     let value_bytes = read_payload_bytes(input.root, typed_ref)?;
     let value = parse_canonical_bytes(&value_bytes)?;
     if canonical_hash(&value)? == typed_ref.value_ref {
@@ -994,7 +990,7 @@ fn entry_refs(typed_ref: &TypedStorageRef, recipe: &StorageMigrationRecipe) -> E
     EntryRefs { policy, evidence }
 }
 
-fn next_value(input: NextInput<'_>) -> IOValue {
+fn next_value(input: NextInput<'_>) -> IoValue {
     ref_value(RefValueInput {
         namespace: input.namespace,
         key: input.key,
@@ -1011,7 +1007,7 @@ fn next_value(input: NextInput<'_>) -> IOValue {
     })
 }
 
-fn step_receipt(input: StepInput<'_>) -> IOValue {
+fn step_receipt(input: StepInput<'_>) -> IoValue {
     let mut details = vec![
         record("recipe", vec![string(&input.recipe.recipe_ref)]),
         record("mode", vec![string(&input.recipe.mode)]),
@@ -1079,11 +1075,11 @@ pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<TypedStorageReceip
     parse_receipt_value(&value, Some(receipt_ref))
 }
 
-pub fn inferred_schema_ref(value: &IOValue) -> Result<String> {
+pub fn inferred_schema_ref(value: &IoValue) -> Result<String> {
     canonical_hash(&inferred_schema_value(value))
 }
 
-pub fn inferred_schema_value(value: &IOValue) -> IOValue {
+pub fn inferred_schema_value(value: &IoValue) -> IoValue {
     let class = match value.value_class() {
         preserves::ValueClass::Atomic(_) => "atomic",
         preserves::ValueClass::Embedded => "embedded",
@@ -1108,7 +1104,7 @@ pub fn effect_manifest_value(
     namespace: &str,
     schema_ref: &str,
     operations: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     require_ref(producer_ref, "storage effect manifest producer ref")?;
     validate_namespace(namespace)?;
     require_ref(schema_ref, "storage effect manifest schema ref")?;
@@ -1127,7 +1123,7 @@ pub fn effect_manifest_value(
     ]))
 }
 
-pub fn migration_recipe_value(input: &StorageMigrationRecipeInput) -> Result<IOValue> {
+pub fn migration_recipe_value(input: &StorageMigrationRecipeInput) -> Result<IoValue> {
     require_ref(&input.source_schema_ref, "migration source schema ref")?;
     require_ref(&input.target_schema_ref, "migration target schema ref")?;
     require_ref(&input.transformer_ref, "migration transformer ref")?;
@@ -1154,7 +1150,7 @@ pub fn migration_recipe_value(input: &StorageMigrationRecipeInput) -> Result<IOV
     ]))
 }
 
-pub fn parse_migration_recipe_value(value: &IOValue) -> Result<StorageMigrationRecipe> {
+pub fn parse_migration_recipe_value(value: &IoValue) -> Result<StorageMigrationRecipe> {
     let recipe = simple_record(value, "storage-migration-recipe-v1", 8)?;
     require_schema(
         &recipe[0],
@@ -1184,7 +1180,7 @@ pub fn parse_migration_recipe_value(value: &IOValue) -> Result<StorageMigrationR
     })
 }
 
-pub fn parse_typed_ref_value(value: &IOValue) -> Result<TypedStorageRef> {
+pub fn parse_typed_ref_value(value: &IoValue) -> Result<TypedStorageRef> {
     let fields = simple_record(value, "typed-storage-ref-v1", 12)?;
     require_schema(&fields[0], crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA, "typed storage ref")?;
     let namespace = record_string(&fields[1], "namespace")?;
@@ -1224,7 +1220,7 @@ pub fn parse_typed_ref_value(value: &IOValue) -> Result<TypedStorageRef> {
     })
 }
 
-pub fn parse_receipt_value(value: &IOValue, expected_receipt_ref: Option<&str>) -> Result<TypedStorageReceipt> {
+pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) -> Result<TypedStorageReceipt> {
     let fields = simple_record(value, "typed-storage-receipt-v1", 9)?;
     require_schema(&fields[0], crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA, "typed storage receipt")?;
     let operation = record_string(&fields[1], "operation")?;
@@ -1265,7 +1261,7 @@ struct RefValueInput<'a> {
     key: &'a str,
     schema_ref: &'a str,
     value_ref: &'a str,
-    payload: &'a IOValue,
+    payload: &'a IoValue,
     producer_ref: &'a str,
     policy_refs: &'a [String],
     evidence_refs: &'a [String],
@@ -1275,7 +1271,7 @@ struct RefValueInput<'a> {
     effect_handle_ref: &'a str,
 }
 
-fn ref_value(input: RefValueInput<'_>) -> IOValue {
+fn ref_value(input: RefValueInput<'_>) -> IoValue {
     record("typed-storage-ref-v1", vec![
         string(crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA),
         record("namespace", vec![string(input.namespace)]),
@@ -1378,7 +1374,7 @@ fn scope_parts(input: &StorageEffectEvidenceInput<'_>) -> Result<ScopeParts> {
     })
 }
 
-fn binding(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts) -> Result<IOValue> {
+fn binding(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts) -> Result<IoValue> {
     let adapter_ref =
         canonical_hash(&record("typed-storage-redb-adapter", vec![string(input.namespace), string(input.schema_ref)]))?;
     handler_binding_value(&crate::effects::HandlerBindingInput {
@@ -1396,7 +1392,7 @@ fn binding(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts) -> Result
     })
 }
 
-fn handle(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts, handler_binding_ref: &str) -> Result<IOValue> {
+fn handle(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts, handler_binding_ref: &str) -> Result<IoValue> {
     effect_handle_value(&crate::effects::EffectHandleInput {
         kind: ADAPTER_KIND_STORAGE.to_string(),
         scope: parts.scope.clone(),
@@ -1414,18 +1410,18 @@ fn handle(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts, handler_bi
     })
 }
 
-fn store_payload(root: &Path, value_bytes: &[u8]) -> Result<(IOValue, Vec<IOValue>)> {
+fn store_payload(root: &Path, value_bytes: &[u8]) -> Result<(IoValue, Vec<IoValue>)> {
     if value_bytes.len() <= INLINE_VALUE_LIMIT {
         Ok((record("inline", vec![u64_value(value_bytes.len() as u64)]), vec![record("payload", vec![
             string("inline"),
             u64_value(value_bytes.len() as u64),
         ])]))
     } else {
-        let put = chunk_store::put_bytes(
+        let put = crate::chunk_store::put_bytes(
             &chunk_root(root),
             "typed-storage-value",
             value_bytes,
-            chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
+            crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
         )?;
         Ok((record("content-ref", vec![string(&put.manifest_ref), u64_value(value_bytes.len() as u64)]), vec![
             record("payload", vec![string("content-ref"), string(&put.manifest_ref)]),
@@ -1434,7 +1430,7 @@ fn store_payload(root: &Path, value_bytes: &[u8]) -> Result<(IOValue, Vec<IOValu
     }
 }
 
-fn apply_migration_transform(recipe: &StorageMigrationRecipe, old_value: &IOValue) -> Result<IOValue> {
+fn apply_migration_transform(recipe: &StorageMigrationRecipe, old_value: &IoValue) -> Result<IoValue> {
     match recipe.transformer_kind.as_str() {
         "identity" | "schema-rename" => Ok(old_value.clone()),
         other => Err(MoltenError::invalid_harness(format!(
@@ -1465,7 +1461,7 @@ fn read_payload_bytes(root: &Path, typed_ref: &TypedStorageRef) -> Result<Vec<u8
             Ok(bytes)
         }
         TypedStoragePayload::ContentRef { manifest_ref, length } => {
-            let read = chunk_store::read_object(&chunk_root(root), manifest_ref)?;
+            let read = crate::chunk_store::read_object(&chunk_root(root), manifest_ref)?;
             if read.bytes.len() as u64 != *length {
                 return Err(MoltenError::invalid_harness(format!(
                     "chunk-backed typed storage length mismatch: got {}, expected {length}",
@@ -1477,7 +1473,7 @@ fn read_payload_bytes(root: &Path, typed_ref: &TypedStorageRef) -> Result<Vec<u8
     }
 }
 
-fn read_typed_ref(root: &Path, storage_ref: &str) -> Result<IOValue> {
+fn read_typed_ref(root: &Path, storage_ref: &str) -> Result<IoValue> {
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let refs = read_txn.open_table(INDEX_REFS).map_err(index_error)?;
@@ -1498,7 +1494,7 @@ fn next_revision(root: &Path, storage_key: &str) -> Result<u64> {
     Ok(parse_typed_ref_value(&value)?.revision.saturating_add(1))
 }
 
-fn receipt_value(input: ReceiptValueInput<'_>) -> IOValue {
+fn receipt_value(input: ReceiptValueInput<'_>) -> IoValue {
     record("typed-storage-receipt-v1", vec![
         string(crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -1521,7 +1517,7 @@ fn receipt_value(input: ReceiptValueInput<'_>) -> IOValue {
     ])
 }
 
-fn denial_receipt_value(input: DenialReceiptValueInput<'_>) -> IOValue {
+fn denial_receipt_value(input: DenialReceiptValueInput<'_>) -> IoValue {
     let fallback_ref = local_ref("typed-storage-denial-effect", input.operation);
     let effect = StorageEffectEvidence {
         manifest_ref: fallback_ref.clone(),
@@ -1544,7 +1540,7 @@ fn denial_receipt_value(input: DenialReceiptValueInput<'_>) -> IOValue {
     })
 }
 
-fn parse_payload(value: &Value<IOValue>) -> Result<TypedStoragePayload> {
+fn parse_payload(value: &Value<IoValue>) -> Result<TypedStoragePayload> {
     let value = value_to_iovalue(value);
     let payload = simple_record(&value, "payload", 1)?;
     let payload_value = value_to_iovalue(&payload[0]);
@@ -1570,7 +1566,7 @@ struct ReceiptBinding {
     value_ref: Option<String>,
 }
 
-fn parse_binding_record(value: &Value<IOValue>) -> Result<ReceiptBinding> {
+fn parse_binding_record(value: &Value<IoValue>) -> Result<ReceiptBinding> {
     let value = value_to_iovalue(value);
     let binding = simple_record(&value, "binding", 4)?;
     Ok(ReceiptBinding {
@@ -1590,8 +1586,8 @@ fn chunk_root(root: &Path) -> std::path::PathBuf {
 }
 
 fn ensure_dirs(root: &Path) -> Result<()> {
-    fs::create_dir_all(root).map_err(MoltenError::from)?;
-    fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
+    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
 }
 
 fn ensure_index_tables(root: &Path) -> Result<Database> {
@@ -1608,14 +1604,14 @@ fn ensure_index_tables(root: &Path) -> Result<Database> {
     Ok(db)
 }
 
-fn store_receipt(root: &Path, receipt_value: &IOValue) -> Result<()> {
+fn store_receipt(root: &Path, receipt_value: &IoValue) -> Result<()> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     store_receipt_in_tx(&write_txn, receipt_value)?;
     write_txn.commit().map_err(index_error)
 }
 
-fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IOValue) -> Result<()> {
+fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IoValue) -> Result<()> {
     let parsed = parse_receipt_value(receipt_value, None)?;
     let receipt_bytes = canonical_bytes(receipt_value)?;
     let mut receipts = write_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
@@ -1722,19 +1718,19 @@ fn require_ref(reference: &str, field: &str) -> Result<()> {
     })
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let reference = required_string(value, field)?;
     require_ref(&reference, field)?;
     Ok(reference)
 }
 
-fn checks_value(checks: &[&str]) -> IOValue {
+fn checks_value(checks: &[&str]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|check| record("check", vec![string(*check), string("pass")])).collect(),
     )])
 }
 
-fn checks_record(checks: Vec<(&str, &str)>) -> IOValue {
+fn checks_record(checks: Vec<(&str, &str)>) -> IoValue {
     record("checks", vec![sequence(
         checks
             .into_iter()
@@ -1743,19 +1739,19 @@ fn checks_record(checks: Vec<(&str, &str)>) -> IOValue {
     )])
 }
 
-fn refs_record(label: &'static str, refs: &[String]) -> IOValue {
+fn refs_record(label: &'static str, refs: &[String]) -> IoValue {
     record(label, vec![sequence(refs.iter().map(string).collect())])
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1765,7 +1761,7 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_string_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1775,31 +1771,31 @@ fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>>
     required_string(value, "optional string").map(Some)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_u64(&record[0], label)
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
@@ -1810,7 +1806,7 @@ fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String
     Ok(refs)
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
@@ -1836,7 +1832,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -1846,30 +1842,30 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -1888,17 +1884,12 @@ fn local_ref(kind: &str, label: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
 
     #[test]
     fn typed_storage_roundtrip_schema_tagged_preserves_value() {
         let root = temp_dir("typed-storage-roundtrip");
-        let value = parse_text("<profile \"alice\" 7>").expect("parse value");
+        let value = crate::preserves_rail::parse_text("<profile \"alice\" 7>").expect("parse value");
         let producer_ref = test_ref("producer");
         let put = put_value(&root, &TypedStoragePutInput {
             namespace: "profiles".to_string(),
@@ -1936,7 +1927,7 @@ mod tests {
     #[test]
     fn typed_storage_schema_mismatch_is_denied_before_write_or_load() {
         let root = temp_dir("typed-storage-schema-mismatch");
-        let value = parse_text("\"alice\"").expect("parse value");
+        let value = crate::preserves_rail::parse_text("\"alice\"").expect("parse value");
         let wrong_schema_ref = test_ref("wrong-schema");
         let error = put_value(&root, &TypedStoragePutInput {
             namespace: "profiles".to_string(),
@@ -1978,7 +1969,7 @@ mod tests {
     #[test]
     fn explicit_and_lazy_migrations_preserve_value_hash_and_trace_refs() {
         let root = temp_dir("typed-storage-migration");
-        let value = parse_text("<profile \"alice\" 7>").expect("parse value");
+        let value = crate::preserves_rail::parse_text("<profile \"alice\" 7>").expect("parse value");
         let admission = TypedStorageAdmission::local_fixture("migration");
         let put = put_value(&root, &TypedStoragePutInput {
             namespace: "profiles".to_string(),
@@ -2021,7 +2012,7 @@ mod tests {
     }
 
     fn assert_lazy_load(root: &Path, admission: &TypedStorageAdmission) {
-        let lazy_value = parse_text("<profile \"bob\" 9>").expect("parse lazy value");
+        let lazy_value = crate::preserves_rail::parse_text("<profile \"bob\" 9>").expect("parse lazy value");
         let lazy_put = put_value(root, &TypedStoragePutInput {
             namespace: "profiles".to_string(),
             key: "bob".to_string(),
@@ -2060,7 +2051,7 @@ mod tests {
     #[test]
     fn migration_requires_matching_source_schema_and_admitted_recipe() {
         let root = temp_dir("typed-storage-migration-deny");
-        let value = parse_text("\"alice\"").expect("parse value");
+        let value = crate::preserves_rail::parse_text("\"alice\"").expect("parse value");
         let admission = TypedStorageAdmission::local_fixture("migration-deny");
         let put = put_value(&root, &TypedStoragePutInput {
             namespace: "profiles".to_string(),
@@ -2111,7 +2102,7 @@ mod tests {
     #[test]
     fn schema_identity_structural_alias_and_migration_available_integrate_with_loads() {
         let root = temp_dir("typed-storage-schema-identity");
-        let value = parse_text("<profile \"alice\" 7>").expect("parse value");
+        let value = crate::preserves_rail::parse_text("<profile \"alice\" 7>").expect("parse value");
         let admission = TypedStorageAdmission::local_fixture("schema-identity");
         let put = put_value(&root, &TypedStoragePutInput {
             namespace: "profiles".to_string(),
@@ -2133,7 +2124,7 @@ mod tests {
             ]),
         ]);
         let actual = parsed_id(
-            schema_identity::MODE_STRUCTURAL,
+            crate::schema_identity::MODE_STRUCTURAL,
             put.schema_ref.clone(),
             shape.clone(),
             "actual-metadata",
@@ -2141,7 +2132,7 @@ mod tests {
         );
         let expected_schema_ref = test_ref("expected-structural-schema");
         let expected = parsed_id(
-            schema_identity::MODE_STRUCTURAL,
+            crate::schema_identity::MODE_STRUCTURAL,
             expected_schema_ref.clone(),
             shape.clone(),
             "expected-metadata",
@@ -2158,22 +2149,26 @@ mod tests {
         })
         .expect("load through structural compatibility");
         assert_eq!(loaded.value, value);
-        assert!(to_text(&loaded.receipt_value).expect("receipt text").contains("schema-compatibility-value"));
+        assert!(
+            crate::preserves_rail::to_text(&loaded.receipt_value)
+                .expect("receipt text")
+                .contains("schema-compatibility-value")
+        );
 
         assert_alternate_case(&root, &put, shape, &admission);
     }
 
-    fn assert_alternate_case(root: &Path, put: &TypedStoragePut, shape: IOValue, admission: &TypedStorageAdmission) {
+    fn assert_alternate_case(root: &Path, put: &TypedStoragePut, shape: IoValue, admission: &TypedStorageAdmission) {
         let unique_expected_schema_ref = test_ref("unique-expected-schema");
         let actual = parsed_id(
-            schema_identity::MODE_UNIQUE,
+            crate::schema_identity::MODE_UNIQUE,
             put.schema_ref.clone(),
             shape.clone(),
             "actual-unique",
             "actual unique identity",
         );
         let expected = parsed_id(
-            schema_identity::MODE_UNIQUE,
+            crate::schema_identity::MODE_UNIQUE,
             unique_expected_schema_ref.clone(),
             shape,
             "expected-unique",
@@ -2207,11 +2202,11 @@ mod tests {
     fn parsed_id(
         mode: &str,
         schema_ref: String,
-        shape: IOValue,
+        shape: IoValue,
         metadata_label: &str,
         context: &str,
-    ) -> schema_identity::SchemaIdentity {
-        let value = schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
+    ) -> crate::schema_identity::SchemaIdentity {
+        let value = crate::schema_identity::schema_identity_value(&crate::schema_identity::SchemaIdentityInput {
             mode: mode.to_string(),
             schema_ref,
             shape,
@@ -2221,16 +2216,16 @@ mod tests {
             evidence_refs: vec![test_ref("schema-evidence")],
         })
         .expect(context);
-        schema_identity::parse_schema_identity(&value).expect(context)
+        crate::schema_identity::parse_schema_identity(&value).expect(context)
     }
 
     fn compatible(
-        expected: schema_identity::SchemaIdentity,
-        actual: schema_identity::SchemaIdentity,
-        alias: Option<schema_identity::SchemaAlias>,
+        expected: crate::schema_identity::SchemaIdentity,
+        actual: crate::schema_identity::SchemaIdentity,
+        alias: Option<crate::schema_identity::SchemaAlias>,
         context: &str,
-    ) -> IOValue {
-        schema_identity::compatibility_decision_value(&schema_identity::SchemaCompatibilityInput {
+    ) -> IoValue {
+        crate::schema_identity::compatibility_decision_value(&crate::schema_identity::SchemaCompatibilityInput {
             expected,
             actual,
             alias,
@@ -2242,8 +2237,8 @@ mod tests {
         .expect(context)
     }
 
-    fn parsed_binding(from_schema_ref: &str, to_schema_ref: &str) -> schema_identity::SchemaAlias {
-        let value = schema_identity::schema_alias_value(&schema_identity::SchemaAliasInput {
+    fn parsed_binding(from_schema_ref: &str, to_schema_ref: &str) -> crate::schema_identity::SchemaAlias {
+        let value = crate::schema_identity::schema_alias_value(&crate::schema_identity::SchemaAliasInput {
             from_schema_ref: from_schema_ref.to_string(),
             to_schema_ref: to_schema_ref.to_string(),
             scope: "storage".to_string(),
@@ -2251,14 +2246,14 @@ mod tests {
             evidence_refs: vec![test_ref("alias-evidence")],
         })
         .expect("alias");
-        schema_identity::parse_schema_alias(&value).expect("parse alias")
+        crate::schema_identity::parse_schema_alias(&value).expect("parse alias")
     }
 
     #[test]
     fn large_values_use_chunk_backed_content_refs() {
         let root = temp_dir("typed-storage-large");
         let large = "x".repeat(INLINE_VALUE_LIMIT + 128);
-        let value = IOValue::new(large.clone());
+        let value = IoValue::new(large.clone());
         let put = put_value(&root, &TypedStoragePutInput {
             namespace: "large".to_string(),
             key: "payload".to_string(),
@@ -2274,8 +2269,8 @@ mod tests {
         let TypedStoragePayload::ContentRef { manifest_ref, .. } = &parsed.payload else {
             panic!("large typed storage value must use chunk manifest ref");
         };
-        let manifest =
-            chunk_store::read_manifest(&chunk_root(&root), manifest_ref).expect("read typed storage chunk manifest");
+        let manifest = crate::chunk_store::read_manifest(&chunk_root(&root), manifest_ref)
+            .expect("read typed storage chunk manifest");
         assert_eq!(manifest.object_kind, "typed-storage-value");
         let get =
             get_value(&root, "large", "payload", Some(&put.schema_ref), &TypedStorageAdmission::local_fixture("large"))
@@ -2283,7 +2278,7 @@ mod tests {
         assert_eq!(get.value.as_string().expect("string").as_ref(), large);
 
         let chunk_hex = crate::preserves_rail::content_ref_hex(&manifest.chunks[0].chunk_ref).expect("chunk hex");
-        fs::write(chunk_root(&root).join("chunks").join(format!("blake3_{chunk_hex}.bin")), b"tampered")
+        std::fs::write(chunk_root(&root).join("chunks").join(format!("blake3_{chunk_hex}.bin")), b"tampered")
             .expect("tamper typed storage chunk");
         let error =
             get_value(&root, "large", "payload", Some(&put.schema_ref), &TypedStorageAdmission::local_fixture("large"))
@@ -2296,7 +2291,7 @@ mod tests {
     #[test]
     fn storage_refs_do_not_mint_authority_from_snapshots() {
         let root = temp_dir("typed-storage-authority");
-        let value = parse_text("<snapshot [\"state\"]>").expect("parse snapshot");
+        let value = crate::preserves_rail::parse_text("<snapshot [\"state\"]>").expect("parse snapshot");
         let put = put_value(&root, &TypedStoragePutInput {
             namespace: "snapshots".to_string(),
             key: "actor".to_string(),
@@ -2321,10 +2316,10 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_typed_ref_hashes_schema_and_revision_are_stable(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_typed_ref_hashes_schema_and_revision_are_stable(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let root = temp_dir("typed-storage-hegel");
-        let value = IOValue::new(format!("value-{salt}"));
+        let value = IoValue::new(format!("value-{salt}"));
         let input = TypedStoragePutInput {
             namespace: format!("ns-{salt}"),
             key: format!("key-{salt}"),
@@ -2380,9 +2375,9 @@ mod tests {
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }
