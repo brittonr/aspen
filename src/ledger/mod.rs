@@ -1,17 +1,3 @@
-use std::fs;
-use std::path::Path;
-
-use preserves::IOValue;
-
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_canonical_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::retention;
-
 const MAX_LEDGER_SCAN_ENTRIES: usize = 100_000;
 const _: () = assert!(MAX_LEDGER_SCAN_ENTRIES > 0);
 
@@ -25,14 +11,14 @@ pub struct LedgerEntry {
 pub struct LedgerImport {
     pub artifact_ref: String,
     pub artifact_kind: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LedgerExport {
     pub artifact_ref: String,
     pub artifact_kind: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,33 +28,33 @@ pub struct LedgerGc {
     pub removed_refs: Vec<String>,
     pub retention_receipt_refs: Vec<String>,
     pub execution_gate_refs: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct LedgerGcInput<'a> {
     pub dry_run: bool,
-    pub retention_evidence: &'a retention::DestructiveRetentionEvidence,
+    pub retention_evidence: &'a crate::retention::DestructiveRetentionEvidence,
     pub apply_refs: &'a [String],
 }
 
-pub fn import_artifact(root: &Path, artifact: &IOValue) -> Result<LedgerImport> {
+pub fn import_artifact(root: &std::path::Path, artifact: &preserves::IOValue) -> crate::error::Result<LedgerImport> {
     ensure_dirs(root)?;
-    let artifact_ref = canonical_hash(artifact)?;
+    let artifact_ref = crate::preserves_rail::canonical_hash(artifact)?;
     let artifact_kind = artifact_kind(artifact).to_string();
     let bytes = crate::preserves_rail::canonical_bytes(artifact)?;
     let path = content_path(root, &artifact_ref)?;
     if path.exists() {
-        let existing = fs::read(&path).map_err(MoltenError::from)?;
-        let existing_value = parse_canonical_bytes(&existing)?;
-        let existing_ref = canonical_hash(&existing_value)?;
+        let existing = std::fs::read(&path).map_err(crate::error::MoltenError::from)?;
+        let existing_value = crate::preserves_rail::parse_canonical_bytes(&existing)?;
+        let existing_ref = crate::preserves_rail::canonical_hash(&existing_value)?;
         if existing_ref != artifact_ref {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::MoltenError::invalid_harness(format!(
                 "ledger content path for {artifact_ref} contains corrupted bytes hashing to {existing_ref}"
             )));
         }
     } else {
-        fs::write(&path, bytes).map_err(MoltenError::from)?;
+        std::fs::write(&path, bytes).map_err(crate::error::MoltenError::from)?;
     }
     let receipt_value = ledger_import_receipt_value(&artifact_ref, &artifact_kind);
     Ok(LedgerImport {
@@ -78,21 +64,31 @@ pub fn import_artifact(root: &Path, artifact: &IOValue) -> Result<LedgerImport> 
     })
 }
 
-pub fn export_artifact(root: &Path, artifact_ref: &str, out: &Path) -> Result<LedgerExport> {
+pub fn export_artifact(
+    root: &std::path::Path,
+    artifact_ref: &str,
+    out: &std::path::Path,
+) -> crate::error::Result<LedgerExport> {
     let artifact = read_artifact(root, artifact_ref)?;
     let artifact_kind = artifact_kind(&artifact).to_string();
     if let Some(parent) = out.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
     }
-    fs::write(out, crate::preserves_rail::to_text(&artifact)?).map_err(MoltenError::from)?;
-    let receipt_value = record("ledger-export-receipt-v1", vec![
-        string(crate::preserves_rail::EVIDENCE_LEDGER_EXPORT_RECEIPT_SCHEMA),
-        record("decision", vec![string("pass")]),
-        record("artifact-kind", vec![string(&artifact_kind)]),
-        record("artifact", vec![string(artifact_ref)]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("content-ref-found"), string("pass")]),
-            record("check", vec![string("canonical-export"), string("pass")]),
+    std::fs::write(out, crate::preserves_rail::to_text(&artifact)?).map_err(crate::error::MoltenError::from)?;
+    let receipt_value = crate::preserves_rail::record("ledger-export-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::EVIDENCE_LEDGER_EXPORT_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string("pass")]),
+        crate::preserves_rail::record("artifact-kind", vec![crate::preserves_rail::string(&artifact_kind)]),
+        crate::preserves_rail::record("artifact", vec![crate::preserves_rail::string(artifact_ref)]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("content-ref-found"),
+                crate::preserves_rail::string("pass"),
+            ]),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("canonical-export"),
+                crate::preserves_rail::string("pass"),
+            ]),
         ])]),
     ]);
     Ok(LedgerExport {
@@ -102,28 +98,28 @@ pub fn export_artifact(root: &Path, artifact_ref: &str, out: &Path) -> Result<Le
     })
 }
 
-pub fn read_artifact(root: &Path, artifact_ref: &str) -> Result<IOValue> {
+pub fn read_artifact(root: &std::path::Path, artifact_ref: &str) -> crate::error::Result<preserves::IOValue> {
     let path = content_path(root, artifact_ref)?;
-    let bytes = fs::read(&path).map_err(MoltenError::from)?;
-    let value = parse_canonical_bytes(&bytes)?;
-    let actual_ref = canonical_hash(&value)?;
+    let bytes = std::fs::read(&path).map_err(crate::error::MoltenError::from)?;
+    let value = crate::preserves_rail::parse_canonical_bytes(&bytes)?;
+    let actual_ref = crate::preserves_rail::canonical_hash(&value)?;
     if actual_ref != artifact_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "ledger content hash mismatch: got {actual_ref}, expected {artifact_ref}"
         )));
     }
     Ok(value)
 }
 
-pub fn list_artifacts(root: &Path) -> Result<Vec<LedgerEntry>> {
+pub fn list_artifacts(root: &std::path::Path) -> crate::error::Result<Vec<LedgerEntry>> {
     let content = root.join("content");
     if !content.exists() {
         return Ok(Vec::new());
     }
     let mut entries = Vec::new();
-    for entry in fs::read_dir(content).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        if !entry.file_type().map_err(MoltenError::from)?.is_file() {
+    for entry in std::fs::read_dir(content).map_err(crate::error::MoltenError::from)? {
+        let entry = entry.map_err(crate::error::MoltenError::from)?;
+        if !entry.file_type().map_err(crate::error::MoltenError::from)?.is_file() {
             continue;
         }
         let Some(artifact_ref) = ref_from_filename(&entry.file_name().to_string_lossy()) else {
@@ -144,20 +140,20 @@ pub fn list_artifacts(root: &Path) -> Result<Vec<LedgerEntry>> {
     Ok(entries)
 }
 
-pub fn pin_artifact(root: &Path, artifact_ref: &str) -> Result<()> {
+pub fn pin_artifact(root: &std::path::Path, artifact_ref: &str) -> crate::error::Result<()> {
     ensure_dirs(root)?;
     read_artifact(root, artifact_ref)?;
-    fs::write(pin_path(root, artifact_ref)?, artifact_ref).map_err(MoltenError::from)
+    std::fs::write(pin_path(root, artifact_ref)?, artifact_ref).map_err(crate::error::MoltenError::from)
 }
 
-pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
+pub fn gc(root: &std::path::Path, input: LedgerGcInput<'_>) -> crate::error::Result<LedgerGc> {
     ensure_dirs(root)?;
     let pins = pinned_refs(root)?;
     let candidates = scan_unpinned(root, &pins)?;
     let action = action_for(input.dry_run);
     let requester_ref =
-        retention::destructive_retention_requester_ref(input.retention_evidence, "ledger-gc-missing-requester")?;
-    let evidence_summary = retention::destructive_retention_evidence_value(input.retention_evidence)?;
+        crate::retention::destructive_retention_requester_ref(input.retention_evidence, "ledger-gc-missing-requester")?;
+    let evidence_summary = crate::retention::destructive_retention_evidence_value(input.retention_evidence)?;
     let review = review_entries(
         ReviewInput {
             root,
@@ -186,7 +182,7 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
     })
 }
 
-fn scan_unpinned(root: &Path, pins: &[String]) -> Result<Vec<LedgerEntry>> {
+fn scan_unpinned(root: &std::path::Path, pins: &[String]) -> crate::error::Result<Vec<LedgerEntry>> {
     let mut candidates = Vec::new();
     for entry in list_artifacts(root)? {
         if pins.iter().any(|pin| pin == &entry.artifact_ref) {
@@ -199,15 +195,15 @@ fn scan_unpinned(root: &Path, pins: &[String]) -> Result<Vec<LedgerEntry>> {
 
 fn action_for(is_dry_run: bool) -> &'static str {
     if is_dry_run {
-        retention::ACTION_ELIGIBILITY
+        crate::retention::ACTION_ELIGIBILITY
     } else {
-        retention::ACTION_DELETE
+        crate::retention::ACTION_DELETE
     }
 }
 
 #[derive(Clone, Copy)]
 struct ReviewInput<'a> {
-    root: &'a Path,
+    root: &'a std::path::Path,
     source: LedgerGcInput<'a>,
     action: &'a str,
     requester_ref: &'a str,
@@ -223,26 +219,27 @@ struct Review {
     denied_refs: Vec<String>,
 }
 
-fn review_entries(input: ReviewInput<'_>, candidates: &[LedgerEntry]) -> Result<Review> {
+fn review_entries(input: ReviewInput<'_>, candidates: &[LedgerEntry]) -> crate::error::Result<Review> {
     let mut review = Review::default();
     for entry in candidates {
         let retention_class = ledger_retention_class(&entry.artifact_kind);
-        let admission =
-            retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
+        let admission = crate::retention::admit_destructive_retention_evidence(
+            crate::retention::DestructiveRetentionAdmissionInput {
                 root: input.root,
                 evidence: input.source.retention_evidence,
                 object_ref: &entry.artifact_ref,
                 object_kind: &entry.artifact_kind,
                 retention_class,
                 action: input.action,
-            })?;
+            },
+        )?;
         extend_refs(
             &mut review.admission_diagnostics,
             &admission.diagnostics,
             "ledger retention admission diagnostics",
         )?;
         extend_refs(&mut review.admission_refs, &admission.admitted_refs, "ledger retention admission refs")?;
-        let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
+        let evaluation = crate::retention::evaluate_retention(crate::retention::RetentionEvaluationInput {
             root: input.root,
             object_ref: &entry.artifact_ref,
             object_kind: &entry.artifact_kind,
@@ -276,7 +273,11 @@ fn review_entries(input: ReviewInput<'_>, candidates: &[LedgerEntry]) -> Result<
     Ok(review)
 }
 
-fn extend_refs(target: &mut impl crate::bounded::VecSink<String>, values: &[String], label: &str) -> Result<()> {
+fn extend_refs(
+    target: &mut impl crate::bounded::VecSink<String>,
+    values: &[String],
+    label: &str,
+) -> crate::error::Result<()> {
     for value in values {
         push_bounded(target, value.clone(), MAX_LEDGER_SCAN_ENTRIES, label)?;
     }
@@ -288,7 +289,7 @@ fn record_execution(
     entry: &LedgerEntry,
     retention_class: &str,
     review: &mut Review,
-) -> Result<bool> {
+) -> crate::error::Result<bool> {
     if input.source.dry_run {
         return Ok(false);
     }
@@ -301,15 +302,16 @@ fn record_execution(
         object_kind: &entry.artifact_kind,
         retention_class,
     });
-    let execution_gate = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
-        root: input.root,
-        subsystem: "ledger-gc",
-        action: input.action,
-        object_ref: &entry.artifact_ref,
-        object_kind: &entry.artifact_kind,
-        retention_class,
-        apply_ref,
-    })?;
+    let execution_gate =
+        crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
+            root: input.root,
+            subsystem: "ledger-gc",
+            action: input.action,
+            object_ref: &entry.artifact_ref,
+            object_kind: &entry.artifact_kind,
+            retention_class,
+            apply_ref,
+        })?;
     push_bounded(
         &mut review.execution_gate_refs,
         execution_gate.execution_ref.clone(),
@@ -331,7 +333,12 @@ fn decision_for(denied_refs: &[String]) -> &'static str {
     if denied_refs.is_empty() { "pass" } else { "deny" }
 }
 
-fn remove_entries(root: &Path, candidates: &[LedgerEntry], is_dry_run: bool, decision: &str) -> Result<Vec<String>> {
+fn remove_entries(
+    root: &std::path::Path,
+    candidates: &[LedgerEntry],
+    is_dry_run: bool,
+    decision: &str,
+) -> crate::error::Result<Vec<String>> {
     let mut removed_refs = Vec::new();
     if decision == "pass" {
         for entry in candidates {
@@ -342,7 +349,8 @@ fn remove_entries(root: &Path, candidates: &[LedgerEntry], is_dry_run: bool, dec
                 "ledger removed refs",
             )?;
             if !is_dry_run {
-                fs::remove_file(content_path(root, &entry.artifact_ref)?).map_err(MoltenError::from)?;
+                std::fs::remove_file(content_path(root, &entry.artifact_ref)?)
+                    .map_err(crate::error::MoltenError::from)?;
             }
         }
     }
@@ -353,30 +361,38 @@ struct OutcomeInput<'a> {
     is_dry_run: bool,
     decision: &'a str,
     removed_refs: &'a [String],
-    evidence_summary: IOValue,
+    evidence_summary: preserves::IOValue,
     review: &'a Review,
 }
 
-fn outcome_value(input: OutcomeInput<'_>) -> IOValue {
-    record("ledger-gc-receipt-v1", vec![
-        string(crate::preserves_rail::EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("mode", vec![string(mode_for(input.is_dry_run))]),
-        record("removed", vec![sequence(input.removed_refs.iter().map(string).collect())]),
-        record("retention", vec![sequence(
-            input.review.retention_receipt_refs.iter().map(string).collect(),
+fn outcome_value(input: OutcomeInput<'_>) -> preserves::IOValue {
+    crate::preserves_rail::record("ledger-gc-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("mode", vec![crate::preserves_rail::string(mode_for(input.is_dry_run))]),
+        crate::preserves_rail::record("removed", vec![crate::preserves_rail::sequence(
+            input.removed_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        record("retention-execution", vec![sequence(input.review.execution_gate_refs.iter().map(string).collect())]),
-        record("denied", vec![sequence(input.review.denied_refs.iter().map(string).collect())]),
-        record("retention-evidence", vec![input.evidence_summary]),
-        record("retention-admission", vec![sequence(input.review.admission_refs.iter().map(string).collect())]),
-        record("retention-diagnostics", vec![sequence(
-            input.review.admission_diagnostics.iter().map(string).collect(),
+        crate::preserves_rail::record("retention", vec![crate::preserves_rail::sequence(
+            input.review.retention_receipt_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        record("retention-execution-diagnostics", vec![sequence(
-            input.review.execution_diagnostics.iter().map(string).collect(),
+        crate::preserves_rail::record("retention-execution", vec![crate::preserves_rail::sequence(
+            input.review.execution_gate_refs.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        record("checks", vec![outcome_checks(input.is_dry_run, input.decision, input.review)]),
+        crate::preserves_rail::record("denied", vec![crate::preserves_rail::sequence(
+            input.review.denied_refs.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("retention-evidence", vec![input.evidence_summary]),
+        crate::preserves_rail::record("retention-admission", vec![crate::preserves_rail::sequence(
+            input.review.admission_refs.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("retention-diagnostics", vec![crate::preserves_rail::sequence(
+            input.review.admission_diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("retention-execution-diagnostics", vec![crate::preserves_rail::sequence(
+            input.review.execution_diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("checks", vec![outcome_checks(input.is_dry_run, input.decision, input.review)]),
     ])
 }
 
@@ -384,22 +400,31 @@ fn mode_for(is_dry_run: bool) -> &'static str {
     if is_dry_run { "dry-run" } else { "apply" }
 }
 
-fn outcome_checks(is_dry_run: bool, decision: &str, review: &Review) -> IOValue {
-    sequence(vec![
-        record("check", vec![string("pin-preservation"), string("pass")]),
-        record("check", vec![string("derived-index-scan"), string("pass")]),
-        record("check", vec![string("retention-receipt-bound"), string("pass")]),
-        record("check", vec![
-            string("retention-execution-gate"),
-            string(pass_or_fail(is_dry_run || review.execution_diagnostics.is_empty())),
+fn outcome_checks(is_dry_run: bool, decision: &str, review: &Review) -> preserves::IOValue {
+    crate::preserves_rail::sequence(vec![
+        crate::preserves_rail::record("check", vec![
+            crate::preserves_rail::string("pin-preservation"),
+            crate::preserves_rail::string("pass"),
         ]),
-        record("check", vec![
-            string("retention-authority-evidence"),
-            string(pass_or_fail(review.admission_diagnostics.is_empty())),
+        crate::preserves_rail::record("check", vec![
+            crate::preserves_rail::string("derived-index-scan"),
+            crate::preserves_rail::string("pass"),
         ]),
-        record("check", vec![
-            string("deny-before-removal"),
-            string(if decision == "pass" { "pass" } else { "fail" }),
+        crate::preserves_rail::record("check", vec![
+            crate::preserves_rail::string("retention-receipt-bound"),
+            crate::preserves_rail::string("pass"),
+        ]),
+        crate::preserves_rail::record("check", vec![
+            crate::preserves_rail::string("retention-execution-gate"),
+            crate::preserves_rail::string(pass_or_fail(is_dry_run || review.execution_diagnostics.is_empty())),
+        ]),
+        crate::preserves_rail::record("check", vec![
+            crate::preserves_rail::string("retention-authority-evidence"),
+            crate::preserves_rail::string(pass_or_fail(review.admission_diagnostics.is_empty())),
+        ]),
+        crate::preserves_rail::record("check", vec![
+            crate::preserves_rail::string("deny-before-removal"),
+            crate::preserves_rail::string(if decision == "pass" { "pass" } else { "fail" }),
         ]),
     ])
 }
@@ -409,7 +434,7 @@ fn pass_or_fail(value: bool) -> &'static str {
 }
 
 struct ApplyRefMatchInput<'a> {
-    root: &'a Path,
+    root: &'a std::path::Path,
     apply_refs: &'a [String],
     subsystem: &'a str,
     action: &'a str,
@@ -421,7 +446,7 @@ struct ApplyRefMatchInput<'a> {
 fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
     let mut fallback_ref = None;
     for apply_ref in input.apply_refs {
-        let Ok(apply) = retention::read_retention_gc_apply(input.root, apply_ref) else {
+        let Ok(apply) = crate::retention::read_retention_gc_apply(input.root, apply_ref) else {
             if fallback_ref.is_none() {
                 fallback_ref = Some(apply_ref.as_str());
             }
@@ -445,26 +470,35 @@ fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
 
 fn ledger_retention_class(artifact_kind: &str) -> &'static str {
     if artifact_kind.contains("secret") || artifact_kind.contains("encrypted") || artifact_kind.contains("redaction") {
-        retention::CLASS_PRIVATE_SECRET_REF
+        crate::retention::CLASS_PRIVATE_SECRET_REF
     } else if artifact_kind.contains("cache") {
-        retention::CLASS_EPHEMERAL_CACHE
+        crate::retention::CLASS_EPHEMERAL_CACHE
     } else if artifact_kind.contains("artifact") || artifact_kind.contains("manifest") {
-        retention::CLASS_PUBLIC_ARTIFACT
+        crate::retention::CLASS_PUBLIC_ARTIFACT
     } else {
-        retention::CLASS_AUDIT_RECEIPT
+        crate::retention::CLASS_AUDIT_RECEIPT
     }
 }
 
-pub fn ledger_import_receipt_value(artifact_ref: &str, artifact_kind: &str) -> IOValue {
-    record("ledger-import-receipt-v1", vec![
-        string(crate::preserves_rail::EVIDENCE_LEDGER_IMPORT_RECEIPT_SCHEMA),
-        record("decision", vec![string("pass")]),
-        record("artifact-kind", vec![string(artifact_kind)]),
-        record("artifact", vec![string(artifact_ref)]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("canonical-content-hash"), string("pass")]),
-            record("check", vec![string("immutable-content"), string("pass")]),
-            record("check", vec![string("derived-index-ready"), string("pass")]),
+pub fn ledger_import_receipt_value(artifact_ref: &str, artifact_kind: &str) -> preserves::IOValue {
+    crate::preserves_rail::record("ledger-import-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::EVIDENCE_LEDGER_IMPORT_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string("pass")]),
+        crate::preserves_rail::record("artifact-kind", vec![crate::preserves_rail::string(artifact_kind)]),
+        crate::preserves_rail::record("artifact", vec![crate::preserves_rail::string(artifact_ref)]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("canonical-content-hash"),
+                crate::preserves_rail::string("pass"),
+            ]),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("immutable-content"),
+                crate::preserves_rail::string("pass"),
+            ]),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("derived-index-ready"),
+                crate::preserves_rail::string("pass"),
+            ]),
         ])]),
     ])
 }
@@ -790,7 +824,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("chunk-lineage-v1", "chunk-lineage"),
 ];
 
-pub fn artifact_kind(value: &IOValue) -> &'static str {
+pub fn artifact_kind(value: &preserves::IOValue) -> &'static str {
     for &(record_label, kind) in ARTIFACT_KIND_RECORDS {
         if value.collect_simple_record(record_label, None).is_some() {
             return kind;
@@ -799,34 +833,41 @@ pub fn artifact_kind(value: &IOValue) -> &'static str {
     "artifact"
 }
 
-fn ensure_dirs(root: &Path) -> Result<()> {
-    fs::create_dir_all(root.join("content")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("pins")).map_err(MoltenError::from)
+fn ensure_dirs(root: &std::path::Path) -> crate::error::Result<()> {
+    std::fs::create_dir_all(root.join("content")).map_err(crate::error::MoltenError::from)?;
+    std::fs::create_dir_all(root.join("pins")).map_err(crate::error::MoltenError::from)
 }
 
-fn content_path(root: &Path, artifact_ref: &str) -> Result<std::path::PathBuf> {
+fn content_path(root: &std::path::Path, artifact_ref: &str) -> crate::error::Result<std::path::PathBuf> {
     Ok(root.join("content").join(filename_for_ref(artifact_ref)?))
 }
 
-fn pin_path(root: &Path, artifact_ref: &str) -> Result<std::path::PathBuf> {
+fn pin_path(root: &std::path::Path, artifact_ref: &str) -> crate::error::Result<std::path::PathBuf> {
     Ok(root.join("pins").join(filename_for_ref(artifact_ref)?))
 }
 
-fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
+fn push_bounded<T>(
+    values: &mut impl crate::bounded::VecSink<T>,
+    value: T,
+    maximum: usize,
+    label: &str,
+) -> crate::error::Result<()> {
     let total = values
         .item_count()
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} count overflow")))?;
     if total > maximum {
-        return Err(MoltenError::invalid_harness(format!("{label} count {total} exceeds bound {maximum}")));
+        return Err(crate::error::MoltenError::invalid_harness(format!(
+            "{label} count {total} exceeds bound {maximum}"
+        )));
     }
     values.push_item(value);
     Ok(())
 }
 
-fn filename_for_ref(artifact_ref: &str) -> Result<String> {
+fn filename_for_ref(artifact_ref: &str) -> crate::error::Result<String> {
     let hex = crate::preserves_rail::content_ref_hex(artifact_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!("unsupported ledger artifact ref {artifact_ref}: {error}"))
+        crate::error::MoltenError::invalid_harness(format!("unsupported ledger artifact ref {artifact_ref}: {error}"))
     })?;
     Ok(format!("blake3_{hex}.bin"))
 }
@@ -836,18 +877,18 @@ fn ref_from_filename(filename: &str) -> Option<String> {
     crate::preserves_rail::content_ref_from_hex(hex).ok()
 }
 
-fn pinned_refs(root: &Path) -> Result<Vec<String>> {
+fn pinned_refs(root: &std::path::Path) -> crate::error::Result<Vec<String>> {
     let pins = root.join("pins");
     if !pins.exists() {
         return Ok(Vec::new());
     }
     let mut refs = Vec::new();
-    for entry in fs::read_dir(pins).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        if entry.file_type().map_err(MoltenError::from)?.is_file() {
-            let reference = fs::read_to_string(entry.path()).map_err(MoltenError::from)?;
+    for entry in std::fs::read_dir(pins).map_err(crate::error::MoltenError::from)? {
+        let entry = entry.map_err(crate::error::MoltenError::from)?;
+        if entry.file_type().map_err(crate::error::MoltenError::from)?.is_file() {
+            let reference = std::fs::read_to_string(entry.path()).map_err(crate::error::MoltenError::from)?;
             crate::preserves_rail::validate_content_ref(&reference).map_err(|error| {
-                MoltenError::invalid_harness(format!(
+                crate::error::MoltenError::invalid_harness(format!(
                     "ledger pin file contains invalid content ref {reference}: {error}"
                 ))
             })?;
@@ -860,18 +901,17 @@ fn pinned_refs(root: &Path) -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preserves_rail::parse_text;
 
     #[test]
     fn ledger_import_is_immutable_and_gc_preserves_pins() {
         let root = temp_dir("ledger");
-        let artifact = parse_text("<example \"ok\">").expect("parse artifact");
+        let artifact = crate::preserves_rail::parse_text("<example \"ok\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
         let duplicate = import_artifact(&root, &artifact).expect("import duplicate");
         assert_eq!(imported.artifact_ref, duplicate.artifact_ref);
         assert_eq!(list_artifacts(&root).expect("list artifacts").len(), 1);
         pin_artifact(&root, &imported.artifact_ref).expect("pin artifact");
-        let retention_evidence = retention::DestructiveRetentionEvidence::default();
+        let retention_evidence = crate::retention::DestructiveRetentionEvidence::default();
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -909,10 +949,10 @@ mod tests {
     #[test]
     fn ledger_read_detects_tampered_materialized_bytes() {
         let root = temp_dir("ledger-tampered-bytes");
-        let artifact = parse_text("<example \"original\">").expect("parse original");
+        let artifact = crate::preserves_rail::parse_text("<example \"original\">").expect("parse original");
         let imported = import_artifact(&root, &artifact).expect("import original");
-        let tampered = parse_text("<example \"tampered\">").expect("parse tampered");
-        fs::write(
+        let tampered = crate::preserves_rail::parse_text("<example \"tampered\">").expect("parse tampered");
+        std::fs::write(
             content_path(&root, &imported.artifact_ref).expect("content path"),
             crate::preserves_rail::canonical_bytes(&tampered).expect("tampered canonical bytes"),
         )
@@ -924,12 +964,24 @@ mod tests {
     #[test]
     fn ledger_gc_requires_retention_pass_before_removal() {
         let root = temp_dir("ledger-retention");
-        let artifact = parse_text("<example \"retained\">").expect("parse artifact");
+        let artifact = crate::preserves_rail::parse_text("<example \"retained\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
-        let owner_ref = canonical_hash(&record("ledger-test-ref", vec![string("owner")])).expect("owner ref");
-        let policy_refs = vec![canonical_hash(&record("ledger-test-ref", vec![string("policy")])).expect("policy ref")];
-        let evidence_refs =
-            vec![canonical_hash(&record("ledger-test-ref", vec![string("evidence")])).expect("evidence ref")];
+        let owner_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("ledger-test-ref", vec![
+            crate::preserves_rail::string("owner"),
+        ]))
+        .expect("owner ref");
+        let policy_refs = vec![
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("ledger-test-ref", vec![
+                crate::preserves_rail::string("policy"),
+            ]))
+            .expect("policy ref"),
+        ];
+        let evidence_refs = vec![
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("ledger-test-ref", vec![
+                crate::preserves_rail::string("evidence"),
+            ]))
+            .expect("evidence ref"),
+        ];
         crate::retention::pin_object(&root, crate::retention::RetentionPinInput {
             object_ref: imported.artifact_ref.clone(),
             object_kind: imported.artifact_kind.clone(),
@@ -949,7 +1001,7 @@ mod tests {
             &imported.artifact_ref,
             &imported.artifact_kind,
             ledger_retention_class(&imported.artifact_kind),
-            retention::ACTION_DELETE,
+            crate::retention::ACTION_DELETE,
         );
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
@@ -966,7 +1018,7 @@ mod tests {
     #[test]
     fn ledger_gc_denies_missing_retention_authority_evidence() {
         let root = temp_dir("ledger-retention-missing-authority");
-        let artifact = parse_text("<example \"missing-authority\">").expect("parse artifact");
+        let artifact = crate::preserves_rail::parse_text("<example \"missing-authority\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
         let retention_evidence = retention_evidence_without_authority(
             &root,
@@ -974,7 +1026,7 @@ mod tests {
             &imported.artifact_ref,
             &imported.artifact_kind,
             ledger_retention_class(&imported.artifact_kind),
-            retention::ACTION_DELETE,
+            crate::retention::ACTION_DELETE,
         );
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
@@ -991,7 +1043,8 @@ mod tests {
     #[test]
     fn ledger_gc_denies_missing_policy_and_supporting_evidence() {
         let root = temp_dir("ledger-retention-missing-policy-evidence");
-        let artifact = parse_text("<example \"missing-policy-evidence\">").expect("parse artifact");
+        let artifact =
+            crate::preserves_rail::parse_text("<example \"missing-policy-evidence\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
         let retention_evidence = retention_evidence_without_policy_evidence(
             &root,
@@ -999,7 +1052,7 @@ mod tests {
             &imported.artifact_ref,
             &imported.artifact_kind,
             ledger_retention_class(&imported.artifact_kind),
-            retention::ACTION_DELETE,
+            crate::retention::ACTION_DELETE,
         );
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
@@ -1016,7 +1069,7 @@ mod tests {
     fn ledger_gc_requires_per_remote_clearance_before_removal() {
         let label = "remote-clearance";
         let root = temp_dir("ledger-retention-remote-clearance");
-        let artifact = parse_text("<example \"remote-clearance\">").expect("parse artifact");
+        let artifact = crate::preserves_rail::parse_text("<example \"remote-clearance\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
         let retention_class = ledger_retention_class(&imported.artifact_kind);
         let mut retention_evidence = retention_evidence(
@@ -1025,7 +1078,7 @@ mod tests {
             &imported.artifact_ref,
             &imported.artifact_kind,
             retention_class,
-            retention::ACTION_DELETE,
+            crate::retention::ACTION_DELETE,
         );
         let peer = add_peer_gate(&root, label, &imported, retention_class, &mut retention_evidence);
         let denied = gc(&root, LedgerGcInput {
@@ -1066,7 +1119,7 @@ mod tests {
     #[test]
     fn ledger_gc_requires_apply_ref_before_removal() {
         let root = temp_dir("ledger-execution-missing-apply");
-        let artifact = parse_text("<example \"missing-apply\">").expect("parse artifact");
+        let artifact = crate::preserves_rail::parse_text("<example \"missing-apply\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
         let retention_class = ledger_retention_class(&imported.artifact_kind);
         let retention_evidence = retention_evidence(
@@ -1075,7 +1128,7 @@ mod tests {
             &imported.artifact_ref,
             &imported.artifact_kind,
             retention_class,
-            retention::ACTION_DELETE,
+            crate::retention::ACTION_DELETE,
         );
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
@@ -1086,7 +1139,7 @@ mod tests {
         assert_eq!(gc.decision, "deny");
         assert!(gc.removed_refs.is_empty());
         assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
-        let gate = retention::read_retention_gc_execution_gate(&root, &gc.execution_gate_refs[0])
+        let gate = crate::retention::read_retention_gc_execution_gate(&root, &gc.execution_gate_refs[0])
             .expect("read execution gate");
         assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-execute-apply-missing"));
     }
@@ -1094,7 +1147,7 @@ mod tests {
     #[test]
     fn ledger_gc_rejects_wrong_scope_apply_ref_before_removal() {
         let root = temp_dir("ledger-execution-wrong-scope");
-        let artifact = parse_text("<example \"wrong-scope\">").expect("parse artifact");
+        let artifact = crate::preserves_rail::parse_text("<example \"wrong-scope\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
         let retention_class = ledger_retention_class(&imported.artifact_kind);
         let retention_evidence = retention_evidence(
@@ -1103,7 +1156,7 @@ mod tests {
             &imported.artifact_ref,
             &imported.artifact_kind,
             retention_class,
-            retention::ACTION_DELETE,
+            crate::retention::ACTION_DELETE,
         );
         let apply_refs = vec![apply_ref_for(
             &root,
@@ -1122,7 +1175,7 @@ mod tests {
         assert_eq!(gc.decision, "deny");
         assert!(gc.removed_refs.is_empty());
         assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
-        let gate = retention::read_retention_gc_execution_gate(&root, &gc.execution_gate_refs[0])
+        let gate = crate::retention::read_retention_gc_execution_gate(&root, &gc.execution_gate_refs[0])
             .expect("read execution gate");
         assert!(
             gate.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-execute-apply-scope-mismatch"),
@@ -1134,7 +1187,7 @@ mod tests {
     #[test]
     fn ledger_gc_rejects_drift_after_apply_before_removal() {
         let root = temp_dir("ledger-execution-drift");
-        let artifact = parse_text("<example \"drift\">").expect("parse artifact");
+        let artifact = crate::preserves_rail::parse_text("<example \"drift\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
         let retention_class = ledger_retention_class(&imported.artifact_kind);
         let retention_evidence = retention_evidence(
@@ -1143,7 +1196,7 @@ mod tests {
             &imported.artifact_ref,
             &imported.artifact_kind,
             retention_class,
-            retention::ACTION_DELETE,
+            crate::retention::ACTION_DELETE,
         );
         let apply_refs = vec![apply_ref_for(
             &root,
@@ -1153,11 +1206,11 @@ mod tests {
             retention_class,
             &retention_evidence,
         )];
-        retention::pin_object(&root, retention::RetentionPinInput {
+        crate::retention::pin_object(&root, crate::retention::RetentionPinInput {
             object_ref: imported.artifact_ref.clone(),
             object_kind: imported.artifact_kind.clone(),
             retention_class: retention_class.to_string(),
-            source: retention::SOURCE_OPERATOR_HOLD.to_string(),
+            source: crate::retention::SOURCE_OPERATOR_HOLD.to_string(),
             reason: "post-apply drift".to_string(),
             owner_ref: ledger_test_ref("owner", "drift"),
             expiry_ref: None,
@@ -1181,9 +1234,9 @@ mod tests {
     #[test]
     fn ledger_detects_corrupted_content_bytes() {
         let root = temp_dir("ledger-corrupt");
-        let artifact = parse_text("<example \"ok\">").expect("parse artifact");
+        let artifact = crate::preserves_rail::parse_text("<example \"ok\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
-        fs::write(content_path(&root, &imported.artifact_ref).expect("content path"), b"not preserves")
+        std::fs::write(content_path(&root, &imported.artifact_ref).expect("content path"), b"not preserves")
             .expect("corrupt artifact");
         let error = read_artifact(&root, &imported.artifact_ref).expect_err("corruption fails");
         assert!(["Preserves", "hash mismatch"].iter().any(|needle| error.to_string().contains(needle)));
@@ -1199,7 +1252,7 @@ mod tests {
         label: &str,
         imported: &LedgerImport,
         retention_class: &str,
-        evidence: &mut retention::DestructiveRetentionEvidence,
+        evidence: &mut crate::retention::DestructiveRetentionEvidence,
     ) -> PeerCase {
         let peer = PeerCase {
             peer: ledger_test_ref("remote-peer", label),
@@ -1209,13 +1262,13 @@ mod tests {
         evidence.remote_refs = vec![peer.remote.clone()];
         evidence.remote_gc_refs = vec![store_admission(
             root,
-            retention::ADMISSION_KIND_REMOTE_GC,
+            crate::retention::ADMISSION_KIND_REMOTE_GC,
             label,
             evidence.requester_ref.as_deref().expect("requester"),
             &imported.artifact_ref,
             &imported.artifact_kind,
             retention_class,
-            retention::ACTION_DELETE,
+            crate::retention::ACTION_DELETE,
             &evidence.remote_refs,
             true,
         )];
@@ -1226,26 +1279,29 @@ mod tests {
         root: &std::path::Path,
         imported: &LedgerImport,
         retention_class: &str,
-        evidence: &retention::DestructiveRetentionEvidence,
+        evidence: &crate::retention::DestructiveRetentionEvidence,
         peer: &PeerCase,
     ) -> String {
-        retention::store_retention_remote_gc_clearance(root, &retention::RetentionRemoteGcClearanceInput {
-            decision: "pass",
-            requester_ref: evidence.requester_ref.as_deref().expect("requester"),
-            peer_ref: &peer.peer,
-            object_ref: &imported.artifact_ref,
-            object_kind: &imported.artifact_kind,
-            retention_class,
-            action: retention::ACTION_DELETE,
-            remote_ref: &peer.remote,
-            policy_ref: &evidence.policy_refs[0],
-            authority_ref: &evidence.authority_refs[0],
-            evidence_refs: &evidence.evidence_refs,
-            retained_refs: &[],
-            is_current: true,
-            revoked_refs: &[],
-            diagnostics: &[],
-        })
+        crate::retention::store_retention_remote_gc_clearance(
+            root,
+            &crate::retention::RetentionRemoteGcClearanceInput {
+                decision: "pass",
+                requester_ref: evidence.requester_ref.as_deref().expect("requester"),
+                peer_ref: &peer.peer,
+                object_ref: &imported.artifact_ref,
+                object_kind: &imported.artifact_kind,
+                retention_class,
+                action: crate::retention::ACTION_DELETE,
+                remote_ref: &peer.remote,
+                policy_ref: &evidence.policy_refs[0],
+                authority_ref: &evidence.authority_refs[0],
+                evidence_refs: &evidence.evidence_refs,
+                retained_refs: &[],
+                is_current: true,
+                revoked_refs: &[],
+                diagnostics: &[],
+            },
+        )
         .expect("store remote clearance")
         .clearance_ref
     }
@@ -1256,19 +1312,19 @@ mod tests {
         object_ref: &str,
         object_kind: &str,
         retention_class: &str,
-        evidence: &retention::DestructiveRetentionEvidence,
+        evidence: &crate::retention::DestructiveRetentionEvidence,
     ) -> String {
-        let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+        let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
             root,
             subsystem,
             object_ref,
             object_kind,
             retention_class,
-            action: retention::ACTION_DELETE,
+            action: crate::retention::ACTION_DELETE,
             evidence,
         })
         .expect("store ledger GC plan");
-        retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+        crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
             root,
             plan_ref: &plan.plan_ref,
         })
@@ -1283,11 +1339,11 @@ mod tests {
         object_kind: &str,
         retention_class: &str,
         action: &str,
-    ) -> retention::DestructiveRetentionEvidence {
+    ) -> crate::retention::DestructiveRetentionEvidence {
         let requester_ref = ledger_test_ref("requester", label);
         let policy_refs = vec![store_admission(
             root,
-            retention::ADMISSION_KIND_POLICY,
+            crate::retention::ADMISSION_KIND_POLICY,
             label,
             &requester_ref,
             object_ref,
@@ -1299,7 +1355,7 @@ mod tests {
         )];
         let authority_refs = vec![store_admission(
             root,
-            retention::ADMISSION_KIND_AUTHORITY,
+            crate::retention::ADMISSION_KIND_AUTHORITY,
             label,
             &requester_ref,
             object_ref,
@@ -1311,7 +1367,7 @@ mod tests {
         )];
         let evidence_refs = vec![store_admission(
             root,
-            retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            crate::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
             label,
             &requester_ref,
             object_ref,
@@ -1323,7 +1379,7 @@ mod tests {
         )];
         let reference_index_refs = vec![store_admission(
             root,
-            retention::ADMISSION_KIND_REFERENCE_INDEX,
+            crate::retention::ADMISSION_KIND_REFERENCE_INDEX,
             label,
             &requester_ref,
             object_ref,
@@ -1333,7 +1389,7 @@ mod tests {
             &[],
             true,
         )];
-        retention::DestructiveRetentionEvidence {
+        crate::retention::DestructiveRetentionEvidence {
             requester_ref: Some(requester_ref),
             policy_refs,
             authority_refs,
@@ -1355,7 +1411,7 @@ mod tests {
         object_kind: &str,
         retention_class: &str,
         action: &str,
-    ) -> retention::DestructiveRetentionEvidence {
+    ) -> crate::retention::DestructiveRetentionEvidence {
         let mut evidence = retention_evidence(root, label, object_ref, object_kind, retention_class, action);
         evidence.authority_refs.clear();
         evidence
@@ -1368,7 +1424,7 @@ mod tests {
         object_kind: &str,
         retention_class: &str,
         action: &str,
-    ) -> retention::DestructiveRetentionEvidence {
+    ) -> crate::retention::DestructiveRetentionEvidence {
         let mut evidence = retention_evidence(root, label, object_ref, object_kind, retention_class, action);
         evidence.policy_refs.clear();
         evidence.evidence_refs.clear();
@@ -1387,7 +1443,7 @@ mod tests {
         remote_refs: &[String],
         is_reference_index_complete: bool,
     ) -> String {
-        retention::store_retention_evidence_admission(root, &retention::RetentionEvidenceAdmissionInput {
+        crate::retention::store_retention_evidence_admission(root, &crate::retention::RetentionEvidenceAdmissionInput {
             kind,
             decision: "pass",
             requester_ref,
@@ -1408,7 +1464,11 @@ mod tests {
     }
 
     fn ledger_test_ref(kind: &str, label: &str) -> String {
-        canonical_hash(&record("ledger-test-ref", vec![string(kind), string(label)])).expect("ledger test ref")
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("ledger-test-ref", vec![
+            crate::preserves_rail::string(kind),
+            crate::preserves_rail::string(label),
+        ]))
+        .expect("ledger test ref")
     }
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
@@ -1417,9 +1477,9 @@ mod tests {
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }
