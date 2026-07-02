@@ -1,23 +1,51 @@
-use std::collections::BTreeSet;
-use std::path::Path;
+type ArtifactPayloadRef = crate::artifacts::ArtifactPayloadRef;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Path = std::path::Path;
+type PreservesRecord<T> = preserves::Record<T>;
+type PreservesValue<T> = preserves::Value<T>;
+type Result<T> = crate::error::Result<T>;
+type Set<T> = std::collections::BTreeSet<T>;
 
-use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
+fn bool_value(value: bool) -> IoValue {
+    crate::preserves_rail::bool_value(value)
+}
+
+fn canonical_hash(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+#[cfg(test)]
+fn parse_text(source: &str) -> Result<IoValue> {
+    crate::preserves_rail::parse_text(source)
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn to_text(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &PreservesValue<IoValue>) -> IoValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 use crate::artifacts;
-use crate::artifacts::ArtifactPayloadRef;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 
 pub const TOOL_VERSION: &str = "local-artifact-catalog-v1";
 pub const DEFAULT_SHORT_ID_MIN_LENGTH: usize = 8;
@@ -115,7 +143,7 @@ pub struct CatalogSummary {
     pub evidence_refs: Vec<String>,
     pub classifications: Vec<String>,
     pub visibility_decision: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,10 +151,10 @@ pub struct CatalogQueryResult {
     pub query_ref: String,
     pub result_ref: String,
     pub decision: String,
-    pub items: Vec<IOValue>,
+    pub items: Vec<IoValue>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
-    pub receipt_value: IOValue,
+    pub value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,8 +163,8 @@ pub struct CatalogShortIdResolution {
     pub full_ref: Option<String>,
     pub candidates: Vec<String>,
     pub decision: String,
-    pub value: IOValue,
-    pub receipt_value: IOValue,
+    pub value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,7 +176,7 @@ pub struct CatalogReceipt {
     pub result_ref: Option<String>,
     pub refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 pub fn list(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogListInput) -> Result<CatalogQueryResult> {
@@ -331,16 +359,16 @@ pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<
 
 struct StoreScan<'a> {
     chunk_root: &'a Path,
-    hidden: BTreeSet<String>,
-    available_chunk_refs: BTreeSet<String>,
+    hidden: Set<String>,
+    available_chunk_refs: Set<String>,
     visible_manifest_refs: Vec<String>,
-    manifest_items: Vec<IOValue>,
+    manifest_items: Vec<IoValue>,
     total_chunk_refs: usize,
-    visible_unique_chunks: BTreeSet<String>,
-    visible_available_chunks: BTreeSet<String>,
-    visible_missing_chunks: BTreeSet<String>,
+    visible_unique_chunks: Set<String>,
+    visible_available_chunks: Set<String>,
+    visible_missing_chunks: Set<String>,
     visible_manifest_pins: usize,
-    visible_chunk_pins: BTreeSet<String>,
+    visible_chunk_pins: Set<String>,
 }
 
 #[derive(Default)]
@@ -353,7 +381,7 @@ struct ManifestScan {
 }
 
 impl<'a> StoreScan<'a> {
-    fn new(chunk_root: &'a Path, hidden: BTreeSet<String>) -> Result<Self> {
+    fn new(chunk_root: &'a Path, hidden: Set<String>) -> Result<Self> {
         Ok(Self {
             chunk_root,
             hidden,
@@ -361,11 +389,11 @@ impl<'a> StoreScan<'a> {
             visible_manifest_refs: Vec::new(),
             manifest_items: Vec::new(),
             total_chunk_refs: 0,
-            visible_unique_chunks: BTreeSet::new(),
-            visible_available_chunks: BTreeSet::new(),
-            visible_missing_chunks: BTreeSet::new(),
+            visible_unique_chunks: Set::new(),
+            visible_available_chunks: Set::new(),
+            visible_missing_chunks: Set::new(),
             visible_manifest_pins: 0,
-            visible_chunk_pins: BTreeSet::new(),
+            visible_chunk_pins: Set::new(),
         })
     }
 
@@ -588,12 +616,12 @@ struct ShortIdResultInput<'a, 'p> {
     query_ref: &'a str,
     prefix: &'a ShortIdPrefix<'p>,
     min_length: usize,
-    value: &'a IOValue,
+    value: &'a IoValue,
     outcome: &'a ShortIdOutcome,
     candidates: &'a [String],
 }
 
-fn short_id_result_value(input: ShortIdResultInput<'_, '_>) -> Result<IOValue> {
+fn short_id_result_value(input: ShortIdResultInput<'_, '_>) -> Result<IoValue> {
     catalog_result_value(
         input.query_ref,
         &input.outcome.decision,
@@ -630,7 +658,7 @@ fn short_id_receipt_value(
     result_ref: &str,
     refs: &[String],
     outcome: &ShortIdOutcome,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     build_receipt_value(&ReceiptValueInput {
         operation: "short-id",
         decision: &outcome.decision,
@@ -646,7 +674,7 @@ fn short_id_receipt_value(
     })
 }
 
-pub fn parse_catalog_receipt(value: &IOValue) -> Result<CatalogReceipt> {
+pub fn parse_catalog_receipt(value: &IoValue) -> Result<CatalogReceipt> {
     let fields = value
         .collect_simple_record("catalog-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-receipt-v1 ...>"))?;
@@ -665,7 +693,7 @@ pub fn parse_catalog_receipt(value: &IOValue) -> Result<CatalogReceipt> {
     })
 }
 
-pub fn catalog_summary(value: &IOValue) -> Result<String> {
+pub fn catalog_summary(value: &IoValue) -> Result<String> {
     if let Ok(receipt) = parse_catalog_receipt(value) {
         return Ok(format!(
             "catalog receipt operation={} decision={} query={} result={}",
@@ -745,7 +773,7 @@ fn append_registry_receipt_views(
     registry_root: &Path,
     subject_ref: &str,
     visibility: &CatalogVisibilityInput,
-    items: &mut impl crate::bounded::VecSink<IOValue>,
+    items: &mut impl crate::bounded::VecSink<IoValue>,
 ) -> Result<()> {
     for receipt in artifacts::list_receipts(registry_root)? {
         if receipt.subject_ref != subject_ref && !to_text(&receipt.value)?.contains(subject_ref) {
@@ -769,7 +797,7 @@ fn append_ledger_receipt_views(
     ledger_root: &Path,
     subject_ref: &str,
     visibility: &CatalogVisibilityInput,
-    items: &mut impl crate::bounded::VecSink<IOValue>,
+    items: &mut impl crate::bounded::VecSink<IoValue>,
 ) -> Result<()> {
     for entry in ledger::list_artifacts(ledger_root)? {
         if hidden_set(visibility).contains(&entry.artifact_ref) {
@@ -801,7 +829,7 @@ fn collect_summaries(
 ) -> Result<Vec<CatalogSummary>> {
     let hidden = hidden_set(visibility);
     let mut summaries = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen = Set::new();
     for artifact in artifacts::list_artifacts(registry_root, None)? {
         if hidden.contains(&artifact.artifact_ref) {
             continue;
@@ -906,7 +934,7 @@ fn ledger_summary(
     registry_root: &Path,
     ledger_root: &Path,
     artifact_ref: &str,
-    value: IOValue,
+    value: IoValue,
     visibility: &CatalogVisibilityInput,
 ) -> Result<CatalogSummary> {
     let kind = ledger::artifact_kind(&value).to_string();
@@ -956,11 +984,11 @@ fn ledger_summary(
     })
 }
 
-fn known_classifications(value: &IOValue) -> Vec<String> {
+fn known_classifications(value: &IoValue) -> Vec<String> {
     known_classifications_result(value).unwrap_or_default()
 }
 
-type ClassificationProbe = fn(&IOValue) -> Result<Option<Vec<String>>>;
+type ClassificationProbe = fn(&IoValue) -> Result<Option<Vec<String>>>;
 
 const CLASSIFICATION_PROBES: &[ClassificationProbe] = &[
     direct_labels,
@@ -977,7 +1005,7 @@ const CLASSIFICATION_PROBES: &[ClassificationProbe] = &[
     octet_gate_labels,
 ];
 
-fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
+fn known_classifications_result(value: &IoValue) -> Result<Vec<String>> {
     for probe in CLASSIFICATION_PROBES {
         if let Some(classifications) = (*probe)(value)? {
             return Ok(classifications);
@@ -986,7 +1014,7 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
     Ok(Vec::new())
 }
 
-fn direct_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn direct_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Ok(receipt) = artifacts::parse_artifact_receipt(value) {
         return Ok(Some(vec![
             "artifact-receipt:registry".to_string(),
@@ -1036,7 +1064,7 @@ fn direct_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn release_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn release_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Ok(receipt) = crate::operator_dogfood::parse_release_gate_receipt(value) {
         let mut classifications = vec![
             "deterministic-replay:release-binding".to_string(),
@@ -1082,7 +1110,7 @@ fn release_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn retention_core_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn retention_core_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Ok(profile) = crate::retention::parse_retention_class_profile(value) {
         return Ok(Some(vec![
             "retention:class".to_string(),
@@ -1109,7 +1137,7 @@ fn retention_core_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn retention_plan_apply_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn retention_plan_apply_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Ok(plan) = crate::retention::parse_retention_gc_plan(value) {
         return Ok(Some(vec![
             "retention-gc:plan".to_string(),
@@ -1145,7 +1173,7 @@ fn retention_plan_apply_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn retention_execute_audit_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn retention_execute_audit_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Ok(execute) = crate::retention::parse_retention_gc_execution_gate(value) {
         let mut classifications = vec![
             "retention-gc:execute".to_string(),
@@ -1191,7 +1219,7 @@ fn retention_execute_audit_labels(value: &IOValue) -> Result<Option<Vec<String>>
     Ok(None)
 }
 
-fn retention_candidate_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn retention_candidate_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Ok(explain) = crate::retention::parse_retention_candidate_explain(value) {
         let mut classifications = vec![
             "retention:explain".to_string(),
@@ -1231,7 +1259,7 @@ fn retention_candidate_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn retention_tail_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn retention_tail_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Ok(profile) = crate::retention::parse_retention_candidate_bundle_profile(value) {
         return Ok(Some(vec![
             "retention:bundle-profile".to_string(),
@@ -1279,7 +1307,7 @@ fn retention_tail_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn lifecycle_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn lifecycle_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if crate::transcripts::parse_transcript_artifact(value).is_ok() {
         return Ok(Some(vec![
             "transcript:artifact".to_string(),
@@ -1304,7 +1332,7 @@ fn lifecycle_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn provenance_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn provenance_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Ok(record) = crate::provenance::parse_provenance_record(value) {
         return Ok(Some(vec![
             "provenance:record".to_string(),
@@ -1367,7 +1395,7 @@ fn provenance_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn octet_evidence_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn octet_evidence_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(fields) = value.collect_simple_record("octet-structured-findings-v1", Some(7)) {
         let counts = value_to_iovalue(&fields[4]);
         let count_fields = simple_record(&counts, "counts", 4)?;
@@ -1397,7 +1425,7 @@ fn octet_evidence_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn octet_baseline_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn octet_baseline_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(fields) = value.collect_simple_record("octet-warning-baseline-v1", Some(14)) {
         let expires_at = record_string(&fields[3], "expires-at")?;
         let finding_count = record_sequence_len(&fields[8], "finding-keys")?;
@@ -1468,7 +1496,7 @@ fn octet_baseline_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn octet_gate_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
+fn octet_gate_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(fields) = value.collect_simple_record("octet-gate-policy-v1", Some(8)) {
         let profile = record_string(&fields[1], "profile")?;
         let required_artifacts = record_sequence_len(&fields[3], "required-artifacts")?;
@@ -1522,7 +1550,9 @@ fn octet_gate_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn deterministic_replay_rollup_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
+fn deterministic_replay_rollup_classifications(
+    fields: &PreservesRecord<PreservesValue<IoValue>>,
+) -> Result<Vec<String>> {
     require_schema(
         &fields[0],
         crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA,
@@ -1550,7 +1580,9 @@ fn deterministic_replay_rollup_classifications(fields: &Record<Value<IOValue>>) 
     Ok(classifications)
 }
 
-fn deterministic_replay_index_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
+fn deterministic_replay_index_classifications(
+    fields: &PreservesRecord<PreservesValue<IoValue>>,
+) -> Result<Vec<String>> {
     require_schema(&fields[0], crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA, "deterministic replay index")?;
     let decision = record_string(&fields[1], "decision")?;
     let total_count = record_u64(&fields[2], "total-count")?;
@@ -1591,7 +1623,9 @@ fn deterministic_replay_index_classifications(fields: &Record<Value<IOValue>>) -
     Ok(classifications)
 }
 
-fn deterministic_replay_verify_gate_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
+fn deterministic_replay_verify_gate_classifications(
+    fields: &PreservesRecord<PreservesValue<IoValue>>,
+) -> Result<Vec<String>> {
     require_schema(
         &fields[0],
         crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA,
@@ -1613,7 +1647,9 @@ fn deterministic_replay_verify_gate_classifications(fields: &Record<Value<IOValu
     ])
 }
 
-fn deterministic_replay_verify_fixture_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
+fn deterministic_replay_verify_fixture_classifications(
+    fields: &PreservesRecord<PreservesValue<IoValue>>,
+) -> Result<Vec<String>> {
     require_schema(
         &fields[0],
         crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA,
@@ -1741,9 +1777,9 @@ fn scoped_refs(
     root_refs: &[String],
     include_dependencies: bool,
     include_dependents: bool,
-) -> Result<BTreeSet<String>> {
+) -> Result<Set<String>> {
     validate_refs(root_refs, "catalog scope ref")?;
-    let mut scoped = BTreeSet::new();
+    let mut scoped = Set::new();
     ensure_count_at_most(root_refs.len(), MAX_CATALOG_REFS, "catalog scope roots")?;
     let mut frontier = root_refs.to_vec();
     while let Some(current) = frontier.pop() {
@@ -1797,7 +1833,7 @@ fn visible_candidate_refs(
     visibility: &CatalogVisibilityInput,
 ) -> Result<Vec<String>> {
     let hidden = hidden_set(visibility);
-    let mut candidates = BTreeSet::new();
+    let mut candidates = Set::new();
     for artifact in artifacts::list_artifacts(registry_root, None)? {
         if !hidden.contains(&artifact.artifact_ref) {
             insert_bounded(&mut candidates, artifact.artifact_ref, MAX_CATALOG_REFS, "catalog visible candidates")?;
@@ -1819,8 +1855,8 @@ fn visible_candidate_refs(
 
 fn finish_query(
     operation: &str,
-    query_value: IOValue,
-    items: Vec<IOValue>,
+    query_value: IoValue,
+    items: Vec<IoValue>,
     diagnostics: Vec<String>,
 ) -> Result<CatalogQueryResult> {
     let query_ref = canonical_hash(&query_value)?;
@@ -1898,7 +1934,7 @@ struct ReceiptValueInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-fn build_summary_value(input: &SummaryValueInput<'_>) -> Result<IOValue> {
+fn build_summary_value(input: &SummaryValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.artifact_ref, "catalog artifact ref")?;
     validate_non_empty(input.artifact_kind, "catalog artifact kind")?;
     validate_ref(input.payload_ref, "catalog payload ref")?;
@@ -1941,11 +1977,11 @@ fn build_summary_value(input: &SummaryValueInput<'_>) -> Result<IOValue> {
 
 fn catalog_view_value(
     summary: &CatalogSummary,
-    summary_value: &IOValue,
-    payload_or_value: &IOValue,
+    summary_value: &IoValue,
+    payload_or_value: &IoValue,
     include_payload: bool,
     redacted: bool,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     Ok(record("catalog-view-v1", vec![
         string(crate::preserves_rail::CATALOG_VIEW_SCHEMA),
         record("artifact", vec![string(&summary.artifact_ref), string(&summary.artifact_kind)]),
@@ -1960,7 +1996,7 @@ fn catalog_view_value(
     ]))
 }
 
-fn build_query_value(input: &QueryValueInput<'_>) -> Result<IOValue> {
+fn build_query_value(input: &QueryValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "catalog operation")?;
     validate_refs(input.root_refs, "catalog query root ref")?;
     validate_filters(input.filters)?;
@@ -1995,10 +2031,10 @@ fn build_query_value(input: &QueryValueInput<'_>) -> Result<IOValue> {
 fn catalog_result_value(
     query_ref: &str,
     decision: &str,
-    items: &[IOValue],
+    items: &[IoValue],
     diagnostics: &[String],
     checks: &[(&str, &str)],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_ref(query_ref, "catalog result query ref")?;
     validate_decision(decision)?;
     Ok(record("catalog-result-v1", vec![
@@ -2011,7 +2047,7 @@ fn catalog_result_value(
     ]))
 }
 
-fn build_receipt_value(input: &ReceiptValueInput<'_>) -> Result<IOValue> {
+fn build_receipt_value(input: &ReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "catalog receipt operation")?;
     validate_decision(input.decision)?;
     validate_ref(input.query_ref, "catalog receipt query ref")?;
@@ -2043,7 +2079,7 @@ fn short_id_resolution_value(
     candidates: &[String],
     decision: &str,
     diagnostics: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_non_empty(prefix, "catalog short id prefix")?;
     if let Some(full_ref) = full_ref {
         validate_ref(full_ref, "catalog short id full ref")?;
@@ -2073,7 +2109,7 @@ struct ChunkStoreCatalogStatusInput<'a> {
     dedup_hits: usize,
 }
 
-fn chunk_store_catalog_status_value(input: &ChunkStoreCatalogStatusInput<'_>) -> Result<IOValue> {
+fn chunk_store_catalog_status_value(input: &ChunkStoreCatalogStatusInput<'_>) -> Result<IoValue> {
     validate_refs(input.manifest_refs, "chunk catalog manifest ref")?;
     Ok(record("chunk-store-catalog-v1", vec![
         string("molten.catalog.chunk-store.v1"),
@@ -2115,7 +2151,7 @@ struct ChunkManifestCatalogInput<'a> {
     visible_chunks: &'a [String],
 }
 
-fn chunk_manifest_catalog_value(input: &ChunkManifestCatalogInput<'_>) -> Result<IOValue> {
+fn chunk_manifest_catalog_value(input: &ChunkManifestCatalogInput<'_>) -> Result<IoValue> {
     let manifest = input.manifest;
     validate_ref(&manifest.manifest_ref, "chunk catalog manifest ref")?;
     validate_ref(&manifest.root_ref, "chunk catalog root ref")?;
@@ -2184,7 +2220,7 @@ fn usize_to_u64(value: usize, label: &str) -> Result<u64> {
     u64::try_from(value).map_err(|_| MoltenError::invalid_harness(format!("{label} count exceeds u64")))
 }
 
-fn filter_value(filter: &CatalogFilter) -> Result<IOValue> {
+fn filter_value(filter: &CatalogFilter) -> Result<IoValue> {
     let (kind, value) = match filter {
         CatalogFilter::Ref(value) => ("ref", value.as_str()),
         CatalogFilter::ArtifactKind(value) => ("artifact-kind", value.as_str()),
@@ -2206,7 +2242,7 @@ fn filter_value(filter: &CatalogFilter) -> Result<IOValue> {
     Ok(record("filter", vec![string(kind), string(value)]))
 }
 
-fn maybe_redacted_value(value: &IOValue, redaction_profile_ref: Option<&str>) -> Result<IOValue> {
+fn maybe_redacted_value(value: &IoValue, redaction_profile_ref: Option<&str>) -> Result<IoValue> {
     crate::secrets::redacted_value(value, redaction_profile_ref)
 }
 
@@ -2221,7 +2257,7 @@ fn receipt_field_matches(text: &str, field: &str, value: &str) -> bool {
     text.contains(&format!("<{field} \"{value}\">")) || text.contains(&format!("<{field} {value}"))
 }
 
-fn hidden_set(visibility: &CatalogVisibilityInput) -> BTreeSet<String> {
+fn hidden_set(visibility: &CatalogVisibilityInput) -> Set<String> {
     visibility.hidden_refs.iter().cloned().collect()
 }
 
@@ -2257,15 +2293,15 @@ fn canonical_ref_matches_prefix(candidate: &str, normalized_prefix: &str) -> boo
     crate::preserves_rail::content_ref_hex(candidate).is_ok_and(|hex| hex.starts_with(normalized_prefix))
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &PreservesValue<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -2275,17 +2311,17 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
 }
 
-fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &PreservesValue<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "catalog checks")?;
@@ -2312,7 +2348,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &PreservesValue<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -2322,84 +2358,87 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, PreservesRecord<PreservesValue<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(
+    value: &'a PreservesValue<IoValue>,
+    field: &str,
+) -> Result<std::borrow::Cow<'a, Vec<PreservesValue<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_string(&fields[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_ref(&fields[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &PreservesValue<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&fields[0])
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&fields[0], label)
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     let items = required_sequence(&fields[0], label)?;
     items.iter().map(|item| required_string(item, label)).collect()
 }
 
-fn record_sequence_len(value: &Value<IOValue>, label: &str) -> Result<usize> {
+fn record_sequence_len(value: &PreservesValue<IoValue>, label: &str) -> Result<usize> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     Ok(required_sequence(&fields[0], label)?.len())
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &PreservesValue<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_u64(&fields[0], label)
 }
 
-fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_value(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     items.iter().map(|item| required_ref(item, label)).collect()
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &PreservesValue<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -2485,7 +2524,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     Ok(())
 }
 
-fn insert_bounded<T: Ord>(values: &mut BTreeSet<T>, value: T, maximum: usize, label: &str) -> Result<bool> {
+fn insert_bounded<T: Ord>(values: &mut Set<T>, value: T, maximum: usize, label: &str) -> Result<bool> {
     if values.contains(&value) {
         return Ok(false);
     }
@@ -2502,7 +2541,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 }
 
 fn sorted_unique(refs: &[String]) -> Vec<String> {
-    refs.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
+    refs.iter().cloned().collect::<Set<_>>().into_iter().collect()
 }
 
 fn push_optional_classification(
@@ -2519,7 +2558,6 @@ fn push_optional_classification(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preserves_rail::parse_text;
 
     #[test]
     fn summaries_include_registry_names_dependencies_and_ledger_classification() {
@@ -2711,13 +2749,13 @@ mod tests {
     }
 
     struct Values {
-        verify: IOValue,
-        divergence: IOValue,
-        rollup: IOValue,
-        index: IOValue,
+        verify: IoValue,
+        divergence: IoValue,
+        rollup: IoValue,
+        index: IoValue,
     }
 
-    fn verify_value(expected_report_ref: &str, actual_report_ref: &str, final_state_ref: &str) -> IOValue {
+    fn verify_value(expected_report_ref: &str, actual_report_ref: &str, final_state_ref: &str) -> IoValue {
         record("deterministic-replay-verify-v1", vec![
             string(crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
             string("pass"),
@@ -2729,7 +2767,7 @@ mod tests {
         ])
     }
 
-    fn divergence_value() -> IOValue {
+    fn divergence_value() -> IoValue {
         record("deterministic-first-divergence-v1", vec![
             string(crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA),
             record("kind", vec![string("effect-response")]),
@@ -3298,7 +3336,7 @@ mod tests {
     fn install_fixture(
         root: &Path,
         kind: &str,
-        payload: IOValue,
+        payload: IoValue,
         dependency_refs: &[String],
         schema_refs: &[String],
     ) -> artifacts::ArtifactInstall {
@@ -3320,7 +3358,7 @@ mod tests {
         canonical_hash(&record("catalog-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    fn count_value(value: u64) -> IOValue {
+    fn count_value(value: u64) -> IoValue {
         crate::preserves_rail::u64_value(value)
     }
 
