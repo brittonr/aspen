@@ -1,16 +1,3 @@
-use preserves::IOValue;
-
-use crate::runtime::RuntimeEvent;
-use crate::runtime::RuntimeState;
-use crate::runtime::RuntimeStep;
-use crate::runtime::RuntimeValue;
-use crate::service_records;
-use crate::service_records::ServiceDemand;
-use crate::service_records::ServiceLifecycleReceiptInput;
-use crate::service_records::ServiceManifest;
-use crate::service_records::ServiceStatus;
-use crate::service_records::ServiceStatusInput;
-
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type Value<T> = preserves::Value<T>;
@@ -23,19 +10,19 @@ const SERVICE_RUNTIME_REPORT_SCHEMA: &str = crate::preserves_rail::SERVICE_RUNTI
 const SERVICE_RUNTIME_SUITE_SCHEMA: &str = crate::preserves_rail::SERVICE_RUNTIME_SUITE_SCHEMA;
 const SERVICE_TURN_CONTEXT_SCHEMA: &str = crate::preserves_rail::SERVICE_TURN_CONTEXT_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &preserves::IOValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> preserves::IOValue {
     crate::preserves_rail::string(value)
 }
 
@@ -43,7 +30,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -68,33 +55,33 @@ pub struct ServiceRuntimeEvidenceInput {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceRuntimeSuiteInput {
-    pub manifests: Vec<IOValue>,
-    pub demands: Vec<IOValue>,
-    pub statuses: Vec<IOValue>,
+    pub manifests: Vec<preserves::IOValue>,
+    pub demands: Vec<preserves::IOValue>,
+    pub statuses: Vec<preserves::IOValue>,
     pub evidence: ServiceRuntimeEvidenceInput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceRuntimeSuite {
     pub suite_ref: String,
-    pub manifests: Vec<ServiceManifest>,
-    pub demands: Vec<ServiceDemand>,
-    pub statuses: Vec<ServiceStatus>,
+    pub manifests: Vec<crate::service_records::ServiceManifest>,
+    pub demands: Vec<crate::service_records::ServiceDemand>,
+    pub statuses: Vec<crate::service_records::ServiceStatus>,
     pub evidence: ServiceRuntimeEvidenceInput,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceRuntimeRun {
     pub suite_ref: String,
-    pub suite_value: IOValue,
+    pub suite_value: preserves::IOValue,
     pub report_ref: String,
-    pub lifecycle_receipts: Vec<IOValue>,
-    pub statuses: Vec<IOValue>,
-    pub readiness_assertions: Vec<IOValue>,
-    pub replay_identities: Vec<IOValue>,
-    pub turn_contexts: Vec<IOValue>,
-    pub value: IOValue,
+    pub lifecycle_receipts: Vec<preserves::IOValue>,
+    pub statuses: Vec<preserves::IOValue>,
+    pub readiness_assertions: Vec<preserves::IOValue>,
+    pub replay_identities: Vec<preserves::IOValue>,
+    pub turn_contexts: Vec<preserves::IOValue>,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,17 +93,17 @@ pub struct ServiceRuntimeReplay {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DemandOutcome {
-    lifecycle_receipt: IOValue,
-    status: Option<IOValue>,
-    readiness: Option<IOValue>,
-    replay_identity: Option<IOValue>,
-    turn_context: Option<IOValue>,
+    lifecycle_receipt: preserves::IOValue,
+    status: Option<preserves::IOValue>,
+    readiness: Option<preserves::IOValue>,
+    replay_identity: Option<preserves::IOValue>,
+    turn_context: Option<preserves::IOValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct BoundedValues {
     label: &'static str,
-    values: Vec<IOValue>,
+    values: Vec<preserves::IOValue>,
 }
 
 impl BoundedValues {
@@ -127,11 +114,11 @@ impl BoundedValues {
         }
     }
 
-    fn from_values(label: &'static str, values: Vec<IOValue>) -> Self {
+    fn from_values(label: &'static str, values: Vec<preserves::IOValue>) -> Self {
         Self { label, values }
     }
 
-    fn push(&mut self, value: IOValue) -> Result<()> {
+    fn push(&mut self, value: preserves::IOValue) -> Result<()> {
         let total = self
             .values
             .len()
@@ -142,11 +129,11 @@ impl BoundedValues {
         Ok(())
     }
 
-    fn as_slice(&self) -> &[IOValue] {
+    fn as_slice(&self) -> &[preserves::IOValue] {
         &self.values
     }
 
-    fn into_values(self) -> Vec<IOValue> {
+    fn into_values(self) -> Vec<preserves::IOValue> {
         self.values
     }
 }
@@ -161,7 +148,7 @@ struct Artifacts {
 }
 
 impl Artifacts {
-    fn new(statuses: Vec<IOValue>) -> Self {
+    fn new(statuses: Vec<preserves::IOValue>) -> Self {
         Self {
             lifecycle_receipts: BoundedValues::empty("service lifecycle receipts"),
             statuses: BoundedValues::from_values("service statuses", statuses),
@@ -191,25 +178,28 @@ impl Artifacts {
 
 struct RunCtx<'a> {
     evidence: &'a ServiceRuntimeEvidenceInput,
-    manifests: &'a OrderedMap<String, ServiceManifest>,
+    manifests: &'a OrderedMap<String, crate::service_records::ServiceManifest>,
     ready_statuses: OrderedMap<String, String>,
     artifacts: Artifacts,
-    runtime: RuntimeState,
+    runtime: crate::runtime::RuntimeState,
 }
 
 struct PassResult {
-    pending: Vec<ServiceDemand>,
+    pending: Vec<crate::service_records::ServiceDemand>,
     is_progress_made: bool,
 }
 
 enum StepOutcome {
     Started,
     Finished,
-    Pending(ServiceDemand),
+    Pending(crate::service_records::ServiceDemand),
 }
 
 impl<'a> RunCtx<'a> {
-    fn new(suite: &'a ServiceRuntimeSuite, manifests: &'a OrderedMap<String, ServiceManifest>) -> Result<Self> {
+    fn new(
+        suite: &'a ServiceRuntimeSuite,
+        manifests: &'a OrderedMap<String, crate::service_records::ServiceManifest>,
+    ) -> Result<Self> {
         let ready_statuses = ready_status_map(&suite.statuses)?;
         let statuses = suite.statuses.iter().map(|status| status.value.clone()).collect::<Vec<_>>();
         Ok(Self {
@@ -217,11 +207,15 @@ impl<'a> RunCtx<'a> {
             manifests,
             ready_statuses,
             artifacts: Artifacts::new(statuses),
-            runtime: RuntimeState::new(1),
+            runtime: crate::runtime::RuntimeState::new(1),
         })
     }
 
-    fn run_demands(&mut self, mut pending: Vec<ServiceDemand>, is_cycle_present: bool) -> Result<()> {
+    fn run_demands(
+        &mut self,
+        mut pending: Vec<crate::service_records::ServiceDemand>,
+        is_cycle_present: bool,
+    ) -> Result<()> {
         let mut passes = 0usize;
         while !pending.is_empty() && !is_cycle_present {
             passes = next_pass_count(passes)?;
@@ -234,7 +228,7 @@ impl<'a> RunCtx<'a> {
         self.finish_pending(pending, is_cycle_present)
     }
 
-    fn run_pass(&mut self, pending: Vec<ServiceDemand>) -> Result<PassResult> {
+    fn run_pass(&mut self, pending: Vec<crate::service_records::ServiceDemand>) -> Result<PassResult> {
         let mut next_pending = Vec::with_capacity(pending.len());
         let mut is_progress_made = false;
         for demand in pending {
@@ -252,7 +246,7 @@ impl<'a> RunCtx<'a> {
         })
     }
 
-    fn step(&mut self, demand: ServiceDemand) -> Result<StepOutcome> {
+    fn step(&mut self, demand: crate::service_records::ServiceDemand) -> Result<StepOutcome> {
         let Some(manifest) = self.manifests.get(&demand.service_id) else {
             self.artifacts.push_outcome(missing_manifest_outcome(&demand)?)?;
             return Ok(StepOutcome::Finished);
@@ -284,13 +278,17 @@ impl<'a> RunCtx<'a> {
 
     fn track_ready_status(&mut self, outcome: &DemandOutcome) -> Result<()> {
         if let Some(status) = outcome.status.as_ref() {
-            let parsed = service_records::parse_service_status(status)?;
+            let parsed = crate::service_records::parse_service_status(status)?;
             self.ready_statuses.insert(parsed.service_id.clone(), parsed.status_ref);
         }
         Ok(())
     }
 
-    fn finish_pending(&mut self, pending: Vec<ServiceDemand>, is_cycle_present: bool) -> Result<()> {
+    fn finish_pending(
+        &mut self,
+        pending: Vec<crate::service_records::ServiceDemand>,
+        is_cycle_present: bool,
+    ) -> Result<()> {
         for demand in pending {
             let manifest = self.manifests.get(&demand.service_id);
             let diagnostic = if is_cycle_present {
@@ -313,7 +311,7 @@ impl<'a> RunCtx<'a> {
     }
 }
 
-pub fn service_runtime_suite_value(input: &ServiceRuntimeSuiteInput) -> Result<IOValue> {
+pub fn service_runtime_suite_value(input: &ServiceRuntimeSuiteInput) -> Result<preserves::IOValue> {
     validate_suite_input(input)?;
     Ok(record("service-runtime-suite-v1", vec![
         string(SERVICE_RUNTIME_SUITE_SCHEMA),
@@ -330,7 +328,7 @@ pub fn service_runtime_suite_value(input: &ServiceRuntimeSuiteInput) -> Result<I
     ]))
 }
 
-pub fn parse_service_runtime_suite(value: &IOValue) -> Result<ServiceRuntimeSuite> {
+pub fn parse_service_runtime_suite(value: &preserves::IOValue) -> Result<ServiceRuntimeSuite> {
     let fields = value
         .collect_simple_record("service-runtime-suite-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-runtime-suite-v1 ...>"))?;
@@ -340,9 +338,13 @@ pub fn parse_service_runtime_suite(value: &IOValue) -> Result<ServiceRuntimeSuit
     let manifest_values = parse_iovalue_sequence(&fields[1], "manifests")?;
     let demand_values = parse_iovalue_sequence(&fields[2], "demands")?;
     let status_values = parse_iovalue_sequence(&fields[3], "statuses")?;
-    let manifests = manifest_values.iter().map(service_records::parse_service_manifest).collect::<Result<Vec<_>>>()?;
-    let demands = demand_values.iter().map(service_records::parse_service_demand).collect::<Result<Vec<_>>>()?;
-    let statuses = status_values.iter().map(service_records::parse_service_status).collect::<Result<Vec<_>>>()?;
+    let manifests = manifest_values
+        .iter()
+        .map(crate::service_records::parse_service_manifest)
+        .collect::<Result<Vec<_>>>()?;
+    let demands = demand_values.iter().map(crate::service_records::parse_service_demand).collect::<Result<Vec<_>>>()?;
+    let statuses =
+        status_values.iter().map(crate::service_records::parse_service_status).collect::<Result<Vec<_>>>()?;
     let evidence = parse_evidence(&fields[4])?;
     validate_runtime_evidence(&evidence)?;
     Ok(ServiceRuntimeSuite {
@@ -355,7 +357,7 @@ pub fn parse_service_runtime_suite(value: &IOValue) -> Result<ServiceRuntimeSuit
     })
 }
 
-pub fn run_service_runtime_suite_value(value: &IOValue) -> Result<ServiceRuntimeRun> {
+pub fn run_service_runtime_suite_value(value: &preserves::IOValue) -> Result<ServiceRuntimeRun> {
     let suite = parse_service_runtime_suite(value)?;
     run_service_runtime_suite(&suite)
 }
@@ -368,7 +370,9 @@ pub fn run_service_runtime_suite(suite: &ServiceRuntimeSuite) -> Result<ServiceR
     finish_runtime_run(suite, context.into_artifacts())
 }
 
-fn manifest_map(manifests: &[ServiceManifest]) -> Result<OrderedMap<String, ServiceManifest>> {
+fn manifest_map(
+    manifests: &[crate::service_records::ServiceManifest],
+) -> Result<OrderedMap<String, crate::service_records::ServiceManifest>> {
     let mut mapped = OrderedMap::new();
     for manifest in manifests {
         if mapped.insert(manifest.service_id.clone(), manifest.clone()).is_some() {
@@ -381,7 +385,7 @@ fn manifest_map(manifests: &[ServiceManifest]) -> Result<OrderedMap<String, Serv
     Ok(mapped)
 }
 
-fn sorted_demands(demands: &[ServiceDemand]) -> Vec<ServiceDemand> {
+fn sorted_demands(demands: &[crate::service_records::ServiceDemand]) -> Vec<crate::service_records::ServiceDemand> {
     let mut sorted = demands.to_vec();
     sorted.sort_by(|left, right| {
         left.service_id.cmp(&right.service_id).then_with(|| left.demand_ref.cmp(&right.demand_ref))
@@ -428,7 +432,7 @@ fn finish_runtime_run(suite: &ServiceRuntimeSuite, artifacts: Artifacts) -> Resu
     })
 }
 
-pub fn replay_service_runtime_report(value: &IOValue) -> Result<ServiceRuntimeReplay> {
+pub fn replay_service_runtime_report(value: &preserves::IOValue) -> Result<ServiceRuntimeReplay> {
     let report = parse_service_runtime_report(value)?;
     let rerun = run_service_runtime_suite_value(&report.suite_value)?;
     let expected_report_ref = canonical_hash(value)?;
@@ -451,7 +455,7 @@ pub fn replay_service_runtime_report(value: &IOValue) -> Result<ServiceRuntimeRe
     })
 }
 
-pub fn parse_service_runtime_report(value: &IOValue) -> Result<ServiceRuntimeRun> {
+pub fn parse_service_runtime_report(value: &preserves::IOValue) -> Result<ServiceRuntimeRun> {
     let fields = value
         .collect_simple_record("service-runtime-report-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-runtime-report-v1 ...>"))?;
@@ -478,12 +482,12 @@ pub fn parse_service_runtime_report(value: &IOValue) -> Result<ServiceRuntimeRun
     })
 }
 
-pub fn service_runtime_summary(value: &IOValue) -> Result<String> {
+pub fn service_runtime_summary(value: &preserves::IOValue) -> Result<String> {
     if let Ok(report) = parse_service_runtime_report(value) {
         let pass_count = report
             .lifecycle_receipts
             .iter()
-            .filter_map(|receipt| service_records::parse_service_lifecycle_receipt(receipt).ok())
+            .filter_map(|receipt| crate::service_records::parse_service_lifecycle_receipt(receipt).ok())
             .filter(|receipt| receipt.decision == "pass")
             .count();
         return Ok(format!(
@@ -505,10 +509,10 @@ pub fn service_runtime_summary(value: &IOValue) -> Result<String> {
             suite.statuses.len()
         ));
     }
-    service_records::service_summary(value)
+    crate::service_records::service_summary(value)
 }
 
-pub fn two_service_suite_value() -> Result<IOValue> {
+pub fn two_service_suite_value() -> Result<preserves::IOValue> {
     let evidence = ServiceRuntimeEvidenceInput {
         authority_refs: vec![synthetic_ref("service-authority")?],
         policy_refs: vec![synthetic_ref("service-policy")?],
@@ -518,36 +522,38 @@ pub fn two_service_suite_value() -> Result<IOValue> {
         scheduler_ref: Some(synthetic_ref("service-scheduler")?),
         effect_log_refs: vec![synthetic_ref("service-effect-log")?],
     };
-    let backend_manifest = service_records::service_manifest_value(&service_records::ServiceManifestInput {
-        service_id: "svc:backend".to_string(),
-        owner_authority_ref: evidence.authority_refs[0].clone(),
-        target_ref: synthetic_ref("backend-target")?,
-        dependencies: Vec::new(),
-        provided_assertion_refs: vec![synthetic_ref("backend-ready-pattern")?],
-        restart_policy_ref: synthetic_ref("backend-restart")?,
-        policy_refs: evidence.policy_refs.clone(),
-        resource_refs: evidence.resource_refs.clone(),
-        effect_profile_refs: evidence.effect_profile_refs.clone(),
-    })?;
-    let frontend_manifest = service_records::service_manifest_value(&service_records::ServiceManifestInput {
-        service_id: "svc:frontend".to_string(),
-        owner_authority_ref: evidence.authority_refs[0].clone(),
-        target_ref: synthetic_ref("frontend-target")?,
-        dependencies: vec!["svc:backend".to_string()],
-        provided_assertion_refs: vec![synthetic_ref("frontend-ready-pattern")?],
-        restart_policy_ref: synthetic_ref("frontend-restart")?,
-        policy_refs: evidence.policy_refs.clone(),
-        resource_refs: evidence.resource_refs.clone(),
-        effect_profile_refs: evidence.effect_profile_refs.clone(),
-    })?;
-    let backend_demand = service_records::service_demand_value(&service_records::ServiceDemandInput {
+    let backend_manifest =
+        crate::service_records::service_manifest_value(&crate::service_records::ServiceManifestInput {
+            service_id: "svc:backend".to_string(),
+            owner_authority_ref: evidence.authority_refs[0].clone(),
+            target_ref: synthetic_ref("backend-target")?,
+            dependencies: Vec::new(),
+            provided_assertion_refs: vec![synthetic_ref("backend-ready-pattern")?],
+            restart_policy_ref: synthetic_ref("backend-restart")?,
+            policy_refs: evidence.policy_refs.clone(),
+            resource_refs: evidence.resource_refs.clone(),
+            effect_profile_refs: evidence.effect_profile_refs.clone(),
+        })?;
+    let frontend_manifest =
+        crate::service_records::service_manifest_value(&crate::service_records::ServiceManifestInput {
+            service_id: "svc:frontend".to_string(),
+            owner_authority_ref: evidence.authority_refs[0].clone(),
+            target_ref: synthetic_ref("frontend-target")?,
+            dependencies: vec!["svc:backend".to_string()],
+            provided_assertion_refs: vec![synthetic_ref("frontend-ready-pattern")?],
+            restart_policy_ref: synthetic_ref("frontend-restart")?,
+            policy_refs: evidence.policy_refs.clone(),
+            resource_refs: evidence.resource_refs.clone(),
+            effect_profile_refs: evidence.effect_profile_refs.clone(),
+        })?;
+    let backend_demand = crate::service_records::service_demand_value(&crate::service_records::ServiceDemandInput {
         demand_id: "demand:backend".to_string(),
         service_id: "svc:backend".to_string(),
         requester_ref: synthetic_ref("operator")?,
         manifest_ref: Some(canonical_hash(&backend_manifest)?),
         policy_refs: evidence.policy_refs.clone(),
     })?;
-    let frontend_demand = service_records::service_demand_value(&service_records::ServiceDemandInput {
+    let frontend_demand = crate::service_records::service_demand_value(&crate::service_records::ServiceDemandInput {
         demand_id: "demand:frontend".to_string(),
         service_id: "svc:frontend".to_string(),
         requester_ref: synthetic_ref("operator")?,
@@ -563,15 +569,15 @@ pub fn two_service_suite_value() -> Result<IOValue> {
 }
 
 struct ReportValueInput<'a> {
-    suite_value: &'a IOValue,
-    lifecycle_receipts: &'a [IOValue],
-    statuses: &'a [IOValue],
-    readiness_assertions: &'a [IOValue],
-    replay_identities: &'a [IOValue],
-    turn_contexts: &'a [IOValue],
+    suite_value: &'a preserves::IOValue,
+    lifecycle_receipts: &'a [preserves::IOValue],
+    statuses: &'a [preserves::IOValue],
+    readiness_assertions: &'a [preserves::IOValue],
+    replay_identities: &'a [preserves::IOValue],
+    turn_contexts: &'a [preserves::IOValue],
 }
 
-fn service_runtime_report_value(input: ReportValueInput<'_>) -> Result<IOValue> {
+fn service_runtime_report_value(input: ReportValueInput<'_>) -> Result<preserves::IOValue> {
     Ok(record("service-runtime-report-v1", vec![
         string(SERVICE_RUNTIME_REPORT_SCHEMA),
         record("suite", vec![input.suite_value.clone()]),
@@ -590,24 +596,24 @@ fn service_runtime_report_value(input: ReportValueInput<'_>) -> Result<IOValue> 
 }
 
 fn start_outcome(
-    runtime: &mut RuntimeState,
+    runtime: &mut crate::runtime::RuntimeState,
     evidence: &ServiceRuntimeEvidenceInput,
-    demand: &ServiceDemand,
-    manifest: &ServiceManifest,
+    demand: &crate::service_records::ServiceDemand,
+    manifest: &crate::service_records::ServiceManifest,
     dependency_status_refs: Vec<String>,
 ) -> Result<DemandOutcome> {
     let replay_identity = replay_identity_value(evidence, demand, manifest, &dependency_status_refs)?;
     let replay_identity_ref = canonical_hash(&replay_identity)?;
     let readiness = readiness_assertion_value(demand, manifest, &dependency_status_refs)?;
     let readiness_ref = canonical_hash(&readiness)?;
-    let runtime_value = RuntimeValue::new(readiness.clone())?;
-    let step = RuntimeStep::Assert {
+    let runtime_value = crate::runtime::RuntimeValue::new(readiness.clone())?;
+    let step = crate::runtime::RuntimeStep::Assert {
         actor: manifest.service_id.clone(),
         value: runtime_value,
     };
     let events = runtime.apply_step(&step);
     let turn_context = turn_context_value(demand, manifest, &readiness_ref, &events)?;
-    let status = service_records::service_status_value(&ServiceStatusInput {
+    let status = crate::service_records::service_status_value(&crate::service_records::ServiceStatusInput {
         service_id: manifest.service_id.clone(),
         state: "ready".to_string(),
         manifest_ref: Some(manifest.manifest_ref.clone()),
@@ -620,18 +626,20 @@ fn start_outcome(
         replay_refs: vec![replay_identity_ref],
     })?;
     let status_ref = canonical_hash(&status)?;
-    let lifecycle_receipt = service_records::service_lifecycle_receipt_value(&ServiceLifecycleReceiptInput {
-        operation: "start".to_string(),
-        decision: "pass".to_string(),
-        service_id: manifest.service_id.clone(),
-        manifest_ref: Some(manifest.manifest_ref.clone()),
-        status_ref: Some(status_ref),
-        authority_refs: evidence.authority_refs.clone(),
-        resource_refs: evidence.resource_refs.clone(),
-        effect_profile_refs: evidence.effect_profile_refs.clone(),
-        supervision_refs: Vec::new(),
-        diagnostics: Vec::new(),
-    })?;
+    let lifecycle_receipt = crate::service_records::service_lifecycle_receipt_value(
+        &crate::service_records::ServiceLifecycleReceiptInput {
+            operation: "start".to_string(),
+            decision: "pass".to_string(),
+            service_id: manifest.service_id.clone(),
+            manifest_ref: Some(manifest.manifest_ref.clone()),
+            status_ref: Some(status_ref),
+            authority_refs: evidence.authority_refs.clone(),
+            resource_refs: evidence.resource_refs.clone(),
+            effect_profile_refs: evidence.effect_profile_refs.clone(),
+            supervision_refs: Vec::new(),
+            diagnostics: Vec::new(),
+        },
+    )?;
     Ok(DemandOutcome {
         lifecycle_receipt,
         status: Some(status),
@@ -641,23 +649,29 @@ fn start_outcome(
     })
 }
 
-fn missing_manifest_outcome(demand: &ServiceDemand) -> Result<DemandOutcome> {
+fn missing_manifest_outcome(demand: &crate::service_records::ServiceDemand) -> Result<DemandOutcome> {
     deny_outcome(demand, None, "service demand has no matching manifest")
 }
 
-fn deny_outcome(demand: &ServiceDemand, manifest: Option<&ServiceManifest>, diagnostic: &str) -> Result<DemandOutcome> {
-    let lifecycle_receipt = service_records::service_lifecycle_receipt_value(&ServiceLifecycleReceiptInput {
-        operation: "start".to_string(),
-        decision: "deny".to_string(),
-        service_id: demand.service_id.clone(),
-        manifest_ref: manifest.map(|manifest| manifest.manifest_ref.clone()),
-        status_ref: None,
-        authority_refs: Vec::new(),
-        resource_refs: Vec::new(),
-        effect_profile_refs: Vec::new(),
-        supervision_refs: Vec::new(),
-        diagnostics: vec![diagnostic.to_string()],
-    })?;
+fn deny_outcome(
+    demand: &crate::service_records::ServiceDemand,
+    manifest: Option<&crate::service_records::ServiceManifest>,
+    diagnostic: &str,
+) -> Result<DemandOutcome> {
+    let lifecycle_receipt = crate::service_records::service_lifecycle_receipt_value(
+        &crate::service_records::ServiceLifecycleReceiptInput {
+            operation: "start".to_string(),
+            decision: "deny".to_string(),
+            service_id: demand.service_id.clone(),
+            manifest_ref: manifest.map(|manifest| manifest.manifest_ref.clone()),
+            status_ref: None,
+            authority_refs: Vec::new(),
+            resource_refs: Vec::new(),
+            effect_profile_refs: Vec::new(),
+            supervision_refs: Vec::new(),
+            diagnostics: vec![diagnostic.to_string()],
+        },
+    )?;
     Ok(DemandOutcome {
         lifecycle_receipt,
         status: None,
@@ -668,39 +682,41 @@ fn deny_outcome(demand: &ServiceDemand, manifest: Option<&ServiceManifest>, diag
 }
 
 fn dependency_wait_outcome(
-    demand: &ServiceDemand,
-    manifest: Option<&ServiceManifest>,
+    demand: &crate::service_records::ServiceDemand,
+    manifest: Option<&crate::service_records::ServiceManifest>,
     diagnostic: &str,
 ) -> Result<DemandOutcome> {
     dependency_resolution_outcome(demand, manifest, "diagnostic", diagnostic)
 }
 
 fn dependency_deny_outcome(
-    demand: &ServiceDemand,
-    manifest: Option<&ServiceManifest>,
+    demand: &crate::service_records::ServiceDemand,
+    manifest: Option<&crate::service_records::ServiceManifest>,
     diagnostic: &str,
 ) -> Result<DemandOutcome> {
     dependency_resolution_outcome(demand, manifest, "deny", diagnostic)
 }
 
 fn dependency_resolution_outcome(
-    demand: &ServiceDemand,
-    manifest: Option<&ServiceManifest>,
+    demand: &crate::service_records::ServiceDemand,
+    manifest: Option<&crate::service_records::ServiceManifest>,
     decision: &str,
     diagnostic: &str,
 ) -> Result<DemandOutcome> {
-    let lifecycle_receipt = service_records::service_lifecycle_receipt_value(&ServiceLifecycleReceiptInput {
-        operation: "dependency-wait".to_string(),
-        decision: decision.to_string(),
-        service_id: demand.service_id.clone(),
-        manifest_ref: manifest.map(|manifest| manifest.manifest_ref.clone()),
-        status_ref: None,
-        authority_refs: Vec::new(),
-        resource_refs: Vec::new(),
-        effect_profile_refs: Vec::new(),
-        supervision_refs: Vec::new(),
-        diagnostics: vec![diagnostic.to_string()],
-    })?;
+    let lifecycle_receipt = crate::service_records::service_lifecycle_receipt_value(
+        &crate::service_records::ServiceLifecycleReceiptInput {
+            operation: "dependency-wait".to_string(),
+            decision: decision.to_string(),
+            service_id: demand.service_id.clone(),
+            manifest_ref: manifest.map(|manifest| manifest.manifest_ref.clone()),
+            status_ref: None,
+            authority_refs: Vec::new(),
+            resource_refs: Vec::new(),
+            effect_profile_refs: Vec::new(),
+            supervision_refs: Vec::new(),
+            diagnostics: vec![diagnostic.to_string()],
+        },
+    )?;
     Ok(DemandOutcome {
         lifecycle_receipt,
         status: None,
@@ -711,10 +727,10 @@ fn dependency_resolution_outcome(
 }
 
 fn readiness_assertion_value(
-    demand: &ServiceDemand,
-    manifest: &ServiceManifest,
+    demand: &crate::service_records::ServiceDemand,
+    manifest: &crate::service_records::ServiceManifest,
     dependency_status_refs: &[String],
-) -> Result<IOValue> {
+) -> Result<preserves::IOValue> {
     Ok(record("service-readiness-v1", vec![
         string(SERVICE_READINESS_ASSERTION_SCHEMA),
         record("service-id", vec![string(&manifest.service_id)]),
@@ -731,10 +747,10 @@ fn readiness_assertion_value(
 
 fn replay_identity_value(
     evidence: &ServiceRuntimeEvidenceInput,
-    demand: &ServiceDemand,
-    manifest: &ServiceManifest,
+    demand: &crate::service_records::ServiceDemand,
+    manifest: &crate::service_records::ServiceManifest,
     dependency_status_refs: &[String],
-) -> Result<IOValue> {
+) -> Result<preserves::IOValue> {
     Ok(record("service-replay-identity-v1", vec![
         string(SERVICE_REPLAY_IDENTITY_SCHEMA),
         record("service-id", vec![string(&manifest.service_id)]),
@@ -758,11 +774,11 @@ fn replay_identity_value(
 }
 
 fn turn_context_value(
-    demand: &ServiceDemand,
-    manifest: &ServiceManifest,
+    demand: &crate::service_records::ServiceDemand,
+    manifest: &crate::service_records::ServiceManifest,
     readiness_ref: &str,
-    events: &[RuntimeEvent],
-) -> Result<IOValue> {
+    events: &[crate::runtime::RuntimeEvent],
+) -> Result<preserves::IOValue> {
     let event_labels = events.iter().map(runtime_event_label).collect::<Vec<_>>();
     Ok(record("service-turn-context-v1", vec![
         string(SERVICE_TURN_CONTEXT_SCHEMA),
@@ -775,22 +791,22 @@ fn turn_context_value(
     ]))
 }
 
-fn runtime_event_label(event: &RuntimeEvent) -> &'static str {
+fn runtime_event_label(event: &crate::runtime::RuntimeEvent) -> &'static str {
     match event {
-        RuntimeEvent::MessageDelivered { .. } => "message-delivered",
-        RuntimeEvent::ObserveRegistered { .. } => "observe-registered",
-        RuntimeEvent::AssertionObserved { .. } => "assertion-observed",
-        RuntimeEvent::AssertionCommitted { .. } => "assertion-committed",
-        RuntimeEvent::AssertionRetracted { .. } => "assertion-retracted",
-        RuntimeEvent::AssertionRetractionObserved { .. } => "assertion-retraction-observed",
-        RuntimeEvent::EffectRequest { .. } => "effect-request",
-        RuntimeEvent::EffectResponse { .. } => "effect-response",
-        RuntimeEvent::AdmissionDecision { .. } => "admission-decision",
-        RuntimeEvent::TurnRolledBack { .. } => "turn-rolled-back",
+        crate::runtime::RuntimeEvent::MessageDelivered { .. } => "message-delivered",
+        crate::runtime::RuntimeEvent::ObserveRegistered { .. } => "observe-registered",
+        crate::runtime::RuntimeEvent::AssertionObserved { .. } => "assertion-observed",
+        crate::runtime::RuntimeEvent::AssertionCommitted { .. } => "assertion-committed",
+        crate::runtime::RuntimeEvent::AssertionRetracted { .. } => "assertion-retracted",
+        crate::runtime::RuntimeEvent::AssertionRetractionObserved { .. } => "assertion-retraction-observed",
+        crate::runtime::RuntimeEvent::EffectRequest { .. } => "effect-request",
+        crate::runtime::RuntimeEvent::EffectResponse { .. } => "effect-response",
+        crate::runtime::RuntimeEvent::AdmissionDecision { .. } => "admission-decision",
+        crate::runtime::RuntimeEvent::TurnRolledBack { .. } => "turn-rolled-back",
     }
 }
 
-fn ready_status_map(statuses: &[ServiceStatus]) -> Result<OrderedMap<String, String>> {
+fn ready_status_map(statuses: &[crate::service_records::ServiceStatus]) -> Result<OrderedMap<String, String>> {
     let mut ready = OrderedMap::new();
     for status in statuses {
         if status.state == "ready" && ready.insert(status.service_id.clone(), status.status_ref.clone()).is_some() {
@@ -803,7 +819,10 @@ fn ready_status_map(statuses: &[ServiceStatus]) -> Result<OrderedMap<String, Str
     Ok(ready)
 }
 
-fn dependency_status_refs(manifest: &ServiceManifest, ready_statuses: &OrderedMap<String, String>) -> Vec<String> {
+fn dependency_status_refs(
+    manifest: &crate::service_records::ServiceManifest,
+    ready_statuses: &OrderedMap<String, String>,
+) -> Vec<String> {
     manifest
         .dependencies
         .iter()
@@ -811,11 +830,14 @@ fn dependency_status_refs(manifest: &ServiceManifest, ready_statuses: &OrderedMa
         .collect()
 }
 
-fn manifest_ref_mismatch(demand: &ServiceDemand, manifest: &ServiceManifest) -> bool {
+fn manifest_ref_mismatch(
+    demand: &crate::service_records::ServiceDemand,
+    manifest: &crate::service_records::ServiceManifest,
+) -> bool {
     demand.manifest_ref.as_ref().is_some_and(|manifest_ref| manifest_ref != &manifest.manifest_ref)
 }
 
-fn dependency_cycle_exists(manifests: &OrderedMap<String, ServiceManifest>) -> Result<bool> {
+fn dependency_cycle_exists(manifests: &OrderedMap<String, crate::service_records::ServiceManifest>) -> Result<bool> {
     for service_id in manifests.keys() {
         let mut stack = manifests.get(service_id).map(|manifest| manifest.dependencies.clone()).unwrap_or_default();
         let mut seen = OrderedSet::new();
@@ -844,13 +866,13 @@ fn validate_suite_input(input: &ServiceRuntimeSuiteInput) -> Result<()> {
     ensure_count_at_most(input.demands.len(), "service demands")?;
     ensure_count_at_most(input.statuses.len(), "service statuses")?;
     for manifest in &input.manifests {
-        service_records::parse_service_manifest(manifest)?;
+        crate::service_records::parse_service_manifest(manifest)?;
     }
     for demand in &input.demands {
-        service_records::parse_service_demand(demand)?;
+        crate::service_records::parse_service_demand(demand)?;
     }
     for status in &input.statuses {
-        service_records::parse_service_status(status)?;
+        crate::service_records::parse_service_status(status)?;
     }
     validate_runtime_evidence(&input.evidence)
 }
@@ -885,7 +907,7 @@ fn startup_admission_diagnostics(evidence: &ServiceRuntimeEvidenceInput) -> Vec<
     diagnostics
 }
 
-fn evidence_value(evidence: &ServiceRuntimeEvidenceInput) -> IOValue {
+fn evidence_value(evidence: &ServiceRuntimeEvidenceInput) -> preserves::IOValue {
     record("evidence", vec![
         record("authority", vec![refs_sequence(&evidence.authority_refs)]),
         record("policy", vec![refs_sequence(&evidence.policy_refs)]),
@@ -897,7 +919,7 @@ fn evidence_value(evidence: &ServiceRuntimeEvidenceInput) -> IOValue {
     ])
 }
 
-fn parse_evidence(value: &Value<IOValue>) -> Result<ServiceRuntimeEvidenceInput> {
+fn parse_evidence(value: &Value<preserves::IOValue>) -> Result<ServiceRuntimeEvidenceInput> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("evidence", Some(7))
@@ -913,19 +935,19 @@ fn parse_evidence(value: &Value<IOValue>) -> Result<ServiceRuntimeEvidenceInput>
     })
 }
 
-fn parse_iovalue_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
+fn parse_iovalue_sequence(value: &Value<preserves::IOValue>, label: &str) -> Result<Vec<preserves::IOValue>> {
     let values = field_sequence(value, label)?;
     ensure_count_at_most(values.len(), label)?;
     Ok(values.iter().map(value_to_iovalue).collect())
 }
 
-fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence(value: &Value<preserves::IOValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     ensure_count_at_most(values.len(), label)?;
     values.iter().map(|value| required_ref(value, label)).collect()
 }
 
-fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
+fn field_sequence(value: &Value<preserves::IOValue>, label: &str) -> Result<Vec<Value<preserves::IOValue>>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -936,7 +958,7 @@ fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOVal
     Ok(values.iter().cloned().collect())
 }
 
-fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
+fn record_iovalue(value: &Value<preserves::IOValue>, label: &str) -> Result<preserves::IOValue> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -944,7 +966,7 @@ fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
     Ok(value_to_iovalue(&fields[0]))
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<preserves::IOValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -952,7 +974,7 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
     parse_optional_ref_value(&fields[0])
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<preserves::IOValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -962,13 +984,13 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional service runtime ref").map(Some)
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> preserves::IOValue {
     record("checks", vec![sequence(
         names.iter().map(|name| record("check", vec![string(name), string("pass")])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<preserves::IOValue>) -> Result<Vec<(String, String)>> {
     let values = field_sequence(value, "checks")?;
     ensure_count_at_most(values.len(), "service runtime checks")?;
     values
@@ -991,7 +1013,7 @@ fn require_check(checks: &[(String, String)], name: &str, context: &str) -> Resu
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<preserves::IOValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual == expected {
         Ok(())
@@ -1000,11 +1022,11 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     }
 }
 
-fn refs_sequence(values: &[String]) -> IOValue {
+fn refs_sequence(values: &[String]) -> preserves::IOValue {
     sequence(values.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> preserves::IOValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
@@ -1024,7 +1046,7 @@ fn validate_optional_ref(reference: Option<&str>, field: &str) -> Result<()> {
     }
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<preserves::IOValue>, field: &str) -> Result<String> {
     let reference = required_string(value, field)?;
     require_ref(&reference, field)?;
     Ok(reference)
@@ -1036,7 +1058,7 @@ fn require_ref(reference: &str, field: &str) -> Result<()> {
     })
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<preserves::IOValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
@@ -1059,11 +1081,7 @@ fn synthetic_ref(label: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
-    use crate::preserves_rail::parse_text;
 
     fn test_ref(label: &str) -> String {
         canonical_hash(&record("service-runtime-test-ref", vec![string(label)])).expect("test ref")
@@ -1081,9 +1099,9 @@ mod tests {
         }
     }
 
-    fn manifest(service_id: &str, dependencies: Vec<String>) -> IOValue {
+    fn manifest(service_id: &str, dependencies: Vec<String>) -> preserves::IOValue {
         let evidence = evidence();
-        service_records::service_manifest_value(&service_records::ServiceManifestInput {
+        crate::service_records::service_manifest_value(&crate::service_records::ServiceManifestInput {
             service_id: service_id.to_string(),
             owner_authority_ref: evidence.authority_refs[0].clone(),
             target_ref: test_ref(&format!("target-{service_id}")),
@@ -1097,8 +1115,8 @@ mod tests {
         .expect("service manifest")
     }
 
-    fn demand(service_id: &str, manifest_value: &IOValue) -> IOValue {
-        service_records::service_demand_value(&service_records::ServiceDemandInput {
+    fn demand(service_id: &str, manifest_value: &preserves::IOValue) -> preserves::IOValue {
+        crate::service_records::service_demand_value(&crate::service_records::ServiceDemandInput {
             demand_id: format!("demand:{service_id}"),
             service_id: service_id.to_string(),
             requester_ref: test_ref("requester"),
@@ -1136,7 +1154,7 @@ mod tests {
         let receipts = run
             .lifecycle_receipts
             .iter()
-            .map(service_records::parse_service_lifecycle_receipt)
+            .map(crate::service_records::parse_service_lifecycle_receipt)
             .collect::<Result<Vec<_>>>()
             .expect("parse receipts");
         assert_eq!(receipts.iter().filter(|receipt| receipt.decision == "pass").count(), 2);
@@ -1148,7 +1166,7 @@ mod tests {
         let run = run_with_missing_evidence(|evidence| evidence.authority_refs.clear());
         assert!(run.readiness_assertions.is_empty());
         let receipt =
-            service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("deny receipt");
+            crate::service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("deny receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("authority")));
     }
@@ -1158,7 +1176,7 @@ mod tests {
         let run = run_with_missing_evidence(|evidence| evidence.source_gate_refs.clear());
         assert!(run.readiness_assertions.is_empty());
         let receipt =
-            service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("deny receipt");
+            crate::service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("deny receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("source-gate")));
     }
@@ -1192,7 +1210,8 @@ mod tests {
         .expect("suite");
         let run = run_service_runtime_suite_value(&suite).expect("run services");
         assert!(run.readiness_assertions.is_empty());
-        let receipt = service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("receipt");
+        let receipt =
+            crate::service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("receipt");
         assert_eq!(receipt.operation, "dependency-wait");
         assert_eq!(receipt.decision, "diagnostic");
     }
@@ -1215,7 +1234,7 @@ mod tests {
         let receipts = run
             .lifecycle_receipts
             .iter()
-            .map(service_records::parse_service_lifecycle_receipt)
+            .map(crate::service_records::parse_service_lifecycle_receipt)
             .collect::<Result<Vec<_>>>()
             .expect("receipts");
         assert_eq!(receipts.len(), 2);
@@ -1229,8 +1248,10 @@ mod tests {
 
     #[test]
     fn malformed_manifest_denies_before_execution() {
-        let malformed = parse_text("<service-manifest-v1 \"molten.service.manifest.v1\" <service-id \"svc:x\">>")
-            .expect("malformed manifest shape parses");
+        let malformed = crate::preserves_rail::parse_text(
+            "<service-manifest-v1 \"molten.service.manifest.v1\" <service-id \"svc:x\">>",
+        )
+        .expect("malformed manifest shape parses");
         let suite = ServiceRuntimeSuiteInput {
             manifests: vec![malformed],
             demands: Vec::new(),
@@ -1259,8 +1280,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_demand_identity_replay_and_no_side_effects_on_wait(tc: TestCase) {
-        let dependency_count = tc.draw(generators::integers::<u64>().min_value(0).max_value(3));
+    fn hegel_demand_identity_replay_and_no_side_effects_on_wait(tc: hegel::TestCase) {
+        let dependency_count = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(3));
         let dependency_count_usize = usize::try_from(dependency_count).expect("bounded dependency count");
         let dependencies = (0..dependency_count_usize).map(|index| format!("svc:dep-{index}")).collect::<Vec<_>>();
         let service = manifest("svc:generated", dependencies);
@@ -1280,7 +1301,7 @@ mod tests {
         } else {
             assert!(run.readiness_assertions.is_empty());
             let receipt =
-                service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("receipt");
+                crate::service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("receipt");
             assert_eq!(receipt.operation, "dependency-wait");
         }
     }
