@@ -780,7 +780,7 @@ fn evaluate_invalidate_key(
         object_kind: "eval-cache-key",
         retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
     });
-    let gate = crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
+    let gate = crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
         root,
         subsystem: "eval-cache-invalidate",
         action: crate::retention::ACTION_TOMBSTONE,
@@ -2221,7 +2221,7 @@ mod tests {
         key_ref: &str,
         evidence: &crate::retention::DestructiveRetentionEvidence,
     ) -> String {
-        let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
+        let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
             root,
             subsystem: "eval-cache-invalidate",
             object_ref: key_ref,
@@ -2231,7 +2231,7 @@ mod tests {
             evidence,
         })
         .expect("store cache invalidation plan");
-        crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
+        crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
             root,
             plan_ref: &plan.plan_ref,
         })

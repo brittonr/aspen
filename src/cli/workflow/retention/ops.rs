@@ -102,7 +102,7 @@ pub(crate) fn gc_plan(args: super::command::ops::GcPlan) -> molten::error::Resul
         out,
     } = args;
     let evidence = retention.into_retention_evidence();
-    let plan = molten::retention::store_retention_gc_plan(molten::retention::RetentionGcPlanInput {
+    let plan = molten::retention::store_retention_gc_plan(molten::retention::GcPlanInput {
         root: &root,
         subsystem: &subsystem,
         object_ref: &object_ref,
@@ -134,7 +134,7 @@ pub(crate) fn gc_apply_plan(args: super::command::ops::GcApplyPlan) -> molten::e
         plan_ref,
         receipt_out,
     } = args;
-    let apply = molten::retention::apply_retention_gc_plan(molten::retention::RetentionGcApplyFromPlanInput {
+    let apply = molten::retention::apply_retention_gc_plan(molten::retention::GcApplyFromPlanInput {
         root: &root,
         plan_ref: &plan_ref,
     })?;
@@ -161,7 +161,7 @@ pub(crate) fn gc_audit(args: super::command::ops::GcAudit) -> molten::error::Res
         execution_ref,
         out,
     } = args;
-    let audit = molten::retention::audit_retention_gc_execution(molten::retention::RetentionGcAuditInput {
+    let audit = molten::retention::audit_retention_gc_execution(molten::retention::GcAuditInput {
         root: &root,
         execution_ref: &execution_ref,
     })?;

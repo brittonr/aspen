@@ -4224,10 +4224,10 @@ struct GcAdmissions {
 }
 
 struct GcFlow {
-    plan: crate::retention::RetentionGcPlan,
-    apply: crate::retention::RetentionGcApply,
-    execution: crate::retention::RetentionGcExecutionGate,
-    audit: crate::retention::RetentionGcAudit,
+    plan: crate::retention::GcPlan,
+    apply: crate::retention::GcApply,
+    execution: crate::retention::GcExecutionGate,
+    audit: crate::retention::GcAudit,
     explain: crate::retention::RetentionCandidateExplain,
     bundle: crate::retention::RetentionCandidateBundle,
     profile: crate::retention::RetentionCandidateBundleProfile,
@@ -4318,7 +4318,7 @@ fn gc_flow(
     seed: GcSeed<'_>,
     evidence: &crate::retention::DestructiveRetentionEvidence,
 ) -> Result<GcFlow> {
-    let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
+    let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
         root: input.root,
         subsystem: "ledger-gc",
         object_ref: seed.object_ref,
@@ -4327,21 +4327,20 @@ fn gc_flow(
         action: seed.action,
         evidence,
     })?;
-    let apply = crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
+    let apply = crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
         root: input.root,
         plan_ref: &plan.plan_ref,
     })?;
-    let execution =
-        crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
-            root: input.root,
-            subsystem: "ledger-gc",
-            action: seed.action,
-            object_ref: seed.object_ref,
-            object_kind: seed.object_kind,
-            retention_class: seed.class,
-            apply_ref: Some(&apply.apply_ref),
-        })?;
-    let audit = crate::retention::audit_retention_gc_execution(crate::retention::RetentionGcAuditInput {
+    let execution = crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
+        root: input.root,
+        subsystem: "ledger-gc",
+        action: seed.action,
+        object_ref: seed.object_ref,
+        object_kind: seed.object_kind,
+        retention_class: seed.class,
+        apply_ref: Some(&apply.apply_ref),
+    })?;
+    let audit = crate::retention::audit_retention_gc_execution(crate::retention::GcAuditInput {
         root: input.root,
         execution_ref: &execution.execution_ref,
     })?;

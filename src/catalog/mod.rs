@@ -1135,7 +1135,7 @@ fn retention_core_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
 }
 
 fn retention_plan_apply_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
-    if let Ok(plan) = crate::retention::parse_retention_gc_plan(value) {
+    if let Ok(plan) = crate::retention::parse_gc_plan(value) {
         return Ok(Some(vec![
             "retention-gc:plan".to_string(),
             "retention-gc-stage:plan".to_string(),
@@ -1147,7 +1147,7 @@ fn retention_plan_apply_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
             format!("retention-gc-plan:{}", plan.plan_ref),
         ]));
     }
-    if let Ok(apply) = crate::retention::parse_retention_gc_apply(value) {
+    if let Ok(apply) = crate::retention::parse_gc_apply(value) {
         let mut classifications = vec![
             "retention-gc:apply".to_string(),
             "retention-gc-stage:apply".to_string(),
@@ -1171,7 +1171,7 @@ fn retention_plan_apply_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
 }
 
 fn retention_execute_audit_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
-    if let Ok(execute) = crate::retention::parse_retention_gc_execution_gate(value) {
+    if let Ok(execute) = crate::retention::parse_gc_execution_gate(value) {
         let mut classifications = vec![
             "retention-gc:execute".to_string(),
             "retention-gc-stage:execute".to_string(),
@@ -1192,7 +1192,7 @@ fn retention_execute_audit_labels(value: &IoValue) -> Result<Option<Vec<String>>
         push_optional_classification(&mut classifications, "retention-gc-tombstone", execute.tombstone_ref.as_deref())?;
         return Ok(Some(classifications));
     }
-    if let Ok(audit) = crate::retention::parse_retention_gc_audit(value) {
+    if let Ok(audit) = crate::retention::parse_gc_audit(value) {
         let mut classifications = vec![
             "retention-gc:audit".to_string(),
             "retention-gc-stage:audit".to_string(),
@@ -3190,10 +3190,10 @@ mod tests {
     }
 
     type GcEvidence = crate::retention::DestructiveRetentionEvidence;
-    type GcPlan = crate::retention::RetentionGcPlan;
-    type GcApply = crate::retention::RetentionGcApply;
-    type GcExecution = crate::retention::RetentionGcExecutionGate;
-    type GcAudit = crate::retention::RetentionGcAudit;
+    type GcPlan = crate::retention::GcPlan;
+    type GcApply = crate::retention::GcApply;
+    type GcExecution = crate::retention::GcExecutionGate;
+    type GcAudit = crate::retention::GcAudit;
 
     struct GcCase {
         object_ref: String,
@@ -3269,7 +3269,7 @@ mod tests {
         }
 
         fn plan(&self, evidence: &GcEvidence) -> GcPlan {
-            crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
+            crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
                 root: self.root,
                 subsystem: self.subsystem,
                 object_ref: &self.object_ref,
@@ -3282,7 +3282,7 @@ mod tests {
         }
 
         fn apply(&self, plan_ref: &str) -> GcApply {
-            crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
+            crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
                 root: self.root,
                 plan_ref,
             })
@@ -3290,7 +3290,7 @@ mod tests {
         }
 
         fn execution(&self, apply_ref: &str) -> GcExecution {
-            crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
+            crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
                 root: self.root,
                 subsystem: self.subsystem,
                 action: self.action,
@@ -3303,7 +3303,7 @@ mod tests {
         }
 
         fn audit(&self, execution_ref: &str) -> GcAudit {
-            crate::retention::audit_retention_gc_execution(crate::retention::RetentionGcAuditInput {
+            crate::retention::audit_retention_gc_execution(crate::retention::GcAuditInput {
                 root: self.root,
                 execution_ref,
             })

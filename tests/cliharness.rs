@@ -2431,11 +2431,7 @@ fn clearance(root: &std::path::Path, refs: &Refs) -> CliResult<String> {
     .clearance_ref)
 }
 
-fn run_plan(
-    root: &std::path::Path,
-    refs: &Refs,
-    out: &std::path::Path,
-) -> CliResult<molten::retention::RetentionGcPlan> {
+fn run_plan(root: &std::path::Path, refs: &Refs, out: &std::path::Path) -> CliResult<molten::retention::GcPlan> {
     let mut command = molten_cmd();
     command
         .args(["test", "retention", "gc-plan", "--root"])
@@ -2457,7 +2453,7 @@ fn run_plan(
     assert!(stdout(&output).contains("retention gc plan ref="));
     let value = read_preserves(out)?;
     assert_eq!(molten::ledger::artifact_kind(&value), "retention-gc-plan");
-    let plan = molten::retention::parse_retention_gc_plan(&value)?;
+    let plan = molten::retention::parse_gc_plan(&value)?;
     assert_eq!(plan.decision, "pass");
     assert!(plan.gates.iter().any(|gate| gate.name == "remote-clearance" && gate.decision == "pass"));
     Ok(plan)
@@ -2488,9 +2484,9 @@ fn add_refs(command: &mut std::process::Command, refs: &Refs) {
 
 fn run_apply(
     root: &std::path::Path,
-    plan: &molten::retention::RetentionGcPlan,
+    plan: &molten::retention::GcPlan,
     out: &std::path::Path,
-) -> CliResult<molten::retention::RetentionGcApply> {
+) -> CliResult<molten::retention::GcApply> {
     let output = molten_cmd()
         .args(["test", "retention", "gc-apply-plan", "--root"])
         .arg(root)
@@ -2503,7 +2499,7 @@ fn run_apply(
     assert!(stdout(&output).contains("retention gc apply ref="));
     let value = read_preserves(out)?;
     assert_eq!(molten::ledger::artifact_kind(&value), "retention-gc-apply");
-    let apply = molten::retention::parse_retention_gc_apply(&value)?;
+    let apply = molten::retention::parse_gc_apply(&value)?;
     assert_eq!(apply.decision, "pass");
     Ok(apply)
 }
@@ -2567,7 +2563,7 @@ fn stale_plan_case(dir: &std::path::Path) -> CliResult<()> {
         .arg(&apply_path)
         .output()?;
     assert_success(&output, "retention apply stale plan ref");
-    let receipt = molten::retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
+    let receipt = molten::retention::parse_gc_apply(&read_preserves(&apply_path)?)?;
     assert_eq!(receipt.decision, "deny");
     assert!(receipt.retention_receipt_ref.is_none());
     assert!(receipt.tombstone_ref.is_none());
@@ -2624,7 +2620,7 @@ fn wrong_apply_case(dir: &std::path::Path) -> CliResult<()> {
         .arg(&apply_path)
         .output()?;
     assert_success(&apply_output, "retention apply wrong subsystem plan");
-    let apply = molten::retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
+    let apply = molten::retention::parse_gc_apply(&read_preserves(&apply_path)?)?;
     assert_eq!(apply.decision, "pass");
     let receipt = dir.join("wrong-apply-ledger-gc.preserves");
     let mut command = molten_cmd();
@@ -2656,16 +2652,15 @@ fn audit_case(dir: &std::path::Path) -> CliResult<()> {
         .arg(dir.join("missing-execution-audit.preserves"))
         .output()?;
     assert_failure(&missing, "retention audit missing execution ref");
-    let execution =
-        molten::retention::store_retention_gc_execution_gate(molten::retention::RetentionGcExecutionGateInput {
-            root: &root,
-            subsystem: "ledger-gc",
-            action: molten::retention::ACTION_DELETE,
-            object_ref: &test_ref("denied-execution-object")?,
-            object_kind: "artifact",
-            retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
-            apply_ref: None,
-        })?;
+    let execution = molten::retention::store_retention_gc_execution_gate(molten::retention::GcExecutionGateInput {
+        root: &root,
+        subsystem: "ledger-gc",
+        action: molten::retention::ACTION_DELETE,
+        object_ref: &test_ref("denied-execution-object")?,
+        object_kind: "artifact",
+        retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
+        apply_ref: None,
+    })?;
     let audit_path = dir.join("denied-execution-audit.preserves");
     let output = molten_cmd()
         .args(["test", "retention", "gc-audit", "--root"])
@@ -2676,7 +2671,7 @@ fn audit_case(dir: &std::path::Path) -> CliResult<()> {
         .arg(&audit_path)
         .output()?;
     assert_success(&output, "retention audit denied execution ref");
-    let audit = molten::retention::parse_retention_gc_audit(&read_preserves(&audit_path)?)?;
+    let audit = molten::retention::parse_gc_audit(&read_preserves(&audit_path)?)?;
     assert_eq!(audit.decision, "deny");
     assert!(audit.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-audit-apply-missing"));
     assert!(audit.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-audit-plan-missing"));
@@ -3027,22 +3022,21 @@ fn setup_retention_gc_catalog_fixture(
         .arg(&apply_path)
         .output()?;
     assert_success(&apply_output, "retention gc-apply-plan catalog fixture");
-    let apply = molten::retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
+    let apply = molten::retention::parse_gc_apply(&read_preserves(&apply_path)?)?;
     assert_eq!(apply.decision, "pass");
-    let execution =
-        molten::retention::store_retention_gc_execution_gate(molten::retention::RetentionGcExecutionGateInput {
-            root: &candidate.root,
-            subsystem,
-            action: &candidate.action,
-            object_ref: &candidate.object_ref,
-            object_kind: &candidate.object_kind,
-            retention_class: &candidate.retention_class,
-            apply_ref: Some(&apply.apply_ref),
-        })?;
+    let execution = molten::retention::store_retention_gc_execution_gate(molten::retention::GcExecutionGateInput {
+        root: &candidate.root,
+        subsystem,
+        action: &candidate.action,
+        object_ref: &candidate.object_ref,
+        object_kind: &candidate.object_kind,
+        retention_class: &candidate.retention_class,
+        apply_ref: Some(&apply.apply_ref),
+    })?;
     assert_eq!(execution.decision, "pass");
     let execution_path = dir.join("catalog-retention-execution.preserves");
     std::fs::write(&execution_path, molten::preserves_rail::to_text(&execution.value)?)?;
-    let audit = molten::retention::audit_retention_gc_execution(molten::retention::RetentionGcAuditInput {
+    let audit = molten::retention::audit_retention_gc_execution(molten::retention::GcAuditInput {
         root: &candidate.root,
         execution_ref: &execution.execution_ref,
     })?;
@@ -3132,7 +3126,7 @@ fn run_retention_gc_plan_cli(
     candidate: &RetentionCliCandidate,
     subsystem: &str,
     out: &std::path::Path,
-) -> CliResult<molten::retention::RetentionGcPlan> {
+) -> CliResult<molten::retention::GcPlan> {
     let mut command = molten_cmd();
     command
         .args(["test", "retention", "gc-plan", "--root"])
@@ -3150,7 +3144,7 @@ fn run_retention_gc_plan_cli(
     add_retention_args(&mut command, candidate);
     let output = command.output()?;
     assert_success(&output, "retention gc-plan regression fixture");
-    let plan = molten::retention::parse_retention_gc_plan(&read_preserves(out)?)?;
+    let plan = molten::retention::parse_gc_plan(&read_preserves(out)?)?;
     assert_eq!(plan.decision, "pass");
     Ok(plan)
 }

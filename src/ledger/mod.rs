@@ -302,16 +302,15 @@ fn record_execution(
         object_kind: &entry.artifact_kind,
         retention_class,
     });
-    let execution_gate =
-        crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
-            root: input.root,
-            subsystem: "ledger-gc",
-            action: input.action,
-            object_ref: &entry.artifact_ref,
-            object_kind: &entry.artifact_kind,
-            retention_class,
-            apply_ref,
-        })?;
+    let execution_gate = crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
+        root: input.root,
+        subsystem: "ledger-gc",
+        action: input.action,
+        object_ref: &entry.artifact_ref,
+        object_kind: &entry.artifact_kind,
+        retention_class,
+        apply_ref,
+    })?;
     push_bounded(
         &mut review.execution_gate_refs,
         execution_gate.execution_ref.clone(),
@@ -1314,7 +1313,7 @@ mod tests {
         retention_class: &str,
         evidence: &crate::retention::DestructiveRetentionEvidence,
     ) -> String {
-        let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
+        let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
             root,
             subsystem,
             object_ref,
@@ -1324,7 +1323,7 @@ mod tests {
             evidence,
         })
         .expect("store ledger GC plan");
-        crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
+        crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
             root,
             plan_ref: &plan.plan_ref,
         })

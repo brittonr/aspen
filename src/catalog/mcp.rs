@@ -1336,13 +1336,13 @@ mod tests {
     struct RetentionGcAuditFixture {
         object_ref: String,
         execution_ref: String,
-        audit: crate::retention::RetentionGcAudit,
+        audit: crate::retention::GcAudit,
     }
 
     fn retention_gc_audit_fixture(root: &Path, label: &str, subsystem: &str) -> RetentionGcAuditFixture {
         let seed = make_seed(root, label, subsystem);
         let evidence = seed_evidence(&seed);
-        let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
+        let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
             root: seed.root,
             subsystem: seed.subsystem,
             object_ref: &seed.object_ref,
@@ -1352,23 +1352,22 @@ mod tests {
             evidence: &evidence,
         })
         .expect("store retention GC catalog MCP plan");
-        let apply = crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
+        let apply = crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
             root: seed.root,
             plan_ref: &plan.plan_ref,
         })
         .expect("apply retention GC catalog MCP plan");
-        let execution =
-            crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
-                root: seed.root,
-                subsystem: seed.subsystem,
-                action: seed.action,
-                object_ref: &seed.object_ref,
-                object_kind: seed.object_kind,
-                retention_class: seed.retention_class,
-                apply_ref: Some(&apply.apply_ref),
-            })
-            .expect("store retention GC catalog MCP execution");
-        let audit = crate::retention::audit_retention_gc_execution(crate::retention::RetentionGcAuditInput {
+        let execution = crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
+            root: seed.root,
+            subsystem: seed.subsystem,
+            action: seed.action,
+            object_ref: &seed.object_ref,
+            object_kind: seed.object_kind,
+            retention_class: seed.retention_class,
+            apply_ref: Some(&apply.apply_ref),
+        })
+        .expect("store retention GC catalog MCP execution");
+        let audit = crate::retention::audit_retention_gc_execution(crate::retention::GcAuditInput {
             root: seed.root,
             execution_ref: &execution.execution_ref,
         })

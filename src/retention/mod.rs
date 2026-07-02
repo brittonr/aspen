@@ -233,7 +233,7 @@ pub struct DestructiveRetentionEvidence {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionGcPlanInput<'a> {
+pub struct GcPlanInput<'a> {
     pub root: &'a Path,
     pub subsystem: &'a str,
     pub object_ref: &'a str,
@@ -244,7 +244,7 @@ pub struct RetentionGcPlanInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionPlanGate {
+pub struct PlanGate {
     pub name: String,
     pub decision: String,
     pub required_refs: Vec<String>,
@@ -253,7 +253,7 @@ pub struct RetentionPlanGate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionGcPlan {
+pub struct GcPlan {
     pub plan_ref: String,
     pub decision: String,
     pub subsystem: String,
@@ -264,19 +264,19 @@ pub struct RetentionGcPlan {
     pub requester_ref: Option<String>,
     pub index_ref: String,
     pub evidence: DestructiveRetentionEvidence,
-    pub gates: Vec<RetentionPlanGate>,
+    pub gates: Vec<PlanGate>,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionGcApplyFromPlanInput<'a> {
+pub struct GcApplyFromPlanInput<'a> {
     pub root: &'a Path,
     pub plan_ref: &'a str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionGcApply {
+pub struct GcApply {
     pub apply_ref: String,
     pub decision: String,
     pub subsystem: String,
@@ -301,7 +301,7 @@ struct ApplyOutcome {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionGcExecutionGateInput<'a> {
+pub struct GcExecutionGateInput<'a> {
     pub root: &'a Path,
     pub subsystem: &'a str,
     pub action: &'a str,
@@ -312,7 +312,7 @@ pub struct RetentionGcExecutionGateInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionGcExecutionGate {
+pub struct GcExecutionGate {
     pub execution_ref: String,
     pub decision: String,
     pub subsystem: String,
@@ -330,13 +330,13 @@ pub struct RetentionGcExecutionGate {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RetentionGcAuditInput<'a> {
+pub struct GcAuditInput<'a> {
     pub root: &'a Path,
     pub execution_ref: &'a str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionGcAudit {
+pub struct GcAudit {
     pub audit_ref: String,
     pub decision: String,
     pub subsystem: String,
@@ -2353,7 +2353,7 @@ struct RemoteClearanceRefsResult {
     peer_refs: Vec<String>,
 }
 
-pub struct RetentionGcPlanValueInput<'a> {
+pub struct GcPlanValueInput<'a> {
     decision: &'a str,
     subsystem: &'a str,
     action: &'a str,
@@ -2363,7 +2363,7 @@ pub struct RetentionGcPlanValueInput<'a> {
     requester_ref: Option<&'a str>,
     index: &'a ReferenceIndex,
     evidence_value: &'a IoValue,
-    gates: &'a [RetentionPlanGate],
+    gates: &'a [PlanGate],
     diagnostics: &'a [String],
 }
 
@@ -2563,7 +2563,7 @@ struct GateAdmissions {
 }
 
 struct RetentionGateInputs<'a> {
-    input: &'a RetentionGcPlanInput<'a>,
+    input: &'a GcPlanInput<'a>,
     policy: AdmissionRefsResult,
     authority: AdmissionRefsResult,
     supporting: AdmissionRefsResult,
@@ -2583,7 +2583,7 @@ struct PlanGateBuildInput<'a> {
 }
 
 struct LocalRetentionGateInput<'a> {
-    input: &'a RetentionGcPlanInput<'a>,
+    input: &'a GcPlanInput<'a>,
     index: &'a ReferenceIndex,
     has_delete_authority: bool,
     has_remote_gc_clearance: bool,
@@ -2775,7 +2775,7 @@ fn loopback_value(input: &LoopbackValueInput<'_>) -> Result<IoValue> {
     })
 }
 
-fn gate_scope<'a>(input: &'a RetentionGcPlanInput<'a>) -> AdmissionScope<'a> {
+fn gate_scope<'a>(input: &'a GcPlanInput<'a>) -> AdmissionScope<'a> {
     AdmissionScope {
         requester_ref: input.evidence.requester_ref.as_deref(),
         object_ref: input.object_ref,
@@ -2785,7 +2785,7 @@ fn gate_scope<'a>(input: &'a RetentionGcPlanInput<'a>) -> AdmissionScope<'a> {
     }
 }
 
-fn gate_admissions(input: &RetentionGcPlanInput<'_>, scope: &AdmissionScope<'_>) -> Result<GateAdmissions> {
+fn gate_admissions(input: &GcPlanInput<'_>, scope: &AdmissionScope<'_>) -> Result<GateAdmissions> {
     let policy = admit_evidence_refs(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.policy_refs,
@@ -2830,10 +2830,7 @@ fn gate_admissions(input: &RetentionGcPlanInput<'_>, scope: &AdmissionScope<'_>)
     })
 }
 
-fn gate_remote_clearance(
-    input: &RetentionGcPlanInput<'_>,
-    scope: &AdmissionScope<'_>,
-) -> Result<RemoteClearanceRefsResult> {
+fn gate_remote_clearance(input: &GcPlanInput<'_>, scope: &AdmissionScope<'_>) -> Result<RemoteClearanceRefsResult> {
     admit_remote_clearance_refs(RemoteClearanceRefsInput {
         root: input.root,
         refs: &input.evidence.remote_clearance_refs,
@@ -2850,7 +2847,7 @@ fn has_all_refs(required: &[String], admitted: &[String]) -> bool {
 }
 
 fn is_clearance_complete(
-    input: &RetentionGcPlanInput<'_>,
+    input: &GcPlanInput<'_>,
     remote_gc: &AdmissionRefsResult,
     remote_clearance: &RemoteClearanceRefsResult,
 ) -> bool {
@@ -2860,7 +2857,7 @@ fn is_clearance_complete(
     has_local_plan && has_remote_refs && has_remote_peers
 }
 
-fn retention_gate_inputs<'a>(input: &'a RetentionGcPlanInput<'a>) -> Result<RetentionGateInputs<'a>> {
+fn retention_gate_inputs<'a>(input: &'a GcPlanInput<'a>) -> Result<RetentionGateInputs<'a>> {
     let scope = gate_scope(input);
     let admissions = gate_admissions(input, &scope)?;
     let remote_clearance = gate_remote_clearance(input, &scope)?;
@@ -2884,7 +2881,7 @@ fn retention_gate_inputs<'a>(input: &'a RetentionGcPlanInput<'a>) -> Result<Rete
     })
 }
 
-fn retention_plan_gates(input: &RetentionGateInputs<'_>, index: &ReferenceIndex) -> Result<Vec<RetentionPlanGate>> {
+fn retention_plan_gates(input: &RetentionGateInputs<'_>, index: &ReferenceIndex) -> Result<Vec<PlanGate>> {
     let mut gates = Vec::new();
     push_access_gates(&mut gates, input)?;
     push_index_gates(&mut gates, input, index)?;
@@ -2892,7 +2889,7 @@ fn retention_plan_gates(input: &RetentionGateInputs<'_>, index: &ReferenceIndex)
     Ok(gates)
 }
 
-fn push_access_gates(gates: &mut impl VecSink<RetentionPlanGate>, input: &RetentionGateInputs<'_>) -> Result<()> {
+fn push_access_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGateInputs<'_>) -> Result<()> {
     push_bounded(
         gates,
         requester_gate(input.input.evidence.requester_ref.as_deref())?,
@@ -2951,7 +2948,7 @@ fn push_access_gates(gates: &mut impl VecSink<RetentionPlanGate>, input: &Retent
 }
 
 fn push_index_gates(
-    gates: &mut impl VecSink<RetentionPlanGate>,
+    gates: &mut impl VecSink<PlanGate>,
     input: &RetentionGateInputs<'_>,
     index: &ReferenceIndex,
 ) -> Result<()> {
@@ -2981,7 +2978,7 @@ fn push_index_gates(
     Ok(())
 }
 
-fn push_external_gates(gates: &mut impl VecSink<RetentionPlanGate>, input: &RetentionGateInputs<'_>) -> Result<()> {
+fn push_external_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGateInputs<'_>) -> Result<()> {
     push_bounded(
         gates,
         retention_plan_gate(PlanGateBuildInput {
@@ -3037,7 +3034,7 @@ fn push_external_gates(gates: &mut impl VecSink<RetentionPlanGate>, input: &Rete
     Ok(())
 }
 
-fn requester_gate(requester_ref: Option<&str>) -> Result<RetentionPlanGate> {
+fn requester_gate(requester_ref: Option<&str>) -> Result<PlanGate> {
     let required_refs = requester_ref.map(|reference| vec![reference.to_string()]).unwrap_or_default();
     let diagnostics = if requester_ref.is_some() {
         Vec::new()
@@ -3053,7 +3050,7 @@ fn requester_gate(requester_ref: Option<&str>) -> Result<RetentionPlanGate> {
     })
 }
 
-fn local_retention_gate(input: LocalRetentionGateInput<'_>) -> Result<RetentionPlanGate> {
+fn local_retention_gate(input: LocalRetentionGateInput<'_>) -> Result<PlanGate> {
     let requester_ref = match input.input.evidence.requester_ref.as_ref() {
         Some(reference) => reference.clone(),
         None => synthetic_ref("retention-gc-plan-missing-requester")?,
@@ -3142,12 +3139,12 @@ fn remote_clearance_gate_diagnostics(input: RemoteClearanceGateInput<'_>) -> Res
     Ok(diagnostics)
 }
 
-fn retention_plan_gate(input: PlanGateBuildInput<'_>) -> Result<RetentionPlanGate> {
+fn retention_plan_gate(input: PlanGateBuildInput<'_>) -> Result<PlanGate> {
     validate_name(input.name, "retention GC plan gate name")?;
     validate_refs(input.required_refs, "retention GC plan required ref")?;
     validate_refs(input.admitted_refs, "retention GC plan admitted ref")?;
     let is_pass = input.diagnostics.is_empty() && (!input.is_required || !input.admitted_refs.is_empty());
-    Ok(RetentionPlanGate {
+    Ok(PlanGate {
         name: input.name.to_string(),
         decision: pass_or_deny(is_pass).to_string(),
         required_refs: input.required_refs.to_vec(),
@@ -3156,7 +3153,7 @@ fn retention_plan_gate(input: PlanGateBuildInput<'_>) -> Result<RetentionPlanGat
     })
 }
 
-fn retention_plan_gate_value(input: &RetentionPlanGate) -> Result<IoValue> {
+fn retention_plan_gate_value(input: &PlanGate) -> Result<IoValue> {
     validate_name(&input.name, "retention GC plan gate name")?;
     validate_decision(&input.decision)?;
     validate_refs(&input.required_refs, "retention GC plan gate required ref")?;
@@ -3170,7 +3167,7 @@ fn retention_plan_gate_value(input: &RetentionPlanGate) -> Result<IoValue> {
     ]))
 }
 
-fn parse_retention_plan_gates(value: &Value<IoValue>) -> Result<Vec<RetentionPlanGate>> {
+fn parse_retention_plan_gates(value: &Value<IoValue>) -> Result<Vec<PlanGate>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("gates", Some(1))
@@ -3191,7 +3188,7 @@ fn parse_retention_plan_gates(value: &Value<IoValue>) -> Result<Vec<RetentionPla
     Ok(gates)
 }
 
-fn parse_retention_plan_gate(value: &IoValue) -> Result<RetentionPlanGate> {
+fn parse_retention_plan_gate(value: &IoValue) -> Result<PlanGate> {
     let fields = value
         .collect_simple_record("gate", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gate"))?;
@@ -3202,7 +3199,7 @@ fn parse_retention_plan_gate(value: &IoValue) -> Result<RetentionPlanGate> {
     let required_refs = record_ref_sequence(&fields[2], "required")?;
     let admitted_refs = record_ref_sequence(&fields[3], "admitted")?;
     let diagnostics = record_string_sequence(&fields[4], "diagnostics")?;
-    Ok(RetentionPlanGate {
+    Ok(PlanGate {
         name,
         decision,
         required_refs,
@@ -3802,7 +3799,7 @@ pub fn validate_destructive_retention_evidence(input: &DestructiveRetentionEvide
     validate_refs(&input.remote_clearance_refs, "retention remote clearance ref")
 }
 
-fn validate_retention_gc_plan_input(input: &RetentionGcPlanInput<'_>) -> Result<()> {
+fn validate_retention_gc_plan_input(input: &GcPlanInput<'_>) -> Result<()> {
     validate_name(input.subsystem, "retention GC plan subsystem")?;
     require_ref(input.object_ref, "retention GC plan object ref")?;
     validate_name(input.object_kind, "retention GC plan object kind")?;
@@ -3922,7 +3919,7 @@ pub fn destructive_retention_evidence_value(input: &DestructiveRetentionEvidence
     ]))
 }
 
-pub fn store_retention_gc_plan(input: RetentionGcPlanInput<'_>) -> Result<RetentionGcPlan> {
+pub fn store_retention_gc_plan(input: GcPlanInput<'_>) -> Result<GcPlan> {
     ensure_store(input.root)?;
     validate_retention_gc_plan_input(&input)?;
     let index = reference_index_for_object(ReferenceIndexForObjectInput {
@@ -3952,7 +3949,7 @@ pub fn store_retention_gc_plan(input: RetentionGcPlanInput<'_>) -> Result<Retent
         "deny"
     };
     let evidence_value = destructive_retention_evidence_value(input.evidence)?;
-    let value = retention_gc_plan_value(&RetentionGcPlanValueInput {
+    let value = gc_plan_value(&GcPlanValueInput {
         decision,
         subsystem: input.subsystem,
         action: input.action,
@@ -3965,12 +3962,12 @@ pub fn store_retention_gc_plan(input: RetentionGcPlanInput<'_>) -> Result<Retent
         gates: &gates,
         diagnostics: &diagnostics,
     })?;
-    let plan = parse_retention_gc_plan(&value)?;
+    let plan = parse_gc_plan(&value)?;
     write_store_value(&gc_plan_path(input.root, &plan.plan_ref)?, &plan.value)?;
     Ok(plan)
 }
 
-pub fn retention_gc_plan_value(input: &RetentionGcPlanValueInput<'_>) -> Result<IoValue> {
+pub fn gc_plan_value(input: &GcPlanValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_name(input.subsystem, "retention GC plan subsystem")?;
     validate_action(input.action)?;
@@ -4009,7 +4006,7 @@ pub fn retention_gc_plan_value(input: &RetentionGcPlanValueInput<'_>) -> Result<
     ]))
 }
 
-pub fn parse_retention_gc_plan(value: &IoValue) -> Result<RetentionGcPlan> {
+pub fn parse_gc_plan(value: &IoValue) -> Result<GcPlan> {
     let fields = value
         .collect_simple_record("retention-gc-plan-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-plan-v1 ...>"))?;
@@ -4045,7 +4042,7 @@ pub fn parse_retention_gc_plan(value: &IoValue) -> Result<RetentionGcPlan> {
     require_check(&checks, "remote-clearance-import-still-required", "retention GC plan")?;
     let evidence_ref = crate::preserves_rail::canonical_hash(&evidence_value)?;
     require_ref(&evidence_ref, "retention GC plan evidence summary ref")?;
-    Ok(RetentionGcPlan {
+    Ok(GcPlan {
         plan_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         subsystem,
@@ -4062,20 +4059,20 @@ pub fn parse_retention_gc_plan(value: &IoValue) -> Result<RetentionGcPlan> {
     })
 }
 
-pub fn read_retention_gc_plan(root: &Path, plan_ref: &str) -> Result<RetentionGcPlan> {
+pub fn read_retention_gc_plan(root: &Path, plan_ref: &str) -> Result<GcPlan> {
     require_ref(plan_ref, "retention GC plan ref")?;
     let value = read_store_value(&gc_plan_path(root, plan_ref)?)?;
-    let plan = parse_retention_gc_plan(&value)?;
+    let plan = parse_gc_plan(&value)?;
     if plan.plan_ref != plan_ref {
         return Err(MoltenError::invalid_harness("stored retention GC plan ref mismatch"));
     }
     Ok(plan)
 }
 
-pub fn apply_retention_gc_plan(input: RetentionGcApplyFromPlanInput<'_>) -> Result<RetentionGcApply> {
+pub fn apply_retention_gc_plan(input: GcApplyFromPlanInput<'_>) -> Result<GcApply> {
     ensure_store(input.root)?;
     let original = read_retention_gc_plan(input.root, input.plan_ref)?;
-    let recomputed = store_retention_gc_plan(RetentionGcPlanInput {
+    let recomputed = store_retention_gc_plan(GcPlanInput {
         root: input.root,
         subsystem: &original.subsystem,
         object_ref: &original.object_ref,
@@ -4112,15 +4109,15 @@ pub fn apply_retention_gc_plan(input: RetentionGcApplyFromPlanInput<'_>) -> Resu
         admission_refs: &admission_refs,
         diagnostics: &outcome.diagnostics,
     })?;
-    let apply = parse_retention_gc_apply(&value)?;
+    let apply = parse_gc_apply(&value)?;
     write_store_value(&gc_apply_path(input.root, &apply.apply_ref)?, &apply.value)?;
     Ok(apply)
 }
 
 fn apply_outcome(
     root: &Path,
-    original: &RetentionGcPlan,
-    recomputed: &RetentionGcPlan,
+    original: &GcPlan,
+    recomputed: &GcPlan,
     admission: &DestructiveRetentionAdmission,
 ) -> Result<ApplyOutcome> {
     let diagnostics = apply_diagnostics(original, recomputed, admission)?;
@@ -4141,8 +4138,8 @@ fn push_apply_diagnostic(diagnostics: &mut impl VecSink<String>, diagnostic: &st
 }
 
 fn apply_diagnostics(
-    original: &RetentionGcPlan,
-    recomputed: &RetentionGcPlan,
+    original: &GcPlan,
+    recomputed: &GcPlan,
     admission: &DestructiveRetentionAdmission,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
@@ -4169,7 +4166,7 @@ fn apply_diagnostics(
 
 fn apply_success_outcome(
     root: &Path,
-    original: &RetentionGcPlan,
+    original: &GcPlan,
     admission: &DestructiveRetentionAdmission,
 ) -> Result<ApplyOutcome> {
     let requester_ref =
@@ -4269,7 +4266,7 @@ fn apply_value(input: &ApplyValueInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-pub fn parse_retention_gc_apply(value: &IoValue) -> Result<RetentionGcApply> {
+pub fn parse_gc_apply(value: &IoValue) -> Result<GcApply> {
     let fields = value
         .collect_simple_record("retention-gc-apply-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-apply-v1 ...>"))?;
@@ -4300,7 +4297,7 @@ pub fn parse_retention_gc_apply(value: &IoValue) -> Result<RetentionGcApply> {
     require_check(&checks, "normal-admission-run", "retention GC apply")?;
     require_check(&checks, "plan-is-not-authority", "retention GC apply")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention GC apply")?;
-    Ok(RetentionGcApply {
+    Ok(GcApply {
         apply_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         subsystem,
@@ -4319,20 +4316,20 @@ pub fn parse_retention_gc_apply(value: &IoValue) -> Result<RetentionGcApply> {
     })
 }
 
-pub fn read_retention_gc_apply(root: &Path, apply_ref: &str) -> Result<RetentionGcApply> {
+pub fn read_retention_gc_apply(root: &Path, apply_ref: &str) -> Result<GcApply> {
     require_ref(apply_ref, "retention GC apply ref")?;
     let value = read_store_value(&gc_apply_path(root, apply_ref)?)?;
-    let apply = parse_retention_gc_apply(&value)?;
+    let apply = parse_gc_apply(&value)?;
     if apply.apply_ref != apply_ref {
         return Err(MoltenError::invalid_harness("stored retention GC apply ref mismatch"));
     }
     Ok(apply)
 }
 
-pub fn read_retention_gc_execution_gate(root: &Path, execution_ref: &str) -> Result<RetentionGcExecutionGate> {
+pub fn read_retention_gc_execution_gate(root: &Path, execution_ref: &str) -> Result<GcExecutionGate> {
     require_ref(execution_ref, "retention GC execution ref")?;
     let value = read_store_value(&gc_execute_path(root, execution_ref)?)?;
-    let gate = parse_retention_gc_execution_gate(&value)?;
+    let gate = parse_gc_execution_gate(&value)?;
     if gate.execution_ref != execution_ref {
         return Err(MoltenError::invalid_harness("stored retention GC execution ref mismatch"));
     }
@@ -4348,7 +4345,7 @@ struct ExecutionGateParts {
     diagnostics: Vec<String>,
 }
 
-fn execution_gate_parts(input: &RetentionGcExecutionGateInput<'_>) -> Result<ExecutionGateParts> {
+fn execution_gate_parts(input: &GcExecutionGateInput<'_>) -> Result<ExecutionGateParts> {
     let mut parts = ExecutionGateParts::default();
     let Some(apply_ref) = input.apply_ref else {
         push_bounded(
@@ -4404,7 +4401,7 @@ fn execution_gate_parts(input: &RetentionGcExecutionGateInput<'_>) -> Result<Exe
     Ok(parts)
 }
 
-pub fn store_retention_gc_execution_gate(input: RetentionGcExecutionGateInput<'_>) -> Result<RetentionGcExecutionGate> {
+pub fn store_retention_gc_execution_gate(input: GcExecutionGateInput<'_>) -> Result<GcExecutionGate> {
     ensure_store(input.root)?;
     validate_name(input.subsystem, "retention GC execution subsystem")?;
     validate_action(input.action)?;
@@ -4429,15 +4426,12 @@ pub fn store_retention_gc_execution_gate(input: RetentionGcExecutionGateInput<'_
         tombstone_ref: parts.tombstone_ref.as_deref(),
         diagnostics: &parts.diagnostics,
     })?;
-    let gate = parse_retention_gc_execution_gate(&value)?;
+    let gate = parse_gc_execution_gate(&value)?;
     write_store_value(&gc_execute_path(input.root, &gate.execution_ref)?, &gate.value)?;
     Ok(gate)
 }
 
-fn execution_gate_apply_diagnostics(
-    input: &RetentionGcExecutionGateInput<'_>,
-    apply: &RetentionGcApply,
-) -> Result<Vec<String>> {
+fn execution_gate_apply_diagnostics(input: &GcExecutionGateInput<'_>, apply: &GcApply) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     if apply.decision != "pass" {
         push_bounded(
@@ -4479,7 +4473,7 @@ fn execution_gate_apply_diagnostics(
 
 fn execution_gate_receipt_diagnostics(
     root: &Path,
-    input: &RetentionGcExecutionGateInput<'_>,
+    input: &GcExecutionGateInput<'_>,
     receipt_ref: &str,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
@@ -4526,8 +4520,8 @@ fn execution_gate_receipt_diagnostics(
 
 fn execution_gate_tombstone_binding_diagnostics(
     root: &Path,
-    input: &RetentionGcExecutionGateInput<'_>,
-    apply: &RetentionGcApply,
+    input: &GcExecutionGateInput<'_>,
+    apply: &GcApply,
 ) -> Result<Vec<String>> {
     let Some(tombstone_ref) = apply.tombstone_ref.as_ref() else {
         let mut diagnostics = Vec::new();
@@ -4546,7 +4540,7 @@ fn execution_gate_tombstone_binding_diagnostics(
 
 fn execution_gate_tombstone_diagnostics(
     root: &Path,
-    input: &RetentionGcExecutionGateInput<'_>,
+    input: &GcExecutionGateInput<'_>,
     tombstone_ref: &str,
     receipt_ref: Option<&str>,
 ) -> Result<Vec<String>> {
@@ -4642,7 +4636,7 @@ fn execution_gate_value(input: &ExecutionGateValueInput<'_>) -> Result<IoValue> 
     ]))
 }
 
-pub fn parse_retention_gc_execution_gate(value: &IoValue) -> Result<RetentionGcExecutionGate> {
+pub fn parse_gc_execution_gate(value: &IoValue) -> Result<GcExecutionGate> {
     let fields = value
         .collect_simple_record("retention-gc-execute-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-execute-v1 ...>"))?;
@@ -4670,7 +4664,7 @@ pub fn parse_retention_gc_execution_gate(value: &IoValue) -> Result<RetentionGcE
     require_check(&checks, "execute-gate-is-not-authority", "retention GC execution")?;
     require_check(&checks, "normal-admission-still-required", "retention GC execution")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention GC execution")?;
-    Ok(RetentionGcExecutionGate {
+    Ok(GcExecutionGate {
         execution_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         subsystem,
@@ -4688,7 +4682,7 @@ pub fn parse_retention_gc_execution_gate(value: &IoValue) -> Result<RetentionGcE
     })
 }
 
-pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<RetentionGcAudit> {
+pub fn audit_retention_gc_execution(input: GcAuditInput<'_>) -> Result<GcAudit> {
     ensure_store(input.root)?;
     let execution = read_retention_gc_execution_gate(input.root, input.execution_ref)?;
     let execution_scope = gc_audit_scope(
@@ -4719,12 +4713,12 @@ pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<
         tombstone_status: &facts.tombstone_status,
         diagnostics: &facts.diagnostics,
     })?;
-    let audit = parse_retention_gc_audit(&value)?;
+    let audit = parse_gc_audit(&value)?;
     write_store_value(&gc_audit_path(input.root, &audit.audit_ref)?, &audit.value)?;
     Ok(audit)
 }
 
-fn audit_facts(root: &Path, execution: &RetentionGcExecutionGate, scope: &GcAuditScope<'_>) -> Result<AuditFacts> {
+fn audit_facts(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope<'_>) -> Result<AuditFacts> {
     let mut diagnostics = execution_notes(execution)?;
     let ApplyStatus {
         decision: apply_decision,
@@ -4759,7 +4753,7 @@ fn audit_facts(root: &Path, execution: &RetentionGcExecutionGate, scope: &GcAudi
     })
 }
 
-fn execution_notes(execution: &RetentionGcExecutionGate) -> Result<Vec<String>> {
+fn execution_notes(execution: &GcExecutionGate) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     if execution.decision != "pass" {
         push_diag(&mut diagnostics, "retention-gc-audit-execution-not-pass")?;
@@ -4773,7 +4767,7 @@ fn execution_notes(execution: &RetentionGcExecutionGate) -> Result<Vec<String>> 
     Ok(diagnostics)
 }
 
-fn apply_status(root: &Path, execution: &RetentionGcExecutionGate, scope: &GcAuditScope<'_>) -> Result<ApplyStatus> {
+fn apply_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope<'_>) -> Result<ApplyStatus> {
     let mut diagnostics = Vec::new();
     let mut decision = "missing".to_string();
     let mut plan_ref = execution.plan_ref.clone();
@@ -4844,11 +4838,7 @@ fn plan_status(root: &Path, plan_ref: Option<&str>, scope: &GcAuditScope<'_>) ->
     Ok(PlanStatus { decision, diagnostics })
 }
 
-fn receipt_status(
-    root: &Path,
-    execution: &RetentionGcExecutionGate,
-    scope: &GcAuditScope<'_>,
-) -> Result<ReceiptStatus> {
+fn receipt_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope<'_>) -> Result<ReceiptStatus> {
     let mut diagnostics = Vec::new();
     let mut decision = "missing".to_string();
     if let Some(receipt_ref) = execution.retention_receipt_ref.as_ref() {
@@ -4874,11 +4864,7 @@ fn receipt_status(
     Ok(ReceiptStatus { decision, diagnostics })
 }
 
-fn tombstone_status(
-    root: &Path,
-    execution: &RetentionGcExecutionGate,
-    scope: &GcAuditScope<'_>,
-) -> Result<TombstoneStatus> {
+fn tombstone_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope<'_>) -> Result<TombstoneStatus> {
     let mut diagnostics = Vec::new();
     let mut status = "missing".to_string();
     if let Some(tombstone_ref) = execution.tombstone_ref.as_ref() {
@@ -5032,7 +5018,7 @@ fn validate_audit_step_status(status: &str, label: &str) -> Result<()> {
     }
 }
 
-pub fn parse_retention_gc_audit(value: &IoValue) -> Result<RetentionGcAudit> {
+pub fn parse_gc_audit(value: &IoValue) -> Result<GcAudit> {
     let fields = value
         .collect_simple_record("retention-gc-audit-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-audit-v1 ...>"))?;
@@ -5067,7 +5053,7 @@ pub fn parse_retention_gc_audit(value: &IoValue) -> Result<RetentionGcAudit> {
     require_check(&checks, "audit-is-not-authority", "retention GC audit")?;
     require_check(&checks, "normal-admission-still-required", "retention GC audit")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention GC audit")?;
-    Ok(RetentionGcAudit {
+    Ok(GcAudit {
         audit_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         subsystem,
@@ -5090,10 +5076,10 @@ pub fn parse_retention_gc_audit(value: &IoValue) -> Result<RetentionGcAudit> {
     })
 }
 
-pub fn read_retention_gc_audit(root: &Path, audit_ref: &str) -> Result<RetentionGcAudit> {
+pub fn read_retention_gc_audit(root: &Path, audit_ref: &str) -> Result<GcAudit> {
     require_ref(audit_ref, "retention GC audit ref")?;
     let value = read_store_value(&gc_audit_path(root, audit_ref)?)?;
-    let audit = parse_retention_gc_audit(&value)?;
+    let audit = parse_gc_audit(&value)?;
     if audit.audit_ref != audit_ref {
         return Err(MoltenError::invalid_harness("stored retention GC audit ref mismatch"));
     }
@@ -5224,7 +5210,7 @@ fn imports_for(root: &Path, remote_clearance_refs: &[String]) -> Result<Vec<Stri
 fn plans_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &gc_plans_dir(root),
-        parse_retention_gc_plan,
+        parse_gc_plan,
         |plan| {
             filter.matches_gc(&plan.subsystem, &plan.object_ref, &plan.object_kind, &plan.retention_class, &plan.action)
         },
@@ -5236,7 +5222,7 @@ fn plans_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<S
 fn applies_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &gc_applies_dir(root),
-        parse_retention_gc_apply,
+        parse_gc_apply,
         |apply| {
             filter.matches_gc(
                 &apply.subsystem,
@@ -5254,7 +5240,7 @@ fn applies_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec
 fn executions_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &gc_executes_dir(root),
-        parse_retention_gc_execution_gate,
+        parse_gc_execution_gate,
         |execute| {
             filter.matches_gc(
                 &execute.subsystem,
@@ -5272,7 +5258,7 @@ fn executions_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<
 fn audits_for(root: &Path, filter: &RetentionCandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &gc_audits_dir(root),
-        parse_retention_gc_audit,
+        parse_gc_audit,
         |audit| {
             filter.matches_gc(
                 &audit.subsystem,
@@ -6646,19 +6632,19 @@ fn validate_retention_candidate_bundle_verify_value_input(
 }
 
 fn parse_retention_gc_plan_kind(value: &IoValue) -> Result<()> {
-    parse_retention_gc_plan(value).map(|_| ())
+    parse_gc_plan(value).map(|_| ())
 }
 
 fn parse_retention_gc_apply_kind(value: &IoValue) -> Result<()> {
-    parse_retention_gc_apply(value).map(|_| ())
+    parse_gc_apply(value).map(|_| ())
 }
 
 fn parse_retention_gc_execution_kind(value: &IoValue) -> Result<()> {
-    parse_retention_gc_execution_gate(value).map(|_| ())
+    parse_gc_execution_gate(value).map(|_| ())
 }
 
 fn parse_retention_gc_audit_kind(value: &IoValue) -> Result<()> {
-    parse_retention_gc_audit(value).map(|_| ())
+    parse_gc_audit(value).map(|_| ())
 }
 
 fn parse_retention_receipt_kind(value: &IoValue) -> Result<()> {
@@ -7103,7 +7089,7 @@ fn live(value: &IoValue) -> Option<String> {
 }
 
 fn gate(value: &IoValue) -> Option<String> {
-    if let Ok(plan) = parse_retention_gc_plan(value) {
+    if let Ok(plan) = parse_gc_plan(value) {
         return Some(format!(
             "retention gc plan ref={} decision={} subsystem={} action={} object={} class={} requester={} index={} gates={} diagnostics={}",
             plan.plan_ref,
@@ -7118,7 +7104,7 @@ fn gate(value: &IoValue) -> Option<String> {
             plan.diagnostics.join(",")
         ));
     }
-    if let Ok(apply) = parse_retention_gc_apply(value) {
+    if let Ok(apply) = parse_gc_apply(value) {
         return Some(format!(
             "retention gc apply ref={} decision={} subsystem={} action={} object={} class={} plan={} recomputed={} receipt={} tombstone={} diagnostics={}",
             apply.apply_ref,
@@ -7138,7 +7124,7 @@ fn gate(value: &IoValue) -> Option<String> {
 }
 
 fn audit(value: &IoValue) -> Option<String> {
-    if let Ok(execute) = parse_retention_gc_execution_gate(value) {
+    if let Ok(execute) = parse_gc_execution_gate(value) {
         return Some(format!(
             "retention gc execute ref={} decision={} subsystem={} action={} object={} class={} apply={} plan={} receipt={} tombstone={} diagnostics={}",
             execute.execution_ref,
@@ -7154,7 +7140,7 @@ fn audit(value: &IoValue) -> Option<String> {
             execute.diagnostics.join(",")
         ));
     }
-    if let Ok(audit) = parse_retention_gc_audit(value) {
+    if let Ok(audit) = parse_gc_audit(value) {
         return Some(format!(
             "retention gc audit ref={} decision={} subsystem={} action={} object={} class={} plan={} apply={} execution={} receipt={} tombstone={} diagnostics={}",
             audit.audit_ref,
@@ -8973,7 +8959,7 @@ mod tests {
     fn gc_plan_lists_gates_and_avoids_receipts_or_tombstones() {
         let root = temp_dir("retention-gc-plan-pass");
         let fixture = store_passing_plan_fixture(&root, "plan-pass");
-        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+        let plan = store_retention_gc_plan(GcPlanInput {
             root: &root,
             subsystem: "chunk-gc",
             object_ref: &fixture.object_ref,
@@ -8993,7 +8979,7 @@ mod tests {
         assert!(gate_names.contains(&"reference-index"));
         assert!(gate_names.contains(&"remote-gc"));
         assert!(gate_names.contains(&"remote-clearance"));
-        let parsed = parse_retention_gc_plan(&plan.value).expect("parse plan");
+        let parsed = parse_gc_plan(&plan.value).expect("parse plan");
         assert_eq!(parsed.plan_ref, plan.plan_ref);
     }
 
@@ -9001,7 +8987,7 @@ mod tests {
     fn gc_plan_rejects_requester_evidence_mismatch() {
         let root = temp_dir("retention-gc-plan-requester-mismatch");
         let fixture = store_passing_plan_fixture(&root, "plan-requester-mismatch");
-        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+        let plan = store_retention_gc_plan(GcPlanInput {
             root: &root,
             subsystem: "ledger-gc",
             object_ref: &fixture.object_ref,
@@ -9024,7 +9010,7 @@ mod tests {
             is_complete: fixture.evidence.is_reference_index_complete,
         })
         .expect("reference index");
-        let tampered = retention_gc_plan_value(&RetentionGcPlanValueInput {
+        let tampered = gc_plan_value(&GcPlanValueInput {
             decision: &plan.decision,
             subsystem: &plan.subsystem,
             action: &plan.action,
@@ -9038,7 +9024,7 @@ mod tests {
             diagnostics: &plan.diagnostics,
         })
         .expect("tampered plan value");
-        let error = parse_retention_gc_plan(&tampered).expect_err("requester mismatch must fail closed");
+        let error = parse_gc_plan(&tampered).expect_err("requester mismatch must fail closed");
         assert!(format!("{error}").contains("requester evidence mismatch"));
     }
 
@@ -9048,7 +9034,7 @@ mod tests {
         let fixture = store_passing_plan_fixture(&root, "plan-deny");
         let mut evidence = fixture.evidence.clone();
         evidence.remote_clearance_refs.clear();
-        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+        let plan = store_retention_gc_plan(GcPlanInput {
             root: &root,
             subsystem: "ledger-gc",
             object_ref: &fixture.object_ref,
@@ -9079,7 +9065,7 @@ mod tests {
     fn gc_apply_from_plan_writes_apply_receipt_and_tombstone() {
         let root = temp_dir("retention-gc-apply-pass");
         let fixture = store_passing_plan_fixture(&root, "apply-pass");
-        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+        let plan = store_retention_gc_plan(GcPlanInput {
             root: &root,
             subsystem: "ledger-gc",
             object_ref: &fixture.object_ref,
@@ -9089,7 +9075,7 @@ mod tests {
             evidence: &fixture.evidence,
         })
         .expect("store apply plan");
-        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+        let apply = apply_retention_gc_plan(GcApplyFromPlanInput {
             root: &root,
             plan_ref: &plan.plan_ref,
         })
@@ -9101,7 +9087,7 @@ mod tests {
         assert!(apply.tombstone_ref.is_some());
         assert_eq!(store_file_count(&gc_applies_dir(&root)), 1);
         assert_eq!(store_file_count(&tombstones_dir(&root)), 1);
-        let parsed = parse_retention_gc_apply(&apply.value).expect("parse apply");
+        let parsed = parse_gc_apply(&apply.value).expect("parse apply");
         assert_eq!(parsed.apply_ref, apply.apply_ref);
         read_retention_receipt(&root, parsed.retention_receipt_ref.as_deref().expect("receipt ref"))
             .expect("read retention receipt");
@@ -9111,7 +9097,7 @@ mod tests {
     fn gc_audit_binds_plan_apply_execution_receipt_and_tombstone() {
         let root = temp_dir("retention-gc-audit-pass");
         let fixture = store_passing_plan_fixture(&root, "audit-pass");
-        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+        let plan = store_retention_gc_plan(GcPlanInput {
             root: &root,
             subsystem: "ledger-gc",
             object_ref: &fixture.object_ref,
@@ -9121,12 +9107,12 @@ mod tests {
             evidence: &fixture.evidence,
         })
         .expect("store audit plan");
-        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+        let apply = apply_retention_gc_plan(GcApplyFromPlanInput {
             root: &root,
             plan_ref: &plan.plan_ref,
         })
         .expect("apply audit plan");
-        let execution = store_retention_gc_execution_gate(RetentionGcExecutionGateInput {
+        let execution = store_retention_gc_execution_gate(GcExecutionGateInput {
             root: &root,
             subsystem: "ledger-gc",
             action: ACTION_DELETE,
@@ -9137,7 +9123,7 @@ mod tests {
         })
         .expect("store execution gate");
         assert_eq!(execution.decision, "pass");
-        let audit = audit_retention_gc_execution(RetentionGcAuditInput {
+        let audit = audit_retention_gc_execution(GcAuditInput {
             root: &root,
             execution_ref: &execution.execution_ref,
         })
@@ -9330,7 +9316,7 @@ mod tests {
     fn gc_audit_denies_missing_chain_links_without_authority() {
         let root = temp_dir("retention-gc-audit-deny");
         let object_ref = fake_ref("audit-missing-object");
-        let execution = store_retention_gc_execution_gate(RetentionGcExecutionGateInput {
+        let execution = store_retention_gc_execution_gate(GcExecutionGateInput {
             root: &root,
             subsystem: "ledger-gc",
             action: ACTION_DELETE,
@@ -9340,7 +9326,7 @@ mod tests {
             apply_ref: None,
         })
         .expect("store denied execution gate");
-        let audit = audit_retention_gc_execution(RetentionGcAuditInput {
+        let audit = audit_retention_gc_execution(GcAuditInput {
             root: &root,
             execution_ref: &execution.execution_ref,
         })
@@ -9358,7 +9344,7 @@ mod tests {
     fn gc_apply_from_plan_denies_drift_before_tombstone() {
         let root = temp_dir("retention-gc-apply-drift");
         let fixture = store_passing_plan_fixture(&root, "apply-drift");
-        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+        let plan = store_retention_gc_plan(GcPlanInput {
             root: &root,
             subsystem: "chunk-gc",
             object_ref: &fixture.object_ref,
@@ -9383,7 +9369,7 @@ mod tests {
         .expect("pin after plan");
         assert_eq!(pin.receipt.decision, "pass");
         let receipt_count = store_file_count(&receipts_dir(&root));
-        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+        let apply = apply_retention_gc_plan(GcApplyFromPlanInput {
             root: &root,
             plan_ref: &plan.plan_ref,
         })
@@ -9403,7 +9389,7 @@ mod tests {
         let fixture = store_passing_plan_fixture(&root, "apply-denied-plan");
         let mut evidence = fixture.evidence;
         evidence.remote_clearance_refs = Vec::new();
-        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+        let plan = store_retention_gc_plan(GcPlanInput {
             root: &root,
             subsystem: "ledger-gc",
             object_ref: &fixture.object_ref,
@@ -9414,7 +9400,7 @@ mod tests {
         })
         .expect("store denied plan");
         assert_eq!(plan.decision, "deny");
-        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+        let apply = apply_retention_gc_plan(GcApplyFromPlanInput {
             root: &root,
             plan_ref: &plan.plan_ref,
         })
@@ -10519,14 +10505,14 @@ mod tests {
     }
 
     struct Flow {
-        plan: RetentionGcPlan,
-        apply: RetentionGcApply,
-        execution: RetentionGcExecutionGate,
-        audit: RetentionGcAudit,
+        plan: GcPlan,
+        apply: GcApply,
+        execution: GcExecutionGate,
+        audit: GcAudit,
     }
 
     fn passing_flow(root: &Path, fixture: &TestPlanFixture, subsystem: &str) -> Flow {
-        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+        let plan = store_retention_gc_plan(GcPlanInput {
             root,
             subsystem,
             object_ref: &fixture.object_ref,
@@ -10536,12 +10522,12 @@ mod tests {
             evidence: &fixture.evidence,
         })
         .expect("store plan");
-        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+        let apply = apply_retention_gc_plan(GcApplyFromPlanInput {
             root,
             plan_ref: &plan.plan_ref,
         })
         .expect("apply plan");
-        let execution = store_retention_gc_execution_gate(RetentionGcExecutionGateInput {
+        let execution = store_retention_gc_execution_gate(GcExecutionGateInput {
             root,
             subsystem,
             action: ACTION_DELETE,
@@ -10551,7 +10537,7 @@ mod tests {
             apply_ref: Some(&apply.apply_ref),
         })
         .expect("store execution");
-        let audit = audit_retention_gc_execution(RetentionGcAuditInput {
+        let audit = audit_retention_gc_execution(GcAuditInput {
             root,
             execution_ref: &execution.execution_ref,
         })
