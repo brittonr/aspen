@@ -4,9 +4,6 @@ type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 
-use crate::preserves_rail;
-use crate::service_records;
-
 const MAX_SUPERVISION_ITEMS: usize = 4096;
 
 const _: () = assert!(MAX_SUPERVISION_ITEMS <= 100_000);
@@ -62,10 +59,10 @@ pub struct ServiceSupervisionSuiteInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceSupervisionSuite {
     pub suite_ref: String,
-    pub manifest: service_records::ServiceManifest,
-    pub links: Vec<service_records::ServiceLink>,
-    pub monitors: Vec<service_records::ServiceMonitor>,
-    pub restart_policy: service_records::ServiceRestartPolicy,
+    pub manifest: crate::service_records::ServiceManifest,
+    pub links: Vec<crate::service_records::ServiceLink>,
+    pub monitors: Vec<crate::service_records::ServiceMonitor>,
+    pub restart_policy: crate::service_records::ServiceRestartPolicy,
     pub owned_state: ServiceOwnedState,
     pub restart_attempt: u64,
     pub logical_step: u64,
@@ -159,16 +156,16 @@ struct CleanupTarget {
 
 pub fn service_owned_state_value(input: &ServiceOwnedStateInput) -> Result<IoValue> {
     validate_owned_state_input(input)?;
-    Ok(preserves_rail::record("service-owned-state-v1", vec![
-        preserves_rail::string(preserves_rail::SERVICE_OWNED_STATE_SCHEMA),
-        preserves_rail::record("service-id", vec![preserves_rail::string(&input.service_id)]),
-        preserves_rail::record("manifest", vec![optional_ref_value(input.manifest_ref.as_deref())]),
-        preserves_rail::record("owned-assertions", vec![refs_sequence(&input.owned_assertion_refs)]),
-        preserves_rail::record("observers", vec![refs_sequence(&input.observer_refs)]),
-        preserves_rail::record("live-refs", vec![refs_sequence(&input.live_ref_refs)]),
-        preserves_rail::record("exposed-refs", vec![refs_sequence(&input.exposed_ref_refs)]),
-        preserves_rail::record("pending-effects", vec![refs_sequence(&input.pending_effect_refs)]),
-        preserves_rail::record("foreign-claims", vec![refs_sequence(&input.foreign_ref_claims)]),
+    Ok(crate::preserves_rail::record("service-owned-state-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::SERVICE_OWNED_STATE_SCHEMA),
+        crate::preserves_rail::record("service-id", vec![crate::preserves_rail::string(&input.service_id)]),
+        crate::preserves_rail::record("manifest", vec![optional_ref_value(input.manifest_ref.as_deref())]),
+        crate::preserves_rail::record("owned-assertions", vec![refs_sequence(&input.owned_assertion_refs)]),
+        crate::preserves_rail::record("observers", vec![refs_sequence(&input.observer_refs)]),
+        crate::preserves_rail::record("live-refs", vec![refs_sequence(&input.live_ref_refs)]),
+        crate::preserves_rail::record("exposed-refs", vec![refs_sequence(&input.exposed_ref_refs)]),
+        crate::preserves_rail::record("pending-effects", vec![refs_sequence(&input.pending_effect_refs)]),
+        crate::preserves_rail::record("foreign-claims", vec![refs_sequence(&input.foreign_ref_claims)]),
         checks_value(&["service-owned-state", "cleanup-index", "foreign-claims-explicit"]),
     ]))
 }
@@ -177,11 +174,11 @@ pub fn parse_service_owned_state(value: &IoValue) -> Result<ServiceOwnedState> {
     let fields = value
         .collect_simple_record("service-owned-state-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-owned-state-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::SERVICE_OWNED_STATE_SCHEMA, "service owned-state schema")?;
+    require_schema(&fields[0], crate::preserves_rail::SERVICE_OWNED_STATE_SCHEMA, "service owned-state schema")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "cleanup-index", "service owned state")?;
     let owned_state = ServiceOwnedState {
-        state_ref: preserves_rail::canonical_hash(value)?,
+        state_ref: crate::preserves_rail::canonical_hash(value)?,
         service_id: record_string(&fields[1], "service-id")?,
         manifest_ref: record_optional_ref(&fields[2], "manifest")?,
         owned_assertion_refs: parse_ref_sequence(&fields[3], "owned-assertions")?,
@@ -198,15 +195,15 @@ pub fn parse_service_owned_state(value: &IoValue) -> Result<ServiceOwnedState> {
 
 pub fn service_supervision_suite_value(input: &ServiceSupervisionSuiteInput) -> Result<IoValue> {
     validate_suite_input(input)?;
-    Ok(preserves_rail::record("service-supervision-suite-v1", vec![
-        preserves_rail::string(preserves_rail::SERVICE_SUPERVISION_SUITE_SCHEMA),
-        preserves_rail::record("manifest", vec![input.manifest.clone()]),
-        preserves_rail::record("links", vec![preserves_rail::sequence(input.links.clone())]),
-        preserves_rail::record("monitors", vec![preserves_rail::sequence(input.monitors.clone())]),
-        preserves_rail::record("restart-policy", vec![input.restart_policy.clone()]),
-        preserves_rail::record("owned-state", vec![input.owned_state.clone()]),
-        preserves_rail::record("restart-attempt", vec![preserves_rail::u64_value(input.restart_attempt)]),
-        preserves_rail::record("logical-step", vec![preserves_rail::u64_value(input.logical_step)]),
+    Ok(crate::preserves_rail::record("service-supervision-suite-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::SERVICE_SUPERVISION_SUITE_SCHEMA),
+        crate::preserves_rail::record("manifest", vec![input.manifest.clone()]),
+        crate::preserves_rail::record("links", vec![crate::preserves_rail::sequence(input.links.clone())]),
+        crate::preserves_rail::record("monitors", vec![crate::preserves_rail::sequence(input.monitors.clone())]),
+        crate::preserves_rail::record("restart-policy", vec![input.restart_policy.clone()]),
+        crate::preserves_rail::record("owned-state", vec![input.owned_state.clone()]),
+        crate::preserves_rail::record("restart-attempt", vec![crate::preserves_rail::u64_value(input.restart_attempt)]),
+        crate::preserves_rail::record("logical-step", vec![crate::preserves_rail::u64_value(input.logical_step)]),
         evidence_value(&input.evidence),
         checks_value(&[
             "canonical-service-supervision-suite",
@@ -220,18 +217,22 @@ pub fn parse_service_supervision_suite(value: &IoValue) -> Result<ServiceSupervi
     let fields = value
         .collect_simple_record("service-supervision-suite-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-suite-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::SERVICE_SUPERVISION_SUITE_SCHEMA, "service supervision suite schema")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::SERVICE_SUPERVISION_SUITE_SCHEMA,
+        "service supervision suite schema",
+    )?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "logical-supervision-only", "service supervision suite")?;
     let manifest_value = record_iovalue(&fields[1], "manifest")?;
     let restart_policy_value = record_iovalue(&fields[4], "restart-policy")?;
     let owned_state_value = record_iovalue(&fields[5], "owned-state")?;
     let suite = ServiceSupervisionSuite {
-        suite_ref: preserves_rail::canonical_hash(value)?,
-        manifest: service_records::parse_service_manifest(&manifest_value)?,
+        suite_ref: crate::preserves_rail::canonical_hash(value)?,
+        manifest: crate::service_records::parse_service_manifest(&manifest_value)?,
         links: parse_link_sequence(&fields[2])?,
         monitors: parse_monitor_sequence(&fields[3])?,
-        restart_policy: service_records::parse_service_restart_policy(&restart_policy_value)?,
+        restart_policy: crate::service_records::parse_service_restart_policy(&restart_policy_value)?,
         owned_state: parse_service_owned_state(&owned_state_value)?,
         restart_attempt: record_u64(&fields[6], "restart-attempt")?,
         logical_step: record_u64(&fields[7], "logical-step")?,
@@ -263,18 +264,18 @@ pub fn run_service_supervision_suite(suite: &ServiceSupervisionSuite) -> Result<
     });
 
     let failure_marker = failure_marker_value(suite)?;
-    let failure_ref = preserves_rail::canonical_hash(&failure_marker)?;
+    let failure_ref = crate::preserves_rail::canonical_hash(&failure_marker)?;
     let monitor_refs = monitors.iter().map(|monitor| monitor.monitor_ref.clone()).collect::<Vec<_>>();
     let failure_status = failure_status_value(suite, &failure_ref, &monitor_refs)?;
-    let failure_status_ref = preserves_rail::canonical_hash(&failure_status)?;
+    let failure_status_ref = crate::preserves_rail::canonical_hash(&failure_status)?;
     let monitor_notifications = monitor_notification_values(&monitors, suite, &failure_ref, &failure_status_ref)?;
     let notification_refs = refs_for_values(&monitor_notifications)?;
     let supervision_refs = supervision_refs(suite, &monitor_refs, &notification_refs)?;
     let failure_lifecycle = failure_lifecycle_receipt(suite, &failure_status_ref, &supervision_refs)?;
-    let failure_lifecycle_ref = preserves_rail::canonical_hash(&failure_lifecycle)?;
+    let failure_lifecycle_ref = crate::preserves_rail::canonical_hash(&failure_lifecycle)?;
     let restart_evaluation = evaluate_restart(suite)?;
     let restart_decision = restart_decision_value(suite, &restart_evaluation, &failure_lifecycle_ref)?;
-    let restart_decision_ref = preserves_rail::canonical_hash(&restart_decision)?;
+    let restart_decision_ref = crate::preserves_rail::canonical_hash(&restart_decision)?;
     let scheduled_demands = scheduled_demands(suite, &restart_evaluation)?;
     let cleanup_evaluation = evaluate_cleanup(suite, &restart_evaluation, &restart_decision_ref)?;
     let final_statuses =
@@ -301,7 +302,7 @@ pub fn run_service_supervision_suite(suite: &ServiceSupervisionSuite) -> Result<
     Ok(ServiceSupervisionRun {
         suite_ref: suite.suite_ref.clone(),
         suite_value: suite.value.clone(),
-        report_ref: preserves_rail::canonical_hash(&report_value)?,
+        report_ref: crate::preserves_rail::canonical_hash(&report_value)?,
         failure_markers,
         statuses,
         lifecycle_receipts,
@@ -318,7 +319,7 @@ pub fn run_service_supervision_suite(suite: &ServiceSupervisionSuite) -> Result<
 pub fn replay_service_supervision_report(value: &IoValue) -> Result<ServiceSupervisionReplay> {
     let report = parse_service_supervision_report(value)?;
     let rerun = run_service_supervision_suite_value(&report.suite_value)?;
-    let expected_report_ref = preserves_rail::canonical_hash(value)?;
+    let expected_report_ref = crate::preserves_rail::canonical_hash(value)?;
     let decision = if expected_report_ref == rerun.report_ref {
         "pass"
     } else {
@@ -344,7 +345,7 @@ pub fn gate_service_supervision_report(value: &IoValue) -> Result<ServiceSupervi
     let restart_decision = report
         .restart_decisions
         .first()
-        .map(service_records::parse_service_restart_decision)
+        .map(crate::service_records::parse_service_restart_decision)
         .transpose()?
         .map(|decision| decision.decision);
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
@@ -358,7 +359,7 @@ pub fn gate_service_supervision_report(value: &IoValue) -> Result<ServiceSupervi
         cleanup_count: report.cleanup_receipts.len(),
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
+    let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(ServiceSupervisionGate {
         receipt_ref,
@@ -380,7 +381,7 @@ pub fn parse_service_supervision_gate_receipt(value: &IoValue) -> Result<Service
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-gate-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA,
+        crate::preserves_rail::SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA,
         "service supervision gate receipt schema",
     )?;
     let checks = parse_checks(&fields[9])?;
@@ -392,7 +393,7 @@ pub fn parse_service_supervision_gate_receipt(value: &IoValue) -> Result<Service
         validate_restart_decision(decision, "service supervision restart decision")?;
     }
     Ok(ServiceSupervisionGateReceipt {
-        receipt_ref: preserves_rail::canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         report_ref: record_ref(&fields[2], "report")?,
         suite_ref: record_ref(&fields[3], "suite")?,
@@ -425,19 +426,19 @@ fn service_supervision_gate_diagnostics(report: &ServiceSupervisionRun) -> Resul
         parse_failure_marker_ref(value)?;
     }
     for value in &report.statuses {
-        service_records::parse_service_status(value)?;
+        crate::service_records::parse_service_status(value)?;
     }
     for value in &report.lifecycle_receipts {
-        service_records::parse_service_lifecycle_receipt(value)?;
+        crate::service_records::parse_service_lifecycle_receipt(value)?;
     }
     for value in &report.restart_decisions {
-        service_records::parse_service_restart_decision(value)?;
+        crate::service_records::parse_service_restart_decision(value)?;
     }
     for value in &report.monitor_notifications {
         parse_monitor_notification_ref(value)?;
     }
     for value in &report.cleanup_receipts {
-        service_records::parse_service_cleanup_receipt(value)?;
+        crate::service_records::parse_service_cleanup_receipt(value)?;
     }
     for value in &report.retractions {
         parse_retraction_ref(value)?;
@@ -449,15 +450,19 @@ pub fn parse_service_supervision_report(value: &IoValue) -> Result<ServiceSuperv
     let fields = value
         .collect_simple_record("service-supervision-report-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-report-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::SERVICE_SUPERVISION_REPORT_SCHEMA, "service supervision report schema")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::SERVICE_SUPERVISION_REPORT_SCHEMA,
+        "service supervision report schema",
+    )?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "canonical-service-supervision-report", "service supervision report")?;
     let suite_value = record_iovalue(&fields[1], "suite")?;
-    let suite_ref = preserves_rail::canonical_hash(&suite_value)?;
+    let suite_ref = crate::preserves_rail::canonical_hash(&suite_value)?;
     Ok(ServiceSupervisionRun {
         suite_ref,
         suite_value,
-        report_ref: preserves_rail::canonical_hash(value)?,
+        report_ref: crate::preserves_rail::canonical_hash(value)?,
         failure_markers: parse_iovalue_sequence(&fields[2], "failures")?,
         statuses: parse_iovalue_sequence(&fields[3], "statuses")?,
         lifecycle_receipts: parse_iovalue_sequence(&fields[4], "lifecycle")?,
@@ -476,7 +481,7 @@ pub fn service_supervision_summary(value: &IoValue) -> Result<String> {
     let restart_decision = report
         .restart_decisions
         .first()
-        .map(service_records::parse_service_restart_decision)
+        .map(crate::service_records::parse_service_restart_decision)
         .transpose()?
         .map_or_else(|| "none".to_string(), |decision| decision.decision);
     Ok(format!(
@@ -492,20 +497,32 @@ pub fn service_supervision_summary(value: &IoValue) -> Result<String> {
 
 pub fn service_supervision_report_value(input: ReportValueInput<'_>) -> Result<IoValue> {
     validate_report_input(&input)?;
-    Ok(preserves_rail::record("service-supervision-report-v1", vec![
-        preserves_rail::string(preserves_rail::SERVICE_SUPERVISION_REPORT_SCHEMA),
-        preserves_rail::record("suite", vec![input.suite_value.clone()]),
-        preserves_rail::record("failures", vec![preserves_rail::sequence(input.failure_markers.to_vec())]),
-        preserves_rail::record("statuses", vec![preserves_rail::sequence(input.statuses.to_vec())]),
-        preserves_rail::record("lifecycle", vec![preserves_rail::sequence(input.lifecycle_receipts.to_vec())]),
-        preserves_rail::record("monitor-notifications", vec![preserves_rail::sequence(
+    Ok(crate::preserves_rail::record("service-supervision-report-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::SERVICE_SUPERVISION_REPORT_SCHEMA),
+        crate::preserves_rail::record("suite", vec![input.suite_value.clone()]),
+        crate::preserves_rail::record("failures", vec![crate::preserves_rail::sequence(
+            input.failure_markers.to_vec(),
+        )]),
+        crate::preserves_rail::record("statuses", vec![crate::preserves_rail::sequence(input.statuses.to_vec())]),
+        crate::preserves_rail::record("lifecycle", vec![crate::preserves_rail::sequence(
+            input.lifecycle_receipts.to_vec(),
+        )]),
+        crate::preserves_rail::record("monitor-notifications", vec![crate::preserves_rail::sequence(
             input.monitor_notifications.to_vec(),
         )]),
-        preserves_rail::record("restart-decisions", vec![preserves_rail::sequence(input.restart_decisions.to_vec())]),
-        preserves_rail::record("scheduled-demands", vec![preserves_rail::sequence(input.scheduled_demands.to_vec())]),
-        preserves_rail::record("cleanup", vec![preserves_rail::sequence(input.cleanup_receipts.to_vec())]),
-        preserves_rail::record("retractions", vec![preserves_rail::sequence(input.retractions.to_vec())]),
-        preserves_rail::record("retention", vec![preserves_rail::sequence(input.retention_inputs.to_vec())]),
+        crate::preserves_rail::record("restart-decisions", vec![crate::preserves_rail::sequence(
+            input.restart_decisions.to_vec(),
+        )]),
+        crate::preserves_rail::record("scheduled-demands", vec![crate::preserves_rail::sequence(
+            input.scheduled_demands.to_vec(),
+        )]),
+        crate::preserves_rail::record("cleanup", vec![crate::preserves_rail::sequence(
+            input.cleanup_receipts.to_vec(),
+        )]),
+        crate::preserves_rail::record("retractions", vec![crate::preserves_rail::sequence(input.retractions.to_vec())]),
+        crate::preserves_rail::record("retention", vec![crate::preserves_rail::sequence(
+            input.retention_inputs.to_vec(),
+        )]),
         checks_value(&[
             "canonical-service-supervision-report",
             "monitor-order-bound",
@@ -517,49 +534,49 @@ pub fn service_supervision_report_value(input: ReportValueInput<'_>) -> Result<I
 fn service_supervision_gate_receipt_value(input: &GateReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision, "service supervision gate receipt decision")?;
     let gate_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(preserves_rail::record("service-supervision-gate-receipt-v1", vec![
-        preserves_rail::string(preserves_rail::SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA),
-        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
-        preserves_rail::record("report", vec![preserves_rail::string(input.report_ref)]),
-        preserves_rail::record("suite", vec![preserves_rail::string(input.suite_ref)]),
-        preserves_rail::record("restart-decision", vec![optional_string_value(input.restart_decision)]),
-        preserves_rail::record("status-count", vec![preserves_rail::u64_value(count_as_u64(
+    Ok(crate::preserves_rail::record("service-supervision-gate-receipt-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("report", vec![crate::preserves_rail::string(input.report_ref)]),
+        crate::preserves_rail::record("suite", vec![crate::preserves_rail::string(input.suite_ref)]),
+        crate::preserves_rail::record("restart-decision", vec![optional_string_value(input.restart_decision)]),
+        crate::preserves_rail::record("status-count", vec![crate::preserves_rail::u64_value(count_as_u64(
             input.status_count,
             "service status count",
         )?)]),
-        preserves_rail::record("monitor-count", vec![preserves_rail::u64_value(count_as_u64(
+        crate::preserves_rail::record("monitor-count", vec![crate::preserves_rail::u64_value(count_as_u64(
             input.monitor_count,
             "service monitor count",
         )?)]),
-        preserves_rail::record("cleanup-count", vec![preserves_rail::u64_value(count_as_u64(
+        crate::preserves_rail::record("cleanup-count", vec![crate::preserves_rail::u64_value(count_as_u64(
             input.cleanup_count,
             "service cleanup count",
         )?)]),
-        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
-        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
-            preserves_rail::record("check", vec![
-                preserves_rail::string("supervision-report-replay"),
-                preserves_rail::string(gate_status),
+        crate::preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("supervision-report-replay"),
+                crate::preserves_rail::string(gate_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("failure-status-lifecycle-bound"),
-                preserves_rail::string(gate_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("failure-status-lifecycle-bound"),
+                crate::preserves_rail::string(gate_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("restart-decision-bound"),
-                preserves_rail::string(gate_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("restart-decision-bound"),
+                crate::preserves_rail::string(gate_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("monitor-notifications-bound"),
-                preserves_rail::string(gate_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("monitor-notifications-bound"),
+                crate::preserves_rail::string(gate_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("cleanup-evidence-bound"),
-                preserves_rail::string(gate_status),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("cleanup-evidence-bound"),
+                crate::preserves_rail::string(gate_status),
             ]),
-            preserves_rail::record("check", vec![
-                preserves_rail::string("service-supervision-gate-is-not-authority"),
-                preserves_rail::string("pass"),
+            crate::preserves_rail::record("check", vec![
+                crate::preserves_rail::string("service-supervision-gate-is-not-authority"),
+                crate::preserves_rail::string("pass"),
             ]),
         ])]),
     ]))
@@ -582,9 +599,9 @@ pub struct ReportValueInput<'a> {
 pub fn supervision_fixture_suite_value() -> Result<IoValue> {
     let refs = fixture_refs()?;
     let restart_policy = fixture_restart_policy(&refs)?;
-    let restart_policy_ref = preserves_rail::canonical_hash(&restart_policy)?;
+    let restart_policy_ref = crate::preserves_rail::canonical_hash(&restart_policy)?;
     let manifest = fixture_manifest(&refs, restart_policy_ref)?;
-    let manifest_ref = preserves_rail::canonical_hash(&manifest)?;
+    let manifest_ref = crate::preserves_rail::canonical_hash(&manifest)?;
     let monitors = fixture_monitors(&refs.policy_ref)?;
     let link = fixture_link(&refs.policy_ref)?;
     let owned_state = fixture_owned_state(manifest_ref)?;
@@ -627,7 +644,7 @@ fn fixture_refs() -> Result<FixtureRefs> {
 }
 
 fn fixture_restart_policy(refs: &FixtureRefs) -> Result<IoValue> {
-    service_records::service_restart_policy_value(&service_records::ServiceRestartPolicyInput {
+    crate::service_records::service_restart_policy_value(&crate::service_records::ServiceRestartPolicyInput {
         policy_id: "restart:web".to_string(),
         max_attempts: 2,
         window_steps: 8,
@@ -637,7 +654,7 @@ fn fixture_restart_policy(refs: &FixtureRefs) -> Result<IoValue> {
 }
 
 fn fixture_manifest(refs: &FixtureRefs, restart_policy_ref: String) -> Result<IoValue> {
-    service_records::service_manifest_value(&service_records::ServiceManifestInput {
+    crate::service_records::service_manifest_value(&crate::service_records::ServiceManifestInput {
         service_id: "svc:web".to_string(),
         owner_authority_ref: refs.authority_ref.clone(),
         target_ref: synthetic_ref("target")?,
@@ -651,14 +668,14 @@ fn fixture_manifest(refs: &FixtureRefs, restart_policy_ref: String) -> Result<Io
 }
 
 fn fixture_monitors(policy_ref: &str) -> Result<Vec<IoValue>> {
-    let first_monitor = service_records::service_monitor_value(&service_records::ServiceMonitorInput {
+    let first_monitor = crate::service_records::service_monitor_value(&crate::service_records::ServiceMonitorInput {
         monitor_id: "monitor:web:b".to_string(),
         service_id: "svc:web".to_string(),
         observer_ref: synthetic_ref("observer-b")?,
         notification_policy: "failure".to_string(),
         policy_refs: vec![policy_ref.to_string()],
     })?;
-    let second_monitor = service_records::service_monitor_value(&service_records::ServiceMonitorInput {
+    let second_monitor = crate::service_records::service_monitor_value(&crate::service_records::ServiceMonitorInput {
         monitor_id: "monitor:web:a".to_string(),
         service_id: "svc:web".to_string(),
         observer_ref: synthetic_ref("observer-a")?,
@@ -669,7 +686,7 @@ fn fixture_monitors(policy_ref: &str) -> Result<Vec<IoValue>> {
 }
 
 fn fixture_link(policy_ref: &str) -> Result<IoValue> {
-    service_records::service_link_value(&service_records::ServiceLinkInput {
+    crate::service_records::service_link_value(&crate::service_records::ServiceLinkInput {
         supervisor_id: "supervisor:web".to_string(),
         parent_service_id: "svc:web".to_string(),
         child_service_id: "svc:web".to_string(),
@@ -692,12 +709,12 @@ fn fixture_owned_state(manifest_ref: String) -> Result<IoValue> {
 }
 
 fn failure_marker_value(suite: &ServiceSupervisionSuite) -> Result<IoValue> {
-    Ok(preserves_rail::record("service-failure-v1", vec![
-        preserves_rail::string(preserves_rail::SERVICE_FAILURE_MARKER_SCHEMA),
-        preserves_rail::record("service-id", vec![preserves_rail::string(&suite.manifest.service_id)]),
-        preserves_rail::record("manifest", vec![preserves_rail::string(&suite.manifest.manifest_ref)]),
-        preserves_rail::record("prior-lifecycle", vec![refs_sequence(&suite.evidence.prior_lifecycle_refs)]),
-        preserves_rail::record("effect-log", vec![refs_sequence(&suite.evidence.effect_log_refs)]),
+    Ok(crate::preserves_rail::record("service-failure-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::SERVICE_FAILURE_MARKER_SCHEMA),
+        crate::preserves_rail::record("service-id", vec![crate::preserves_rail::string(&suite.manifest.service_id)]),
+        crate::preserves_rail::record("manifest", vec![crate::preserves_rail::string(&suite.manifest.manifest_ref)]),
+        crate::preserves_rail::record("prior-lifecycle", vec![refs_sequence(&suite.evidence.prior_lifecycle_refs)]),
+        crate::preserves_rail::record("effect-log", vec![refs_sequence(&suite.evidence.effect_log_refs)]),
         checks_value(&["canonical-service-failure", "logical-supervision", "replay-bound"]),
     ]))
 }
@@ -706,10 +723,10 @@ fn parse_failure_marker_ref(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("service-failure-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-failure-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::SERVICE_FAILURE_MARKER_SCHEMA, "service failure marker schema")?;
+    require_schema(&fields[0], crate::preserves_rail::SERVICE_FAILURE_MARKER_SCHEMA, "service failure marker schema")?;
     let checks = parse_checks(&fields[5])?;
     require_check(&checks, "logical-supervision", "service failure marker")?;
-    preserves_rail::canonical_hash(value)
+    crate::preserves_rail::canonical_hash(value)
 }
 
 fn parse_monitor_notification_ref(value: &IoValue) -> Result<String> {
@@ -718,22 +735,22 @@ fn parse_monitor_notification_ref(value: &IoValue) -> Result<String> {
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-monitor-notification-v1 ...>"))?;
     require_schema(
         &fields[0],
-        preserves_rail::SERVICE_MONITOR_NOTIFICATION_SCHEMA,
+        crate::preserves_rail::SERVICE_MONITOR_NOTIFICATION_SCHEMA,
         "service monitor notification schema",
     )?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "failure-bound", "service monitor notification")?;
-    preserves_rail::canonical_hash(value)
+    crate::preserves_rail::canonical_hash(value)
 }
 
 fn parse_retraction_ref(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("service-retraction-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-retraction-v1 ...>"))?;
-    require_schema(&fields[0], preserves_rail::SERVICE_RETRACTION_SCHEMA, "service retraction schema")?;
+    require_schema(&fields[0], crate::preserves_rail::SERVICE_RETRACTION_SCHEMA, "service retraction schema")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "service-owned-retraction", "service retraction")?;
-    preserves_rail::canonical_hash(value)
+    crate::preserves_rail::canonical_hash(value)
 }
 
 fn failure_status_value(
@@ -741,7 +758,7 @@ fn failure_status_value(
     failure_ref: &str,
     monitor_refs: &[String],
 ) -> Result<IoValue> {
-    service_records::service_status_value(&service_records::ServiceStatusInput {
+    crate::service_records::service_status_value(&crate::service_records::ServiceStatusInput {
         service_id: suite.manifest.service_id.clone(),
         state: "failed".to_string(),
         manifest_ref: Some(suite.manifest.manifest_ref.clone()),
@@ -770,7 +787,7 @@ fn final_status_values(
     } else {
         "stopped"
     };
-    let status = service_records::service_status_value(&service_records::ServiceStatusInput {
+    let status = crate::service_records::service_status_value(&crate::service_records::ServiceStatusInput {
         service_id: suite.manifest.service_id.clone(),
         state: state.to_string(),
         manifest_ref: Some(suite.manifest.manifest_ref.clone()),
@@ -786,20 +803,22 @@ fn final_status_values(
 }
 
 fn monitor_notification_values(
-    monitors: &[service_records::ServiceMonitor],
+    monitors: &[crate::service_records::ServiceMonitor],
     suite: &ServiceSupervisionSuite,
     failure_ref: &str,
     failure_status_ref: &str,
 ) -> Result<Vec<IoValue>> {
     let mut notifications = Vec::with_capacity(monitors.len());
     for monitor in monitors {
-        let notification = preserves_rail::record("service-monitor-notification-v1", vec![
-            preserves_rail::string(preserves_rail::SERVICE_MONITOR_NOTIFICATION_SCHEMA),
-            preserves_rail::record("service-id", vec![preserves_rail::string(&suite.manifest.service_id)]),
-            preserves_rail::record("monitor", vec![preserves_rail::string(&monitor.monitor_ref)]),
-            preserves_rail::record("observer", vec![preserves_rail::string(&monitor.observer_ref)]),
-            preserves_rail::record("failure", vec![preserves_rail::string(failure_ref)]),
-            preserves_rail::record("status", vec![preserves_rail::string(failure_status_ref)]),
+        let notification = crate::preserves_rail::record("service-monitor-notification-v1", vec![
+            crate::preserves_rail::string(crate::preserves_rail::SERVICE_MONITOR_NOTIFICATION_SCHEMA),
+            crate::preserves_rail::record("service-id", vec![crate::preserves_rail::string(
+                &suite.manifest.service_id,
+            )]),
+            crate::preserves_rail::record("monitor", vec![crate::preserves_rail::string(&monitor.monitor_ref)]),
+            crate::preserves_rail::record("observer", vec![crate::preserves_rail::string(&monitor.observer_ref)]),
+            crate::preserves_rail::record("failure", vec![crate::preserves_rail::string(failure_ref)]),
+            crate::preserves_rail::record("status", vec![crate::preserves_rail::string(failure_status_ref)]),
             checks_value(&["monitor-order-bound", "logical-notification", "failure-bound"]),
         ]);
         notifications.push(notification);
@@ -812,7 +831,7 @@ fn failure_lifecycle_receipt(
     failure_status_ref: &str,
     supervision_refs: &[String],
 ) -> Result<IoValue> {
-    service_records::service_lifecycle_receipt_value(&service_records::ServiceLifecycleReceiptInput {
+    crate::service_records::service_lifecycle_receipt_value(&crate::service_records::ServiceLifecycleReceiptInput {
         operation: "fail".to_string(),
         decision: "pass".to_string(),
         service_id: suite.manifest.service_id.clone(),
@@ -886,7 +905,7 @@ fn restart_decision_value(
 ) -> Result<IoValue> {
     let mut prior_lifecycle_refs = suite.evidence.prior_lifecycle_refs.clone();
     prior_lifecycle_refs.push(failure_lifecycle_ref.to_string());
-    service_records::service_restart_decision_value(&service_records::ServiceRestartDecisionInput {
+    crate::service_records::service_restart_decision_value(&crate::service_records::ServiceRestartDecisionInput {
         decision: restart.decision.clone(),
         service_id: suite.manifest.service_id.clone(),
         manifest_ref: Some(suite.manifest.manifest_ref.clone()),
@@ -912,7 +931,7 @@ fn scheduled_demands(suite: &ServiceSupervisionSuite, restart: &RestartEvaluatio
         .first()
         .cloned()
         .ok_or_else(|| MoltenError::invalid_harness("restart pass requires authority ref"))?;
-    let demand = service_records::service_demand_value(&service_records::ServiceDemandInput {
+    let demand = crate::service_records::service_demand_value(&crate::service_records::ServiceDemandInput {
         demand_id: format!("restart:{}:{}", suite.manifest.service_id, restart.attempt),
         service_id: suite.manifest.service_id.clone(),
         requester_ref,
@@ -937,8 +956,8 @@ fn evaluate_cleanup(
     }
     let is_foreign_claim_present = !suite.owned_state.foreign_ref_claims.is_empty();
     if is_foreign_claim_present {
-        let cleanup_receipt =
-            service_records::service_cleanup_receipt_value(&service_records::ServiceCleanupReceiptInput {
+        let cleanup_receipt = crate::service_records::service_cleanup_receipt_value(
+            &crate::service_records::ServiceCleanupReceiptInput {
                 decision: "deny".to_string(),
                 service_id: suite.manifest.service_id.clone(),
                 manifest_ref: Some(suite.manifest.manifest_ref.clone()),
@@ -952,9 +971,13 @@ fn evaluate_cleanup(
                 revocation_refs: suite.evidence.revocation_refs.clone(),
                 retention_refs: suite.evidence.retention_policy_refs.clone(),
                 diagnostics: vec!["foreign service-owned state cannot be proven".to_string()],
-            })?;
-        let retention_input =
-            retention_input_value(suite, &preserves_rail::canonical_hash(&cleanup_receipt)?, restart_decision_ref)?;
+            },
+        )?;
+        let retention_input = retention_input_value(
+            suite,
+            &crate::preserves_rail::canonical_hash(&cleanup_receipt)?,
+            restart_decision_ref,
+        )?;
         return Ok(CleanupEvaluation {
             cleanup_receipt: Some(cleanup_receipt),
             retractions: Vec::new(),
@@ -966,11 +989,11 @@ fn evaluate_cleanup(
     let mut retraction_refs = Vec::with_capacity(targets.len());
     for target in targets {
         let retraction = retraction_value(suite, &target)?;
-        retraction_refs.push(preserves_rail::canonical_hash(&retraction)?);
+        retraction_refs.push(crate::preserves_rail::canonical_hash(&retraction)?);
         retractions.push(retraction);
     }
     let cleanup_receipt =
-        service_records::service_cleanup_receipt_value(&service_records::ServiceCleanupReceiptInput {
+        crate::service_records::service_cleanup_receipt_value(&crate::service_records::ServiceCleanupReceiptInput {
             decision: "pass".to_string(),
             service_id: suite.manifest.service_id.clone(),
             manifest_ref: Some(suite.manifest.manifest_ref.clone()),
@@ -986,7 +1009,7 @@ fn evaluate_cleanup(
             diagnostics: Vec::new(),
         })?;
     let retention_input =
-        retention_input_value(suite, &preserves_rail::canonical_hash(&cleanup_receipt)?, restart_decision_ref)?;
+        retention_input_value(suite, &crate::preserves_rail::canonical_hash(&cleanup_receipt)?, restart_decision_ref)?;
     Ok(CleanupEvaluation {
         cleanup_receipt: Some(cleanup_receipt),
         retractions,
@@ -1023,14 +1046,14 @@ fn insert_targets(targets: &mut BTreeSet<CleanupTarget>, kind: &str, refs: &[Str
 }
 
 fn retraction_value(suite: &ServiceSupervisionSuite, target: &CleanupTarget) -> Result<IoValue> {
-    Ok(preserves_rail::record("service-retraction-v1", vec![
-        preserves_rail::string(preserves_rail::SERVICE_RETRACTION_SCHEMA),
-        preserves_rail::record("service-id", vec![preserves_rail::string(&suite.manifest.service_id)]),
-        preserves_rail::record("manifest", vec![preserves_rail::string(&suite.manifest.manifest_ref)]),
-        preserves_rail::record("kind", vec![preserves_rail::string(&target.kind)]),
-        preserves_rail::record("target", vec![preserves_rail::string(&target.target_ref)]),
-        preserves_rail::record("authority", vec![refs_sequence(&suite.evidence.authority_refs)]),
-        preserves_rail::record("revocations", vec![refs_sequence(&suite.evidence.revocation_refs)]),
+    Ok(crate::preserves_rail::record("service-retraction-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::SERVICE_RETRACTION_SCHEMA),
+        crate::preserves_rail::record("service-id", vec![crate::preserves_rail::string(&suite.manifest.service_id)]),
+        crate::preserves_rail::record("manifest", vec![crate::preserves_rail::string(&suite.manifest.manifest_ref)]),
+        crate::preserves_rail::record("kind", vec![crate::preserves_rail::string(&target.kind)]),
+        crate::preserves_rail::record("target", vec![crate::preserves_rail::string(&target.target_ref)]),
+        crate::preserves_rail::record("authority", vec![refs_sequence(&suite.evidence.authority_refs)]),
+        crate::preserves_rail::record("revocations", vec![refs_sequence(&suite.evidence.revocation_refs)]),
         checks_value(&["service-owned-retraction", "no-foreign-delete", "retention-still-gates"]),
     ]))
 }
@@ -1040,12 +1063,12 @@ fn retention_input_value(
     cleanup_receipt_ref: &str,
     restart_decision_ref: &str,
 ) -> Result<IoValue> {
-    Ok(preserves_rail::record("service-retention-input-v1", vec![
-        preserves_rail::string(preserves_rail::SERVICE_RETENTION_INPUT_SCHEMA),
-        preserves_rail::record("service-id", vec![preserves_rail::string(&suite.manifest.service_id)]),
-        preserves_rail::record("cleanup", vec![preserves_rail::string(cleanup_receipt_ref)]),
-        preserves_rail::record("restart-decision", vec![preserves_rail::string(restart_decision_ref)]),
-        preserves_rail::record("retention-policy", vec![refs_sequence(&suite.evidence.retention_policy_refs)]),
+    Ok(crate::preserves_rail::record("service-retention-input-v1", vec![
+        crate::preserves_rail::string(crate::preserves_rail::SERVICE_RETENTION_INPUT_SCHEMA),
+        crate::preserves_rail::record("service-id", vec![crate::preserves_rail::string(&suite.manifest.service_id)]),
+        crate::preserves_rail::record("cleanup", vec![crate::preserves_rail::string(cleanup_receipt_ref)]),
+        crate::preserves_rail::record("restart-decision", vec![crate::preserves_rail::string(restart_decision_ref)]),
+        crate::preserves_rail::record("retention-policy", vec![refs_sequence(&suite.evidence.retention_policy_refs)]),
         checks_value(&[
             "cleanup-is-input-evidence",
             "retention-policy-still-decides",
@@ -1068,7 +1091,7 @@ fn status_values(failure_status: &IoValue, final_statuses: &[IoValue]) -> Result
 fn refs_for_values(values: &[IoValue]) -> Result<Vec<String>> {
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
-        refs.push(preserves_rail::canonical_hash(value)?);
+        refs.push(crate::preserves_rail::canonical_hash(value)?);
     }
     Ok(refs)
 }
@@ -1098,14 +1121,14 @@ fn optional_value_vec(value: Option<IoValue>) -> Vec<IoValue> {
 fn validate_suite_input(input: &ServiceSupervisionSuiteInput) -> Result<()> {
     ensure_count_at_most(input.links.len(), "service supervision links")?;
     ensure_count_at_most(input.monitors.len(), "service supervision monitors")?;
-    service_records::parse_service_manifest(&input.manifest)?;
-    service_records::parse_service_restart_policy(&input.restart_policy)?;
+    crate::service_records::parse_service_manifest(&input.manifest)?;
+    crate::service_records::parse_service_restart_policy(&input.restart_policy)?;
     parse_service_owned_state(&input.owned_state)?;
     for link in &input.links {
-        service_records::parse_service_link(link)?;
+        crate::service_records::parse_service_link(link)?;
     }
     for monitor in &input.monitors {
-        service_records::parse_service_monitor(monitor)?;
+        crate::service_records::parse_service_monitor(monitor)?;
     }
     validate_evidence(&input.evidence)
 }
@@ -1169,13 +1192,13 @@ fn ensure_count_at_most(actual: usize, label: &str) -> Result<()> {
 }
 
 fn evidence_value(input: &ServiceSupervisionEvidenceInput) -> IoValue {
-    preserves_rail::record("evidence", vec![
-        preserves_rail::record("authority", vec![refs_sequence(&input.authority_refs)]),
-        preserves_rail::record("resource", vec![refs_sequence(&input.resource_refs)]),
-        preserves_rail::record("revocations", vec![refs_sequence(&input.revocation_refs)]),
-        preserves_rail::record("retention", vec![refs_sequence(&input.retention_policy_refs)]),
-        preserves_rail::record("prior-lifecycle", vec![refs_sequence(&input.prior_lifecycle_refs)]),
-        preserves_rail::record("effect-log", vec![refs_sequence(&input.effect_log_refs)]),
+    crate::preserves_rail::record("evidence", vec![
+        crate::preserves_rail::record("authority", vec![refs_sequence(&input.authority_refs)]),
+        crate::preserves_rail::record("resource", vec![refs_sequence(&input.resource_refs)]),
+        crate::preserves_rail::record("revocations", vec![refs_sequence(&input.revocation_refs)]),
+        crate::preserves_rail::record("retention", vec![refs_sequence(&input.retention_policy_refs)]),
+        crate::preserves_rail::record("prior-lifecycle", vec![refs_sequence(&input.prior_lifecycle_refs)]),
+        crate::preserves_rail::record("effect-log", vec![refs_sequence(&input.effect_log_refs)]),
     ])
 }
 
@@ -1193,33 +1216,36 @@ fn parse_evidence(value: &Value<IoValue>) -> Result<ServiceSupervisionEvidenceIn
     })
 }
 
-fn parse_link_sequence(value: &Value<IoValue>) -> Result<Vec<service_records::ServiceLink>> {
-    parse_iovalue_sequence(value, "links")?.iter().map(service_records::parse_service_link).collect()
+fn parse_link_sequence(value: &Value<IoValue>) -> Result<Vec<crate::service_records::ServiceLink>> {
+    parse_iovalue_sequence(value, "links")?
+        .iter()
+        .map(crate::service_records::parse_service_link)
+        .collect()
 }
 
-fn parse_monitor_sequence(value: &Value<IoValue>) -> Result<Vec<service_records::ServiceMonitor>> {
+fn parse_monitor_sequence(value: &Value<IoValue>) -> Result<Vec<crate::service_records::ServiceMonitor>> {
     parse_iovalue_sequence(value, "monitors")?
         .iter()
-        .map(service_records::parse_service_monitor)
+        .map(crate::service_records::parse_service_monitor)
         .collect()
 }
 
 fn parse_iovalue_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<IoValue>> {
     let values = field_sequence(value, label)?;
     ensure_count_at_most(values.len(), label)?;
-    Ok(values.iter().map(preserves_rail::value_to_iovalue).collect())
+    Ok(values.iter().map(crate::preserves_rail::value_to_iovalue).collect())
 }
 
 fn record_iovalue(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
-    Ok(preserves_rail::value_to_iovalue(&fields[0]))
+    Ok(crate::preserves_rail::value_to_iovalue(&fields[0]))
 }
 
 fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} N>")))?;
@@ -1230,7 +1256,7 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
 }
 
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} STRING>")))?;
@@ -1244,7 +1270,7 @@ fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
 }
 
 fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
@@ -1260,7 +1286,7 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
 }
 
 fn record_optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
@@ -1287,7 +1313,7 @@ fn parse_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Stri
 }
 
 fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoValue>>> {
-    let value = preserves_rail::value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} [...]>")))?;
@@ -1302,7 +1328,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     ensure_count_at_most(checks.len(), "checks")?;
     let mut parsed = Vec::with_capacity(checks.len());
     for check in checks {
-        let check = preserves_rail::value_to_iovalue(&check);
+        let check = crate::preserves_rail::value_to_iovalue(&check);
         let check_fields = check
             .collect_simple_record("check", Some(2))
             .ok_or_else(|| MoltenError::invalid_harness("expected <check NAME STATUS>"))?;
@@ -1331,19 +1357,22 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
 }
 
 fn refs_sequence(values: &[String]) -> IoValue {
-    preserves_rail::sequence(values.iter().map(preserves_rail::string).collect())
+    crate::preserves_rail::sequence(values.iter().map(crate::preserves_rail::string).collect())
 }
 
 fn strings_sequence(values: &[String]) -> IoValue {
-    preserves_rail::sequence(values.iter().map(preserves_rail::string).collect())
+    crate::preserves_rail::sequence(values.iter().map(crate::preserves_rail::string).collect())
 }
 
 fn checks_value(values: &[&str]) -> IoValue {
-    preserves_rail::record("checks", vec![preserves_rail::sequence(
+    crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(
         values
             .iter()
             .map(|value| {
-                preserves_rail::record("check", vec![preserves_rail::string(value), preserves_rail::string("pass")])
+                crate::preserves_rail::record("check", vec![
+                    crate::preserves_rail::string(value),
+                    crate::preserves_rail::string("pass"),
+                ])
             })
             .collect(),
     )])
@@ -1351,15 +1380,15 @@ fn checks_value(values: &[&str]) -> IoValue {
 
 fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(
-        || preserves_rail::record("none", Vec::new()),
-        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+        || crate::preserves_rail::record("none", Vec::new()),
+        |value| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(value)]),
     )
 }
 
 fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(
-        || preserves_rail::record("none", Vec::new()),
-        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+        || crate::preserves_rail::record("none", Vec::new()),
+        |value| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(value)]),
     )
 }
 
@@ -1414,7 +1443,7 @@ fn required_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
 }
 
 fn require_ref(reference: &str, label: &str) -> Result<()> {
-    preserves_rail::validate_content_ref(reference).map_err(|error| {
+    crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
     })
 }
@@ -1427,8 +1456,8 @@ fn required_string(value: &Value<IoValue>, label: &str) -> Result<String> {
 }
 
 fn synthetic_ref(label: &str) -> Result<String> {
-    preserves_rail::canonical_hash(&preserves_rail::record("service-supervision-fixture-ref", vec![
-        preserves_rail::string(label),
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("service-supervision-fixture-ref", vec![
+        crate::preserves_rail::string(label),
     ]))
 }
 
@@ -1442,8 +1471,8 @@ mod tests {
     type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
 
     fn test_ref(label: &str) -> String {
-        preserves_rail::canonical_hash(&preserves_rail::record("service-supervision-test-ref", vec![
-            preserves_rail::string(label),
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("service-supervision-test-ref", vec![
+            crate::preserves_rail::string(label),
         ]))
         .expect("test ref")
     }
@@ -1483,10 +1512,11 @@ mod tests {
         let run = run_service_supervision_suite_value(&suite_value).expect("run supervision");
         assert_eq!(run.monitor_notifications.len(), 2);
         assert_eq!(run.scheduled_demands.len(), 1);
-        let decision = service_records::parse_service_restart_decision(&run.restart_decisions[0]).expect("decision");
+        let decision =
+            crate::service_records::parse_service_restart_decision(&run.restart_decisions[0]).expect("decision");
         assert_eq!(decision.decision, "pass");
         let lifecycle =
-            service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("lifecycle");
+            crate::service_records::parse_service_lifecycle_receipt(&run.lifecycle_receipts[0]).expect("lifecycle");
         assert_eq!(lifecycle.operation, "fail");
         assert_eq!(lifecycle.supervision_refs.len(), 5);
         replay_service_supervision_report(&run.value).expect("replay supervision report");
@@ -1507,7 +1537,8 @@ mod tests {
         assert_eq!(run.cleanup_receipts.len(), 1);
         assert_eq!(run.retractions.len(), 5);
         assert_eq!(run.statuses.len(), 2);
-        let decision = service_records::parse_service_restart_decision(&run.restart_decisions[0]).expect("decision");
+        let decision =
+            crate::service_records::parse_service_restart_decision(&run.restart_decisions[0]).expect("decision");
         assert_eq!(decision.decision, "deny");
         assert!(decision.diagnostics.iter().any(|diagnostic| diagnostic.contains("budget")));
     }
@@ -1531,7 +1562,7 @@ mod tests {
         let run = run_service_supervision_suite_value(&suite_value).expect("run revoked supervision");
         assert_eq!(run.cleanup_receipts.len(), 1);
         assert_eq!(run.retention_inputs.len(), 1);
-        let cleanup = service_records::parse_service_cleanup_receipt(&run.cleanup_receipts[0]).expect("cleanup");
+        let cleanup = crate::service_records::parse_service_cleanup_receipt(&run.cleanup_receipts[0]).expect("cleanup");
         assert_eq!(cleanup.decision, "pass");
         assert_eq!(cleanup.revocation_refs.len(), 1);
         assert_eq!(cleanup.retraction_refs.len(), 5);
@@ -1568,7 +1599,7 @@ mod tests {
         .expect("foreign suite");
         let run = run_service_supervision_suite_value(&suite_value).expect("run foreign cleanup");
         assert!(run.retractions.is_empty());
-        let cleanup = service_records::parse_service_cleanup_receipt(&run.cleanup_receipts[0]).expect("cleanup");
+        let cleanup = crate::service_records::parse_service_cleanup_receipt(&run.cleanup_receipts[0]).expect("cleanup");
         assert_eq!(cleanup.decision, "deny");
         assert!(cleanup.diagnostics.iter().any(|diagnostic| diagnostic.contains("foreign")));
     }
@@ -1592,7 +1623,8 @@ mod tests {
         let run = run_service_supervision_suite_value(&suite_value).expect("run resource denied supervision");
         assert!(run.scheduled_demands.is_empty());
         assert_eq!(run.cleanup_receipts.len(), 1);
-        let decision = service_records::parse_service_restart_decision(&run.restart_decisions[0]).expect("decision");
+        let decision =
+            crate::service_records::parse_service_restart_decision(&run.restart_decisions[0]).expect("decision");
         assert_eq!(decision.decision, "deny");
         assert!(decision.diagnostics.iter().any(|diagnostic| diagnostic.contains("resource")));
     }
@@ -1606,10 +1638,10 @@ mod tests {
         assert!(replay_service_supervision_report(&report_from_parts(&suite_value, &monitor_report)).is_err());
 
         let mut restart_report = parse_service_supervision_report(&run.value).expect("parse report");
-        let decision =
-            service_records::parse_service_restart_decision(&restart_report.restart_decisions[0]).expect("decision");
-        restart_report.restart_decisions[0] =
-            service_records::service_restart_decision_value(&service_records::ServiceRestartDecisionInput {
+        let decision = crate::service_records::parse_service_restart_decision(&restart_report.restart_decisions[0])
+            .expect("decision");
+        restart_report.restart_decisions[0] = crate::service_records::service_restart_decision_value(
+            &crate::service_records::ServiceRestartDecisionInput {
                 decision: decision.decision,
                 service_id: decision.service_id,
                 manifest_ref: decision.manifest_ref,
@@ -1622,8 +1654,9 @@ mod tests {
                 authority_refs: decision.authority_refs,
                 resource_refs: decision.resource_refs,
                 diagnostics: vec!["tampered restart diagnostic".to_string()],
-            })
-            .expect("tampered restart decision");
+            },
+        )
+        .expect("tampered restart decision");
         assert!(replay_service_supervision_report(&report_from_parts(&suite_value, &restart_report)).is_err());
 
         let mut cleanup_report = parse_service_supervision_report(&run.value).expect("parse report");
@@ -1681,20 +1714,20 @@ mod tests {
         .expect("catalog list supervision report");
         assert_eq!(listed.items.len(), 1);
         assert!(
-            preserves_rail::to_text(&listed.value)
+            crate::preserves_rail::to_text(&listed.value)
                 .expect("render catalog result")
                 .contains("ledger-kind:service-supervision-report")
         );
         let request =
-            crate::catalog_mcp::mcp_request_value("catalog.list", vec![preserves_rail::record("kind", vec![
-                preserves_rail::string("service-supervision-report"),
+            crate::catalog_mcp::mcp_request_value("catalog.list", vec![crate::preserves_rail::record("kind", vec![
+                crate::preserves_rail::string("service-supervision-report"),
             ])])
             .expect("MCP request");
         let mcp =
             crate::catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("MCP list supervision report");
         assert_eq!(mcp.decision, "pass");
         assert!(
-            preserves_rail::to_text(&mcp.response_value)
+            crate::preserves_rail::to_text(&mcp.response_value)
                 .expect("render MCP response")
                 .contains("service-supervision-report")
         );
@@ -1702,13 +1735,13 @@ mod tests {
 
     #[test]
     fn malformed_os_parentage_is_not_supervision_evidence() {
-        let value = preserves_rail::parse_text(
+        let value = crate::preserves_rail::parse_text(
             "<service-link-v1 \"molten.service.link.v1\" <supervisor-id \"supervisor:web\"> \
              <parent-service \"1234\"> <child-service \"svc:web\"> <propagation \"restart\"> \
              <policy []> <checks [<check \"logical-supervision\" \"pass\">]>>",
         )
         .expect("parse malformed link");
-        assert!(service_records::parse_service_link(&value).is_err());
+        assert!(crate::service_records::parse_service_link(&value).is_err());
     }
 
     #[hegel::test(test_cases = 16)]
