@@ -1,6 +1,6 @@
-use steel::steel_vm::engine::Engine;
 use steel::steel_vm::register_fn::RegisterFn;
 
+type Engine = steel::steel_vm::engine::Engine;
 type Shared<T> = std::sync::Arc<T>;
 type Counter = std::sync::atomic::AtomicU64;
 type MemoryOrder = std::sync::atomic::Ordering;
