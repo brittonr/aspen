@@ -1217,7 +1217,7 @@ fn retention_execute_audit_labels(value: &IoValue) -> Result<Option<Vec<String>>
 }
 
 fn candidate_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
-    if let Ok(explain) = crate::retention::parse_retention_candidate_explain(value) {
+    if let Ok(explain) = crate::retention::parse_candidate_explain(value) {
         let mut classifications = vec![
             "retention:explain".to_string(),
             "retention-candidate:explain".to_string(),
@@ -1236,7 +1236,7 @@ fn candidate_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
         push_optional_classification(&mut classifications, "retention-subsystem", explain.subsystem.as_deref())?;
         return Ok(Some(classifications));
     }
-    if let Ok(bundle) = crate::retention::parse_retention_candidate_bundle(value) {
+    if let Ok(bundle) = crate::retention::parse_candidate_bundle(value) {
         let mut classifications = vec![
             "retention:bundle".to_string(),
             "retention-candidate:bundle".to_string(),
@@ -1257,7 +1257,7 @@ fn candidate_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
 }
 
 fn retention_tail_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
-    if let Ok(profile) = crate::retention::parse_retention_candidate_bundle_profile(value) {
+    if let Ok(profile) = crate::retention::parse_candidate_bundle_profile(value) {
         return Ok(Some(vec![
             "retention:bundle-profile".to_string(),
             "retention-candidate:bundle-profile".to_string(),
@@ -1267,7 +1267,7 @@ fn retention_tail_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
             format!("retention-bundle-markers:{}", profile.marker_refs.len()),
         ]));
     }
-    if let Ok(verify) = crate::retention::parse_retention_candidate_bundle_verify(value) {
+    if let Ok(verify) = crate::retention::parse_candidate_bundle_verify(value) {
         let mut classifications = vec![
             "retention:bundle-verify".to_string(),
             "retention-candidate:bundle-verify".to_string(),
@@ -2925,7 +2925,7 @@ mod tests {
     }
 
     #[test]
-    fn retention_gc_chain_artifacts_are_catalog_searchable() {
+    fn gc_chain_artifacts_are_catalog_searchable() {
         let dir = temp_dir("catalog-retention-gc");
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
@@ -3266,7 +3266,7 @@ mod tests {
         }
 
         fn plan(&self, evidence: &GcEvidence) -> GcPlan {
-            crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
+            crate::retention::store_gc_plan(crate::retention::GcPlanInput {
                 root: self.root,
                 subsystem: self.subsystem,
                 object_ref: &self.object_ref,
@@ -3279,7 +3279,7 @@ mod tests {
         }
 
         fn apply(&self, plan_ref: &str) -> GcApply {
-            crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
+            crate::retention::apply_gc_plan(crate::retention::GcApplyFromPlanInput {
                 root: self.root,
                 plan_ref,
             })
@@ -3287,7 +3287,7 @@ mod tests {
         }
 
         fn execution(&self, apply_ref: &str) -> GcExecution {
-            crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
+            crate::retention::store_gc_execution_gate(crate::retention::GcExecutionGateInput {
                 root: self.root,
                 subsystem: self.subsystem,
                 action: self.action,
@@ -3300,7 +3300,7 @@ mod tests {
         }
 
         fn audit(&self, execution_ref: &str) -> GcAudit {
-            crate::retention::audit_retention_gc_execution(crate::retention::GcAuditInput {
+            crate::retention::audit_gc_execution(crate::retention::GcAuditInput {
                 root: self.root,
                 execution_ref,
             })

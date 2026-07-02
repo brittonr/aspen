@@ -1931,7 +1931,7 @@ struct ApplyRefMatchInput<'a> {
 fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
     let mut fallback_ref = None;
     for apply_ref in input.apply_refs {
-        let Ok(apply) = crate::retention::read_retention_gc_apply(input.root, apply_ref) else {
+        let Ok(apply) = crate::retention::read_gc_apply(input.root, apply_ref) else {
             if fallback_ref.is_none() {
                 fallback_ref = Some(apply_ref.as_str());
             }
@@ -2098,16 +2098,15 @@ impl GcNotes {
             object_kind: object.object_kind,
             retention_class: object.retention_class,
         });
-        let execution_gate =
-            crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
-                root: env.root,
-                subsystem: "chunk-gc",
-                action: env.action,
-                object_ref: object.object_ref,
-                object_kind: object.object_kind,
-                retention_class: object.retention_class,
-                apply_ref,
-            })?;
+        let execution_gate = crate::retention::store_gc_execution_gate(crate::retention::GcExecutionGateInput {
+            root: env.root,
+            subsystem: "chunk-gc",
+            action: env.action,
+            object_ref: object.object_ref,
+            object_kind: object.object_kind,
+            retention_class: object.retention_class,
+            apply_ref,
+        })?;
         push_bounded(
             &mut self.execution_gates,
             execution_gate.execution_ref.clone(),
@@ -4894,7 +4893,7 @@ mod tests {
     ) -> Vec<String> {
         let mut apply_refs = Vec::with_capacity(manifest_refs.len() + chunk_refs.len());
         for manifest_ref in manifest_refs {
-            let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
+            let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
                 root,
                 subsystem: "chunk-gc",
                 object_ref: manifest_ref,
@@ -4905,7 +4904,7 @@ mod tests {
             })
             .expect("store manifest GC plan");
             apply_refs.push(
-                crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
+                crate::retention::apply_gc_plan(crate::retention::GcApplyFromPlanInput {
                     root,
                     plan_ref: &plan.plan_ref,
                 })
@@ -4914,7 +4913,7 @@ mod tests {
             );
         }
         for chunk_ref in chunk_refs {
-            let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
+            let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
                 root,
                 subsystem: "chunk-gc",
                 object_ref: chunk_ref,
@@ -4925,7 +4924,7 @@ mod tests {
             })
             .expect("store chunk GC plan");
             apply_refs.push(
-                crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
+                crate::retention::apply_gc_plan(crate::retention::GcApplyFromPlanInput {
                     root,
                     plan_ref: &plan.plan_ref,
                 })

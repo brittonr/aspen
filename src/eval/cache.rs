@@ -780,7 +780,7 @@ fn evaluate_invalidate_key(
         object_kind: "eval-cache-key",
         retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
     });
-    let gate = crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
+    let gate = crate::retention::store_gc_execution_gate(crate::retention::GcExecutionGateInput {
         root,
         subsystem: "eval-cache-invalidate",
         action: crate::retention::ACTION_TOMBSTONE,
@@ -1856,7 +1856,7 @@ struct ApplyRefMatchInput<'a> {
 fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
     let mut fallback_ref = None;
     for apply_ref in input.apply_refs {
-        let Ok(apply) = crate::retention::read_retention_gc_apply(input.root, apply_ref) else {
+        let Ok(apply) = crate::retention::read_gc_apply(input.root, apply_ref) else {
             if fallback_ref.is_none() {
                 fallback_ref = Some(apply_ref.as_str());
             }
@@ -2221,7 +2221,7 @@ mod tests {
         key_ref: &str,
         evidence: &crate::retention::DestructiveRetentionEvidence,
     ) -> String {
-        let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
+        let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
             root,
             subsystem: "eval-cache-invalidate",
             object_ref: key_ref,
@@ -2231,7 +2231,7 @@ mod tests {
             evidence,
         })
         .expect("store cache invalidation plan");
-        crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
+        crate::retention::apply_gc_plan(crate::retention::GcApplyFromPlanInput {
             root,
             plan_ref: &plan.plan_ref,
         })

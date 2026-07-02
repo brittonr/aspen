@@ -302,7 +302,7 @@ fn record_execution(
         object_kind: &entry.artifact_kind,
         retention_class,
     });
-    let execution_gate = crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
+    let execution_gate = crate::retention::store_gc_execution_gate(crate::retention::GcExecutionGateInput {
         root: input.root,
         subsystem: "ledger-gc",
         action: input.action,
@@ -445,7 +445,7 @@ struct ApplyRefMatchInput<'a> {
 fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
     let mut fallback_ref = None;
     for apply_ref in input.apply_refs {
-        let Ok(apply) = crate::retention::read_retention_gc_apply(input.root, apply_ref) else {
+        let Ok(apply) = crate::retention::read_gc_apply(input.root, apply_ref) else {
             if fallback_ref.is_none() {
                 fallback_ref = Some(apply_ref.as_str());
             }
@@ -1138,8 +1138,8 @@ mod tests {
         assert_eq!(gc.decision, "deny");
         assert!(gc.removed_refs.is_empty());
         assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
-        let gate = crate::retention::read_retention_gc_execution_gate(&root, &gc.execution_gate_refs[0])
-            .expect("read execution gate");
+        let gate =
+            crate::retention::read_gc_execution_gate(&root, &gc.execution_gate_refs[0]).expect("read execution gate");
         assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-execute-apply-missing"));
     }
 
@@ -1174,8 +1174,8 @@ mod tests {
         assert_eq!(gc.decision, "deny");
         assert!(gc.removed_refs.is_empty());
         assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
-        let gate = crate::retention::read_retention_gc_execution_gate(&root, &gc.execution_gate_refs[0])
-            .expect("read execution gate");
+        let gate =
+            crate::retention::read_gc_execution_gate(&root, &gc.execution_gate_refs[0]).expect("read execution gate");
         assert!(
             gate.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-execute-apply-scope-mismatch"),
             "{:?}",
@@ -1310,7 +1310,7 @@ mod tests {
         retention_class: &str,
         evidence: &crate::retention::DestructiveRetentionEvidence,
     ) -> String {
-        let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
+        let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
             root,
             subsystem,
             object_ref,
@@ -1320,7 +1320,7 @@ mod tests {
             evidence,
         })
         .expect("store ledger GC plan");
-        crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
+        crate::retention::apply_gc_plan(crate::retention::GcApplyFromPlanInput {
             root,
             plan_ref: &plan.plan_ref,
         })

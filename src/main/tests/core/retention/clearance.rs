@@ -9,7 +9,7 @@ fn remote_clearance_roundtrip(dir: &Path, fixture: &RetentionFixture) -> Clearan
         "remote-clearance-response.preserves",
     );
     let import_out = import_clearance(dir, fixture, &clearance, response_out, "remote-clearance-import.preserves");
-    let imported = molten::retention::parse_retention_remote_gc_clearance_import(
+    let imported = molten::retention::parse_remote_gc_clearance_import(
         &read_preserves_file(&import_out).expect("read clearance import"),
     )
     .expect("parse clearance import");
@@ -128,7 +128,7 @@ fn retained_clearance_is_denied(dir: &Path, fixture: &RetentionFixture, clearanc
         "remote-clearance-retained-response.preserves",
     );
     let import_out = import_clearance(dir, fixture, &clearance, response, "remote-clearance-retained-import.preserves");
-    let imported = molten::retention::parse_retention_remote_gc_clearance_import(
+    let imported = molten::retention::parse_remote_gc_clearance_import(
         &read_preserves_file(&import_out).expect("read retained clearance import"),
     )
     .expect("parse retained clearance import");

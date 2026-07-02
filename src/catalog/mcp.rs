@@ -1100,12 +1100,12 @@ mod tests {
     }
 
     #[test]
-    fn retention_gc_named_tool_searches_audit_scope() {
+    fn gc_named_tool_searches_audit_scope() {
         let root = temp_dir("catalog-mcp-retention-gc");
         let registry = root.join("registry");
         let ledger_root = root.join("ledger");
         let retention_root = root.join("retention");
-        let fixture = retention_gc_audit_fixture(&retention_root, "catalog-mcp-retention-gc", "chunk-gc");
+        let fixture = gc_audit_fixture(&retention_root, "catalog-mcp-retention-gc", "chunk-gc");
         crate::ledger::import_artifact(&ledger_root, &fixture.audit.value).expect("import retention GC audit");
 
         let request = mcp_request_value("search_retention_gc", vec![
@@ -1339,10 +1339,10 @@ mod tests {
         audit: crate::retention::GcAudit,
     }
 
-    fn retention_gc_audit_fixture(root: &Path, label: &str, subsystem: &str) -> RetentionGcAuditFixture {
+    fn gc_audit_fixture(root: &Path, label: &str, subsystem: &str) -> RetentionGcAuditFixture {
         let seed = make_seed(root, label, subsystem);
         let evidence = seed_evidence(&seed);
-        let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
+        let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
             root: seed.root,
             subsystem: seed.subsystem,
             object_ref: &seed.object_ref,
@@ -1352,12 +1352,12 @@ mod tests {
             evidence: &evidence,
         })
         .expect("store retention GC catalog MCP plan");
-        let apply = crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
+        let apply = crate::retention::apply_gc_plan(crate::retention::GcApplyFromPlanInput {
             root: seed.root,
             plan_ref: &plan.plan_ref,
         })
         .expect("apply retention GC catalog MCP plan");
-        let execution = crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
+        let execution = crate::retention::store_gc_execution_gate(crate::retention::GcExecutionGateInput {
             root: seed.root,
             subsystem: seed.subsystem,
             action: seed.action,
@@ -1367,7 +1367,7 @@ mod tests {
             apply_ref: Some(&apply.apply_ref),
         })
         .expect("store retention GC catalog MCP execution");
-        let audit = crate::retention::audit_retention_gc_execution(crate::retention::GcAuditInput {
+        let audit = crate::retention::audit_gc_execution(crate::retention::GcAuditInput {
             root: seed.root,
             execution_ref: &execution.execution_ref,
         })

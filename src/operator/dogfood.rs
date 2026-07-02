@@ -102,7 +102,7 @@ pub struct ReleaseGateInput<'a> {
     pub catalog_query_refs: &'a [String],
     pub repro_verify_refs: &'a [String],
     pub replay_index_refs: &'a [String],
-    pub retention_gc_refs: &'a [String],
+    pub gc_refs: &'a [String],
     pub validation_command_refs: &'a [String],
 }
 
@@ -117,7 +117,7 @@ pub struct ReleaseGateReceipt {
     pub catalog_query_refs: Vec<String>,
     pub repro_verify_refs: Vec<String>,
     pub replay_index_refs: Vec<String>,
-    pub retention_gc_refs: Vec<String>,
+    pub gc_refs: Vec<String>,
     pub validation_command_refs: Vec<String>,
     pub checks: Vec<(String, String)>,
     pub value: IoValue,
@@ -721,7 +721,7 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IoValu
     require_non_empty_refs(input.catalog_query_refs, "dogfood release catalog query ref")?;
     require_non_empty_refs(input.repro_verify_refs, "dogfood release repro verify ref")?;
     require_non_empty_refs(input.replay_index_refs, "dogfood release replay index ref")?;
-    require_non_empty_refs(input.retention_gc_refs, "dogfood release retention GC ref")?;
+    require_non_empty_refs(input.gc_refs, "dogfood release retention GC ref")?;
     require_non_empty_refs(input.validation_command_refs, "dogfood release validation command ref")?;
     Ok(crate::preserves_rail::record("release-gate-receipt-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA),
@@ -735,7 +735,7 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IoValu
         crate::preserves_rail::record("catalog-queries", vec![refs_sequence(input.catalog_query_refs)]),
         crate::preserves_rail::record("repro-verifies", vec![refs_sequence(input.repro_verify_refs)]),
         crate::preserves_rail::record("replay-indexes", vec![refs_sequence(input.replay_index_refs)]),
-        crate::preserves_rail::record("retention-gc", vec![refs_sequence(input.retention_gc_refs)]),
+        crate::preserves_rail::record("retention-gc", vec![refs_sequence(input.gc_refs)]),
         crate::preserves_rail::record("validation-commands", vec![refs_sequence(input.validation_command_refs)]),
         checks_value_from_pairs(&[
             ("dogfood-report-pass", "pass"),
@@ -774,7 +774,7 @@ pub fn parse_release_gate_receipt(value: &IoValue) -> Result<ReleaseGateReceipt>
         catalog_query_refs: record_ref_sequence(&fields[5], "catalog-queries")?,
         repro_verify_refs: record_ref_sequence(&fields[6], "repro-verifies")?,
         replay_index_refs: record_ref_sequence(&fields[7], "replay-indexes")?,
-        retention_gc_refs: record_ref_sequence(&fields[8], "retention-gc")?,
+        gc_refs: record_ref_sequence(&fields[8], "retention-gc")?,
         validation_command_refs: record_ref_sequence(&fields[9], "validation-commands")?,
         checks,
         value: value.clone(),
@@ -3106,7 +3106,7 @@ fn record_gc_steps(input: GcStepInput<'_>) -> Result<GcRun> {
         state_root_ref,
         checkpoints,
     } = input;
-    let retention_gc = run_retention_gc_workflow(GcWorkflowInput {
+    let retention_gc = run_gc_workflow(GcWorkflowInput {
         root,
         bundle_dir,
         ledger_root,
@@ -3435,7 +3435,7 @@ struct ReleaseValueInput<'a> {
 
 fn build_release_value(input: ReleaseValueInput<'_>) -> Result<Option<IoValue>> {
     let validation_command_refs = vec![dogfood_ref("cargo-nextest-ci")?];
-    let retention_gc_release_refs = vec![
+    let gc_release_refs = vec![
         input.retention_gc.audit_ref.clone(),
         input.retention_gc.bundle_verify_ref.clone(),
         input.retention_gc.catalog_receipt_ref.clone(),
@@ -3449,7 +3449,7 @@ fn build_release_value(input: ReleaseValueInput<'_>) -> Result<Option<IoValue>> 
             catalog_query_refs: input.catalog_query_refs,
             repro_verify_refs: input.repro_verify_refs,
             replay_index_refs: input.replay_index_refs,
-            retention_gc_refs: &retention_gc_release_refs,
+            gc_refs: &gc_release_refs,
             validation_command_refs: &validation_command_refs,
         })?))
     } else {
@@ -4167,7 +4167,7 @@ fn execute_job_stack(input: JobExecutionInput<'_>) -> Result<JobExecutionParts> 
     })
 }
 
-fn run_retention_gc_workflow(input: GcWorkflowInput<'_>) -> Result<GcRun> {
+fn run_gc_workflow(input: GcWorkflowInput<'_>) -> Result<GcRun> {
     let object_ref = dogfood_ref("retention-object")?;
     let requester_ref = dogfood_ref("retention-requester")?;
     let peer_ref = dogfood_ref("retention-peer")?;
@@ -4316,7 +4316,7 @@ fn gc_flow(
     seed: GcSeed<'_>,
     evidence: &crate::retention::DestructiveRetentionEvidence,
 ) -> Result<GcFlow> {
-    let plan = crate::retention::store_retention_gc_plan(crate::retention::GcPlanInput {
+    let plan = crate::retention::store_gc_plan(crate::retention::GcPlanInput {
         root: input.root,
         subsystem: "ledger-gc",
         object_ref: seed.object_ref,
@@ -4325,11 +4325,11 @@ fn gc_flow(
         action: seed.action,
         evidence,
     })?;
-    let apply = crate::retention::apply_retention_gc_plan(crate::retention::GcApplyFromPlanInput {
+    let apply = crate::retention::apply_gc_plan(crate::retention::GcApplyFromPlanInput {
         root: input.root,
         plan_ref: &plan.plan_ref,
     })?;
-    let execution = crate::retention::store_retention_gc_execution_gate(crate::retention::GcExecutionGateInput {
+    let execution = crate::retention::store_gc_execution_gate(crate::retention::GcExecutionGateInput {
         root: input.root,
         subsystem: "ledger-gc",
         action: seed.action,
@@ -4338,7 +4338,7 @@ fn gc_flow(
         retention_class: seed.class,
         apply_ref: Some(&apply.apply_ref),
     })?;
-    let audit = crate::retention::audit_retention_gc_execution(crate::retention::GcAuditInput {
+    let audit = crate::retention::audit_gc_execution(crate::retention::GcAuditInput {
         root: input.root,
         execution_ref: &execution.execution_ref,
     })?;
@@ -4359,7 +4359,7 @@ fn gc_flow(
     let profile_value = crate::preserves_rail::parse_text(
         &std::fs::read_to_string(input.bundle_dir.join("bundle-profile.preserves")).map_err(MoltenError::from)?,
     )?;
-    let profile = crate::retention::parse_retention_candidate_bundle_profile(&profile_value)?;
+    let profile = crate::retention::parse_candidate_bundle_profile(&profile_value)?;
     let verify = crate::retention::verify_candidate_bundle(crate::retention::CandidateBundleVerifyInput {
         bundle_dir: input.bundle_dir,
     })?;
@@ -5567,7 +5567,7 @@ mod tests {
                 catalog_query_refs: &[dogfood_ref("catalog").expect("catalog")],
                 repro_verify_refs: &[dogfood_ref("verify").expect("verify")],
                 replay_index_refs: &[dogfood_ref("replay-index").expect("replay index")],
-                retention_gc_refs: &[dogfood_ref("retention-gc").expect("retention gc")],
+                gc_refs: &[dogfood_ref("retention-gc").expect("retention gc")],
                 validation_command_refs: &[dogfood_ref("validation").expect("validation")],
             })
             .is_err()

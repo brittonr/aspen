@@ -27,7 +27,7 @@ fn store_audit_execution(
     object_ref: &str,
     apply_ref: &str,
 ) -> molten::retention::GcExecutionGate {
-    let audit_execution = molten::retention::store_retention_gc_execution_gate(molten::retention::GcExecutionGateInput {
+    let audit_execution = molten::retention::store_gc_execution_gate(molten::retention::GcExecutionGateInput {
         root,
         subsystem: "ledger-gc",
         action: molten::retention::ACTION_DELETE,

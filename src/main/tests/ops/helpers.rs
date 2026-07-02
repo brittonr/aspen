@@ -67,7 +67,7 @@
         retention_args: &RetentionEvidenceArgs,
     ) -> String {
         let evidence = retention_args.clone().into_retention_evidence();
-        let plan = molten::retention::store_retention_gc_plan(molten::retention::GcPlanInput {
+        let plan = molten::retention::store_gc_plan(molten::retention::GcPlanInput {
             root: input.root,
             subsystem,
             object_ref: input.object_ref,
@@ -77,7 +77,7 @@
             evidence: &evidence,
         })
         .expect("store CLI retention GC plan");
-        molten::retention::apply_retention_gc_plan(molten::retention::GcApplyFromPlanInput {
+        molten::retention::apply_gc_plan(molten::retention::GcApplyFromPlanInput {
             root: input.root,
             plan_ref: &plan.plan_ref,
         })

@@ -2315,7 +2315,7 @@ fn cli_octet_gate_writes_canonical_deny_receipt_for_warning_only() -> CliResult<
 }
 
 #[test]
-fn cli_retention_gc_plan_lists_gates_before_mutation() -> CliResult<()> {
+fn cli_gc_plan_lists_gates_before_mutation() -> CliResult<()> {
     let dir = temp_dir("cli-retention-gc-plan")?;
     let root = dir.join("retention-state");
     let plan_path = dir.join("plan.preserves");
@@ -2499,7 +2499,7 @@ fn run_apply(
 }
 
 #[test]
-fn cli_retention_gc_negative_regression_matrix() -> CliResult<()> {
+fn cli_gc_negative_regression_matrix() -> CliResult<()> {
     let dir = temp_dir("cli-retention-gc-negative")?;
     missing_plan_case(&dir)?;
     stale_plan_case(&dir)?;
@@ -2534,7 +2534,7 @@ fn stale_plan_case(dir: &std::path::Path) -> CliResult<()> {
         retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
         action: molten::retention::ACTION_DELETE,
     })?;
-    let plan = run_retention_gc_plan_cli(&candidate, "ledger-gc", &dir.join("stale-plan.preserves"))?;
+    let plan = run_gc_plan_cli(&candidate, "ledger-gc", &dir.join("stale-plan.preserves"))?;
     molten::retention::pin_object(&root, molten::retention::PinInput {
         object_ref: candidate.object_ref.clone(),
         object_kind: candidate.object_kind.clone(),
@@ -2603,7 +2603,7 @@ fn wrong_apply_case(dir: &std::path::Path) -> CliResult<()> {
         retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
         action: molten::retention::ACTION_DELETE,
     })?;
-    let plan = run_retention_gc_plan_cli(&candidate, "chunk-gc", &dir.join("wrong-plan.preserves"))?;
+    let plan = run_gc_plan_cli(&candidate, "chunk-gc", &dir.join("wrong-plan.preserves"))?;
     let apply_path = dir.join("wrong-apply.preserves");
     let apply_output = molten_cmd()
         .args(["test", "retention", "gc-apply-plan", "--root"])
@@ -2646,7 +2646,7 @@ fn audit_case(dir: &std::path::Path) -> CliResult<()> {
         .arg(dir.join("missing-execution-audit.preserves"))
         .output()?;
     assert_failure(&missing, "retention audit missing execution ref");
-    let execution = molten::retention::store_retention_gc_execution_gate(molten::retention::GcExecutionGateInput {
+    let execution = molten::retention::store_gc_execution_gate(molten::retention::GcExecutionGateInput {
         root: &root,
         subsystem: "ledger-gc",
         action: molten::retention::ACTION_DELETE,
@@ -2673,7 +2673,7 @@ fn audit_case(dir: &std::path::Path) -> CliResult<()> {
 }
 
 #[test]
-fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
+fn cli_catalog_discovers_gc_audit_chains() -> CliResult<()> {
     let dir = temp_dir("cli-retention-gc-catalog")?;
     let registry = dir.join("registry");
     let ledger_root = dir.join("ledger");
@@ -2686,7 +2686,7 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
         retention_class: molten::retention::CLASS_PUBLIC_ARTIFACT,
         action: molten::retention::ACTION_DELETE,
     })?;
-    let fixture = setup_retention_gc_catalog_fixture(&candidate, "ledger-gc", &dir)?;
+    let fixture = setup_gc_catalog_fixture(&candidate, "ledger-gc", &dir)?;
 
     let (explain_path, explain_ref) = run_explain(&retention_root, &dir, &fixture)?;
     let (bundle_dir, bundle_ref) = run_bundle(&retention_root, &dir, &explain_path, &explain_ref)?;
@@ -2724,7 +2724,7 @@ fn run_explain(
         .output()?;
     assert_success(&explain_output, "retention explain candidate");
     assert!(stdout(&explain_output).contains("retention explain ref="));
-    let explain = molten::retention::parse_retention_candidate_explain(&read_preserves(&explain_path)?)?;
+    let explain = molten::retention::parse_candidate_explain(&read_preserves(&explain_path)?)?;
     assert_eq!(explain.object_ref, fixture.object_ref);
     assert_eq!(explain.admission_refs.len(), 4);
     assert_eq!(explain.gc_plan_refs, vec![fixture.plan_ref.clone()]);
@@ -2754,7 +2754,7 @@ fn run_bundle(
     assert_success(&bundle_output, "retention bundle export");
     assert!(stderr(&bundle_output).contains("retention bundle ref="));
     let bundle_value = read_preserves(&bundle_dir.join("bundle.preserves"))?;
-    let bundle = molten::retention::parse_retention_candidate_bundle(&bundle_value)?;
+    let bundle = molten::retention::parse_candidate_bundle(&bundle_value)?;
     assert_eq!(molten::ledger::artifact_kind(&bundle_value), "retention-candidate-bundle");
     assert_eq!(bundle.explain_ref, explain_ref);
     assert_eq!(bundle.artifact_refs.len(), 6);
@@ -2770,7 +2770,7 @@ fn check_profile(
     ledger_root: &std::path::Path,
     bundle_dir: &std::path::Path,
 ) -> CliResult<()> {
-    let bundle_profile = molten::retention::parse_retention_candidate_bundle_profile(&read_preserves(
+    let bundle_profile = molten::retention::parse_candidate_bundle_profile(&read_preserves(
         &bundle_dir.join("bundle-profile.preserves"),
     )?)?;
     assert_eq!(bundle_profile.profile, "public");
@@ -2818,7 +2818,7 @@ fn run_verify(
     assert_success(&verify_output, "retention bundle verify");
     assert!(stderr(&verify_output).contains("retention bundle verify ref="));
     let verify_value = read_preserves(&verify_path)?;
-    let verify = molten::retention::parse_retention_candidate_bundle_verify(&verify_value)?;
+    let verify = molten::retention::parse_candidate_bundle_verify(&verify_value)?;
     assert_eq!(molten::ledger::artifact_kind(&verify_value), "retention-candidate-bundle-verify");
     assert_eq!(verify.decision, "pass");
     assert_eq!(verify.bundle_ref, bundle_ref);
@@ -2872,7 +2872,7 @@ fn run_tamper(
         .arg(&tampered_path)
         .output()?;
     assert_success(&tampered_output, "retention bundle verify tampered");
-    let tampered = molten::retention::parse_retention_candidate_bundle_verify(&read_preserves(&tampered_path)?)?;
+    let tampered = molten::retention::parse_candidate_bundle_verify(&read_preserves(&tampered_path)?)?;
     assert_eq!(tampered.decision, "deny");
     assert!(
         tampered
@@ -2999,13 +2999,13 @@ struct RetentionGcCatalogFixture {
     audit_ref: String,
 }
 
-fn setup_retention_gc_catalog_fixture(
+fn setup_gc_catalog_fixture(
     candidate: &RetentionCliCandidate,
     subsystem: &str,
     dir: &std::path::Path,
 ) -> CliResult<RetentionGcCatalogFixture> {
     let plan_path = dir.join("catalog-retention-plan.preserves");
-    let plan = run_retention_gc_plan_cli(candidate, subsystem, &plan_path)?;
+    let plan = run_gc_plan_cli(candidate, subsystem, &plan_path)?;
     let apply_path = dir.join("catalog-retention-apply.preserves");
     let apply_output = molten_cmd()
         .args(["test", "retention", "gc-apply-plan", "--root"])
@@ -3018,7 +3018,7 @@ fn setup_retention_gc_catalog_fixture(
     assert_success(&apply_output, "retention gc-apply-plan catalog fixture");
     let apply = molten::retention::parse_gc_apply(&read_preserves(&apply_path)?)?;
     assert_eq!(apply.decision, "pass");
-    let execution = molten::retention::store_retention_gc_execution_gate(molten::retention::GcExecutionGateInput {
+    let execution = molten::retention::store_gc_execution_gate(molten::retention::GcExecutionGateInput {
         root: &candidate.root,
         subsystem,
         action: &candidate.action,
@@ -3030,7 +3030,7 @@ fn setup_retention_gc_catalog_fixture(
     assert_eq!(execution.decision, "pass");
     let execution_path = dir.join("catalog-retention-execution.preserves");
     std::fs::write(&execution_path, molten::preserves_rail::to_text(&execution.value)?)?;
-    let audit = molten::retention::audit_retention_gc_execution(molten::retention::GcAuditInput {
+    let audit = molten::retention::audit_gc_execution(molten::retention::GcAuditInput {
         root: &candidate.root,
         execution_ref: &execution.execution_ref,
     })?;
@@ -3116,7 +3116,7 @@ fn store_retention_cli_admission(input: RetentionAdmissionInput<'_>) -> CliResul
     .admission_ref)
 }
 
-fn run_retention_gc_plan_cli(
+fn run_gc_plan_cli(
     candidate: &RetentionCliCandidate,
     subsystem: &str,
     out: &std::path::Path,
