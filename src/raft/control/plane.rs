@@ -1,4 +1,4 @@
-type IOValue = preserves::IOValue;
+type IoValue = preserves::IOValue;
 use redb::ReadableDatabase;
 use redb::ReadableTableMetadata;
 
@@ -10,31 +10,31 @@ type TableDefinition<K, V> = redb::TableDefinition<'static, K, V>;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 
-fn bool_value(value: bool) -> IOValue {
+fn bool_value(value: bool) -> IoValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -42,7 +42,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -93,7 +93,7 @@ pub struct RaftGroupManifest {
     pub snapshot_policy_ref: String,
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,7 +111,7 @@ pub struct ControlRegistryCommand {
     pub namespace: String,
     pub name: String,
     pub target_ref: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,7 +119,7 @@ pub struct RaftCommandEnvelopeInput {
     pub group_ref: String,
     pub client_session: String,
     pub sequence: u64,
-    pub command: IOValue,
+    pub command: IoValue,
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -132,12 +132,12 @@ pub struct RaftCommandEnvelope {
     pub group_ref: String,
     pub client_session: String,
     pub sequence: u64,
-    pub command: IOValue,
+    pub command: IoValue,
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -165,7 +165,7 @@ pub struct ControlRegistryState {
     pub state_ref: String,
     pub entries: Vec<ControlRegistryEntry>,
     pub client_sessions: Vec<ClientSessionRecord>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,7 +173,7 @@ pub struct RaftPredicateReceipt {
     pub predicate_ref: String,
     pub predicate: String,
     pub decision: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,9 +184,9 @@ pub struct RaftLogEntry {
     pub index: u64,
     pub prior_log_ref: Option<String>,
     pub command_ref: String,
-    pub command: IOValue,
+    pub command: IoValue,
     pub append_predicate_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -198,7 +198,7 @@ pub struct RaftCommitReceipt {
     pub index: u64,
     pub command_ref: String,
     pub log_entry_ref: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -211,7 +211,7 @@ pub struct ControlRegistryReceipt {
     pub state_after_ref: Option<String>,
     pub duplicate: bool,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -240,7 +240,7 @@ pub struct ControlRegistryRuntime {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlRegistryReadInput {
-    pub state: IOValue,
+    pub state: IoValue,
     pub group_ref: String,
     pub committed_term: u64,
     pub committed_index: u64,
@@ -257,7 +257,7 @@ pub struct RaftReadReceipt {
     pub decision: String,
     pub target_ref: Option<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -265,7 +265,7 @@ pub struct RaftSnapshotInput {
     pub group_ref: String,
     pub term: u64,
     pub index: u64,
-    pub state: IOValue,
+    pub state: IoValue,
     pub log_refs: Vec<String>,
 }
 
@@ -277,14 +277,14 @@ pub struct RaftSnapshot {
     pub index: u64,
     pub state: ControlRegistryState,
     pub content_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RaftRecoveryInput {
     pub group_ref: String,
-    pub snapshot: IOValue,
-    pub log_entries: Vec<IOValue>,
+    pub snapshot: IoValue,
+    pub log_entries: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -293,7 +293,7 @@ pub struct RaftRecoveryReceipt {
     pub decision: String,
     pub restored_state_ref: Option<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -351,7 +351,7 @@ struct LogEntryValueInput<'a> {
     index: u64,
     prior_log_ref: Option<&'a str>,
     command_ref: &'a str,
-    command: &'a IOValue,
+    command: &'a IoValue,
     append_predicate_ref: &'a str,
 }
 
@@ -399,7 +399,7 @@ struct ReadReceiptValueInput<'a> {
     diagnostics: &'a [String],
 }
 
-pub fn raft_group_manifest_value(input: &RaftGroupManifestInput) -> Result<IOValue> {
+pub fn raft_group_manifest_value(input: &RaftGroupManifestInput) -> Result<IoValue> {
     validate_group_id(&input.group_id)?;
     validate_refs(&input.members, "raft member ref")?;
     validate_non_empty(&input.state_machine, "raft state machine")?;
@@ -427,7 +427,7 @@ pub fn raft_group_manifest_value(input: &RaftGroupManifestInput) -> Result<IOVal
     ]))
 }
 
-pub fn parse_raft_group_manifest(value: &IOValue) -> Result<RaftGroupManifest> {
+pub fn parse_raft_group_manifest(value: &IoValue) -> Result<RaftGroupManifest> {
     let fields = value
         .collect_simple_record("raft-group-manifest-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-group-manifest-v1 ...>"))?;
@@ -459,7 +459,7 @@ pub fn parse_raft_group_manifest(value: &IOValue) -> Result<RaftGroupManifest> {
     })
 }
 
-pub fn control_registry_command_value(input: &ControlRegistryCommandInput) -> Result<IOValue> {
+pub fn control_registry_command_value(input: &ControlRegistryCommandInput) -> Result<IoValue> {
     validate_control_command(input)?;
     Ok(record("control-registry-command-v1", vec![
         string(crate::preserves_rail::CONTROL_REGISTRY_COMMAND_SCHEMA),
@@ -471,7 +471,7 @@ pub fn control_registry_command_value(input: &ControlRegistryCommandInput) -> Re
     ]))
 }
 
-pub fn parse_control_registry_command(value: &IOValue) -> Result<ControlRegistryCommand> {
+pub fn parse_control_registry_command(value: &IoValue) -> Result<ControlRegistryCommand> {
     let fields = value
         .collect_simple_record("control-registry-command-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <control-registry-command-v1 ...>"))?;
@@ -498,7 +498,7 @@ pub fn parse_control_registry_command(value: &IOValue) -> Result<ControlRegistry
     })
 }
 
-pub fn raft_command_envelope_value(input: &RaftCommandEnvelopeInput) -> Result<IOValue> {
+pub fn raft_command_envelope_value(input: &RaftCommandEnvelopeInput) -> Result<IoValue> {
     require_ref(&input.group_ref, "raft command group ref")?;
     validate_client_session(&input.client_session)?;
     validate_refs(&input.authority_refs, "raft command authority ref")?;
@@ -520,7 +520,7 @@ pub fn raft_command_envelope_value(input: &RaftCommandEnvelopeInput) -> Result<I
     ]))
 }
 
-pub fn parse_raft_command_envelope(value: &IOValue) -> Result<RaftCommandEnvelope> {
+pub fn parse_raft_command_envelope(value: &IoValue) -> Result<RaftCommandEnvelope> {
     let fields = value
         .collect_simple_record("raft-command-envelope-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-command-envelope-v1 ...>"))?;
@@ -548,7 +548,7 @@ pub fn initial_control_registry_state() -> Result<ControlRegistryState> {
 pub fn control_registry_state_value(
     mut entries: Vec<ControlRegistryEntry>,
     mut client_sessions: Vec<ClientSessionRecord>,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     ensure_count_at_most(entries.len(), MAX_RAFT_ENTRIES, "control registry entries")?;
     ensure_count_at_most(client_sessions.len(), MAX_RAFT_ENTRIES, "control registry client sessions")?;
     entries.sort_by(|left, right| {
@@ -583,7 +583,7 @@ pub fn control_registry_state_value(
     ]))
 }
 
-pub fn parse_control_registry_state(value: &IOValue) -> Result<ControlRegistryState> {
+pub fn parse_control_registry_state(value: &IoValue) -> Result<ControlRegistryState> {
     let fields = value
         .collect_simple_record("control-registry-state-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <control-registry-state-v1 ...>"))?;
@@ -599,7 +599,7 @@ pub fn parse_control_registry_state(value: &IOValue) -> Result<ControlRegistrySt
     })
 }
 
-pub fn new_control_registry_runtime(manifest_value: &IOValue) -> Result<ControlRegistryRuntime> {
+pub fn new_control_registry_runtime(manifest_value: &IoValue) -> Result<ControlRegistryRuntime> {
     let manifest = parse_raft_group_manifest(manifest_value)?;
     if manifest.state_machine != CONTROL_REGISTRY_STATE_MACHINE {
         return Err(MoltenError::invalid_harness(format!(
@@ -622,7 +622,7 @@ pub fn new_control_registry_runtime(manifest_value: &IOValue) -> Result<ControlR
 
 pub fn propose_control_registry_command(
     runtime: &mut ControlRegistryRuntime,
-    envelope_value: &IOValue,
+    envelope_value: &IoValue,
 ) -> Result<ControlRegistryProposal> {
     let envelope = parse_raft_command_envelope(envelope_value)?;
     let (command, diagnostics) = admitted_command(&envelope.command);
@@ -774,7 +774,7 @@ pub fn snapshot_control_registry(input: &RaftSnapshotInput) -> Result<RaftSnapsh
     })
 }
 
-pub fn parse_raft_snapshot(value: &IOValue) -> Result<RaftSnapshot> {
+pub fn parse_raft_snapshot(value: &IoValue) -> Result<RaftSnapshot> {
     let fields = value
         .collect_simple_record("raft-snapshot-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-snapshot-v1 ...>"))?;
@@ -914,7 +914,7 @@ pub fn control_registry_store_status(root: &Path) -> Result<ControlRegistryStore
     })
 }
 
-pub fn control_registry_fixture_manifest_value() -> Result<IOValue> {
+pub fn control_registry_fixture_manifest_value() -> Result<IoValue> {
     raft_group_manifest_value(&RaftGroupManifestInput {
         group_id: DEFAULT_GROUP_ID.to_string(),
         members: vec![
@@ -1068,7 +1068,7 @@ fn pass_commit(input: PassCommitInput<'_>) -> Result<RaftCommitReceipt> {
     parse_commit_receipt(&value)
 }
 
-fn admitted_command(command: &IOValue) -> (Option<ControlRegistryCommand>, Vec<String>) {
+fn admitted_command(command: &IoValue) -> (Option<ControlRegistryCommand>, Vec<String>) {
     if let Ok(parsed) = parse_control_registry_command(command) {
         return (Some(parsed), Vec::new());
     }
@@ -1246,7 +1246,7 @@ fn deny_registry_receipt(
     parse_registry_receipt(&value)
 }
 
-fn raft_log_entry_value(input: &LogEntryValueInput<'_>) -> Result<IOValue> {
+fn raft_log_entry_value(input: &LogEntryValueInput<'_>) -> Result<IoValue> {
     require_ref(input.group_ref, "raft log group ref")?;
     require_ref(input.command_ref, "raft log command ref")?;
     require_ref(input.append_predicate_ref, "raft log append predicate ref")?;
@@ -1266,7 +1266,7 @@ fn raft_log_entry_value(input: &LogEntryValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-fn parse_raft_log_entry(value: &IOValue) -> Result<RaftLogEntry> {
+fn parse_raft_log_entry(value: &IoValue) -> Result<RaftLogEntry> {
     let fields = value
         .collect_simple_record("raft-log-entry-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-log-entry-v1 ...>"))?;
@@ -1286,7 +1286,7 @@ fn parse_raft_log_entry(value: &IOValue) -> Result<RaftLogEntry> {
     })
 }
 
-fn commit_receipt_value(input: &CommitReceiptValueInput<'_>) -> Result<IOValue> {
+fn commit_receipt_value(input: &CommitReceiptValueInput<'_>) -> Result<IoValue> {
     require_ref(input.group_ref, "raft commit group ref")?;
     require_ref(input.command_ref, "raft commit command ref")?;
     validate_refs(input.quorum_refs, "raft commit quorum ref")?;
@@ -1306,7 +1306,7 @@ fn commit_receipt_value(input: &CommitReceiptValueInput<'_>) -> Result<IOValue> 
     ]))
 }
 
-fn parse_commit_receipt(value: &IOValue) -> Result<RaftCommitReceipt> {
+fn parse_commit_receipt(value: &IoValue) -> Result<RaftCommitReceipt> {
     let fields = value
         .collect_simple_record("raft-commit-receipt-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-commit-receipt-v1 ...>"))?;
@@ -1323,7 +1323,7 @@ fn parse_commit_receipt(value: &IOValue) -> Result<RaftCommitReceipt> {
     })
 }
 
-fn registry_receipt_value(input: &RegistryReceiptValueInput<'_>) -> Result<IOValue> {
+fn registry_receipt_value(input: &RegistryReceiptValueInput<'_>) -> Result<IoValue> {
     require_ref(input.command_ref, "control registry command ref")?;
     require_ref(input.state_before_ref, "control registry state-before ref")?;
     if let Some(reference) = input.state_after_ref {
@@ -1351,7 +1351,7 @@ fn registry_receipt_value(input: &RegistryReceiptValueInput<'_>) -> Result<IOVal
     ]))
 }
 
-fn parse_registry_receipt(value: &IOValue) -> Result<ControlRegistryReceipt> {
+fn parse_registry_receipt(value: &IoValue) -> Result<ControlRegistryReceipt> {
     let fields = value
         .collect_simple_record("control-registry-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <control-registry-receipt-v1 ...>"))?;
@@ -1373,7 +1373,7 @@ fn parse_registry_receipt(value: &IOValue) -> Result<ControlRegistryReceipt> {
     })
 }
 
-fn predicate_receipt_value(input: &PredicateReceiptInput<'_>) -> Result<IOValue> {
+fn predicate_receipt_value(input: &PredicateReceiptInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.predicate, "raft predicate")?;
     require_ref(input.group_ref, "raft predicate group ref")?;
     validate_refs(input.subjects, "raft predicate subject ref")?;
@@ -1390,7 +1390,7 @@ fn predicate_receipt_value(input: &PredicateReceiptInput<'_>) -> Result<IOValue>
     ]))
 }
 
-fn parse_predicate_receipt(value: &IOValue) -> Result<RaftPredicateReceipt> {
+fn parse_predicate_receipt(value: &IoValue) -> Result<RaftPredicateReceipt> {
     let fields = value
         .collect_simple_record("raft-predicate-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-predicate-receipt-v1 ...>"))?;
@@ -1404,7 +1404,7 @@ fn parse_predicate_receipt(value: &IOValue) -> Result<RaftPredicateReceipt> {
     })
 }
 
-fn read_receipt_value(input: &ReadReceiptValueInput<'_>) -> Result<IOValue> {
+fn read_receipt_value(input: &ReadReceiptValueInput<'_>) -> Result<IoValue> {
     Ok(record("raft-read-receipt-v1", vec![
         string(crate::preserves_rail::RAFT_READ_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -1469,7 +1469,7 @@ fn sessions_from_map(sessions: &OrderedMap<String, ClientSessionRecord>) -> Vec<
     sessions.values().cloned().collect()
 }
 
-fn parse_registry_entries(value: &Value<IOValue>) -> Result<Vec<ControlRegistryEntry>> {
+fn parse_registry_entries(value: &Value<IoValue>) -> Result<Vec<ControlRegistryEntry>> {
     let values = field_sequence(value, "entries")?;
     ensure_count_at_most(values.len(), MAX_RAFT_ENTRIES, "control registry entries")?;
     let mut entries = Vec::with_capacity(values.len());
@@ -1492,7 +1492,7 @@ fn parse_registry_entries(value: &Value<IOValue>) -> Result<Vec<ControlRegistryE
     Ok(entries)
 }
 
-fn parse_client_sessions(value: &Value<IOValue>) -> Result<Vec<ClientSessionRecord>> {
+fn parse_client_sessions(value: &Value<IoValue>) -> Result<Vec<ClientSessionRecord>> {
     let values = field_sequence(value, "client-sessions")?;
     ensure_count_at_most(values.len(), MAX_RAFT_ENTRIES, "control registry client sessions")?;
     let mut sessions = Vec::with_capacity(values.len());
@@ -1652,21 +1652,21 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
 }
 
-fn strings_sequence(values: &[String]) -> IOValue {
+fn strings_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(string).collect())
 }
 
-fn checks_value(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn optional_ref_value(reference: Option<&str>) -> IOValue {
+fn optional_ref_value(reference: Option<&str>) -> IoValue {
     reference.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn session_record_value(session: &ClientSessionRecord) -> IOValue {
+fn session_record_value(session: &ClientSessionRecord) -> IoValue {
     record("session", vec![
         string(&session.client_session),
         u64_value(session.sequence),
@@ -1674,7 +1674,7 @@ fn session_record_value(session: &ClientSessionRecord) -> IOValue {
     ])
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1682,13 +1682,13 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&fields[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let reference = record_string(value, label)?;
     require_ref(&reference, label)?;
     Ok(reference)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1696,7 +1696,7 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
     parse_optional_ref_value(&fields[0])
 }
 
-fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
+fn record_iovalue(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1704,7 +1704,7 @@ fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
     Ok(value_to_iovalue(&fields[0]))
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1712,7 +1712,7 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     required_u64(&fields[0], label)
 }
 
-fn record_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
+fn record_bool(value: &Value<IoValue>, label: &str) -> Result<bool> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1722,7 +1722,7 @@ fn record_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1732,7 +1732,7 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional raft ref").map(Some)
 }
 
-fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     ensure_count_at_most(values.len(), MAX_RAFT_REFS, label)?;
     values
@@ -1745,13 +1745,13 @@ fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>
         .collect()
 }
 
-fn parse_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     ensure_count_at_most(values.len(), MAX_RAFT_REFS, label)?;
     values.iter().map(|value| required_string(value, label)).collect()
 }
 
-fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
+fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoValue>>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1762,7 +1762,7 @@ fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOVal
     Ok(values.iter().cloned().collect())
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let values = field_sequence(value, "checks")?;
     ensure_count_at_most(values.len(), MAX_RAFT_COMMANDS, "raft checks")?;
     values
@@ -1784,7 +1784,7 @@ fn require_check(checks: &[(String, String)], name: &str, context: &str) -> Resu
     Err(MoltenError::invalid_harness(format!("{context} missing passing {name} check")))
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual == expected {
         Ok(())
@@ -1793,20 +1793,20 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     }
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let reference = required_string(value, field)?;
     require_ref(&reference, field)?;
     Ok(reference)
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -1842,11 +1842,11 @@ mod tests {
     type CatalogListInput = crate::catalog::CatalogListInput;
     type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
 
-    fn parse_text(source: &str) -> Result<IOValue> {
+    fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
     }
 
-    fn to_text(value: &IOValue) -> Result<String> {
+    fn to_text(value: &IoValue) -> Result<String> {
         crate::preserves_rail::to_text(value)
     }
 

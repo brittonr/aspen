@@ -1,4 +1,4 @@
-type IOValue = preserves::IOValue;
+type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
@@ -477,23 +477,23 @@ fn validate_content_ref_hex(value: &str, hex: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn parse_text(source: &str) -> Result<IOValue> {
+pub fn parse_text(source: &str) -> Result<IoValue> {
     preserves::read_iovalue_text(source, false).map_err(|error| MoltenError::Preserves(error.to_string()))
 }
 
-pub fn to_text(value: &IOValue) -> Result<String> {
+pub fn to_text(value: &IoValue) -> Result<String> {
     preserves::write_iovalue_text(value, false).map_err(|error| MoltenError::Preserves(error.to_string()))
 }
 
-pub fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+pub fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     preserves::write_iovalue_packed(value, false).map_err(|error| MoltenError::Preserves(error.to_string()))
 }
 
-pub fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+pub fn parse_canonical_bytes(bytes: &[u8]) -> Result<IoValue> {
     preserves::read_iovalue_packed(bytes, false).map_err(|error| MoltenError::Preserves(error.to_string()))
 }
 
-pub fn canonical_hash(value: &IOValue) -> Result<String> {
+pub fn canonical_hash(value: &IoValue) -> Result<String> {
     let bytes = canonical_bytes(value)?;
     Ok(content_ref_from_bytes(&bytes))
 }
@@ -506,36 +506,36 @@ pub fn content_ref_from_blake3_hash(hash: blake3::Hash) -> String {
     format!("{BLAKE3_REF_PREFIX}{}", hash.to_hex())
 }
 
-pub fn canonical_content_ref(value: &IOValue) -> Result<ContentRef> {
+pub fn canonical_content_ref(value: &IoValue) -> Result<ContentRef> {
     ContentRef::parse(&canonical_hash(value)?)
 }
 
-pub fn symbol(name: &'static str) -> IOValue {
-    IOValue::symbol(name)
+pub fn symbol(name: &'static str) -> IoValue {
+    IoValue::symbol(name)
 }
 
-pub fn string(value: impl AsRef<str>) -> IOValue {
-    IOValue::new(value.as_ref().to_owned())
+pub fn string(value: impl AsRef<str>) -> IoValue {
+    IoValue::new(value.as_ref().to_owned())
 }
 
-pub fn u64_value(value: u64) -> IOValue {
-    IOValue::new(value)
+pub fn u64_value(value: u64) -> IoValue {
+    IoValue::new(value)
 }
 
-pub fn bool_value(value: bool) -> IOValue {
-    IOValue::new(value)
+pub fn bool_value(value: bool) -> IoValue {
+    IoValue::new(value)
 }
 
-pub fn sequence(values: Vec<IOValue>) -> IOValue {
-    IOValue::new(values)
+pub fn sequence(values: Vec<IoValue>) -> IoValue {
+    IoValue::new(values)
 }
 
-pub fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
-    IOValue::record(symbol(label), fields)
+pub fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    IoValue::record(symbol(label), fields)
 }
 
-pub fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
-    IOValue::from(value.clone())
+pub fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
+    IoValue::from(value.clone())
 }
 
 #[cfg(test)]

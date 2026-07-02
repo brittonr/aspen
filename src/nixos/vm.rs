@@ -1,4 +1,4 @@
-type IOValue = preserves::IOValue;
+type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 
@@ -6,15 +6,15 @@ const NIXOS_VM_NODE_EVIDENCE_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_NODE
 const NIXOS_VM_TEST_RUN_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_TEST_RUN_SCHEMA;
 const NIXOS_VM_TOPOLOGY_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_TOPOLOGY_SCHEMA;
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
@@ -63,7 +63,7 @@ pub struct NixosVmTestRunInput<'a> {
     pub caveats: &'a [String],
 }
 
-pub fn topology_value(input: &NixosVmTopologyInput<'_>) -> Result<IOValue> {
+pub fn topology_value(input: &NixosVmTopologyInput<'_>) -> Result<IoValue> {
     validate_nodes(input.nodes)?;
     validate_text_field("package ref", input.package_ref)?;
     validate_text_field("package path", input.package_path)?;
@@ -90,7 +90,7 @@ pub fn topology_value(input: &NixosVmTopologyInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn node_evidence_value(input: &NixosVmNodeEvidenceInput<'_>) -> Result<IOValue> {
+pub fn node_evidence_value(input: &NixosVmNodeEvidenceInput<'_>) -> Result<IoValue> {
     validate_text_field("node", input.node)?;
     validate_text_field("state root", input.state_root)?;
     validate_optional_ref("identity receipt", input.identity_receipt_ref)?;
@@ -120,7 +120,7 @@ pub fn node_evidence_value(input: &NixosVmNodeEvidenceInput<'_>) -> Result<IOVal
     ]))
 }
 
-pub fn test_run_value(input: &NixosVmTestRunInput<'_>) -> Result<IOValue> {
+pub fn test_run_value(input: &NixosVmTestRunInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_content_ref(input.topology_ref)?;
     validate_text_field("scenario", input.scenario)?;
@@ -216,7 +216,7 @@ fn validate_decision(decision: &str) -> Result<()> {
     }
 }
 
-fn node_values(nodes: &[String]) -> Result<Vec<IOValue>> {
+fn node_values(nodes: &[String]) -> Result<Vec<IoValue>> {
     let mut values = Vec::with_capacity(nodes.len());
     for node in nodes {
         values.push(record("node", vec![string(node)]));
@@ -224,7 +224,7 @@ fn node_values(nodes: &[String]) -> Result<Vec<IOValue>> {
     Ok(values)
 }
 
-fn string_values(label: &str, values: &[String], maximum: usize) -> Result<Vec<IOValue>> {
+fn string_values(label: &str, values: &[String], maximum: usize) -> Result<Vec<IoValue>> {
     if values.len() > maximum {
         return Err(MoltenError::invalid_harness(format!(
             "nixos VM {label} count {} exceeds bound {maximum}",
@@ -239,7 +239,7 @@ fn string_values(label: &str, values: &[String], maximum: usize) -> Result<Vec<I
     Ok(output)
 }
 
-fn ref_values(refs: &[String]) -> Result<Vec<IOValue>> {
+fn ref_values(refs: &[String]) -> Result<Vec<IoValue>> {
     validate_ref_slice("artifact", refs)?;
     let mut values = Vec::with_capacity(refs.len());
     for reference in refs {
@@ -248,14 +248,14 @@ fn ref_values(refs: &[String]) -> Result<Vec<IOValue>> {
     Ok(values)
 }
 
-fn optional_ref_value(reference: Option<&str>) -> IOValue {
+fn optional_ref_value(reference: Option<&str>) -> IoValue {
     match reference {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn check_value(name: &'static str, status: &'static str) -> IOValue {
+fn check_value(name: &'static str, status: &'static str) -> IoValue {
     record("check", vec![string(name), string(status)])
 }
 

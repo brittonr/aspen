@@ -1,4 +1,4 @@
-type IOValue = preserves::IOValue;
+type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 
@@ -9,19 +9,19 @@ const PROD_SOAK_FAULT_MATRIX_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_FAU
 const PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA;
 const PROD_SOAK_RUN_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_RUN_SCHEMA;
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -127,7 +127,7 @@ pub struct ProdSoakFaultMatrixInput<'a> {
     pub caveats: &'a [String],
 }
 
-pub fn evidence_export_value(input: &ProdSoakEvidenceExportInput<'_>) -> Result<IOValue> {
+pub fn evidence_export_value(input: &ProdSoakEvidenceExportInput<'_>) -> Result<IoValue> {
     validate_text_field("node", input.node)?;
     validate_content_ref(input.node_evidence_ref)?;
     validate_ref_slice("evidence export artifact", input.artifact_refs)?;
@@ -147,7 +147,7 @@ pub fn evidence_export_value(input: &ProdSoakEvidenceExportInput<'_>) -> Result<
     ]))
 }
 
-pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
+pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_content_ref(input.topology_ref)?;
@@ -210,7 +210,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn durability_value(input: &ProdSoakDurabilityInput<'_>) -> Result<IOValue> {
+pub fn durability_value(input: &ProdSoakDurabilityInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_ref_slice("durability queued control", input.queued_control_refs)?;
@@ -254,7 +254,7 @@ pub fn durability_value(input: &ProdSoakDurabilityInput<'_>) -> Result<IOValue> 
     ]))
 }
 
-pub fn resource_envelope_value(input: &ProdSoakResourceEnvelopeInput<'_>) -> Result<IOValue> {
+pub fn resource_envelope_value(input: &ProdSoakResourceEnvelopeInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_metric_bound("queue depth", input.queue_depth, input.max_queue_depth)?;
@@ -304,7 +304,7 @@ pub fn resource_envelope_value(input: &ProdSoakResourceEnvelopeInput<'_>) -> Res
     ]))
 }
 
-pub fn fault_case_value(input: &ProdSoakFaultCaseInput<'_>) -> Result<IOValue> {
+pub fn fault_case_value(input: &ProdSoakFaultCaseInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_fault_kind(input.fault_kind)?;
@@ -348,7 +348,7 @@ pub fn fault_case_value(input: &ProdSoakFaultCaseInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn fault_matrix_value(input: &ProdSoakFaultMatrixInput<'_>) -> Result<IOValue> {
+pub fn fault_matrix_value(input: &ProdSoakFaultMatrixInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_ref_slice("fault case", input.fault_case_refs)?;
@@ -509,12 +509,12 @@ fn validate_decision(decision: &str) -> Result<()> {
     }
 }
 
-fn ref_values(refs: &[String]) -> Result<Vec<IOValue>> {
+fn ref_values(refs: &[String]) -> Result<Vec<IoValue>> {
     validate_ref_slice("artifact", refs)?;
     Ok(refs.iter().map(string).collect())
 }
 
-fn string_values(label: &str, values: &[String], maximum: usize) -> Result<Vec<IOValue>> {
+fn string_values(label: &str, values: &[String], maximum: usize) -> Result<Vec<IoValue>> {
     if values.len() > maximum {
         return Err(MoltenError::invalid_harness(format!(
             "prod soak {label} count {} exceeds bound {maximum}",
@@ -529,7 +529,7 @@ fn string_values(label: &str, values: &[String], maximum: usize) -> Result<Vec<I
     Ok(output)
 }
 
-fn check_value(name: &'static str, status: &'static str) -> IOValue {
+fn check_value(name: &'static str, status: &'static str) -> IoValue {
     record("check", vec![string(name), string(status)])
 }
 
