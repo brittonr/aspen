@@ -35,14 +35,14 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-const MAX_LIFECYCLE_REFS: usize = 1024;
+const MAX_REFS: usize = 1024;
 const MAX_DIAGNOSTICS: usize = 32;
 
-const _: () = assert!(MAX_LIFECYCLE_REFS <= 100_000);
+const _: () = assert!(MAX_REFS <= 100_000);
 const _: () = assert!(MAX_DIAGNOSTICS <= 100_000);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum LifecycleEntityKind {
+pub enum EntityKind {
     Actor,
     Service,
     Vat,
@@ -51,7 +51,7 @@ pub enum LifecycleEntityKind {
     Job,
 }
 
-impl LifecycleEntityKind {
+impl EntityKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Actor => "actor",
@@ -65,7 +65,7 @@ impl LifecycleEntityKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum LifecycleState {
+pub enum State {
     Declared,
     Spawning,
     Starting,
@@ -78,7 +78,7 @@ pub enum LifecycleState {
     Cleaned,
 }
 
-impl LifecycleState {
+impl State {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Declared => "declared",
@@ -96,7 +96,7 @@ impl LifecycleState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum LifecycleAction {
+pub enum Action {
     Spawn,
     Start,
     Ready,
@@ -108,7 +108,7 @@ pub enum LifecycleAction {
     SupervisorDecision,
 }
 
-impl LifecycleAction {
+impl Action {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Spawn => "spawn",
@@ -125,12 +125,12 @@ impl LifecycleAction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LifecycleTransitionInput {
-    pub entity_kind: LifecycleEntityKind,
+pub struct TransitionInput {
+    pub entity_kind: EntityKind,
     pub entity_id: String,
-    pub from_state: LifecycleState,
-    pub to_state: LifecycleState,
-    pub action: LifecycleAction,
+    pub from_state: State,
+    pub to_state: State,
+    pub action: Action,
     pub cause: String,
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -140,13 +140,13 @@ pub struct LifecycleTransitionInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LifecycleTransitionRecord {
+pub struct TransitionRecord {
     pub transition_ref: String,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LifecycleTransitionReceipt {
+pub struct TransitionReceipt {
     pub receipt_ref: String,
     pub transition_ref: String,
     pub decision: String,
@@ -155,12 +155,12 @@ pub struct LifecycleTransitionReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LifecycleTraceEvent {
+pub struct TraceEvent {
     pub event_ref: String,
     pub transition_ref: String,
-    pub entity_kind: LifecycleEntityKind,
+    pub entity_kind: EntityKind,
     pub entity_id: String,
-    pub action: LifecycleAction,
+    pub action: Action,
     pub cause: String,
     pub policy_refs: Vec<String>,
     pub value: IoValue,
@@ -185,7 +185,7 @@ impl TurnFailureKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TurnFailureInput<'a> {
-    pub entity_kind: LifecycleEntityKind,
+    pub entity_kind: EntityKind,
     pub entity_id: &'a str,
     pub failure_kind: TurnFailureKind,
     pub cause: &'a str,
@@ -209,7 +209,7 @@ pub struct TurnFailureReceipt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeCleanupInput<'a> {
-    pub entity_kind: LifecycleEntityKind,
+    pub entity_kind: EntityKind,
     pub entity_id: &'a str,
     pub cause: &'a str,
     pub before: &'a RuntimeSnapshot,
@@ -230,7 +230,7 @@ pub struct ScopeCleanupReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LifecycleMonitorInput<'a> {
+pub struct MonitorInput<'a> {
     pub observer_id: &'a str,
     pub child_id: &'a str,
     pub child_failure_ref: &'a str,
@@ -240,7 +240,7 @@ pub struct LifecycleMonitorInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LifecycleMonitorReceipt {
+pub struct MonitorReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub diagnostics: Vec<String>,
@@ -298,7 +298,7 @@ pub struct SupervisorDecisionReceipt {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ServiceLifecycleAssertionKind {
+pub enum ServiceAssertionKind {
     Demand,
     Ready,
     Failure,
@@ -308,7 +308,7 @@ pub enum ServiceLifecycleAssertionKind {
     Stop,
 }
 
-impl ServiceLifecycleAssertionKind {
+impl ServiceAssertionKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Demand => "demand",
@@ -322,7 +322,7 @@ impl ServiceLifecycleAssertionKind {
     }
 }
 
-pub fn lifecycle_transition_value(input: &LifecycleTransitionInput) -> Result<IoValue> {
+pub fn transition_value(input: &TransitionInput) -> Result<IoValue> {
     validate_transition_input(input)?;
     Ok(record("lifecycle-transition-v1", vec![
         string(crate::preserves_rail::LIFECYCLE_TRANSITION_SCHEMA),
@@ -342,14 +342,14 @@ pub fn lifecycle_transition_value(input: &LifecycleTransitionInput) -> Result<Io
     ]))
 }
 
-pub fn lifecycle_transition_record(input: &LifecycleTransitionInput) -> Result<LifecycleTransitionRecord> {
-    let value = lifecycle_transition_value(input)?;
+pub fn transition_record(input: &TransitionInput) -> Result<TransitionRecord> {
+    let value = transition_value(input)?;
     let transition_ref = canonical_hash(&value)?;
-    Ok(LifecycleTransitionRecord { transition_ref, value })
+    Ok(TransitionRecord { transition_ref, value })
 }
 
-pub fn lifecycle_transition_receipt(input: &LifecycleTransitionInput) -> Result<LifecycleTransitionReceipt> {
-    let transition = lifecycle_transition_record(input)?;
+pub fn transition_receipt(input: &TransitionInput) -> Result<TransitionReceipt> {
+    let transition = transition_record(input)?;
     let diagnostics = transition_diagnostics(input);
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = record("lifecycle-transition-receipt-v1", vec![
@@ -360,7 +360,7 @@ pub fn lifecycle_transition_receipt(input: &LifecycleTransitionInput) -> Result<
         checks_value(),
     ]);
     let receipt_ref = canonical_hash(&value)?;
-    Ok(LifecycleTransitionReceipt {
+    Ok(TransitionReceipt {
         receipt_ref,
         transition_ref: transition.transition_ref,
         decision: decision.to_owned(),
@@ -369,8 +369,8 @@ pub fn lifecycle_transition_receipt(input: &LifecycleTransitionInput) -> Result<
     })
 }
 
-pub fn lifecycle_trace_event(input: &LifecycleTransitionInput) -> Result<LifecycleTraceEvent> {
-    let transition = lifecycle_transition_record(input)?;
+pub fn trace_event(input: &TransitionInput) -> Result<TraceEvent> {
+    let transition = transition_record(input)?;
     let value = record("lifecycle-trace-event-v1", vec![
         string(crate::preserves_rail::LIFECYCLE_TRACE_EVENT_SCHEMA),
         record("transition", vec![string(&transition.transition_ref)]),
@@ -382,7 +382,7 @@ pub fn lifecycle_trace_event(input: &LifecycleTransitionInput) -> Result<Lifecyc
         checks_value(),
     ]);
     let event_ref = canonical_hash(&value)?;
-    Ok(LifecycleTraceEvent {
+    Ok(TraceEvent {
         event_ref,
         transition_ref: transition.transition_ref,
         entity_kind: input.entity_kind,
@@ -472,7 +472,7 @@ pub fn scope_cleanup_receipt(input: &ScopeCleanupInput<'_>) -> Result<ScopeClean
     })
 }
 
-pub fn lifecycle_monitor_receipt(input: &LifecycleMonitorInput<'_>) -> Result<LifecycleMonitorReceipt> {
+pub fn monitor_receipt(input: &MonitorInput<'_>) -> Result<MonitorReceipt> {
     validate_monitor_input(input)?;
     let mut diagnostics = Vec::with_capacity(MAX_DIAGNOSTICS.min(1));
     if input.policy_refs.is_empty() {
@@ -493,7 +493,7 @@ pub fn lifecycle_monitor_receipt(input: &LifecycleMonitorInput<'_>) -> Result<Li
         checks_value(),
     ]);
     let receipt_ref = canonical_hash(&value)?;
-    Ok(LifecycleMonitorReceipt {
+    Ok(MonitorReceipt {
         receipt_ref,
         decision: decision.to_owned(),
         diagnostics,
@@ -545,7 +545,7 @@ pub fn supervisor_decision_receipt(input: &SupervisorDecisionInput<'_>) -> Resul
 
 pub fn service_lifecycle_assertion(
     service_id: &str,
-    kind: ServiceLifecycleAssertionKind,
+    kind: ServiceAssertionKind,
     target_ref: Option<&str>,
     evidence_refs: &[String],
 ) -> Result<RuntimeValue> {
@@ -566,7 +566,7 @@ pub fn service_lifecycle_assertion(
     ]))
 }
 
-fn validate_transition_input(input: &LifecycleTransitionInput) -> Result<()> {
+fn validate_transition_input(input: &TransitionInput) -> Result<()> {
     if input.entity_id.trim().is_empty() {
         return Err(MoltenError::invalid_harness("lifecycle entity id must be non-empty"));
     }
@@ -583,7 +583,7 @@ fn validate_transition_input(input: &LifecycleTransitionInput) -> Result<()> {
 }
 
 fn validate_refs(label: &str, refs: &[String]) -> Result<()> {
-    if refs.len() > MAX_LIFECYCLE_REFS {
+    if refs.len() > MAX_REFS {
         return Err(MoltenError::invalid_harness(format!("{label} refs exceed lifecycle bound")));
     }
     let mut prior: Option<&str> = None;
@@ -629,7 +629,7 @@ fn validate_scope_cleanup_input(input: &ScopeCleanupInput<'_>) -> Result<()> {
     Ok(())
 }
 
-fn validate_monitor_input(input: &LifecycleMonitorInput<'_>) -> Result<()> {
+fn validate_monitor_input(input: &MonitorInput<'_>) -> Result<()> {
     if input.observer_id.trim().is_empty() || input.child_id.trim().is_empty() {
         return Err(MoltenError::invalid_harness("monitor observer and child ids must be non-empty"));
     }
@@ -695,7 +695,7 @@ fn turn_action_value(action: &TurnAction) -> IoValue {
     }
 }
 
-fn transition_diagnostics(input: &LifecycleTransitionInput) -> Vec<String> {
+fn transition_diagnostics(input: &TransitionInput) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(MAX_DIAGNOSTICS.min(2));
     if !action_matches_target(input.action, input.to_state) {
         diagnostics.push(format!(
@@ -710,39 +710,39 @@ fn transition_diagnostics(input: &LifecycleTransitionInput) -> Vec<String> {
     diagnostics
 }
 
-fn action_matches_target(action: LifecycleAction, to_state: LifecycleState) -> bool {
+fn action_matches_target(action: Action, to_state: State) -> bool {
     matches!(
         (action, to_state),
-        (LifecycleAction::Spawn, LifecycleState::Spawning)
-            | (LifecycleAction::Start, LifecycleState::Starting)
-            | (LifecycleAction::Ready, LifecycleState::Ready)
-            | (LifecycleAction::Degrade, LifecycleState::Degraded)
-            | (LifecycleAction::Fail, LifecycleState::Failed)
-            | (LifecycleAction::Restart, LifecycleState::Restarting)
-            | (LifecycleAction::Stop, LifecycleState::Stopping | LifecycleState::Stopped)
-            | (LifecycleAction::Cleanup, LifecycleState::Cleaned)
-            | (LifecycleAction::SupervisorDecision, _)
+        (Action::Spawn, State::Spawning)
+            | (Action::Start, State::Starting)
+            | (Action::Ready, State::Ready)
+            | (Action::Degrade, State::Degraded)
+            | (Action::Fail, State::Failed)
+            | (Action::Restart, State::Restarting)
+            | (Action::Stop, State::Stopping | State::Stopped)
+            | (Action::Cleanup, State::Cleaned)
+            | (Action::SupervisorDecision, _)
     )
 }
 
-fn allowed_transition(from_state: LifecycleState, to_state: LifecycleState) -> bool {
+fn allowed_transition(from_state: State, to_state: State) -> bool {
     matches!(
         (from_state, to_state),
-        (LifecycleState::Declared, LifecycleState::Spawning)
-            | (LifecycleState::Spawning, LifecycleState::Starting)
-            | (LifecycleState::Starting, LifecycleState::Ready)
-            | (LifecycleState::Ready, LifecycleState::Degraded)
-            | (LifecycleState::Ready, LifecycleState::Stopping)
-            | (LifecycleState::Ready, LifecycleState::Failed)
-            | (LifecycleState::Degraded, LifecycleState::Ready)
-            | (LifecycleState::Degraded, LifecycleState::Stopping)
-            | (LifecycleState::Degraded, LifecycleState::Failed)
-            | (LifecycleState::Stopping, LifecycleState::Stopped)
-            | (LifecycleState::Stopped, LifecycleState::Cleaned)
-            | (LifecycleState::Failed, LifecycleState::Restarting)
-            | (LifecycleState::Failed, LifecycleState::Cleaned)
-            | (LifecycleState::Restarting, LifecycleState::Starting)
-            | (LifecycleState::Restarting, LifecycleState::Cleaned)
+        (State::Declared, State::Spawning)
+            | (State::Spawning, State::Starting)
+            | (State::Starting, State::Ready)
+            | (State::Ready, State::Degraded)
+            | (State::Ready, State::Stopping)
+            | (State::Ready, State::Failed)
+            | (State::Degraded, State::Ready)
+            | (State::Degraded, State::Stopping)
+            | (State::Degraded, State::Failed)
+            | (State::Stopping, State::Stopped)
+            | (State::Stopped, State::Cleaned)
+            | (State::Failed, State::Restarting)
+            | (State::Failed, State::Cleaned)
+            | (State::Restarting, State::Starting)
+            | (State::Restarting, State::Cleaned)
     )
 }
 
@@ -792,7 +792,7 @@ mod tests {
         let after = state.snapshot();
         let policy_ref = content_ref_from_bytes(b"policy");
         let receipt = super::turn_failure_receipt(&super::TurnFailureInput {
-            entity_kind: super::LifecycleEntityKind::Actor,
+            entity_kind: super::EntityKind::Actor,
             entity_id: "actor-1",
             failure_kind: super::TurnFailureKind::Denial,
             cause: "policy denied",
@@ -827,7 +827,7 @@ mod tests {
         state.apply_step(&step);
         let after = state.snapshot();
         let receipt = super::turn_failure_receipt(&super::TurnFailureInput {
-            entity_kind: super::LifecycleEntityKind::Actor,
+            entity_kind: super::EntityKind::Actor,
             entity_id: "actor-1",
             failure_kind: super::TurnFailureKind::ValidationFailure,
             cause: "validation failed",
@@ -868,7 +868,7 @@ mod tests {
         let after = state.snapshot();
         let evidence_ref = content_ref_from_bytes(b"cleanup-evidence");
         let receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
-            entity_kind: super::LifecycleEntityKind::Actor,
+            entity_kind: super::EntityKind::Actor,
             entity_id: "actor-1",
             cause: "stop",
             before: &before,
@@ -905,7 +905,7 @@ mod tests {
         let first_cleanup = state.cleanup_actor_scope("actor-1").expect("first cleanup");
         let after_first = state.snapshot();
         let first_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
-            entity_kind: super::LifecycleEntityKind::Actor,
+            entity_kind: super::EntityKind::Actor,
             entity_id: "actor-1",
             cause: "cleanup",
             before: &before_first,
@@ -922,7 +922,7 @@ mod tests {
         let second_cleanup = state.cleanup_actor_scope("actor-1").expect("second cleanup");
         let after_second = state.snapshot();
         let second_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
-            entity_kind: super::LifecycleEntityKind::Actor,
+            entity_kind: super::EntityKind::Actor,
             entity_id: "actor-1",
             cause: "cleanup",
             before: &before_second,
@@ -955,7 +955,7 @@ mod tests {
         let after = state.snapshot();
         let effect_refs = vec![content_ref_from_bytes(b"irreversible-effect")];
         let receipt = super::turn_failure_receipt(&super::TurnFailureInput {
-            entity_kind: super::LifecycleEntityKind::Actor,
+            entity_kind: super::EntityKind::Actor,
             entity_id: "actor-1",
             failure_kind: super::TurnFailureKind::Panic,
             cause: "panic after one-shot effect",
@@ -980,7 +980,7 @@ mod tests {
     fn monitor_observes_failure_without_authority_escalation() {
         let policy_ref = content_ref_from_bytes(b"monitor-policy");
         let failure_ref = content_ref_from_bytes(b"child-failure");
-        let receipt = super::lifecycle_monitor_receipt(&super::LifecycleMonitorInput {
+        let receipt = super::monitor_receipt(&super::MonitorInput {
             observer_id: "monitor-1",
             child_id: "child-1",
             child_failure_ref: &failure_ref,
@@ -1042,13 +1042,11 @@ mod tests {
     #[test]
     fn service_lifecycle_states_are_dataspace_assertions() {
         let evidence_ref = content_ref_from_bytes(b"readiness-evidence");
-        let assertion = super::service_lifecycle_assertion(
-            "service:frontend",
-            super::ServiceLifecycleAssertionKind::Ready,
-            None,
-            &[evidence_ref],
-        )
-        .expect("service assertion");
+        let assertion =
+            super::service_lifecycle_assertion("service:frontend", super::ServiceAssertionKind::Ready, None, &[
+                evidence_ref,
+            ])
+            .expect("service assertion");
         let mut state = crate::runtime::RuntimeState::new(1);
         state.apply_step(&crate::runtime::RuntimeStep::Assert {
             actor: "service:frontend".to_owned(),
@@ -1114,12 +1112,12 @@ mod tests {
     fn transition_receipt_passes_valid_spawn() {
         let policy_ref = content_ref_from_bytes(b"policy");
         let evidence_ref = content_ref_from_bytes(b"evidence");
-        let input = super::LifecycleTransitionInput {
-            entity_kind: super::LifecycleEntityKind::Actor,
+        let input = super::TransitionInput {
+            entity_kind: super::EntityKind::Actor,
             entity_id: "actor-1".to_owned(),
-            from_state: super::LifecycleState::Declared,
-            to_state: super::LifecycleState::Spawning,
-            action: super::LifecycleAction::Spawn,
+            from_state: super::State::Declared,
+            to_state: super::State::Spawning,
+            action: super::Action::Spawn,
             cause: "operator-request".to_owned(),
             policy_refs: vec![policy_ref],
             resource_refs: Vec::new(),
@@ -1128,7 +1126,7 @@ mod tests {
             logical_step: 1,
         };
 
-        let receipt = super::lifecycle_transition_receipt(&input).expect("receipt");
+        let receipt = super::transition_receipt(&input).expect("receipt");
 
         assert_eq!(receipt.decision, "pass");
         assert!(receipt.diagnostics.is_empty());
@@ -1137,12 +1135,12 @@ mod tests {
 
     #[test]
     fn transition_receipt_denies_impossible_jump() {
-        let input = super::LifecycleTransitionInput {
-            entity_kind: super::LifecycleEntityKind::Service,
+        let input = super::TransitionInput {
+            entity_kind: super::EntityKind::Service,
             entity_id: "svc".to_owned(),
-            from_state: super::LifecycleState::Declared,
-            to_state: super::LifecycleState::Ready,
-            action: super::LifecycleAction::Ready,
+            from_state: super::State::Declared,
+            to_state: super::State::Ready,
+            action: super::Action::Ready,
             cause: "bad-adapter".to_owned(),
             policy_refs: Vec::new(),
             resource_refs: Vec::new(),
@@ -1151,7 +1149,7 @@ mod tests {
             logical_step: 2,
         };
 
-        let receipt = super::lifecycle_transition_receipt(&input).expect("receipt");
+        let receipt = super::transition_receipt(&input).expect("receipt");
 
         assert_eq!(receipt.decision, "deny");
         assert_eq!(receipt.diagnostics, vec!["invalid transition declared -> ready".to_owned()]);
@@ -1160,12 +1158,12 @@ mod tests {
     #[test]
     fn trace_event_binds_transition_cause_and_policy() {
         let policy_ref = content_ref_from_bytes(b"policy-a");
-        let input = super::LifecycleTransitionInput {
-            entity_kind: super::LifecycleEntityKind::Job,
+        let input = super::TransitionInput {
+            entity_kind: super::EntityKind::Job,
             entity_id: "job-7".to_owned(),
-            from_state: super::LifecycleState::Ready,
-            to_state: super::LifecycleState::Failed,
-            action: super::LifecycleAction::Fail,
+            from_state: super::State::Ready,
+            to_state: super::State::Failed,
+            action: super::Action::Fail,
             cause: "stage-denied".to_owned(),
             policy_refs: vec![policy_ref],
             resource_refs: Vec::new(),
@@ -1174,7 +1172,7 @@ mod tests {
             logical_step: 9,
         };
 
-        let event = super::lifecycle_trace_event(&input).expect("trace event");
+        let event = super::trace_event(&input).expect("trace event");
         let rendered = to_text(&event.value).expect("render event");
 
         assert!(event.event_ref.starts_with("blake3:"));
@@ -1187,12 +1185,12 @@ mod tests {
         let mut refs = vec![content_ref_from_bytes(b"z"), content_ref_from_bytes(b"a")];
         refs.sort();
         refs.reverse();
-        let input = super::LifecycleTransitionInput {
-            entity_kind: super::LifecycleEntityKind::Vat,
+        let input = super::TransitionInput {
+            entity_kind: super::EntityKind::Vat,
             entity_id: "vat".to_owned(),
-            from_state: super::LifecycleState::Declared,
-            to_state: super::LifecycleState::Spawning,
-            action: super::LifecycleAction::Spawn,
+            from_state: super::State::Declared,
+            to_state: super::State::Spawning,
+            action: super::Action::Spawn,
             cause: "test".to_owned(),
             policy_refs: refs,
             resource_refs: Vec::new(),
@@ -1201,7 +1199,7 @@ mod tests {
             logical_step: 0,
         };
 
-        let error = super::lifecycle_transition_receipt(&input).expect_err("unsorted refs fail");
+        let error = super::transition_receipt(&input).expect_err("unsorted refs fail");
         assert!(error.to_string().contains("policy refs must be sorted and unique"));
     }
 }
