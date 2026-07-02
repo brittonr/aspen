@@ -771,30 +771,6 @@ fn checks_value() -> IoValue {
 
 #[cfg(test)]
 mod tests {
-    use super::LifecycleAction;
-    use super::LifecycleEntityKind;
-    use super::LifecycleMonitorInput;
-    use super::LifecycleState;
-    use super::LifecycleTransitionInput;
-    use super::RestartStrategy;
-    use super::RestartWindow;
-    use super::ScopeCleanupInput;
-    use super::ServiceLifecycleAssertionKind;
-    use super::SupervisorDecisionInput;
-    use super::SupervisorPolicy;
-    use super::TurnFailureInput;
-    use super::TurnFailureKind;
-    use super::lifecycle_monitor_receipt;
-    use super::lifecycle_trace_event;
-    use super::lifecycle_transition_receipt;
-    use super::scope_cleanup_receipt;
-    use super::service_lifecycle_assertion;
-    use super::supervisor_decision_receipt;
-    use super::turn_failure_receipt;
-    use crate::runtime::RuntimeState;
-    use crate::runtime::RuntimeStep;
-    use crate::runtime::RuntimeValue;
-
     fn content_ref_from_bytes(bytes: &[u8]) -> String {
         crate::preserves_rail::content_ref_from_bytes(bytes)
     }
@@ -805,20 +781,20 @@ mod tests {
 
     #[test]
     fn failed_turn_rolls_back_pending_actions_and_records_discarded_refs() {
-        let state = RuntimeState::new(1);
-        let step = RuntimeStep::Assert {
+        let state = crate::runtime::RuntimeState::new(1);
+        let step = crate::runtime::RuntimeStep::Assert {
             actor: "actor-1".to_owned(),
-            value: RuntimeValue::string("service.ready").expect("runtime value"),
+            value: crate::runtime::RuntimeValue::string("service.ready").expect("runtime value"),
         };
         let before = state.snapshot();
         let turn = state.begin_turn(&step);
         let events = state.rollback_turn(turn.clone(), step.primary_actor(), "policy denied");
         let after = state.snapshot();
         let policy_ref = content_ref_from_bytes(b"policy");
-        let receipt = turn_failure_receipt(&TurnFailureInput {
-            entity_kind: LifecycleEntityKind::Actor,
+        let receipt = super::turn_failure_receipt(&super::TurnFailureInput {
+            entity_kind: super::LifecycleEntityKind::Actor,
             entity_id: "actor-1",
-            failure_kind: TurnFailureKind::Denial,
+            failure_kind: super::TurnFailureKind::Denial,
             cause: "policy denied",
             before: &before,
             after_rollback: &after,
@@ -841,19 +817,19 @@ mod tests {
 
     #[test]
     fn failed_turn_receipt_denies_if_rollback_mutated_state() {
-        let mut state = RuntimeState::new(1);
-        let step = RuntimeStep::Assert {
+        let mut state = crate::runtime::RuntimeState::new(1);
+        let step = crate::runtime::RuntimeStep::Assert {
             actor: "actor-1".to_owned(),
-            value: RuntimeValue::string("service.ready").expect("runtime value"),
+            value: crate::runtime::RuntimeValue::string("service.ready").expect("runtime value"),
         };
         let before = state.snapshot();
         let turn = state.begin_turn(&step);
         state.apply_step(&step);
         let after = state.snapshot();
-        let receipt = turn_failure_receipt(&TurnFailureInput {
-            entity_kind: LifecycleEntityKind::Actor,
+        let receipt = super::turn_failure_receipt(&super::TurnFailureInput {
+            entity_kind: super::LifecycleEntityKind::Actor,
             entity_id: "actor-1",
-            failure_kind: TurnFailureKind::ValidationFailure,
+            failure_kind: super::TurnFailureKind::ValidationFailure,
             cause: "validation failed",
             before: &before,
             after_rollback: &after,
@@ -872,17 +848,17 @@ mod tests {
 
     #[test]
     fn scope_cleanup_retracts_owned_assertions_subscriptions_and_messages() {
-        let mut state = RuntimeState::new(1);
-        let ready = RuntimeValue::string("service.ready").expect("runtime value");
-        state.apply_step(&RuntimeStep::Observe {
+        let mut state = crate::runtime::RuntimeState::new(1);
+        let ready = crate::runtime::RuntimeValue::string("service.ready").expect("runtime value");
+        state.apply_step(&crate::runtime::RuntimeStep::Observe {
             actor: "actor-1".to_owned(),
             pattern: ready.clone(),
         });
-        state.apply_step(&RuntimeStep::Assert {
+        state.apply_step(&crate::runtime::RuntimeStep::Assert {
             actor: "actor-1".to_owned(),
             value: ready.clone(),
         });
-        state.apply_step(&RuntimeStep::Send {
+        state.apply_step(&crate::runtime::RuntimeStep::Send {
             from: "actor-1".to_owned(),
             to: "actor-2".to_owned(),
             body: ready,
@@ -891,8 +867,8 @@ mod tests {
         let cleanup = state.cleanup_actor_scope("actor-1").expect("cleanup scope");
         let after = state.snapshot();
         let evidence_ref = content_ref_from_bytes(b"cleanup-evidence");
-        let receipt = scope_cleanup_receipt(&ScopeCleanupInput {
-            entity_kind: LifecycleEntityKind::Actor,
+        let receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
+            entity_kind: super::LifecycleEntityKind::Actor,
             entity_id: "actor-1",
             cause: "stop",
             before: &before,
@@ -919,17 +895,17 @@ mod tests {
 
     #[test]
     fn scope_cleanup_is_idempotent_and_receipt_backed() {
-        let mut state = RuntimeState::new(1);
-        let ready = RuntimeValue::string("service.ready").expect("runtime value");
-        state.apply_step(&RuntimeStep::Assert {
+        let mut state = crate::runtime::RuntimeState::new(1);
+        let ready = crate::runtime::RuntimeValue::string("service.ready").expect("runtime value");
+        state.apply_step(&crate::runtime::RuntimeStep::Assert {
             actor: "actor-1".to_owned(),
             value: ready,
         });
         let before_first = state.snapshot();
         let first_cleanup = state.cleanup_actor_scope("actor-1").expect("first cleanup");
         let after_first = state.snapshot();
-        let first_receipt = scope_cleanup_receipt(&ScopeCleanupInput {
-            entity_kind: LifecycleEntityKind::Actor,
+        let first_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
+            entity_kind: super::LifecycleEntityKind::Actor,
             entity_id: "actor-1",
             cause: "cleanup",
             before: &before_first,
@@ -945,8 +921,8 @@ mod tests {
         let before_second = state.snapshot();
         let second_cleanup = state.cleanup_actor_scope("actor-1").expect("second cleanup");
         let after_second = state.snapshot();
-        let second_receipt = scope_cleanup_receipt(&ScopeCleanupInput {
-            entity_kind: LifecycleEntityKind::Actor,
+        let second_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
+            entity_kind: super::LifecycleEntityKind::Actor,
             entity_id: "actor-1",
             cause: "cleanup",
             before: &before_second,
@@ -970,18 +946,18 @@ mod tests {
 
     #[test]
     fn failed_turn_discloses_one_shot_effects() {
-        let state = RuntimeState::new(1);
-        let step = RuntimeStep::Clock {
+        let state = crate::runtime::RuntimeState::new(1);
+        let step = crate::runtime::RuntimeStep::Clock {
             actor: "actor-1".to_owned(),
         };
         let before = state.snapshot();
         let turn = state.begin_turn(&step);
         let after = state.snapshot();
         let effect_refs = vec![content_ref_from_bytes(b"irreversible-effect")];
-        let receipt = turn_failure_receipt(&TurnFailureInput {
-            entity_kind: LifecycleEntityKind::Actor,
+        let receipt = super::turn_failure_receipt(&super::TurnFailureInput {
+            entity_kind: super::LifecycleEntityKind::Actor,
             entity_id: "actor-1",
-            failure_kind: TurnFailureKind::Panic,
+            failure_kind: super::TurnFailureKind::Panic,
             cause: "panic after one-shot effect",
             before: &before,
             after_rollback: &after,
@@ -1004,7 +980,7 @@ mod tests {
     fn monitor_observes_failure_without_authority_escalation() {
         let policy_ref = content_ref_from_bytes(b"monitor-policy");
         let failure_ref = content_ref_from_bytes(b"child-failure");
-        let receipt = lifecycle_monitor_receipt(&LifecycleMonitorInput {
+        let receipt = super::lifecycle_monitor_receipt(&super::LifecycleMonitorInput {
             observer_id: "monitor-1",
             child_id: "child-1",
             child_failure_ref: &failure_ref,
@@ -1023,13 +999,13 @@ mod tests {
     fn supervisor_restart_strategies_and_windows_are_deterministic() {
         let policy_ref = content_ref_from_bytes(b"supervisor-policy");
         let failure_ref = content_ref_from_bytes(b"child-failure");
-        let one_for_one = SupervisorPolicy {
+        let one_for_one = super::SupervisorPolicy {
             supervisor_id: "sup".to_owned(),
-            strategy: RestartStrategy::OneForOne,
+            strategy: super::RestartStrategy::OneForOne,
             restart_window: None,
             policy_refs: vec![policy_ref.clone()],
         };
-        let restart = supervisor_decision_receipt(&SupervisorDecisionInput {
+        let restart = super::supervisor_decision_receipt(&super::SupervisorDecisionInput {
             policy: &one_for_one,
             child_id: "child",
             child_failure_ref: &failure_ref,
@@ -1040,17 +1016,17 @@ mod tests {
         .expect("restart decision");
         assert_eq!(restart.decision, "restart");
 
-        let bounded = SupervisorPolicy {
+        let bounded = super::SupervisorPolicy {
             supervisor_id: "sup".to_owned(),
-            strategy: RestartStrategy::Bounded,
-            restart_window: Some(RestartWindow {
+            strategy: super::RestartStrategy::Bounded,
+            restart_window: Some(super::RestartWindow {
                 start_step: 0,
                 end_step: 20,
                 max_restarts: 2,
             }),
             policy_refs: vec![policy_ref],
         };
-        let denied = supervisor_decision_receipt(&SupervisorDecisionInput {
+        let denied = super::supervisor_decision_receipt(&super::SupervisorDecisionInput {
             policy: &bounded,
             child_id: "child",
             child_failure_ref: &failure_ref,
@@ -1066,12 +1042,15 @@ mod tests {
     #[test]
     fn service_lifecycle_states_are_dataspace_assertions() {
         let evidence_ref = content_ref_from_bytes(b"readiness-evidence");
-        let assertion = service_lifecycle_assertion("service:frontend", ServiceLifecycleAssertionKind::Ready, None, &[
-            evidence_ref,
-        ])
+        let assertion = super::service_lifecycle_assertion(
+            "service:frontend",
+            super::ServiceLifecycleAssertionKind::Ready,
+            None,
+            &[evidence_ref],
+        )
         .expect("service assertion");
-        let mut state = RuntimeState::new(1);
-        state.apply_step(&RuntimeStep::Assert {
+        let mut state = crate::runtime::RuntimeState::new(1);
+        state.apply_step(&crate::runtime::RuntimeStep::Assert {
             actor: "service:frontend".to_owned(),
             value: assertion.clone(),
         });
@@ -1088,11 +1067,11 @@ mod tests {
     fn hegel_cleanup_idempotence_no_leaks_and_restart_bounds(tc: hegel::TestCase) {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(5));
         let actor = format!("actor-{salt}");
-        let mut state = RuntimeState::new(1);
+        let mut state = crate::runtime::RuntimeState::new(1);
         for index in 0..=(salt % 2) {
-            state.apply_step(&RuntimeStep::Assert {
+            state.apply_step(&crate::runtime::RuntimeStep::Assert {
                 actor: actor.clone(),
-                value: RuntimeValue::string(format!("service.ready.{index}")).expect("runtime value"),
+                value: crate::runtime::RuntimeValue::string(format!("service.ready.{index}")).expect("runtime value"),
             });
         }
         let _first = state.cleanup_actor_scope(&actor).expect("first cleanup");
@@ -1105,17 +1084,17 @@ mod tests {
 
         let policy_ref = content_ref_from_bytes(b"restart-policy");
         let failure_ref = content_ref_from_bytes(format!("failure-{salt}").as_bytes());
-        let policy = SupervisorPolicy {
+        let policy = super::SupervisorPolicy {
             supervisor_id: "sup".to_owned(),
-            strategy: RestartStrategy::Bounded,
-            restart_window: Some(RestartWindow {
+            strategy: super::RestartStrategy::Bounded,
+            restart_window: Some(super::RestartWindow {
                 start_step: 0,
                 end_step: 10,
                 max_restarts: 3,
             }),
             policy_refs: vec![policy_ref],
         };
-        let receipt = supervisor_decision_receipt(&SupervisorDecisionInput {
+        let receipt = super::supervisor_decision_receipt(&super::SupervisorDecisionInput {
             policy: &policy,
             child_id: &actor,
             child_failure_ref: &failure_ref,
@@ -1135,12 +1114,12 @@ mod tests {
     fn transition_receipt_passes_valid_spawn() {
         let policy_ref = content_ref_from_bytes(b"policy");
         let evidence_ref = content_ref_from_bytes(b"evidence");
-        let input = LifecycleTransitionInput {
-            entity_kind: LifecycleEntityKind::Actor,
+        let input = super::LifecycleTransitionInput {
+            entity_kind: super::LifecycleEntityKind::Actor,
             entity_id: "actor-1".to_owned(),
-            from_state: LifecycleState::Declared,
-            to_state: LifecycleState::Spawning,
-            action: LifecycleAction::Spawn,
+            from_state: super::LifecycleState::Declared,
+            to_state: super::LifecycleState::Spawning,
+            action: super::LifecycleAction::Spawn,
             cause: "operator-request".to_owned(),
             policy_refs: vec![policy_ref],
             resource_refs: Vec::new(),
@@ -1149,7 +1128,7 @@ mod tests {
             logical_step: 1,
         };
 
-        let receipt = lifecycle_transition_receipt(&input).expect("receipt");
+        let receipt = super::lifecycle_transition_receipt(&input).expect("receipt");
 
         assert_eq!(receipt.decision, "pass");
         assert!(receipt.diagnostics.is_empty());
@@ -1158,12 +1137,12 @@ mod tests {
 
     #[test]
     fn transition_receipt_denies_impossible_jump() {
-        let input = LifecycleTransitionInput {
-            entity_kind: LifecycleEntityKind::Service,
+        let input = super::LifecycleTransitionInput {
+            entity_kind: super::LifecycleEntityKind::Service,
             entity_id: "svc".to_owned(),
-            from_state: LifecycleState::Declared,
-            to_state: LifecycleState::Ready,
-            action: LifecycleAction::Ready,
+            from_state: super::LifecycleState::Declared,
+            to_state: super::LifecycleState::Ready,
+            action: super::LifecycleAction::Ready,
             cause: "bad-adapter".to_owned(),
             policy_refs: Vec::new(),
             resource_refs: Vec::new(),
@@ -1172,7 +1151,7 @@ mod tests {
             logical_step: 2,
         };
 
-        let receipt = lifecycle_transition_receipt(&input).expect("receipt");
+        let receipt = super::lifecycle_transition_receipt(&input).expect("receipt");
 
         assert_eq!(receipt.decision, "deny");
         assert_eq!(receipt.diagnostics, vec!["invalid transition declared -> ready".to_owned()]);
@@ -1181,12 +1160,12 @@ mod tests {
     #[test]
     fn trace_event_binds_transition_cause_and_policy() {
         let policy_ref = content_ref_from_bytes(b"policy-a");
-        let input = LifecycleTransitionInput {
-            entity_kind: LifecycleEntityKind::Job,
+        let input = super::LifecycleTransitionInput {
+            entity_kind: super::LifecycleEntityKind::Job,
             entity_id: "job-7".to_owned(),
-            from_state: LifecycleState::Ready,
-            to_state: LifecycleState::Failed,
-            action: LifecycleAction::Fail,
+            from_state: super::LifecycleState::Ready,
+            to_state: super::LifecycleState::Failed,
+            action: super::LifecycleAction::Fail,
             cause: "stage-denied".to_owned(),
             policy_refs: vec![policy_ref],
             resource_refs: Vec::new(),
@@ -1195,7 +1174,7 @@ mod tests {
             logical_step: 9,
         };
 
-        let event = lifecycle_trace_event(&input).expect("trace event");
+        let event = super::lifecycle_trace_event(&input).expect("trace event");
         let rendered = to_text(&event.value).expect("render event");
 
         assert!(event.event_ref.starts_with("blake3:"));
@@ -1208,12 +1187,12 @@ mod tests {
         let mut refs = vec![content_ref_from_bytes(b"z"), content_ref_from_bytes(b"a")];
         refs.sort();
         refs.reverse();
-        let input = LifecycleTransitionInput {
-            entity_kind: LifecycleEntityKind::Vat,
+        let input = super::LifecycleTransitionInput {
+            entity_kind: super::LifecycleEntityKind::Vat,
             entity_id: "vat".to_owned(),
-            from_state: LifecycleState::Declared,
-            to_state: LifecycleState::Spawning,
-            action: LifecycleAction::Spawn,
+            from_state: super::LifecycleState::Declared,
+            to_state: super::LifecycleState::Spawning,
+            action: super::LifecycleAction::Spawn,
             cause: "test".to_owned(),
             policy_refs: refs,
             resource_refs: Vec::new(),
@@ -1222,7 +1201,7 @@ mod tests {
             logical_step: 0,
         };
 
-        let error = lifecycle_transition_receipt(&input).expect_err("unsorted refs fail");
+        let error = super::lifecycle_transition_receipt(&input).expect_err("unsorted refs fail");
         assert!(error.to_string().contains("policy refs must be sorted and unique"));
     }
 }
