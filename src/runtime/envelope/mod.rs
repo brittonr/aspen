@@ -1,5 +1,42 @@
-use crate::error;
-use crate::preserves_rail;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn parse_text(source: &str) -> Result<IoValue> {
+    crate::preserves_rail::parse_text(source)
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn to_text(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
+
+fn u64_value(value: u64) -> IoValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
 
 const ENVELOPE_VERSION: u16 = 1;
 const MAX_REF_LIST_ITEMS: usize = 256;
@@ -12,7 +49,7 @@ const MAX_CAPABILITY_BYTES: usize = 512;
 pub struct ActorId(String);
 
 impl ActorId {
-    pub fn parse(value: impl Into<String>) -> error::Result<Self> {
+    pub fn parse(value: impl Into<String>) -> Result<Self> {
         let value = value.into();
         validate_nonempty_token("actor id", &value, MAX_ACTOR_ID_BYTES)?;
         Ok(Self(value))
@@ -33,9 +70,9 @@ impl ActorId {
 pub struct ContentRef(String);
 
 impl ContentRef {
-    pub fn parse(value: impl Into<String>) -> error::Result<Self> {
+    pub fn parse(value: impl Into<String>) -> Result<Self> {
         let value = value.into();
-        preserves_rail::validate_content_ref(&value)?;
+        validate_content_ref(&value)?;
         Ok(Self(value))
     }
 
@@ -54,7 +91,7 @@ impl ContentRef {
 pub struct Capability(String);
 
 impl Capability {
-    pub fn parse(value: impl Into<String>) -> error::Result<Self> {
+    pub fn parse(value: impl Into<String>) -> Result<Self> {
         let value = value.into();
         validate_nonempty_token("capability", &value, MAX_CAPABILITY_BYTES)?;
         Ok(Self(value))
@@ -75,9 +112,9 @@ impl Capability {
 pub struct EvidenceRef(String);
 
 impl EvidenceRef {
-    pub fn parse(value: impl Into<String>) -> error::Result<Self> {
+    pub fn parse(value: impl Into<String>) -> Result<Self> {
         let value = value.into();
-        preserves_rail::validate_content_ref(&value)?;
+        validate_content_ref(&value)?;
         Ok(Self(value))
     }
 
@@ -122,7 +159,7 @@ pub struct EnvelopeBoundary {
 }
 
 impl Envelope {
-    pub fn new(input: EnvelopeInput) -> error::Result<Self> {
+    pub fn new(input: EnvelopeInput) -> Result<Self> {
         validate_ref_list_len("blob refs", input.blob_refs.len())?;
         validate_ref_list_len("capabilities", input.capabilities.len())?;
         validate_ref_list_len("evidence refs", input.evidence_refs.len())?;
@@ -137,15 +174,15 @@ impl Envelope {
         })
     }
 
-    pub fn from_dto(dto: EnvelopeDto) -> error::Result<Self> {
+    pub fn from_dto(dto: EnvelopeDto) -> Result<Self> {
         if dto.version != ENVELOPE_VERSION {
-            return Err(error::MoltenError::invalid_harness(format!(
+            return Err(MoltenError::invalid_harness(format!(
                 "unsupported envelope version {}, expected {ENVELOPE_VERSION}",
                 dto.version
             )));
         }
-        let subject = super::RuntimeValue::new(preserves_rail::parse_text(&dto.subject_preserves)?)?;
-        let body = super::RuntimeValue::new(preserves_rail::parse_text(&dto.body_preserves)?)?;
+        let subject = super::RuntimeValue::new(parse_text(&dto.subject_preserves)?)?;
+        let body = super::RuntimeValue::new(parse_text(&dto.body_preserves)?)?;
         Self::new(EnvelopeInput {
             sender: dto.sender,
             subject,
@@ -156,39 +193,39 @@ impl Envelope {
         })
     }
 
-    pub fn to_dto(&self) -> error::Result<EnvelopeDto> {
+    pub fn to_dto(&self) -> Result<EnvelopeDto> {
         Ok(EnvelopeDto {
             version: self.version,
             sender: self.sender.clone(),
-            subject_preserves: preserves_rail::to_text(self.subject.as_iovalue())?,
-            body_preserves: preserves_rail::to_text(self.body.as_iovalue())?,
+            subject_preserves: to_text(self.subject.as_iovalue())?,
+            body_preserves: to_text(self.body.as_iovalue())?,
             blob_refs: self.blob_refs.clone(),
             capabilities: self.capabilities.clone(),
             evidence_refs: self.evidence_refs.clone(),
         })
     }
 
-    pub fn to_value(&self) -> preserves::IOValue {
-        preserves_rail::record("runtime-envelope-v1", vec![
-            preserves_rail::u64_value(u64::from(self.version)),
-            preserves_rail::record("sender", vec![preserves_rail::string(self.sender.as_str())]),
-            preserves_rail::record("subject", vec![self.subject.as_iovalue().clone()]),
-            preserves_rail::record("body", vec![self.body.as_iovalue().clone()]),
+    pub fn to_value(&self) -> IoValue {
+        record("runtime-envelope-v1", vec![
+            u64_value(u64::from(self.version)),
+            record("sender", vec![string(self.sender.as_str())]),
+            record("subject", vec![self.subject.as_iovalue().clone()]),
+            record("body", vec![self.body.as_iovalue().clone()]),
             ref_list_value("blob-refs", &self.blob_refs),
             capability_list_value(&self.capabilities),
             evidence_list_value(&self.evidence_refs),
         ])
     }
 
-    pub fn canonical_bytes(&self) -> error::Result<Vec<u8>> {
-        preserves_rail::canonical_bytes(&self.to_value())
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>> {
+        canonical_bytes(&self.to_value())
     }
 
-    pub fn canonical_hash(&self) -> error::Result<String> {
-        preserves_rail::canonical_hash(&self.to_value())
+    pub fn canonical_hash(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
     }
 
-    pub fn boundary(&self) -> error::Result<EnvelopeBoundary> {
+    pub fn boundary(&self) -> Result<EnvelopeBoundary> {
         Ok(EnvelopeBoundary {
             envelope_ref: self.canonical_hash()?,
             subject_ref: self.subject.value_ref().to_string(),
@@ -198,7 +235,7 @@ impl Envelope {
         })
     }
 
-    pub fn validate_core(&self) -> error::Result<EnvelopeBoundary> {
+    pub fn validate_core(&self) -> Result<EnvelopeBoundary> {
         validate_ref_list_len("blob refs", self.blob_refs.len())?;
         validate_ref_list_len("capabilities", self.capabilities.len())?;
         validate_ref_list_len("evidence refs", self.evidence_refs.len())?;
@@ -215,45 +252,45 @@ pub struct EnvelopeInput {
     pub evidence_refs: Vec<EvidenceRef>,
 }
 
-fn validate_nonempty_token(label: &str, value: &str, max_bytes: usize) -> error::Result<()> {
+fn validate_nonempty_token(label: &str, value: &str, max_bytes: usize) -> Result<()> {
     if value.is_empty() {
-        return Err(error::MoltenError::invalid_harness(format!("{label} must not be empty")));
+        return Err(MoltenError::invalid_harness(format!("{label} must not be empty")));
     }
     if value.len() > max_bytes {
-        return Err(error::MoltenError::invalid_harness(format!("{label} exceeds {max_bytes} bytes")));
+        return Err(MoltenError::invalid_harness(format!("{label} exceeds {max_bytes} bytes")));
     }
     Ok(())
 }
 
-fn validate_ref_list_len(label: &str, len: usize) -> error::Result<()> {
+fn validate_ref_list_len(label: &str, len: usize) -> Result<()> {
     if len > MAX_REF_LIST_ITEMS {
-        return Err(error::MoltenError::invalid_harness(format!("{label} exceeds {MAX_REF_LIST_ITEMS} items")));
+        return Err(MoltenError::invalid_harness(format!("{label} exceeds {MAX_REF_LIST_ITEMS} items")));
     }
     Ok(())
 }
 
-fn ref_list_value(label: &'static str, refs: &[ContentRef]) -> preserves::IOValue {
+fn ref_list_value(label: &'static str, refs: &[ContentRef]) -> IoValue {
     let mut values = Vec::with_capacity(refs.len());
     for reference in refs {
-        values.push(preserves_rail::string(reference.as_str()));
+        values.push(string(reference.as_str()));
     }
-    preserves_rail::record(label, vec![preserves_rail::sequence(values)])
+    record(label, vec![sequence(values)])
 }
 
-fn capability_list_value(capabilities: &[Capability]) -> preserves::IOValue {
+fn capability_list_value(capabilities: &[Capability]) -> IoValue {
     let mut values = Vec::with_capacity(capabilities.len());
     for capability in capabilities {
-        values.push(preserves_rail::string(capability.as_str()));
+        values.push(string(capability.as_str()));
     }
-    preserves_rail::record("capabilities", vec![preserves_rail::sequence(values)])
+    record("capabilities", vec![sequence(values)])
 }
 
-fn evidence_list_value(refs: &[EvidenceRef]) -> preserves::IOValue {
+fn evidence_list_value(refs: &[EvidenceRef]) -> IoValue {
     let mut values = Vec::with_capacity(refs.len());
     for reference in refs {
-        values.push(preserves_rail::string(reference.as_str()));
+        values.push(string(reference.as_str()));
     }
-    preserves_rail::record("evidence-refs", vec![preserves_rail::sequence(values)])
+    record("evidence-refs", vec![sequence(values)])
 }
 
 #[cfg(test)]
