@@ -55,7 +55,7 @@ pub(super) fn run_ledger(command: Command) -> Outcome<()> {
             receipt_out,
         } => {
             let retention_evidence = retention.into_retention_evidence();
-            let gc = molten::ledger::gc(&ledger, molten::ledger::LedgerGcInput {
+            let gc = molten::ledger::gc(&ledger, molten::ledger::GcInput {
                 dry_run,
                 retention_evidence: &retention_evidence,
                 apply_refs: &apply_refs,

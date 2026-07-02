@@ -55,11 +55,11 @@ mod ledger {
     pub(super) fn import_artifact(
         root: &super::Path,
         artifact: &super::IoValue,
-    ) -> super::Result<crate::ledger::LedgerImport> {
+    ) -> super::Result<crate::ledger::Import> {
         crate::ledger::import_artifact(root, artifact)
     }
 
-    pub(super) fn list_artifacts(root: &super::Path) -> super::Result<Vec<crate::ledger::LedgerEntry>> {
+    pub(super) fn list_artifacts(root: &super::Path) -> super::Result<Vec<crate::ledger::Entry>> {
         crate::ledger::list_artifacts(root)
     }
 
