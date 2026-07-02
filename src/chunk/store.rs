@@ -5,9 +5,6 @@ use redb::ReadableDatabase;
 use redb::ReadableTable;
 use redb::ReadableTableMetadata;
 
-use crate::evidence_chain;
-use crate::retention;
-
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
 type CompoundClass = preserves::CompoundClass;
@@ -264,7 +261,7 @@ pub struct ChunkStoreGc {
 #[derive(Debug, Clone, Copy)]
 pub struct ChunkStoreGcInput<'a> {
     pub dry_run: bool,
-    pub retention_evidence: &'a retention::DestructiveRetentionEvidence,
+    pub retention_evidence: &'a crate::retention::DestructiveRetentionEvidence,
     pub apply_refs: &'a [String],
 }
 
@@ -1934,7 +1931,7 @@ struct ApplyRefMatchInput<'a> {
 fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
     let mut fallback_ref = None;
     for apply_ref in input.apply_refs {
-        let Ok(apply) = retention::read_retention_gc_apply(input.root, apply_ref) else {
+        let Ok(apply) = crate::retention::read_retention_gc_apply(input.root, apply_ref) else {
             if fallback_ref.is_none() {
                 fallback_ref = Some(apply_ref.as_str());
             }
@@ -1998,7 +1995,7 @@ fn gc_targets(root: &Path, pinned_manifests: Vec<String>, mut reachable_chunks: 
 struct GcEnv<'a> {
     root: &'a Path,
     is_dry_run: bool,
-    evidence: &'a retention::DestructiveRetentionEvidence,
+    evidence: &'a crate::retention::DestructiveRetentionEvidence,
     apply_refs: &'a [String],
     action: &'a str,
     requester_ref: &'a str,
@@ -2023,17 +2020,18 @@ struct GcNotes {
 
 impl GcNotes {
     fn consider(&mut self, env: &GcEnv<'_>, object: GcObject<'_>) -> Result<()> {
-        let admission =
-            retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
+        let admission = crate::retention::admit_destructive_retention_evidence(
+            crate::retention::DestructiveRetentionAdmissionInput {
                 root: env.root,
                 evidence: env.evidence,
                 object_ref: object.object_ref,
                 object_kind: object.object_kind,
                 retention_class: object.retention_class,
                 action: env.action,
-            })?;
+            },
+        )?;
         self.note_admission(&admission)?;
-        let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
+        let evaluation = crate::retention::evaluate_retention(crate::retention::RetentionEvaluationInput {
             root: env.root,
             object_ref: object.object_ref,
             object_kind: object.object_kind,
@@ -2070,7 +2068,7 @@ impl GcNotes {
         Ok(())
     }
 
-    fn note_admission(&mut self, admission: &retention::DestructiveRetentionAdmission) -> Result<()> {
+    fn note_admission(&mut self, admission: &crate::retention::DestructiveRetentionAdmission) -> Result<()> {
         for diagnostic in &admission.diagnostics {
             push_bounded(
                 &mut self.admission_diagnostics,
@@ -2100,15 +2098,16 @@ impl GcNotes {
             object_kind: object.object_kind,
             retention_class: object.retention_class,
         });
-        let execution_gate = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
-            root: env.root,
-            subsystem: "chunk-gc",
-            action: env.action,
-            object_ref: object.object_ref,
-            object_kind: object.object_kind,
-            retention_class: object.retention_class,
-            apply_ref,
-        })?;
+        let execution_gate =
+            crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
+                root: env.root,
+                subsystem: "chunk-gc",
+                action: env.action,
+                object_ref: object.object_ref,
+                object_kind: object.object_kind,
+                retention_class: object.retention_class,
+                apply_ref,
+            })?;
         push_bounded(
             &mut self.execution_gates,
             execution_gate.execution_ref.clone(),
@@ -2268,13 +2267,15 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
         pinned_refs(&root.join("pins").join("chunks"))?,
     )?;
     let action = if input.dry_run {
-        retention::ACTION_ELIGIBILITY
+        crate::retention::ACTION_ELIGIBILITY
     } else {
-        retention::ACTION_DELETE
+        crate::retention::ACTION_DELETE
     };
-    let requester_ref =
-        retention::destructive_retention_requester_ref(input.retention_evidence, "chunk-store-gc-missing-requester")?;
-    let evidence_summary = retention::destructive_retention_evidence_value(input.retention_evidence)?;
+    let requester_ref = crate::retention::destructive_retention_requester_ref(
+        input.retention_evidence,
+        "chunk-store-gc-missing-requester",
+    )?;
+    let evidence_summary = crate::retention::destructive_retention_evidence_value(input.retention_evidence)?;
     let env = GcEnv {
         root,
         is_dry_run: input.dry_run,
@@ -2288,14 +2289,14 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
         notes.consider(&env, GcObject {
             object_ref: manifest_ref,
             object_kind: "chunk-manifest",
-            retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+            retention_class: crate::retention::CLASS_PUBLIC_ARTIFACT,
         })?;
     }
     for chunk_ref in &targets.chunks {
         notes.consider(&env, GcObject {
             object_ref: chunk_ref,
             object_kind: "chunk",
-            retention_class: retention::CLASS_DURABLE_VALUE,
+            retention_class: crate::retention::CLASS_DURABLE_VALUE,
         })?;
     }
     finish_gc(GcFinishInput {
@@ -2361,8 +2362,11 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
         )));
     }
 
-    let chain =
-        evidence_chain::ChainScope::new("chunk-lineage", manifest.manifest_ref.clone(), manifest.root_ref.clone());
+    let chain = crate::evidence_chain::ChainScope::new(
+        "chunk-lineage",
+        manifest.manifest_ref.clone(),
+        manifest.root_ref.clone(),
+    );
     let producer = lineage_producer()?;
     let series = link_series(&manifest, &receipts, &chain, &producer)?;
     let evidence = pass_evidence(&chain, &manifest, &series.refs, &series.receipt_refs)?;
@@ -2397,8 +2401,8 @@ struct LinkSeries {
 fn link_series(
     manifest: &ChunkManifest,
     receipts: &[ChunkStoreReceipt],
-    chain: &evidence_chain::ChainScope,
-    producer: &evidence_chain::ChainProducer,
+    chain: &crate::evidence_chain::ChainScope,
+    producer: &crate::evidence_chain::ChainProducer,
 ) -> Result<LinkSeries> {
     ensure_count_at_most(receipts.len(), MAX_CHUNK_STORE_RECEIPTS, "chunk lineage receipts")?;
     let mut links = Vec::with_capacity(receipts.len());
@@ -2406,7 +2410,7 @@ fn link_series(
     let mut receipt_refs = Vec::with_capacity(receipts.len());
     let mut receipt_values = Vec::with_capacity(receipts.len());
     for receipt in receipts {
-        let payload = evidence_chain::ChainPayload::new(
+        let payload = crate::evidence_chain::ChainPayload::new(
             "chunk-store-receipt",
             receipt.receipt_ref.clone(),
             CHUNK_STORE_RECEIPT_SCHEMA,
@@ -2418,7 +2422,7 @@ fn link_series(
             string(&receipt.operation),
         ]))?;
         let input = if let Some(previous) = links.last() {
-            evidence_chain::ChainLinkInput::append(
+            crate::evidence_chain::ChainLinkInput::append(
                 previous,
                 payload,
                 lineage_context_refs(manifest, receipt)?,
@@ -2426,7 +2430,7 @@ fn link_series(
                 trellis_input_ref,
             )
         } else {
-            evidence_chain::ChainLinkInput::genesis(
+            crate::evidence_chain::ChainLinkInput::genesis(
                 chain.clone(),
                 payload,
                 lineage_context_refs(manifest, receipt)?,
@@ -2434,8 +2438,8 @@ fn link_series(
                 trellis_input_ref,
             )
         };
-        let link_value = evidence_chain::chain_link_value(&input);
-        let link = evidence_chain::parse_chain_link(&link_value)?;
+        let link_value = crate::evidence_chain::chain_link_value(&input);
+        let link = crate::evidence_chain::parse_chain_link(&link_value)?;
         push_bounded(
             &mut receipt_refs,
             receipt.receipt_ref.clone(),
@@ -2472,7 +2476,7 @@ struct Ends {
 }
 
 fn pass_evidence(
-    chain: &evidence_chain::ChainScope,
+    chain: &crate::evidence_chain::ChainScope,
     manifest: &ChunkManifest,
     link_refs: &[String],
     receipt_refs: &[String],
@@ -2486,7 +2490,7 @@ fn pass_evidence(
     });
     let predicate_refs = predicate_values
         .iter()
-        .map(evidence_chain::parse_chain_predicate_receipt)
+        .map(crate::evidence_chain::parse_chain_predicate_receipt)
         .collect::<Result<Vec<_>>>()?
         .into_iter()
         .map(|receipt| receipt.receipt_ref)
@@ -2533,49 +2537,49 @@ fn predicate_set(input: PredicateInput<'_>) -> Vec<IoValue> {
         input.manifest.metadata_ref.clone(),
     ];
     let segment_checks = vec![
-        evidence_chain::ChainCheck::pass("segment-contiguity"),
-        evidence_chain::ChainCheck::pass("canonical-link-order"),
+        crate::evidence_chain::ChainCheck::pass("segment-contiguity"),
+        crate::evidence_chain::ChainCheck::pass("canonical-link-order"),
     ];
     let fork_checks = vec![
-        evidence_chain::ChainCheck::pass("fork-policy-profile"),
-        evidence_chain::ChainCheck::pass("fork-evidence-binding"),
+        crate::evidence_chain::ChainCheck::pass("fork-policy-profile"),
+        crate::evidence_chain::ChainCheck::pass("fork-evidence-binding"),
     ];
     let anchor_subject_refs = vec![input.ends.anchor_ref.clone(), input.ends.head_ref.clone()];
     let anchor_checks = vec![
-        evidence_chain::ChainCheck::pass("anchor-descent"),
-        evidence_chain::ChainCheck::pass("head-binding"),
+        crate::evidence_chain::ChainCheck::pass("anchor-descent"),
+        crate::evidence_chain::ChainCheck::pass("head-binding"),
     ];
     let checkpoint_checks = vec![
-        evidence_chain::ChainCheck::pass("checkpoint-range-coverage"),
-        evidence_chain::ChainCheck::pass("verified-range"),
+        crate::evidence_chain::ChainCheck::pass("checkpoint-range-coverage"),
+        crate::evidence_chain::ChainCheck::pass("verified-range"),
     ];
     vec![
-        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
-            predicate: evidence_chain::SEGMENT_NO_GAP_PREDICATE,
+        crate::evidence_chain::chain_predicate_receipt_value(&crate::evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: crate::evidence_chain::SEGMENT_NO_GAP_PREDICATE,
             decision: "pass",
             subject_refs: input.link_refs,
             input_refs: input.receipt_refs,
             context_refs: &context_refs,
             checks: &segment_checks,
         }),
-        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
-            predicate: evidence_chain::SEGMENT_NO_FORK_PREDICATE,
+        crate::evidence_chain::chain_predicate_receipt_value(&crate::evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: crate::evidence_chain::SEGMENT_NO_FORK_PREDICATE,
             decision: "pass",
             subject_refs: std::slice::from_ref(&input.ends.head_ref),
             input_refs: input.link_refs,
             context_refs: &context_refs,
             checks: &fork_checks,
         }),
-        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
-            predicate: evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE,
+        crate::evidence_chain::chain_predicate_receipt_value(&crate::evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: crate::evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE,
             decision: "pass",
             subject_refs: &anchor_subject_refs,
             input_refs: input.link_refs,
             context_refs: &context_refs,
             checks: &anchor_checks,
         }),
-        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
-            predicate: evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE,
+        crate::evidence_chain::chain_predicate_receipt_value(&crate::evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: crate::evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE,
             decision: "pass",
             subject_refs: input.link_refs,
             input_refs: input.receipt_refs,
@@ -2586,7 +2590,7 @@ fn predicate_set(input: PredicateInput<'_>) -> Vec<IoValue> {
 }
 
 struct VerifyInput<'a> {
-    chain: &'a evidence_chain::ChainScope,
+    chain: &'a crate::evidence_chain::ChainScope,
     link_refs: &'a [String],
     receipt_refs: &'a [String],
     ends: &'a Ends,
@@ -2595,7 +2599,7 @@ struct VerifyInput<'a> {
 
 fn verify_value(input: VerifyInput<'_>) -> IoValue {
     let verify_diagnostics = Vec::new();
-    let verify_receipt = evidence_chain::ChainVerifyReceiptValueInput {
+    let verify_receipt = crate::evidence_chain::ChainVerifyReceiptValueInput {
         decision: "pass",
         chain: input.chain,
         anchor_ref: Some(&input.ends.anchor_ref),
@@ -2605,11 +2609,13 @@ fn verify_value(input: VerifyInput<'_>) -> IoValue {
         payload_refs: input.receipt_refs,
         diagnostics: &verify_diagnostics,
     };
-    evidence_chain::chain_verify_receipt_value_with_policy(&evidence_chain::ChainVerifyReceiptPolicyValueInput {
-        receipt: verify_receipt,
-        predicate_receipt_refs: input.predicate_refs,
-        fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
-    })
+    crate::evidence_chain::chain_verify_receipt_value_with_policy(
+        &crate::evidence_chain::ChainVerifyReceiptPolicyValueInput {
+            receipt: verify_receipt,
+            predicate_receipt_refs: input.predicate_refs,
+            fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
+        },
+    )
 }
 
 pub fn parse_chunk_lineage_value(value: &IoValue) -> Result<ChunkLineage> {
@@ -2648,14 +2654,14 @@ pub fn parse_chunk_lineage_value(value: &IoValue) -> Result<ChunkLineage> {
 
     let predicates = predicate_values
         .iter()
-        .map(evidence_chain::parse_chain_predicate_receipt)
+        .map(crate::evidence_chain::parse_chain_predicate_receipt)
         .collect::<Result<Vec<_>>>()?;
     let predicate_receipt_refs = predicates.iter().map(|predicate| predicate.receipt_ref.clone()).collect::<Vec<_>>();
-    require_chunk_lineage_predicate(&predicates, evidence_chain::SEGMENT_NO_GAP_PREDICATE)?;
-    require_chunk_lineage_predicate(&predicates, evidence_chain::SEGMENT_NO_FORK_PREDICATE)?;
-    require_chunk_lineage_predicate(&predicates, evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE)?;
+    require_chunk_lineage_predicate(&predicates, crate::evidence_chain::SEGMENT_NO_GAP_PREDICATE)?;
+    require_chunk_lineage_predicate(&predicates, crate::evidence_chain::SEGMENT_NO_FORK_PREDICATE)?;
+    require_chunk_lineage_predicate(&predicates, crate::evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE)?;
     let range_predicate =
-        require_chunk_lineage_predicate(&predicates, evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE)?;
+        require_chunk_lineage_predicate(&predicates, crate::evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE)?;
     if range_predicate.subject_refs.as_slice() != entries.link_refs.as_slice()
         || range_predicate.input_refs.as_slice() != entries.receipt_refs.as_slice()
     {
@@ -2691,7 +2697,7 @@ struct EntryInput<'a> {
 }
 
 struct ParsedEntries {
-    first_chain: evidence_chain::ChainScope,
+    first_chain: crate::evidence_chain::ChainScope,
     link_refs: Vec<String>,
     receipt_refs: Vec<String>,
 }
@@ -2743,7 +2749,7 @@ struct LinkInput<'a> {
 }
 
 struct CheckedEntry {
-    chain: evidence_chain::ChainScope,
+    chain: crate::evidence_chain::ChainScope,
     link_ref: String,
 }
 
@@ -2753,7 +2759,7 @@ fn checked_entry(input: LinkInput<'_>) -> Result<CheckedEntry> {
             "chunk lineage receipt does not bind the lineage manifest as pass evidence",
         ));
     }
-    let link = evidence_chain::parse_chain_link(input.value)?;
+    let link = crate::evidence_chain::parse_chain_link(input.value)?;
     if link.chain.scope != "chunk-lineage" || link.chain.id != input.manifest_ref || link.chain.epoch != input.root_ref
     {
         return Err(MoltenError::invalid_harness("chunk lineage link scope must be per manifest/root, not global"));
@@ -2801,8 +2807,8 @@ fn lineage_operation_rank(operation: &str) -> (u8, &str) {
     (rank, operation)
 }
 
-fn lineage_producer() -> Result<evidence_chain::ChainProducer> {
-    Ok(evidence_chain::ChainProducer::new(
+fn lineage_producer() -> Result<crate::evidence_chain::ChainProducer> {
+    Ok(crate::evidence_chain::ChainProducer::new(
         "molten-chunk-lineage",
         canonical_hash(&record("chunk-lineage-producer-key", vec![string("molten")]))?,
     ))
@@ -2811,12 +2817,12 @@ fn lineage_producer() -> Result<evidence_chain::ChainProducer> {
 fn lineage_context_refs(
     manifest: &ChunkManifest,
     receipt: &ChunkStoreReceipt,
-) -> Result<Vec<evidence_chain::ChainContextRef>> {
+) -> Result<Vec<crate::evidence_chain::ChainContextRef>> {
     let mut refs = vec![
-        evidence_chain::ChainContextRef::new("manifest", manifest.manifest_ref.clone()),
-        evidence_chain::ChainContextRef::new("chunk-root", manifest.root_ref.clone()),
-        evidence_chain::ChainContextRef::new("metadata", manifest.metadata_ref.clone()),
-        evidence_chain::ChainContextRef::new(
+        crate::evidence_chain::ChainContextRef::new("manifest", manifest.manifest_ref.clone()),
+        crate::evidence_chain::ChainContextRef::new("chunk-root", manifest.root_ref.clone()),
+        crate::evidence_chain::ChainContextRef::new("metadata", manifest.metadata_ref.clone()),
+        crate::evidence_chain::ChainContextRef::new(
             "operation",
             canonical_hash(&record("chunk-lineage-operation", vec![string(&receipt.operation)]))?,
         ),
@@ -2824,7 +2830,7 @@ fn lineage_context_refs(
     for chunk in &manifest.chunks {
         push_bounded(
             &mut refs,
-            evidence_chain::ChainContextRef::new("chunk", chunk.chunk_ref.clone()),
+            crate::evidence_chain::ChainContextRef::new("chunk", chunk.chunk_ref.clone()),
             MAX_CHUNK_STORE_CONTEXT_REFS,
             "chunk lineage context refs",
         )?;
@@ -2840,7 +2846,7 @@ fn lineage_context_refs(
 
 struct DetailContextRefsInput<'a> {
     value: &'a IoValue,
-    refs: &'a mut Vec<evidence_chain::ChainContextRef>,
+    refs: &'a mut Vec<crate::evidence_chain::ChainContextRef>,
 }
 
 fn collect_detail_context_refs(input: DetailContextRefsInput<'_>) -> Result<()> {
@@ -2865,21 +2871,21 @@ fn collect_detail_context_refs(input: DetailContextRefsInput<'_>) -> Result<()> 
 
 struct DetailTextInput<'a> {
     text: String,
-    refs: &'a mut Vec<evidence_chain::ChainContextRef>,
+    refs: &'a mut Vec<crate::evidence_chain::ChainContextRef>,
 }
 
 fn collect_detail_context_refs_push_text(input: DetailTextInput<'_>) -> Result<()> {
     if validate_content_ref(&input.text).is_ok() {
         push_bounded(
             input.refs,
-            evidence_chain::ChainContextRef::new("detail-ref", input.text),
+            crate::evidence_chain::ChainContextRef::new("detail-ref", input.text),
             MAX_CHUNK_STORE_CONTEXT_REFS,
             "chunk lineage detail refs",
         )?;
     } else if input.text.starts_with("iroh-local-chunk:") {
         push_bounded(
             input.refs,
-            evidence_chain::ChainContextRef::new(
+            crate::evidence_chain::ChainContextRef::new(
                 "ticket",
                 canonical_hash(&record("iroh-ticket", vec![string(input.text)]))?,
             ),
@@ -3026,7 +3032,7 @@ fn lineage_record_value(value: &Value<IoValue>, label: &str) -> Result<IoValue> 
 }
 
 fn require_lineage_context(
-    context_refs: &[evidence_chain::ChainContextRef],
+    context_refs: &[crate::evidence_chain::ChainContextRef],
     label: &str,
     expected: &str,
 ) -> Result<()> {
@@ -3038,9 +3044,9 @@ fn require_lineage_context(
 }
 
 fn require_chunk_lineage_predicate<'a>(
-    predicates: &'a [evidence_chain::ChainPredicateReceipt],
+    predicates: &'a [crate::evidence_chain::ChainPredicateReceipt],
     expected_kind: &str,
-) -> Result<&'a evidence_chain::ChainPredicateReceipt> {
+) -> Result<&'a crate::evidence_chain::ChainPredicateReceipt> {
     predicates
         .iter()
         .find(|predicate| predicate.predicate == expected_kind && predicate.decision == "pass")
@@ -3051,7 +3057,7 @@ fn require_chunk_lineage_predicate<'a>(
 
 fn validate_chunk_lineage_verify_receipt(
     value: &IoValue,
-    chain: &evidence_chain::ChainScope,
+    chain: &crate::evidence_chain::ChainScope,
     link_refs: &[String],
     receipt_refs: &[String],
     predicate_receipt_refs: &[String],
@@ -3095,11 +3101,11 @@ fn validate_chunk_lineage_verify_receipt(
     Ok(())
 }
 
-fn parse_lineage_chain_scope(value: &Value<IoValue>) -> Result<evidence_chain::ChainScope> {
+fn parse_lineage_chain_scope(value: &Value<IoValue>) -> Result<crate::evidence_chain::ChainScope> {
     let chain = value
         .collect_simple_record("chain", Some(3))
         .ok_or_else(|| MoltenError::invalid_harness("expected chain scope field"))?;
-    Ok(evidence_chain::ChainScope::new(
+    Ok(crate::evidence_chain::ChainScope::new(
         record_string(&chain[0], "scope")?,
         record_string(&chain[1], "id")?,
         record_string(&chain[2], "epoch")?,
@@ -4582,11 +4588,11 @@ mod tests {
         let policy_refs = vec![canonical_hash(&record("chunk-test-ref", vec![string("policy")])).expect("policy ref")];
         let evidence_refs =
             vec![canonical_hash(&record("chunk-test-ref", vec![string("evidence")])).expect("evidence ref")];
-        retention::pin_object(&root, retention::RetentionPinInput {
+        crate::retention::pin_object(&root, crate::retention::RetentionPinInput {
             object_ref: put.manifest_ref.clone(),
             object_kind: "chunk-manifest".to_string(),
-            retention_class: retention::CLASS_PUBLIC_ARTIFACT.to_string(),
-            source: retention::SOURCE_OPERATOR_HOLD.to_string(),
+            retention_class: crate::retention::CLASS_PUBLIC_ARTIFACT.to_string(),
+            source: crate::retention::SOURCE_OPERATOR_HOLD.to_string(),
             reason: "operator hold".to_string(),
             owner_ref,
             expiry_ref: None,
@@ -4884,22 +4890,22 @@ mod tests {
         root: &std::path::Path,
         manifest_refs: &[String],
         chunk_refs: &[String],
-        evidence: &retention::DestructiveRetentionEvidence,
+        evidence: &crate::retention::DestructiveRetentionEvidence,
     ) -> Vec<String> {
         let mut apply_refs = Vec::with_capacity(manifest_refs.len() + chunk_refs.len());
         for manifest_ref in manifest_refs {
-            let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+            let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
                 root,
                 subsystem: "chunk-gc",
                 object_ref: manifest_ref,
                 object_kind: "chunk-manifest",
-                retention_class: retention::CLASS_PUBLIC_ARTIFACT,
-                action: retention::ACTION_DELETE,
+                retention_class: crate::retention::CLASS_PUBLIC_ARTIFACT,
+                action: crate::retention::ACTION_DELETE,
                 evidence,
             })
             .expect("store manifest GC plan");
             apply_refs.push(
-                retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+                crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
                     root,
                     plan_ref: &plan.plan_ref,
                 })
@@ -4908,18 +4914,18 @@ mod tests {
             );
         }
         for chunk_ref in chunk_refs {
-            let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+            let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
                 root,
                 subsystem: "chunk-gc",
                 object_ref: chunk_ref,
                 object_kind: "chunk",
-                retention_class: retention::CLASS_DURABLE_VALUE,
-                action: retention::ACTION_DELETE,
+                retention_class: crate::retention::CLASS_DURABLE_VALUE,
+                action: crate::retention::ACTION_DELETE,
                 evidence,
             })
             .expect("store chunk GC plan");
             apply_refs.push(
-                retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+                crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
                     root,
                     plan_ref: &plan.plan_ref,
                 })
@@ -4930,7 +4936,7 @@ mod tests {
         apply_refs
     }
 
-    fn retention_evidence(root: &std::path::Path, label: &str) -> retention::DestructiveRetentionEvidence {
+    fn retention_evidence(root: &std::path::Path, label: &str) -> crate::retention::DestructiveRetentionEvidence {
         let requester_ref = chunk_test_ref("requester", label);
         let mut policy_refs = Vec::new();
         let mut authority_refs = Vec::new();
@@ -4943,7 +4949,7 @@ mod tests {
                 &requester_ref,
                 &manifest_ref,
                 "chunk-manifest",
-                retention::CLASS_PUBLIC_ARTIFACT,
+                crate::retention::CLASS_PUBLIC_ARTIFACT,
                 &mut policy_refs,
                 &mut authority_refs,
                 &mut evidence_refs,
@@ -4957,14 +4963,14 @@ mod tests {
                 &requester_ref,
                 &chunk_ref,
                 "chunk",
-                retention::CLASS_DURABLE_VALUE,
+                crate::retention::CLASS_DURABLE_VALUE,
                 &mut policy_refs,
                 &mut authority_refs,
                 &mut evidence_refs,
                 &mut reference_index_refs,
             );
         }
-        retention::DestructiveRetentionEvidence {
+        crate::retention::DestructiveRetentionEvidence {
             requester_ref: Some(requester_ref),
             policy_refs,
             authority_refs,
@@ -4993,7 +4999,7 @@ mod tests {
     ) {
         policy_refs.push(store_admission(
             root,
-            retention::ADMISSION_KIND_POLICY,
+            crate::retention::ADMISSION_KIND_POLICY,
             label,
             requester_ref,
             object_ref,
@@ -5004,7 +5010,7 @@ mod tests {
         ));
         authority_refs.push(store_admission(
             root,
-            retention::ADMISSION_KIND_AUTHORITY,
+            crate::retention::ADMISSION_KIND_AUTHORITY,
             label,
             requester_ref,
             object_ref,
@@ -5015,7 +5021,7 @@ mod tests {
         ));
         evidence_refs.push(store_admission(
             root,
-            retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            crate::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
             label,
             requester_ref,
             object_ref,
@@ -5026,7 +5032,7 @@ mod tests {
         ));
         reference_index_refs.push(store_admission(
             root,
-            retention::ADMISSION_KIND_REFERENCE_INDEX,
+            crate::retention::ADMISSION_KIND_REFERENCE_INDEX,
             label,
             requester_ref,
             object_ref,
@@ -5048,14 +5054,14 @@ mod tests {
         remote_refs: &[String],
         is_reference_index_complete: bool,
     ) -> String {
-        retention::store_retention_evidence_admission(root, &retention::RetentionEvidenceAdmissionInput {
+        crate::retention::store_retention_evidence_admission(root, &crate::retention::RetentionEvidenceAdmissionInput {
             kind,
             decision: "pass",
             requester_ref,
             object_ref,
             object_kind,
             retention_class,
-            action: retention::ACTION_DELETE,
+            action: crate::retention::ACTION_DELETE,
             bound_refs: &[chunk_test_ref(kind, label)],
             retained_refs: &[],
             remote_refs,
