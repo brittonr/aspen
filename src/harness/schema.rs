@@ -1,20 +1,19 @@
-use std::borrow::Cow;
-use std::collections::BTreeSet;
-
-use preserves::CompoundClass;
-use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
-use preserves::ValueClass;
 use preserves::ValueImpl;
 
 use super::core;
 use crate::effects;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::preserves_rail;
 use crate::runtime;
 use crate::secrets;
+
+type CompoundClass = preserves::CompoundClass;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type OrderedSet<T> = std::collections::BTreeSet<T>;
+type Record<T> = preserves::Record<T>;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
+type ValueClass = preserves::ValueClass;
 
 const WASM_ABI_MAX_OUTPUT_BYTES_FOR_VALIDATION: u64 = 8 * 1024;
 const MAX_WASM_IMPORT_EVIDENCE: usize = 1024;
@@ -43,31 +42,31 @@ const _: () = assert!(MAX_REDACTION_CONTAINER_ITEMS <= 1_000_000);
 const _: () = assert!(MAX_REDACTION_MARKER_REFS <= 1_000_000);
 const _: () = assert!(MAX_REDACTION_ENCRYPTED_REFS <= 1_000_000);
 
-fn bool_value(value: bool) -> IOValue {
+fn bool_value(value: bool) -> IoValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn to_text(value: &IOValue) -> Result<String> {
+fn to_text(value: &IoValue) -> Result<String> {
     crate::preserves_rail::to_text(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -75,12 +74,12 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
 #[cfg(test)]
-fn parse_text(source: &str) -> Result<IOValue> {
+fn parse_text(source: &str) -> Result<IoValue> {
     crate::preserves_rail::parse_text(source)
 }
 
@@ -96,7 +95,7 @@ pub struct HarnessSuite {
     pub capabilities_explicit: bool,
     pub policy: runtime::AdmissionPolicy,
     pub steps: Vec<core::CoreStep>,
-    pub source_value: IOValue,
+    pub source_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,7 +108,7 @@ pub struct HarnessReport {
     pub suite_ref: String,
     pub initial_state_hash: String,
     pub final_state_hash: String,
-    pub suite_value: IOValue,
+    pub suite_value: IoValue,
     pub policy_gate: Option<PolicyGateEvidence>,
     pub capability_gate: Option<CapabilityGateEvidence>,
     pub budget_gate: Option<BudgetGateEvidence>,
@@ -126,7 +125,7 @@ pub struct HarnessFailure {
     pub phase: String,
     pub kind: String,
     pub message: String,
-    pub diagnostics: Vec<IOValue>,
+    pub diagnostics: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,23 +183,23 @@ pub struct HarnessReproBundle {
     pub bundle_ref: String,
     pub kind: HarnessReproBundleKind,
     pub artifact_ref: String,
-    pub report_value: Option<IOValue>,
-    pub failure_value: Option<IOValue>,
+    pub report_value: Option<IoValue>,
+    pub failure_value: Option<IoValue>,
     pub gate_receipt_ref: Option<String>,
-    pub gate_receipt_value: Option<IOValue>,
+    pub gate_receipt_value: Option<IoValue>,
     pub redaction_policy_ref: Option<String>,
     pub redaction_gate_ref: Option<String>,
     pub export_profile: Option<String>,
     pub export_profile_ref: Option<String>,
-    pub export_profile_value: Option<IOValue>,
+    pub export_profile_value: Option<IoValue>,
     pub source_report_ref: Option<String>,
     pub source_suite_ref: Option<String>,
     pub redaction_transform_manifest_ref: Option<String>,
-    pub redaction_transform_manifest_value: Option<IOValue>,
+    pub redaction_transform_manifest_value: Option<IoValue>,
     pub redaction_transform_receipt_ref: Option<String>,
-    pub redaction_transform_receipt_value: Option<IOValue>,
+    pub redaction_transform_receipt_value: Option<IoValue>,
     pub private_bundle_profile_ref: Option<String>,
-    pub private_bundle_profile_value: Option<IOValue>,
+    pub private_bundle_profile_value: Option<IoValue>,
     pub loss_classification: Option<String>,
     pub encrypted_refs: Vec<String>,
 }
@@ -308,13 +307,13 @@ impl ActorKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EffectLogEntry {
     pub sequence: u64,
-    pub request: IOValue,
-    pub response: IOValue,
+    pub request: IoValue,
+    pub response: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicyGateEvidence {
-    pub value: IOValue,
+    pub value: IoValue,
     pub policy_ref: String,
     pub nickel_source_ref: String,
     pub nickel_export_ref: String,
@@ -324,7 +323,7 @@ pub struct PolicyGateEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CapabilityGateEvidence {
-    pub value: IOValue,
+    pub value: IoValue,
     pub capability_ref: String,
     pub authority_preflight_ref: String,
     pub proofset_ref: String,
@@ -334,7 +333,7 @@ pub struct CapabilityGateEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BudgetGateEvidence {
-    pub value: IOValue,
+    pub value: IoValue,
     pub budget_ref: String,
     pub nickel_source_ref: String,
     pub nickel_export_ref: String,
@@ -344,20 +343,20 @@ pub struct BudgetGateEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutorPreflightsEvidence {
-    pub value: IOValue,
+    pub value: IoValue,
     pub preflights: Vec<ExecutorPreflightEvidence>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutorPreflightEvidence {
-    pub value: IOValue,
+    pub value: IoValue,
     pub actor_id: String,
     pub kind: ActorKind,
     pub artifact_ref: Option<String>,
     pub sandbox_ref: String,
     pub allowed_hostcalls: Vec<String>,
     pub conformance_refs: Vec<String>,
-    pub executor_receipts: Vec<IOValue>,
+    pub executor_receipts: Vec<IoValue>,
     pub steel_review: Option<SteelReviewReceipt>,
     pub wasm_inspection: Option<WasmInspectionReceipt>,
     pub checks: Vec<String>,
@@ -365,7 +364,7 @@ pub struct ExecutorPreflightEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SteelReviewReceipt {
-    pub value: IOValue,
+    pub value: IoValue,
     pub source_ref: String,
     pub callable: String,
     pub allowed_hostcalls: Vec<String>,
@@ -374,7 +373,7 @@ pub struct SteelReviewReceipt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WasmInspectionReceipt {
-    pub value: IOValue,
+    pub value: IoValue,
     pub module_ref: String,
     pub module_kind: String,
     pub imports: Vec<WasmImportEvidence>,
@@ -392,19 +391,19 @@ pub struct WasmImportEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessObservation {
-    pub value: IOValue,
+    pub value: IoValue,
     pub observation_ref: String,
     pub index: u64,
     pub step_ref: String,
     pub before_state_hash: String,
     pub after_state_hash: String,
     pub event_refs: Vec<String>,
-    pub events: Vec<IOValue>,
+    pub events: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmissionDecisionEvent {
-    pub value: IOValue,
+    pub value: IoValue,
     pub request: core::AdmissionRequest,
     pub authority: Option<AdmissionAuthorityEvidence>,
     pub decision: runtime::AdmissionDecision,
@@ -460,7 +459,7 @@ enum SuiteFieldStatus {
 }
 
 impl SuiteFixtures {
-    fn apply_field(&mut self, field: &Value<IOValue>) -> Result<SuiteFieldStatus> {
+    fn apply_field(&mut self, field: &Value<IoValue>) -> Result<SuiteFieldStatus> {
         if value_has_record_label(field, "budget-v1") {
             self.apply_budget(field)?;
             return Ok(SuiteFieldStatus::Applied);
@@ -480,7 +479,7 @@ impl SuiteFixtures {
         Ok(SuiteFieldStatus::Unknown)
     }
 
-    fn apply_budget(&mut self, field: &Value<IOValue>) -> Result<()> {
+    fn apply_budget(&mut self, field: &Value<IoValue>) -> Result<()> {
         if self.has_budget_fixture {
             return Err(MoltenError::invalid_harness("duplicate suite budget fixture"));
         }
@@ -489,7 +488,7 @@ impl SuiteFixtures {
         Ok(())
     }
 
-    fn apply_actors(&mut self, field: &Value<IOValue>) -> Result<()> {
+    fn apply_actors(&mut self, field: &Value<IoValue>) -> Result<()> {
         if self.actors.is_some() {
             return Err(MoltenError::invalid_harness("duplicate suite actor registry fixture"));
         }
@@ -498,7 +497,7 @@ impl SuiteFixtures {
         Ok(())
     }
 
-    fn apply_capabilities(&mut self, field: &Value<IOValue>) -> Result<()> {
+    fn apply_capabilities(&mut self, field: &Value<IoValue>) -> Result<()> {
         if self.has_capability_fixture {
             return Err(MoltenError::invalid_harness("duplicate suite capability fixture"));
         }
@@ -507,7 +506,7 @@ impl SuiteFixtures {
         Ok(())
     }
 
-    fn apply_policy(&mut self, field: &Value<IOValue>) -> Result<()> {
+    fn apply_policy(&mut self, field: &Value<IoValue>) -> Result<()> {
         if self.has_policy_fixture {
             return Err(MoltenError::invalid_harness("duplicate suite policy fixture"));
         }
@@ -517,7 +516,7 @@ impl SuiteFixtures {
     }
 }
 
-pub fn parse_suite(value: &IOValue) -> Result<HarnessSuite> {
+pub fn parse_suite(value: &IoValue) -> Result<HarnessSuite> {
     let suite = value
         .collect_simple_record("harness-suite-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <harness-suite-v1 ...>"))?;
@@ -558,7 +557,7 @@ pub fn parse_suite(value: &IOValue) -> Result<HarnessSuite> {
     })
 }
 
-fn suite_fixtures(suite: &Record<Value<IOValue>>, arity: usize) -> Result<(usize, SuiteFixtures)> {
+fn suite_fixtures(suite: &Record<Value<IoValue>>, arity: usize) -> Result<(usize, SuiteFixtures)> {
     let mut cursor = 3;
     let mut fixtures = SuiteFixtures::default();
     while cursor < arity - 1 {
@@ -578,7 +577,7 @@ pub fn suite_ref(suite: &HarnessSuite) -> Result<String> {
     canonical_hash(&suite.source_value)
 }
 
-pub fn step_value(step: &core::CoreStep) -> IOValue {
+pub fn step_value(step: &core::CoreStep) -> IoValue {
     match step {
         core::CoreStep::Send { from, to, body } => {
             record("send", vec![string(from), string(to), body.as_iovalue().clone()])
@@ -593,7 +592,7 @@ pub fn step_value(step: &core::CoreStep) -> IOValue {
     }
 }
 
-pub fn event_value(event: &core::CoreEvent) -> IOValue {
+pub fn event_value(event: &core::CoreEvent) -> IoValue {
     match event {
         core::CoreEvent::MessageDelivered { from, to, body } => {
             record("message-delivered", vec![string(from), string(to), body.as_iovalue().clone()])
@@ -646,7 +645,7 @@ pub fn event_value(event: &core::CoreEvent) -> IOValue {
     }
 }
 
-fn admission_decision_event_value(request: &core::AdmissionRequest, decision: &runtime::AdmissionDecision) -> IOValue {
+fn admission_decision_event_value(request: &core::AdmissionRequest, decision: &runtime::AdmissionDecision) -> IoValue {
     record("admission-decision-v1", vec![
         string(preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA),
         admission_request_value(request),
@@ -658,7 +657,7 @@ pub fn admission_decision_event_value_with_authority(
     request: &core::AdmissionRequest,
     authority: &AdmissionAuthorityEvidence,
     decision: &runtime::AdmissionDecision,
-) -> IOValue {
+) -> IoValue {
     record("admission-decision-v1", vec![
         string(preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA),
         admission_request_value(request),
@@ -667,7 +666,7 @@ pub fn admission_decision_event_value_with_authority(
     ])
 }
 
-fn admission_authority_value(authority: &AdmissionAuthorityEvidence) -> IOValue {
+fn admission_authority_value(authority: &AdmissionAuthorityEvidence) -> IoValue {
     record("authority", vec![
         record("capability-ref", vec![string(&authority.capability_ref)]),
         record("authorized", vec![bool_value(authority.authorized)]),
@@ -675,7 +674,7 @@ fn admission_authority_value(authority: &AdmissionAuthorityEvidence) -> IOValue 
     ])
 }
 
-fn admission_request_value(request: &core::AdmissionRequest) -> IOValue {
+fn admission_request_value(request: &core::AdmissionRequest) -> IoValue {
     record("request", vec![
         string(&request.actor),
         string(request.action.as_str()),
@@ -685,15 +684,15 @@ fn admission_request_value(request: &core::AdmissionRequest) -> IOValue {
     ])
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_runtime_value(value: Option<&core::RuntimeValue>) -> IOValue {
+fn optional_runtime_value(value: Option<&core::RuntimeValue>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![value.as_iovalue().clone()]))
 }
 
-fn optional_u64_value(value: Option<u64>) -> IOValue {
+fn optional_u64_value(value: Option<u64>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![u64_value(value)]))
 }
 
@@ -701,7 +700,7 @@ pub fn actor_input_value(
     suite: &HarnessSuite,
     step: &core::CoreStep,
     context: HostcallEvidenceContext<'_>,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     let actor = step.primary_actor();
     let kind = actor_kind_for_primary_actor(suite, actor)?;
     Ok(record("actor-input-v1", vec![
@@ -722,7 +721,7 @@ pub fn hostcall_request_value(
     step: &core::CoreStep,
     context: HostcallEvidenceContext<'_>,
     decision: &runtime::AdmissionDecision,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     let request = core::AdmissionRequest::from_step(step);
     let effect_refs = hostcall_effect_refs(suite, step, context, decision.is_allowed())?;
     let checks = if decision.is_allowed() {
@@ -796,9 +795,9 @@ struct CallBase {
 }
 
 struct CallBinding {
-    value: IOValue,
+    value: IoValue,
     value_ref: String,
-    handle: IOValue,
+    handle: IoValue,
     handle_ref: String,
 }
 
@@ -924,7 +923,7 @@ fn request_refs(base: &CallBase, binding: &CallBinding, context: HostcallEvidenc
     })
 }
 
-fn call_effect_manifest(base: &CallBase, context: HostcallEvidenceContext<'_>) -> Result<IOValue> {
+fn call_effect_manifest(base: &CallBase, context: HostcallEvidenceContext<'_>) -> Result<IoValue> {
     effects::effect_manifest_value(&effects::EffectManifestInput {
         artifact_kind: base.actor_kind.to_string(),
         artifact_ref: base.actor_ref.clone(),
@@ -950,7 +949,7 @@ fn call_handler_profile(
     base: &CallBase,
     binding: &CallBinding,
     context: HostcallEvidenceContext<'_>,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     effects::handler_profile_value(&effects::HandlerProfileInput {
         profile: effects::HANDLER_PROFILE_LOCAL.to_string(),
         handler_binding_refs: vec![binding.value_ref.clone()],
@@ -966,7 +965,7 @@ fn call_effect_request(
     binding: &CallBinding,
     context: HostcallEvidenceContext<'_>,
     effect_id: String,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     effects::effect_request_value(&effects::EffectRequestInput {
         artifact_ref: base.actor_ref.clone(),
         effect_id,
@@ -981,9 +980,9 @@ fn call_effect_request(
 fn call_binding_receipt_ref(
     base: &CallBase,
     binding: &CallBinding,
-    manifest: &IOValue,
-    profile: &IOValue,
-    request: &IOValue,
+    manifest: &IoValue,
+    profile: &IoValue,
+    request: &IoValue,
 ) -> Result<String> {
     let effect_binding = effects::admit_effect_request(manifest, profile, request, &[
         binding.value_ref.clone(),
@@ -1034,7 +1033,7 @@ fn hostcall_session_ref(context: HostcallEvidenceContext<'_>) -> Result<String> 
     ]))
 }
 
-pub(crate) fn validate_hostcall_effect_binding_request(hostcall_request: &IOValue, operation: &str) -> Result<()> {
+pub(crate) fn validate_hostcall_effect_binding_request(hostcall_request: &IoValue, operation: &str) -> Result<()> {
     let request = hostcall_request
         .collect_simple_record("hostcall-request-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("executor hostcall gate requires bound effect request evidence"))?;
@@ -1058,10 +1057,10 @@ pub(crate) fn validate_hostcall_effect_binding_request(hostcall_request: &IOValu
 
 pub fn hostcall_decision_value(
     context: HostcallEvidenceContext<'_>,
-    admission_event: &IOValue,
+    admission_event: &IoValue,
     authority: &AdmissionAuthorityEvidence,
     decision: &runtime::AdmissionDecision,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     let authority_value = admission_authority_value(authority);
     Ok(record("hostcall-decision-v1", vec![
         string(preserves_rail::RUNTIME_HOSTCALL_DECISION_SCHEMA),
@@ -1081,8 +1080,8 @@ pub fn actor_output_value(
     step: &core::CoreStep,
     context: HostcallEvidenceContext<'_>,
     decision: &runtime::AdmissionDecision,
-    runtime_events: &[IOValue],
-) -> Result<IOValue> {
+    runtime_events: &[IoValue],
+) -> Result<IoValue> {
     let runtime_events_value = sequence(runtime_events.to_vec());
     Ok(record("actor-output-v1", vec![
         string(preserves_rail::RUNTIME_ACTOR_OUTPUT_SCHEMA),
@@ -1117,7 +1116,7 @@ pub(crate) struct SteelResourceReceiptInput {
     pub hostcall_count: u64,
 }
 
-pub(crate) fn steel_execution_receipt_value(input: SteelExecutionReceiptInput<'_>) -> IOValue {
+pub(crate) fn steel_execution_receipt_value(input: SteelExecutionReceiptInput<'_>) -> IoValue {
     record("steel-execution-receipt-v1", vec![
         string(preserves_rail::RUNTIME_STEEL_EXECUTION_RECEIPT_SCHEMA),
         record("actor", vec![string(input.actor_id)]),
@@ -1178,7 +1177,7 @@ pub(crate) struct WasmAbiReceiptInput {
     pub output_bytes: u64,
 }
 
-pub(crate) fn wasm_execution_receipt_value(input: WasmExecutionReceiptInput<'_>) -> IOValue {
+pub(crate) fn wasm_execution_receipt_value(input: WasmExecutionReceiptInput<'_>) -> IoValue {
     let mut checks = vec![
         "wasmtime-instantiated",
         "no-wasi",
@@ -1219,7 +1218,7 @@ pub(crate) fn wasm_execution_receipt_value(input: WasmExecutionReceiptInput<'_>)
     record("wasm-execution-receipt-v1", fields)
 }
 
-fn hostcall_checks_value(checks: &[&str]) -> IOValue {
+fn hostcall_checks_value(checks: &[&str]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|name| record("check", vec![string(*name), string("pass")])).collect(),
     )])
@@ -1237,7 +1236,7 @@ fn actor_kind_for_primary_actor<'a>(suite: &'a HarnessSuite, actor: &str) -> Res
     actor_decl_for_primary_actor(suite, actor).map(|decl| &decl.kind)
 }
 
-pub fn snapshot_value(snapshot: &core::RuntimeSnapshot) -> IOValue {
+pub fn snapshot_value(snapshot: &core::RuntimeSnapshot) -> IoValue {
     record("runtime-state-v1", vec![
         u64_value(snapshot.logical_time),
         u64_value(snapshot.rng_state),
@@ -1263,13 +1262,13 @@ pub fn observation_value(
     step_ref: String,
     before_state_hash: String,
     after_state_hash: String,
-    events: Vec<IOValue>,
-) -> Result<IOValue> {
+    events: Vec<IoValue>,
+) -> Result<IoValue> {
     let mut event_refs = Vec::with_capacity(events.len());
     for event in &events {
         event_refs.push(canonical_hash(event)?);
     }
-    let mut event_ref_values: Vec<IOValue> = Vec::with_capacity(event_refs.len());
+    let mut event_ref_values: Vec<IoValue> = Vec::with_capacity(event_refs.len());
     for reference in event_refs {
         event_ref_values.push(string(reference));
     }
@@ -1289,16 +1288,16 @@ pub struct ReportValueInput<'a> {
     pub suite_ref: String,
     pub initial_state_hash: String,
     pub final_state_hash: String,
-    pub policy_gate: IOValue,
-    pub capability_gate: IOValue,
-    pub budget_gate: IOValue,
-    pub observations: Vec<IOValue>,
+    pub policy_gate: IoValue,
+    pub capability_gate: IoValue,
+    pub budget_gate: IoValue,
+    pub observations: Vec<IoValue>,
     pub effect_log: Vec<EffectLogEntry>,
     pub budget: &'a HarnessBudget,
     pub usage: &'a BudgetUsage,
 }
 
-pub fn report_value(input: ReportValueInput<'_>) -> IOValue {
+pub fn report_value(input: ReportValueInput<'_>) -> IoValue {
     let executor_preflights = match executor_preflights_value(input.suite) {
         Ok(value) => value,
         Err(error) => record("executor-preflights-invalid-v1", vec![
@@ -1327,7 +1326,7 @@ pub fn report_value(input: ReportValueInput<'_>) -> IOValue {
     ])
 }
 
-pub fn failure_value(phase: &str, error: &MoltenError, mut diagnostics: Vec<IOValue>) -> IOValue {
+pub fn failure_value(phase: &str, error: &MoltenError, mut diagnostics: Vec<IoValue>) -> IoValue {
     diagnostics.extend(error_diagnostics(error));
     record("harness-failure-v1", vec![
         string(preserves_rail::HARNESS_FAILURE_SCHEMA),
@@ -1338,21 +1337,21 @@ pub fn failure_value(phase: &str, error: &MoltenError, mut diagnostics: Vec<IOVa
     ])
 }
 
-pub fn suite_failure_value(phase: &str, error: &MoltenError, suite_value: &IOValue) -> Result<IOValue> {
+pub fn suite_failure_value(phase: &str, error: &MoltenError, suite_value: &IoValue) -> Result<IoValue> {
     Ok(failure_value(phase, error, vec![
         record("suite-ref", vec![string(canonical_hash(suite_value)?)]),
         record("suite", vec![suite_value.clone()]),
     ]))
 }
 
-pub fn report_failure_value(phase: &str, error: &MoltenError, report_value: &IOValue) -> Result<IOValue> {
+pub fn report_failure_value(phase: &str, error: &MoltenError, report_value: &IoValue) -> Result<IoValue> {
     Ok(failure_value(phase, error, vec![
         record("report-ref", vec![string(canonical_hash(report_value)?)]),
         record("report", vec![report_value.clone()]),
     ]))
 }
 
-pub fn parse_failure(failure_value: &IOValue) -> Result<HarnessFailure> {
+pub fn parse_failure(failure_value: &IoValue) -> Result<HarnessFailure> {
     let failure = simple_record(failure_value, "harness-failure-v1", 5)?;
     let schema = required_string(&failure[0], "failure schema")?;
     if schema != preserves_rail::HARNESS_FAILURE_SCHEMA {
@@ -1390,7 +1389,7 @@ pub fn parse_failure(failure_value: &IOValue) -> Result<HarnessFailure> {
     })
 }
 
-pub fn failure_summary(failure_value: &IOValue) -> Result<String> {
+pub fn failure_summary(failure_value: &IoValue) -> Result<String> {
     let failure = parse_failure(failure_value)?;
     Ok(format!(
         "failure {}\nstatus=fail\nphase={}\nkind={}\nmessage={}\ndiagnostics={}",
@@ -1410,7 +1409,7 @@ struct ParsedHeader {
     suite_ref: String,
     initial_state_hash: String,
     final_state_hash: String,
-    suite_value: IOValue,
+    suite_value: IoValue,
     suite: HarnessSuite,
 }
 
@@ -1421,7 +1420,7 @@ struct GateSet {
     budget_gate: Option<BudgetGateEvidence>,
 }
 
-pub fn parse_report(report_value: &IOValue) -> Result<HarnessReport> {
+pub fn parse_report(report_value: &IoValue) -> Result<HarnessReport> {
     let report = report_value
         .collect_simple_record("harness-report-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <harness-report-v1 ...>"))?;
@@ -1454,7 +1453,7 @@ pub fn parse_report(report_value: &IOValue) -> Result<HarnessReport> {
     })
 }
 
-fn valid_report_arity(report: &Record<Value<IOValue>>) -> Result<usize> {
+fn valid_report_arity(report: &Record<Value<IoValue>>) -> Result<usize> {
     let arity = report.fields_iter().count();
     if arity != 13 && arity != 14 && arity != 15 && arity != 16 && arity != 17 {
         return Err(MoltenError::invalid_harness(format!(
@@ -1464,7 +1463,7 @@ fn valid_report_arity(report: &Record<Value<IOValue>>) -> Result<usize> {
     Ok(arity)
 }
 
-fn parsed_header(report: &Record<Value<IOValue>>) -> Result<ParsedHeader> {
+fn parsed_header(report: &Record<Value<IoValue>>) -> Result<ParsedHeader> {
     let schema = required_string(&report[0], "report schema")?;
     if schema != preserves_rail::HARNESS_REPORT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
@@ -1510,7 +1509,7 @@ fn parsed_header(report: &Record<Value<IOValue>>) -> Result<ParsedHeader> {
     })
 }
 
-fn gate_set(report: &Record<Value<IOValue>>, arity: usize) -> Result<GateSet> {
+fn gate_set(report: &Record<Value<IoValue>>, arity: usize) -> Result<GateSet> {
     let mut cursor = 9;
     let policy_gate = optional_policy_gate(report, &mut cursor, arity)?;
     let capability_gate = optional_capability_gate(report, &mut cursor, arity)?;
@@ -1524,7 +1523,7 @@ fn gate_set(report: &Record<Value<IOValue>>, arity: usize) -> Result<GateSet> {
 }
 
 fn optional_policy_gate(
-    report: &Record<Value<IOValue>>,
+    report: &Record<Value<IoValue>>,
     cursor: &mut usize,
     arity: usize,
 ) -> Result<Option<PolicyGateEvidence>> {
@@ -1537,7 +1536,7 @@ fn optional_policy_gate(
 }
 
 fn optional_capability_gate(
-    report: &Record<Value<IOValue>>,
+    report: &Record<Value<IoValue>>,
     cursor: &mut usize,
     arity: usize,
 ) -> Result<Option<CapabilityGateEvidence>> {
@@ -1550,7 +1549,7 @@ fn optional_capability_gate(
 }
 
 fn optional_budget_gate(
-    report: &Record<Value<IOValue>>,
+    report: &Record<Value<IoValue>>,
     cursor: &mut usize,
     arity: usize,
 ) -> Result<Option<BudgetGateEvidence>> {
@@ -1563,7 +1562,7 @@ fn optional_budget_gate(
 }
 
 fn registry_after_gates(
-    report: &Record<Value<IOValue>>,
+    report: &Record<Value<IoValue>>,
     cursor: usize,
     suite: &HarnessSuite,
 ) -> Result<(usize, Vec<ActorDecl>)> {
@@ -1575,7 +1574,7 @@ fn registry_after_gates(
 }
 
 fn preflights_after_registry(
-    report: &Record<Value<IOValue>>,
+    report: &Record<Value<IoValue>>,
     cursor: usize,
     arity: usize,
 ) -> Result<(usize, Option<ExecutorPreflightsEvidence>)> {
@@ -1586,7 +1585,7 @@ fn preflights_after_registry(
     Ok((cursor, None))
 }
 
-fn observations_after(report: &Record<Value<IOValue>>, cursor: usize) -> Result<(usize, Vec<HarnessObservation>)> {
+fn observations_after(report: &Record<Value<IoValue>>, cursor: usize) -> Result<(usize, Vec<HarnessObservation>)> {
     let observation_values = required_sequence(&report[cursor], "report observations")?;
     let mut observations = Vec::with_capacity(observation_values.len());
     for (position, observation) in observation_values.iter().enumerate() {
@@ -1603,7 +1602,7 @@ fn observations_after(report: &Record<Value<IOValue>>, cursor: usize) -> Result<
 }
 
 fn log_and_budget(
-    report: &Record<Value<IOValue>>,
+    report: &Record<Value<IoValue>>,
     cursor: usize,
     suite: &HarnessSuite,
 ) -> Result<(Vec<EffectLogEntry>, BudgetEvidence)> {
@@ -1627,7 +1626,7 @@ pub fn validate_budget_fixture_evidence(suite: &HarnessSuite) -> Result<()> {
     }
 }
 
-pub fn budget_gate_value(budget: &HarnessBudget) -> Result<IOValue> {
+pub fn budget_gate_value(budget: &HarnessBudget) -> Result<IoValue> {
     let preflight = budget_preflight_material(budget)?;
     Ok(record("budget-gate-v1", vec![
         string(preserves_rail::HARNESS_BUDGET_GATE_SCHEMA),
@@ -1640,7 +1639,7 @@ pub fn budget_gate_value(budget: &HarnessBudget) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_budget_gate(value: &IOValue) -> Result<BudgetGateEvidence> {
+pub fn parse_budget_gate(value: &IoValue) -> Result<BudgetGateEvidence> {
     let gate = simple_record(value, "budget-gate-v1", 7)?;
     let schema = required_string(&gate[0], "budget gate schema")?;
     if schema != preserves_rail::HARNESS_BUDGET_GATE_SCHEMA {
@@ -1731,9 +1730,9 @@ pub fn validate_budget_gate_evidence(suite: &HarnessSuite, budget_gate: Option<&
 
 struct BudgetPreflightMaterial {
     budget_ref: String,
-    nickel_source_value: IOValue,
-    resource_contract_value: IOValue,
-    resource_preflight_value: IOValue,
+    nickel_source_value: IoValue,
+    resource_contract_value: IoValue,
+    resource_preflight_value: IoValue,
 }
 
 struct BudgetNickelSourceEvidence {
@@ -1812,7 +1811,7 @@ fn budget_nickel_source_value(
     export_json: &str,
     export_ref: &str,
     budget_ref: &str,
-) -> IOValue {
+) -> IoValue {
     record("budget-source", vec![
         string(preserves_rail::HARNESS_BUDGET_NICKEL_STATIC_SCHEMA),
         record("source", vec![string(source)]),
@@ -1823,7 +1822,7 @@ fn budget_nickel_source_value(
     ])
 }
 
-fn parse_budget_nickel_source_evidence(value: &Value<IOValue>) -> Result<BudgetNickelSourceEvidence> {
+fn parse_budget_nickel_source_evidence(value: &Value<IoValue>) -> Result<BudgetNickelSourceEvidence> {
     let value = value_to_iovalue(value);
     let source = simple_record(&value, "budget-source", 6)?;
     let schema = required_string(&source[0], "Nickel resource policy schema")?;
@@ -1863,7 +1862,7 @@ fn parse_budget_nickel_source_evidence(value: &Value<IOValue>) -> Result<BudgetN
     })
 }
 
-fn parse_resource_contract_evidence(value: &Value<IOValue>) -> Result<ResourceContractEvidence> {
+fn parse_resource_contract_evidence(value: &Value<IoValue>) -> Result<ResourceContractEvidence> {
     let value = value_to_iovalue(value);
     let contract = simple_record(&value, "resource-contract", 3)?;
     let schema = required_string(&contract[0], "resource contract schema")?;
@@ -1895,7 +1894,7 @@ fn parse_resource_contract_evidence(value: &Value<IOValue>) -> Result<ResourceCo
     })
 }
 
-fn parse_budget_contract_envelope(value: &IOValue) -> Result<basalt::ContractEnvelope> {
+fn parse_budget_contract_envelope(value: &IoValue) -> Result<basalt::ContractEnvelope> {
     let envelope = simple_record(value, "contract-envelope", 7)?;
     let backend = required_string(&envelope[0], "budget contract backend")?;
     if backend != "nickel" {
@@ -1946,7 +1945,7 @@ fn parse_budget_contract_envelope(value: &IOValue) -> Result<basalt::ContractEnv
     ))
 }
 
-fn parse_basalt_resource_preflight_evidence(value: &Value<IOValue>) -> Result<BasaltResourcePreflightEvidence> {
+fn parse_basalt_resource_preflight_evidence(value: &Value<IoValue>) -> Result<BasaltResourcePreflightEvidence> {
     let value = value_to_iovalue(value);
     let receipt = simple_record(&value, "basalt-resource-preflight", 8)?;
     let schema = required_string(&receipt[0], "Basalt resource preflight schema")?;
@@ -2001,7 +2000,7 @@ fn nickel_budget_source(budget: &HarnessBudget, budget_ref: &str) -> String {
     )
 }
 
-fn budget_gate_checks_value() -> IOValue {
+fn budget_gate_checks_value() -> IoValue {
     record("checks", vec![sequence(
         [
             "budget-schema",
@@ -2021,7 +2020,7 @@ fn budget_gate_checks_value() -> IOValue {
     )])
 }
 
-fn parse_budget_gate_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_budget_gate_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks_record = simple_record(&value, "checks", 1)?;
     let check_values = required_sequence(&checks_record[0], "budget gate checks")?;
@@ -2053,7 +2052,7 @@ pub fn validate_actor_registry_evidence(suite: &HarnessSuite, observations: &[Ha
             "missing explicit actor registry fixture; inferred actors cannot satisfy evidence gates",
         ));
     }
-    let actor_ids = suite.actors.iter().map(|actor| actor.id.as_str()).collect::<BTreeSet<_>>();
+    let actor_ids = suite.actors.iter().map(|actor| actor.id.as_str()).collect::<OrderedSet<_>>();
     for step in &suite.steps {
         for actor in actor_ids_for_step(step) {
             require_declared_actor(&actor_ids, actor, "suite step", None)?;
@@ -2209,7 +2208,7 @@ fn expected_runtime_predicates(step: &core::CoreStep, decision: &runtime::Admiss
     expected
 }
 
-fn parse_runtime_predicate_receipt(value: &IOValue) -> Result<String> {
+fn parse_runtime_predicate_receipt(value: &IoValue) -> Result<String> {
     let receipt = value
         .collect_simple_record("runtime-predicate-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <runtime-predicate-receipt-v1 ...>"))?;
@@ -2260,7 +2259,7 @@ fn parse_runtime_predicate_receipt(value: &IOValue) -> Result<String> {
     Ok(predicate)
 }
 
-fn sequence_strings(value: &Value<IOValue>, field: &str) -> Result<Vec<String>> {
+fn sequence_strings(value: &Value<IoValue>, field: &str) -> Result<Vec<String>> {
     let values = required_sequence(value, field)?;
     values.iter().map(|value| required_string(&value, field)).collect()
 }
@@ -2289,7 +2288,7 @@ struct RuntimeBoundary<'a> {
     position: usize,
     observation: &'a HarnessObservation,
     decision: &'a runtime::AdmissionDecision,
-    runtime_events: &'a [IOValue],
+    runtime_events: &'a [IoValue],
 }
 
 pub fn validate_hostcall_evidence(
@@ -2372,7 +2371,7 @@ fn validated_step_ref(position: usize, step: &core::CoreStep, observation: &Harn
     Ok(step_ref)
 }
 
-fn actor_output_slot(position: usize, observation: &HarnessObservation) -> Result<(usize, &IOValue)> {
+fn actor_output_slot(position: usize, observation: &HarnessObservation) -> Result<(usize, &IoValue)> {
     if observation.events.len() < 5 {
         return Err(MoltenError::invalid_harness(format!(
             "missing executor hostcall boundary evidence at observation {position}"
@@ -2389,7 +2388,7 @@ fn actor_output_slot(position: usize, observation: &HarnessObservation) -> Resul
     Ok((actor_output_index, actor_output_event))
 }
 
-fn boundary_order(position: usize, observation: &HarnessObservation, actor_output_event: &IOValue) -> Result<()> {
+fn boundary_order(position: usize, observation: &HarnessObservation, actor_output_event: &IoValue) -> Result<()> {
     if event_boundary(&observation.events[1]) != EventBoundary::ActorInput
         || event_boundary(&observation.events[2]) != EventBoundary::HostcallRequest
         || event_boundary(&observation.events[3]) != EventBoundary::HostcallDecision
@@ -2433,8 +2432,8 @@ struct WasmExecutionEvidenceInput<'a> {
     step: &'a core::CoreStep,
     position: usize,
     decision: &'a runtime::AdmissionDecision,
-    actor_input: &'a IOValue,
-    runtime_events: &'a [IOValue],
+    actor_input: &'a IoValue,
+    runtime_events: &'a [IoValue],
 }
 
 fn validate_steel_execution_evidence(
@@ -2442,7 +2441,7 @@ fn validate_steel_execution_evidence(
     step: &core::CoreStep,
     position: usize,
     decision: &runtime::AdmissionDecision,
-    runtime_events: &[IOValue],
+    runtime_events: &[IoValue],
 ) -> Result<()> {
     let actor = step.primary_actor();
     let decl = actor_decl_for_primary_actor(suite, actor)?;
@@ -2469,7 +2468,7 @@ fn validate_steel_execution_receipt(
     actor: &ActorDecl,
     step: &core::CoreStep,
     position: usize,
-    value: &IOValue,
+    value: &IoValue,
 ) -> Result<()> {
     let receipt_value = value
         .collect_simple_record("steel-execution-receipt-v1", None)
@@ -2537,7 +2536,7 @@ fn validate_steel_execution_receipt(
     require_steel_execution_checks(&checks, arity)
 }
 
-fn steel_execution_checks_index(receipt: &Record<Value<IOValue>>, arity: usize) -> Result<usize> {
+fn steel_execution_checks_index(receipt: &Record<Value<IoValue>>, arity: usize) -> Result<usize> {
     if arity == 10 {
         validate_steel_execution_resources(&receipt[8])?;
         Ok(9)
@@ -2546,7 +2545,7 @@ fn steel_execution_checks_index(receipt: &Record<Value<IOValue>>, arity: usize) 
     }
 }
 
-fn validate_steel_execution_resources(value: &Value<IOValue>) -> Result<()> {
+fn validate_steel_execution_resources(value: &Value<IoValue>) -> Result<()> {
     let resources_value = value_to_iovalue(value);
     let resources = simple_record(&resources_value, "resources", 5)?;
     let fuel_value = value_to_iovalue(&resources[0]);
@@ -2613,8 +2612,8 @@ fn validate_wasm_execution_receipt(
     actor: &ActorDecl,
     step: &core::CoreStep,
     position: usize,
-    actor_input: &IOValue,
-    value: &IOValue,
+    actor_input: &IoValue,
+    value: &IoValue,
 ) -> Result<()> {
     let receipt_value = value
         .collect_simple_record("wasm-execution-receipt-v1", None)
@@ -2685,8 +2684,8 @@ fn validate_wasm_execution_receipt(
 fn wasm_execution_checks_index(
     actor: &ActorDecl,
     position: usize,
-    actor_input: &IOValue,
-    receipt: &Record<Value<IOValue>>,
+    actor_input: &IoValue,
+    receipt: &Record<Value<IoValue>>,
     arity: usize,
 ) -> Result<usize> {
     validate_wasm_execution_resources(receipt)?;
@@ -2698,7 +2697,7 @@ fn wasm_execution_checks_index(
     }
 }
 
-fn validate_wasm_execution_resources(receipt: &Record<Value<IOValue>>) -> Result<()> {
+fn validate_wasm_execution_resources(receipt: &Record<Value<IoValue>>) -> Result<()> {
     let fuel_value = value_to_iovalue(&receipt[6]);
     let fuel = simple_record(&fuel_value, "fuel", 2)?;
     let fuel_limit = required_u64(&fuel[0], "Wasm execution fuel limit")?;
@@ -2715,8 +2714,8 @@ fn validate_wasm_execution_resources(receipt: &Record<Value<IOValue>>) -> Result
 fn validate_wasm_abi_fields(
     actor: &ActorDecl,
     position: usize,
-    actor_input: &IOValue,
-    receipt: &Record<Value<IOValue>>,
+    actor_input: &IoValue,
+    receipt: &Record<Value<IoValue>>,
 ) -> Result<()> {
     let abi = required_record_string(&receipt[8], "abi", "Wasm execution ABI schema")?;
     if abi != preserves_rail::RUNTIME_WASM_ABI_SCHEMA {
@@ -2759,7 +2758,7 @@ fn require_wasm_execution_checks(checks: &[String], arity: usize) -> Result<()> 
     Ok(())
 }
 
-fn require_hostcall_event(position: usize, kind: &str, actual: &IOValue, expected: &IOValue) -> Result<()> {
+fn require_hostcall_event(position: usize, kind: &str, actual: &IoValue, expected: &IoValue) -> Result<()> {
     if actual == expected {
         return Ok(());
     }
@@ -2770,7 +2769,7 @@ fn require_hostcall_event(position: usize, kind: &str, actual: &IOValue, expecte
     )))
 }
 
-pub fn parse_admission_decision_event(value: &IOValue) -> Result<AdmissionDecisionEvent> {
+pub fn parse_admission_decision_event(value: &IoValue) -> Result<AdmissionDecisionEvent> {
     let admission = value
         .collect_simple_record("admission-decision-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <admission-decision-v1 ...>"))?;
@@ -2802,11 +2801,11 @@ pub fn parse_admission_decision_event(value: &IOValue) -> Result<AdmissionDecisi
     })
 }
 
-pub fn report_suite_value(report_value: &IOValue) -> Result<IOValue> {
+pub fn report_suite_value(report_value: &IoValue) -> Result<IoValue> {
     Ok(parse_report(report_value)?.suite_value)
 }
 
-pub fn boundary_coverage_value(report_value: &IOValue) -> Result<IOValue> {
+pub fn boundary_coverage_value(report_value: &IoValue) -> Result<IoValue> {
     let report = parse_report(report_value)?;
     let suite = parse_suite(&report.suite_value)?;
     let mut coverage = Vec::new();
@@ -2875,7 +2874,7 @@ pub fn boundary_coverage_value(report_value: &IOValue) -> Result<IOValue> {
     ]))
 }
 
-fn push_boundary_coverage(out: &mut impl crate::bounded::VecSink<IOValue>, name: &str, exercised: bool) {
+fn push_boundary_coverage(out: &mut impl crate::bounded::VecSink<IoValue>, name: &str, exercised: bool) {
     out.push_item(record("boundary", vec![
         string(name),
         string(if exercised { "exercised" } else { "unexercised" }),
@@ -2895,16 +2894,16 @@ fn report_has_denied_admission(report: &HarnessReport) -> Result<bool> {
     Ok(false)
 }
 
-fn report_value_contains_label(value: &IOValue, label: &str) -> bool {
+fn report_value_contains_label(value: &IoValue, label: &str) -> bool {
     to_text(value).is_ok_and(|text| text.contains(label))
 }
 
 pub fn golden_trace_update_receipt_value(
     previous_report_ref: Option<&str>,
-    updated_report_value: &IOValue,
+    updated_report_value: &IoValue,
     reason: &str,
     reviewer_ref: &str,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_golden_trace_update_reason(reason)?;
     if let Some(previous_report_ref) = previous_report_ref {
         validate_content_ref(previous_report_ref)?;
@@ -2938,7 +2937,7 @@ pub fn golden_trace_update_receipt_value(
     ]))
 }
 
-pub fn validate_golden_trace_update_receipt(value: &IOValue, updated_report_value: &IOValue) -> Result<()> {
+pub fn validate_golden_trace_update_receipt(value: &IoValue, updated_report_value: &IoValue) -> Result<()> {
     let receipt = simple_record(value, "golden-trace-update-receipt-v1", 11)?;
     let schema = required_string(&receipt[0], "golden trace update receipt schema")?;
     if schema != preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA {
@@ -3011,11 +3010,11 @@ fn validate_golden_trace_update_reason(reason: &str) -> Result<()> {
 }
 
 pub fn upgrade_replay_receipt_value(
-    old_report_value: &IOValue,
-    new_report_value: &IOValue,
+    old_report_value: &IoValue,
+    new_report_value: &IoValue,
     migration_receipt_ref: Option<&str>,
     compatibility_diagnostic_ref: Option<&str>,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     let old_report = parse_report(old_report_value)?;
     let new_report = parse_report(new_report_value)?;
     let old_trace_ref = report_trace_ref(&old_report)?;
@@ -3062,9 +3061,9 @@ pub fn upgrade_replay_receipt_value(
 }
 
 pub fn validate_upgrade_replay_receipt(
-    value: &IOValue,
-    old_report_value: &IOValue,
-    new_report_value: &IOValue,
+    value: &IoValue,
+    old_report_value: &IoValue,
+    new_report_value: &IoValue,
 ) -> Result<()> {
     let receipt = simple_record(value, "upgrade-replay-receipt-v1", 12)?;
     let outcome = require_upgrade_replay_header(&receipt)?;
@@ -3084,7 +3083,7 @@ pub fn validate_upgrade_replay_receipt(
     require_upgrade_replay_checks(&receipt[11])
 }
 
-fn require_upgrade_replay_header(receipt: &Record<Value<IOValue>>) -> Result<String> {
+fn require_upgrade_replay_header(receipt: &Record<Value<IoValue>>) -> Result<String> {
     let schema = required_string(&receipt[0], "upgrade replay receipt schema")?;
     if schema != preserves_rail::HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
@@ -3104,7 +3103,7 @@ fn require_upgrade_replay_header(receipt: &Record<Value<IOValue>>) -> Result<Str
 }
 
 fn require_upgrade_replay_report_refs(
-    receipt: &Record<Value<IOValue>>,
+    receipt: &Record<Value<IoValue>>,
     old_report: &HarnessReport,
     new_report: &HarnessReport,
 ) -> Result<(String, String)> {
@@ -3161,7 +3160,7 @@ fn require_upgrade_replay_drift_evidence(
     Ok(())
 }
 
-fn require_upgrade_replay_checks(checks_value: &Value<IOValue>) -> Result<()> {
+fn require_upgrade_replay_checks(checks_value: &Value<IoValue>) -> Result<()> {
     let checks = parse_executor_preflight_checks(checks_value)?;
     for expected in [
         "old-report-bound",
@@ -3179,7 +3178,7 @@ fn report_trace_ref(report: &HarnessReport) -> Result<String> {
     canonical_hash(&sequence(report.observations.iter().map(|observation| observation.value.clone()).collect()))
 }
 
-pub fn harness_run_receipt_value(report_value: &IOValue, export_refs: &[&str]) -> Result<IOValue> {
+pub fn harness_run_receipt_value(report_value: &IoValue, export_refs: &[&str]) -> Result<IoValue> {
     let report = parse_report(report_value)?;
     for export_ref in export_refs {
         validate_content_ref(export_ref)?;
@@ -3224,7 +3223,7 @@ pub fn harness_run_receipt_value(report_value: &IOValue, export_refs: &[&str]) -
     ]))
 }
 
-pub fn validate_harness_run_receipt(value: &IOValue, report_value: &IOValue, export_refs: &[&str]) -> Result<()> {
+pub fn validate_harness_run_receipt(value: &IoValue, report_value: &IoValue, export_refs: &[&str]) -> Result<()> {
     let expected = harness_run_receipt_value(report_value, export_refs)?;
     if canonical_hash(value)? != canonical_hash(&expected)? {
         return Err(MoltenError::invalid_harness("harness run receipt does not match report and export refs"));
@@ -3258,16 +3257,16 @@ pub fn validate_harness_run_receipt(value: &IOValue, report_value: &IOValue, exp
     Ok(())
 }
 
-fn refs_sequence_from_strs(refs: &[&str]) -> IOValue {
+fn refs_sequence_from_strs(refs: &[&str]) -> IoValue {
     sequence(refs.iter().map(|value| string(*value)).collect())
 }
 
 pub fn deterministic_multipeer_receipt_value(
-    report_value: &IOValue,
+    report_value: &IoValue,
     seed: u64,
     profile: &str,
     peer_events: &[&str],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_multipeer_profile(profile)?;
     if peer_events.is_empty() {
         return Err(MoltenError::invalid_harness("deterministic multi-peer receipt requires at least one peer event"));
@@ -3316,8 +3315,8 @@ pub fn deterministic_multipeer_receipt_value(
 }
 
 pub fn validate_deterministic_multipeer_receipt(
-    value: &IOValue,
-    report_value: &IOValue,
+    value: &IoValue,
+    report_value: &IoValue,
     seed: u64,
     profile: &str,
     peer_events: &[&str],
@@ -3377,11 +3376,11 @@ fn validate_multipeer_event(event: &str) -> Result<()> {
     }
 }
 
-pub fn repro_bundle_value(report_value: &IOValue) -> Result<IOValue> {
+pub fn repro_bundle_value(report_value: &IoValue) -> Result<IoValue> {
     repro_bundle_value_with_command(report_value, &default_report_bundle_command())
 }
 
-pub fn repro_bundle_value_with_command(report_value: &IOValue, command: &[String]) -> Result<IOValue> {
+pub fn repro_bundle_value_with_command(report_value: &IoValue, command: &[String]) -> Result<IoValue> {
     let report = parse_report(report_value)?;
     Ok(record("harness-repro-bundle-v1", vec![
         string(preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA),
@@ -3409,10 +3408,10 @@ pub fn repro_bundle_value_with_command(report_value: &IOValue, command: &[String
 }
 
 pub fn sealed_repro_bundle_value_with_command_and_receipt(
-    report_value: &IOValue,
+    report_value: &IoValue,
     command: &[String],
-    gate_receipt_value: &IOValue,
-) -> Result<IOValue> {
+    gate_receipt_value: &IoValue,
+) -> Result<IoValue> {
     let report = parse_report(report_value)?;
     let gate_receipt_ref = canonical_hash(gate_receipt_value)?;
     let redaction_policy = redaction_policy_value();
@@ -3456,10 +3455,10 @@ pub fn sealed_repro_bundle_value_with_command_and_receipt(
 }
 
 pub fn profiled_repro_bundle_value_with_command(
-    report_value: &IOValue,
+    report_value: &IoValue,
     command: &[String],
     profile: ReproExportProfile,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     if profile == ReproExportProfile::DenySensitive {
         return Err(MoltenError::invalid_harness(
             "deny-sensitive repro export must use sealed pass bundle construction",
@@ -3528,11 +3527,11 @@ pub fn profiled_repro_bundle_value_with_command(
 }
 
 struct ProfiledTransformOutput {
-    report_value: IOValue,
+    report_value: IoValue,
     manifest_ref: String,
-    manifest_value: IOValue,
+    manifest_value: IoValue,
     receipt_ref: String,
-    receipt_value: IOValue,
+    receipt_value: IoValue,
     encrypted_refs: Vec<String>,
 }
 
@@ -3553,7 +3552,7 @@ struct RedactionManifestEntry {
 }
 
 fn redacted_report_for_profile(
-    report_value: &IOValue,
+    report_value: &IoValue,
     report: &HarnessReport,
     profile: ReproExportProfile,
     policy_ref: &str,
@@ -3601,7 +3600,7 @@ fn redacted_report_for_profile(
     })
 }
 
-fn rebind_report_suite_ref(report_value: &IOValue) -> Result<IOValue> {
+fn rebind_report_suite_ref(report_value: &IoValue) -> Result<IoValue> {
     let report = simple_record(report_value, "harness-report-v1", 17)
         .or_else(|_| simple_record(report_value, "harness-report-v1", 16))
         .or_else(|_| simple_record(report_value, "harness-report-v1", 15))
@@ -3623,16 +3622,16 @@ fn rebind_report_suite_ref(report_value: &IOValue) -> Result<IOValue> {
 
 enum RedactionTraversalFrame {
     Enter {
-        value: IOValue,
+        value: IoValue,
         path: String,
     },
     ExitRecord {
-        original: IOValue,
-        label: IOValue,
+        original: IoValue,
+        label: IoValue,
         field_count: usize,
     },
     ExitSequence {
-        original: IOValue,
+        original: IoValue,
         item_count: usize,
     },
 }
@@ -3665,7 +3664,7 @@ impl RedactionFrameStack {
         self.frames.pop()
     }
 
-    fn push_children(&mut self, child_entries: Vec<(IOValue, String)>) -> Result<()> {
+    fn push_children(&mut self, child_entries: Vec<(IoValue, String)>) -> Result<()> {
         ensure_redaction_bound(
             self.frames.len() + child_entries.len(),
             MAX_REDACTION_TRANSFORM_NODES,
@@ -3682,7 +3681,7 @@ impl RedactionFrameStack {
 }
 
 struct RedactionOutputStack {
-    values: Vec<IOValue>,
+    values: Vec<IoValue>,
 }
 
 impl RedactionOutputStack {
@@ -3692,20 +3691,20 @@ impl RedactionOutputStack {
         }
     }
 
-    fn push(&mut self, value: IOValue) -> Result<()> {
+    fn push(&mut self, value: IoValue) -> Result<()> {
         ensure_redaction_bound(self.values.len() + 1, MAX_REDACTION_TRANSFORM_NODES, "redaction traversal outputs")?;
         self.values.push(value);
         Ok(())
     }
 
-    fn take(&mut self, count: usize) -> Result<Vec<IOValue>> {
+    fn take(&mut self, count: usize) -> Result<Vec<IoValue>> {
         if self.values.len() < count {
             return Err(MoltenError::invalid_harness("redaction traversal stack underflow"));
         }
         Ok(self.values.split_off(self.values.len() - count))
     }
 
-    fn finish(mut self) -> Result<IOValue> {
+    fn finish(mut self) -> Result<IoValue> {
         if self.values.len() != 1 {
             return Err(MoltenError::invalid_harness("redaction traversal produced invalid output"));
         }
@@ -3715,13 +3714,13 @@ impl RedactionOutputStack {
     }
 }
 
-fn bounded_redaction_child_count(value: &IOValue, context: &str) -> Result<usize> {
+fn bounded_redaction_child_count(value: &IoValue, context: &str) -> Result<usize> {
     let count = value.iter().count();
     ensure_redaction_bound(count, MAX_REDACTION_CONTAINER_ITEMS, context)?;
     Ok(count)
 }
 
-fn redaction_child_entries(value: &IOValue, path: &str, context: &str) -> Result<Vec<(IOValue, String)>> {
+fn redaction_child_entries(value: &IoValue, path: &str, context: &str) -> Result<Vec<(IoValue, String)>> {
     let child_count = bounded_redaction_child_count(value, context)?;
     let mut entries = Vec::with_capacity(child_count);
     for (index, child) in value.iter().enumerate() {
@@ -3745,7 +3744,7 @@ impl<'a> RedactionTraversal<'a> {
         }
     }
 
-    fn run(mut self, value: &IOValue, path: &str) -> Result<IOValue> {
+    fn run(mut self, value: &IoValue, path: &str) -> Result<IoValue> {
         self.stack.push(RedactionTraversalFrame::Enter {
             value: value.clone(),
             path: path.to_string(),
@@ -3771,7 +3770,7 @@ impl<'a> RedactionTraversal<'a> {
         }
     }
 
-    fn enter(&mut self, value: IOValue, path: String) -> Result<()> {
+    fn enter(&mut self, value: IoValue, path: String) -> Result<()> {
         if let Some(label) = record_label_string(&value)
             && is_sensitive_record_label(&label)
         {
@@ -3788,7 +3787,7 @@ impl<'a> RedactionTraversal<'a> {
         }
     }
 
-    fn enter_record(&mut self, value: IOValue, path: String) -> Result<()> {
+    fn enter_record(&mut self, value: IoValue, path: String) -> Result<()> {
         let label = value_to_iovalue(&value.label());
         let child_entries = redaction_child_entries(&value, &path, "redaction record fields")?;
         self.stack.push(RedactionTraversalFrame::ExitRecord {
@@ -3799,7 +3798,7 @@ impl<'a> RedactionTraversal<'a> {
         self.stack.push_children(child_entries)
     }
 
-    fn enter_sequence(&mut self, value: IOValue, path: String) -> Result<()> {
+    fn enter_sequence(&mut self, value: IoValue, path: String) -> Result<()> {
         let child_entries = redaction_child_entries(&value, &path, "redaction sequence items")?;
         self.stack.push(RedactionTraversalFrame::ExitSequence {
             original: value,
@@ -3808,17 +3807,17 @@ impl<'a> RedactionTraversal<'a> {
         self.stack.push_children(child_entries)
     }
 
-    fn exit_record(&mut self, original: IOValue, label: IOValue, field_count: usize) -> Result<()> {
+    fn exit_record(&mut self, original: IoValue, label: IoValue, field_count: usize) -> Result<()> {
         let fields = self.outputs.take(field_count)?;
-        self.push_rebuilt(original, IOValue::record(label, fields))
+        self.push_rebuilt(original, IoValue::record(label, fields))
     }
 
-    fn exit_sequence(&mut self, original: IOValue, item_count: usize) -> Result<()> {
+    fn exit_sequence(&mut self, original: IoValue, item_count: usize) -> Result<()> {
         let values = self.outputs.take(item_count)?;
         self.push_rebuilt(original, sequence(values))
     }
 
-    fn push_rebuilt(&mut self, original: IOValue, rebuilt: IOValue) -> Result<()> {
+    fn push_rebuilt(&mut self, original: IoValue, rebuilt: IoValue) -> Result<()> {
         if rebuilt == original {
             self.outputs.push(original)
         } else {
@@ -3827,16 +3826,16 @@ impl<'a> RedactionTraversal<'a> {
     }
 }
 
-fn transform_sensitive_value(value: &IOValue, path: &str, state: &mut RedactionTransformState) -> Result<IOValue> {
+fn transform_sensitive_value(value: &IoValue, path: &str, state: &mut RedactionTransformState) -> Result<IoValue> {
     RedactionTraversal::new(state).run(value, path)
 }
 
 fn transform_sensitive_record(
-    value: &IOValue,
+    value: &IoValue,
     label: &str,
     path: &str,
     state: &mut RedactionTransformState,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     if label == "encrypted-ref" {
         return Err(MoltenError::invalid_harness(
             "malformed encrypted-ref marker cannot be accepted into a repro export profile",
@@ -3860,11 +3859,11 @@ fn transform_sensitive_record(
 }
 
 fn redaction_marker_for_value(
-    value: &IOValue,
+    value: &IoValue,
     label: &str,
     path: &str,
     state: &mut RedactionTransformState,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     let commitment_ref = canonical_hash(value)?;
     let path_ref = canonical_hash(&string(path))?;
     let receipt_ref = canonical_hash(&record("redaction-marker-seed", vec![
@@ -3893,11 +3892,11 @@ fn redaction_marker_for_value(
 }
 
 fn encrypted_ref_for_value(
-    value: &IOValue,
+    value: &IoValue,
     label: &str,
     path: &str,
     state: &mut RedactionTransformState,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     let commitment_ref = canonical_hash(value)?;
     let ciphertext_ref =
         canonical_hash(&record("encrypted-redaction-ciphertext", vec![string(&commitment_ref), string(path)]))?;
@@ -3921,18 +3920,18 @@ fn encrypted_ref_for_value(
     Ok(encrypted_value)
 }
 
-fn record_label_string(value: &IOValue) -> Option<String> {
+fn record_label_string(value: &IoValue) -> Option<String> {
     if !value.is_record() {
         return None;
     }
-    value.label().as_symbol().map(Cow::into_owned)
+    value.label().as_symbol().map(std::borrow::Cow::into_owned)
 }
 
-pub fn failure_repro_bundle_value(failure_value: &IOValue) -> Result<IOValue> {
+pub fn failure_repro_bundle_value(failure_value: &IoValue) -> Result<IoValue> {
     failure_repro_bundle_value_with_command(failure_value, &default_failure_bundle_command())
 }
 
-pub fn failure_repro_bundle_value_with_command(failure_value: &IOValue, command: &[String]) -> Result<IOValue> {
+pub fn failure_repro_bundle_value_with_command(failure_value: &IoValue, command: &[String]) -> Result<IoValue> {
     let failure = parse_failure(failure_value)?;
     Ok(record("harness-repro-bundle-v1", vec![
         string(preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA),
@@ -3949,7 +3948,7 @@ pub fn failure_repro_bundle_value_with_command(failure_value: &IOValue, command:
     ]))
 }
 
-pub fn parse_repro_bundle(value: &IOValue) -> Result<HarnessReproBundle> {
+pub fn parse_repro_bundle(value: &IoValue) -> Result<HarnessReproBundle> {
     let bundle = value
         .collect_simple_record("harness-repro-bundle-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <harness-repro-bundle-v1 ...>"))?;
@@ -3982,7 +3981,7 @@ pub fn parse_repro_bundle(value: &IOValue) -> Result<HarnessReproBundle> {
     )))
 }
 
-pub fn repro_bundle_report_value(bundle_value: &IOValue) -> Result<IOValue> {
+pub fn repro_bundle_report_value(bundle_value: &IoValue) -> Result<IoValue> {
     let bundle = parse_repro_bundle(bundle_value)?;
     match (bundle.kind, bundle.report_value) {
         (HarnessReproBundleKind::Report, Some(report_value)) => Ok(report_value),
@@ -3996,7 +3995,7 @@ pub fn repro_bundle_report_value(bundle_value: &IOValue) -> Result<IOValue> {
     }
 }
 
-pub fn repro_bundle_summary(bundle_value: &IOValue) -> Result<String> {
+pub fn repro_bundle_summary(bundle_value: &IoValue) -> Result<String> {
     let bundle = parse_repro_bundle(bundle_value)?;
     let gate_receipt = bundle.gate_receipt_ref.as_deref().unwrap_or("none");
     let export_profile = bundle.export_profile.as_deref().unwrap_or("legacy");
@@ -4015,14 +4014,14 @@ pub fn repro_bundle_summary(bundle_value: &IOValue) -> Result<String> {
     ))
 }
 
-pub fn actor_registry_value(actors: &[ActorDecl]) -> IOValue {
+pub fn actor_registry_value(actors: &[ActorDecl]) -> IoValue {
     record("actor-registry-v1", vec![
         string(preserves_rail::HARNESS_ACTOR_REGISTRY_SCHEMA),
         sequence(actors.iter().map(actor_decl_value).collect()),
     ])
 }
 
-fn actor_decl_value(actor: &ActorDecl) -> IOValue {
+fn actor_decl_value(actor: &ActorDecl) -> IoValue {
     let mut fields = vec![string(&actor.id), string(actor.kind.as_str())];
     if let Some(executor) = &actor.executor {
         fields.push(actor_executor_config_value(executor));
@@ -4030,7 +4029,7 @@ fn actor_decl_value(actor: &ActorDecl) -> IOValue {
     record("actor", fields)
 }
 
-fn actor_executor_config_value(config: &ActorExecutorConfig) -> IOValue {
+fn actor_executor_config_value(config: &ActorExecutorConfig) -> IoValue {
     match config {
         ActorExecutorConfig::Steel(config) => steel_executor_config_value(config),
         ActorExecutorConfig::Wasm(config) => wasm_executor_config_value(config),
@@ -4039,7 +4038,7 @@ fn actor_executor_config_value(config: &ActorExecutorConfig) -> IOValue {
     }
 }
 
-fn steel_executor_config_value(config: &SteelExecutorConfig) -> IOValue {
+fn steel_executor_config_value(config: &SteelExecutorConfig) -> IoValue {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     record("steel-executor-v1", vec![
         string(preserves_rail::RUNTIME_STEEL_EXECUTOR_SCHEMA),
@@ -4051,7 +4050,7 @@ fn steel_executor_config_value(config: &SteelExecutorConfig) -> IOValue {
     ])
 }
 
-fn wasm_executor_config_value(config: &WasmExecutorConfig) -> IOValue {
+fn wasm_executor_config_value(config: &WasmExecutorConfig) -> IoValue {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     record("wasm-executor-v1", vec![
         string(preserves_rail::RUNTIME_WASM_EXECUTOR_SCHEMA),
@@ -4063,7 +4062,7 @@ fn wasm_executor_config_value(config: &WasmExecutorConfig) -> IOValue {
     ])
 }
 
-fn adapter_executor_config_value(config: &AdapterExecutorConfig) -> IOValue {
+fn adapter_executor_config_value(config: &AdapterExecutorConfig) -> IoValue {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     record("adapter-executor-v1", vec![
         string(preserves_rail::RUNTIME_ADAPTER_EXECUTOR_SCHEMA),
@@ -4076,7 +4075,7 @@ fn adapter_executor_config_value(config: &AdapterExecutorConfig) -> IOValue {
     ])
 }
 
-fn remote_proxy_executor_config_value(config: &RemoteProxyExecutorConfig) -> IOValue {
+fn remote_proxy_executor_config_value(config: &RemoteProxyExecutorConfig) -> IoValue {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     record("remote-proxy-executor-v1", vec![
         string(preserves_rail::RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA),
@@ -4090,7 +4089,7 @@ fn remote_proxy_executor_config_value(config: &RemoteProxyExecutorConfig) -> IOV
     ])
 }
 
-pub fn executor_preflights_value(suite: &HarnessSuite) -> Result<IOValue> {
+pub fn executor_preflights_value(suite: &HarnessSuite) -> Result<IoValue> {
     validate_executor_preflight_inputs(suite)?;
     Ok(record("executor-preflights-v1", vec![
         string(preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA),
@@ -4181,7 +4180,7 @@ fn validate_required_hostcalls_allowed(
     Ok(())
 }
 
-fn executor_preflight_value(actor: &ActorDecl, allowed_hostcalls: &[String]) -> Result<IOValue> {
+fn executor_preflight_value(actor: &ActorDecl, allowed_hostcalls: &[String]) -> Result<IoValue> {
     let sandbox = executor_sandbox_value(&actor.kind);
     let sandbox_ref = canonical_hash(&sandbox)?;
     let conformance_refs: Vec<std::string::String> = executor_conformance_refs(allowed_hostcalls)?;
@@ -4234,7 +4233,7 @@ fn executor_conformance_refs(allowed_hostcalls: &[String]) -> Result<Vec<String>
     Ok(vec![canonical_hash(&executor_conformance_suite_value(allowed_hostcalls))?])
 }
 
-fn executor_conformance_suite_value(allowed_hostcalls: &[String]) -> IOValue {
+fn executor_conformance_suite_value(allowed_hostcalls: &[String]) -> IoValue {
     record("executor-conformance-suite-v1", vec![
         string(preserves_rail::HARNESS_EXECUTOR_CONFORMANCE_SCHEMA),
         record("boundary", vec![string("molten.runtime.executor-hostcall-boundary.v1")]),
@@ -4255,7 +4254,7 @@ fn executor_conformance_suite_value(allowed_hostcalls: &[String]) -> IOValue {
     ])
 }
 
-fn executor_sandbox_value(kind: &ActorKind) -> IOValue {
+fn executor_sandbox_value(kind: &ActorKind) -> IoValue {
     record("executor-sandbox-v1", vec![
         record("kind", vec![string(kind.as_str())]),
         record("ambient-io", vec![bool_value(false)]),
@@ -4326,7 +4325,7 @@ fn remote_proxy_executor_preflight_checks() -> &'static [&'static str] {
     ]
 }
 
-fn steel_review_receipt_value(config: &SteelExecutorConfig) -> Result<IOValue> {
+fn steel_review_receipt_value(config: &SteelExecutorConfig) -> Result<IoValue> {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     Ok(record("steel-review-receipt-v1", vec![
         string(preserves_rail::RUNTIME_STEEL_REVIEW_RECEIPT_SCHEMA),
@@ -4345,7 +4344,7 @@ fn steel_review_receipt_value(config: &SteelExecutorConfig) -> Result<IOValue> {
     ]))
 }
 
-fn adapter_preflight_receipt_value(config: &AdapterExecutorConfig) -> Result<IOValue> {
+fn adapter_preflight_receipt_value(config: &AdapterExecutorConfig) -> Result<IoValue> {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     Ok(record("adapter-preflight-receipt-v1", vec![
         string(preserves_rail::RUNTIME_ADAPTER_PREFLIGHT_RECEIPT_SCHEMA),
@@ -4365,7 +4364,7 @@ fn adapter_preflight_receipt_value(config: &AdapterExecutorConfig) -> Result<IOV
     ]))
 }
 
-fn remote_proxy_preflight_receipt_value(config: &RemoteProxyExecutorConfig) -> Result<IOValue> {
+fn remote_proxy_preflight_receipt_value(config: &RemoteProxyExecutorConfig) -> Result<IoValue> {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     Ok(record("remote-proxy-preflight-receipt-v1", vec![
         string(preserves_rail::RUNTIME_REMOTE_PROXY_PREFLIGHT_RECEIPT_SCHEMA),
@@ -4432,7 +4431,7 @@ struct WasmInspection {
     imports: Vec<WasmImportEvidence>,
 }
 
-fn wasm_inspection_receipt_value(config: &WasmExecutorConfig) -> Result<IOValue> {
+fn wasm_inspection_receipt_value(config: &WasmExecutorConfig) -> Result<IoValue> {
     let inspection = inspect_wasm_module(config)?;
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     Ok(record("wasm-inspection-receipt-v1", vec![
@@ -4618,7 +4617,7 @@ fn wasm_type_ref_kind(ty: &wasmparser::TypeRef) -> &'static str {
     }
 }
 
-fn wasm_import_value(import: &WasmImportEvidence) -> IOValue {
+fn wasm_import_value(import: &WasmImportEvidence) -> IoValue {
     record("import", vec![string(&import.module), string(&import.name), string(&import.kind)])
 }
 
@@ -4693,7 +4692,7 @@ fn allowed_hostcalls_for_actor(suite: &HarnessSuite, actor: &ActorDecl) -> Vec<S
 }
 
 fn hostcalls_required_by_steps(suite: &HarnessSuite, actor_id: &str) -> Vec<String> {
-    let mut hostcalls = BTreeSet::new();
+    let mut hostcalls = OrderedSet::new();
     for step in &suite.steps {
         if step.primary_actor() == actor_id {
             hostcalls.insert(core::AdmissionRequest::from_step(step).action.as_str().to_string());
@@ -4702,7 +4701,7 @@ fn hostcalls_required_by_steps(suite: &HarnessSuite, actor_id: &str) -> Vec<Stri
     hostcalls.into_iter().collect()
 }
 
-pub fn parse_executor_preflights(value: &IOValue) -> Result<ExecutorPreflightsEvidence> {
+pub fn parse_executor_preflights(value: &IoValue) -> Result<ExecutorPreflightsEvidence> {
     let preflights = simple_record(value, "executor-preflights-v1", 2)?;
     let schema = required_string(&preflights[0], "executor preflights schema")?;
     if schema != preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA {
@@ -4722,7 +4721,7 @@ pub fn parse_executor_preflights(value: &IOValue) -> Result<ExecutorPreflightsEv
     })
 }
 
-fn parse_executor_preflight(value: &IOValue) -> Result<ExecutorPreflightEvidence> {
+fn parse_executor_preflight(value: &IoValue) -> Result<ExecutorPreflightEvidence> {
     let preflight = value
         .collect_simple_record("executor-preflight-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <executor-preflight-v1 ...>"))?;
@@ -4833,7 +4832,7 @@ fn validate_hostcall_preflight_bindings(
     Ok(())
 }
 
-fn validate_hostcall_preflight_event(position: usize, event: &IOValue, by_actor: &PreflightMap<'_>) -> Result<()> {
+fn validate_hostcall_preflight_event(position: usize, event: &IoValue, by_actor: &PreflightMap<'_>) -> Result<()> {
     let Some(request) = event.collect_simple_record("hostcall-request-v1", None) else {
         return Ok(());
     };
@@ -5048,7 +5047,7 @@ fn validate_remote_preflight(
     Ok(())
 }
 
-fn parse_optional_steel_review_receipt(receipts: &[IOValue]) -> Result<Option<SteelReviewReceipt>> {
+fn parse_optional_steel_review_receipt(receipts: &[IoValue]) -> Result<Option<SteelReviewReceipt>> {
     let mut parsed = None;
     for receipt in receipts {
         if receipt.collect_simple_record("steel-review-receipt-v1", None).is_some() {
@@ -5061,7 +5060,7 @@ fn parse_optional_steel_review_receipt(receipts: &[IOValue]) -> Result<Option<St
     Ok(parsed)
 }
 
-fn parse_steel_review_receipt(value: &IOValue) -> Result<SteelReviewReceipt> {
+fn parse_steel_review_receipt(value: &IoValue) -> Result<SteelReviewReceipt> {
     let receipt = simple_record(value, "steel-review-receipt-v1", 6)?;
     let schema = required_string(&receipt[0], "Steel review receipt schema")?;
     if schema != preserves_rail::RUNTIME_STEEL_REVIEW_RECEIPT_SCHEMA {
@@ -5092,7 +5091,7 @@ fn parse_steel_review_receipt(value: &IOValue) -> Result<SteelReviewReceipt> {
     })
 }
 
-fn parse_optional_wasm_inspection_receipt(receipts: &[IOValue]) -> Result<Option<WasmInspectionReceipt>> {
+fn parse_optional_wasm_inspection_receipt(receipts: &[IoValue]) -> Result<Option<WasmInspectionReceipt>> {
     let mut parsed = None;
     for receipt in receipts {
         if receipt.collect_simple_record("wasm-inspection-receipt-v1", None).is_some() {
@@ -5105,7 +5104,7 @@ fn parse_optional_wasm_inspection_receipt(receipts: &[IOValue]) -> Result<Option
     Ok(parsed)
 }
 
-fn parse_wasm_inspection_receipt(value: &IOValue) -> Result<WasmInspectionReceipt> {
+fn parse_wasm_inspection_receipt(value: &IoValue) -> Result<WasmInspectionReceipt> {
     let receipt = simple_record(value, "wasm-inspection-receipt-v1", 8)?;
     let schema = required_string(&receipt[0], "Wasm inspection receipt schema")?;
     if schema != preserves_rail::RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA {
@@ -5148,7 +5147,7 @@ fn parse_wasm_inspection_receipt(value: &IOValue) -> Result<WasmInspectionReceip
     })
 }
 
-fn parse_wasm_import(value: &IOValue) -> Result<WasmImportEvidence> {
+fn parse_wasm_import(value: &IoValue) -> Result<WasmImportEvidence> {
     let import = simple_record(value, "import", 3)?;
     Ok(WasmImportEvidence {
         module: required_string(&import[0], "Wasm import module")?,
@@ -5157,7 +5156,7 @@ fn parse_wasm_import(value: &IOValue) -> Result<WasmImportEvidence> {
     })
 }
 
-fn optional_executor_hash(value: &Value<IOValue>, label: &str, field: &str) -> Result<Option<String>> {
+fn optional_executor_hash(value: &Value<IoValue>, label: &str, field: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let parsed = optional_request_string(&record[0], field)?;
@@ -5167,7 +5166,7 @@ fn optional_executor_hash(value: &Value<IOValue>, label: &str, field: &str) -> R
     Ok(parsed)
 }
 
-fn parse_executor_preflight_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_executor_preflight_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks_record = simple_record(&value, "checks", 1)?;
     let check_values = required_sequence(&checks_record[0], "executor preflight checks")?;
@@ -5193,7 +5192,7 @@ fn require_executor_preflight_check(checks: &[String], expected: &str) -> Result
     }
 }
 
-fn validate_denied_observation_events(position: usize, events: &[IOValue]) -> Result<()> {
+fn validate_denied_observation_events(position: usize, events: &[IoValue]) -> Result<()> {
     let mut has_rollback_event = false;
     for event in events {
         match event_boundary(event) {
@@ -5241,15 +5240,15 @@ fn validate_denied_observation_events(position: usize, events: &[IOValue]) -> Re
     Ok(())
 }
 
-fn is_turn_rolled_back(value: &IOValue) -> bool {
+fn is_turn_rolled_back(value: &IoValue) -> bool {
     value.collect_simple_record("turn-rolled-back", Some(2)).is_some()
 }
 
-fn is_turn_journal(value: &IOValue) -> bool {
+fn is_turn_journal(value: &IoValue) -> bool {
     value.collect_simple_record("turn-journal-v1", None).is_some()
 }
 
-fn parse_admission_request(value: &Value<IOValue>) -> Result<core::AdmissionRequest> {
+fn parse_admission_request(value: &Value<IoValue>) -> Result<core::AdmissionRequest> {
     let request_value = value_to_iovalue(value);
     let request = simple_record(&request_value, "request", 5)?;
     Ok(core::AdmissionRequest {
@@ -5261,7 +5260,7 @@ fn parse_admission_request(value: &Value<IOValue>) -> Result<core::AdmissionRequ
     })
 }
 
-fn parse_admission_authority(value: &Value<IOValue>) -> Result<AdmissionAuthorityEvidence> {
+fn parse_admission_authority(value: &Value<IoValue>) -> Result<AdmissionAuthorityEvidence> {
     let authority_value = value_to_iovalue(value);
     let authority = simple_record(&authority_value, "authority", 3)?;
     Ok(AdmissionAuthorityEvidence {
@@ -5271,7 +5270,7 @@ fn parse_admission_authority(value: &Value<IOValue>) -> Result<AdmissionAuthorit
     })
 }
 
-fn parse_admission_decision(value: &Value<IOValue>) -> Result<runtime::AdmissionDecision> {
+fn parse_admission_decision(value: &Value<IoValue>) -> Result<runtime::AdmissionDecision> {
     let decision_value = value_to_iovalue(value);
     let decision = simple_record(&decision_value, "decision", 2)?;
     let status = required_string(&decision[0], "admission decision status")?;
@@ -5283,14 +5282,14 @@ fn parse_admission_decision(value: &Value<IOValue>) -> Result<runtime::Admission
     }
 }
 
-pub fn policy_value(policy: &runtime::AdmissionPolicy) -> IOValue {
+pub fn policy_value(policy: &runtime::AdmissionPolicy) -> IoValue {
     record("policy-v1", vec![
         string(preserves_rail::HARNESS_POLICY_SCHEMA),
         sequence(policy.deny_rules().iter().map(deny_rule_value).collect()),
     ])
 }
 
-pub fn policy_gate_value(policy: &runtime::AdmissionPolicy) -> Result<IOValue> {
+pub fn policy_gate_value(policy: &runtime::AdmissionPolicy) -> Result<IoValue> {
     let preflight = policy_preflight_material(policy)?;
     Ok(record("policy-gate-v1", vec![
         string(preserves_rail::HARNESS_POLICY_GATE_SCHEMA),
@@ -5304,7 +5303,7 @@ pub fn policy_gate_value(policy: &runtime::AdmissionPolicy) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_policy_gate(value: &IOValue) -> Result<PolicyGateEvidence> {
+pub fn parse_policy_gate(value: &IoValue) -> Result<PolicyGateEvidence> {
     let gate = simple_record(value, "policy-gate-v1", 8)?;
     let schema = required_string(&gate[0], "policy gate schema")?;
     if schema != preserves_rail::HARNESS_POLICY_GATE_SCHEMA {
@@ -5391,9 +5390,9 @@ pub fn validate_policy_gate_evidence(suite: &HarnessSuite, policy_gate: Option<&
 
 struct PolicyPreflightMaterial {
     policy_ref: String,
-    nickel_source_value: IOValue,
-    nickel_contract_value: IOValue,
-    basalt_preflight_value: IOValue,
+    nickel_source_value: IoValue,
+    nickel_contract_value: IoValue,
+    basalt_preflight_value: IoValue,
 }
 
 struct NickelSourceEvidence {
@@ -5474,7 +5473,7 @@ fn nickel_source_value(
     export_json: &str,
     export_ref: &str,
     policy_ref: &str,
-) -> IOValue {
+) -> IoValue {
     record("nickel-source", vec![
         string(preserves_rail::HARNESS_POLICY_NICKEL_STATIC_SCHEMA),
         record("source", vec![string(source)]),
@@ -5485,7 +5484,7 @@ fn nickel_source_value(
     ])
 }
 
-fn contract_envelope_value(envelope: &basalt::ContractEnvelope) -> IOValue {
+fn contract_envelope_value(envelope: &basalt::ContractEnvelope) -> IoValue {
     record("contract-envelope", vec![
         string(&envelope.backend),
         string(&envelope.contract_id),
@@ -5497,7 +5496,7 @@ fn contract_envelope_value(envelope: &basalt::ContractEnvelope) -> IOValue {
     ])
 }
 
-fn parse_nickel_source_evidence(value: &Value<IOValue>) -> Result<NickelSourceEvidence> {
+fn parse_nickel_source_evidence(value: &Value<IoValue>) -> Result<NickelSourceEvidence> {
     let value = value_to_iovalue(value);
     let source = simple_record(&value, "nickel-source", 6)?;
     let schema = required_string(&source[0], "Nickel source schema")?;
@@ -5535,7 +5534,7 @@ fn parse_nickel_source_evidence(value: &Value<IOValue>) -> Result<NickelSourceEv
     })
 }
 
-fn parse_nickel_contract_evidence(value: &Value<IOValue>) -> Result<NickelContractEvidence> {
+fn parse_nickel_contract_evidence(value: &Value<IoValue>) -> Result<NickelContractEvidence> {
     let value = value_to_iovalue(value);
     let contract = simple_record(&value, "nickel-contract", 3)?;
     let schema = required_string(&contract[0], "Nickel contract schema")?;
@@ -5567,7 +5566,7 @@ fn parse_nickel_contract_evidence(value: &Value<IOValue>) -> Result<NickelContra
     })
 }
 
-fn parse_contract_envelope(value: &IOValue) -> Result<basalt::ContractEnvelope> {
+fn parse_contract_envelope(value: &IoValue) -> Result<basalt::ContractEnvelope> {
     let envelope = simple_record(value, "contract-envelope", 7)?;
     let backend = required_string(&envelope[0], "policy contract backend")?;
     if backend != "nickel" {
@@ -5617,7 +5616,7 @@ fn parse_contract_envelope(value: &IOValue) -> Result<basalt::ContractEnvelope> 
     ))
 }
 
-fn parse_basalt_policy_preflight_evidence(value: &Value<IOValue>) -> Result<BasaltPolicyPreflightEvidence> {
+fn parse_basalt_policy_preflight_evidence(value: &Value<IoValue>) -> Result<BasaltPolicyPreflightEvidence> {
     let value = value_to_iovalue(value);
     let receipt = simple_record(&value, "basalt-preflight", 8)?;
     let schema = required_string(&receipt[0], "Basalt policy preflight schema")?;
@@ -5735,14 +5734,14 @@ fn nickel_error(error: nickel_lang::Error) -> MoltenError {
     }
 }
 
-pub fn capabilities_value(capabilities: &runtime::CapabilityContext) -> IOValue {
+pub fn capabilities_value(capabilities: &runtime::CapabilityContext) -> IoValue {
     record("capabilities-v1", vec![
         string(preserves_rail::HARNESS_CAPABILITIES_SCHEMA),
         sequence(capabilities.grants().iter().map(capability_grant_value).collect()),
     ])
 }
 
-pub fn capability_gate_value(capabilities: &runtime::CapabilityContext) -> Result<IOValue> {
+pub fn capability_gate_value(capabilities: &runtime::CapabilityContext) -> Result<IoValue> {
     let preflight = capability_preflight_material(capabilities)?;
     Ok(record("capability-gate-v1", vec![
         string(preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA),
@@ -5755,7 +5754,7 @@ pub fn capability_gate_value(capabilities: &runtime::CapabilityContext) -> Resul
     ]))
 }
 
-pub fn parse_capability_gate(value: &IOValue) -> Result<CapabilityGateEvidence> {
+pub fn parse_capability_gate(value: &IoValue) -> Result<CapabilityGateEvidence> {
     let gate = simple_record(value, "capability-gate-v1", 7)?;
     let schema = required_string(&gate[0], "capability gate schema")?;
     if schema != preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA {
@@ -5852,9 +5851,9 @@ pub fn validate_capability_gate_evidence(
 
 struct CapabilityPreflightMaterial {
     capability_ref: String,
-    authority_contract_value: IOValue,
-    authority_preflight_value: IOValue,
-    proofset_value: IOValue,
+    authority_contract_value: IoValue,
+    authority_preflight_value: IoValue,
+    proofset_value: IoValue,
 }
 
 struct AuthorityContractEvidence {
@@ -5934,14 +5933,14 @@ fn capability_grant_refs(capabilities: &runtime::CapabilityContext) -> Result<Ve
     capabilities.grants().iter().map(|grant| canonical_hash(&capability_grant_value(grant))).collect()
 }
 
-fn ucan_proofset_value() -> IOValue {
+fn ucan_proofset_value() -> IoValue {
     record("ucan-proofset-v1", vec![
         string(preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA),
         sequence(Vec::new()),
     ])
 }
 
-fn parse_authority_contract_evidence(value: &Value<IOValue>) -> Result<AuthorityContractEvidence> {
+fn parse_authority_contract_evidence(value: &Value<IoValue>) -> Result<AuthorityContractEvidence> {
     let value = value_to_iovalue(value);
     let contract = simple_record(&value, "authority-contract", 3)?;
     let schema = required_string(&contract[0], "authority contract schema")?;
@@ -5973,7 +5972,7 @@ fn parse_authority_contract_evidence(value: &Value<IOValue>) -> Result<Authority
     })
 }
 
-fn parse_capability_contract_envelope(value: &IOValue) -> Result<basalt::ContractEnvelope> {
+fn parse_capability_contract_envelope(value: &IoValue) -> Result<basalt::ContractEnvelope> {
     let envelope = simple_record(value, "contract-envelope", 7)?;
     let backend = required_string(&envelope[0], "capability contract backend")?;
     if backend != "nickel" {
@@ -6025,7 +6024,7 @@ fn parse_capability_contract_envelope(value: &IOValue) -> Result<basalt::Contrac
     ))
 }
 
-fn parse_basalt_authority_preflight_evidence(value: &Value<IOValue>) -> Result<BasaltAuthorityPreflightEvidence> {
+fn parse_basalt_authority_preflight_evidence(value: &Value<IoValue>) -> Result<BasaltAuthorityPreflightEvidence> {
     let value = value_to_iovalue(value);
     let receipt = simple_record(&value, "basalt-authority-preflight", 9)?;
     let schema = required_string(&receipt[0], "Basalt authority preflight schema")?;
@@ -6071,7 +6070,7 @@ fn parse_basalt_authority_preflight_evidence(value: &Value<IOValue>) -> Result<B
     })
 }
 
-fn parse_ucan_proofset_evidence(value: &Value<IOValue>) -> Result<UcanProofsetEvidence> {
+fn parse_ucan_proofset_evidence(value: &Value<IoValue>) -> Result<UcanProofsetEvidence> {
     let value = value_to_iovalue(value);
     let proofset = simple_record(&value, "ucan-proofset-v1", 2)?;
     let schema = required_string(&proofset[0], "UCAN proofset schema")?;
@@ -6109,7 +6108,7 @@ pub fn admission_authority_evidence(
     })
 }
 
-pub fn parse_capabilities(value: &IOValue) -> Result<runtime::CapabilityContext> {
+pub fn parse_capabilities(value: &IoValue) -> Result<runtime::CapabilityContext> {
     let capabilities = simple_record(value, "capabilities-v1", 2)?;
     let schema = required_string(&capabilities[0], "capabilities schema")?;
     if schema != preserves_rail::HARNESS_CAPABILITIES_SCHEMA {
@@ -6133,7 +6132,7 @@ pub fn parse_capabilities(value: &IOValue) -> Result<runtime::CapabilityContext>
     Ok(runtime::CapabilityContext::from_grants(grants))
 }
 
-fn capability_grant_value(grant: &runtime::CapabilityGrant) -> IOValue {
+fn capability_grant_value(grant: &runtime::CapabilityGrant) -> IoValue {
     record("grant", vec![
         optional_policy_string(grant.actor.as_deref()),
         optional_policy_action(grant.action.as_ref()),
@@ -6142,7 +6141,7 @@ fn capability_grant_value(grant: &runtime::CapabilityGrant) -> IOValue {
     ])
 }
 
-fn capability_gate_checks_value() -> IOValue {
+fn capability_gate_checks_value() -> IoValue {
     record("checks", vec![sequence(
         [
             "capability-schema",
@@ -6161,7 +6160,7 @@ fn capability_gate_checks_value() -> IOValue {
     )])
 }
 
-fn parse_capability_gate_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_capability_gate_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks_record = simple_record(&value, "checks", 1)?;
     let check_values = required_sequence(&checks_record[0], "capability gate checks")?;
@@ -6187,7 +6186,7 @@ fn require_capability_gate_check(checks: &[String], expected: &str) -> Result<()
     }
 }
 
-fn deny_rule_value(rule: &runtime::AdmissionDenyRule) -> IOValue {
+fn deny_rule_value(rule: &runtime::AdmissionDenyRule) -> IoValue {
     record("deny", vec![
         optional_policy_string(rule.actor.as_deref()),
         optional_policy_action(rule.action.as_ref()),
@@ -6197,19 +6196,19 @@ fn deny_rule_value(rule: &runtime::AdmissionDenyRule) -> IOValue {
     ])
 }
 
-fn optional_policy_string(value: Option<&str>) -> IOValue {
+fn optional_policy_string(value: Option<&str>) -> IoValue {
     value.map_or_else(|| bool_value(false), string)
 }
 
-fn optional_policy_action(value: Option<&runtime::AdmissionAction>) -> IOValue {
+fn optional_policy_action(value: Option<&runtime::AdmissionAction>) -> IoValue {
     value.map_or_else(|| bool_value(false), |action| string(action.as_str()))
 }
 
-fn optional_policy_runtime_value(value: Option<&core::RuntimeValue>) -> IOValue {
+fn optional_policy_runtime_value(value: Option<&core::RuntimeValue>) -> IoValue {
     value.map_or_else(|| bool_value(false), |value| value.as_iovalue().clone())
 }
 
-fn policy_gate_checks_value() -> IOValue {
+fn policy_gate_checks_value() -> IoValue {
     record("checks", vec![sequence(
         [
             "policy-schema",
@@ -6227,7 +6226,7 @@ fn policy_gate_checks_value() -> IOValue {
     )])
 }
 
-fn parse_policy_gate_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_policy_gate_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks_record = simple_record(&value, "checks", 1)?;
     let check_values = required_sequence(&checks_record[0], "policy gate checks")?;
@@ -6253,7 +6252,7 @@ fn require_policy_gate_check(checks: &[String], expected: &str) -> Result<()> {
     }
 }
 
-pub fn parse_policy(value: &IOValue) -> Result<runtime::AdmissionPolicy> {
+pub fn parse_policy(value: &IoValue) -> Result<runtime::AdmissionPolicy> {
     let policy = simple_record(value, "policy-v1", 2)?;
     let schema = required_string(&policy[0], "policy schema")?;
     if schema != preserves_rail::HARNESS_POLICY_SCHEMA {
@@ -6293,7 +6292,7 @@ pub fn parse_policy(value: &IOValue) -> Result<runtime::AdmissionPolicy> {
     Ok(runtime::AdmissionPolicy::from_deny_rules(rules))
 }
 
-pub fn parse_actor_registry(value: &IOValue) -> Result<Vec<ActorDecl>> {
+pub fn parse_actor_registry(value: &IoValue) -> Result<Vec<ActorDecl>> {
     let registry = simple_record(value, "actor-registry-v1", 2)?;
     let schema = required_string(&registry[0], "actor registry schema")?;
     if schema != preserves_rail::HARNESS_ACTOR_REGISTRY_SCHEMA {
@@ -6303,7 +6302,7 @@ pub fn parse_actor_registry(value: &IOValue) -> Result<Vec<ActorDecl>> {
         )));
     }
     let actor_values = required_sequence(&registry[1], "actor registry entries")?;
-    let mut seen = BTreeSet::new();
+    let mut seen = OrderedSet::new();
     let mut actors = Vec::with_capacity(actor_values.len());
     for actor in actor_values.iter() {
         let actor_value = value_to_iovalue(&actor);
@@ -6331,7 +6330,7 @@ pub fn parse_actor_registry(value: &IOValue) -> Result<Vec<ActorDecl>> {
     Ok(actors)
 }
 
-fn parse_actor_executor_config(value: &IOValue, kind: &ActorKind, actor_id: &str) -> Result<ActorExecutorConfig> {
+fn parse_actor_executor_config(value: &IoValue, kind: &ActorKind, actor_id: &str) -> Result<ActorExecutorConfig> {
     if value.collect_simple_record("steel-executor-v1", None).is_some() {
         if kind != &ActorKind::Steel {
             return Err(MoltenError::invalid_harness(format!(
@@ -6373,7 +6372,7 @@ fn parse_actor_executor_config(value: &IOValue, kind: &ActorKind, actor_id: &str
     )))
 }
 
-fn parse_steel_executor_config(value: &IOValue) -> Result<SteelExecutorConfig> {
+fn parse_steel_executor_config(value: &IoValue) -> Result<SteelExecutorConfig> {
     let config = simple_record(value, "steel-executor-v1", 4)?;
     let schema = required_string(&config[0], "Steel executor schema")?;
     if schema != preserves_rail::RUNTIME_STEEL_EXECUTOR_SCHEMA {
@@ -6396,7 +6395,7 @@ fn parse_steel_executor_config(value: &IOValue) -> Result<SteelExecutorConfig> {
     })
 }
 
-fn parse_wasm_executor_config(value: &IOValue) -> Result<WasmExecutorConfig> {
+fn parse_wasm_executor_config(value: &IoValue) -> Result<WasmExecutorConfig> {
     let config = simple_record(value, "wasm-executor-v1", 4)?;
     let schema = required_string(&config[0], "Wasm executor schema")?;
     if schema != preserves_rail::RUNTIME_WASM_EXECUTOR_SCHEMA {
@@ -6422,7 +6421,7 @@ fn parse_wasm_executor_config(value: &IOValue) -> Result<WasmExecutorConfig> {
     })
 }
 
-fn parse_adapter_executor_config(value: &IOValue) -> Result<AdapterExecutorConfig> {
+fn parse_adapter_executor_config(value: &IoValue) -> Result<AdapterExecutorConfig> {
     let config = simple_record(value, "adapter-executor-v1", 5)?;
     let schema = required_string(&config[0], "adapter executor schema")?;
     if schema != preserves_rail::RUNTIME_ADAPTER_EXECUTOR_SCHEMA {
@@ -6447,7 +6446,7 @@ fn parse_adapter_executor_config(value: &IOValue) -> Result<AdapterExecutorConfi
     })
 }
 
-fn parse_remote_proxy_executor_config(value: &IOValue) -> Result<RemoteProxyExecutorConfig> {
+fn parse_remote_proxy_executor_config(value: &IoValue) -> Result<RemoteProxyExecutorConfig> {
     let config = simple_record(value, "remote-proxy-executor-v1", 6)?;
     let schema = required_string(&config[0], "remote-proxy executor schema")?;
     if schema != preserves_rail::RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA {
@@ -6475,7 +6474,7 @@ fn parse_remote_proxy_executor_config(value: &IOValue) -> Result<RemoteProxyExec
 }
 
 fn normalize_allowed_hostcalls(values: Vec<String>) -> Result<Vec<String>> {
-    let mut seen = BTreeSet::new();
+    let mut seen = OrderedSet::new();
     for value in values {
         parse_admission_action(&value)?;
         if !seen.insert(value.clone()) {
@@ -6489,7 +6488,7 @@ pub fn actor_ids_for_step(step: &core::CoreStep) -> Vec<&str> {
     step.actor_ids()
 }
 
-fn actor_ids_for_event(event: &IOValue) -> Result<Vec<String>> {
+fn actor_ids_for_event(event: &IoValue) -> Result<Vec<String>> {
     if let Some(actors) = message_participants(event)? {
         return Ok(actors);
     }
@@ -6511,7 +6510,7 @@ fn actor_ids_for_event(event: &IOValue) -> Result<Vec<String>> {
     Ok(Vec::new())
 }
 
-fn message_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
+fn message_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(message) = event.collect_simple_record("message-delivered", Some(3)) {
         return Ok(Some(vec![
             required_string(&message[0], "message sender")?,
@@ -6524,7 +6523,7 @@ fn message_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn assertion_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
+fn assertion_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(observed) = event.collect_simple_record("assertion-observed", Some(3)) {
         return Ok(Some(vec![
             required_string(&observed[0], "assertion observer")?,
@@ -6546,7 +6545,7 @@ fn assertion_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn effect_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
+fn effect_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(request) = event.collect_simple_record("effect-request", None) {
         let arity = request.fields_iter().count();
         if arity != 3 && arity != 4 {
@@ -6567,7 +6566,7 @@ fn effect_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn decision_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
+fn decision_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
     if event.collect_simple_record("admission-decision-v1", None).is_none() {
         return Ok(None);
     }
@@ -6581,7 +6580,7 @@ fn decision_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(Some(actors))
 }
 
-fn boundary_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
+fn boundary_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(input) = event.collect_simple_record("actor-input-v1", Some(9)) {
         let actor_value = value_to_iovalue(&input[1]);
         let actor = simple_record(&actor_value, "actor", 2)?;
@@ -6609,7 +6608,7 @@ fn boundary_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     Ok(None)
 }
 
-fn receipt_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
+fn receipt_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(receipt) = event.collect_simple_record("steel-execution-receipt-v1", None) {
         return Ok(Some(vec![required_record_string(&receipt[1], "actor", "Steel execution actor")?]));
     }
@@ -6620,7 +6619,7 @@ fn receipt_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
 }
 
 fn require_declared_actor(
-    actor_ids: &BTreeSet<&str>,
+    actor_ids: &OrderedSet<&str>,
     actor: &str,
     context: &str,
     observation: Option<usize>,
@@ -6635,7 +6634,7 @@ fn require_declared_actor(
 }
 
 fn infer_actor_registry(steps: &[core::CoreStep]) -> Vec<ActorDecl> {
-    let mut ids = BTreeSet::new();
+    let mut ids = OrderedSet::new();
     for step in steps {
         for actor in actor_ids_for_step(step) {
             ids.insert(actor.to_owned());
@@ -6674,8 +6673,8 @@ fn parse_actor_kind(kind: &str) -> Result<ActorKind> {
 }
 
 fn parse_legacy_report_repro_bundle(
-    bundle_value: &IOValue,
-    bundle: &Record<Value<IOValue>>,
+    bundle_value: &IoValue,
+    bundle: &Record<Value<IoValue>>,
 ) -> Result<HarnessReproBundle> {
     let report_ref = required_string(&bundle[1], "repro bundle report ref")?;
     let suite_ref = required_string(&bundle[2], "repro bundle suite ref")?;
@@ -6732,7 +6731,7 @@ struct ReportBundleBody {
     suite_ref: String,
     replay_status: String,
     profile: String,
-    report_value: IOValue,
+    report_value: IoValue,
     report: HarnessReport,
 }
 
@@ -6745,12 +6744,12 @@ struct SealedRedaction {
     has_redaction: bool,
 }
 
-fn parse_report_repro_bundle(bundle_value: &IOValue, bundle: &Record<Value<IOValue>>) -> Result<HarnessReproBundle> {
+fn parse_report_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<HarnessReproBundle> {
     let body = parse_report_body(bundle)?;
     report_bundle_from_body(bundle_value, body)
 }
 
-fn parse_report_body(bundle: &Record<Value<IOValue>>) -> Result<ReportBundleBody> {
+fn parse_report_body(bundle: &Record<Value<IoValue>>) -> Result<ReportBundleBody> {
     let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
     if kind != "report" {
         return Err(MoltenError::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
@@ -6795,7 +6794,7 @@ fn parse_report_body(bundle: &Record<Value<IOValue>>) -> Result<ReportBundleBody
     })
 }
 
-fn report_bundle_from_body(bundle_value: &IOValue, body: ReportBundleBody) -> Result<HarnessReproBundle> {
+fn report_bundle_from_body(bundle_value: &IoValue, body: ReportBundleBody) -> Result<HarnessReproBundle> {
     Ok(HarnessReproBundle {
         bundle_ref: canonical_hash(bundle_value)?,
         kind: HarnessReproBundleKind::Report,
@@ -6823,8 +6822,8 @@ fn report_bundle_from_body(bundle_value: &IOValue, body: ReportBundleBody) -> Re
 }
 
 fn parse_sealed_report_repro_bundle(
-    bundle_value: &IOValue,
-    bundle: &Record<Value<IOValue>>,
+    bundle_value: &IoValue,
+    bundle: &Record<Value<IoValue>>,
 ) -> Result<HarnessReproBundle> {
     let body = parse_report_body(bundle)?;
     require_report_artifact_refs(&body.artifact_refs, &body.report)?;
@@ -6845,7 +6844,7 @@ fn parse_sealed_report_repro_bundle(
 }
 
 fn parse_sealed_redaction(
-    bundle: &Record<Value<IOValue>>,
+    bundle: &Record<Value<IoValue>>,
     body: &ReportBundleBody,
     arity: usize,
 ) -> Result<SealedRedaction> {
@@ -6875,7 +6874,7 @@ fn parse_sealed_redaction(
     })
 }
 
-fn embedded_gate_receipt(bundle: &Record<Value<IOValue>>, index: usize, expected_ref: &str) -> Result<IOValue> {
+fn embedded_gate_receipt(bundle: &Record<Value<IoValue>>, index: usize, expected_ref: &str) -> Result<IoValue> {
     let gate_receipt_value = value_to_iovalue(&bundle[index]);
     let actual_gate_receipt_ref = canonical_hash(&gate_receipt_value)?;
     if actual_gate_receipt_ref != expected_ref {
@@ -6909,10 +6908,10 @@ fn require_report_seal_checks(checks: &[String], has_redaction: bool) -> Result<
 }
 
 fn sealed_report_bundle(
-    bundle_value: &IOValue,
+    bundle_value: &IoValue,
     body: ReportBundleBody,
     seal: ReproSeal,
-    gate_receipt_value: IOValue,
+    gate_receipt_value: IoValue,
     redaction: SealedRedaction,
 ) -> Result<HarnessReproBundle> {
     Ok(HarnessReproBundle {
@@ -6946,28 +6945,28 @@ struct ProfiledBody {
     source_report_ref: String,
     source_suite_ref: String,
     output_report_ref: String,
-    export_profile_value: IOValue,
+    export_profile_value: IoValue,
     export_profile: ReproExportProfileEvidence,
-    report_value: IOValue,
+    report_value: IoValue,
     report: HarnessReport,
 }
 
 struct ProfiledEvidence {
     policy_ref: String,
     manifest_ref: String,
-    manifest_value: IOValue,
+    manifest_value: IoValue,
     transform_receipt: RedactionTransformReceiptEvidence,
 }
 
 struct ProfiledPrivate {
     private_bundle_profile_ref: Option<String>,
-    private_bundle_profile_value: Option<IOValue>,
+    private_bundle_profile_value: Option<IoValue>,
     checks_index: usize,
 }
 
 fn parse_profiled_report_repro_bundle(
-    bundle_value: &IOValue,
-    bundle: &Record<Value<IOValue>>,
+    bundle_value: &IoValue,
+    bundle: &Record<Value<IoValue>>,
 ) -> Result<HarnessReproBundle> {
     let arity = bundle.fields_iter().count();
     let body = parse_profiled_body(bundle)?;
@@ -6979,7 +6978,7 @@ fn parse_profiled_report_repro_bundle(
     profiled_report_bundle(bundle_value, body, evidence, private)
 }
 
-fn parse_profiled_body(bundle: &Record<Value<IOValue>>) -> Result<ProfiledBody> {
+fn parse_profiled_body(bundle: &Record<Value<IoValue>>) -> Result<ProfiledBody> {
     let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
     if kind != "report" {
         return Err(MoltenError::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
@@ -7032,7 +7031,7 @@ fn parse_profiled_body(bundle: &Record<Value<IOValue>>) -> Result<ProfiledBody> 
     })
 }
 
-fn parse_profiled_evidence(bundle: &Record<Value<IOValue>>, body: &ProfiledBody) -> Result<ProfiledEvidence> {
+fn parse_profiled_evidence(bundle: &Record<Value<IoValue>>, body: &ProfiledBody) -> Result<ProfiledEvidence> {
     let policy_value = value_to_iovalue(&bundle[19]);
     parse_redaction_policy(&policy_value)?;
     let policy_ref = canonical_hash(&policy_value)?;
@@ -7103,7 +7102,7 @@ fn require_profiled_output_inventory(
 }
 
 fn parse_profiled_private(
-    bundle: &Record<Value<IOValue>>,
+    bundle: &Record<Value<IoValue>>,
     body: &ProfiledBody,
     evidence: &ProfiledEvidence,
     arity: usize,
@@ -7166,7 +7165,7 @@ fn require_profiled_checks(checks: &[String], profile: ReproExportProfile) -> Re
 }
 
 fn profiled_report_bundle(
-    bundle_value: &IOValue,
+    bundle_value: &IoValue,
     body: ProfiledBody,
     evidence: ProfiledEvidence,
     private: ProfiledPrivate,
@@ -7199,7 +7198,7 @@ fn profiled_report_bundle(
 }
 
 fn validate_redaction_transform_manifest(
-    value: &IOValue,
+    value: &IoValue,
     source_report_ref: &str,
     source_suite_ref: &str,
     report: &HarnessReport,
@@ -7243,7 +7242,7 @@ fn validate_redaction_transform_manifest(
     Ok(())
 }
 
-fn collect_redaction_marker_refs(value: &IOValue) -> Result<Vec<String>> {
+fn collect_redaction_marker_refs(value: &IoValue) -> Result<Vec<String>> {
     let mut refs = Vec::with_capacity(8);
     let mut stack = vec![value.clone()];
     while let Some(current) = stack.pop() {
@@ -7274,7 +7273,7 @@ fn collect_redaction_marker_refs(value: &IOValue) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-fn parse_failure_repro_bundle(bundle_value: &IOValue, bundle: &Record<Value<IOValue>>) -> Result<HarnessReproBundle> {
+fn parse_failure_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<HarnessReproBundle> {
     let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
     if kind != "failure" {
         return Err(MoltenError::invalid_harness(format!("expected failure repro bundle kind, got {kind}")));
@@ -7325,7 +7324,7 @@ struct ReproSeal {
 }
 
 fn parse_repro_seal(
-    value: &Value<IOValue>,
+    value: &Value<IoValue>,
     report_ref: &str,
     suite_ref: &str,
     profile: &str,
@@ -7364,7 +7363,7 @@ fn parse_repro_seal(
     Ok(ReproSeal { gate_receipt_ref })
 }
 
-fn parse_seal_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_seal_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks_record = simple_record(&value, "seal-checks", 1)?;
     let check_values = required_sequence(&checks_record[0], "repro seal checks")?;
@@ -7400,7 +7399,7 @@ struct ReproReportMatchInput<'a> {
     profile: &'a str,
     actors: &'a [ActorDecl],
     effect_log: &'a [EffectLogEntry],
-    suite_value: &'a IOValue,
+    suite_value: &'a IoValue,
 }
 
 fn require_report_artifact_refs(refs: &[(String, String)], report: &HarnessReport) -> Result<()> {
@@ -7442,15 +7441,15 @@ fn require_repro_report_matches(input: &ReproReportMatchInput<'_>) -> Result<()>
     Ok(())
 }
 
-fn tool_value() -> IOValue {
+fn tool_value() -> IoValue {
     record("tool", vec![string("molten"), string(env!("CARGO_PKG_VERSION"))])
 }
 
-fn command_value(command: &[String]) -> IOValue {
+fn command_value(command: &[String]) -> IoValue {
     record("command", vec![sequence(command.iter().map(string).collect())])
 }
 
-fn replay_instructions_value(instructions: &[&[&str]]) -> IOValue {
+fn replay_instructions_value(instructions: &[&[&str]]) -> IoValue {
     record("replay-instructions", vec![sequence(
         instructions
             .iter()
@@ -7459,7 +7458,7 @@ fn replay_instructions_value(instructions: &[&[&str]]) -> IOValue {
     )])
 }
 
-fn artifact_refs_value(refs: &[(&str, &str)]) -> IOValue {
+fn artifact_refs_value(refs: &[(&str, &str)]) -> IoValue {
     record("artifact-refs", vec![sequence(
         refs.iter()
             .map(|(kind, artifact_ref)| record("artifact-ref", vec![string(*kind), string(*artifact_ref)]))
@@ -7467,7 +7466,7 @@ fn artifact_refs_value(refs: &[(&str, &str)]) -> IOValue {
     )])
 }
 
-fn artifact_refs_owned_value(refs: &[(String, String)]) -> IOValue {
+fn artifact_refs_owned_value(refs: &[(String, String)]) -> IoValue {
     record("artifact-refs", vec![sequence(
         refs.iter()
             .map(|(kind, artifact_ref)| record("artifact-ref", vec![string(kind), string(artifact_ref)]))
@@ -7479,7 +7478,7 @@ fn report_artifact_refs_value(
     report: &HarnessReport,
     gate_receipt_ref: Option<&str>,
     redaction_refs: Option<(&str, &str)>,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     Ok(artifact_refs_owned_value(&report_artifact_refs(report, gate_receipt_ref, redaction_refs)?))
 }
 
@@ -7577,10 +7576,10 @@ struct RedactionTransformReceiptEvidence {
     loss_classification: String,
     marker_refs: Vec<String>,
     encrypted_refs: Vec<String>,
-    value: IOValue,
+    value: IoValue,
 }
 
-fn redaction_policy_value() -> IOValue {
+fn redaction_policy_value() -> IoValue {
     record("redaction-policy-v1", vec![
         string(preserves_rail::HARNESS_REDACTION_POLICY_SCHEMA),
         record("mode", vec![string("deny-sensitive-markers")]),
@@ -7590,7 +7589,7 @@ fn redaction_policy_value() -> IOValue {
     ])
 }
 
-fn repro_export_profile_value(profile: ReproExportProfile) -> IOValue {
+fn repro_export_profile_value(profile: ReproExportProfile) -> IoValue {
     record("repro-export-profile-v1", vec![
         string(preserves_rail::HARNESS_REDACTION_PROFILE_SCHEMA),
         record("name", vec![string(profile.as_str())]),
@@ -7606,7 +7605,7 @@ fn repro_export_profile_value(profile: ReproExportProfile) -> IOValue {
     ])
 }
 
-fn parse_repro_export_profile(value: &IOValue) -> Result<ReproExportProfileEvidence> {
+fn parse_repro_export_profile(value: &IoValue) -> Result<ReproExportProfileEvidence> {
     let profile_value = simple_record(value, "repro-export-profile-v1", 6)?;
     let schema = required_string(&profile_value[0], "repro export profile schema")?;
     if schema != preserves_rail::HARNESS_REDACTION_PROFILE_SCHEMA {
@@ -7651,7 +7650,7 @@ fn redaction_transform_manifest_value(
     profile: ReproExportProfile,
     entries: &[RedactionManifestEntry],
     encrypted_refs: &[String],
-) -> IOValue {
+) -> IoValue {
     record("redaction-transform-manifest-v1", vec![
         string(preserves_rail::HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA),
         record("source-report", vec![string(&source_report.report_ref)]),
@@ -7684,7 +7683,7 @@ fn redaction_transform_manifest_value(
     ])
 }
 
-fn redaction_transform_receipt_value(input: &RedactionTransformReceiptInput<'_>) -> Result<IOValue> {
+fn redaction_transform_receipt_value(input: &RedactionTransformReceiptInput<'_>) -> Result<IoValue> {
     Ok(record("redaction-transform-receipt-v1", vec![
         string(preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
@@ -7701,7 +7700,7 @@ fn redaction_transform_receipt_value(input: &RedactionTransformReceiptInput<'_>)
     ]))
 }
 
-fn parse_redaction_transform_receipt(value: &IOValue) -> Result<RedactionTransformReceiptEvidence> {
+fn parse_redaction_transform_receipt(value: &IoValue) -> Result<RedactionTransformReceiptEvidence> {
     let receipt = simple_record(value, "redaction-transform-receipt-v1", 12)?;
     let schema = required_string(&receipt[0], "redaction transform schema")?;
     if schema != preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA {
@@ -7747,7 +7746,7 @@ fn parse_redaction_transform_receipt(value: &IOValue) -> Result<RedactionTransfo
     })
 }
 
-fn redaction_gate_value(report_value: &IOValue, report: &HarnessReport) -> Result<IOValue> {
+fn redaction_gate_value(report_value: &IoValue, report: &HarnessReport) -> Result<IoValue> {
     if let Some(marker) = first_sensitive_marker(report_value) {
         return Err(MoltenError::invalid_harness(format!(
             "redaction preflight found sensitive marker {marker}; sealed pass repro bundles require explicit redaction before export"
@@ -7766,18 +7765,18 @@ fn redaction_gate_value(report_value: &IOValue, report: &HarnessReport) -> Resul
     ]))
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn optional_ref_value(reference: Option<&str>) -> IOValue {
+fn optional_ref_value(reference: Option<&str>) -> IoValue {
     match reference {
         Some(reference) => record("some", vec![string(reference)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn checks_value_for_names(names: &[&str]) -> IOValue {
+fn checks_value_for_names(names: &[&str]) -> IoValue {
     record("checks", vec![sequence(
         names.iter().map(|name| record("check", vec![string(*name), string("pass")])).collect(),
     )])
@@ -7806,7 +7805,7 @@ fn redaction_transform_check_names(profile: ReproExportProfile) -> Vec<&'static 
     checks
 }
 
-fn profiled_repro_checks_value(profile: ReproExportProfile) -> IOValue {
+fn profiled_repro_checks_value(profile: ReproExportProfile) -> IoValue {
     let mut checks = vec![
         "profile-schema",
         "redaction-transform-receipt",
@@ -7828,7 +7827,7 @@ fn profiled_repro_checks_value(profile: ReproExportProfile) -> IOValue {
     )])
 }
 
-fn redaction_gate_checks_value() -> IOValue {
+fn redaction_gate_checks_value() -> IoValue {
     record("checks", vec![sequence(
         [
             "redaction-policy",
@@ -7846,10 +7845,10 @@ fn redaction_gate_checks_value() -> IOValue {
 }
 
 fn validate_redaction_evidence(
-    report_value: &IOValue,
+    report_value: &IoValue,
     report: &HarnessReport,
-    policy_value: &IOValue,
-    gate_value: &IOValue,
+    policy_value: &IoValue,
+    gate_value: &IoValue,
 ) -> Result<(String, String)> {
     let expected_policy = redaction_policy_value();
     let expected_policy_ref = canonical_hash(&expected_policy)?;
@@ -7872,7 +7871,7 @@ fn validate_redaction_evidence(
     Ok((actual_policy_ref, actual_gate_ref))
 }
 
-fn parse_redaction_policy(value: &IOValue) -> Result<()> {
+fn parse_redaction_policy(value: &IoValue) -> Result<()> {
     let policy = simple_record(value, "redaction-policy-v1", 3)?;
     let schema = required_string(&policy[0], "redaction policy schema")?;
     if schema != preserves_rail::HARNESS_REDACTION_POLICY_SCHEMA {
@@ -7897,10 +7896,10 @@ fn parse_redaction_policy(value: &IOValue) -> Result<()> {
 }
 
 fn parse_redaction_gate(
-    value: &IOValue,
+    value: &IoValue,
     report: &HarnessReport,
     policy_ref: &str,
-    report_value: &IOValue,
+    report_value: &IoValue,
 ) -> Result<()> {
     let gate = simple_record(value, "redaction-gate-v1", 7)?;
     let schema = required_string(&gate[0], "redaction gate schema")?;
@@ -7942,7 +7941,7 @@ fn parse_redaction_gate(
     Ok(())
 }
 
-fn parse_redaction_gate_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_redaction_gate_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks_record = simple_record(&value, "checks", 1)?;
     let check_values = required_sequence(&checks_record[0], "redaction gate checks")?;
@@ -7972,7 +7971,7 @@ fn is_sensitive_record_label(label: &str) -> bool {
     FORBIDDEN_REDACTION_MARKERS.iter().any(|marker| marker == &label)
 }
 
-fn validate_profiled_output(value: &IOValue, profile: ReproExportProfile) -> Result<Vec<String>> {
+fn validate_profiled_output(value: &IoValue, profile: ReproExportProfile) -> Result<Vec<String>> {
     let mut encrypted_refs = Vec::with_capacity(8);
     let mut stack = vec![value.clone()];
     while let Some(current) = stack.pop() {
@@ -8029,7 +8028,7 @@ fn validate_profiled_output(value: &IOValue, profile: ReproExportProfile) -> Res
     Ok(encrypted_refs)
 }
 
-fn first_sensitive_marker(value: &IOValue) -> Option<String> {
+fn first_sensitive_marker(value: &IoValue) -> Option<String> {
     let mut stack = vec![value.clone()];
     while let Some(current) = stack.pop() {
         if current.is_record() {
@@ -8060,7 +8059,7 @@ fn first_sensitive_marker(value: &IOValue) -> Option<String> {
     None
 }
 
-fn repro_seal_value(report: &HarnessReport, gate_receipt_ref: &str) -> IOValue {
+fn repro_seal_value(report: &HarnessReport, gate_receipt_ref: &str) -> IoValue {
     record("repro-seal", vec![
         string(preserves_rail::HARNESS_REPRO_SEAL_SCHEMA),
         record("decision", vec![string("pass")]),
@@ -8072,7 +8071,7 @@ fn repro_seal_value(report: &HarnessReport, gate_receipt_ref: &str) -> IOValue {
     ])
 }
 
-fn sealed_repro_checks_value() -> IOValue {
+fn sealed_repro_checks_value() -> IoValue {
     record("seal-checks", vec![sequence(
         [
             "sealed-report",
@@ -8125,31 +8124,31 @@ fn default_failure_bundle_command() -> Vec<String> {
     .collect()
 }
 
-fn required_record_string(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+fn required_record_string(value: &Value<IoValue>, label: &str, field: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], field)
 }
 
-fn required_record_hash(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+fn required_record_hash(value: &Value<IoValue>, label: &str, field: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_hash(&record[0], field)
 }
 
-fn required_record_bool(value: &Value<IOValue>, label: &str, field: &str) -> Result<bool> {
+fn required_record_bool(value: &Value<IoValue>, label: &str, field: &str) -> Result<bool> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_bool(&record[0], field)
 }
 
-fn required_record_u64(value: &Value<IOValue>, label: &str, field: &str) -> Result<u64> {
+fn required_record_u64(value: &Value<IoValue>, label: &str, field: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_u64(&record[0], field)
 }
 
-fn required_record_sequence(value: &Value<IOValue>, label: &str, field: &str) -> Result<Vec<Value<IOValue>>> {
+fn required_record_sequence(value: &Value<IoValue>, label: &str, field: &str) -> Result<Vec<Value<IoValue>>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let owned = value_to_iovalue(&record[0]);
@@ -8159,28 +8158,28 @@ fn required_record_sequence(value: &Value<IOValue>, label: &str, field: &str) ->
         .into_owned())
 }
 
-fn required_record_hash_sequence(value: &Value<IOValue>, label: &str, field: &str) -> Result<Vec<String>> {
+fn required_record_hash_sequence(value: &Value<IoValue>, label: &str, field: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let values = required_sequence(&record[0], field)?;
     values.iter().map(|value| required_hash(&value, field)).collect()
 }
 
-fn required_record_string_sequence(value: &Value<IOValue>, label: &str, field: &str) -> Result<Vec<String>> {
+fn required_record_string_sequence(value: &Value<IoValue>, label: &str, field: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let values = required_sequence(&record[0], field)?;
     values.iter().map(|value| required_string(&value, field)).collect()
 }
 
-fn required_record_iovalue_sequence(value: &Value<IOValue>, label: &str, field: &str) -> Result<Vec<IOValue>> {
+fn required_record_iovalue_sequence(value: &Value<IoValue>, label: &str, field: &str) -> Result<Vec<IoValue>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let values = required_sequence(&record[0], field)?;
     Ok(values.iter().map(|value| value_to_iovalue(&value)).collect())
 }
 
-fn validate_tool_record(value: &Value<IOValue>) -> Result<()> {
+fn validate_tool_record(value: &Value<IoValue>) -> Result<()> {
     let value = value_to_iovalue(value);
     let tool = simple_record(&value, "tool", 2)?;
     let name = required_string(&tool[0], "repro bundle tool name")?;
@@ -8194,14 +8193,14 @@ fn validate_tool_record(value: &Value<IOValue>) -> Result<()> {
     Ok(())
 }
 
-fn validate_sequence_record(value: &Value<IOValue>, label: &str, field: &str) -> Result<()> {
+fn validate_sequence_record(value: &Value<IoValue>, label: &str, field: &str) -> Result<()> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_sequence(&record[0], field)?;
     Ok(())
 }
 
-fn parse_artifact_refs(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_artifact_refs(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let artifact_refs = simple_record(&value, "artifact-refs", 1)?;
     let ref_values = required_sequence(&artifact_refs[0], "repro bundle artifact refs")?;
@@ -8225,7 +8224,7 @@ fn require_artifact_ref(refs: &[(String, String)], kind: &str, expected: &str) -
     }
 }
 
-pub fn effect_log_value(entries: &[EffectLogEntry]) -> IOValue {
+pub fn effect_log_value(entries: &[EffectLogEntry]) -> IoValue {
     record("effect-log-v1", vec![
         string(preserves_rail::HARNESS_EFFECT_LOG_SCHEMA),
         sequence(
@@ -8243,11 +8242,11 @@ pub fn effect_log_value(entries: &[EffectLogEntry]) -> IOValue {
     ])
 }
 
-pub fn budget_limits_value(budget: &HarnessBudget) -> IOValue {
+pub fn budget_limits_value(budget: &HarnessBudget) -> IoValue {
     record("budget-v1", vec![string(preserves_rail::HARNESS_BUDGET_SCHEMA), limits_value(budget)])
 }
 
-pub fn budget_value(budget: &HarnessBudget, usage: &BudgetUsage) -> IOValue {
+pub fn budget_value(budget: &HarnessBudget, usage: &BudgetUsage) -> IoValue {
     record("budget-v1", vec![
         string(preserves_rail::HARNESS_BUDGET_SCHEMA),
         limits_value(budget),
@@ -8260,7 +8259,7 @@ pub fn budget_value(budget: &HarnessBudget, usage: &BudgetUsage) -> IOValue {
     ])
 }
 
-pub fn parse_budget(value: &IOValue) -> Result<BudgetEvidence> {
+pub fn parse_budget(value: &IoValue) -> Result<BudgetEvidence> {
     let budget = simple_record(value, "budget-v1", 3)?;
     let limits = parse_budget_schema_and_limits(&budget)?;
     let usage_value = value_to_iovalue(&budget[2]);
@@ -8274,12 +8273,12 @@ pub fn parse_budget(value: &IOValue) -> Result<BudgetEvidence> {
     Ok(BudgetEvidence { limits, usage })
 }
 
-pub fn parse_budget_limits(value: &IOValue) -> Result<HarnessBudget> {
+pub fn parse_budget_limits(value: &IoValue) -> Result<HarnessBudget> {
     let budget = simple_record(value, "budget-v1", 2)?;
     parse_budget_schema_and_limits(&budget)
 }
 
-fn limits_value(budget: &HarnessBudget) -> IOValue {
+fn limits_value(budget: &HarnessBudget) -> IoValue {
     record("limits", vec![
         u64_value(budget.max_steps),
         u64_value(budget.max_effects),
@@ -8288,7 +8287,7 @@ fn limits_value(budget: &HarnessBudget) -> IOValue {
     ])
 }
 
-fn parse_budget_schema_and_limits(budget: &Record<Value<IOValue>>) -> Result<HarnessBudget> {
+fn parse_budget_schema_and_limits(budget: &Record<Value<IoValue>>) -> Result<HarnessBudget> {
     let schema = required_string(&budget[0], "budget schema")?;
     if schema != preserves_rail::HARNESS_BUDGET_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
@@ -8306,7 +8305,7 @@ fn parse_budget_schema_and_limits(budget: &Record<Value<IOValue>>) -> Result<Har
     })
 }
 
-pub fn parse_effect_log(value: &IOValue) -> Result<Vec<EffectLogEntry>> {
+pub fn parse_effect_log(value: &IoValue) -> Result<Vec<EffectLogEntry>> {
     let effect_log = simple_record(value, "effect-log-v1", 2)?;
     let schema = required_string(&effect_log[0], "effect log schema")?;
     if schema != preserves_rail::HARNESS_EFFECT_LOG_SCHEMA {
@@ -8346,7 +8345,7 @@ pub fn parse_effect_log(value: &IOValue) -> Result<Vec<EffectLogEntry>> {
 
 pub fn effect_log_from_observations(observations: &[HarnessObservation]) -> Result<Vec<EffectLogEntry>> {
     let mut entries = Vec::new();
-    let mut pending_request: Option<(u64, IOValue)> = None;
+    let mut pending_request: Option<(u64, IoValue)> = None;
     for observation in observations {
         for event in &observation.events {
             match event_boundary(event) {
@@ -8397,10 +8396,10 @@ pub fn effect_log_from_observations(observations: &[HarnessObservation]) -> Resu
 }
 
 pub(crate) fn append_effect_entries_from_events(
-    events: &[IOValue],
+    events: &[IoValue],
     entries: &mut impl crate::bounded::VecSink<EffectLogEntry>,
 ) -> Result<()> {
-    let mut pending_request: Option<(u64, IOValue)> = None;
+    let mut pending_request: Option<(u64, IoValue)> = None;
     for event in events {
         match event_boundary(event) {
             EventBoundary::EffectRequest => {
@@ -8466,7 +8465,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     Ok(())
 }
 
-pub fn effect_response_sequence_and_value(value: &IOValue) -> Result<(u64, u64)> {
+pub fn effect_response_sequence_and_value(value: &IoValue) -> Result<(u64, u64)> {
     let response = value
         .collect_simple_record("effect-response", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected effect-response record"))?;
@@ -8480,7 +8479,7 @@ pub fn effect_response_sequence_and_value(value: &IOValue) -> Result<(u64, u64)>
     Ok((sequence, value))
 }
 
-pub fn effect_request_sequence(value: &IOValue) -> Result<u64> {
+pub fn effect_request_sequence(value: &IoValue) -> Result<u64> {
     let request = value
         .collect_simple_record("effect-request", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected effect-request record"))?;
@@ -8491,7 +8490,7 @@ pub fn effect_request_sequence(value: &IOValue) -> Result<u64> {
     required_u64(&request[2], "effect request sequence")
 }
 
-pub fn event_boundary(value: &IOValue) -> EventBoundary {
+pub fn event_boundary(value: &IoValue) -> EventBoundary {
     if value.collect_simple_record("effect-request", None).is_some() {
         return EventBoundary::EffectRequest;
     }
@@ -8525,7 +8524,7 @@ pub fn event_boundary(value: &IOValue) -> EventBoundary {
     EventBoundary::Trace
 }
 
-fn parse_observation(value: &Value<IOValue>) -> Result<HarnessObservation> {
+fn parse_observation(value: &Value<IoValue>) -> Result<HarnessObservation> {
     let value = value_to_iovalue(value);
     let observation = value
         .collect_simple_record("turn-observation-v1", None)
@@ -8575,7 +8574,7 @@ fn parse_observation(value: &Value<IOValue>) -> Result<HarnessObservation> {
     })
 }
 
-fn parse_step(value: &Value<IOValue>) -> Result<core::CoreStep> {
+fn parse_step(value: &Value<IoValue>) -> Result<core::CoreStep> {
     if let Some(record) = value.collect_simple_record("send", Some(3)) {
         return Ok(core::CoreStep::Send {
             from: required_string(&record[0], "send from")?,
@@ -8615,8 +8614,8 @@ fn parse_step(value: &Value<IOValue>) -> Result<core::CoreStep> {
     Err(MoltenError::invalid_harness("unknown harness step record"))
 }
 
-fn tuple_set<T, F>(label: &'static str, values: &BTreeSet<T>, mut render: F) -> IOValue
-where F: FnMut(&T) -> IOValue {
+fn tuple_set<T, F>(label: &'static str, values: &OrderedSet<T>, mut render: F) -> IoValue
+where F: FnMut(&T) -> IoValue {
     record(label, vec![sequence(values.iter().map(&mut render).collect())])
 }
 
@@ -8636,7 +8635,7 @@ fn error_kind(error: &MoltenError) -> String {
     }
 }
 
-fn error_diagnostics(error: &MoltenError) -> Vec<IOValue> {
+fn error_diagnostics(error: &MoltenError) -> Vec<IoValue> {
     match error {
         MoltenError::HarnessDivergence(divergence) => {
             let mut diagnostics = Vec::new();
@@ -8652,37 +8651,41 @@ fn error_diagnostics(error: &MoltenError) -> Vec<IOValue> {
     }
 }
 
-fn simple_record<'a>(value: &'a IOValue, label: &str, arity: usize) -> Result<Cow<'a, Record<Value<IOValue>>>> {
+fn simple_record<'a>(
+    value: &'a IoValue,
+    label: &str,
+    arity: usize,
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
-fn value_has_record_label(value: &Value<IOValue>, label: &str) -> bool {
+fn value_has_record_label(value: &Value<IoValue>, label: &str) -> bool {
     value.collect_simple_record(label, None).is_some()
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_bool(value: &Value<IOValue>, field: &str) -> Result<bool> {
+fn required_bool(value: &Value<IoValue>, field: &str) -> Result<bool> {
     value
         .as_boolean()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected boolean for {field}")))
 }
 
-fn optional_string(value: &Value<IOValue>, field: &str) -> Result<Option<String>> {
+fn optional_string(value: &Value<IoValue>, field: &str) -> Result<Option<String>> {
     if value.as_boolean() == Some(false) {
         Ok(None)
     } else {
@@ -8690,7 +8693,7 @@ fn optional_string(value: &Value<IOValue>, field: &str) -> Result<Option<String>
     }
 }
 
-fn optional_request_string(value: &Value<IOValue>, field: &str) -> Result<Option<String>> {
+fn optional_request_string(value: &Value<IoValue>, field: &str) -> Result<Option<String>> {
     if value.as_boolean() == Some(false) || value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -8701,7 +8704,7 @@ fn optional_request_string(value: &Value<IOValue>, field: &str) -> Result<Option
     required_string(value, field).map(Some)
 }
 
-fn optional_request_runtime_value(value: &Value<IOValue>, _field: &str) -> Result<Option<core::RuntimeValue>> {
+fn optional_request_runtime_value(value: &Value<IoValue>, _field: &str) -> Result<Option<core::RuntimeValue>> {
     if value.as_boolean() == Some(false) || value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -8712,7 +8715,7 @@ fn optional_request_runtime_value(value: &Value<IOValue>, _field: &str) -> Resul
     core::RuntimeValue::new(value_to_iovalue(value)).map(Some)
 }
 
-fn optional_request_u64(value: &Value<IOValue>, field: &str) -> Result<Option<u64>> {
+fn optional_request_u64(value: &Value<IoValue>, field: &str) -> Result<Option<u64>> {
     if value.as_boolean() == Some(false) || value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -8723,7 +8726,7 @@ fn optional_request_u64(value: &Value<IOValue>, field: &str) -> Result<Option<u6
     required_u64(value, field).map(Some)
 }
 
-fn optional_action(value: &Value<IOValue>, field: &str) -> Result<Option<runtime::AdmissionAction>> {
+fn optional_action(value: &Value<IoValue>, field: &str) -> Result<Option<runtime::AdmissionAction>> {
     if value.as_boolean() == Some(false) {
         Ok(None)
     } else {
@@ -8731,7 +8734,7 @@ fn optional_action(value: &Value<IOValue>, field: &str) -> Result<Option<runtime
     }
 }
 
-fn optional_runtime_match_value(value: &Value<IOValue>) -> Result<Option<core::RuntimeValue>> {
+fn optional_runtime_match_value(value: &Value<IoValue>) -> Result<Option<core::RuntimeValue>> {
     if value.as_boolean() == Some(false) {
         Ok(None)
     } else {
@@ -8739,7 +8742,7 @@ fn optional_runtime_match_value(value: &Value<IOValue>) -> Result<Option<core::R
     }
 }
 
-fn required_hash(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_hash(value: &Value<IoValue>, field: &str) -> Result<String> {
     let hash = required_string(value, field)?;
     validate_content_ref(&hash).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {hash}: {error}"))
@@ -8747,11 +8750,11 @@ fn required_hash(value: &Value<IOValue>, field: &str) -> Result<String> {
     Ok(hash)
 }
 
-fn required_runtime_value(value: &Value<IOValue>, _field: &str) -> Result<core::RuntimeValue> {
+fn required_runtime_value(value: &Value<IoValue>, _field: &str) -> Result<core::RuntimeValue> {
     core::RuntimeValue::new(value_to_iovalue(value))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
