@@ -1,7 +1,6 @@
-use std::path::Path;
-
-use molten::error::MoltenError;
-use molten::error::Result;
+type MoltenError = molten::error::MoltenError;
+type Path = std::path::Path;
+type Result<T> = molten::error::Result<T>;
 
 use super::command::worker;
 use super::io;

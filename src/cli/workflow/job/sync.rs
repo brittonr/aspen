@@ -1,5 +1,5 @@
-use molten::error::MoltenError;
-use molten::error::Result;
+type MoltenError = molten::error::MoltenError;
+type Result<T> = molten::error::Result<T>;
 
 use super::command::sync;
 use super::io;
