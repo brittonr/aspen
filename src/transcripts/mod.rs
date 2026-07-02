@@ -19,12 +19,6 @@ mod fs {
     }
 }
 
-use crate::artifacts;
-use crate::eval_cache;
-use crate::harness;
-use crate::schema_identity;
-use crate::typed_storage;
-
 const TRANSCRIPT_ARTIFACT_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_ARTIFACT_SCHEMA;
 const TRANSCRIPT_RUN_RECEIPT_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_RUN_RECEIPT_SCHEMA;
 const TRANSCRIPT_STANZA_OUTCOME_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_STANZA_OUTCOME_SCHEMA;
@@ -411,10 +405,10 @@ fn cached_run(transcript: &TranscriptArtifact, input: &TranscriptRunInput) -> Re
         return Ok(None);
     };
     let cache_key = transcript_cache_key(transcript)?;
-    if let Ok(cache_get) = eval_cache::get(
+    if let Ok(cache_get) = crate::eval_cache::get(
         cache_root,
-        &canonical_hash(&eval_cache::eval_cache_key_value(&cache_key)?)?,
-        &eval_cache::EvalCacheGetInput {
+        &canonical_hash(&crate::eval_cache::eval_cache_key_value(&cache_key)?)?,
+        &crate::eval_cache::EvalCacheGetInput {
             current_policy_refs: transcript.policy_refs.clone(),
             current_capability_refs: transcript.capability_refs.clone(),
             current_revocation_refs: transcript.revocation_refs.clone(),
@@ -446,9 +440,9 @@ fn store_run(
         && let Some(cache_root) = input.cache_root.as_ref()
     {
         let cache_key = transcript_cache_key(transcript)?;
-        let put = eval_cache::put(cache_root, &cache_key, &eval_cache::EvalCacheValueInput {
-            tier: eval_cache::TIER_SIMULATED.to_string(),
-            status: eval_cache::STATUS_PASS.to_string(),
+        let put = crate::eval_cache::put(cache_root, &cache_key, &crate::eval_cache::EvalCacheValueInput {
+            tier: crate::eval_cache::TIER_SIMULATED.to_string(),
+            status: crate::eval_cache::STATUS_PASS.to_string(),
             output: Some(receipt.clone()),
             dependency_refs: cache_key.dependency_refs.clone(),
             policy_refs: cache_key.policy_refs.clone(),
@@ -511,13 +505,13 @@ pub fn render_transcript(transcript: &TranscriptArtifact, run: Option<&Transcrip
     Ok(rendered)
 }
 
-pub fn transcript_cache_key(transcript: &TranscriptArtifact) -> Result<eval_cache::EvalCacheKeyInput> {
+pub fn transcript_cache_key(transcript: &TranscriptArtifact) -> Result<crate::eval_cache::EvalCacheKeyInput> {
     let handler_profile_ref = transcript
         .handler_profile_ref
         .clone()
         .unwrap_or(canonical_hash(&record("transcript-default-handler-profile", vec![string("deterministic-local")]))?);
     let tool_ref = canonical_hash(&record("transcript-runner-tool", vec![string("molten-local-transcript-runner")]))?;
-    let mut key = eval_cache::transcript_run_key_placeholder(&eval_cache::TranscriptRunKeyInput {
+    let mut key = crate::eval_cache::transcript_run_key_placeholder(&crate::eval_cache::TranscriptRunKeyInput {
         transcript_ref: &transcript.transcript_ref,
         closure_hash: &transcript.dependency_closure_hash,
         dependency_refs: &transcript.dependency_refs,
@@ -773,22 +767,23 @@ fn execute_artifact_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option
             let payload = state.last_output.clone().ok_or_else(|| {
                 MoltenError::invalid_harness("artifact install requires prior preserves/artifact stanza output")
             })?;
-            let install = artifacts::install_artifact(&state.registry, &artifacts::ArtifactInstallInput {
-                kind: kind.to_string(),
-                payload,
-                schema_refs: vec![local_ref("transcript-artifact-schema", kind)?],
-                dependency_refs: Vec::new(),
-                effect_manifest_ref: None,
-                policy_refs: vec![local_ref("transcript-artifact-policy", kind)?],
-                evidence_refs: vec![local_ref("transcript-artifact-evidence", kind)?],
-                installer_ref: local_ref("transcript-runner", kind)?,
-                capability_refs: vec![local_ref("transcript-artifact-capability", kind)?],
-            })?;
+            let install =
+                crate::artifacts::install_artifact(&state.registry, &crate::artifacts::ArtifactInstallInput {
+                    kind: kind.to_string(),
+                    payload,
+                    schema_refs: vec![local_ref("transcript-artifact-schema", kind)?],
+                    dependency_refs: Vec::new(),
+                    effect_manifest_ref: None,
+                    policy_refs: vec![local_ref("transcript-artifact-policy", kind)?],
+                    evidence_refs: vec![local_ref("transcript-artifact-evidence", kind)?],
+                    installer_ref: local_ref("transcript-runner", kind)?,
+                    capability_refs: vec![local_ref("transcript-artifact-capability", kind)?],
+                })?;
             state.last_artifact_ref = Some(install.artifact_ref.clone());
             Ok(Some(install.artifact.value))
         }
         Some("list") => {
-            let refs = artifacts::list_artifacts(&state.registry, None)?
+            let refs = crate::artifacts::list_artifacts(&state.registry, None)?
                 .iter()
                 .map(|artifact| string(&artifact.artifact_ref))
                 .collect();
@@ -800,7 +795,7 @@ fn execute_artifact_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option
                 .map(|value| (*value).to_string())
                 .or_else(|| state.last_artifact_ref.clone())
                 .ok_or_else(|| MoltenError::invalid_harness("artifact closure requires an artifact ref"))?;
-            let closure = artifacts::dependency_closure(&state.registry, &[artifact_ref])?;
+            let closure = crate::artifacts::dependency_closure(&state.registry, &[artifact_ref])?;
             Ok(Some(closure.receipt_value))
         }
         Some(other) => Err(MoltenError::invalid_harness(format!("unsupported transcript artifact command {other}"))),
@@ -814,12 +809,12 @@ fn execute_schema_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<I
             let schema_ref = option_value(args, "--schema-ref")
                 .map(str::to_string)
                 .unwrap_or(local_ref("transcript-schema", "identity")?);
-            let mode = option_value(args, "--mode").unwrap_or(schema_identity::MODE_STRUCTURAL).to_string();
+            let mode = option_value(args, "--mode").unwrap_or(crate::schema_identity::MODE_STRUCTURAL).to_string();
             let shape = state
                 .last_output
                 .clone()
                 .ok_or_else(|| MoltenError::invalid_harness("schema identity requires prior preserves shape output"))?;
-            let value = schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
+            let value = crate::schema_identity::schema_identity_value(&crate::schema_identity::SchemaIdentityInput {
                 mode,
                 schema_ref,
                 shape,
@@ -846,8 +841,8 @@ fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<
                 .clone()
                 .ok_or_else(|| MoltenError::invalid_harness("storage put requires prior preserves output"))?;
             let admission =
-                typed_storage::TypedStorageAdmission::local_fixture(&format!("transcript:{namespace}:{key}"));
-            let put = typed_storage::put_value(&state.storage, &typed_storage::TypedStoragePutInput {
+                crate::typed_storage::TypedStorageAdmission::local_fixture(&format!("transcript:{namespace}:{key}"));
+            let put = crate::typed_storage::put_value(&state.storage, &crate::typed_storage::TypedStoragePutInput {
                 namespace,
                 key,
                 schema_ref,
@@ -864,8 +859,8 @@ fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<
             let key = option_value(args, "--key").unwrap_or("value");
             let schema_ref = option_value(args, "--schema-ref");
             let admission =
-                typed_storage::TypedStorageAdmission::local_fixture(&format!("transcript:{namespace}:{key}"));
-            let get = typed_storage::get_value(&state.storage, namespace, key, schema_ref, &admission)?;
+                crate::typed_storage::TypedStorageAdmission::local_fixture(&format!("transcript:{namespace}:{key}"));
+            let get = crate::typed_storage::get_value(&state.storage, namespace, key, schema_ref, &admission)?;
             Ok(Some(get.value))
         }
         Some(other) => Err(MoltenError::invalid_harness(format!("unsupported transcript storage command {other}"))),
@@ -876,7 +871,7 @@ fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<
 fn execute_cache_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IoValue>> {
     match args.first().copied() {
         Some("status") => {
-            let status = eval_cache::status(&state.cache)?;
+            let status = crate::eval_cache::status(&state.cache)?;
             Ok(Some(record("eval-cache-status", vec![
                 u64_value(status.keys as u64),
                 u64_value(status.values as u64),
@@ -885,7 +880,7 @@ fn execute_cache_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<Io
             ])))
         }
         Some("list") => {
-            let entries = eval_cache::list(&state.cache, &eval_cache::EvalCacheListFilter::default())?;
+            let entries = crate::eval_cache::list(&state.cache, &crate::eval_cache::EvalCacheListFilter::default())?;
             Ok(Some(record("eval-cache-list", vec![sequence(
                 entries.iter().map(|entry| string(&entry.key_ref)).collect(),
             )])))
@@ -900,7 +895,7 @@ fn execute_report_cli(state: &RunnerState) -> Result<Option<IoValue>> {
         .last_output
         .as_ref()
         .ok_or_else(|| MoltenError::invalid_harness("report command requires prior output"))?;
-    let validation = harness::validate_report_value(value)?;
+    let validation = crate::harness::validate_report_value(value)?;
     Ok(Some(record("report-validation", vec![string(validation.report_ref)])))
 }
 
@@ -1442,8 +1437,8 @@ mod tests {
             ..TranscriptParseInput::default()
         })
         .expect("parse");
-        let cache_key = eval_cache::parse_eval_cache_key(
-            &eval_cache::eval_cache_key_value(&transcript_cache_key(&transcript).expect("transcript cache key"))
+        let cache_key = crate::eval_cache::parse_eval_cache_key(
+            &crate::eval_cache::eval_cache_key_value(&transcript_cache_key(&transcript).expect("transcript cache key"))
                 .expect("cache key value"),
         )
         .expect("parse cache key");
