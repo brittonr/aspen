@@ -1330,7 +1330,7 @@ fn lifecycle_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
 }
 
 fn provenance_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
-    if let Ok(record) = crate::provenance::parse_provenance_record(value) {
+    if let Ok(record) = crate::provenance::parse_record(value) {
         return Ok(Some(vec![
             "provenance:record".to_string(),
             format!("provenance-trust-state:{}", record.trust_state),
@@ -1338,7 +1338,7 @@ fn provenance_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
             format!("provenance-build-records:{}", record.build_record_refs.len()),
         ]));
     }
-    if let Ok(record) = crate::provenance::parse_provenance_build_record(value) {
+    if let Ok(record) = crate::provenance::parse_build_record(value) {
         return Ok(Some(vec![
             "provenance:build-record".to_string(),
             format!("provenance-expected-artifact:{}", record.expected_artifact_ref),
@@ -1346,7 +1346,7 @@ fn provenance_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
             format!("provenance-build-toolchains:{}", record.toolchain_refs.len()),
         ]));
     }
-    if let Ok(receipt) = crate::provenance::parse_provenance_build_verification_receipt(value) {
+    if let Ok(receipt) = crate::provenance::parse_build_verification_receipt(value) {
         return Ok(Some(vec![
             "provenance:build-verify-receipt".to_string(),
             format!("provenance-build-decision:{}", receipt.decision),
@@ -2898,8 +2898,8 @@ mod tests {
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
         let artifact_ref = test_ref("provenance-artifact");
-        let record = crate::provenance::synthetic_reviewed_provenance_record(&artifact_ref).expect("record");
-        let evaluation = crate::provenance::evaluate_provenance(&crate::provenance::ProvenanceEvaluationInput {
+        let record = crate::provenance::synthetic_reviewed_record(&artifact_ref).expect("record");
+        let evaluation = crate::provenance::evaluate(&crate::provenance::EvaluationInput {
             operation: "install",
             profile: "node-control",
             artifact_ref: &artifact_ref,

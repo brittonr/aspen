@@ -28,7 +28,7 @@ pub(crate) fn control_request(input: super::command::authority::Request) -> molt
 }
 
 pub(crate) fn provenance_fixture(input: super::command::authority::Provenance) -> molten::error::Result<()> {
-    let value = molten::provenance::synthetic_reviewed_provenance_record(&input.artifact_ref)?;
+    let value = molten::provenance::synthetic_reviewed_record(&input.artifact_ref)?;
     super::core::write_file(&input.out, &molten::preserves_rail::to_text(&value)?)?;
     println!(
         "node provenance fixture {} written to {}",

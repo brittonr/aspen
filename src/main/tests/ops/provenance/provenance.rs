@@ -169,7 +169,7 @@ fn verify_build_record(build_record: &Path, actual_artifact_ref: &str, receipt_o
 }
 
 fn assert_provenance_summary(receipt: &Path, expected: &str) {
-    let summary = molten::provenance::provenance_summary(&read_preserves_file(receipt).expect("read provenance receipt"))
+    let summary = molten::provenance::summary(&read_preserves_file(receipt).expect("read provenance receipt"))
         .expect("summarize provenance receipt");
     assert!(summary.contains(expected));
 }

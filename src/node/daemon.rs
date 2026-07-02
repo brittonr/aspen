@@ -7969,7 +7969,7 @@ struct ControlProvenanceInput<'a> {
     subreceipt_kind: &'a str,
 }
 
-fn evaluate_control_provenance(input: &ControlProvenanceInput<'_>) -> Result<crate::provenance::ProvenanceEvaluation> {
+fn evaluate_control_provenance(input: &ControlProvenanceInput<'_>) -> Result<crate::provenance::Evaluation> {
     let mut provenance_diagnostics = Vec::with_capacity(input.request.evidence_refs.len().saturating_add(1));
     if input.request.evidence_refs.is_empty() {
         provenance_diagnostics.push("node control provenance evidence refs missing".to_string());
@@ -7979,7 +7979,7 @@ fn evaluate_control_provenance(input: &ControlProvenanceInput<'_>) -> Result<cra
     for evidence_ref in &input.request.evidence_refs {
         match read_ledger_artifact(input.state_root, evidence_ref) {
             Ok(value) => {
-                if crate::provenance::parse_provenance_build_verification_receipt(&value).is_ok() {
+                if crate::provenance::parse_build_verification_receipt(&value).is_ok() {
                     build_verification_values.push(value);
                 } else {
                     provenance_values.push(value);
@@ -7989,7 +7989,7 @@ fn evaluate_control_provenance(input: &ControlProvenanceInput<'_>) -> Result<cra
                 .push(format!("node control provenance evidence {evidence_ref} not found in node ledger: {error}")),
         }
     }
-    let evaluation = crate::provenance::evaluate_provenance(&crate::provenance::ProvenanceEvaluationInput {
+    let evaluation = crate::provenance::evaluate(&crate::provenance::EvaluationInput {
         operation: input.operation,
         profile: "node-control",
         artifact_ref: input.artifact_ref,
@@ -8016,7 +8016,7 @@ struct InstallFinishInput<'a> {
     startup_receipt_ref: &'a str,
     payload_ref: &'a str,
     payload_value: IoValue,
-    provenance: crate::provenance::ProvenanceEvaluation,
+    provenance: crate::provenance::Evaluation,
     diagnostics: Vec<String>,
 }
 
@@ -8174,7 +8174,7 @@ struct CompleteRunInput<'a> {
     request: &'a crate::node_runtime::ControlRequest,
     startup_receipt_ref: &'a str,
     prepared: PreparedRun,
-    provenance: crate::provenance::ProvenanceEvaluation,
+    provenance: crate::provenance::Evaluation,
     diagnostics: Vec<String>,
 }
 
@@ -9317,7 +9317,7 @@ pub fn summary(value: &IoValue) -> Result<String> {
     if let Ok(summary) = crate::protocol_session::protocol_summary(value) {
         return Ok(summary);
     }
-    if let Ok(summary) = crate::provenance::provenance_summary(value) {
+    if let Ok(summary) = crate::provenance::summary(value) {
         return Ok(summary);
     }
     Err(MoltenError::invalid_harness("unsupported node daemon artifact for show"))
@@ -10937,7 +10937,7 @@ mod tests {
         let payload_ref = import_artifact(root, &payload).expect("import tampered payload");
         let wrong_artifact_ref = local_ref("node-control-wrong-provenance-artifact", "tampered").expect("wrong ref");
         let wrong_provenance =
-            crate::provenance::synthetic_reviewed_provenance_record(&wrong_artifact_ref).expect("wrong provenance");
+            crate::provenance::synthetic_reviewed_record(&wrong_artifact_ref).expect("wrong provenance");
         let wrong_ref = import_artifact(root, &wrong_provenance).expect("import wrong provenance");
         let evidence_refs = vec![wrong_ref];
         let request = request_value(&payload_ref, refs, &evidence_refs);
@@ -11006,7 +11006,7 @@ mod tests {
     }
 
     fn build_record_for(material: &BuildMaterial) -> IoValue {
-        crate::provenance::provenance_build_record_value(&crate::provenance::ProvenanceBuildRecordInput {
+        crate::provenance::build_record_value(&crate::provenance::BuildRecordInput {
             expected_artifact_ref: &material.payload_ref,
             source_refs: &material.source_refs,
             dependency_closure_ref: &material.dependency_ref,
@@ -11021,7 +11021,7 @@ mod tests {
     }
 
     fn provenance_record_for(material: &BuildMaterial, build_record_refs: &[String]) -> IoValue {
-        crate::provenance::provenance_record_value(&crate::provenance::ProvenanceRecordInput {
+        crate::provenance::record_value(&crate::provenance::RecordInput {
             artifact_ref: &material.payload_ref,
             trust_state: crate::provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED,
             source_refs: &material.source_refs,
@@ -11040,13 +11040,12 @@ mod tests {
     fn verified_refs(root: &Path, material: &BuildMaterial) -> Vec<String> {
         let build_record = build_record_for(material);
         let build_record_ref = import_artifact(root, &build_record).expect("import build record");
-        let build_verification =
-            crate::provenance::verify_provenance_build(&crate::provenance::ProvenanceBuildVerificationInput {
-                build_record_value: &build_record,
-                actual_artifact_ref: &material.payload_ref,
-                prior_diagnostics: &[],
-            })
-            .expect("verify build");
+        let build_verification = crate::provenance::verify_build(&crate::provenance::BuildVerificationInput {
+            build_record_value: &build_record,
+            actual_artifact_ref: &material.payload_ref,
+            prior_diagnostics: &[],
+        })
+        .expect("verify build");
         let build_verification_ref =
             import_artifact(root, &build_verification.receipt_value).expect("import build verification");
         let build_record_refs = vec![build_record_ref];
@@ -13722,7 +13721,7 @@ mod tests {
             )]);
         let payload_ref = import_artifact(&case.root, &payload_value).expect("import payload");
         let payload_provenance =
-            crate::provenance::synthetic_reviewed_provenance_record(&payload_ref).expect("payload provenance");
+            crate::provenance::synthetic_reviewed_record(&payload_ref).expect("payload provenance");
         let payload_provenance_ref =
             import_artifact(&case.root, &payload_provenance).expect("import payload provenance");
         let install_evidence_refs = vec![payload_provenance_ref];
@@ -13775,7 +13774,7 @@ mod tests {
         let admission_ref =
             import_artifact(&case.root, &job_fixture.admission_receipt).expect("import admission receipt");
         let job_provenance =
-            crate::provenance::synthetic_reviewed_provenance_record(&job_fixture.job_ref).expect("job provenance");
+            crate::provenance::synthetic_reviewed_record(&job_fixture.job_ref).expect("job provenance");
         let job_provenance_ref = import_artifact(&case.root, &job_provenance).expect("import job provenance");
         let run_evidence_refs = vec![job_provenance_ref];
         let run_request = crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {

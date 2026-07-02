@@ -4082,7 +4082,7 @@ fn provenance_values(artifact_refs: &[String]) -> Result<Vec<IoValue>> {
     let mut values = Vec::with_capacity(artifact_refs.len());
     for artifact_ref in artifact_refs {
         values.push_limited_value(
-            crate::provenance::synthetic_reviewed_provenance_record(artifact_ref)?,
+            crate::provenance::synthetic_reviewed_record(artifact_ref)?,
             MAX_OPERATOR_REFS,
             "dogfood sync provenance",
         )?;

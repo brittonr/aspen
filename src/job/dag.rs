@@ -2164,7 +2164,7 @@ fn collect_candidates(
         }
         let source = crate::artifacts::read_artifact(input.source_registry, &artifact_ref)?;
         let payload = crate::artifacts::read_payload(input.source_registry, &artifact_ref)?;
-        let provenance = crate::provenance::evaluate_provenance(&crate::provenance::ProvenanceEvaluationInput {
+        let provenance = crate::provenance::evaluate(&crate::provenance::EvaluationInput {
             operation: "remote-sync-install",
             profile: "node-control",
             artifact_ref: &artifact_ref,
@@ -7748,7 +7748,7 @@ mod tests {
         artifact_refs
             .iter()
             .map(|artifact_ref| {
-                crate::provenance::synthetic_reviewed_provenance_record(artifact_ref).expect("reviewed provenance")
+                crate::provenance::synthetic_reviewed_record(artifact_ref).expect("reviewed provenance")
             })
             .collect()
     }

@@ -30,7 +30,7 @@ fn build_record(command: Command) -> Outcome<()> {
         return Err(wrong_handler("build-record"));
     };
     let build_params = super::input::parse_build_params(&build_params)?;
-    let value = molten::provenance::provenance_build_record_value(&molten::provenance::ProvenanceBuildRecordInput {
+    let value = molten::provenance::build_record_value(&molten::provenance::BuildRecordInput {
         expected_artifact_ref: &expected_artifact_ref,
         source_refs: &source_refs,
         dependency_closure_ref: &dependency_closure_ref,
@@ -61,12 +61,11 @@ fn verify_build(command: Command) -> Outcome<()> {
         return Err(wrong_handler("verify-build"));
     };
     let build_record_value = super::io::read_preserves_file(&build_record)?;
-    let verification =
-        molten::provenance::verify_provenance_build(&molten::provenance::ProvenanceBuildVerificationInput {
-            build_record_value: &build_record_value,
-            actual_artifact_ref: &actual_artifact_ref,
-            prior_diagnostics: &prior_diagnostics,
-        })?;
+    let verification = molten::provenance::verify_build(&molten::provenance::BuildVerificationInput {
+        build_record_value: &build_record_value,
+        actual_artifact_ref: &actual_artifact_ref,
+        prior_diagnostics: &prior_diagnostics,
+    })?;
     let is_written_to_file = super::io::write_optional_preserves(receipt_out.as_ref(), &verification.receipt_value)?;
     super::io::print_or_log_summary(
         is_written_to_file,
@@ -100,7 +99,7 @@ fn record(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("record"));
     };
-    let value = molten::provenance::provenance_record_value(&molten::provenance::ProvenanceRecordInput {
+    let value = molten::provenance::record_value(&molten::provenance::RecordInput {
         artifact_ref: &artifact_ref,
         trust_state: &trust_state,
         source_refs: &source_refs,
@@ -123,7 +122,7 @@ fn record(command: Command) -> Outcome<()> {
 }
 
 fn fixture(artifact_ref: String, out: Option<FilePath>) -> Outcome<()> {
-    let value = molten::provenance::synthetic_reviewed_provenance_record(&artifact_ref)?;
+    let value = molten::provenance::synthetic_reviewed_record(&artifact_ref)?;
     let reference = molten::preserves_rail::canonical_hash(&value)?;
     let is_written_to_file = super::io::write_optional_preserves(out.as_ref(), &value)?;
     super::io::print_or_log_summary(
@@ -148,7 +147,7 @@ fn evaluate(command: Command) -> Outcome<()> {
     };
     let provenance_values = bounded_values(provenance_paths, "provenance evidence")?;
     let build_verification_values = bounded_values(build_verification_paths, "provenance build verification evidence")?;
-    let evaluation = molten::provenance::evaluate_provenance(&molten::provenance::ProvenanceEvaluationInput {
+    let evaluation = molten::provenance::evaluate(&molten::provenance::EvaluationInput {
         operation: &operation,
         profile: &profile,
         artifact_ref: &artifact_ref,
@@ -181,7 +180,7 @@ fn bounded_values(paths: Vec<FilePath>, label: &'static str) -> Outcome<Vec<pres
 
 fn show(artifact: FilePath) -> Outcome<()> {
     let value = super::io::read_preserves_file(&artifact)?;
-    println!("{}", molten::provenance::provenance_summary(&value)?);
+    println!("{}", molten::provenance::summary(&value)?);
     Ok(())
 }
 

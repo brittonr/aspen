@@ -41,7 +41,7 @@ const _: () = assert!(MAX_BUILD_PARAMS > 0);
 const _: () = assert!(MAX_BUILD_PARAM_BYTES > 0);
 
 #[derive(Debug, Clone, Copy)]
-pub struct ProvenanceRecordInput<'a> {
+pub struct RecordInput<'a> {
     pub artifact_ref: &'a str,
     pub trust_state: &'a str,
     pub source_refs: &'a [String],
@@ -56,7 +56,7 @@ pub struct ProvenanceRecordInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ProvenanceEvaluationInput<'a> {
+pub struct EvaluationInput<'a> {
     pub operation: &'a str,
     pub profile: &'a str,
     pub artifact_ref: &'a str,
@@ -72,7 +72,7 @@ pub struct BuildParam {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ProvenanceBuildRecordInput<'a> {
+pub struct BuildRecordInput<'a> {
     pub expected_artifact_ref: &'a str,
     pub source_refs: &'a [String],
     pub dependency_closure_ref: &'a str,
@@ -85,14 +85,14 @@ pub struct ProvenanceBuildRecordInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ProvenanceBuildVerificationInput<'a> {
+pub struct BuildVerificationInput<'a> {
     pub build_record_value: &'a IoValue,
     pub actual_artifact_ref: &'a str,
     pub prior_diagnostics: &'a [String],
 }
 
 #[derive(Debug, Clone, Copy)]
-struct ProvenanceReceiptValueInput<'a> {
+struct ReceiptValueInput<'a> {
     decision: &'a str,
     operation: &'a str,
     profile: &'a str,
@@ -121,19 +121,19 @@ enum TrustAdmission {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct BuildChecks {
-    receipts: Vec<ProvenanceBuildVerificationReceipt>,
+    receipts: Vec<BuildVerificationReceipt>,
     refs: Vec<String>,
     diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RecordMatch {
-    record: Option<ProvenanceRecord>,
+    record: Option<Record>,
     diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProvenanceRecord {
+pub struct Record {
     pub record_ref: String,
     pub artifact_ref: String,
     pub trust_state: String,
@@ -150,7 +150,7 @@ pub struct ProvenanceRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProvenanceEvaluation {
+pub struct Evaluation {
     pub decision: String,
     pub receipt_ref: String,
     pub receipt_value: IoValue,
@@ -159,7 +159,7 @@ pub struct ProvenanceEvaluation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProvenanceBuildRecord {
+pub struct BuildRecord {
     pub record_ref: String,
     pub expected_artifact_ref: String,
     pub source_refs: Vec<String>,
@@ -174,7 +174,7 @@ pub struct ProvenanceBuildRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProvenanceBuildVerification {
+pub struct BuildVerification {
     pub decision: String,
     pub receipt_ref: String,
     pub receipt_value: IoValue,
@@ -185,7 +185,7 @@ pub struct ProvenanceBuildVerification {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProvenanceBuildVerificationReceipt {
+pub struct BuildVerificationReceipt {
     pub decision: String,
     pub receipt_ref: String,
     pub expected_artifact_ref: String,
@@ -195,7 +195,7 @@ pub struct ProvenanceBuildVerificationReceipt {
     pub value: IoValue,
 }
 
-pub fn provenance_record_value(input: &ProvenanceRecordInput<'_>) -> Result<IoValue> {
+pub fn record_value(input: &RecordInput<'_>) -> Result<IoValue> {
     validate_ref(input.artifact_ref, "provenance artifact ref")?;
     validate_trust_state(input.trust_state)?;
     validate_refs(input.source_refs, "provenance source ref")?;
@@ -223,7 +223,7 @@ pub fn provenance_record_value(input: &ProvenanceRecordInput<'_>) -> Result<IoVa
     ]))
 }
 
-pub fn synthetic_reviewed_provenance_record(artifact_ref: &str) -> Result<IoValue> {
+pub fn synthetic_reviewed_record(artifact_ref: &str) -> Result<IoValue> {
     let source_refs = vec![synthetic_ref("source", artifact_ref)?];
     let toolchain_refs = vec![synthetic_ref("toolchain", env!("CARGO_PKG_VERSION"))?];
     let review_refs = vec![synthetic_ref("review", artifact_ref)?];
@@ -232,7 +232,7 @@ pub fn synthetic_reviewed_provenance_record(artifact_ref: &str) -> Result<IoValu
     let policy_refs = vec![synthetic_ref("policy", artifact_ref)?];
     let dependency_closure_ref = synthetic_ref("dependency-closure", artifact_ref)?;
     let builder_ref = synthetic_ref("builder", "local-synthetic-reviewed")?;
-    provenance_record_value(&ProvenanceRecordInput {
+    record_value(&RecordInput {
         artifact_ref,
         trust_state: TRUST_STATE_REVIEWED,
         source_refs: &source_refs,
@@ -247,7 +247,7 @@ pub fn synthetic_reviewed_provenance_record(artifact_ref: &str) -> Result<IoValu
     })
 }
 
-pub fn provenance_build_record_value(input: &ProvenanceBuildRecordInput<'_>) -> Result<IoValue> {
+pub fn build_record_value(input: &BuildRecordInput<'_>) -> Result<IoValue> {
     validate_ref(input.expected_artifact_ref, "provenance expected artifact ref")?;
     validate_refs(input.source_refs, "provenance build source ref")?;
     validate_ref(input.dependency_closure_ref, "provenance build dependency closure ref")?;
@@ -271,9 +271,9 @@ pub fn provenance_build_record_value(input: &ProvenanceBuildRecordInput<'_>) -> 
     ]))
 }
 
-pub fn verify_provenance_build(input: &ProvenanceBuildVerificationInput<'_>) -> Result<ProvenanceBuildVerification> {
+pub fn verify_build(input: &BuildVerificationInput<'_>) -> Result<BuildVerification> {
     validate_ref(input.actual_artifact_ref, "provenance actual artifact ref")?;
-    let build_record = parse_provenance_build_record(input.build_record_value)?;
+    let build_record = parse_build_record(input.build_record_value)?;
     let mut diagnostics = Vec::with_capacity(input.prior_diagnostics.len().saturating_add(2));
     diagnostics.extend(input.prior_diagnostics.iter().cloned());
     if build_record.expected_artifact_ref != input.actual_artifact_ref {
@@ -291,7 +291,7 @@ pub fn verify_provenance_build(input: &ProvenanceBuildVerificationInput<'_>) -> 
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = canonical_hash(&receipt_value)?;
-    Ok(ProvenanceBuildVerification {
+    Ok(BuildVerification {
         decision: decision.to_string(),
         receipt_ref,
         receipt_value,
@@ -302,7 +302,7 @@ pub fn verify_provenance_build(input: &ProvenanceBuildVerificationInput<'_>) -> 
     })
 }
 
-pub fn evaluate_provenance(input: &ProvenanceEvaluationInput<'_>) -> Result<ProvenanceEvaluation> {
+pub fn evaluate(input: &EvaluationInput<'_>) -> Result<Evaluation> {
     validate_evaluation_input(input)?;
     let mut diagnostics = Vec::with_capacity(evaluation_diagnostic_capacity(input));
     diagnostics.extend(input.prior_diagnostics.iter().cloned());
@@ -320,14 +320,14 @@ pub fn evaluate_provenance(input: &ProvenanceEvaluationInput<'_>) -> Result<Prov
         diagnostics.push(format!("provenance trust state {trust_state} is not admitted for profile {}", input.profile));
     }
     if let Some(record) = matched.as_ref() {
-        diagnostics.extend(stronger_provenance_diagnostics(record, input.operation, input.profile));
+        diagnostics.extend(stronger_diagnostics(record, input.operation, input.profile));
     }
     if let Some(record) = matched.as_ref().filter(|record| record.trust_state == TRUST_STATE_REPRODUCIBLE_VERIFIED) {
         diagnostics.extend(reproducible_build_binding_diagnostics(record, input.artifact_ref, &build_checks.receipts));
     }
 
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let receipt_value = provenance_receipt_value(&ProvenanceReceiptValueInput {
+    let receipt_value = receipt_value(&ReceiptValueInput {
         decision,
         operation: input.operation,
         profile: input.profile,
@@ -338,7 +338,7 @@ pub fn evaluate_provenance(input: &ProvenanceEvaluationInput<'_>) -> Result<Prov
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = canonical_hash(&receipt_value)?;
-    Ok(ProvenanceEvaluation {
+    Ok(Evaluation {
         decision: decision.to_string(),
         receipt_ref,
         receipt_value,
@@ -347,7 +347,7 @@ pub fn evaluate_provenance(input: &ProvenanceEvaluationInput<'_>) -> Result<Prov
     })
 }
 
-fn validate_evaluation_input(input: &ProvenanceEvaluationInput<'_>) -> Result<()> {
+fn validate_evaluation_input(input: &EvaluationInput<'_>) -> Result<()> {
     validate_ref(input.artifact_ref, "provenance evaluation artifact ref")?;
     validate_profile(input.profile)?;
     ensure_ref_bound(input.provenance_values.len(), MAX_PROVENANCE_REFS, "provenance values")?;
@@ -359,7 +359,7 @@ fn validate_evaluation_input(input: &ProvenanceEvaluationInput<'_>) -> Result<()
     Ok(())
 }
 
-fn evaluation_diagnostic_capacity(input: &ProvenanceEvaluationInput<'_>) -> usize {
+fn evaluation_diagnostic_capacity(input: &EvaluationInput<'_>) -> usize {
     input
         .prior_diagnostics
         .len()
@@ -373,7 +373,7 @@ fn parse_build_checks(values: &[IoValue]) -> BuildChecks {
     let mut refs = Vec::with_capacity(values.len());
     let mut diagnostics = Vec::with_capacity(values.len());
     for value in values {
-        match parse_provenance_build_verification_receipt(value) {
+        match parse_build_verification_receipt(value) {
             Ok(receipt) => {
                 refs.push(receipt.receipt_ref.clone());
                 receipts.push(receipt);
@@ -390,10 +390,10 @@ fn parse_build_checks(values: &[IoValue]) -> BuildChecks {
 
 fn find_matching_record(values: &[IoValue], artifact_ref: &str) -> RecordMatch {
     let mut diagnostics = Vec::with_capacity(values.len().saturating_add(1));
-    let mut matched: Option<ProvenanceRecord> = None;
+    let mut matched: Option<Record> = None;
     let mut has_mismatched_record = false;
     for value in values {
-        let record = match parse_provenance_record(value) {
+        let record = match parse_record(value) {
             Ok(record) => record,
             Err(error) => {
                 diagnostics.push(format!("malformed provenance record: {error}"));
@@ -417,7 +417,7 @@ fn find_matching_record(values: &[IoValue], artifact_ref: &str) -> RecordMatch {
     }
 }
 
-fn trust_status<'a>(record: Option<&'a ProvenanceRecord>, profile: &str) -> (&'a str, TrustAdmission) {
+fn trust_status<'a>(record: Option<&'a Record>, profile: &str) -> (&'a str, TrustAdmission) {
     let trust_state = record.map(|record| record.trust_state.as_str()).unwrap_or(TRUST_STATE_UNKNOWN);
     let has_admitted_trust_state = is_trust_state_admitted(trust_state, profile);
     let admission = if record.is_some() && has_admitted_trust_state {
@@ -430,12 +430,12 @@ fn trust_status<'a>(record: Option<&'a ProvenanceRecord>, profile: &str) -> (&'a
     (trust_state, admission)
 }
 
-pub fn parse_provenance_record(value: &IoValue) -> Result<ProvenanceRecord> {
+pub fn parse_record(value: &IoValue) -> Result<Record> {
     if let Some(fields) = value.collect_simple_record("provenance-record-v1", Some(12)) {
         require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECORD_SCHEMA, "provenance record")?;
         let trust_state = record_string(&fields[2], "trust-state")?;
         validate_trust_state(&trust_state)?;
-        return Ok(ProvenanceRecord {
+        return Ok(Record {
             record_ref: canonical_hash(value)?,
             artifact_ref: record_ref(&fields[1], "artifact")?,
             trust_state,
@@ -457,7 +457,7 @@ pub fn parse_provenance_record(value: &IoValue) -> Result<ProvenanceRecord> {
     require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECORD_SCHEMA, "provenance record")?;
     let trust_state = record_string(&fields[2], "trust-state")?;
     validate_trust_state(&trust_state)?;
-    Ok(ProvenanceRecord {
+    Ok(Record {
         record_ref: canonical_hash(value)?,
         artifact_ref: record_ref(&fields[1], "artifact")?,
         trust_state,
@@ -474,13 +474,13 @@ pub fn parse_provenance_record(value: &IoValue) -> Result<ProvenanceRecord> {
     })
 }
 
-pub fn parse_provenance_build_record(value: &IoValue) -> Result<ProvenanceBuildRecord> {
+pub fn parse_build_record(value: &IoValue) -> Result<BuildRecord> {
     let fields = value
         .collect_simple_record("provenance-build-record-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-build-record-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::PROVENANCE_BUILD_RECORD_SCHEMA, "provenance build record")?;
     let build_params = record_build_params_sequence(&fields[5], "build-params")?;
-    Ok(ProvenanceBuildRecord {
+    Ok(BuildRecord {
         record_ref: canonical_hash(value)?,
         expected_artifact_ref: record_ref(&fields[1], "expected-artifact")?,
         source_refs: record_ref_sequence(&fields[2], "source")?,
@@ -495,7 +495,7 @@ pub fn parse_provenance_build_record(value: &IoValue) -> Result<ProvenanceBuildR
     })
 }
 
-pub fn parse_provenance_build_verification_receipt(value: &IoValue) -> Result<ProvenanceBuildVerificationReceipt> {
+pub fn parse_build_verification_receipt(value: &IoValue) -> Result<BuildVerificationReceipt> {
     let fields = value
         .collect_simple_record("provenance-build-verify-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-build-verify-receipt-v1 ...>"))?;
@@ -510,7 +510,7 @@ pub fn parse_provenance_build_verification_receipt(value: &IoValue) -> Result<Pr
             "invalid provenance build verification decision `{decision}`"
         )));
     }
-    Ok(ProvenanceBuildVerificationReceipt {
+    Ok(BuildVerificationReceipt {
         decision,
         receipt_ref: canonical_hash(value)?,
         expected_artifact_ref: record_ref(&fields[2], "expected-artifact")?,
@@ -521,8 +521,8 @@ pub fn parse_provenance_build_verification_receipt(value: &IoValue) -> Result<Pr
     })
 }
 
-pub fn provenance_summary(value: &IoValue) -> Result<String> {
-    if let Ok(record) = parse_provenance_record(value) {
+pub fn summary(value: &IoValue) -> Result<String> {
+    if let Ok(record) = parse_record(value) {
         return Ok(format!(
             "provenance record artifact={} trust_state={} build_records={} record={}",
             record.artifact_ref,
@@ -531,7 +531,7 @@ pub fn provenance_summary(value: &IoValue) -> Result<String> {
             record.record_ref
         ));
     }
-    if let Ok(record) = parse_provenance_build_record(value) {
+    if let Ok(record) = parse_build_record(value) {
         return Ok(format!(
             "provenance build record expected_artifact={} sources={} toolchains={} params={} record={}",
             record.expected_artifact_ref,
@@ -575,7 +575,7 @@ pub fn provenance_summary(value: &IoValue) -> Result<String> {
     Err(MoltenError::invalid_harness("unsupported provenance artifact"))
 }
 
-fn provenance_receipt_value(input: &ProvenanceReceiptValueInput<'_>) -> Result<IoValue> {
+fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IoValue> {
     let reproducible_check = if input.trust_state == TRUST_STATE_REPRODUCIBLE_VERIFIED {
         input.decision
     } else {
@@ -628,9 +628,9 @@ fn build_verify_receipt_value(input: &BuildVerifyReceiptValueInput<'_>) -> Resul
 }
 
 fn reproducible_build_binding_diagnostics(
-    record: &ProvenanceRecord,
+    record: &Record,
     artifact_ref: &str,
-    receipts: &[ProvenanceBuildVerificationReceipt],
+    receipts: &[BuildVerificationReceipt],
 ) -> Vec<String> {
     if receipts.is_empty() {
         return vec![format!(
@@ -674,7 +674,7 @@ fn is_trust_state_admitted(trust_state: &str, profile: &str) -> bool {
         || (trust_state == TRUST_STATE_SANDBOX_ONLY && profile == PROFILE_LOCAL_TEST)
 }
 
-fn stronger_provenance_diagnostics(record: &ProvenanceRecord, operation: &str, profile: &str) -> Vec<String> {
+fn stronger_diagnostics(record: &Record, operation: &str, profile: &str) -> Vec<String> {
     let has_strong_trust = is_strong_trust_state(&record.trust_state);
     if operation_requires_strong_provenance(operation) {
         if has_strong_trust {
@@ -917,8 +917,8 @@ mod tests {
     #[test]
     fn reviewed_provenance_passes_node_control_and_wrong_artifact_denies() {
         let artifact_ref = synthetic_ref("artifact", "reviewed").expect("artifact ref");
-        let record = synthetic_reviewed_provenance_record(&artifact_ref).expect("record");
-        let pass = evaluate_provenance(&ProvenanceEvaluationInput {
+        let record = synthetic_reviewed_record(&artifact_ref).expect("record");
+        let pass = evaluate(&EvaluationInput {
             operation: "install",
             profile: "node-control",
             artifact_ref: &artifact_ref,
@@ -930,7 +930,7 @@ mod tests {
         assert_eq!(pass.decision, "pass");
         assert_eq!(crate::ledger::artifact_kind(&pass.receipt_value), "provenance-receipt");
         let wrong_ref = synthetic_ref("artifact", "wrong").expect("wrong ref");
-        let denied = evaluate_provenance(&ProvenanceEvaluationInput {
+        let denied = evaluate(&EvaluationInput {
             operation: "install",
             profile: "node-control",
             artifact_ref: &wrong_ref,
@@ -950,7 +950,7 @@ mod tests {
         let toolchain_refs = vec![synthetic_ref("toolchain", "sandbox").expect("toolchain ref")];
         let dependency_ref = synthetic_ref("deps", "sandbox").expect("deps ref");
         let builder_ref = synthetic_ref("builder", "sandbox").expect("builder ref");
-        let record = provenance_record_value(&ProvenanceRecordInput {
+        let record = record_value(&RecordInput {
             artifact_ref: &artifact_ref,
             trust_state: TRUST_STATE_SANDBOX_ONLY,
             source_refs: &source_refs,
@@ -964,7 +964,7 @@ mod tests {
             build_record_refs: &[],
         })
         .expect("sandbox record");
-        let node = evaluate_provenance(&ProvenanceEvaluationInput {
+        let node = evaluate(&EvaluationInput {
             operation: "run",
             profile: "node-control",
             artifact_ref: &artifact_ref,
@@ -974,7 +974,7 @@ mod tests {
         })
         .expect("node deny");
         assert_eq!(node.decision, "deny");
-        let local = evaluate_provenance(&ProvenanceEvaluationInput {
+        let local = evaluate(&EvaluationInput {
             operation: "run",
             profile: "local-test",
             artifact_ref: &artifact_ref,
@@ -1007,7 +1007,7 @@ mod tests {
                 value: "release".to_string(),
             },
         ];
-        let value = provenance_build_record_value(&ProvenanceBuildRecordInput {
+        let value = build_record_value(&BuildRecordInput {
             expected_artifact_ref: &expected_ref,
             source_refs: &source_refs,
             dependency_closure_ref: &dependency_ref,
@@ -1019,12 +1019,12 @@ mod tests {
             evidence_refs: &evidence_refs,
         })
         .expect("build record");
-        let record = parse_provenance_build_record(&value).expect("parse build record");
+        let record = parse_build_record(&value).expect("parse build record");
         assert_eq!(record.expected_artifact_ref, expected_ref);
         assert_eq!(record.build_params.len(), 2);
         assert_eq!(crate::ledger::artifact_kind(&value), "provenance-build-record");
 
-        let pass = verify_provenance_build(&ProvenanceBuildVerificationInput {
+        let pass = verify_build(&BuildVerificationInput {
             build_record_value: &value,
             actual_artifact_ref: &expected_ref,
             prior_diagnostics: &[],
@@ -1033,7 +1033,7 @@ mod tests {
         assert_eq!(pass.decision, "pass");
         assert_eq!(crate::ledger::artifact_kind(&pass.receipt_value), "provenance-build-verify-receipt");
 
-        let deny = verify_provenance_build(&ProvenanceBuildVerificationInput {
+        let deny = verify_build(&BuildVerificationInput {
             build_record_value: &value,
             actual_artifact_ref: &actual_ref,
             prior_diagnostics: &[],
@@ -1059,7 +1059,7 @@ mod tests {
         let toolchain_refs = vec![synthetic_ref("toolchain", "reproducible").expect("toolchain ref")];
         let dependency_ref = synthetic_ref("deps", "reproducible").expect("deps ref");
         let builder_ref = synthetic_ref("builder", "reproducible").expect("builder ref");
-        let build_record = provenance_build_record_value(&ProvenanceBuildRecordInput {
+        let build_record = build_record_value(&BuildRecordInput {
             expected_artifact_ref: &artifact_ref,
             source_refs: &source_refs,
             dependency_closure_ref: &dependency_ref,
@@ -1072,7 +1072,7 @@ mod tests {
         })
         .expect("build record");
         let build_record_refs = vec![canonical_hash(&build_record).expect("build record ref")];
-        let provenance = provenance_record_value(&ProvenanceRecordInput {
+        let provenance = record_value(&RecordInput {
             artifact_ref: &artifact_ref,
             trust_state: TRUST_STATE_REPRODUCIBLE_VERIFIED,
             source_refs: &source_refs,
@@ -1099,7 +1099,7 @@ mod tests {
 
     fn wrong_value(case: &Case) -> IoValue {
         let wrong_record_refs = vec![synthetic_ref("build-record", "wrong").expect("wrong build record ref")];
-        provenance_record_value(&ProvenanceRecordInput {
+        record_value(&RecordInput {
             artifact_ref: &case.artifact_ref,
             trust_state: TRUST_STATE_REPRODUCIBLE_VERIFIED,
             source_refs: &case.source_refs,
@@ -1116,7 +1116,7 @@ mod tests {
     }
 
     fn assert_missing(case: &Case) {
-        let receipt = evaluate_provenance(&ProvenanceEvaluationInput {
+        let receipt = evaluate(&EvaluationInput {
             operation: "install",
             profile: "node-control",
             artifact_ref: &case.artifact_ref,
@@ -1134,14 +1134,14 @@ mod tests {
         );
     }
 
-    fn assert_match(case: &Case) -> ProvenanceBuildVerification {
-        let verification = verify_provenance_build(&ProvenanceBuildVerificationInput {
+    fn assert_match(case: &Case) -> BuildVerification {
+        let verification = verify_build(&BuildVerificationInput {
             build_record_value: &case.build_record,
             actual_artifact_ref: &case.artifact_ref,
             prior_diagnostics: &[],
         })
         .expect("verify reproducible build");
-        let pass = evaluate_provenance(&ProvenanceEvaluationInput {
+        let pass = evaluate(&EvaluationInput {
             operation: "install",
             profile: "node-control",
             artifact_ref: &case.artifact_ref,
@@ -1154,9 +1154,9 @@ mod tests {
         verification
     }
 
-    fn assert_wrong(case: &Case, verification: &ProvenanceBuildVerification) {
+    fn assert_wrong(case: &Case, verification: &BuildVerification) {
         let wrong_binding = wrong_value(case);
-        let eval = evaluate_provenance(&ProvenanceEvaluationInput {
+        let eval = evaluate(&EvaluationInput {
             operation: "install",
             profile: "node-control",
             artifact_ref: &case.artifact_ref,
@@ -1180,8 +1180,8 @@ mod tests {
     #[test]
     fn sensitive_operations_require_stronger_provenance_than_reviewed() {
         let artifact_ref = synthetic_ref("artifact", "sensitive").expect("artifact ref");
-        let reviewed = synthetic_reviewed_provenance_record(&artifact_ref).expect("reviewed record");
-        let denied = evaluate_provenance(&ProvenanceEvaluationInput {
+        let reviewed = synthetic_reviewed_record(&artifact_ref).expect("reviewed record");
+        let denied = evaluate(&EvaluationInput {
             operation: "install-policy-artifact",
             profile: "node-control",
             artifact_ref: &artifact_ref,
@@ -1197,7 +1197,7 @@ mod tests {
         let toolchain_refs = vec![synthetic_ref("toolchain", "policy-trusted").expect("toolchain ref")];
         let dependency_ref = synthetic_ref("deps", "policy-trusted").expect("deps ref");
         let builder_ref = synthetic_ref("builder", "policy-trusted").expect("builder ref");
-        let policy = provenance_record_value(&ProvenanceRecordInput {
+        let policy = record_value(&RecordInput {
             artifact_ref: &artifact_ref,
             trust_state: TRUST_STATE_POLICY_TRUSTED,
             source_refs: &source_refs,
@@ -1211,7 +1211,7 @@ mod tests {
             build_record_refs: &[],
         })
         .expect("policy trusted record");
-        let admitted = evaluate_provenance(&ProvenanceEvaluationInput {
+        let admitted = evaluate(&EvaluationInput {
             operation: "install-policy-artifact",
             profile: "node-control",
             artifact_ref: &artifact_ref,
@@ -1227,7 +1227,7 @@ mod tests {
     fn hegel_provenance_hash_only_denied_and_trust_monotonicity(tc: hegel::TestCase) {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(1_000_000));
         let artifact_ref = synthetic_ref("artifact", &format!("hegel-{salt}")).expect("artifact ref");
-        let hash_only = evaluate_provenance(&ProvenanceEvaluationInput {
+        let hash_only = evaluate(&EvaluationInput {
             operation: "install",
             profile: "node-control",
             artifact_ref: &artifact_ref,
@@ -1239,8 +1239,8 @@ mod tests {
         assert_eq!(hash_only.decision, "deny");
         assert!(hash_only.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing provenance")));
 
-        let reviewed = synthetic_reviewed_provenance_record(&artifact_ref).expect("reviewed record");
-        let reviewed_eval = evaluate_provenance(&ProvenanceEvaluationInput {
+        let reviewed = synthetic_reviewed_record(&artifact_ref).expect("reviewed record");
+        let reviewed_eval = evaluate(&EvaluationInput {
             operation: "install",
             profile: "node-control",
             artifact_ref: &artifact_ref,
@@ -1251,7 +1251,7 @@ mod tests {
         .expect("reviewed evaluation");
         assert_eq!(reviewed_eval.decision, "pass");
 
-        let sensitive_eval = evaluate_provenance(&ProvenanceEvaluationInput {
+        let sensitive_eval = evaluate(&EvaluationInput {
             operation: "remote-sync-execute",
             profile: "node-control",
             artifact_ref: &artifact_ref,

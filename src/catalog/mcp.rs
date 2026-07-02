@@ -1059,8 +1059,8 @@ mod tests {
         let registry = root.join("registry");
         let ledger_root = root.join("ledger");
         let artifact_ref = test_ref("provenance-artifact");
-        let provenance_record = crate::provenance::synthetic_reviewed_provenance_record(&artifact_ref).expect("record");
-        let evaluation = crate::provenance::evaluate_provenance(&crate::provenance::ProvenanceEvaluationInput {
+        let provenance_record = crate::provenance::synthetic_reviewed_record(&artifact_ref).expect("record");
+        let evaluation = crate::provenance::evaluate(&crate::provenance::EvaluationInput {
             operation: "install",
             profile: "node-control",
             artifact_ref: &artifact_ref,

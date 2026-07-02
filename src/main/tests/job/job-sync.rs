@@ -40,7 +40,7 @@
         for artifact in source_artifacts {
             let provenance_path = setup.dir.join(format!("job-provenance-{}.preserves", provenance_paths.len()));
             let provenance_value =
-                molten::provenance::synthetic_reviewed_provenance_record(&artifact.artifact_ref).expect("provenance");
+                molten::provenance::synthetic_reviewed_record(&artifact.artifact_ref).expect("provenance");
             write_file(&provenance_path, &to_text(&provenance_value).expect("provenance text"))
                 .expect("write provenance");
             provenance_paths.push(provenance_path);
