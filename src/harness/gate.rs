@@ -1,10 +1,9 @@
-use preserves::IOValue;
-
 use super::replay;
 use super::schema;
 use crate::evidence_chain;
 
 type Cow<'a, T> = std::borrow::Cow<'a, T>;
+type IoValue = preserves::IOValue;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
@@ -18,23 +17,23 @@ const HARNESS_OBSERVATION_SCHEMA: &str = crate::preserves_rail::HARNESS_OBSERVAT
 const HARNESS_REPORT_SCHEMA: &str = crate::preserves_rail::HARNESS_REPORT_SCHEMA;
 const HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA: &str = crate::preserves_rail::HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -42,7 +41,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -160,7 +159,7 @@ pub struct GateCheck {
     pub final_state_hash: String,
     pub replay_actual_report_ref: String,
     pub deterministic_replay_verify_ref: String,
-    pub deterministic_replay_verify_value: IOValue,
+    pub deterministic_replay_verify_value: IoValue,
     pub executor_preflights_ref: String,
     pub executor_execution_receipts_ref: String,
     pub runtime_predicate_receipts_ref: String,
@@ -195,11 +194,11 @@ pub struct GateChainEvidence {
     pub checkpoint_ref: String,
     pub range_predicate_ref: String,
     pub predicate_receipt_refs: Vec<String>,
-    pub link_value: IOValue,
-    pub anchor_value: IOValue,
-    pub verify_receipt_value: IOValue,
-    pub checkpoint_value: IOValue,
-    pub predicate_values: Vec<IOValue>,
+    pub link_value: IoValue,
+    pub anchor_value: IoValue,
+    pub verify_receipt_value: IoValue,
+    pub checkpoint_value: IoValue,
+    pub predicate_values: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -215,9 +214,9 @@ pub struct TurnJournalChainEvidence {
     pub payload_refs: Vec<String>,
     pub verify_receipt_ref: String,
     pub predicate_receipt_refs: Vec<String>,
-    pub link_values: Vec<IOValue>,
-    pub verify_receipt_value: IOValue,
-    pub predicate_values: Vec<IOValue>,
+    pub link_values: Vec<IoValue>,
+    pub verify_receipt_value: IoValue,
+    pub predicate_values: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -243,7 +242,7 @@ pub struct ReproVerifyReceipt {
     pub checks: Vec<String>,
 }
 
-pub fn gate_check_value(value: &IOValue) -> Result<GateCheck> {
+pub fn gate_check_value(value: &IoValue) -> Result<GateCheck> {
     if value.collect_simple_record("harness-failure-v1", None).is_some() {
         let failure = schema::parse_failure(value)?;
         return Err(MoltenError::invalid_harness(format!(
@@ -291,17 +290,17 @@ pub fn gate_check_value(value: &IOValue) -> Result<GateCheck> {
     ))
 }
 
-pub fn sealed_repro_bundle_value_with_command(report_value: &IOValue, command: &[String]) -> Result<IOValue> {
+pub fn sealed_repro_bundle_value_with_command(report_value: &IoValue, command: &[String]) -> Result<IoValue> {
     let report_check = gate_check_report(report_value, "report".to_string(), None)?;
     let report_receipt_value = gate_receipt_value(&report_check);
     schema::sealed_repro_bundle_value_with_command_and_receipt(report_value, command, &report_receipt_value)
 }
 
 pub fn repro_bundle_value_with_export_profile(
-    report_value: &IOValue,
+    report_value: &IoValue,
     command: &[String],
     profile: schema::ReproExportProfile,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     match profile {
         schema::ReproExportProfile::DenySensitive => sealed_repro_bundle_value_with_command(report_value, command),
         schema::ReproExportProfile::RedactedDiagnostic | schema::ReproExportProfile::EncryptedPrivate => {
@@ -310,7 +309,7 @@ pub fn repro_bundle_value_with_export_profile(
     }
 }
 
-pub fn repro_verify_receipt_value(bundle_value: &IOValue) -> Result<IOValue> {
+pub fn repro_verify_receipt_value(bundle_value: &IoValue) -> Result<IoValue> {
     let bundle = schema::parse_repro_bundle(bundle_value)?;
     if bundle.kind == schema::HarnessReproBundleKind::Failure {
         return Err(MoltenError::invalid_harness(format!(
@@ -353,7 +352,7 @@ pub fn repro_verify_receipt_value(bundle_value: &IOValue) -> Result<IOValue> {
     ]))
 }
 
-pub fn gate_receipt_value(check: &GateCheck) -> IOValue {
+pub fn gate_receipt_value(check: &GateCheck) -> IoValue {
     let mut refs = vec![
         ("artifact", check.artifact_ref.as_str()),
         ("report", check.report_ref.as_str()),
@@ -407,7 +406,7 @@ pub fn gate_receipt_value(check: &GateCheck) -> IOValue {
     ])
 }
 
-pub fn parse_gate_receipt(value: &IOValue) -> Result<GateReceipt> {
+pub fn parse_gate_receipt(value: &IoValue) -> Result<GateReceipt> {
     let receipt = simple_record(value, "gate-receipt-v1", 14)?;
     let schema = required_string(&receipt[0], "gate receipt schema")?;
     if schema != HARNESS_GATE_RECEIPT_SCHEMA {
@@ -481,7 +480,7 @@ pub fn gate_check_summary(check: &GateCheck) -> String {
     )
 }
 
-pub fn gate_receipt_summary(value: &IOValue) -> Result<String> {
+pub fn gate_receipt_summary(value: &IoValue) -> Result<String> {
     let receipt = parse_gate_receipt(value)?;
     Ok(format!(
         "gate receipt {}\ndecision={}\nartifact_kind={}\nartifact={}\nreport={}\nsuite={}\nfinal_state={}\nchecks={}",
@@ -496,7 +495,7 @@ pub fn gate_receipt_summary(value: &IOValue) -> Result<String> {
     ))
 }
 
-pub fn parse_repro_verify_receipt(value: &IOValue) -> Result<ReproVerifyReceipt> {
+pub fn parse_repro_verify_receipt(value: &IoValue) -> Result<ReproVerifyReceipt> {
     let receipt = simple_record(value, "repro-verify-receipt-v1", 9)?;
     let schema = required_string(&receipt[0], "repro verify receipt schema")?;
     if schema != HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA {
@@ -535,7 +534,7 @@ pub fn parse_repro_verify_receipt(value: &IOValue) -> Result<ReproVerifyReceipt>
     })
 }
 
-pub fn repro_verify_receipt_summary(value: &IOValue) -> Result<String> {
+pub fn repro_verify_receipt_summary(value: &IoValue) -> Result<String> {
     let receipt = parse_repro_verify_receipt(value)?;
     Ok(format!(
         "repro verify receipt {}\ndecision={}\nbundle={}\nreport={}\nsuite={}\ngate_receipt={}\nchecks={}",
@@ -549,7 +548,7 @@ pub fn repro_verify_receipt_summary(value: &IOValue) -> Result<String> {
     ))
 }
 
-fn validate_sealed_report_bundle(report_value: &IOValue, bundle: &schema::HarnessReproBundle) -> Result<()> {
+fn validate_sealed_report_bundle(report_value: &IoValue, bundle: &schema::HarnessReproBundle) -> Result<()> {
     if bundle.redaction_policy_ref.is_none() || bundle.redaction_gate_ref.is_none() {
         return Err(MoltenError::invalid_harness("sealed report repro bundle missing redaction preflight evidence"));
     }
@@ -610,7 +609,7 @@ struct EvidenceRefs {
     capability_proofset_ref: String,
 }
 
-fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Option<String>) -> Result<GateCheck> {
+fn gate_check_report(value: &IoValue, artifact_kind: String, artifact_ref: Option<String>) -> Result<GateCheck> {
     let validation = replay::validate_report_value(value)?;
     let replay = replay::replay_report_value(value)?;
     let report = schema::parse_report(value)?;
@@ -731,11 +730,11 @@ fn runtime_predicate_receipts_ref(observations: &[schema::HarnessObservation]) -
     canonical_hash(&record("runtime-predicate-receipts", vec![sequence(receipts)]))
 }
 
-fn tool_value() -> IOValue {
+fn tool_value() -> IoValue {
     record("tool", vec![string("molten"), string(env!("CARGO_PKG_VERSION"))])
 }
 
-fn artifact_refs_value(refs: &[(&str, &str)]) -> IOValue {
+fn artifact_refs_value(refs: &[(&str, &str)]) -> IoValue {
     record("artifact-refs", vec![sequence(
         refs.iter()
             .map(|(kind, artifact_ref)| record("artifact-ref", vec![string(*kind), string(*artifact_ref)]))
@@ -743,7 +742,7 @@ fn artifact_refs_value(refs: &[(&str, &str)]) -> IOValue {
     )])
 }
 
-fn validation_value(check: &GateCheck) -> IOValue {
+fn validation_value(check: &GateCheck) -> IoValue {
     record("validation", vec![
         record("status", vec![string("pass")]),
         record("report", vec![string(&check.report_ref)]),
@@ -755,7 +754,7 @@ fn validation_value(check: &GateCheck) -> IOValue {
     ])
 }
 
-fn harness_replay_verify_value(expected_report_ref: &str, actual_report_ref: &str, final_state_hash: &str) -> IOValue {
+fn harness_replay_verify_value(expected_report_ref: &str, actual_report_ref: &str, final_state_hash: &str) -> IoValue {
     record("deterministic-replay-verify-v1", vec![
         string(DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
         string("pass"),
@@ -771,7 +770,7 @@ fn harness_replay_verify_value(expected_report_ref: &str, actual_report_ref: &st
     ])
 }
 
-fn replay_value(check: &GateCheck) -> IOValue {
+fn replay_value(check: &GateCheck) -> IoValue {
     record("replay", vec![
         record("status", vec![string("pass")]),
         record("expected-report", vec![string(&check.report_ref)]),
@@ -786,25 +785,25 @@ struct PassLink {
     chain: evidence_chain::ChainScope,
     producer: evidence_chain::ChainProducer,
     link_ref: String,
-    link_value: IOValue,
+    link_value: IoValue,
     payload_refs: Vec<String>,
     subject_refs: Vec<String>,
     context_refs: Vec<String>,
 }
 
 struct PassPredicates {
-    values: Vec<IOValue>,
+    values: Vec<IoValue>,
     refs: Vec<String>,
     range_ref: String,
 }
 
 struct PassArtifacts {
     anchor_ref: String,
-    anchor_value: IOValue,
+    anchor_value: IoValue,
     verify_ref: String,
-    verify_value: IOValue,
+    verify_value: IoValue,
     checkpoint_ref: String,
-    checkpoint_value: IOValue,
+    checkpoint_value: IoValue,
 }
 
 struct Pred<'a> {
@@ -876,7 +875,7 @@ fn pass_link(report_ref: &str, suite_ref: &str, final_state_hash: &str, profile:
     })
 }
 
-fn pass_predicate(input: Pred<'_>) -> IOValue {
+fn pass_predicate(input: Pred<'_>) -> IoValue {
     evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
         predicate: input.predicate,
         decision: "pass",
@@ -953,7 +952,7 @@ fn pass_predicates(link: &PassLink) -> Result<PassPredicates> {
     })
 }
 
-fn pass_predicate_refs(values: &[IOValue]) -> Result<(Vec<String>, String)> {
+fn pass_predicate_refs(values: &[IoValue]) -> Result<(Vec<String>, String)> {
     let mut refs = Vec::with_capacity(values.len());
     let mut range_ref = None;
     for value in values {
@@ -971,7 +970,7 @@ fn pass_predicate_refs(values: &[IOValue]) -> Result<(Vec<String>, String)> {
     ))
 }
 
-fn pass_verify_value(link: &PassLink, predicates: &PassPredicates) -> IOValue {
+fn pass_verify_value(link: &PassLink, predicates: &PassPredicates) -> IoValue {
     let diagnostics = Vec::new();
     let receipt = evidence_chain::ChainVerifyReceiptValueInput {
         decision: "pass",
@@ -1023,7 +1022,7 @@ fn pass_artifacts(link: &PassLink, predicates: &PassPredicates, suite_ref: &str)
     })
 }
 
-fn chain_evidence_value(evidence: &GateChainEvidence) -> IOValue {
+fn chain_evidence_value(evidence: &GateChainEvidence) -> IoValue {
     record("chain-evidence", vec![
         record("profile", vec![string("local-pass-evidence-chain")]),
         record("link", vec![evidence.link_value.clone()]),
@@ -1046,11 +1045,11 @@ fn chain_evidence_value(evidence: &GateChainEvidence) -> IOValue {
 }
 
 struct EvidenceParts {
-    link_value: IOValue,
-    anchor_value: IOValue,
-    verify_receipt_value: IOValue,
-    checkpoint_value: IOValue,
-    predicate_values: Vec<IOValue>,
+    link_value: IoValue,
+    anchor_value: IoValue,
+    verify_receipt_value: IoValue,
+    checkpoint_value: IoValue,
+    predicate_values: Vec<IoValue>,
 }
 
 struct ParsedPredicates {
@@ -1058,7 +1057,7 @@ struct ParsedPredicates {
     refs: Vec<String>,
 }
 
-fn parse_chain_evidence(value: &Value<IOValue>) -> Result<GateChainEvidence> {
+fn parse_chain_evidence(value: &Value<IoValue>) -> Result<GateChainEvidence> {
     let parts = evidence_parts(value)?;
     let link = evidence_chain::parse_chain_link(&parts.link_value)?;
     let link_ref = link.link_ref.clone();
@@ -1099,7 +1098,7 @@ fn parse_chain_evidence(value: &Value<IOValue>) -> Result<GateChainEvidence> {
     })
 }
 
-fn evidence_parts(value: &Value<IOValue>) -> Result<EvidenceParts> {
+fn evidence_parts(value: &Value<IoValue>) -> Result<EvidenceParts> {
     let value = value_to_iovalue(value);
     let evidence = simple_record(&value, "chain-evidence", 7)?;
     let profile = required_record_string(&evidence[0], "profile", "chain evidence profile")?;
@@ -1120,7 +1119,7 @@ fn evidence_parts(value: &Value<IOValue>) -> Result<EvidenceParts> {
     })
 }
 
-fn parsed_predicates(values: &[IOValue]) -> Result<ParsedPredicates> {
+fn parsed_predicates(values: &[IoValue]) -> Result<ParsedPredicates> {
     let mut receipts = Vec::with_capacity(values.len());
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
@@ -1148,7 +1147,7 @@ fn require_predicates(predicates: &ParsedPredicates, range_ref: &str, link_ref: 
 }
 
 fn validate_gate_chain_verify_receipt(
-    value: &IOValue,
+    value: &IoValue,
     link: &crate::evidence_chain::ChainLink,
     range_predicate_ref: &str,
     predicate_receipt_refs: &[String],
@@ -1238,7 +1237,7 @@ struct TurnJournalBuilder {
     actor_id: String,
     chain: evidence_chain::ChainScope,
     links: Vec<evidence_chain::ChainLink>,
-    link_values: Vec<IOValue>,
+    link_values: Vec<IoValue>,
     payload_refs: Vec<String>,
 }
 
@@ -1361,7 +1360,7 @@ fn predicate_values(
     payload_refs: &[String],
     context_refs: &[String],
     ends: &LinkEnds<'_>,
-) -> Vec<IOValue> {
+) -> Vec<IoValue> {
     let segment_checks = vec![
         evidence_chain::ChainCheck::pass("segment-contiguity"),
         evidence_chain::ChainCheck::pass("canonical-link-order"),
@@ -1403,7 +1402,7 @@ fn predicate_values(
     ]
 }
 
-fn predicate_refs(values: &[IOValue]) -> Result<Vec<String>> {
+fn predicate_refs(values: &[IoValue]) -> Result<Vec<String>> {
     Ok(values
         .iter()
         .map(evidence_chain::parse_chain_predicate_receipt)
@@ -1419,7 +1418,7 @@ fn verify_value(
     payload_refs: &[String],
     ends: &LinkEnds<'_>,
     predicate_receipt_refs: &[String],
-) -> IOValue {
+) -> IoValue {
     let verify_diagnostics = Vec::new();
     let verify_receipt = evidence_chain::ChainVerifyReceiptValueInput {
         decision: "pass",
@@ -1479,7 +1478,7 @@ fn turn_journal_producer() -> Result<evidence_chain::ChainProducer> {
     ))
 }
 
-fn turn_journals_value(evidence: &TurnJournalEvidence) -> IOValue {
+fn turn_journals_value(evidence: &TurnJournalEvidence) -> IoValue {
     record("turn-journals", vec![
         record("profile", vec![string("per-actor-local-turn-journal")]),
         record("journals", vec![sequence(evidence.journals.iter().map(turn_journal_value).collect())]),
@@ -1498,7 +1497,7 @@ fn turn_journals_value(evidence: &TurnJournalEvidence) -> IOValue {
     ])
 }
 
-fn turn_journal_value(journal: &TurnJournalChainEvidence) -> IOValue {
+fn turn_journal_value(journal: &TurnJournalChainEvidence) -> IoValue {
     record("turn-journal", vec![
         record("actor", vec![string(&journal.actor_id)]),
         record("links", vec![sequence(journal.link_values.clone())]),
@@ -1519,7 +1518,7 @@ fn turn_journal_value(journal: &TurnJournalChainEvidence) -> IOValue {
     ])
 }
 
-fn parse_turn_journals(value: &Value<IOValue>, report_ref: &str, suite_ref: &str) -> Result<TurnJournalEvidence> {
+fn parse_turn_journals(value: &Value<IoValue>, report_ref: &str, suite_ref: &str) -> Result<TurnJournalEvidence> {
     let value = value_to_iovalue(value);
     let journals_record = simple_record(&value, "turn-journals", 3)?;
     let profile = required_record_string(&journals_record[0], "profile", "turn journal profile")?;
@@ -1546,7 +1545,7 @@ fn require_turn_journal_checks(checks: &[String]) -> Result<()> {
 }
 
 fn parse_turn_journal_set(
-    journal_values: &[IOValue],
+    journal_values: &[IoValue],
     report_ref: &str,
     suite_ref: &str,
 ) -> Result<Vec<TurnJournalChainEvidence>> {
@@ -1565,7 +1564,7 @@ fn parse_turn_journal_set(
     Ok(journals)
 }
 
-fn parse_turn_journal(value: &IOValue, report_ref: &str, suite_ref: &str) -> Result<TurnJournalChainEvidence> {
+fn parse_turn_journal(value: &IoValue, report_ref: &str, suite_ref: &str) -> Result<TurnJournalChainEvidence> {
     let journal_record = simple_record(value, "turn-journal", 5)?;
     let actor_id = required_record_string(&journal_record[0], "actor", "turn journal actor")?;
     let link_values = required_record_values(&journal_record[1], "links")?;
@@ -1603,7 +1602,7 @@ struct ParsedTurnJournalLinks {
 }
 
 fn parse_turn_journal_links(
-    link_values: &[IOValue],
+    link_values: &[IoValue],
     actor_id: &str,
     report_ref: &str,
     suite_ref: &str,
@@ -1684,7 +1683,7 @@ fn validate_turn_journal_previous_ref(
     Ok(())
 }
 
-fn parse_turn_journal_predicates(predicate_values: &[IOValue]) -> Result<Vec<evidence_chain::ChainPredicateReceipt>> {
+fn parse_turn_journal_predicates(predicate_values: &[IoValue]) -> Result<Vec<evidence_chain::ChainPredicateReceipt>> {
     let receipts = predicate_values
         .iter()
         .map(evidence_chain::parse_chain_predicate_receipt)
@@ -1696,7 +1695,7 @@ fn parse_turn_journal_predicates(predicate_values: &[IOValue]) -> Result<Vec<evi
 }
 
 fn validate_turn_journal_verify_receipt(
-    value: &IOValue,
+    value: &IoValue,
     chain: &evidence_chain::ChainScope,
     link_refs: &[String],
     payload_refs: &[String],
@@ -1759,7 +1758,7 @@ fn require_context_ref_kind(context_refs: &[evidence_chain::ChainContextRef], la
     }
 }
 
-fn repro_verify_checks_value() -> IOValue {
+fn repro_verify_checks_value() -> IoValue {
     record("checks", vec![sequence(
         [
             "sealed-bundle",
@@ -1775,7 +1774,7 @@ fn repro_verify_checks_value() -> IOValue {
     )])
 }
 
-fn checks_value() -> IOValue {
+fn checks_value() -> IoValue {
     record("checks", vec![sequence(
         PASS_CHECKS.iter().map(|name| record("check", vec![string(*name), string("pass")])).collect(),
     )])
@@ -1804,7 +1803,7 @@ struct ReplayReceipt {
     verify_ref: String,
 }
 
-fn parse_validation(value: &Value<IOValue>) -> Result<ValidationReceipt> {
+fn parse_validation(value: &Value<IoValue>) -> Result<ValidationReceipt> {
     let value = value_to_iovalue(value);
     let validation = simple_record(&value, "validation", 7)?;
     let status = required_record_string(&validation[0], "status", "gate validation status")?;
@@ -1829,7 +1828,7 @@ fn parse_validation(value: &Value<IOValue>) -> Result<ValidationReceipt> {
     })
 }
 
-fn parse_replay(value: &Value<IOValue>) -> Result<ReplayReceipt> {
+fn parse_replay(value: &Value<IoValue>) -> Result<ReplayReceipt> {
     let value = value_to_iovalue(value);
     let replay = simple_record(&value, "replay", 6)?;
     let status = required_record_string(&replay[0], "status", "gate replay status")?;
@@ -1857,7 +1856,7 @@ fn parse_replay(value: &Value<IOValue>) -> Result<ReplayReceipt> {
 }
 
 fn validate_harness_replay_verify_value(
-    value: &IOValue,
+    value: &IoValue,
     expected_verify_ref: &str,
     expected_report_ref: &str,
     actual_report_ref: &str,
@@ -1904,7 +1903,7 @@ fn validate_harness_replay_verify_value(
     Ok(())
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks_record = simple_record(&value, "checks", 1)?;
     let check_values = required_sequence(&checks_record[0], "gate checks")?;
@@ -1979,7 +1978,7 @@ fn require_link_context(
     Ok(())
 }
 
-fn validate_tool_record(value: &Value<IOValue>) -> Result<()> {
+fn validate_tool_record(value: &Value<IoValue>) -> Result<()> {
     let value = value_to_iovalue(value);
     let tool = simple_record(&value, "tool", 2)?;
     let name = required_string(&tool[0], "gate receipt tool name")?;
@@ -1993,7 +1992,7 @@ fn validate_tool_record(value: &Value<IOValue>) -> Result<()> {
     Ok(())
 }
 
-fn parse_artifact_refs(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_artifact_refs(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let artifact_refs = simple_record(&value, "artifact-refs", 1)?;
     let ref_values = required_sequence(&artifact_refs[0], "gate receipt artifact refs")?;
@@ -2032,19 +2031,19 @@ fn require_artifact_kind(refs: &[(String, String)], kind: &str) -> Result<()> {
     }
 }
 
-fn required_record_string(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+fn required_record_string(value: &Value<IoValue>, label: &str, field: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], field)
 }
 
-fn required_record_hash(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+fn required_record_hash(value: &Value<IoValue>, label: &str, field: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_hash(&record[0], field)
 }
 
-fn required_record_optional_hash(value: &Value<IOValue>, label: &str, field: &str) -> Result<Option<String>> {
+fn required_record_optional_hash(value: &Value<IoValue>, label: &str, field: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let optional = value_to_iovalue(&record[0]);
@@ -2057,33 +2056,33 @@ fn required_record_optional_hash(value: &Value<IOValue>, label: &str, field: &st
     }
 }
 
-fn required_record_hash_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn required_record_hash_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let values = required_sequence(&record[0], label)?;
     values.iter().map(|value| required_hash(value, label)).collect()
 }
 
-fn required_record_value(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
+fn required_record_value(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     Ok(value_to_iovalue(&record[0]))
 }
 
-fn required_record_values(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
+fn required_record_values(value: &Value<IoValue>, label: &str) -> Result<Vec<IoValue>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let values = required_sequence(&record[0], label)?;
     Ok(values.iter().map(value_to_iovalue).collect())
 }
 
-fn required_record_u64(value: &Value<IOValue>, label: &str, field: &str) -> Result<u64> {
+fn required_record_u64(value: &Value<IoValue>, label: &str, field: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_u64(&record[0], field)
 }
 
-fn required_chain_scope(value: &Value<IOValue>) -> Result<evidence_chain::ChainScope> {
+fn required_chain_scope(value: &Value<IoValue>) -> Result<evidence_chain::ChainScope> {
     let value = value_to_iovalue(value);
     let chain = simple_record(&value, "chain", 3)?;
     Ok(evidence_chain::ChainScope::new(
@@ -2093,27 +2092,27 @@ fn required_chain_scope(value: &Value<IOValue>) -> Result<evidence_chain::ChainS
     ))
 }
 
-fn simple_record<'a>(value: &'a IOValue, label: &str, arity: usize) -> Result<Cow<'a, Record<Value<IOValue>>>> {
+fn simple_record<'a>(value: &'a IoValue, label: &str, arity: usize) -> Result<Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_hash(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_hash(value: &Value<IoValue>, field: &str) -> Result<String> {
     let hash = required_string(value, field)?;
     validate_content_ref(&hash).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {hash}: {error}"))
@@ -2121,7 +2120,7 @@ fn required_hash(value: &Value<IOValue>, field: &str) -> Result<String> {
     Ok(hash)
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
