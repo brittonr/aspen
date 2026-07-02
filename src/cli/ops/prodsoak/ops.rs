@@ -44,7 +44,7 @@ fn evidence_export(command: Command) -> Outcome<()> {
     let node_evidence_ref = super::io::preserves_file_ref(&node_evidence)?;
     let artifact_refs = super::io::preserves_file_refs(&artifacts)?;
     let log_refs = super::io::raw_file_refs(&logs)?;
-    let value = molten::prod_soak::evidence_export_value(&molten::prod_soak::ProdSoakEvidenceExportInput {
+    let value = molten::prod_soak::evidence_export_value(&molten::prod_soak::EvidenceExportInput {
         node: &node,
         node_evidence_ref: &node_evidence_ref,
         artifact_refs: &artifact_refs,
@@ -70,7 +70,7 @@ fn durability(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("durability"));
     };
-    let value = molten::prod_soak::durability_value(&molten::prod_soak::ProdSoakDurabilityInput {
+    let value = molten::prod_soak::durability_value(&molten::prod_soak::DurabilityInput {
         decision: &decision,
         scenario: &scenario,
         queued_control_refs: &queued_control_refs,
@@ -106,7 +106,7 @@ fn fault_case(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("fault-case"));
     };
-    let value = molten::prod_soak::fault_case_value(&molten::prod_soak::ProdSoakFaultCaseInput {
+    let value = molten::prod_soak::fault_case_value(&molten::prod_soak::FaultCaseInput {
         decision: &decision,
         scenario: &scenario,
         fault_kind: &fault_kind,
@@ -149,7 +149,7 @@ fn resource_envelope(command: Command) -> Outcome<()> {
     else {
         return Err(wrong_handler("resource-envelope"));
     };
-    let value = molten::prod_soak::resource_envelope_value(&molten::prod_soak::ProdSoakResourceEnvelopeInput {
+    let value = molten::prod_soak::resource_envelope_value(&molten::prod_soak::ResourceEnvelopeInput {
         decision: &decision,
         scenario: &scenario,
         queue_depth,
@@ -191,7 +191,7 @@ fn fault_matrix(command: Command) -> Outcome<()> {
         return Err(wrong_handler("fault-matrix"));
     };
     let fault_case_refs = super::io::preserves_file_refs(&fault_cases)?;
-    let value = molten::prod_soak::fault_matrix_value(&molten::prod_soak::ProdSoakFaultMatrixInput {
+    let value = molten::prod_soak::fault_matrix_value(&molten::prod_soak::FaultMatrixInput {
         decision: &decision,
         scenario: &scenario,
         fault_case_refs: &fault_case_refs,
@@ -236,7 +236,7 @@ fn run_receipt(command: Command) -> Outcome<()> {
     let node_evidence_refs = super::io::preserves_file_refs(&node_evidence)?;
     let evidence_export_refs = super::io::preserves_file_refs(&evidence_exports)?;
     let log_refs = super::io::raw_file_refs(&logs)?;
-    let value = molten::prod_soak::run_value(&molten::prod_soak::ProdSoakRunInput {
+    let value = molten::prod_soak::run_value(&molten::prod_soak::RunInput {
         decision: &decision,
         scenario: &scenario,
         topology_ref: &topology_ref,

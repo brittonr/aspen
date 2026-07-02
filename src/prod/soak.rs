@@ -2,12 +2,12 @@ type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 
-const PROD_SOAK_DURABILITY_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_DURABILITY_SCHEMA;
-const PROD_SOAK_EVIDENCE_EXPORT_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_EVIDENCE_EXPORT_SCHEMA;
-const PROD_SOAK_FAULT_CASE_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_FAULT_CASE_SCHEMA;
-const PROD_SOAK_FAULT_MATRIX_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_FAULT_MATRIX_SCHEMA;
-const PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA;
-const PROD_SOAK_RUN_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_RUN_SCHEMA;
+const DURABILITY_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_DURABILITY_SCHEMA;
+const EVIDENCE_EXPORT_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_EVIDENCE_EXPORT_SCHEMA;
+const FAULT_CASE_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_FAULT_CASE_SCHEMA;
+const FAULT_MATRIX_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_FAULT_MATRIX_SCHEMA;
+const RESOURCE_ENVELOPE_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA;
+const RUN_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_RUN_SCHEMA;
 
 fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
@@ -29,10 +29,10 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-const MAX_SOAK_REFS: usize = 512;
-const MAX_SOAK_TEXT_FIELDS: usize = 128;
-const _: () = assert!(MAX_SOAK_REFS <= 100_000);
-const _: () = assert!(MAX_SOAK_TEXT_FIELDS <= 100_000);
+const MAX_REFS: usize = 512;
+const MAX_TEXT_FIELDS: usize = 128;
+const _: () = assert!(MAX_REFS <= 100_000);
+const _: () = assert!(MAX_TEXT_FIELDS <= 100_000);
 
 const REQUIRED_NETWORK_FAULTS: &[&str] = &[
     "delay",
@@ -46,14 +46,14 @@ const REQUIRED_NETWORK_FAULTS: &[&str] = &[
     "corrupted-transport-receipt",
 ];
 
-pub struct ProdSoakEvidenceExportInput<'a> {
+pub struct EvidenceExportInput<'a> {
     pub node: &'a str,
     pub node_evidence_ref: &'a str,
     pub artifact_refs: &'a [String],
     pub log_refs: &'a [String],
 }
 
-pub struct ProdSoakRunInput<'a> {
+pub struct RunInput<'a> {
     pub decision: &'a str,
     pub scenario: &'a str,
     pub topology_ref: &'a str,
@@ -74,7 +74,7 @@ pub struct ProdSoakRunInput<'a> {
     pub caveats: &'a [String],
 }
 
-pub struct ProdSoakDurabilityInput<'a> {
+pub struct DurabilityInput<'a> {
     pub decision: &'a str,
     pub scenario: &'a str,
     pub queued_control_refs: &'a [String],
@@ -86,7 +86,7 @@ pub struct ProdSoakDurabilityInput<'a> {
     pub caveats: &'a [String],
 }
 
-pub struct ProdSoakFaultCaseInput<'a> {
+pub struct FaultCaseInput<'a> {
     pub decision: &'a str,
     pub scenario: &'a str,
     pub fault_kind: &'a str,
@@ -99,7 +99,7 @@ pub struct ProdSoakFaultCaseInput<'a> {
     pub caveats: &'a [String],
 }
 
-pub struct ProdSoakResourceEnvelopeInput<'a> {
+pub struct ResourceEnvelopeInput<'a> {
     pub decision: &'a str,
     pub scenario: &'a str,
     pub queue_depth: u64,
@@ -118,7 +118,7 @@ pub struct ProdSoakResourceEnvelopeInput<'a> {
     pub caveats: &'a [String],
 }
 
-pub struct ProdSoakFaultMatrixInput<'a> {
+pub struct FaultMatrixInput<'a> {
     pub decision: &'a str,
     pub scenario: &'a str,
     pub fault_case_refs: &'a [String],
@@ -127,13 +127,13 @@ pub struct ProdSoakFaultMatrixInput<'a> {
     pub caveats: &'a [String],
 }
 
-pub fn evidence_export_value(input: &ProdSoakEvidenceExportInput<'_>) -> Result<IoValue> {
+pub fn evidence_export_value(input: &EvidenceExportInput<'_>) -> Result<IoValue> {
     validate_text_field("node", input.node)?;
     validate_content_ref(input.node_evidence_ref)?;
     validate_ref_slice("evidence export artifact", input.artifact_refs)?;
     validate_ref_slice("evidence export log", input.log_refs)?;
     Ok(record("prod-soak-evidence-export-v1", vec![
-        string(PROD_SOAK_EVIDENCE_EXPORT_SCHEMA),
+        string(EVIDENCE_EXPORT_SCHEMA),
         record("node", vec![string(input.node)]),
         record("node-evidence", vec![string(input.node_evidence_ref)]),
         record("artifacts", vec![sequence(ref_values(input.artifact_refs)?)]),
@@ -147,7 +147,7 @@ pub fn evidence_export_value(input: &ProdSoakEvidenceExportInput<'_>) -> Result<
     ]))
 }
 
-pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IoValue> {
+pub fn run_value(input: &RunInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_content_ref(input.topology_ref)?;
@@ -174,7 +174,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IoValue> {
     validate_fault_profile_refs(input.fault_profile, input.fault_refs, input.decision)?;
     validate_pass_caveats(input.caveats, input.decision)?;
     Ok(record("prod-soak-run-v1", vec![
-        string(PROD_SOAK_RUN_SCHEMA),
+        string(RUN_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("scenario", vec![string(input.scenario)]),
         record("topology", vec![string(input.topology_ref)]),
@@ -193,14 +193,10 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IoValue> {
         record("diagnostics", vec![sequence(string_values(
             "diagnostic",
             input.diagnostics,
-            MAX_SOAK_TEXT_FIELDS,
+            MAX_TEXT_FIELDS,
         )?)]),
         record("logs", vec![sequence(ref_values(input.log_refs)?)]),
-        record("caveats", vec![sequence(string_values(
-            "soak caveat",
-            input.caveats,
-            MAX_SOAK_TEXT_FIELDS,
-        )?)]),
+        record("caveats", vec![sequence(string_values("soak caveat", input.caveats, MAX_TEXT_FIELDS)?)]),
         record("checks", vec![sequence(vec![
             check_value("production-shaped-child-evidence", "pass"),
             check_value("replay-boundary-explicit", "pass"),
@@ -210,7 +206,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-pub fn durability_value(input: &ProdSoakDurabilityInput<'_>) -> Result<IoValue> {
+pub fn durability_value(input: &DurabilityInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_ref_slice("durability queued control", input.queued_control_refs)?;
@@ -225,7 +221,7 @@ pub fn durability_value(input: &ProdSoakDurabilityInput<'_>) -> Result<IoValue> 
     validate_pass_category("retention", input.retention_refs, input.decision)?;
     validate_pass_caveats(input.caveats, input.decision)?;
     Ok(record("prod-soak-durability-v1", vec![
-        string(PROD_SOAK_DURABILITY_SCHEMA),
+        string(DURABILITY_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("scenario", vec![string(input.scenario)]),
         record("queued-control", vec![sequence(ref_values(input.queued_control_refs)?)]),
@@ -236,12 +232,12 @@ pub fn durability_value(input: &ProdSoakDurabilityInput<'_>) -> Result<IoValue> 
         record("diagnostics", vec![sequence(string_values(
             "durability diagnostic",
             input.diagnostics,
-            MAX_SOAK_TEXT_FIELDS,
+            MAX_TEXT_FIELDS,
         )?)]),
         record("caveats", vec![sequence(string_values(
             "durability caveat",
             input.caveats,
-            MAX_SOAK_TEXT_FIELDS,
+            MAX_TEXT_FIELDS,
         )?)]),
         record("checks", vec![sequence(vec![
             check_value("queued-control-bound", "pass"),
@@ -254,7 +250,7 @@ pub fn durability_value(input: &ProdSoakDurabilityInput<'_>) -> Result<IoValue> 
     ]))
 }
 
-pub fn resource_envelope_value(input: &ProdSoakResourceEnvelopeInput<'_>) -> Result<IoValue> {
+pub fn resource_envelope_value(input: &ResourceEnvelopeInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_metric_bound("queue depth", input.queue_depth, input.max_queue_depth)?;
@@ -268,7 +264,7 @@ pub fn resource_envelope_value(input: &ProdSoakResourceEnvelopeInput<'_>) -> Res
     validate_pass_category("resource denial", input.denial_refs, input.decision)?;
     validate_pass_caveats(input.caveats, input.decision)?;
     Ok(record("prod-soak-resource-envelope-v1", vec![
-        string(PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA),
+        string(RESOURCE_ENVELOPE_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("scenario", vec![string(input.scenario)]),
         record("queue-depth", vec![u64_value(input.queue_depth)]),
@@ -286,12 +282,12 @@ pub fn resource_envelope_value(input: &ProdSoakResourceEnvelopeInput<'_>) -> Res
         record("diagnostics", vec![sequence(string_values(
             "resource diagnostic",
             input.diagnostics,
-            MAX_SOAK_TEXT_FIELDS,
+            MAX_TEXT_FIELDS,
         )?)]),
         record("caveats", vec![sequence(string_values(
             "resource caveat",
             input.caveats,
-            MAX_SOAK_TEXT_FIELDS,
+            MAX_TEXT_FIELDS,
         )?)]),
         record("checks", vec![sequence(vec![
             check_value("queue-depth-bound", "pass"),
@@ -304,7 +300,7 @@ pub fn resource_envelope_value(input: &ProdSoakResourceEnvelopeInput<'_>) -> Res
     ]))
 }
 
-pub fn fault_case_value(input: &ProdSoakFaultCaseInput<'_>) -> Result<IoValue> {
+pub fn fault_case_value(input: &FaultCaseInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_fault_kind(input.fault_kind)?;
@@ -317,7 +313,7 @@ pub fn fault_case_value(input: &ProdSoakFaultCaseInput<'_>) -> Result<IoValue> {
     validate_pass_fault_denials(input.expected_outcome, input.denial_refs, input.decision)?;
     validate_pass_caveats(input.caveats, input.decision)?;
     Ok(record("prod-soak-fault-case-v1", vec![
-        string(PROD_SOAK_FAULT_CASE_SCHEMA),
+        string(FAULT_CASE_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("scenario", vec![string(input.scenario)]),
         record("fault-kind", vec![string(input.fault_kind)]),
@@ -329,13 +325,9 @@ pub fn fault_case_value(input: &ProdSoakFaultCaseInput<'_>) -> Result<IoValue> {
         record("diagnostics", vec![sequence(string_values(
             "fault diagnostic",
             input.diagnostics,
-            MAX_SOAK_TEXT_FIELDS,
+            MAX_TEXT_FIELDS,
         )?)]),
-        record("caveats", vec![sequence(string_values(
-            "fault caveat",
-            input.caveats,
-            MAX_SOAK_TEXT_FIELDS,
-        )?)]),
+        record("caveats", vec![sequence(string_values("fault caveat", input.caveats, MAX_TEXT_FIELDS)?)]),
         record("checks", vec![sequence(vec![
             check_value("fault-kind-covered", "pass"),
             check_value("fault-evidence-bound", "pass"),
@@ -348,7 +340,7 @@ pub fn fault_case_value(input: &ProdSoakFaultCaseInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-pub fn fault_matrix_value(input: &ProdSoakFaultMatrixInput<'_>) -> Result<IoValue> {
+pub fn fault_matrix_value(input: &FaultMatrixInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("scenario", input.scenario)?;
     validate_ref_slice("fault case", input.fault_case_refs)?;
@@ -357,7 +349,7 @@ pub fn fault_matrix_value(input: &ProdSoakFaultMatrixInput<'_>) -> Result<IoValu
     validate_fault_matrix_coverage(input.fault_kinds, input.decision)?;
     validate_pass_caveats(input.caveats, input.decision)?;
     Ok(record("prod-soak-fault-matrix-v1", vec![
-        string(PROD_SOAK_FAULT_MATRIX_SCHEMA),
+        string(FAULT_MATRIX_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("scenario", vec![string(input.scenario)]),
         record("fault-cases", vec![sequence(ref_values(input.fault_case_refs)?)]),
@@ -366,12 +358,12 @@ pub fn fault_matrix_value(input: &ProdSoakFaultMatrixInput<'_>) -> Result<IoValu
         record("diagnostics", vec![sequence(string_values(
             "fault matrix diagnostic",
             input.diagnostics,
-            MAX_SOAK_TEXT_FIELDS,
+            MAX_TEXT_FIELDS,
         )?)]),
         record("caveats", vec![sequence(string_values(
             "fault matrix caveat",
             input.caveats,
-            MAX_SOAK_TEXT_FIELDS,
+            MAX_TEXT_FIELDS,
         )?)]),
         record("checks", vec![sequence(vec![
             check_value("network-transport-fault-matrix", "pass"),
@@ -442,9 +434,9 @@ fn validate_fault_kind(kind: &str) -> Result<()> {
 }
 
 fn validate_fault_kinds(kinds: &[String]) -> Result<()> {
-    if kinds.len() > MAX_SOAK_TEXT_FIELDS {
+    if kinds.len() > MAX_TEXT_FIELDS {
         return Err(MoltenError::invalid_harness(format!(
-            "prod soak fault kind count {} exceeds bound {MAX_SOAK_TEXT_FIELDS}",
+            "prod soak fault kind count {} exceeds bound {MAX_TEXT_FIELDS}",
             kinds.len()
         )));
     }
@@ -486,9 +478,9 @@ fn validate_text_field(label: &str, value: &str) -> Result<()> {
 }
 
 fn validate_ref_slice(label: &str, refs: &[String]) -> Result<()> {
-    if refs.len() > MAX_SOAK_REFS {
+    if refs.len() > MAX_REFS {
         return Err(MoltenError::invalid_harness(format!(
-            "prod soak {label} ref count {} exceeds bound {MAX_SOAK_REFS}",
+            "prod soak {label} ref count {} exceeds bound {MAX_REFS}",
             refs.len()
         )));
     }
@@ -560,7 +552,7 @@ mod tests {
     #[test]
     fn evidence_export_binds_node_and_artifacts() {
         let artifact_ref = local_ref("artifact");
-        let value = evidence_export_value(&ProdSoakEvidenceExportInput {
+        let value = evidence_export_value(&EvidenceExportInput {
             node: "node-a",
             node_evidence_ref: &local_ref("node-evidence"),
             artifact_refs: std::slice::from_ref(&artifact_ref),
@@ -581,7 +573,7 @@ mod tests {
         let job = vec![local_ref("job-worker")];
         let coordination = vec![local_ref("coordination")];
         let evidence_export = vec![local_ref("export-a"), local_ref("export-b")];
-        let value = run_value(&ProdSoakRunInput {
+        let value = run_value(&RunInput {
             decision: "pass",
             scenario: "phase1-soak",
             topology_ref: &local_ref("topology"),
@@ -622,7 +614,7 @@ mod tests {
         let network_diagnostic = local_ref("network-diagnostics");
         let metrics_snapshot = local_ref("metrics-snapshot");
         let resource_refs = vec![network_diagnostic.clone(), metrics_snapshot.clone()];
-        let value = run_value(&ProdSoakRunInput {
+        let value = run_value(&RunInput {
             decision: "pass",
             scenario: "phase1-network-diagnostics",
             topology_ref: &local_ref("topology"),
@@ -651,7 +643,7 @@ mod tests {
 
     #[test]
     fn passing_run_requires_all_phase_one_categories() {
-        let error = run_value(&ProdSoakRunInput {
+        let error = run_value(&RunInput {
             decision: "pass",
             scenario: "missing-remote",
             topology_ref: &local_ref("topology"),
@@ -677,7 +669,7 @@ mod tests {
 
     #[test]
     fn durability_receipt_requires_restart_and_state_refs() {
-        let value = durability_value(&ProdSoakDurabilityInput {
+        let value = durability_value(&DurabilityInput {
             decision: "pass",
             scenario: "restart-durability",
             queued_control_refs: &[local_ref("restart-queue")],
@@ -696,7 +688,7 @@ mod tests {
 
     #[test]
     fn resource_envelope_receipt_binds_bounds_and_denials() {
-        let value = resource_envelope_value(&ProdSoakResourceEnvelopeInput {
+        let value = resource_envelope_value(&ResourceEnvelopeInput {
             decision: "pass",
             scenario: "pilot-resource-envelope",
             queue_depth: 1,
@@ -724,7 +716,7 @@ mod tests {
     fn fault_case_binds_denial_for_stale_ticket() {
         let denial = vec![local_ref("stale-ticket-denial")];
         let evidence = vec![local_ref("ticket")];
-        let value = fault_case_value(&ProdSoakFaultCaseInput {
+        let value = fault_case_value(&FaultCaseInput {
             decision: "pass",
             scenario: "network-faults",
             fault_kind: "stale-ticket",
@@ -746,7 +738,7 @@ mod tests {
     fn fault_matrix_requires_all_network_faults_for_pass() {
         let fault_cases = vec![local_ref("case")];
         let incomplete = vec!["delay".to_string()];
-        let error = fault_matrix_value(&ProdSoakFaultMatrixInput {
+        let error = fault_matrix_value(&FaultMatrixInput {
             decision: "pass",
             scenario: "network-faults",
             fault_case_refs: &fault_cases,
@@ -758,7 +750,7 @@ mod tests {
         assert!(error.to_string().contains("drop"));
 
         let complete = REQUIRED_NETWORK_FAULTS.iter().map(|kind| (*kind).to_string()).collect::<Vec<_>>();
-        let value = fault_matrix_value(&ProdSoakFaultMatrixInput {
+        let value = fault_matrix_value(&FaultMatrixInput {
             decision: "pass",
             scenario: "network-faults",
             fault_case_refs: &fault_cases,
