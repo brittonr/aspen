@@ -157,7 +157,7 @@ pub struct Pin {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionReferenceIndexInput {
+pub struct ReferenceIndexInput {
     pub object_ref: String,
     pub object_kind: String,
     pub pin_refs: Vec<String>,
@@ -168,7 +168,7 @@ pub struct RetentionReferenceIndexInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionReferenceIndex {
+pub struct ReferenceIndex {
     pub index_ref: String,
     pub object_ref: String,
     pub object_kind: String,
@@ -884,7 +884,7 @@ pub struct PinOperation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RetentionEvaluation {
     pub receipt: RetentionReceipt,
-    pub index: RetentionReferenceIndex,
+    pub index: ReferenceIndex,
     pub tombstone: Option<RetentionTombstone>,
 }
 
@@ -1089,7 +1089,7 @@ pub fn unpin_object(input: UnpinObjectInput<'_>) -> Result<RetentionReceipt> {
     Ok(receipt)
 }
 
-pub fn reference_index_value(input: &RetentionReferenceIndexInput) -> Result<IoValue> {
+pub fn reference_index_value(input: &ReferenceIndexInput) -> Result<IoValue> {
     validate_reference_index_input(input)?;
     Ok(crate::preserves_rail::record("retention-reference-index-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_REFERENCE_INDEX_SCHEMA),
@@ -1112,7 +1112,7 @@ pub fn reference_index_value(input: &RetentionReferenceIndexInput) -> Result<IoV
     ]))
 }
 
-pub fn parse_reference_index(value: &IoValue) -> Result<RetentionReferenceIndex> {
+pub fn parse_reference_index(value: &IoValue) -> Result<ReferenceIndex> {
     let fields = value
         .collect_simple_record("retention-reference-index-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-reference-index-v1 ...>"))?;
@@ -1128,7 +1128,7 @@ pub fn parse_reference_index(value: &IoValue) -> Result<RetentionReferenceIndex>
     let remote_refs = record_ref_sequence(&fields[5], "remote")?;
     let proof = record_string(&fields[6], "proof")?;
     require_check(&parse_checks(&fields[7])?, "mutable-name-not-gc-proof", "retention reference index")?;
-    Ok(RetentionReferenceIndex {
+    Ok(ReferenceIndex {
         index_ref: crate::preserves_rail::canonical_hash(value)?,
         object_ref,
         object_kind,
@@ -1141,7 +1141,7 @@ pub fn parse_reference_index(value: &IoValue) -> Result<RetentionReferenceIndex>
     })
 }
 
-pub fn reference_index_for_object(input: ReferenceIndexForObjectInput<'_>) -> Result<RetentionReferenceIndex> {
+pub fn reference_index_for_object(input: ReferenceIndexForObjectInput<'_>) -> Result<ReferenceIndex> {
     ensure_store(input.root)?;
     let pins = pins_for_object(input.root, input.object_ref)?;
     let mut pin_refs = Vec::with_capacity(pins.len());
@@ -1149,7 +1149,7 @@ pub fn reference_index_for_object(input: ReferenceIndexForObjectInput<'_>) -> Re
         push_bounded(&mut pin_refs, pin.pin_ref.clone(), MAX_RETENTION_REFS, "retention index pin refs")?;
     }
     let tombstone_refs = tombstone_refs_for_object(input.root, input.object_ref)?;
-    let value = reference_index_value(&RetentionReferenceIndexInput {
+    let value = reference_index_value(&ReferenceIndexInput {
         object_ref: input.object_ref.to_string(),
         object_kind: input.object_kind.to_string(),
         pin_refs,
@@ -2361,7 +2361,7 @@ pub struct RetentionGcPlanValueInput<'a> {
     object_kind: &'a str,
     retention_class: &'a str,
     requester_ref: Option<&'a str>,
-    index: &'a RetentionReferenceIndex,
+    index: &'a ReferenceIndex,
     evidence_value: &'a IoValue,
     gates: &'a [RetentionPlanGate],
     diagnostics: &'a [String],
@@ -2584,7 +2584,7 @@ struct PlanGateBuildInput<'a> {
 
 struct LocalRetentionGateInput<'a> {
     input: &'a RetentionGcPlanInput<'a>,
-    index: &'a RetentionReferenceIndex,
+    index: &'a ReferenceIndex,
     has_delete_authority: bool,
     has_remote_gc_clearance: bool,
 }
@@ -2884,10 +2884,7 @@ fn retention_gate_inputs<'a>(input: &'a RetentionGcPlanInput<'a>) -> Result<Rete
     })
 }
 
-fn retention_plan_gates(
-    input: &RetentionGateInputs<'_>,
-    index: &RetentionReferenceIndex,
-) -> Result<Vec<RetentionPlanGate>> {
+fn retention_plan_gates(input: &RetentionGateInputs<'_>, index: &ReferenceIndex) -> Result<Vec<RetentionPlanGate>> {
     let mut gates = Vec::new();
     push_access_gates(&mut gates, input)?;
     push_index_gates(&mut gates, input, index)?;
@@ -2956,7 +2953,7 @@ fn push_access_gates(gates: &mut impl VecSink<RetentionPlanGate>, input: &Retent
 fn push_index_gates(
     gates: &mut impl VecSink<RetentionPlanGate>,
     input: &RetentionGateInputs<'_>,
-    index: &RetentionReferenceIndex,
+    index: &ReferenceIndex,
 ) -> Result<()> {
     push_bounded(
         gates,
@@ -3214,7 +3211,7 @@ fn parse_retention_plan_gate(value: &IoValue) -> Result<RetentionPlanGate> {
     })
 }
 
-fn parse_embedded_reference_index(value: &Value<IoValue>) -> Result<(String, RetentionReferenceIndex)> {
+fn parse_embedded_reference_index(value: &Value<IoValue>) -> Result<(String, ReferenceIndex)> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("index", Some(2))
@@ -7497,7 +7494,7 @@ fn build_tombstone(input: TombstoneBuildInput<'_>) -> Result<RetentionTombstone>
     parse_tombstone(&value)
 }
 
-fn retention_diagnostics(input: &RetentionEvaluationInput<'_>, index: &RetentionReferenceIndex) -> Result<Vec<String>> {
+fn retention_diagnostics(input: &RetentionEvaluationInput<'_>, index: &ReferenceIndex) -> Result<Vec<String>> {
     let is_destructive = is_destructive_action(input.action);
     let mut diagnostics = Vec::new();
     push_notes(&mut diagnostics, [
@@ -7589,7 +7586,7 @@ fn validate_pin_input(input: &PinInput) -> Result<()> {
     Ok(())
 }
 
-fn validate_reference_index_input(input: &RetentionReferenceIndexInput) -> Result<()> {
+fn validate_reference_index_input(input: &ReferenceIndexInput) -> Result<()> {
     require_ref(&input.object_ref, "retention index object ref")?;
     validate_name(&input.object_kind, "retention index object kind")?;
     validate_refs(&input.pin_refs, "retention index pin ref")?;
