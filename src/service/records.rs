@@ -1307,8 +1307,7 @@ fn is_sensitive_marker_present(value: &IoValue) -> Result<bool> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
+    type TestCase = hegel::TestCase;
 
     use super::*;
 
@@ -1657,7 +1656,7 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_service_manifest_refs_are_stable_and_bounds_fail_closed(tc: TestCase) {
-        let dependency_count = tc.draw(generators::integers::<u64>().min_value(0).max_value(4));
+        let dependency_count = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(4));
         let dependency_count_usize = usize::try_from(dependency_count).expect("bounded dependency count");
         let mut input = manifest_input();
         input.dependencies = (0..dependency_count_usize).map(|index| format!("svc:dep-{index}")).collect::<Vec<_>>();

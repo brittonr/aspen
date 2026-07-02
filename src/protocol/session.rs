@@ -2553,8 +2553,7 @@ fn synthetic_ref(label: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
+    type TestCase = hegel::TestCase;
 
     use super::*;
 
@@ -2904,7 +2903,7 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_generated_linear_protocols_install_and_roundtrip(tc: TestCase) {
-        let step_count = usize::try_from(tc.draw(generators::integers::<u64>().min_value(1).max_value(3)))
+        let step_count = usize::try_from(tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(3)))
             .expect("usize step count");
         let mut steps = Vec::with_capacity(step_count);
         let mut labels = Vec::with_capacity(step_count);

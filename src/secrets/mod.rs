@@ -1999,8 +1999,7 @@ where S: crate::bounded::VecSink<T>
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
+    type TestCase = hegel::TestCase;
 
     use super::*;
 
@@ -2146,7 +2145,7 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_redaction_stability_no_plaintext_and_authority_monotonicity(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(1).max_value(1_000_000));
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(1_000_000));
         let payload = record("secret", vec![string(format!("payload-{salt}"))]);
         let first = redacted_view(&payload, None).expect("first redaction");
         let second = redacted_view(&payload, None).expect("second redaction");

@@ -2494,8 +2494,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
+    type TestCase = hegel::TestCase;
 
     use super::*;
 
@@ -2925,8 +2924,8 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_chain_segment_append_no_gap_fork_and_anchor_properties(tc: TestCase) {
-        let length = tc.draw(generators::integers::<usize>().min_value(1).max_value(5));
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+        let length = tc.draw(hegel::generators::integers::<usize>().min_value(1).max_value(5));
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let labels = (0..length).map(|index| format!("hegel-{salt}-payload-{index}")).collect::<Vec<_>>();
         let chain = ChainScope::new("evidence-ledger", format!("hegel-node-{salt}"), "epoch-1");
 

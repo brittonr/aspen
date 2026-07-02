@@ -1434,8 +1434,7 @@ fn synthetic_ref(label: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
+    type TestCase = hegel::TestCase;
 
     use super::*;
     use crate::catalog;
@@ -1714,7 +1713,7 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_cleanup_bounded_and_monitor_order_deterministic(tc: TestCase) {
-        let attempt = tc.draw(generators::integers::<u64>().min_value(0).max_value(3));
+        let attempt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(3));
         let suite_value = suite_with_attempt(attempt);
         let run = run_service_supervision_suite_value(&suite_value).expect("generated supervision run");
         let replay = replay_service_supervision_report(&run.value).expect("generated replay");

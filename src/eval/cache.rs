@@ -1904,8 +1904,7 @@ mod tests {
     type Ordering = std::sync::atomic::Ordering;
     type PathBuf = std::path::PathBuf;
 
-    use hegel::TestCase;
-    use hegel::generators;
+    type TestCase = hegel::TestCase;
 
     use super::*;
     use crate::schema_identity;
@@ -2153,7 +2152,7 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_key_determinism_dependency_invalidation_and_no_name_key(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let dependency = test_ref(&format!("dep-{salt}"));
         let root = temp_dir("eval-cache-hegel");
         let key = key_input("artifact-closure", &format!("input-{salt}"), std::slice::from_ref(&dependency));

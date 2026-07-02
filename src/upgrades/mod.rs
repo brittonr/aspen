@@ -1654,8 +1654,7 @@ mod tests {
     type AtomicU64 = std::sync::atomic::AtomicU64;
     type Ordering = std::sync::atomic::Ordering;
 
-    use hegel::TestCase;
-    use hegel::generators;
+    type TestCase = hegel::TestCase;
 
     use super::*;
 
@@ -1917,7 +1916,7 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_upgrade_plan_hash_task_order_and_impact_invariants(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let root = temp_dir("upgrade-hegel");
         let ledger_root = root.join("ledger");
         let base = ledger::import_artifact(&ledger_root, &record("artifact", vec![string(format!("base-{salt}"))]))

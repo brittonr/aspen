@@ -1429,8 +1429,7 @@ fn fixture_diagnostics(receipts: &[runtime::RuntimePredicateReceipt]) -> Vec<Str
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
+    type TestCase = hegel::TestCase;
 
     use super::*;
 
@@ -1675,7 +1674,7 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_promise_pipeline_ordering_bounds_and_terminal_cleanup(tc: TestCase) {
-        let queue_len = tc.draw(generators::integers::<u64>().min_value(0).max_value(4));
+        let queue_len = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(4));
         let queue = (0..queue_len)
             .map(|index| {
                 runtime::RuntimePromisePipelineEntry::new(index + 1, vat_test_ref(&format!("target-{index}")), "call")
@@ -1689,7 +1688,7 @@ mod tests {
         .expect("pending pipeline");
         assert_eq!(pending.receipt.decision, runtime::PredicateDecision::Pass);
 
-        let overflow_len = tc.draw(generators::integers::<u64>().min_value(5).max_value(8));
+        let overflow_len = tc.draw(hegel::generators::integers::<u64>().min_value(5).max_value(8));
         let overflow_queue = (0..overflow_len)
             .map(|index| {
                 runtime::RuntimePromisePipelineEntry::new(index + 1, vat_test_ref(&format!("overflow-{index}")), "call")
@@ -1718,7 +1717,7 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_actormap_commit_and_rollback_invariants(tc: TestCase) {
-        let spawn_count = tc.draw(generators::integers::<u64>().min_value(1).max_value(4));
+        let spawn_count = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(4));
         let before = sorted_refs(vec![vat_test_ref("root"), vat_test_ref("helper")]);
         let spawned =
             sorted_refs((0..spawn_count).map(|index| vat_test_ref(&format!("spawned-{index}"))).collect::<Vec<_>>());

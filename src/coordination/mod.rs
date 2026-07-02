@@ -2319,8 +2319,7 @@ where S: VecSink<T>
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
+    type TestCase = hegel::TestCase;
 
     use super::*;
     use crate::catalog;
@@ -2637,7 +2636,7 @@ mod tests {
 
     #[hegel::test(test_cases = 12)]
     fn hegel_fencing_fifo_semaphore_and_no_actor_traffic_invariants(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(1).max_value(1000));
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(1000));
         let mut runtime = runtime();
         let key = format!("resource:{salt}");
         let acquire =
