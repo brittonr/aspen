@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use preserves::IOValue;
 use preserves::Record;
 use preserves::Value;
@@ -1322,7 +1320,7 @@ fn validate_declared_effects(effects: &[DeclaredEffect]) -> Result<()> {
     if effects.is_empty() {
         return Err(MoltenError::invalid_harness("effect manifest must declare at least one effect"));
     }
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for effect in effects {
         validate_effect_id(&effect.effect_id)?;
         validate_operation(&effect.operation)?;
@@ -1344,7 +1342,7 @@ fn validate_operations(operations: &[String]) -> Result<()> {
     if operations.is_empty() {
         return Err(MoltenError::invalid_harness("effect operation set must not be empty"));
     }
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for operation in operations {
         validate_operation(operation)?;
         if !seen.insert(operation.as_str()) {
@@ -1419,7 +1417,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 }
 
 fn validate_unique_refs(refs: &[String], field: &str) -> Result<()> {
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for value in refs {
         require_ref(value, field)?;
         if !seen.insert(value.as_str()) {
@@ -1567,8 +1565,6 @@ mod tests {
     use hegel::generators;
 
     use super::*;
-    use crate::preserves_rail::record;
-    use crate::preserves_rail::string;
 
     fn fake_ref(label: &str) -> String {
         canonical_hash(&record("fake-ref", vec![string(label)])).expect("hash fake ref")
