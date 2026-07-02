@@ -1,7 +1,6 @@
 use preserves::ValueImpl;
 
 use super::core;
-use crate::runtime;
 
 type CompoundClass = preserves::CompoundClass;
 type IoValue = preserves::IOValue;
@@ -88,9 +87,9 @@ pub struct HarnessSuite {
     pub budget_explicit: bool,
     pub actors: Vec<ActorDecl>,
     pub actors_explicit: bool,
-    pub capabilities: runtime::CapabilityContext,
+    pub capabilities: crate::runtime::CapabilityContext,
     pub capabilities_explicit: bool,
-    pub policy: runtime::AdmissionPolicy,
+    pub policy: crate::runtime::AdmissionPolicy,
     pub steps: Vec<core::CoreStep>,
     pub source_value: IoValue,
 }
@@ -403,7 +402,7 @@ pub struct AdmissionDecisionEvent {
     pub value: IoValue,
     pub request: core::AdmissionRequest,
     pub authority: Option<AdmissionAuthorityEvidence>,
-    pub decision: runtime::AdmissionDecision,
+    pub decision: crate::runtime::AdmissionDecision,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -444,9 +443,9 @@ struct SuiteFixtures {
     has_budget_fixture: bool,
     actors: Option<Vec<ActorDecl>>,
     has_actor_fixture: bool,
-    capabilities: runtime::CapabilityContext,
+    capabilities: crate::runtime::CapabilityContext,
     has_capability_fixture: bool,
-    policy: runtime::AdmissionPolicy,
+    policy: crate::runtime::AdmissionPolicy,
     has_policy_fixture: bool,
 }
 
@@ -642,7 +641,10 @@ pub fn event_value(event: &core::CoreEvent) -> IoValue {
     }
 }
 
-fn admission_decision_event_value(request: &core::AdmissionRequest, decision: &runtime::AdmissionDecision) -> IoValue {
+fn admission_decision_event_value(
+    request: &core::AdmissionRequest,
+    decision: &crate::runtime::AdmissionDecision,
+) -> IoValue {
     record("admission-decision-v1", vec![
         string(crate::preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA),
         admission_request_value(request),
@@ -653,7 +655,7 @@ fn admission_decision_event_value(request: &core::AdmissionRequest, decision: &r
 pub fn admission_decision_event_value_with_authority(
     request: &core::AdmissionRequest,
     authority: &AdmissionAuthorityEvidence,
-    decision: &runtime::AdmissionDecision,
+    decision: &crate::runtime::AdmissionDecision,
 ) -> IoValue {
     record("admission-decision-v1", vec![
         string(crate::preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA),
@@ -717,7 +719,7 @@ pub fn hostcall_request_value(
     suite: &HarnessSuite,
     step: &core::CoreStep,
     context: HostcallEvidenceContext<'_>,
-    decision: &runtime::AdmissionDecision,
+    decision: &crate::runtime::AdmissionDecision,
 ) -> Result<IoValue> {
     let request = core::AdmissionRequest::from_step(step);
     let effect_refs = hostcall_effect_refs(suite, step, context, decision.is_allowed())?;
@@ -1059,7 +1061,7 @@ pub fn hostcall_decision_value(
     context: HostcallEvidenceContext<'_>,
     admission_event: &IoValue,
     authority: &AdmissionAuthorityEvidence,
-    decision: &runtime::AdmissionDecision,
+    decision: &crate::runtime::AdmissionDecision,
 ) -> Result<IoValue> {
     let authority_value = admission_authority_value(authority);
     Ok(record("hostcall-decision-v1", vec![
@@ -1079,7 +1081,7 @@ pub fn hostcall_decision_value(
 pub fn actor_output_value(
     step: &core::CoreStep,
     context: HostcallEvidenceContext<'_>,
-    decision: &runtime::AdmissionDecision,
+    decision: &crate::runtime::AdmissionDecision,
     runtime_events: &[IoValue],
 ) -> Result<IoValue> {
     let runtime_events_value = sequence(runtime_events.to_vec());
@@ -2187,7 +2189,10 @@ pub fn validate_runtime_predicate_evidence(suite: &HarnessSuite, observations: &
     Ok(())
 }
 
-fn expected_runtime_predicates(step: &core::CoreStep, decision: &runtime::AdmissionDecision) -> Vec<&'static str> {
+fn expected_runtime_predicates(
+    step: &core::CoreStep,
+    decision: &crate::runtime::AdmissionDecision,
+) -> Vec<&'static str> {
     let mut expected = Vec::with_capacity(2);
     if !decision.is_allowed()
         || matches!(
@@ -2287,7 +2292,7 @@ struct RuntimeBoundary<'a> {
     step: &'a core::CoreStep,
     position: usize,
     observation: &'a HarnessObservation,
-    decision: &'a runtime::AdmissionDecision,
+    decision: &'a crate::runtime::AdmissionDecision,
     runtime_events: &'a [IoValue],
 }
 
@@ -2431,7 +2436,7 @@ struct WasmExecutionEvidenceInput<'a> {
     suite: &'a HarnessSuite,
     step: &'a core::CoreStep,
     position: usize,
-    decision: &'a runtime::AdmissionDecision,
+    decision: &'a crate::runtime::AdmissionDecision,
     actor_input: &'a IoValue,
     runtime_events: &'a [IoValue],
 }
@@ -2440,7 +2445,7 @@ fn validate_steel_execution_evidence(
     suite: &HarnessSuite,
     step: &core::CoreStep,
     position: usize,
-    decision: &runtime::AdmissionDecision,
+    decision: &crate::runtime::AdmissionDecision,
     runtime_events: &[IoValue],
 ) -> Result<()> {
     let actor = step.primary_actor();
@@ -5270,26 +5275,26 @@ fn parse_admission_authority(value: &Value<IoValue>) -> Result<AdmissionAuthorit
     })
 }
 
-fn parse_admission_decision(value: &Value<IoValue>) -> Result<runtime::AdmissionDecision> {
+fn parse_admission_decision(value: &Value<IoValue>) -> Result<crate::runtime::AdmissionDecision> {
     let decision_value = value_to_iovalue(value);
     let decision = simple_record(&decision_value, "decision", 2)?;
     let status = required_string(&decision[0], "admission decision status")?;
     let reason = required_string(&decision[1], "admission decision reason")?;
     match status.as_str() {
-        "allow" => Ok(runtime::AdmissionDecision::Allow { reason }),
-        "deny" => Ok(runtime::AdmissionDecision::Deny { reason }),
+        "allow" => Ok(crate::runtime::AdmissionDecision::Allow { reason }),
+        "deny" => Ok(crate::runtime::AdmissionDecision::Deny { reason }),
         other => Err(MoltenError::invalid_harness(format!("unknown admission decision status {other}"))),
     }
 }
 
-pub fn policy_value(policy: &runtime::AdmissionPolicy) -> IoValue {
+pub fn policy_value(policy: &crate::runtime::AdmissionPolicy) -> IoValue {
     record("policy-v1", vec![
         string(crate::preserves_rail::HARNESS_POLICY_SCHEMA),
         sequence(policy.deny_rules().iter().map(deny_rule_value).collect()),
     ])
 }
 
-pub fn policy_gate_value(policy: &runtime::AdmissionPolicy) -> Result<IoValue> {
+pub fn policy_gate_value(policy: &crate::runtime::AdmissionPolicy) -> Result<IoValue> {
     let preflight = policy_preflight_material(policy)?;
     Ok(record("policy-gate-v1", vec![
         string(crate::preserves_rail::HARNESS_POLICY_GATE_SCHEMA),
@@ -5417,7 +5422,7 @@ const POLICY_CONTRACT_ID: &str = "molten.harness.admission-policy";
 const POLICY_CONTRACT_VERSION: &str = "v1";
 const POLICY_INPUT_SCHEMA: &str = "molten.runtime.admission-request.v1";
 
-fn policy_preflight_material(policy: &runtime::AdmissionPolicy) -> Result<PolicyPreflightMaterial> {
+fn policy_preflight_material(policy: &crate::runtime::AdmissionPolicy) -> Result<PolicyPreflightMaterial> {
     let policy_snapshot = policy_value(policy);
     let policy_ref = canonical_hash(&policy_snapshot)?;
     let source = nickel_policy_source(policy, &policy_ref)?;
@@ -5658,7 +5663,7 @@ fn parse_basalt_policy_preflight_evidence(value: &Value<IoValue>) -> Result<Basa
     })
 }
 
-fn nickel_policy_source(policy: &runtime::AdmissionPolicy, policy_ref: &str) -> Result<String> {
+fn nickel_policy_source(policy: &crate::runtime::AdmissionPolicy, policy_ref: &str) -> Result<String> {
     let mut source = String::from("{\n");
     source.push_str(&format!(
         "  schema_version = {},\n",
@@ -5672,7 +5677,7 @@ fn nickel_policy_source(policy: &runtime::AdmissionPolicy, policy_ref: &str) -> 
         source.push_str(&format!("      actor = {},\n", nickel_optional_string(rule.actor.as_deref())));
         source.push_str(&format!(
             "      action = {},\n",
-            nickel_optional_string(rule.action.as_ref().map(runtime::AdmissionAction::as_str))
+            nickel_optional_string(rule.action.as_ref().map(crate::runtime::AdmissionAction::as_str))
         ));
         source.push_str(&format!("      target = {},\n", nickel_optional_string(rule.target.as_deref())));
         source.push_str(&format!("      value = {},\n", nickel_optional_runtime_value(rule.value.as_ref())?));
@@ -5734,14 +5739,14 @@ fn nickel_error(error: nickel_lang::Error) -> MoltenError {
     }
 }
 
-pub fn capabilities_value(capabilities: &runtime::CapabilityContext) -> IoValue {
+pub fn capabilities_value(capabilities: &crate::runtime::CapabilityContext) -> IoValue {
     record("capabilities-v1", vec![
         string(crate::preserves_rail::HARNESS_CAPABILITIES_SCHEMA),
         sequence(capabilities.grants().iter().map(capability_grant_value).collect()),
     ])
 }
 
-pub fn capability_gate_value(capabilities: &runtime::CapabilityContext) -> Result<IoValue> {
+pub fn capability_gate_value(capabilities: &crate::runtime::CapabilityContext) -> Result<IoValue> {
     let preflight = capability_preflight_material(capabilities)?;
     Ok(record("capability-gate-v1", vec![
         string(crate::preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA),
@@ -5877,7 +5882,9 @@ const CAPABILITY_CONTRACT_ID: &str = "molten.harness.capability-context";
 const CAPABILITY_CONTRACT_VERSION: &str = "v1";
 const CAPABILITY_INPUT_SCHEMA: &str = "molten.runtime.admission-request.v1";
 
-fn capability_preflight_material(capabilities: &runtime::CapabilityContext) -> Result<CapabilityPreflightMaterial> {
+fn capability_preflight_material(
+    capabilities: &crate::runtime::CapabilityContext,
+) -> Result<CapabilityPreflightMaterial> {
     let capability_snapshot = capabilities_value(capabilities);
     let capability_ref = canonical_hash(&capability_snapshot)?;
     let grant_refs: Vec<String> = capability_grant_refs(capabilities)?;
@@ -5929,7 +5936,7 @@ fn capability_preflight_material(capabilities: &runtime::CapabilityContext) -> R
     })
 }
 
-fn capability_grant_refs(capabilities: &runtime::CapabilityContext) -> Result<Vec<String>> {
+fn capability_grant_refs(capabilities: &crate::runtime::CapabilityContext) -> Result<Vec<String>> {
     capabilities.grants().iter().map(|grant| canonical_hash(&capability_grant_value(grant))).collect()
 }
 
@@ -6092,7 +6099,7 @@ fn parse_ucan_proofset_evidence(value: &Value<IoValue>) -> Result<UcanProofsetEv
 }
 
 pub fn admission_authority_evidence(
-    capabilities: &runtime::CapabilityContext,
+    capabilities: &crate::runtime::CapabilityContext,
     request: &core::AdmissionRequest,
 ) -> Result<AdmissionAuthorityEvidence> {
     let authorization = capabilities.authorize(request);
@@ -6108,7 +6115,7 @@ pub fn admission_authority_evidence(
     })
 }
 
-pub fn parse_capabilities(value: &IoValue) -> Result<runtime::CapabilityContext> {
+pub fn parse_capabilities(value: &IoValue) -> Result<crate::runtime::CapabilityContext> {
     let capabilities = simple_record(value, "capabilities-v1", 2)?;
     let schema = required_string(&capabilities[0], "capabilities schema")?;
     if schema != crate::preserves_rail::HARNESS_CAPABILITIES_SCHEMA {
@@ -6122,17 +6129,17 @@ pub fn parse_capabilities(value: &IoValue) -> Result<runtime::CapabilityContext>
     for grant in grant_values.iter() {
         let grant_value = value_to_iovalue(&grant);
         let grant = simple_record(&grant_value, "grant", 4)?;
-        grants.push(runtime::CapabilityGrant {
+        grants.push(crate::runtime::CapabilityGrant {
             actor: optional_string(&grant[0], "capability grant actor")?,
             action: optional_action(&grant[1], "capability grant action")?,
             target: optional_string(&grant[2], "capability grant target")?,
             value: optional_runtime_match_value(&grant[3])?,
         });
     }
-    Ok(runtime::CapabilityContext::from_grants(grants))
+    Ok(crate::runtime::CapabilityContext::from_grants(grants))
 }
 
-fn capability_grant_value(grant: &runtime::CapabilityGrant) -> IoValue {
+fn capability_grant_value(grant: &crate::runtime::CapabilityGrant) -> IoValue {
     record("grant", vec![
         optional_policy_string(grant.actor.as_deref()),
         optional_policy_action(grant.action.as_ref()),
@@ -6186,7 +6193,7 @@ fn require_capability_gate_check(checks: &[String], expected: &str) -> Result<()
     }
 }
 
-fn deny_rule_value(rule: &runtime::AdmissionDenyRule) -> IoValue {
+fn deny_rule_value(rule: &crate::runtime::AdmissionDenyRule) -> IoValue {
     record("deny", vec![
         optional_policy_string(rule.actor.as_deref()),
         optional_policy_action(rule.action.as_ref()),
@@ -6200,7 +6207,7 @@ fn optional_policy_string(value: Option<&str>) -> IoValue {
     value.map_or_else(|| bool_value(false), string)
 }
 
-fn optional_policy_action(value: Option<&runtime::AdmissionAction>) -> IoValue {
+fn optional_policy_action(value: Option<&crate::runtime::AdmissionAction>) -> IoValue {
     value.map_or_else(|| bool_value(false), |action| string(action.as_str()))
 }
 
@@ -6252,7 +6259,7 @@ fn require_policy_gate_check(checks: &[String], expected: &str) -> Result<()> {
     }
 }
 
-pub fn parse_policy(value: &IoValue) -> Result<runtime::AdmissionPolicy> {
+pub fn parse_policy(value: &IoValue) -> Result<crate::runtime::AdmissionPolicy> {
     let policy = simple_record(value, "policy-v1", 2)?;
     let schema = required_string(&policy[0], "policy schema")?;
     if schema != crate::preserves_rail::HARNESS_POLICY_SCHEMA {
@@ -6281,7 +6288,7 @@ pub fn parse_policy(value: &IoValue) -> Result<runtime::AdmissionPolicy> {
         if reason.is_empty() {
             return Err(MoltenError::invalid_harness("policy deny reason must not be empty"));
         }
-        rules.push(runtime::AdmissionDenyRule {
+        rules.push(crate::runtime::AdmissionDenyRule {
             actor,
             action,
             target,
@@ -6289,7 +6296,7 @@ pub fn parse_policy(value: &IoValue) -> Result<runtime::AdmissionPolicy> {
             reason,
         });
     }
-    Ok(runtime::AdmissionPolicy::from_deny_rules(rules))
+    Ok(crate::runtime::AdmissionPolicy::from_deny_rules(rules))
 }
 
 pub fn parse_actor_registry(value: &IoValue) -> Result<Vec<ActorDecl>> {
@@ -6572,7 +6579,7 @@ fn decision_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
     }
     let decision = parse_admission_decision_event(event)?;
     let mut actors = vec![decision.request.actor];
-    if matches!(&decision.request.action, runtime::AdmissionAction::Send)
+    if matches!(&decision.request.action, crate::runtime::AdmissionAction::Send)
         && let Some(target) = decision.request.target
     {
         actors.push(target);
@@ -6595,7 +6602,7 @@ fn boundary_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
         }
         let parsed_request = parse_admission_request(&request[4])?;
         let mut actors = vec![parsed_request.actor];
-        if matches!(&parsed_request.action, runtime::AdmissionAction::Send)
+        if matches!(&parsed_request.action, crate::runtime::AdmissionAction::Send)
             && let Some(target) = parsed_request.target
         {
             actors.push(target);
@@ -6649,14 +6656,14 @@ fn infer_actor_registry(steps: &[core::CoreStep]) -> Vec<ActorDecl> {
         .collect()
 }
 
-fn parse_admission_action(action: &str) -> Result<runtime::AdmissionAction> {
+fn parse_admission_action(action: &str) -> Result<crate::runtime::AdmissionAction> {
     match action {
-        "send" => Ok(runtime::AdmissionAction::Send),
-        "observe" => Ok(runtime::AdmissionAction::Observe),
-        "assert" => Ok(runtime::AdmissionAction::Assert),
-        "retract" => Ok(runtime::AdmissionAction::Retract),
-        "clock" => Ok(runtime::AdmissionAction::Clock),
-        "random" => Ok(runtime::AdmissionAction::Random),
+        "send" => Ok(crate::runtime::AdmissionAction::Send),
+        "observe" => Ok(crate::runtime::AdmissionAction::Observe),
+        "assert" => Ok(crate::runtime::AdmissionAction::Assert),
+        "retract" => Ok(crate::runtime::AdmissionAction::Retract),
+        "clock" => Ok(crate::runtime::AdmissionAction::Clock),
+        "random" => Ok(crate::runtime::AdmissionAction::Random),
         other => Err(MoltenError::invalid_harness(format!("unknown admission action {other}"))),
     }
 }
@@ -8729,7 +8736,7 @@ fn optional_request_u64(value: &Value<IoValue>, field: &str) -> Result<Option<u6
     required_u64(value, field).map(Some)
 }
 
-fn optional_action(value: &Value<IoValue>, field: &str) -> Result<Option<runtime::AdmissionAction>> {
+fn optional_action(value: &Value<IoValue>, field: &str) -> Result<Option<crate::runtime::AdmissionAction>> {
     if value.as_boolean() == Some(false) {
         Ok(None)
     } else {
