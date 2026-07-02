@@ -1,15 +1,15 @@
-use preserves::IOValue;
 use redb::ReadableDatabase;
 
+type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value.as_ref())
 }
 
@@ -61,7 +61,7 @@ pub struct OperationId {
     pub intent: String,
     pub payload_ref: String,
     pub policy_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +72,7 @@ pub struct DeliveryWindow {
     pub next_sequence: u64,
     pub lowest_retained: u64,
     pub retention_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,7 +89,7 @@ pub struct DedupEntry {
     pub semantic_result_ref: Option<String>,
     pub first_receipt_ref: String,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,7 +103,7 @@ pub struct IdempotencyReceipt {
     pub semantic_result_ref: Option<String>,
     pub side_effect: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +132,7 @@ pub struct DeliveryCheckInput<'a> {
     pub gap_policy: GapPolicy,
 }
 
-pub fn scope_profile_value(profile: &str, scope_name: &str, retention_refs: &[String]) -> Result<IOValue> {
+pub fn scope_profile_value(profile: &str, scope_name: &str, retention_refs: &[String]) -> Result<IoValue> {
     validate_scope_profile(profile)?;
     validate_name(scope_name, "delivery scope name")?;
     validate_refs(retention_refs, "delivery scope retention ref")?;
@@ -169,7 +169,7 @@ pub fn control_command_scope_ref(group_ref: &str, client_session: &str) -> Resul
     scope_ref(SCOPE_CONTROL_COMMAND, &format!("{group_ref}:{client_session}"))
 }
 
-pub fn operation_id_value(input: &OperationIdInput) -> Result<IOValue> {
+pub fn operation_id_value(input: &OperationIdInput) -> Result<IoValue> {
     validate_operation_input(input)?;
     Ok(record("operation-id-v1", vec![
         string(crate::preserves_rail::DELIVERY_OPERATION_ID_SCHEMA),
@@ -193,7 +193,7 @@ pub fn derive_operation_id(input: OperationIdInput) -> Result<OperationId> {
     parse_operation_id(&value)
 }
 
-pub fn parse_operation_id(value: &IOValue) -> Result<OperationId> {
+pub fn parse_operation_id(value: &IoValue) -> Result<OperationId> {
     let fields = value
         .collect_simple_record("operation-id-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <operation-id-v1 ...>"))?;
@@ -228,7 +228,7 @@ pub fn delivery_window_value(
     next_sequence: u64,
     lowest_retained: u64,
     retention_refs: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_scope_profile(scope_profile)?;
     require_ref(scope_ref, "delivery window scope ref")?;
     validate_refs(retention_refs, "delivery retention ref")?;
@@ -246,7 +246,7 @@ pub fn delivery_window_value(
     ]))
 }
 
-pub fn parse_delivery_window(value: &IOValue) -> Result<DeliveryWindow> {
+pub fn parse_delivery_window(value: &IoValue) -> Result<DeliveryWindow> {
     let fields = value
         .collect_simple_record("delivery-window-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <delivery-window-v1 ...>"))?;
@@ -305,7 +305,7 @@ pub fn check_delivery(input: DeliveryCheckInput<'_>) -> Result<DeliveryDecision>
     Ok(decision)
 }
 
-pub fn read_idempotency_receipt(root: &std::path::Path, receipt_ref: &str) -> Result<IOValue> {
+pub fn read_idempotency_receipt(root: &std::path::Path, receipt_ref: &str) -> Result<IoValue> {
     require_ref(receipt_ref, "delivery idempotency receipt ref")?;
     let db = ensure_store_tables(root)?;
     let read_txn = db.begin_read().map_err(store_error)?;
@@ -320,7 +320,7 @@ pub fn retry_receipt_value(
     operation: &OperationId,
     window: &DeliveryWindow,
     diagnostics: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_diagnostics(diagnostics)?;
     Ok(record("retry-receipt-v1", vec![
         string(crate::preserves_rail::DELIVERY_RETRY_RECEIPT_SCHEMA),
@@ -333,7 +333,7 @@ pub fn retry_receipt_value(
     ]))
 }
 
-pub fn parse_idempotency_receipt(value: &IOValue) -> Result<IdempotencyReceipt> {
+pub fn parse_idempotency_receipt(value: &IoValue) -> Result<IdempotencyReceipt> {
     let fields = value
         .collect_simple_record("delivery-idempotency-receipt-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <delivery-idempotency-receipt-v1 ...>"))?;
@@ -361,7 +361,7 @@ pub fn parse_idempotency_receipt(value: &IOValue) -> Result<IdempotencyReceipt> 
     })
 }
 
-pub fn parse_dedup_entry(value: &IOValue) -> Result<DedupEntry> {
+pub fn parse_dedup_entry(value: &IoValue) -> Result<DedupEntry> {
     let fields = value
         .collect_simple_record("dedup-entry-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <dedup-entry-v1 ...>"))?;
@@ -384,7 +384,7 @@ pub fn parse_dedup_entry(value: &IOValue) -> Result<DedupEntry> {
     })
 }
 
-pub fn delivery_summary(value: &IOValue) -> Result<String> {
+pub fn delivery_summary(value: &IoValue) -> Result<String> {
     if let Ok(operation) = parse_operation_id(value) {
         return Ok(format!(
             "delivery operation ref={} scope={} producer={} consumer={} sequence={} intent={} payload={}",
@@ -691,7 +691,7 @@ fn store_receipt(db: &redb::Database, receipt: &IdempotencyReceipt) -> Result<()
     store_raw_receipt(db, &receipt.receipt_ref, &receipt.value)
 }
 
-fn store_raw_receipt(db: &redb::Database, receipt_ref: &str, receipt_value: &IOValue) -> Result<()> {
+fn store_raw_receipt(db: &redb::Database, receipt_ref: &str, receipt_value: &IoValue) -> Result<()> {
     let write_txn = db.begin_write().map_err(store_error)?;
     {
         let mut receipts = write_txn.open_table(STORE_RECEIPTS).map_err(store_error)?;
@@ -701,7 +701,7 @@ fn store_raw_receipt(db: &redb::Database, receipt_ref: &str, receipt_value: &IOV
     write_txn.commit().map_err(store_error)
 }
 
-fn dedup_entry_value(input: DedupEntryValueInput<'_>) -> Result<IOValue> {
+fn dedup_entry_value(input: DedupEntryValueInput<'_>) -> Result<IoValue> {
     validate_refs(input.evidence_refs, "delivery dedup evidence ref")?;
     if let Some(result_ref) = input.semantic_result_ref {
         require_ref(result_ref, "delivery dedup semantic result ref")?;
@@ -736,7 +736,7 @@ struct DedupEntryValueInput<'a> {
     evidence_refs: &'a [String],
 }
 
-fn idempotency_receipt_value(input: IdempotencyReceiptValueInput<'_>) -> Result<IOValue> {
+fn idempotency_receipt_value(input: IdempotencyReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     require_ref(input.operation_ref, "delivery idempotency operation ref")?;
     require_ref(input.scope_ref, "delivery idempotency scope ref")?;
@@ -888,21 +888,21 @@ fn store_error(error: impl std::fmt::Display) -> MoltenError {
     MoltenError::invalid_harness(format!("delivery idempotency redb store error: {error}"))
 }
 
-fn strings_sequence(values: &[String]) -> IOValue {
+fn strings_sequence(values: &[String]) -> IoValue {
     crate::preserves_rail::sequence(values.iter().map(string).collect())
 }
 
-fn optional_ref_value(reference: Option<&str>) -> IOValue {
+fn optional_ref_value(reference: Option<&str>) -> IoValue {
     reference.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn checks_value(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![crate::preserves_rail::sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("checks", Some(1))
@@ -932,13 +932,13 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
     }
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let reference = record_string(value, label)?;
     require_ref(&reference, label)?;
     Ok(reference)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -955,13 +955,13 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
     Ok(Some(reference))
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let refs = record_string_sequence(value, label)?;
     validate_refs(&refs, label)?;
     Ok(refs)
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -972,7 +972,7 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
     entries.iter().map(|entry| required_string(entry, label)).collect()
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -980,7 +980,7 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&fields[0], label)
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -991,7 +991,7 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, label: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result<()> {
     let actual = required_string(value, label)?;
     if actual == expected {
         Ok(())
@@ -1000,7 +1000,7 @@ fn require_schema(value: &Value<IOValue>, expected: &str, label: &str) -> Result
     }
 }
 
-fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
