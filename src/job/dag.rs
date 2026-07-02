@@ -1698,42 +1698,78 @@ struct CompleteInput<'a> {
     stage_receipt_refs: &'a [String],
 }
 
+struct FinalRunOutputs {
+    refs: Vec<String>,
+    value: IoValue,
+}
+
 fn complete_run(input: CompleteInput<'_>) -> Result<RunFinish> {
-    let dag = input.dag;
-    let request = input.request;
-    let stage_receipt_refs = input.stage_receipt_refs;
+    let roots = requested_output_roots(input.dag, input.request)?;
+    let final_outputs = collect_final_run_outputs(&input, roots)?;
+    let evidence_refs = collect_run_evidence_refs(input.dag, input.stage_receipt_refs)?;
+    let receipt_value = run_finish_receipt_value(&input, &final_outputs.refs, &evidence_refs)?;
+    Ok(RunFinish {
+        output_refs: final_outputs.refs,
+        output_value: final_outputs.value,
+        receipt_value,
+    })
+}
+
+fn requested_output_roots(dag: &JobDag, request: &JobOutputRequest) -> Result<Vec<String>> {
     let roots = if request.roots.is_empty() {
         sink_nodes(dag)?
     } else {
         request.roots.clone()
     };
     ensure_count_at_most(roots.len(), MAX_JOB_ROOTS, "job output roots")?;
+    Ok(roots)
+}
+
+fn collect_final_run_outputs(input: &CompleteInput<'_>, roots: Vec<String>) -> Result<FinalRunOutputs> {
     let mut final_values = Vec::with_capacity(roots.len());
     let mut final_refs = Vec::with_capacity(roots.len());
     for root in roots {
-        let root_index =
-            *input.plan.node_index.get(&root).ok_or_else(|| {
-                MoltenError::invalid_harness(format!("job output root {root} missing from node index"))
-            })?;
-        let values = input
-            .outputs_by_index
-            .get(root_index)
-            .and_then(Option::as_ref)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("job output root {root} was not executed")))?;
+        let root_index = output_root_index(input.plan, &root)?;
+        let values = output_values_for_root(input.outputs_by_index, root_index, &root)?;
         extend_cloned_bounded(&mut final_values, values, MAX_JOB_STAGE_VALUES, "job final values")?;
         if let Some(refs) = input.output_refs_by_index.get(root_index).and_then(Option::as_ref) {
             extend_cloned_bounded(&mut final_refs, refs, MAX_JOB_REFS, "job final refs")?;
         }
     }
-    let output_value = crate::preserves_rail::sequence(final_values.clone());
+    let value = crate::preserves_rail::sequence(final_values.clone());
+    ensure_final_output_ref(&mut final_refs, &value)?;
+    Ok(FinalRunOutputs {
+        refs: final_refs,
+        value,
+    })
+}
+
+fn output_root_index(plan: &TrellisExecutionPlan, root: &str) -> Result<usize> {
+    plan.node_index
+        .get(root)
+        .copied()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("job output root {root} missing from node index")))
+}
+
+fn output_values_for_root<'a>(
+    outputs_by_index: &'a [Option<Vec<IoValue>>],
+    root_index: usize,
+    root: &str,
+) -> Result<&'a [IoValue]> {
+    outputs_by_index
+        .get(root_index)
+        .and_then(Option::as_deref)
+        .ok_or_else(|| MoltenError::invalid_harness(format!("job output root {root} was not executed")))
+}
+
+fn ensure_final_output_ref(final_refs: &mut Vec<String>, output_value: &IoValue) -> Result<()> {
     if final_refs.is_empty() {
-        push_bounded(
-            &mut final_refs,
-            crate::preserves_rail::canonical_hash(&output_value)?,
-            MAX_JOB_REFS,
-            "job final refs",
-        )?;
+        push_bounded(final_refs, crate::preserves_rail::canonical_hash(output_value)?, MAX_JOB_REFS, "job final refs")?;
     }
+    Ok(())
+}
+
+fn collect_run_evidence_refs(dag: &JobDag, stage_receipt_refs: &[String]) -> Result<Vec<String>> {
     let evidence_count = checked_count_sum(
         dag.evidence_refs.len(),
         stage_receipt_refs.len(),
@@ -1743,18 +1779,26 @@ fn complete_run(input: CompleteInput<'_>) -> Result<RunFinish> {
     let mut evidence_refs = Vec::with_capacity(evidence_count);
     extend_cloned_bounded(&mut evidence_refs, &dag.evidence_refs, MAX_JOB_REFS, "job receipt evidence refs")?;
     extend_cloned_bounded(&mut evidence_refs, stage_receipt_refs, MAX_JOB_REFS, "job receipt evidence refs")?;
-    let receipt_value = job_receipt_value(JobReceiptInput {
+    Ok(evidence_refs)
+}
+
+fn run_finish_receipt_value(
+    input: &CompleteInput<'_>,
+    final_refs: &[String],
+    evidence_refs: &[String],
+) -> Result<IoValue> {
+    job_receipt_value(JobReceiptInput {
         operation: "run",
         decision: "pass",
-        job_ref: Some(&dag.job_ref),
-        request_ref: Some(&request.request_ref),
+        job_ref: Some(&input.dag.job_ref),
+        request_ref: Some(&input.request.request_ref),
         stage_id: None,
-        input_refs: stage_receipt_refs,
-        output_refs: &final_refs,
+        input_refs: input.stage_receipt_refs,
+        output_refs: final_refs,
         cache_ref: None,
         effect_refs: &[],
-        policy_refs: &combined_policy_refs(dag, request, None),
-        evidence_refs: &evidence_refs,
+        policy_refs: &combined_policy_refs(input.dag, input.request, None),
+        evidence_refs,
         diagnostics: &[],
         checks: &[
             ("deterministic-topological-order", "pass"),
@@ -1763,11 +1807,6 @@ fn complete_run(input: CompleteInput<'_>) -> Result<RunFinish> {
             ("stage-receipts-bound", "pass"),
             ("output-refs-bound", "pass"),
         ],
-    })?;
-    Ok(RunFinish {
-        output_refs: final_refs,
-        output_value,
-        receipt_value,
     })
 }
 
@@ -1904,6 +1943,13 @@ fn stage_profile_values(dag: &JobDag, plan: &TrellisExecutionPlan, cache_entries
     Ok(StageProfiles { config_bytes, values })
 }
 
+struct ProfileCounts {
+    cache_entries: usize,
+    materialization_boundaries: u64,
+    stage_count: u64,
+    edge_count: u64,
+}
+
 pub fn profile_job_dag(
     dag: &JobDag,
     output_request: Option<&IoValue>,
@@ -1911,41 +1957,68 @@ pub fn profile_job_dag(
 ) -> Result<JobProfile> {
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
-    let cache_entries = if let Some(cache_root) = cache_root {
-        crate::eval_cache::list(cache_root, &crate::eval_cache::EvalCacheListFilter {
+    let counts = profile_counts(dag, cache_root)?;
+    let profile_stages = stage_profile_values(dag, &plan, counts.cache_entries)?;
+    let value = profile_value(dag, &request, profile_stages, &counts)?;
+    let profile_ref = crate::preserves_rail::canonical_hash(&value)?;
+    let receipt_value = profile_receipt_value(dag, &request, &profile_ref)?;
+    Ok(JobProfile {
+        profile_ref,
+        job_ref: dag.job_ref.clone(),
+        request_ref: request.request_ref,
+        stage_count: counts.stage_count,
+        edge_count: counts.edge_count,
+        materialization_boundaries: counts.materialization_boundaries,
+        value,
+        receipt_value,
+    })
+}
+
+fn profile_counts(dag: &JobDag, cache_root: Option<&FilePath>) -> Result<ProfileCounts> {
+    Ok(ProfileCounts {
+        cache_entries: cache_entry_count(cache_root)?,
+        materialization_boundaries: materialization_boundary_count(dag)?,
+        stage_count: usize_to_u64(dag.nodes.len(), "job profile stage count")?,
+        edge_count: usize_to_u64(dag.edges.len(), "job profile edge count")?,
+    })
+}
+
+fn cache_entry_count(cache_root: Option<&FilePath>) -> Result<usize> {
+    if let Some(cache_root) = cache_root {
+        Ok(crate::eval_cache::list(cache_root, &crate::eval_cache::EvalCacheListFilter {
             operation: Some(JOB_CACHE_OPERATION.to_string()),
             ..crate::eval_cache::EvalCacheListFilter::default()
         })?
-        .len()
+        .len())
     } else {
-        0
-    };
-    let profile_stages = stage_profile_values(dag, &plan, cache_entries)?;
-    let materialization_boundaries = usize_to_u64(
+        Ok(0)
+    }
+}
+
+fn materialization_boundary_count(dag: &JobDag) -> Result<u64> {
+    usize_to_u64(
         dag.edges.iter().filter(|edge| edge.materialization != "stream").count()
             + dag.nodes.iter().filter(|node| node.kind == "materialize").count(),
         "job profile materialization boundary count",
-    )?;
-    let stage_count = usize_to_u64(dag.nodes.len(), "job profile stage count")?;
-    let edge_count = usize_to_u64(dag.edges.len(), "job profile edge count")?;
-    let value = crate::preserves_rail::record("job-profile-v1", vec![
+    )
+}
+
+fn profile_value(
+    dag: &JobDag,
+    request: &JobOutputRequest,
+    profile_stages: StageProfiles,
+    counts: &ProfileCounts,
+) -> Result<IoValue> {
+    Ok(crate::preserves_rail::record("job-profile-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::JOB_PROFILE_SCHEMA),
         crate::preserves_rail::record("job", vec![crate::preserves_rail::string(&dag.job_ref)]),
         crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&request.request_ref)]),
-        crate::preserves_rail::record("stage-count", vec![crate::preserves_rail::u64_value(stage_count)]),
-        crate::preserves_rail::record("edge-count", vec![crate::preserves_rail::u64_value(edge_count)]),
+        crate::preserves_rail::record("stage-count", vec![crate::preserves_rail::u64_value(counts.stage_count)]),
+        crate::preserves_rail::record("edge-count", vec![crate::preserves_rail::u64_value(counts.edge_count)]),
         crate::preserves_rail::record("materialization-boundaries", vec![crate::preserves_rail::u64_value(
-            materialization_boundaries,
+            counts.materialization_boundaries,
         )]),
-        crate::preserves_rail::record("estimated-bytes", vec![
-            crate::preserves_rail::record("config", vec![crate::preserves_rail::u64_value(
-                profile_stages.config_bytes,
-            )]),
-            crate::preserves_rail::record("known-cache-entries", vec![crate::preserves_rail::u64_value(usize_to_u64(
-                cache_entries,
-                "job cache entry count",
-            )?)]),
-        ]),
+        estimated_bytes_value(profile_stages.config_bytes, counts.cache_entries)?,
         crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(profile_stages.values)]),
         checks_value(&[
             "deterministic-profile",
@@ -1953,31 +2026,33 @@ pub fn profile_job_dag(
             "cache-projection-only",
             "trellis-order-bound",
         ]),
-    ]);
-    let profile_ref = crate::preserves_rail::canonical_hash(&value)?;
-    let receipt_value = analysis_receipt_value(AnalysisReceiptValueInput {
+    ]))
+}
+
+fn estimated_bytes_value(config_bytes: u64, cache_entries: usize) -> Result<IoValue> {
+    Ok(crate::preserves_rail::record("estimated-bytes", vec![
+        crate::preserves_rail::record("config", vec![crate::preserves_rail::u64_value(config_bytes)]),
+        crate::preserves_rail::record("known-cache-entries", vec![crate::preserves_rail::u64_value(usize_to_u64(
+            cache_entries,
+            "job cache entry count",
+        )?)]),
+    ]))
+}
+
+fn profile_receipt_value(dag: &JobDag, request: &JobOutputRequest, profile_ref: &str) -> Result<IoValue> {
+    analysis_receipt_value(AnalysisReceiptValueInput {
         label: "job-profile-receipt-v1",
         schema: crate::preserves_rail::JOB_PROFILE_RECEIPT_SCHEMA,
         operation: "profile",
         job_ref: &dag.job_ref,
         request_ref: &request.request_ref,
-        artifact_ref: &profile_ref,
+        artifact_ref: profile_ref,
         diagnostics: &[],
         checks: &[
             ("deterministic-profile", "pass"),
             ("no-wall-clock-time", "pass"),
             ("cache-projection-only", "pass"),
         ],
-    })?;
-    Ok(JobProfile {
-        profile_ref,
-        job_ref: dag.job_ref.clone(),
-        request_ref: request.request_ref,
-        stage_count,
-        edge_count,
-        materialization_boundaries,
-        value,
-        receipt_value,
     })
 }
 
