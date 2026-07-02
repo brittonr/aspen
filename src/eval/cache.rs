@@ -1,52 +1,50 @@
-use std::collections::BTreeSet;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-
-use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
-use redb::Database;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 use redb::ReadableTableMetadata;
-use redb::TableDefinition;
 
-use crate::chunk_store;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::retention;
+
+type BtreeSet<T> = std::collections::BTreeSet<T>;
+type Database = redb::Database;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Path = std::path::Path;
+type PathBuf = std::path::PathBuf;
+type Record<T> = preserves::Record<T>;
+type Result<T> = crate::error::Result<T>;
+type TableDefinition<K, V> = redb::TableDefinition<'static, K, V>;
+type Value<T> = preserves::Value<T>;
 
 const DEFAULT_FIXED_V1_CHUNK_SIZE: u64 = crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 const EVAL_CACHE_KEY_SCHEMA: &str = crate::preserves_rail::EVAL_CACHE_KEY_SCHEMA;
 const EVAL_CACHE_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVAL_CACHE_RECEIPT_SCHEMA;
 const EVAL_CACHE_VALUE_SCHEMA: &str = crate::preserves_rail::EVAL_CACHE_VALUE_SCHEMA;
 
-fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IoValue> {
     crate::preserves_rail::parse_canonical_bytes(bytes)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -54,7 +52,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -119,7 +117,7 @@ pub struct EvalCacheKey {
     pub tool_ref: String,
     pub tool_version: String,
     pub assumption_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,7 +138,7 @@ pub enum EvalCacheOutputRef {
 pub struct EvalCacheValueInput {
     pub tier: String,
     pub status: String,
-    pub output: Option<IOValue>,
+    pub output: Option<IoValue>,
     pub dependency_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -158,22 +156,22 @@ pub struct EvalCacheValue {
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvalCachePut {
     pub key: EvalCacheKey,
     pub value: EvalCacheValue,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvalCacheGet {
     pub key: EvalCacheKey,
     pub value: EvalCacheValue,
-    pub output: Option<IOValue>,
-    pub receipt_value: IOValue,
+    pub output: Option<IoValue>,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,7 +200,7 @@ pub struct EvalCacheReceipt {
     pub decision: String,
     pub key_ref: Option<String>,
     pub value_ref: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -262,7 +260,7 @@ pub struct EvalCacheInvalidate {
     pub invalidated_key_refs: Vec<String>,
     pub retention_receipt_refs: Vec<String>,
     pub execution_gate_refs: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -318,7 +316,7 @@ struct EvalCacheReceiptValueInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-pub fn eval_cache_key_value(input: &EvalCacheKeyInput) -> Result<IOValue> {
+pub fn eval_cache_key_value(input: &EvalCacheKeyInput) -> Result<IoValue> {
     validate_key_input(input)?;
     Ok(record("eval-cache-key-v1", vec![
         string(EVAL_CACHE_KEY_SCHEMA),
@@ -339,7 +337,7 @@ pub fn eval_cache_key_value(input: &EvalCacheKeyInput) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_eval_cache_key(value: &IOValue) -> Result<EvalCacheKey> {
+pub fn parse_eval_cache_key(value: &IoValue) -> Result<EvalCacheKey> {
     let fields = value
         .collect_simple_record("eval-cache-key-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-key-v1 ...>"))?;
@@ -372,7 +370,7 @@ pub fn eval_cache_value_value(
     key_ref: &str,
     input: &EvalCacheValueInput,
     output_ref: &EvalCacheOutputRef,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_ref(key_ref, "eval cache key ref")?;
     validate_value_input(input)?;
     validate_output_ref(output_ref)?;
@@ -390,7 +388,7 @@ pub fn eval_cache_value_value(
     ]))
 }
 
-pub fn parse_eval_cache_value(value: &IOValue) -> Result<EvalCacheValue> {
+pub fn parse_eval_cache_value(value: &IoValue) -> Result<EvalCacheValue> {
     let fields = value
         .collect_simple_record("eval-cache-value-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-value-v1 ...>"))?;
@@ -424,8 +422,12 @@ pub fn put(root: &Path, key_input: &EvalCacheKeyInput, value_input: &EvalCacheVa
             length: bytes.len() as u64,
         },
         (Some(output), Some(bytes)) => {
-            let chunk =
-                chunk_store::put_bytes(&chunk_root(root), "eval-cache-output", bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
+            let chunk = crate::chunk_store::put_bytes(
+                &chunk_root(root),
+                "eval-cache-output",
+                bytes,
+                DEFAULT_FIXED_V1_CHUNK_SIZE,
+            )?;
             EvalCacheOutputRef::ContentRef {
                 manifest_ref: chunk.manifest_ref,
                 output_ref: canonical_hash(output)?,
@@ -554,7 +556,7 @@ fn denied_stale(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) ->
     )))
 }
 
-fn hit_receipt(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> Result<IOValue> {
+fn hit_receipt(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> Result<IoValue> {
     store_and_return_receipt(root, &EvalCacheReceiptValueInput {
         operation: "hit",
         decision: "pass",
@@ -605,7 +607,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
 }
 
 fn selected_keys(root: &Path, input: &EvalCacheInvalidateInput) -> Result<Vec<String>> {
-    let mut keys = BTreeSet::new();
+    let mut keys = BtreeSet::new();
     if let Some(key_ref) = input.key_ref.as_ref() {
         keys.insert(key_ref.clone());
     }
@@ -882,7 +884,7 @@ fn invalidate_diagnostics(
     diagnostics
 }
 
-fn invalidate_receipt(decision: &str, refs: &[String], diagnostics: &[String], run: &InvalRun) -> Result<IOValue> {
+fn invalidate_receipt(decision: &str, refs: &[String], diagnostics: &[String], run: &InvalRun) -> Result<IoValue> {
     receipt_value(&EvalCacheReceiptValueInput {
         operation: "invalidate",
         decision,
@@ -1027,7 +1029,7 @@ pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<EvalCacheReceipt> 
     parse_eval_cache_receipt(&parse_canonical_bytes(bytes.value())?)
 }
 
-pub fn rebuild_index(root: &Path) -> Result<IOValue> {
+pub fn rebuild_index(root: &Path) -> Result<IoValue> {
     ensure_dirs(root)?;
     let keys_values = {
         let db = ensure_index_tables(root)?;
@@ -1213,7 +1215,7 @@ pub fn transcript_run_key_placeholder(input: &TranscriptRunKeyInput<'_>) -> Resu
     })
 }
 
-pub fn parse_eval_cache_receipt(value: &IOValue) -> Result<EvalCacheReceipt> {
+pub fn parse_eval_cache_receipt(value: &IoValue) -> Result<EvalCacheReceipt> {
     let fields = value
         .collect_simple_record("eval-cache-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-receipt-v1 ...>"))?;
@@ -1248,7 +1250,7 @@ fn read_key_value_pair(root: &Path, key_ref: &str) -> Result<Option<(EvalCacheKe
     Ok(Some((key, value)))
 }
 
-fn read_output(root: &Path, key_ref: &str, value: &EvalCacheValue) -> Result<Option<IOValue>> {
+fn read_output(root: &Path, key_ref: &str, value: &EvalCacheValue) -> Result<Option<IoValue>> {
     match &value.output {
         EvalCacheOutputRef::None => Ok(None),
         EvalCacheOutputRef::Inline { output_ref, length } => {
@@ -1276,7 +1278,7 @@ fn read_output(root: &Path, key_ref: &str, value: &EvalCacheValue) -> Result<Opt
             output_ref,
             length,
         } => {
-            let read = chunk_store::read_object(&chunk_root(root), manifest_ref)?;
+            let read = crate::chunk_store::read_object(&chunk_root(root), manifest_ref)?;
             if read.bytes.len() as u64 != *length {
                 return Err(MoltenError::invalid_harness("eval cache content output length mismatch"));
             }
@@ -1361,7 +1363,7 @@ fn insert_str_index(
     Ok(())
 }
 
-fn store_and_return_receipt(root: &Path, input: &EvalCacheReceiptValueInput<'_>) -> Result<IOValue> {
+fn store_and_return_receipt(root: &Path, input: &EvalCacheReceiptValueInput<'_>) -> Result<IoValue> {
     let receipt = receipt_value(input)?;
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
@@ -1370,7 +1372,7 @@ fn store_and_return_receipt(root: &Path, input: &EvalCacheReceiptValueInput<'_>)
     Ok(receipt)
 }
 
-fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt: &IOValue) -> Result<()> {
+fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt: &IoValue) -> Result<()> {
     let parsed = parse_eval_cache_receipt(receipt)?;
     let mut receipts = write_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
     receipts
@@ -1386,7 +1388,7 @@ fn tombstone_reason(root: &Path, key_ref: &str) -> Result<Option<String>> {
     Ok(tombstones.get(key_ref).map_err(index_error)?.map(|value| value.value().to_string()))
 }
 
-fn receipt_value(input: &EvalCacheReceiptValueInput<'_>) -> Result<IOValue> {
+fn receipt_value(input: &EvalCacheReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "eval cache receipt operation")?;
     if !matches!(input.decision, "pass" | "deny") {
         return Err(MoltenError::invalid_harness(format!(
@@ -1574,7 +1576,7 @@ fn validate_status(status: &str) -> Result<()> {
     }
 }
 
-fn output_ref_value(output: &EvalCacheOutputRef) -> IOValue {
+fn output_ref_value(output: &EvalCacheOutputRef) -> IoValue {
     record("output", vec![match output {
         EvalCacheOutputRef::None => record("none", Vec::new()),
         EvalCacheOutputRef::Inline { output_ref, length } => {
@@ -1588,7 +1590,7 @@ fn output_ref_value(output: &EvalCacheOutputRef) -> IOValue {
     }])
 }
 
-fn parse_output_ref(value: &Value<IOValue>) -> Result<EvalCacheOutputRef> {
+fn parse_output_ref(value: &Value<IoValue>) -> Result<EvalCacheOutputRef> {
     let value = value_to_iovalue(value);
     let output = simple_record(&value, "output", 1)?;
     let payload = value_to_iovalue(&output[0]);
@@ -1640,8 +1642,8 @@ fn str_table_keys(table: &redb::Table<'_, &str, &str>) -> Result<Vec<String>> {
 }
 
 fn ensure_dirs(root: &Path) -> Result<()> {
-    fs::create_dir_all(root).map_err(MoltenError::from)?;
-    fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
+    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
 }
 
 fn ensure_index_tables(root: &Path) -> Result<Database> {
@@ -1675,19 +1677,19 @@ fn index_path(root: &Path) -> PathBuf {
     root.join(INDEX_FILE)
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
 fn sorted_unique(refs: &[String]) -> Vec<String> {
-    refs.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
+    refs.iter().cloned().collect::<BtreeSet<_>>().into_iter().collect()
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1697,38 +1699,38 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     items.iter().map(|item| required_string(item, label)).collect()
 }
 
-fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_value(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     let mut refs = Vec::with_capacity(items.len());
     for item in items.iter() {
@@ -1737,17 +1739,17 @@ fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<S
     Ok(refs)
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
 }
 
-fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
@@ -1773,7 +1775,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -1783,36 +1785,36 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -2202,7 +2204,7 @@ mod tests {
     fn value_input(
         tier: &str,
         status: &str,
-        output: Option<IOValue>,
+        output: Option<IoValue>,
         key: &EvalCacheKeyInput,
         evidence_refs: &[String],
     ) -> EvalCacheValueInput {
@@ -2339,9 +2341,9 @@ mod tests {
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }
