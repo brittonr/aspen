@@ -859,7 +859,7 @@ struct OperationFinalizeInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeDaemonInit {
+pub struct Init {
     pub config_ref: String,
     pub identity_ref: String,
     pub identity_receipt_ref: String,
@@ -868,14 +868,14 @@ pub struct NodeDaemonInit {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeDaemonRun {
+pub struct Run {
     pub startup_ref: String,
     pub startup_value: IoValue,
     pub adapter_receipt_refs: Vec<crate::node_runtime::NodeAdapterReceiptRef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeDaemonStatus {
+pub struct Status {
     pub health_ref: String,
     pub control_receipt_ref: String,
     pub health_value: IoValue,
@@ -884,7 +884,7 @@ pub struct NodeDaemonStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NodeDaemonStop {
+pub struct Stop {
     pub shutdown_ref: String,
     pub control_receipt_ref: String,
     pub shutdown_value: IoValue,
@@ -5069,7 +5069,7 @@ fn count_prior_supervised_service_runs(state_root: &Path, supervisor_policy_ref:
     Ok(count)
 }
 
-pub fn init_local_node(input: &InitInput<'_>) -> Result<NodeDaemonInit> {
+pub fn init_local_node(input: &InitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.node_id)?;
     ensure_state_layout(input.state_root)?;
@@ -5104,7 +5104,7 @@ pub fn init_local_node(input: &InitInput<'_>) -> Result<NodeDaemonInit> {
     write_preserves(&input.state_root.join(CONFIG_FILE), &config_value)?;
     write_preserves(&input.state_root.join(IDENTITY_RECEIPT_FILE), &identity_resolution.receipt_value)?;
     write_preserves(&input.state_root.join(IDENTITY_FILE), &identity.value)?;
-    Ok(NodeDaemonInit {
+    Ok(Init {
         config_ref: crate::preserves_rail::canonical_hash(&config_value)?,
         identity_ref: identity.identity_ref,
         identity_receipt_ref: identity_resolution.receipt_ref,
@@ -5113,7 +5113,7 @@ pub fn init_local_node(input: &InitInput<'_>) -> Result<NodeDaemonInit> {
     })
 }
 
-pub fn run_local_node(input: &RunInput<'_>) -> Result<NodeDaemonRun> {
+pub fn run_local_node(input: &RunInput<'_>) -> Result<Run> {
     ensure_state_layout(input.state_root)?;
     verify_restart_state(input.state_root)?;
     let config_value = read_preserves(&input.state_root.join(CONFIG_FILE))?;
@@ -5151,14 +5151,14 @@ pub fn run_local_node(input: &RunInput<'_>) -> Result<NodeDaemonRun> {
     let startup_ref = run.startup_receipt.receipt_ref.clone();
     write_active_lock(input.state_root, &startup_ref)?;
     import_node_artifact(input.state_root, &run.startup_receipt.value)?;
-    Ok(NodeDaemonRun {
+    Ok(Run {
         startup_ref,
         startup_value: run.startup_receipt.value,
         adapter_receipt_refs: run.adapter_receipts,
     })
 }
 
-pub fn status_local_node(input: &StatusInput<'_>) -> Result<NodeDaemonStatus> {
+pub fn status_local_node(input: &StatusInput<'_>) -> Result<Status> {
     let request = status_request()?;
     status_local_node_with_request(input, &request)
 }
@@ -5166,7 +5166,7 @@ pub fn status_local_node(input: &StatusInput<'_>) -> Result<NodeDaemonStatus> {
 fn status_local_node_with_request(
     input: &StatusInput<'_>,
     request: &crate::node_runtime::ControlRequest,
-) -> Result<NodeDaemonStatus> {
+) -> Result<Status> {
     let startup_value = read_preserves(&input.state_root.join(STARTUP_FILE))?;
     let startup = crate::node_runtime::parse_node_startup_receipt(&startup_value)?;
     let shutdown_ref = if input.state_root.join(SHUTDOWN_FILE).exists() {
@@ -5199,7 +5199,7 @@ fn status_local_node_with_request(
     let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt_value)?;
     write_preserves(&input.state_root.join(CONTROL_STATUS_FILE), &control_receipt_value)?;
     import_node_artifact(input.state_root, &control_receipt_value)?;
-    Ok(NodeDaemonStatus {
+    Ok(Status {
         health_ref,
         control_receipt_ref,
         health_value,
@@ -5208,15 +5208,12 @@ fn status_local_node_with_request(
     })
 }
 
-pub fn stop_local_node(input: &StopInput<'_>) -> Result<NodeDaemonStop> {
+pub fn stop_local_node(input: &StopInput<'_>) -> Result<Stop> {
     let request = shutdown_request()?;
     stop_local_node_with_request(input, &request)
 }
 
-fn stop_local_node_with_request(
-    input: &StopInput<'_>,
-    request: &crate::node_runtime::ControlRequest,
-) -> Result<NodeDaemonStop> {
+fn stop_local_node_with_request(input: &StopInput<'_>, request: &crate::node_runtime::ControlRequest) -> Result<Stop> {
     let startup_value = read_preserves(&input.state_root.join(STARTUP_FILE))?;
     let startup = crate::node_runtime::parse_node_startup_receipt(&startup_value)?;
     let mut shutdown_adapters = Vec::with_capacity(startup.adapters.len());
@@ -5267,7 +5264,7 @@ fn stop_local_node_with_request(
     write_preserves(&input.state_root.join(CONTROL_STOP_FILE), &control_receipt_value)?;
     import_node_artifact(input.state_root, &control_receipt_value)?;
     remove_active_lock(input.state_root)?;
-    Ok(NodeDaemonStop {
+    Ok(Stop {
         shutdown_ref,
         control_receipt_ref,
         shutdown_value,
