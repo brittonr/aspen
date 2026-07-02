@@ -86,7 +86,7 @@ fn build_remote_envelope(dir: &Path) -> PathBuf {
     envelope_out
 }
 
-fn read_remote_envelope(path: &Path) -> molten::remote_dataspace::RemoteDataspaceEnvelope {
+fn read_remote_envelope(path: &Path) -> molten::remote_dataspace::Envelope {
     let value = read_preserves_file(path).expect("read remote envelope");
     molten::remote_dataspace::parse_envelope(&value).expect("parse remote envelope")
 }

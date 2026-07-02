@@ -504,8 +504,8 @@ pub struct JobWorkerExecuteInput<'a> {
     pub storage_root: &'a FilePath,
     pub cache_root: &'a FilePath,
     pub chunk_root: &'a FilePath,
-    pub delivery: &'a crate::remote_dataspace::RemoteDataspaceDelivery,
-    pub delivery_log: Option<&'a crate::remote_dataspace::RemoteDeliveryLog>,
+    pub delivery: &'a crate::remote_dataspace::Delivery,
+    pub delivery_log: Option<&'a crate::remote_dataspace::DeliveryLog>,
     pub admission_receipt_value: &'a IoValue,
     pub execution_request_value: &'a IoValue,
     pub ledger_root: Option<&'a FilePath>,
@@ -684,7 +684,7 @@ struct WorkerResultValueInput<'a> {
 
 struct WorkerStatusValueInput<'a> {
     request: &'a JobWorkerRequest,
-    delivery: &'a crate::remote_dataspace::RemoteDataspaceDelivery,
+    delivery: &'a crate::remote_dataspace::Delivery,
     state: &'a str,
     execution_receipt_ref: Option<&'a str>,
     diagnostics: &'a [String],
@@ -1201,9 +1201,7 @@ pub fn parse_job_worker_request_value(value: &IoValue) -> Result<JobWorkerReques
     })
 }
 
-pub fn job_worker_envelope(
-    input: JobWorkerEnvelopeInput<'_>,
-) -> Result<crate::remote_dataspace::RemoteDataspaceEnvelope> {
+pub fn job_worker_envelope(input: JobWorkerEnvelopeInput<'_>) -> Result<crate::remote_dataspace::Envelope> {
     let request = parse_job_worker_request_value(input.request_value)?;
     if input.to_peer != request.target_peer {
         return Err(MoltenError::invalid_harness(format!(
@@ -1211,12 +1209,12 @@ pub fn job_worker_envelope(
             input.to_peer, request.target_peer
         )));
     }
-    crate::remote_dataspace::build_envelope(crate::remote_dataspace::RemoteDataspaceEnvelopeInput {
+    crate::remote_dataspace::build_envelope(crate::remote_dataspace::EnvelopeInput {
         from_peer: input.from_peer.to_string(),
         from_actor: input.from_actor.to_string(),
         to_peer: input.to_peer.to_string(),
         topic: input.topic.to_string(),
-        operation: crate::remote_dataspace::RemoteDataspaceOperation::Message,
+        operation: crate::remote_dataspace::Operation::Message,
         payload: input.request_value.clone(),
         content_refs: Vec::new(),
         capability_refs: request.authority_refs.clone(),
@@ -3434,7 +3432,7 @@ fn job_execution_receipt_value(input: ExecutionReceiptValueInput<'_>) -> Result<
 
 fn job_worker_assignment_value(
     request: &JobWorkerRequest,
-    delivery: &crate::remote_dataspace::RemoteDataspaceDelivery,
+    delivery: &crate::remote_dataspace::Delivery,
 ) -> Result<IoValue> {
     Ok(crate::preserves_rail::record("job-worker-assignment-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::JOB_WORKER_ASSIGNMENT_SCHEMA),
@@ -4310,7 +4308,7 @@ struct WorkerReceipt {
 }
 
 struct FinalStatusInput<'a> {
-    delivery: &'a crate::remote_dataspace::RemoteDataspaceDelivery,
+    delivery: &'a crate::remote_dataspace::Delivery,
     request: &'a JobWorkerRequest,
     diagnostics: &'a [String],
     outputs: &'a WorkerOutputs,
@@ -4381,8 +4379,7 @@ fn push_delivery_checks(
     request: &JobWorkerRequest,
     buffers: &mut DeliveryCheckBuffers,
 ) -> (Option<String>, bool) {
-    let has_message_operation =
-        input.delivery.envelope.operation == crate::remote_dataspace::RemoteDataspaceOperation::Message;
+    let has_message_operation = input.delivery.envelope.operation == crate::remote_dataspace::Operation::Message;
     buffers.push("remote-dataspace-message", has_message_operation);
     if !has_message_operation {
         buffers.note("job worker request was not delivered as a remote dataspace message");
@@ -7325,12 +7322,12 @@ mod tests {
     }
 
     fn assert_target_mismatch(fixture: &WorkerFixture) {
-        let envelope = crate::remote_dataspace::build_envelope(crate::remote_dataspace::RemoteDataspaceEnvelopeInput {
+        let envelope = crate::remote_dataspace::build_envelope(crate::remote_dataspace::EnvelopeInput {
             from_peer: "peer:a".to_string(),
             from_actor: "source-worker".to_string(),
             to_peer: "peer:c".to_string(),
             topic: "molten.job.worker".to_string(),
-            operation: crate::remote_dataspace::RemoteDataspaceOperation::Message,
+            operation: crate::remote_dataspace::Operation::Message,
             payload: fixture.worker_request.clone(),
             content_refs: Vec::new(),
             capability_refs: vec![fixture.authority_context_ref.clone()],
@@ -7821,8 +7818,8 @@ mod tests {
         node_identity_ref: String,
         evidence_refs: Vec<String>,
         worker_request: IoValue,
-        delivery: crate::remote_dataspace::RemoteDataspaceDelivery,
-        delivery_log: crate::remote_dataspace::RemoteDeliveryLog,
+        delivery: crate::remote_dataspace::Delivery,
+        delivery_log: crate::remote_dataspace::DeliveryLog,
     }
 
     struct SeedArtifacts {
@@ -8080,7 +8077,7 @@ mod tests {
         request_value: &IoValue,
         target_peer: &str,
         replayable: bool,
-    ) -> (crate::remote_dataspace::RemoteDataspaceDelivery, crate::remote_dataspace::RemoteDeliveryLog) {
+    ) -> (crate::remote_dataspace::Delivery, crate::remote_dataspace::DeliveryLog) {
         let envelope = job_worker_envelope(JobWorkerEnvelopeInput {
             from_peer: "peer:a",
             from_actor: "source-worker",

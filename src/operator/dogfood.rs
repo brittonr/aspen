@@ -3723,14 +3723,14 @@ struct RemoteStepInput<'a> {
 }
 
 struct RemoteStep {
-    run: crate::remote_dataspace::RemoteTwoPeerHarness,
+    run: crate::remote_dataspace::TwoPeerHarness,
     gate_ref: String,
 }
 
 fn record_remote_step(input: RemoteStepInput<'_>) -> Result<RemoteStep> {
     let remote = crate::remote_dataspace::two_peer_service_ready_harness(
         &input.state_root.join("remote-dataspace"),
-        crate::remote_dataspace::RemoteDeliveryEvidence {
+        crate::remote_dataspace::DeliveryEvidence {
             peer_bootstrap_refs: vec![dogfood_ref("remote-peer-bootstrap")?],
             capability_refs: vec![dogfood_ref("remote-capability")?],
             policy_refs: input.policy_refs.to_vec(),

@@ -3,9 +3,9 @@ type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
-type RemoteDataspaceEnvelope = crate::remote_dataspace::RemoteDataspaceEnvelope;
-type RemoteDataspaceEnvelopeInput = crate::remote_dataspace::RemoteDataspaceEnvelopeInput;
-type RemoteDataspaceOperation = crate::remote_dataspace::RemoteDataspaceOperation;
+type Envelope = crate::remote_dataspace::Envelope;
+type EnvelopeInput = crate::remote_dataspace::EnvelopeInput;
+type Operation = crate::remote_dataspace::Operation;
 
 const PROTOCOL_ENDPOINT_SCHEMA: &str = crate::preserves_rail::PROTOCOL_ENDPOINT_SCHEMA;
 const PROTOCOL_INSTALL_RECEIPT_SCHEMA: &str = crate::preserves_rail::PROTOCOL_INSTALL_RECEIPT_SCHEMA;
@@ -44,7 +44,7 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
-fn build_remote_envelope(input: RemoteDataspaceEnvelopeInput) -> Result<RemoteDataspaceEnvelope> {
+fn build_remote_envelope(input: EnvelopeInput) -> Result<Envelope> {
     crate::remote_dataspace::build_envelope(input)
 }
 
@@ -778,14 +778,14 @@ pub fn offer_protocol_branch(input: ProtocolBranchOperationInput) -> Result<Prot
     pass_operation("offer", &state, None, &next_state, gates)
 }
 
-pub fn protocol_message_remote_envelope(input: ProtocolRemoteEnvelopeInput) -> Result<RemoteDataspaceEnvelope> {
+pub fn protocol_message_remote_envelope(input: ProtocolRemoteEnvelopeInput) -> Result<Envelope> {
     let message = parse_protocol_message(&input.message)?;
-    build_remote_envelope(RemoteDataspaceEnvelopeInput {
+    build_remote_envelope(EnvelopeInput {
         from_peer: input.from_peer,
         from_actor: input.from_actor,
         to_peer: input.to_peer,
         topic: input.topic,
-        operation: RemoteDataspaceOperation::Message,
+        operation: Operation::Message,
         payload: message.value,
         content_refs: Vec::new(),
         capability_refs: input.capability_refs,

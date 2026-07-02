@@ -206,10 +206,10 @@ pub(super) fn run_local_execution(input: RunInput<'_>) -> Result<JobWorkerExecut
 
 struct WriteInput<'a> {
     run: RunInput<'a>,
-    envelope: &'a molten::remote_dataspace::RemoteDataspaceEnvelope,
-    published: &'a molten::remote_dataspace::RemoteDataspaceExchange,
-    delivery: &'a molten::remote_dataspace::RemoteDataspaceDelivery,
-    delivery_log: &'a molten::remote_dataspace::RemoteDeliveryLog,
+    envelope: &'a molten::remote_dataspace::Envelope,
+    published: &'a molten::remote_dataspace::Exchange,
+    delivery: &'a molten::remote_dataspace::Delivery,
+    delivery_log: &'a molten::remote_dataspace::DeliveryLog,
     executed: &'a molten::job_dag::JobWorkerExecution,
 }
 

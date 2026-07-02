@@ -10,13 +10,11 @@ type RuntimeState = crate::runtime::RuntimeState;
 type RuntimeStep = crate::runtime::RuntimeStep;
 type RuntimeValue = crate::runtime::RuntimeValue;
 
-const REMOTE_DATASPACE_ADMISSION_RECEIPT_SCHEMA: &str =
-    crate::preserves_rail::REMOTE_DATASPACE_ADMISSION_RECEIPT_SCHEMA;
-const REMOTE_DATASPACE_DELIVERY_LOG_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_DELIVERY_LOG_SCHEMA;
-const REMOTE_DATASPACE_ENVELOPE_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_ENVELOPE_SCHEMA;
-const REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA;
-const REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA: &str =
-    crate::preserves_rail::REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA;
+const ADMISSION_RECEIPT_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_ADMISSION_RECEIPT_SCHEMA;
+const DELIVERY_LOG_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_DELIVERY_LOG_SCHEMA;
+const ENVELOPE_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_ENVELOPE_SCHEMA;
+const GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA;
+const TRANSPORT_RECEIPT_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA;
 
 mod fs {
     pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
@@ -80,18 +78,18 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
 pub const LOCAL_GOSSIP_TRANSPORT: &str = "iroh-local-gossip";
 pub const LIVE_GOSSIP_TRANSPORT: &str = "iroh-gossip";
 
-const MAX_REMOTE_REPLAY_EVENTS: usize = 4_096;
-const _: () = assert!(MAX_REMOTE_REPLAY_EVENTS > 0);
+const MAX_REPLAY_EVENTS: usize = 4_096;
+const _: () = assert!(MAX_REPLAY_EVENTS > 0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RemoteDataspaceOperation {
+pub enum Operation {
     Message,
     Assert,
     Retract,
     Observe,
 }
 
-impl RemoteDataspaceOperation {
+impl Operation {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Message => "message",
@@ -113,13 +111,13 @@ impl RemoteDataspaceOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteDataspaceEnvelope {
+pub struct Envelope {
     pub envelope_ref: String,
     pub from_peer: String,
     pub from_actor: String,
     pub to_peer: String,
     pub topic: String,
-    pub operation: RemoteDataspaceOperation,
+    pub operation: Operation,
     pub payload: IoValue,
     pub content_refs: Vec<String>,
     pub capability_refs: Vec<String>,
@@ -130,19 +128,19 @@ pub struct RemoteDataspaceEnvelope {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteDataspaceExchange {
+pub struct Exchange {
     pub envelope_ref: String,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteDataspaceDelivery {
-    pub envelope: RemoteDataspaceEnvelope,
+pub struct Delivery {
+    pub envelope: Envelope,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct RemoteDeliveryEvidence {
+pub struct DeliveryEvidence {
     pub peer_bootstrap_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub policy_refs: Vec<String>,
@@ -151,14 +149,14 @@ pub struct RemoteDeliveryEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteDataspaceApplied {
+pub struct Applied {
     pub events: Vec<RuntimeEvent>,
     pub admission_receipt_value: IoValue,
     pub turn_journal_context_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteDataspaceIdempotentApplied {
+pub struct IdempotentApplied {
     pub events: Vec<RuntimeEvent>,
     pub admission_receipt_value: IoValue,
     pub turn_journal_context_ref: String,
@@ -168,16 +166,16 @@ pub struct RemoteDataspaceIdempotentApplied {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteDeliveryLog {
+pub struct DeliveryLog {
     pub log_ref: String,
     pub replayable: bool,
-    pub entries: Vec<RemoteDataspaceDelivery>,
+    pub entries: Vec<Delivery>,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteTwoPeerHarness {
-    pub delivery_log: RemoteDeliveryLog,
+pub struct TwoPeerHarness {
+    pub delivery_log: DeliveryLog,
     pub admission_receipt_value: IoValue,
     pub receipt_value: IoValue,
     pub observed_events: Vec<RuntimeEvent>,
@@ -185,12 +183,12 @@ pub struct RemoteTwoPeerHarness {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteDataspaceEnvelopeInput {
+pub struct EnvelopeInput {
     pub from_peer: String,
     pub from_actor: String,
     pub to_peer: String,
     pub topic: String,
-    pub operation: RemoteDataspaceOperation,
+    pub operation: Operation,
     pub payload: IoValue,
     pub content_refs: Vec<String>,
     pub capability_refs: Vec<String>,
@@ -211,7 +209,7 @@ pub struct LocalTransportReceiptInput<'a> {
     pub operation: &'a str,
     pub decision: &'a str,
     pub node: &'a str,
-    pub envelope: &'a RemoteDataspaceEnvelope,
+    pub envelope: &'a Envelope,
     pub diagnostics: Vec<String>,
     pub checks: Vec<(String, String)>,
 }
@@ -221,21 +219,21 @@ pub struct TransportReceiptInput<'a> {
     pub operation: &'a str,
     pub decision: &'a str,
     pub node: &'a str,
-    pub envelope: &'a RemoteDataspaceEnvelope,
+    pub envelope: &'a Envelope,
     pub diagnostics: Vec<String>,
     pub checks: Vec<(String, String)>,
 }
 
 struct AdmissionReceiptInput<'a> {
     decision: &'a str,
-    envelope: &'a RemoteDataspaceEnvelope,
+    envelope: &'a Envelope,
     transport_receipt_ref: &'a str,
-    evidence: &'a RemoteDeliveryEvidence,
+    evidence: &'a DeliveryEvidence,
     turn_context_refs: &'a [String],
     diagnostics: Vec<String>,
 }
 
-pub fn build_envelope(input: RemoteDataspaceEnvelopeInput) -> Result<RemoteDataspaceEnvelope> {
+pub fn build_envelope(input: EnvelopeInput) -> Result<Envelope> {
     validate_name(&input.from_peer, "from peer")?;
     validate_name(&input.from_actor, "from actor")?;
     validate_name(&input.to_peer, "to peer")?;
@@ -247,13 +245,13 @@ pub fn build_envelope(input: RemoteDataspaceEnvelopeInput) -> Result<RemoteDatas
     parse_envelope(&value)
 }
 
-pub fn assert_envelope(input: AssertEnvelopeInput<'_>) -> Result<RemoteDataspaceEnvelope> {
-    build_envelope(RemoteDataspaceEnvelopeInput {
+pub fn assert_envelope(input: AssertEnvelopeInput<'_>) -> Result<Envelope> {
+    build_envelope(EnvelopeInput {
         from_peer: input.from_peer.to_owned(),
         from_actor: input.from_actor.to_owned(),
         to_peer: input.to_peer.to_owned(),
         topic: input.topic.to_owned(),
-        operation: RemoteDataspaceOperation::Assert,
+        operation: Operation::Assert,
         payload: input.payload,
         content_refs: Vec::new(),
         capability_refs: input.capability_refs,
@@ -261,7 +259,7 @@ pub fn assert_envelope(input: AssertEnvelopeInput<'_>) -> Result<RemoteDataspace
     })
 }
 
-pub fn parse_envelope(value: &IoValue) -> Result<RemoteDataspaceEnvelope> {
+pub fn parse_envelope(value: &IoValue) -> Result<Envelope> {
     let (fields, has_operation_ref) =
         if let Some(fields) = value.collect_simple_record("remote-dataspace-envelope-v1", Some(12)) {
             (fields, true)
@@ -273,12 +271,12 @@ pub fn parse_envelope(value: &IoValue) -> Result<RemoteDataspaceEnvelope> {
                 false,
             )
         };
-    require_schema(&fields[0], REMOTE_DATASPACE_ENVELOPE_SCHEMA, "remote dataspace envelope schema")?;
+    require_schema(&fields[0], ENVELOPE_SCHEMA, "remote dataspace envelope schema")?;
     let from_peer = record_string(&fields[1], "from-peer")?;
     let from_actor = record_string(&fields[2], "from-actor")?;
     let to_peer = record_string(&fields[3], "to-peer")?;
     let topic = record_string(&fields[4], "topic")?;
-    let operation = RemoteDataspaceOperation::parse(&record_string(&fields[5], "operation")?)?;
+    let operation = Operation::parse(&record_string(&fields[5], "operation")?)?;
     let payload = record_iovalue(&fields[6], "payload")?;
     let content_refs = record_string_sequence(&fields[7], "content-refs")?;
     let capability_refs = record_string_sequence(&fields[8], "capability-refs")?;
@@ -312,7 +310,7 @@ pub fn parse_envelope(value: &IoValue) -> Result<RemoteDataspaceEnvelope> {
         capability_refs: &capability_refs,
         evidence_refs: &evidence_refs,
     })?;
-    Ok(RemoteDataspaceEnvelope {
+    Ok(Envelope {
         envelope_ref: canonical_hash(value)?,
         from_peer,
         from_actor,
@@ -336,7 +334,7 @@ struct RefParts<'a> {
     from_actor: &'a str,
     to_peer: &'a str,
     topic: &'a str,
-    operation: RemoteDataspaceOperation,
+    operation: Operation,
     payload: &'a IoValue,
     capability_refs: &'a [String],
     evidence_refs: &'a [String],
@@ -384,11 +382,7 @@ pub fn store_content_blob(root: &Path, bytes: &[u8]) -> Result<String> {
     Ok(content_ref)
 }
 
-pub fn publish_local_gossip(
-    root: &Path,
-    envelope: &RemoteDataspaceEnvelope,
-    node: &str,
-) -> Result<RemoteDataspaceExchange> {
+pub fn publish_local_gossip(root: &Path, envelope: &Envelope, node: &str) -> Result<Exchange> {
     validate_name(node, "publisher node")?;
     validate_envelope_identity(envelope)?;
     validate_content_refs_available(root, &envelope.content_refs)?;
@@ -396,7 +390,7 @@ pub fn publish_local_gossip(
     fs::create_dir_all(&topic_dir).map_err(MoltenError::from)?;
     fs::write(envelope_path(root, &envelope.topic, &envelope.envelope_ref)?, canonical_bytes(&envelope.value)?)
         .map_err(MoltenError::from)?;
-    Ok(RemoteDataspaceExchange {
+    Ok(Exchange {
         envelope_ref: envelope.envelope_ref.clone(),
         receipt_value: transport_receipt_value_for_transport(TransportReceiptInput {
             transport: LOCAL_GOSSIP_TRANSPORT,
@@ -416,16 +410,16 @@ pub fn publish_local_gossip(
 
 pub async fn publish_live_gossip(
     sender: &iroh_gossip::api::GossipSender,
-    envelope: &RemoteDataspaceEnvelope,
+    envelope: &Envelope,
     node: &str,
-) -> Result<RemoteDataspaceExchange> {
+) -> Result<Exchange> {
     validate_name(node, "publisher node")?;
     validate_envelope_identity(envelope)?;
     sender
         .broadcast(canonical_bytes(&envelope.value)?.into())
         .await
         .map_err(|error| MoltenError::invalid_harness(format!("live Iroh gossip publish failed: {error}")))?;
-    Ok(RemoteDataspaceExchange {
+    Ok(Exchange {
         envelope_ref: envelope.envelope_ref.clone(),
         receipt_value: transport_receipt_value_for_transport(TransportReceiptInput {
             transport: LIVE_GOSSIP_TRANSPORT,
@@ -448,7 +442,7 @@ pub fn deliver_live_gossip_event(
     event: &iroh_gossip::api::Event,
     topic: &str,
     receiver_peer: &str,
-) -> Result<Option<RemoteDataspaceDelivery>> {
+) -> Result<Option<Delivery>> {
     match event {
         iroh_gossip::api::Event::Received(message) => deliver_live_gossip_bytes(
             root,
@@ -470,7 +464,7 @@ pub fn deliver_live_gossip_bytes(
     topic: &str,
     receiver_peer: &str,
     delivered_from: &str,
-) -> Result<RemoteDataspaceDelivery> {
+) -> Result<Delivery> {
     validate_name(topic, "topic")?;
     validate_name(receiver_peer, "receiver peer")?;
     validate_name(delivered_from, "delivered from")?;
@@ -504,18 +498,13 @@ pub fn deliver_live_gossip_bytes(
             ("transport-is-not-authority".to_owned(), "pass".to_owned()),
         ],
     });
-    Ok(RemoteDataspaceDelivery {
+    Ok(Delivery {
         envelope,
         receipt_value,
     })
 }
 
-pub fn deliver_local_gossip(
-    root: &Path,
-    topic: &str,
-    envelope_ref: &str,
-    receiver_peer: &str,
-) -> Result<RemoteDataspaceDelivery> {
+pub fn deliver_local_gossip(root: &Path, topic: &str, envelope_ref: &str, receiver_peer: &str) -> Result<Delivery> {
     validate_name(topic, "topic")?;
     validate_name(receiver_peer, "receiver peer")?;
     validate_ref(envelope_ref, "envelope ref")?;
@@ -555,27 +544,24 @@ pub fn deliver_local_gossip(
             ("transport-is-not-authority".to_owned(), "pass".to_owned()),
         ],
     });
-    Ok(RemoteDataspaceDelivery {
+    Ok(Delivery {
         envelope,
         receipt_value,
     })
 }
 
-pub fn apply_delivered_envelope(
-    state: &mut RuntimeState,
-    envelope: &RemoteDataspaceEnvelope,
-) -> Result<Vec<RuntimeEvent>> {
+pub fn apply_delivered_envelope(state: &mut RuntimeState, envelope: &Envelope) -> Result<Vec<RuntimeEvent>> {
     validate_envelope_identity(envelope)?;
     let actor = remote_actor_id(envelope);
     let payload = RuntimeValue::new(envelope.payload.clone())?;
     let step = match envelope.operation {
-        RemoteDataspaceOperation::Assert => RuntimeStep::Assert { actor, value: payload },
-        RemoteDataspaceOperation::Retract => RuntimeStep::Retract { actor, value: payload },
-        RemoteDataspaceOperation::Observe => RuntimeStep::Observe {
+        Operation::Assert => RuntimeStep::Assert { actor, value: payload },
+        Operation::Retract => RuntimeStep::Retract { actor, value: payload },
+        Operation::Observe => RuntimeStep::Observe {
             actor,
             pattern: payload,
         },
-        RemoteDataspaceOperation::Message => RuntimeStep::Send {
+        Operation::Message => RuntimeStep::Send {
             from: actor,
             to: format!("{}:inbox", envelope.to_peer),
             body: payload,
@@ -586,9 +572,9 @@ pub fn apply_delivered_envelope(
 
 pub fn admit_and_apply_delivered_envelope(
     state: &mut RuntimeState,
-    delivery: &RemoteDataspaceDelivery,
-    evidence: &RemoteDeliveryEvidence,
-) -> Result<RemoteDataspaceApplied> {
+    delivery: &Delivery,
+    evidence: &DeliveryEvidence,
+) -> Result<Applied> {
     validate_delivery_evidence(&delivery.envelope, evidence)?;
     let transport_receipt_ref = canonical_hash(&delivery.receipt_value)?;
     let turn_journal_context_ref = turn_journal_context_ref(delivery)?;
@@ -603,7 +589,7 @@ pub fn admit_and_apply_delivered_envelope(
         diagnostics: Vec::new(),
     });
     let events = apply_delivered_envelope(state, &delivery.envelope)?;
-    Ok(RemoteDataspaceApplied {
+    Ok(Applied {
         events,
         admission_receipt_value,
         turn_journal_context_ref,
@@ -613,10 +599,10 @@ pub fn admit_and_apply_delivered_envelope(
 pub fn admit_and_apply_delivered_envelope_idempotent(
     idempotency_root: &Path,
     state: &mut RuntimeState,
-    delivery: &RemoteDataspaceDelivery,
-    evidence: &RemoteDeliveryEvidence,
+    delivery: &Delivery,
+    evidence: &DeliveryEvidence,
     gap_policy: crate::delivery_idempotency::GapPolicy,
-) -> Result<RemoteDataspaceIdempotentApplied> {
+) -> Result<IdempotentApplied> {
     validate_delivery_evidence(&delivery.envelope, evidence)?;
     let transport_receipt_ref = canonical_hash(&delivery.receipt_value)?;
     let turn_journal_context_ref = turn_journal_context_ref(delivery)?;
@@ -653,7 +639,7 @@ pub fn admit_and_apply_delivered_envelope_idempotent(
     } else {
         Vec::new()
     };
-    Ok(RemoteDataspaceIdempotentApplied {
+    Ok(IdempotentApplied {
         events,
         admission_receipt_value,
         turn_journal_context_ref,
@@ -664,7 +650,7 @@ pub fn admit_and_apply_delivered_envelope_idempotent(
 }
 
 pub fn deny_admission_receipt_value(
-    envelope: &RemoteDataspaceEnvelope,
+    envelope: &Envelope,
     transport_receipt_ref: &str,
     diagnostics: Vec<String>,
 ) -> IoValue {
@@ -672,21 +658,21 @@ pub fn deny_admission_receipt_value(
         decision: "deny",
         envelope,
         transport_receipt_ref,
-        evidence: &RemoteDeliveryEvidence::default(),
+        evidence: &DeliveryEvidence::default(),
         turn_context_refs: &[],
         diagnostics,
     })
 }
 
-pub fn parse_delivery_log(value: &IoValue) -> Result<RemoteDeliveryLog> {
+pub fn parse_delivery_log(value: &IoValue) -> Result<DeliveryLog> {
     let fields = value
         .collect_simple_record("remote-dataspace-delivery-log-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <remote-dataspace-delivery-log-v1 ...>"))?;
-    require_schema(&fields[0], REMOTE_DATASPACE_DELIVERY_LOG_SCHEMA, "remote dataspace delivery log schema")?;
+    require_schema(&fields[0], DELIVERY_LOG_SCHEMA, "remote dataspace delivery log schema")?;
     let is_replayable = record_bool(&fields[1], "replayable")?;
     let entry_values = field_sequence(&fields[2], "entries")?;
     let entries = entry_values.iter().map(parse_delivery_log_entry).collect::<Result<Vec<_>>>()?;
-    Ok(RemoteDeliveryLog {
+    Ok(DeliveryLog {
         log_ref: canonical_hash(value)?,
         replayable: is_replayable,
         entries,
@@ -694,15 +680,15 @@ pub fn parse_delivery_log(value: &IoValue) -> Result<RemoteDeliveryLog> {
     })
 }
 
-pub fn delivery_log(deliveries: &[RemoteDataspaceDelivery], replayable: bool) -> Result<RemoteDeliveryLog> {
+pub fn delivery_log(deliveries: &[Delivery], replayable: bool) -> Result<DeliveryLog> {
     delivery_log_with_idempotency_receipts(deliveries, &[], replayable)
 }
 
 pub fn delivery_log_with_idempotency_receipts(
-    deliveries: &[RemoteDataspaceDelivery],
+    deliveries: &[Delivery],
     idempotency_receipts: &[IoValue],
     replayable: bool,
-) -> Result<RemoteDeliveryLog> {
+) -> Result<DeliveryLog> {
     if !idempotency_receipts.is_empty() && idempotency_receipts.len() != deliveries.len() {
         return Err(MoltenError::invalid_harness(
             "remote delivery log idempotency receipt count must match delivery count",
@@ -727,7 +713,7 @@ pub fn delivery_log_with_idempotency_receipts(
     }
     let idempotency_status = if idempotency_receipts.is_empty() { "n/a" } else { "pass" };
     let value = record("remote-dataspace-delivery-log-v1", vec![
-        string(REMOTE_DATASPACE_DELIVERY_LOG_SCHEMA),
+        string(DELIVERY_LOG_SCHEMA),
         record("replayable", vec![crate::preserves_rail::bool_value(replayable)]),
         record("entries", vec![sequence(entries)]),
         record("checks", vec![sequence(vec![
@@ -737,7 +723,7 @@ pub fn delivery_log_with_idempotency_receipts(
             record("check", vec![string("no-live-network-during-replay"), string("pass")]),
         ])]),
     ]);
-    Ok(RemoteDeliveryLog {
+    Ok(DeliveryLog {
         log_ref: canonical_hash(&value)?,
         replayable,
         entries: deliveries.to_vec(),
@@ -745,23 +731,23 @@ pub fn delivery_log_with_idempotency_receipts(
     })
 }
 
-pub fn replay_delivery_log(state: &mut RuntimeState, log: &RemoteDeliveryLog) -> Result<Vec<RuntimeEvent>> {
+pub fn replay_delivery_log(state: &mut RuntimeState, log: &DeliveryLog) -> Result<Vec<RuntimeEvent>> {
     if !log.replayable {
         return Err(MoltenError::invalid_harness(
             "remote dataspace delivery log is non-replayable and cannot satisfy deterministic replay",
         ));
     }
-    ensure_count_at_most(log.entries.len(), MAX_REMOTE_REPLAY_EVENTS, "remote replay deliveries")?;
+    ensure_count_at_most(log.entries.len(), MAX_REPLAY_EVENTS, "remote replay deliveries")?;
     let mut events = Vec::with_capacity(log.entries.len());
     for delivery in &log.entries {
         let delivered = apply_delivered_envelope(state, &delivery.envelope)?;
-        extend_bounded(&mut events, delivered, MAX_REMOTE_REPLAY_EVENTS, "remote replay events")?;
+        extend_bounded(&mut events, delivered, MAX_REPLAY_EVENTS, "remote replay events")?;
     }
     Ok(events)
 }
 
-pub fn remote_dataspace_gate_receipt_value(
-    delivery_log: &RemoteDeliveryLog,
+pub fn gate_receipt_value(
+    delivery_log: &DeliveryLog,
     admission_receipts: &[IoValue],
     turn_context_refs: &[String],
 ) -> Result<IoValue> {
@@ -777,7 +763,7 @@ pub fn remote_dataspace_gate_receipt_value(
     let admission_refs: Vec<String> = admission_receipts.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
     let operation_refs = delivery_log.entries.iter().map(|delivery| string(&delivery.envelope.operation_ref)).collect();
     Ok(record("remote-dataspace-gate-receipt-v1", vec![
-        string(REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA),
+        string(GATE_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("delivery-log", vec![string(&delivery_log.log_ref)]),
         record("admission-receipts", vec![sequence(admission_refs.iter().map(string).collect())]),
@@ -797,7 +783,7 @@ pub fn remote_dataspace_gate_receipt_value(
     ]))
 }
 
-pub fn two_peer_service_ready_harness(root: &Path, evidence: RemoteDeliveryEvidence) -> Result<RemoteTwoPeerHarness> {
+pub fn two_peer_service_ready_harness(root: &Path, evidence: DeliveryEvidence) -> Result<TwoPeerHarness> {
     let payload = record("service-ready", vec![string("db")]);
     let pattern = RuntimeValue::new(payload.clone())?;
     let mut peer_b = RuntimeState::new(1);
@@ -824,12 +810,12 @@ pub fn two_peer_service_ready_harness(root: &Path, evidence: RemoteDeliveryEvide
         pattern,
     });
     let replayed_events = replay_delivery_log(&mut replay_peer_b, &delivery_log)?;
-    let receipt_value = remote_dataspace_gate_receipt_value(
+    let receipt_value = gate_receipt_value(
         &delivery_log,
         std::slice::from_ref(&applied.admission_receipt_value),
         std::slice::from_ref(&applied.turn_journal_context_ref),
     )?;
-    Ok(RemoteTwoPeerHarness {
+    Ok(TwoPeerHarness {
         delivery_log,
         admission_receipt_value: applied.admission_receipt_value,
         receipt_value,
@@ -838,7 +824,7 @@ pub fn two_peer_service_ready_harness(root: &Path, evidence: RemoteDeliveryEvide
     })
 }
 
-pub fn turn_journal_context_ref(delivery: &RemoteDataspaceDelivery) -> Result<String> {
+pub fn turn_journal_context_ref(delivery: &Delivery) -> Result<String> {
     let transport_receipt_ref = canonical_hash(&delivery.receipt_value)?;
     let context = record("remote-dataspace-turn-context-v1", vec![
         record("envelope", vec![string(&delivery.envelope.envelope_ref)]),
@@ -853,7 +839,7 @@ pub fn turn_journal_context_ref(delivery: &RemoteDataspaceDelivery) -> Result<St
     canonical_hash(&context)
 }
 
-pub fn remote_actor_id(envelope: &RemoteDataspaceEnvelope) -> String {
+pub fn remote_actor_id(envelope: &Envelope) -> String {
     remote_actor_id_parts(&envelope.from_peer, &envelope.from_actor)
 }
 
@@ -875,7 +861,7 @@ pub fn transport_receipt_value(input: LocalTransportReceiptInput<'_>) -> IoValue
 
 pub fn transport_receipt_value_for_transport(input: TransportReceiptInput<'_>) -> IoValue {
     record("remote-dataspace-transport-receipt-v1", vec![
-        string(REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA),
+        string(TRANSPORT_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("transport", vec![string(input.transport)]),
@@ -900,7 +886,7 @@ pub fn transport_receipt_value_for_transport(input: TransportReceiptInput<'_>) -
 
 fn remote_admission_receipt_value(input: AdmissionReceiptInput<'_>) -> IoValue {
     record("remote-dataspace-admission-receipt-v1", vec![
-        string(REMOTE_DATASPACE_ADMISSION_RECEIPT_SCHEMA),
+        string(ADMISSION_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("envelope", vec![string(&input.envelope.envelope_ref)]),
         record("transport-receipt", vec![string(input.transport_receipt_ref)]),
@@ -924,7 +910,7 @@ fn remote_admission_receipt_value(input: AdmissionReceiptInput<'_>) -> IoValue {
     ])
 }
 
-fn validate_delivery_evidence(envelope: &RemoteDataspaceEnvelope, evidence: &RemoteDeliveryEvidence) -> Result<()> {
+fn validate_delivery_evidence(envelope: &Envelope, evidence: &DeliveryEvidence) -> Result<()> {
     require_non_empty_refs(&evidence.peer_bootstrap_refs, "peer bootstrap ref")?;
     require_non_empty_refs(&evidence.capability_refs, "capability ref")?;
     require_non_empty_refs(&evidence.policy_refs, "policy ref")?;
@@ -966,7 +952,7 @@ struct EnvelopeOperationRefInput<'a> {
     from_actor: &'a str,
     to_peer: &'a str,
     topic: &'a str,
-    operation: RemoteDataspaceOperation,
+    operation: Operation,
     payload: &'a IoValue,
     capability_refs: &'a [String],
     evidence_refs: &'a [String],
@@ -992,7 +978,7 @@ fn envelope_policy_refs(capability_refs: &[String], evidence_refs: &[String]) ->
         .len()
         .checked_add(evidence_refs.len())
         .ok_or_else(|| MoltenError::invalid_harness("remote dataspace policy ref count overflow"))?;
-    ensure_count_at_most(total, MAX_REMOTE_REPLAY_EVENTS, "remote dataspace operation policy refs")?;
+    ensure_count_at_most(total, MAX_REPLAY_EVENTS, "remote dataspace operation policy refs")?;
     let mut refs = Vec::with_capacity(total);
     refs.extend(capability_refs.iter().cloned());
     refs.extend(evidence_refs.iter().cloned());
@@ -1009,7 +995,7 @@ fn payload_delivery_sequence(payload: &IoValue) -> Result<u64> {
     Ok(1)
 }
 
-fn envelope_value(input: &RemoteDataspaceEnvelopeInput) -> Result<IoValue> {
+fn envelope_value(input: &EnvelopeInput) -> Result<IoValue> {
     let delivery_sequence = payload_delivery_sequence(&input.payload)?;
     let operation_ref = envelope_operation_ref(EnvelopeOperationRefInput {
         from_peer: &input.from_peer,
@@ -1023,7 +1009,7 @@ fn envelope_value(input: &RemoteDataspaceEnvelopeInput) -> Result<IoValue> {
         sequence: delivery_sequence,
     })?;
     Ok(record("remote-dataspace-envelope-v1", vec![
-        string(REMOTE_DATASPACE_ENVELOPE_SCHEMA),
+        string(ENVELOPE_SCHEMA),
         record("from-peer", vec![string(&input.from_peer)]),
         record("from-actor", vec![string(&input.from_actor)]),
         record("to-peer", vec![string(&input.to_peer)]),
@@ -1038,7 +1024,7 @@ fn envelope_value(input: &RemoteDataspaceEnvelopeInput) -> Result<IoValue> {
     ]))
 }
 
-fn validate_envelope_identity(envelope: &RemoteDataspaceEnvelope) -> Result<()> {
+fn validate_envelope_identity(envelope: &Envelope) -> Result<()> {
     let actual_ref = canonical_hash(&envelope.value)?;
     if actual_ref != envelope.envelope_ref {
         return Err(MoltenError::invalid_harness(format!(
@@ -1128,7 +1114,7 @@ fn filename_for_ref(reference: &str) -> Result<String> {
     Ok(format!("blake3_{hex}.bin"))
 }
 
-fn parse_delivery_log_entry(value: &Value<IoValue>) -> Result<RemoteDataspaceDelivery> {
+fn parse_delivery_log_entry(value: &Value<IoValue>) -> Result<Delivery> {
     let value = value_to_iovalue(value);
     let (fields, has_operation_ref, has_idempotency_receipt) =
         if let Some(fields) = value.collect_simple_record("entry", Some(5)) {
@@ -1164,7 +1150,7 @@ fn parse_delivery_log_entry(value: &Value<IoValue>) -> Result<RemoteDataspaceDel
             return Err(MoltenError::invalid_harness("remote delivery log idempotency receipt mismatch"));
         }
     }
-    Ok(RemoteDataspaceDelivery {
+    Ok(Delivery {
         envelope,
         receipt_value,
     })
@@ -1300,12 +1286,12 @@ mod tests {
     fn missing_or_tampered_content_ref_is_rejected_before_delivery() {
         let root = temp_dir("remote-dataspace-content-ref");
         let content_ref = store_content_blob(&root, b"large payload").expect("store content");
-        let envelope = build_envelope(RemoteDataspaceEnvelopeInput {
+        let envelope = build_envelope(EnvelopeInput {
             from_peer: "peer:a".to_owned(),
             from_actor: "producer".to_owned(),
             to_peer: "peer:b".to_owned(),
             topic: "services".to_owned(),
-            operation: RemoteDataspaceOperation::Assert,
+            operation: Operation::Assert,
             payload: record("content-ref", vec![string(&content_ref)]),
             content_refs: vec![content_ref.clone()],
             capability_refs: Vec::new(),
@@ -1320,7 +1306,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_dataspace_refs_reject_malformed_content_refs() {
+    fn refs_reject_malformed_content_refs() {
         for reference in [
             "blake3:short",
             "blake3:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -1357,12 +1343,9 @@ mod tests {
             crate::ledger::artifact_kind(&applied.admission_receipt_value),
             "remote-dataspace-admission-receipt"
         );
-        let missing = admit_and_apply_delivered_envelope(
-            &mut RuntimeState::new(1),
-            &delivery,
-            &RemoteDeliveryEvidence::default(),
-        )
-        .expect_err("missing evidence denies before applying");
+        let missing =
+            admit_and_apply_delivered_envelope(&mut RuntimeState::new(1), &delivery, &DeliveryEvidence::default())
+                .expect_err("missing evidence denies before applying");
         assert!(missing.to_string().contains("peer bootstrap"));
     }
 
@@ -1415,7 +1398,7 @@ mod tests {
         assert_conflict_case(&root, &mut state, &evidence);
     }
 
-    fn assert_conflict_case(root: &Path, state: &mut RuntimeState, evidence: &RemoteDeliveryEvidence) {
+    fn assert_conflict_case(root: &Path, state: &mut RuntimeState, evidence: &DeliveryEvidence) {
         let changed = assert_envelope(AssertEnvelopeInput {
             from_peer: "peer:a",
             from_actor: "producer",
@@ -1534,12 +1517,12 @@ mod tests {
         let root = temp_dir("remote-dataspace-negative-admission");
         let capability_ref = fake_ref("capability-required");
         let bootstrap_ref = fake_ref("bootstrap-required");
-        let envelope = build_envelope(RemoteDataspaceEnvelopeInput {
+        let envelope = build_envelope(EnvelopeInput {
             from_peer: "peer:a".to_owned(),
             from_actor: "producer".to_owned(),
             to_peer: "peer:b".to_owned(),
             topic: "services".to_owned(),
-            operation: RemoteDataspaceOperation::Assert,
+            operation: Operation::Assert,
             payload: record("service-ready", vec![string("db")]),
             content_refs: Vec::new(),
             capability_refs: vec![capability_ref.clone()],
@@ -1560,8 +1543,8 @@ mod tests {
         assert!(denied.to_string().contains("capability evidence"));
     }
 
-    fn evidence_fixture() -> RemoteDeliveryEvidence {
-        RemoteDeliveryEvidence {
+    fn evidence_fixture() -> DeliveryEvidence {
+        DeliveryEvidence {
             peer_bootstrap_refs: vec![fake_ref("bootstrap")],
             capability_refs: vec![fake_ref("capability")],
             policy_refs: vec![fake_ref("policy")],

@@ -78,7 +78,7 @@ fn run_two_peer(transport_root: FilePath, out: FilePath) -> Outcome<()> {
     Ok(())
 }
 
-fn write_two_peer_outputs(out: &FilePathRef, harness: &molten::remote_dataspace::RemoteTwoPeerHarness) -> Outcome<()> {
+fn write_two_peer_outputs(out: &FilePathRef, harness: &molten::remote_dataspace::TwoPeerHarness) -> Outcome<()> {
     super::io::write_file(
         &out.join("delivery-log.preserves"),
         &molten::preserves_rail::to_text(&harness.delivery_log.value)?,
@@ -101,7 +101,7 @@ fn write_two_peer_outputs(out: &FilePathRef, harness: &molten::remote_dataspace:
 }
 
 fn two_peer_summary(
-    harness: &molten::remote_dataspace::RemoteTwoPeerHarness,
+    harness: &molten::remote_dataspace::TwoPeerHarness,
     turn_context_ref: &str,
 ) -> Outcome<preserves::IOValue> {
     Ok(molten::preserves_rail::record("remote-dataspace-summary-v1", vec![
@@ -130,7 +130,7 @@ fn gate(
         .iter()
         .map(|path| super::io::read_preserves_file(path))
         .collect::<Outcome<Vec<_>>>()?;
-    let receipt = molten::remote_dataspace::remote_dataspace_gate_receipt_value(&log, &receipts, &turn_context_refs)?;
+    let receipt = molten::remote_dataspace::gate_receipt_value(&log, &receipts, &turn_context_refs)?;
     super::io::emit_named_receipt(receipt_out.as_ref(), "remote dataspace gate receipt", &receipt)
 }
 
@@ -150,18 +150,17 @@ fn run_remote_envelope_command(command: EnvelopeCommand) -> Outcome<()> {
         } => {
             let payload = super::io::read_preserves_file(&payload)?;
             let operation = parse_remote_operation(&operation)?;
-            let envelope =
-                molten::remote_dataspace::build_envelope(molten::remote_dataspace::RemoteDataspaceEnvelopeInput {
-                    from_peer,
-                    from_actor,
-                    to_peer,
-                    topic,
-                    operation,
-                    payload,
-                    content_refs,
-                    capability_refs,
-                    evidence_refs,
-                })?;
+            let envelope = molten::remote_dataspace::build_envelope(molten::remote_dataspace::EnvelopeInput {
+                from_peer,
+                from_actor,
+                to_peer,
+                topic,
+                operation,
+                payload,
+                content_refs,
+                capability_refs,
+                evidence_refs,
+            })?;
             super::io::write_file(&out, &molten::preserves_rail::to_text(&envelope.value)?)?;
             println!("remote envelope {} written to {}", envelope.envelope_ref, out.display());
             Ok(())
@@ -169,20 +168,20 @@ fn run_remote_envelope_command(command: EnvelopeCommand) -> Outcome<()> {
     }
 }
 
-fn parse_remote_operation(operation: &str) -> Outcome<molten::remote_dataspace::RemoteDataspaceOperation> {
+fn parse_remote_operation(operation: &str) -> Outcome<molten::remote_dataspace::Operation> {
     match operation {
-        "message" => Ok(molten::remote_dataspace::RemoteDataspaceOperation::Message),
-        "assert" => Ok(molten::remote_dataspace::RemoteDataspaceOperation::Assert),
-        "retract" => Ok(molten::remote_dataspace::RemoteDataspaceOperation::Retract),
-        "observe" => Ok(molten::remote_dataspace::RemoteDataspaceOperation::Observe),
+        "message" => Ok(molten::remote_dataspace::Operation::Message),
+        "assert" => Ok(molten::remote_dataspace::Operation::Assert),
+        "retract" => Ok(molten::remote_dataspace::Operation::Retract),
+        "observe" => Ok(molten::remote_dataspace::Operation::Observe),
         _ => Err(molten::error::MoltenError::invalid_harness(format!(
             "unsupported remote dataspace operation {operation}; expected message/assert/retract/observe"
         ))),
     }
 }
 
-fn remote_evidence_fixture() -> Outcome<molten::remote_dataspace::RemoteDeliveryEvidence> {
-    Ok(molten::remote_dataspace::RemoteDeliveryEvidence {
+fn remote_evidence_fixture() -> Outcome<molten::remote_dataspace::DeliveryEvidence> {
+    Ok(molten::remote_dataspace::DeliveryEvidence {
         peer_bootstrap_refs: vec![remote_cli_synthetic_ref("remote-bootstrap")?],
         capability_refs: vec![remote_cli_synthetic_ref("remote-capability")?],
         policy_refs: vec![remote_cli_synthetic_ref("remote-policy")?],
