@@ -1,18 +1,34 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+type ChunkManifest = crate::chunk_store::ChunkManifest;
+type ChunkTransforms = crate::chunk_store::ChunkTransforms;
+type IoValue = preserves::IOValue;
+type Map<K, V> = std::collections::BTreeMap<K, V>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type Set<T> = std::collections::BTreeSet<T>;
 
-use preserves::IOValue;
+fn content_ref_from_blake3_hash(hash: blake3::Hash) -> String {
+    crate::preserves_rail::content_ref_from_blake3_hash(hash)
+}
 
-use crate::chunk_store::ChunkManifest;
-use crate::chunk_store::ChunkTransforms;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::content_ref_from_blake3_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IoValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
 
 pub const OPERATOR_GATEWAY_READ_SCHEMA: &str = "molten.operator.gateway-read-receipt.v1";
 pub const OPERATOR_GATEWAY_RANGE_SCHEMA: &str = "molten.operator.gateway-range-receipt.v1";
@@ -74,13 +90,13 @@ pub struct GatewayReadDecision {
     pub normalized_range: Option<GatewayRange>,
     pub required_chunk_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone)]
 pub struct GatewayRangeVerificationInput<'a> {
     pub read: GatewayReadInput<'a>,
-    pub chunk_bytes: BTreeMap<String, Vec<u8>>,
+    pub chunk_bytes: Map<String, Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,7 +107,7 @@ pub struct GatewayRangeVerification {
     pub chunk_refs: Vec<String>,
     pub bytes: Vec<u8>,
     pub diagnostics: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,7 +143,7 @@ pub struct GatewayIndexDecision {
     pub bundle_ref: String,
     pub entries: Vec<GatewayIndexEntry>,
     pub diagnostics: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 trait DiagnosticSink {
@@ -263,7 +279,7 @@ pub fn decide_index(input: &GatewayIndexInput) -> Result<GatewayIndexDecision> {
     collect_ref_diagnostics(std::slice::from_ref(&input.requester_ref), "requester", &mut diagnostics)?;
     collect_visibility_diagnostics(&input.visibility, &mut diagnostics)?;
     validate_count(input.members.len(), MAX_GATEWAY_MEMBERS, "gateway index member")?;
-    let hidden = input.visibility.hidden_refs.iter().collect::<BTreeSet<_>>();
+    let hidden = input.visibility.hidden_refs.iter().collect::<Set<_>>();
     let entry_capacity = input.members.len().min(MAX_GATEWAY_MEMBERS);
     let mut entries = Vec::with_capacity(entry_capacity);
     for member in &input.members {
@@ -316,7 +332,7 @@ pub fn decide_index(input: &GatewayIndexInput) -> Result<GatewayIndexDecision> {
     })
 }
 
-pub fn gateway_receipt_authorizes_mutation(_receipt: &IOValue) -> bool {
+pub fn gateway_receipt_authorizes_mutation(_receipt: &IoValue) -> bool {
     false
 }
 
@@ -383,7 +399,7 @@ fn required_chunks_for_range(
 fn reconstruct_verified_range(
     manifest: &ChunkManifest,
     range: GatewayRange,
-    chunks: &BTreeMap<String, Vec<u8>>,
+    chunks: &Map<String, Vec<u8>>,
     chunk_size: usize,
     diagnostics: &mut impl DiagnosticSink,
 ) -> Result<Vec<u8>> {
@@ -452,7 +468,7 @@ struct ReadReceiptInput<'a> {
     diagnostics: &'a [String],
 }
 
-fn read_receipt_value(input: ReadReceiptInput<'_>) -> Result<IOValue> {
+fn read_receipt_value(input: ReadReceiptInput<'_>) -> Result<IoValue> {
     Ok(record("operator-gateway-read-receipt-v1", vec![
         string(OPERATOR_GATEWAY_READ_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -480,7 +496,7 @@ struct RangeReceiptInput<'a> {
     diagnostics: &'a [String],
 }
 
-fn range_receipt_value(input: RangeReceiptInput<'_>) -> Result<IOValue> {
+fn range_receipt_value(input: RangeReceiptInput<'_>) -> Result<IoValue> {
     Ok(record("operator-gateway-range-receipt-v1", vec![
         string(OPERATOR_GATEWAY_RANGE_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -506,7 +522,7 @@ struct IndexReceiptInput<'a> {
     diagnostics: &'a [String],
 }
 
-fn index_receipt_value(input: IndexReceiptInput<'_>) -> Result<IOValue> {
+fn index_receipt_value(input: IndexReceiptInput<'_>) -> Result<IoValue> {
     Ok(record("operator-gateway-index-receipt-v1", vec![
         string(OPERATOR_GATEWAY_INDEX_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -525,7 +541,7 @@ fn index_receipt_value(input: IndexReceiptInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-fn visibility_value(visibility: &GatewayVisibility) -> Result<IOValue> {
+fn visibility_value(visibility: &GatewayVisibility) -> Result<IoValue> {
     Ok(record("visibility", vec![
         record("profile", vec![string(&visibility.profile)]),
         record("policy", vec![refs_value(&visibility.visibility_policy_refs)?]),
@@ -535,7 +551,7 @@ fn visibility_value(visibility: &GatewayVisibility) -> Result<IOValue> {
     ]))
 }
 
-fn index_entry_value(entry: &GatewayIndexEntry) -> IOValue {
+fn index_entry_value(entry: &GatewayIndexEntry) -> IoValue {
     record("entry", vec![
         record("name", vec![string(&entry.name)]),
         record("object", vec![optional_string_value(entry.object_ref.as_deref())]),
@@ -545,7 +561,7 @@ fn index_entry_value(entry: &GatewayIndexEntry) -> IOValue {
     ])
 }
 
-fn range_value(range: Option<GatewayRange>) -> IOValue {
+fn range_value(range: Option<GatewayRange>) -> IoValue {
     match range {
         Some(range) => record("some", vec![
             record("offset", vec![u64_value(range.offset)]),
@@ -611,31 +627,31 @@ fn push_diagnostic(diagnostics: &mut impl DiagnosticSink, diagnostic: impl Into<
     diagnostics.push_bounded(diagnostic.into())
 }
 
-fn refs_value(refs: &[String]) -> Result<IOValue> {
+fn refs_value(refs: &[String]) -> Result<IoValue> {
     validate_count(refs.len(), MAX_GATEWAY_REFS, "gateway ref")?;
     Ok(sequence(refs.iter().map(string).collect()))
 }
 
-fn strings_value(values: &[String]) -> Result<IOValue> {
+fn strings_value(values: &[String]) -> Result<IoValue> {
     validate_count(values.len(), MAX_GATEWAY_DIAGNOSTICS, "gateway string")?;
     Ok(sequence(values.iter().map(string).collect()))
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     match value {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn optional_u64_value(value: Option<u64>) -> IOValue {
+fn optional_u64_value(value: Option<u64>) -> IoValue {
     match value {
         Some(value) => record("some", vec![u64_value(value)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn checks_value(checks: &[(&'static str, &'static str)]) -> IOValue {
+fn checks_value(checks: &[(&'static str, &'static str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
@@ -691,7 +707,7 @@ mod tests {
         }
     }
 
-    fn manifest_fixture() -> (PathBuf, ChunkManifest, BTreeMap<String, Vec<u8>>) {
+    fn manifest_fixture() -> (PathBuf, ChunkManifest, Map<String, Vec<u8>>) {
         let root = temp_root("range");
         let body = b"abcdefghi";
         let put = chunk_store::put_bytes(&root, "artifact", body, CHUNK_SIZE).expect("put");
@@ -707,7 +723,7 @@ mod tests {
                 let end = (start + chunk_size).min(body.len());
                 (chunk.chunk_ref.clone(), body[start..end].to_vec())
             })
-            .collect::<BTreeMap<_, _>>();
+            .collect::<Map<_, _>>();
         (root, manifest, chunks)
     }
 
