@@ -2545,7 +2545,7 @@ struct LocalRunState<'a> {
     job_source_root: std::path::PathBuf,
     job_target_root: std::path::PathBuf,
     retention_root: std::path::PathBuf,
-    retention_bundle_root: std::path::PathBuf,
+    bundle_root: std::path::PathBuf,
     policy_refs: Vec<String>,
     capability_refs: Vec<String>,
     resource_refs: Vec<String>,
@@ -2569,7 +2569,7 @@ impl<'a> LocalRunState<'a> {
             job_source_root: state_root.join("job-source-registry"),
             job_target_root: state_root.join("job-target-registry"),
             retention_root: state_root.join("retention-store"),
-            retention_bundle_root: state_root.join("retention-bundle"),
+            bundle_root: state_root.join("retention-bundle"),
             policy_refs: vec![dogfood_ref("operator-policy")?],
             capability_refs: vec![dogfood_ref("operator-capability")?],
             resource_refs: vec![dogfood_ref("operator-resource")?],
@@ -2641,7 +2641,7 @@ impl<'a> LocalRunState<'a> {
     fn record_gc(&mut self) -> Result<GcRun> {
         let retention_gc = record_gc_steps(GcStepInput {
             root: &self.retention_root,
-            bundle_dir: &self.retention_bundle_root,
+            bundle_dir: &self.bundle_root,
             ledger_root: &self.ledger_root,
             registry_root: &self.registry_root,
             state_root_ref: &self.state_root_ref,

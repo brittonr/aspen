@@ -30,7 +30,7 @@ fn deny_pinned_delete(dir: &Path, fixture: &RetentionFixture) {
         Some(denied_receipt.clone()),
     ))
     .expect("deny pinned delete");
-    let denied = molten::retention::parse_retention_receipt(
+    let denied = molten::retention::parse_receipt(
         &read_preserves_file(&denied_receipt).expect("read denied receipt"),
     )
     .expect("parse denied receipt");
@@ -58,7 +58,7 @@ fn tombstone_retention_object(dir: &Path, fixture: &RetentionFixture) {
         Some(tombstone_receipt.clone()),
     ))
     .expect("tombstone retention object");
-    let tombstone = molten::retention::parse_retention_receipt(
+    let tombstone = molten::retention::parse_receipt(
         &read_preserves_file(&tombstone_receipt).expect("read tombstone receipt"),
     )
     .expect("parse tombstone receipt");

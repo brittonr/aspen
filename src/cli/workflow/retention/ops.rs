@@ -238,6 +238,6 @@ pub(crate) fn run_fixture(args: super::command::ops::RunFixture) -> molten::erro
 pub(crate) fn show(args: super::command::ops::Show) -> molten::error::Result<()> {
     let super::command::ops::Show { artifact } = args;
     let value = super::io::read_preserves_file(&artifact)?;
-    println!("{}", molten::retention::retention_summary(&value)?);
+    println!("{}", molten::retention::summary(&value)?);
     Ok(())
 }

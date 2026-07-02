@@ -1284,7 +1284,7 @@ fn retention_tail_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
         push_optional_classification(&mut classifications, "retention-subsystem", verify.subsystem.as_deref())?;
         return Ok(Some(classifications));
     }
-    if let Ok(receipt) = crate::retention::parse_retention_receipt(value) {
+    if let Ok(receipt) = crate::retention::parse_receipt(value) {
         return Ok(Some(vec![
             "retention:receipt".to_string(),
             format!("retention-decision:{}", receipt.decision),

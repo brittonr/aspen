@@ -902,7 +902,7 @@ fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<Strin
     let mut has_matching_pass = false;
     let mut has_matching_tombstone = false;
     for receipt_value in &input.retention_receipts {
-        match crate::retention::parse_retention_receipt(receipt_value) {
+        match crate::retention::parse_receipt(receipt_value) {
             Ok(receipt) => {
                 actual_refs.insert(receipt.receipt_ref.clone());
                 let is_cleanup_action = matches!(

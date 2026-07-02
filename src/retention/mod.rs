@@ -933,7 +933,7 @@ pub fn parse_class_profile(value: &IoValue) -> Result<ClassProfile> {
     let deletion_authority_ref = record_ref(&fields[4], "deletion-authority")?;
     let policy_refs = record_ref_sequence(&fields[5], "policy")?;
     let diagnostics = record_string_sequence(&fields[7], "diagnostics")?;
-    validate_retention_class(&class_name)?;
+    validate_class(&class_name)?;
     require_check(&parse_checks(&fields[8])?, "mutable-name-not-gc-proof", "retention class profile")?;
     Ok(ClassProfile {
         profile_ref: crate::preserves_rail::canonical_hash(value)?,
@@ -985,7 +985,7 @@ pub fn parse_pin(value: &IoValue) -> Result<Pin> {
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "object-ref-bound", "retention pin")?;
     require_check(&checks, "pin-source-bound", "retention pin")?;
-    validate_retention_class(&retention_class)?;
+    validate_class(&retention_class)?;
     validate_pin_source(&source)?;
     Ok(Pin {
         pin_ref: crate::preserves_rail::canonical_hash(value)?,
@@ -1163,7 +1163,7 @@ pub fn reference_index_for_object(input: ReferenceIndexForObjectInput<'_>) -> Re
 
 pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
     ensure_store(input.root)?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention object ref")?;
     validate_name(input.object_kind, "retention object kind")?;
@@ -1180,7 +1180,7 @@ pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
         remote_refs: input.remote_refs,
         is_complete: input.is_reference_index_complete,
     })?;
-    let diagnostics = retention_diagnostics(&input, &index)?;
+    let diagnostics = evaluation_diagnostics(&input, &index)?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let mut tombstone = None;
     let mut tombstone_ref = None;
@@ -1273,7 +1273,7 @@ pub fn parse_evidence_admission(value: &IoValue) -> Result<EvidenceAdmission> {
     let requester_ref = record_ref(&fields[3], "requester")?;
     let (object_ref, object_kind) = parse_object_value(&fields[4])?;
     let retention_class = record_string(&fields[5], "class")?;
-    validate_retention_class(&retention_class)?;
+    validate_class(&retention_class)?;
     let action = record_string(&fields[6], "action")?;
     validate_action(&action)?;
     let bound_refs = record_ref_sequence(&fields[7], "bound")?;
@@ -1355,7 +1355,7 @@ pub fn parse_remote_gc_clearance(value: &IoValue) -> Result<RemoteGcClearance> {
     let peer_ref = record_ref(&fields[3], "peer")?;
     let (object_ref, object_kind) = parse_object_value(&fields[4])?;
     let retention_class = record_string(&fields[5], "class")?;
-    validate_retention_class(&retention_class)?;
+    validate_class(&retention_class)?;
     let action = record_string(&fields[6], "action")?;
     validate_action(&action)?;
     let remote_ref = record_ref(&fields[7], "remote")?;
@@ -2542,7 +2542,7 @@ struct GateAdmissions {
     remote_gc: AdmissionRefsResult,
 }
 
-struct RetentionGateInputs<'a> {
+struct GateInputs<'a> {
     input: &'a GcPlanInput<'a>,
     policy: AdmissionRefsResult,
     authority: AdmissionRefsResult,
@@ -2837,7 +2837,7 @@ fn is_clearance_complete(
     has_local_plan && has_remote_refs && has_remote_peers
 }
 
-fn retention_gate_inputs<'a>(input: &'a GcPlanInput<'a>) -> Result<RetentionGateInputs<'a>> {
+fn gate_inputs<'a>(input: &'a GcPlanInput<'a>) -> Result<GateInputs<'a>> {
     let scope = gate_scope(input);
     let admissions = gate_admissions(input, &scope)?;
     let remote_clearance = gate_remote_clearance(input, &scope)?;
@@ -2848,7 +2848,7 @@ fn retention_gate_inputs<'a>(input: &'a GcPlanInput<'a>) -> Result<RetentionGate
         && !admissions.supporting.admitted_refs.is_empty()
         && (!input.evidence.is_reference_index_complete || !admissions.reference_index.admitted_refs.is_empty())
         && has_remote_gc_clearance;
-    Ok(RetentionGateInputs {
+    Ok(GateInputs {
         input,
         policy: admissions.policy,
         authority: admissions.authority,
@@ -2861,7 +2861,7 @@ fn retention_gate_inputs<'a>(input: &'a GcPlanInput<'a>) -> Result<RetentionGate
     })
 }
 
-fn retention_plan_gates(input: &RetentionGateInputs<'_>, index: &ReferenceIndex) -> Result<Vec<PlanGate>> {
+fn retention_plan_gates(input: &GateInputs<'_>, index: &ReferenceIndex) -> Result<Vec<PlanGate>> {
     let mut gates = Vec::new();
     push_access_gates(&mut gates, input)?;
     push_index_gates(&mut gates, input, index)?;
@@ -2869,7 +2869,7 @@ fn retention_plan_gates(input: &RetentionGateInputs<'_>, index: &ReferenceIndex)
     Ok(gates)
 }
 
-fn push_access_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGateInputs<'_>) -> Result<()> {
+fn push_access_gates(gates: &mut impl VecSink<PlanGate>, input: &GateInputs<'_>) -> Result<()> {
     push_bounded(
         gates,
         requester_gate(input.input.evidence.requester_ref.as_deref())?,
@@ -2878,7 +2878,7 @@ fn push_access_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGateIn
     )?;
     push_bounded(
         gates,
-        retention_plan_gate(PlanGateBuildInput {
+        plan_gate(PlanGateBuildInput {
             name: "policy",
             is_required: true,
             required_refs: &input.input.evidence.policy_refs,
@@ -2894,7 +2894,7 @@ fn push_access_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGateIn
     )?;
     push_bounded(
         gates,
-        retention_plan_gate(PlanGateBuildInput {
+        plan_gate(PlanGateBuildInput {
             name: "authority",
             is_required: is_destructive_action(input.input.action),
             required_refs: &input.input.evidence.authority_refs,
@@ -2910,7 +2910,7 @@ fn push_access_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGateIn
     )?;
     push_bounded(
         gates,
-        retention_plan_gate(PlanGateBuildInput {
+        plan_gate(PlanGateBuildInput {
             name: "supporting-evidence",
             is_required: is_destructive_action(input.input.action),
             required_refs: &input.input.evidence.evidence_refs,
@@ -2927,14 +2927,10 @@ fn push_access_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGateIn
     Ok(())
 }
 
-fn push_index_gates(
-    gates: &mut impl VecSink<PlanGate>,
-    input: &RetentionGateInputs<'_>,
-    index: &ReferenceIndex,
-) -> Result<()> {
+fn push_index_gates(gates: &mut impl VecSink<PlanGate>, input: &GateInputs<'_>, index: &ReferenceIndex) -> Result<()> {
     push_bounded(
         gates,
-        retention_plan_gate(PlanGateBuildInput {
+        plan_gate(PlanGateBuildInput {
             name: "reference-index",
             is_required: input.input.evidence.is_reference_index_complete,
             required_refs: &input.input.evidence.reference_index_refs,
@@ -2958,10 +2954,10 @@ fn push_index_gates(
     Ok(())
 }
 
-fn push_external_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGateInputs<'_>) -> Result<()> {
+fn push_external_gates(gates: &mut impl VecSink<PlanGate>, input: &GateInputs<'_>) -> Result<()> {
     push_bounded(
         gates,
-        retention_plan_gate(PlanGateBuildInput {
+        plan_gate(PlanGateBuildInput {
             name: "remote-gc",
             is_required: is_destructive_action(input.input.action) && !input.input.evidence.remote_refs.is_empty(),
             required_refs: &input.input.evidence.remote_gc_refs,
@@ -2979,7 +2975,7 @@ fn push_external_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGate
     )?;
     push_bounded(
         gates,
-        retention_plan_gate(PlanGateBuildInput {
+        plan_gate(PlanGateBuildInput {
             name: "remote-clearance",
             is_required: is_destructive_action(input.input.action)
                 && (!input.input.evidence.remote_refs.is_empty() || !input.input.evidence.remote_peer_refs.is_empty()),
@@ -3001,7 +2997,7 @@ fn push_external_gates(gates: &mut impl VecSink<PlanGate>, input: &RetentionGate
     let empty_refs = Vec::new();
     push_bounded(
         gates,
-        retention_plan_gate(PlanGateBuildInput {
+        plan_gate(PlanGateBuildInput {
             name: "evidence-only-boundary",
             is_required: false,
             required_refs: &empty_refs,
@@ -3021,7 +3017,7 @@ fn requester_gate(requester_ref: Option<&str>) -> Result<PlanGate> {
     } else {
         vec!["retention-requester-missing".to_string()]
     };
-    retention_plan_gate(PlanGateBuildInput {
+    plan_gate(PlanGateBuildInput {
         name: "requester",
         is_required: true,
         required_refs: &required_refs,
@@ -3050,14 +3046,14 @@ fn local_retention_gate(input: LocalRetentionGateInput<'_>) -> Result<PlanGate> 
         has_delete_authority: input.has_delete_authority,
         has_remote_gc_clearance: input.has_remote_gc_clearance,
     };
-    let diagnostics = retention_diagnostics(&local_input, input.index)?;
+    let diagnostics = evaluation_diagnostics(&local_input, input.index)?;
     let required_refs = vec![input.index.index_ref.clone()];
     let admitted_refs = if diagnostics.is_empty() {
         required_refs.clone()
     } else {
         Vec::new()
     };
-    retention_plan_gate(PlanGateBuildInput {
+    plan_gate(PlanGateBuildInput {
         name: "local-retention",
         is_required: true,
         required_refs: &required_refs,
@@ -3081,7 +3077,7 @@ fn diagnostics_with_missing(input: MissingDiagnosticInput<'_>) -> Result<Vec<Str
     Ok(diagnostics)
 }
 
-fn reference_index_gate_diagnostics(input: &RetentionGateInputs<'_>) -> Result<Vec<String>> {
+fn reference_index_gate_diagnostics(input: &GateInputs<'_>) -> Result<Vec<String>> {
     let mut diagnostics = input.reference_index.diagnostics.clone();
     if !input.input.evidence.is_reference_index_complete {
         push_bounded(
@@ -3119,7 +3115,7 @@ fn remote_clearance_gate_diagnostics(input: RemoteClearanceGateInput<'_>) -> Res
     Ok(diagnostics)
 }
 
-fn retention_plan_gate(input: PlanGateBuildInput<'_>) -> Result<PlanGate> {
+fn plan_gate(input: PlanGateBuildInput<'_>) -> Result<PlanGate> {
     validate_name(input.name, "retention GC plan gate name")?;
     validate_refs(input.required_refs, "retention GC plan required ref")?;
     validate_refs(input.admitted_refs, "retention GC plan admitted ref")?;
@@ -3158,17 +3154,12 @@ fn parse_retention_plan_gates(value: &Value<IoValue>) -> Result<Vec<PlanGate>> {
     let mut gates = Vec::with_capacity(entries.len());
     for entry in entries.iter() {
         let gate_value = crate::preserves_rail::value_to_iovalue(entry);
-        push_bounded(
-            &mut gates,
-            parse_retention_plan_gate(&gate_value)?,
-            MAX_RETENTION_REFS,
-            "retention GC plan gates",
-        )?;
+        push_bounded(&mut gates, parse_plan_gate(&gate_value)?, MAX_RETENTION_REFS, "retention GC plan gates")?;
     }
     Ok(gates)
 }
 
-fn parse_retention_plan_gate(value: &IoValue) -> Result<PlanGate> {
+fn parse_plan_gate(value: &IoValue) -> Result<PlanGate> {
     let fields = value
         .collect_simple_record("gate", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gate"))?;
@@ -3712,7 +3703,7 @@ pub fn admit_destructive_retention_evidence(input: DestructiveAdmissionInput<'_>
     validate_destructive_retention_evidence(input.evidence)?;
     require_ref(input.object_ref, "retention admission object ref")?;
     validate_name(input.object_kind, "retention admission object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     validate_action(input.action)?;
     let mut diagnostics = destructive_retention_evidence_diagnostics(input.evidence, input.action)?;
     let mut admitted_refs = Vec::new();
@@ -3774,7 +3765,7 @@ fn validate_gc_plan_input(input: &GcPlanInput<'_>) -> Result<()> {
     validate_name(input.subsystem, "retention GC plan subsystem")?;
     require_ref(input.object_ref, "retention GC plan object ref")?;
     validate_name(input.object_kind, "retention GC plan object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     validate_action(input.action)?;
     validate_destructive_retention_evidence(input.evidence)
 }
@@ -3898,7 +3889,7 @@ pub fn store_gc_plan(input: GcPlanInput<'_>) -> Result<GcPlan> {
         remote_refs: input.evidence.remote_refs.as_slice(),
         is_complete: input.evidence.is_reference_index_complete,
     })?;
-    let gate_inputs = retention_gate_inputs(&input)?;
+    let gate_inputs = gate_inputs(&input)?;
     let gates = retention_plan_gates(&gate_inputs, &index)?;
     let mut diagnostics = Vec::new();
     for gate in &gates {
@@ -3941,7 +3932,7 @@ pub fn gc_plan_value(input: &GcPlanValueInput<'_>) -> Result<IoValue> {
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention GC plan object ref")?;
     validate_name(input.object_kind, "retention GC plan object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     if let Some(requester_ref) = input.requester_ref {
         require_ref(requester_ref, "retention GC plan requester ref")?;
     }
@@ -3991,7 +3982,7 @@ pub fn parse_gc_plan(value: &IoValue) -> Result<GcPlan> {
     validate_action(&action)?;
     let (object_ref, object_kind) = parse_object_value(&fields[5])?;
     let retention_class = record_string(&fields[6], "class")?;
-    validate_retention_class(&retention_class)?;
+    validate_class(&retention_class)?;
     let requester_ref = record_optional_ref(&fields[7], "requester")?;
     let (index_ref, index) = parse_embedded_reference_index(&fields[8])?;
     if index.object_ref != object_ref || index.object_kind != object_kind {
@@ -4171,7 +4162,7 @@ fn apply_value(input: &ApplyValueInput<'_>) -> Result<IoValue> {
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention GC apply object ref")?;
     validate_name(input.object_kind, "retention GC apply object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     if let Some(requester_ref) = input.requester_ref {
         require_ref(requester_ref, "retention GC apply requester ref")?;
     }
@@ -4243,7 +4234,7 @@ pub fn parse_gc_apply(value: &IoValue) -> Result<GcApply> {
     validate_action(&action)?;
     let (object_ref, object_kind) = parse_object_value(&fields[5])?;
     let retention_class = record_string(&fields[6], "class")?;
-    validate_retention_class(&retention_class)?;
+    validate_class(&retention_class)?;
     let requester_ref = record_optional_ref(&fields[7], "requester")?;
     let plan_ref = record_ref(&fields[8], "plan")?;
     let recomputed_plan_ref = record_ref(&fields[9], "recomputed-plan")?;
@@ -4367,7 +4358,7 @@ pub fn store_gc_execution_gate(input: GcExecutionGateInput<'_>) -> Result<GcExec
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention GC execution object ref")?;
     validate_name(input.object_kind, "retention GC execution object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     let mut parts = execution_gate_parts(&input)?;
     parts.diagnostics.sort();
     parts.diagnostics.dedup();
@@ -4437,7 +4428,7 @@ fn execution_gate_receipt_diagnostics(
     receipt_ref: &str,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    match read_retention_receipt(root, receipt_ref) {
+    match read_receipt(root, receipt_ref) {
         Ok(receipt) => {
             if receipt.decision != "pass" {
                 push_bounded(
@@ -4505,7 +4496,7 @@ fn execution_gate_tombstone_diagnostics(
     receipt_ref: Option<&str>,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    match read_retention_tombstone(root, tombstone_ref) {
+    match read_tombstone(root, tombstone_ref) {
         Ok(tombstone) => {
             if tombstone.object_ref != input.object_ref
                 || tombstone.object_kind != input.object_kind
@@ -4547,7 +4538,7 @@ fn execution_gate_value(input: &ExecutionGateValueInput<'_>) -> Result<IoValue> 
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention GC execution object ref")?;
     validate_name(input.object_kind, "retention GC execution object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     if let Some(apply_ref) = input.apply_ref {
         require_ref(apply_ref, "retention GC execution apply ref")?;
     }
@@ -4613,7 +4604,7 @@ pub fn parse_gc_execution_gate(value: &IoValue) -> Result<GcExecutionGate> {
     validate_action(&action)?;
     let (object_ref, object_kind) = parse_object_value(&fields[5])?;
     let retention_class = record_string(&fields[6], "class")?;
-    validate_retention_class(&retention_class)?;
+    validate_class(&retention_class)?;
     let apply_ref = record_optional_ref(&fields[7], "apply")?;
     let plan_ref = record_optional_ref(&fields[8], "plan")?;
     let recomputed_plan_ref = record_optional_ref(&fields[9], "recomputed-plan")?;
@@ -4802,19 +4793,14 @@ fn receipt_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope
     let mut diagnostics = Vec::new();
     let mut decision = "missing".to_string();
     if let Some(receipt_ref) = execution.retention_receipt_ref.as_ref() {
-        let receipt = read_retention_receipt(root, receipt_ref)?;
+        let receipt = read_receipt(root, receipt_ref)?;
         decision.clone_from(&receipt.decision);
         if receipt.decision != "pass" {
             push_diag(&mut diagnostics, "retention-gc-audit-retention-receipt-not-pass")?;
         }
-        if !same_retention_scope(
+        if !same_audit_scope(
             &scope.retention,
-            &retention_audit_scope(
-                &receipt.action,
-                &receipt.object_ref,
-                &receipt.object_kind,
-                &receipt.retention_class,
-            ),
+            &audit_scope(&receipt.action, &receipt.object_ref, &receipt.object_kind, &receipt.retention_class),
         ) {
             push_diag(&mut diagnostics, "retention-gc-audit-retention-receipt-scope-mismatch")?;
         }
@@ -4828,16 +4814,11 @@ fn tombstone_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditSco
     let mut diagnostics = Vec::new();
     let mut status = "missing".to_string();
     if let Some(tombstone_ref) = execution.tombstone_ref.as_ref() {
-        let tombstone = read_retention_tombstone(root, tombstone_ref)?;
+        let tombstone = read_tombstone(root, tombstone_ref)?;
         status = "present".to_string();
-        if !same_retention_scope(
+        if !same_audit_scope(
             &scope.retention,
-            &retention_audit_scope(
-                &tombstone.action,
-                &tombstone.object_ref,
-                &tombstone.object_kind,
-                &tombstone.retention_class,
-            ),
+            &audit_scope(&tombstone.action, &tombstone.object_ref, &tombstone.object_kind, &tombstone.retention_class),
         ) {
             push_diag(&mut diagnostics, "retention-gc-audit-tombstone-scope-mismatch")?;
         }
@@ -4872,11 +4853,11 @@ fn gc_audit_scope<'a>(
 ) -> GcAuditScope<'a> {
     GcAuditScope {
         subsystem,
-        retention: retention_audit_scope(action, object_ref, object_kind, retention_class),
+        retention: audit_scope(action, object_ref, object_kind, retention_class),
     }
 }
 
-fn retention_audit_scope<'a>(
+fn audit_scope<'a>(
     action: &'a str,
     object_ref: &'a str,
     object_kind: &'a str,
@@ -4891,10 +4872,10 @@ fn retention_audit_scope<'a>(
 }
 
 fn same_gc_scope(left: &GcAuditScope<'_>, right: &GcAuditScope<'_>) -> bool {
-    left.subsystem == right.subsystem && same_retention_scope(&left.retention, &right.retention)
+    left.subsystem == right.subsystem && same_audit_scope(&left.retention, &right.retention)
 }
 
-fn same_retention_scope(left: &AuditScope<'_>, right: &AuditScope<'_>) -> bool {
+fn same_audit_scope(left: &AuditScope<'_>, right: &AuditScope<'_>) -> bool {
     left.action == right.action
         && left.object_ref == right.object_ref
         && left.object_kind == right.object_kind
@@ -4907,7 +4888,7 @@ fn audit_value(input: &AuditValueInput<'_>) -> Result<IoValue> {
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention GC audit object ref")?;
     validate_name(input.object_kind, "retention GC audit object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     if let Some(plan_ref) = input.plan_ref {
         require_ref(plan_ref, "retention GC audit plan ref")?;
     }
@@ -4995,7 +4976,7 @@ pub fn parse_gc_audit(value: &IoValue) -> Result<GcAudit> {
     validate_action(&action)?;
     let (object_ref, object_kind) = parse_object_value(&fields[5])?;
     let retention_class = record_string(&fields[6], "class")?;
-    validate_retention_class(&retention_class)?;
+    validate_class(&retention_class)?;
     let (plan_ref, plan_decision) = record_optional_ref_with_status(&fields[7], "plan")?;
     let (apply_ref, apply_decision) = record_optional_ref_with_status(&fields[8], "apply")?;
     let execution_fields = fields[9]
@@ -5236,7 +5217,7 @@ fn audits_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> 
 fn receipts_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_retention_refs(
         &receipts_dir(root),
-        parse_retention_receipt,
+        parse_receipt,
         |receipt| {
             filter.matches_retention(
                 &receipt.object_ref,
@@ -5359,7 +5340,7 @@ pub fn parse_candidate_explain(value: &IoValue) -> Result<CandidateExplain> {
         .ok_or_else(|| MoltenError::invalid_harness("expected retention candidate filters"))?;
     let retention_class = record_optional_string(&filter_fields[0], "class")?;
     if let Some(retention_class) = retention_class.as_deref() {
-        validate_retention_class(retention_class)?;
+        validate_class(retention_class)?;
     }
     let action = record_optional_string(&filter_fields[1], "action")?;
     if let Some(action) = action.as_deref() {
@@ -5568,7 +5549,7 @@ fn collect_retention_bundle_artifact_sensitive_markers(
     if !artifact_dir.exists() {
         return Ok(());
     }
-    for dir_name in retention_bundle_artifact_dirs() {
+    for dir_name in bundle_artifact_dirs() {
         let group_dir = artifact_dir.join(dir_name);
         if !group_dir.exists() {
             continue;
@@ -5614,7 +5595,7 @@ fn collect_retention_bundle_sensitive_markers(
         {
             push_bounded(
                 marker_refs,
-                retention_bundle_marker_ref(bundle_ref, &current_path, &label)?,
+                bundle_marker_ref(bundle_ref, &current_path, &label)?,
                 MAX_RETENTION_REFS,
                 "retention bundle profile markers",
             )?;
@@ -5624,7 +5605,7 @@ fn collect_retention_bundle_sensitive_markers(
         {
             push_bounded(
                 marker_refs,
-                retention_bundle_marker_ref(bundle_ref, &current_path, &text)?,
+                bundle_marker_ref(bundle_ref, &current_path, &text)?,
                 MAX_RETENTION_REFS,
                 "retention bundle profile markers",
             )?;
@@ -5667,7 +5648,7 @@ fn write_candidate_bundle_redacted_view(bundle_dir: &Path, bundle: &CandidateBun
         redacted_retention_bundle_value(&explain_value, "/explain", &bundle.bundle_ref, &mut ignored_markers)?;
     write_store_value(&redacted_dir.join("explain.preserves"), &redacted_explain)?;
     let artifact_dir = bundle_dir.join("artifacts");
-    for dir_name in retention_bundle_artifact_dirs() {
+    for dir_name in bundle_artifact_dirs() {
         let group_dir = artifact_dir.join(dir_name);
         if !group_dir.exists() {
             continue;
@@ -5828,7 +5809,7 @@ fn sensitive_marker(
 }
 
 fn marker_result(bundle_ref: &str, path: &str, token: &str, marker_refs: &mut impl VecSink<String>) -> Result<IoValue> {
-    let marker_ref = retention_bundle_marker_ref(bundle_ref, path, token)?;
+    let marker_ref = bundle_marker_ref(bundle_ref, path, token)?;
     push_bounded(marker_refs, marker_ref.clone(), MAX_RETENTION_REFS, "retention bundle profile markers")?;
     Ok(crate::preserves_rail::record("retention-bundle-redaction-marker", vec![
         crate::preserves_rail::string(&marker_ref),
@@ -5867,7 +5848,7 @@ fn push_visit_frames(
     Ok(())
 }
 
-fn retention_bundle_marker_ref(bundle_ref: &str, path: &str, token: &str) -> Result<String> {
+fn bundle_marker_ref(bundle_ref: &str, path: &str, token: &str) -> Result<String> {
     crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("retention-bundle-sensitive-marker", vec![
         crate::preserves_rail::string(bundle_ref),
         crate::preserves_rail::string(path),
@@ -6023,7 +6004,7 @@ pub fn parse_candidate_bundle(value: &IoValue) -> Result<CandidateBundle> {
         .ok_or_else(|| MoltenError::invalid_harness("expected retention bundle filters"))?;
     let retention_class = record_optional_string(&filter_fields[0], "class")?;
     if let Some(retention_class) = retention_class.as_deref() {
-        validate_retention_class(retention_class)?;
+        validate_class(retention_class)?;
     }
     let action = record_optional_string(&filter_fields[1], "action")?;
     if let Some(action) = action.as_deref() {
@@ -6337,7 +6318,7 @@ fn scan_retention_bundle_artifact_files(
             continue;
         }
         let dir_name = entry.file_name().to_string_lossy().into_owned();
-        if !retention_bundle_artifact_dirs().contains(&dir_name.as_str()) {
+        if !bundle_artifact_dirs().contains(&dir_name.as_str()) {
             push_bounded(
                 diagnostics,
                 "retention-bundle-unexpected-artifact-dir".to_string(),
@@ -6465,7 +6446,7 @@ fn verify_retention_bundle_artifact_group(
     Ok(())
 }
 
-fn retention_bundle_artifact_dirs() -> &'static [&'static str] {
+fn bundle_artifact_dirs() -> &'static [&'static str] {
     &[
         "gc-plans",
         "gc-applies",
@@ -6534,7 +6515,7 @@ pub fn parse_candidate_bundle_verify(value: &IoValue) -> Result<CandidateBundleV
         .ok_or_else(|| MoltenError::invalid_harness("expected retention bundle verify filters"))?;
     let retention_class = record_optional_string(&filter_fields[0], "class")?;
     if let Some(retention_class) = retention_class.as_deref() {
-        validate_retention_class(retention_class)?;
+        validate_class(retention_class)?;
     }
     let action = record_optional_string(&filter_fields[1], "action")?;
     if let Some(action) = action.as_deref() {
@@ -6596,7 +6577,7 @@ fn parse_gc_audit_kind(value: &IoValue) -> Result<()> {
 }
 
 fn parse_retention_receipt_kind(value: &IoValue) -> Result<()> {
-    parse_retention_receipt(value).map(|_| ())
+    parse_receipt(value).map(|_| ())
 }
 
 fn parse_retention_tombstone_kind(value: &IoValue) -> Result<()> {
@@ -6644,11 +6625,11 @@ fn read_gc_audit_value(root: &Path, reference: &str) -> Result<IoValue> {
 }
 
 fn read_retention_receipt_value(root: &Path, reference: &str) -> Result<IoValue> {
-    Ok(read_retention_receipt(root, reference)?.value)
+    Ok(read_receipt(root, reference)?.value)
 }
 
 fn read_retention_tombstone_value(root: &Path, reference: &str) -> Result<IoValue> {
-    Ok(read_retention_tombstone(root, reference)?.value)
+    Ok(read_tombstone(root, reference)?.value)
 }
 
 fn validate_candidate_explain_input(input: &CandidateExplainInput<'_>) -> Result<()> {
@@ -6657,7 +6638,7 @@ fn validate_candidate_explain_input(input: &CandidateExplainInput<'_>) -> Result
         validate_name(object_kind, "retention candidate object kind")?;
     }
     if let Some(retention_class) = input.retention_class {
-        validate_retention_class(retention_class)?;
+        validate_class(retention_class)?;
     }
     if let Some(action) = input.action {
         validate_action(action)?;
@@ -6797,7 +6778,7 @@ fn record_optional_ref_with_status(value: &Value<IoValue>, label: &str) -> Resul
     Ok((reference, status))
 }
 
-pub fn parse_retention_receipt(value: &IoValue) -> Result<Receipt> {
+pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     let fields = value
         .collect_simple_record("retention-receipt-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-receipt-v1 ...>"))?;
@@ -6816,7 +6797,7 @@ pub fn parse_retention_receipt(value: &IoValue) -> Result<Receipt> {
     let checks = parse_checks(&fields[13])?;
     require_check(&checks, "reference-index-bound", "retention receipt")?;
     validate_action(&action)?;
-    validate_retention_class(&retention_class)?;
+    validate_class(&retention_class)?;
     Ok(Receipt {
         receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
@@ -6847,7 +6828,7 @@ pub fn parse_tombstone(value: &IoValue) -> Result<Tombstone> {
     let policy_refs = record_ref_sequence(&fields[5], "policy")?;
     let evidence_refs = record_ref_sequence(&fields[6], "evidence")?;
     require_check(&parse_checks(&fields[8])?, "audit-visible-tombstone", "retention tombstone")?;
-    validate_retention_class(&retention_class)?;
+    validate_class(&retention_class)?;
     validate_action(&action)?;
     Ok(Tombstone {
         tombstone_ref: crate::preserves_rail::canonical_hash(value)?,
@@ -6862,13 +6843,13 @@ pub fn parse_tombstone(value: &IoValue) -> Result<Tombstone> {
     })
 }
 
-pub fn read_retention_receipt(root: &Path, receipt_ref: &str) -> Result<Receipt> {
+pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<Receipt> {
     require_ref(receipt_ref, "retention receipt ref")?;
     let value = read_store_value(&receipt_path(root, receipt_ref)?)?;
-    parse_retention_receipt(&value)
+    parse_receipt(&value)
 }
 
-pub fn read_retention_tombstone(root: &Path, tombstone_ref: &str) -> Result<Tombstone> {
+pub fn read_tombstone(root: &Path, tombstone_ref: &str) -> Result<Tombstone> {
     require_ref(tombstone_ref, "retention tombstone ref")?;
     let value = read_store_value(&tombstone_path(root, tombstone_ref)?)?;
     let tombstone = parse_tombstone(&value)?;
@@ -6878,7 +6859,7 @@ pub fn read_retention_tombstone(root: &Path, tombstone_ref: &str) -> Result<Tomb
     Ok(tombstone)
 }
 
-pub fn retention_summary(value: &IoValue) -> Result<String> {
+pub fn summary(value: &IoValue) -> Result<String> {
     if let Some(text) = base(value) {
         return Ok(text);
     }
@@ -7187,7 +7168,7 @@ fn profile(value: &IoValue) -> Option<String> {
 }
 
 fn stored(value: &IoValue) -> Option<String> {
-    if let Ok(receipt) = parse_retention_receipt(value) {
+    if let Ok(receipt) = parse_receipt(value) {
         return Some(format!(
             "retention receipt ref={} decision={} action={} object={} class={} pins={} tombstone={} diagnostics={}",
             receipt.receipt_ref,
@@ -7387,7 +7368,7 @@ fn build_receipt(input: ReceiptBuildInput<'_>) -> Result<Receipt> {
             ("remote-cache-considered", "pass"),
         ]),
     ]);
-    parse_retention_receipt(&value)
+    parse_receipt(&value)
 }
 
 struct TombstoneBuildInput<'a> {
@@ -7428,7 +7409,7 @@ fn build_tombstone(input: TombstoneBuildInput<'_>) -> Result<Tombstone> {
     parse_tombstone(&value)
 }
 
-fn retention_diagnostics(input: &EvaluationInput<'_>, index: &ReferenceIndex) -> Result<Vec<String>> {
+fn evaluation_diagnostics(input: &EvaluationInput<'_>, index: &ReferenceIndex) -> Result<Vec<String>> {
     let is_destructive = is_destructive_action(input.action);
     let mut diagnostics = Vec::new();
     push_notes(&mut diagnostics, [
@@ -7490,7 +7471,7 @@ fn is_destructive_action(action: &str) -> bool {
 }
 
 fn validate_class_profile_input(input: &ClassProfileInput) -> Result<()> {
-    validate_retention_class(&input.class_name)?;
+    validate_class(&input.class_name)?;
     require_ref(&input.deletion_authority_ref, "retention deletion authority ref")?;
     validate_refs(&input.policy_refs, "retention class policy ref")?;
     if input.policy_refs.is_empty() {
@@ -7505,7 +7486,7 @@ fn validate_class_profile_input(input: &ClassProfileInput) -> Result<()> {
 fn validate_pin_input(input: &PinInput) -> Result<()> {
     require_ref(&input.object_ref, "retention pin object ref")?;
     validate_name(&input.object_kind, "retention pin object kind")?;
-    validate_retention_class(&input.retention_class)?;
+    validate_class(&input.retention_class)?;
     validate_pin_source(&input.source)?;
     validate_name(&input.reason, "retention pin reason")?;
     require_ref(&input.owner_ref, "retention pin owner ref")?;
@@ -7537,7 +7518,7 @@ fn validate_receipt_build_input(input: &ReceiptBuildInput<'_>) -> Result<()> {
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention receipt object ref")?;
     validate_name(input.object_kind, "retention receipt object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     require_ref(input.requester_ref, "retention receipt requester ref")?;
     require_ref(input.index_ref, "retention receipt index ref")?;
     validate_refs(input.pin_refs, "retention receipt pin ref")?;
@@ -7551,7 +7532,7 @@ fn validate_receipt_build_input(input: &ReceiptBuildInput<'_>) -> Result<()> {
     ensure_count_at_most(input.diagnostics.len(), MAX_RETENTION_DIAGNOSTICS, "retention receipt diagnostics")
 }
 
-fn validate_retention_class(value: &str) -> Result<()> {
+fn validate_class(value: &str) -> Result<()> {
     if RETENTION_CLASSES.iter().any(|class| class == &value) {
         Ok(())
     } else {
@@ -7597,7 +7578,7 @@ fn validate_evidence_admission_input(input: &EvidenceAdmissionInput<'_>) -> Resu
     require_ref(input.requester_ref, "retention admission requester ref")?;
     require_ref(input.object_ref, "retention admission object ref")?;
     validate_name(input.object_kind, "retention admission object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     validate_action(input.action)?;
     validate_refs(input.bound_refs, "retention admission bound ref")?;
     validate_refs(input.retained_refs, "retention admission retained ref")?;
@@ -7612,7 +7593,7 @@ fn validate_remote_gc_clearance_input(input: &RemoteGcClearanceInput<'_>) -> Res
     require_ref(input.peer_ref, "retention remote clearance peer ref")?;
     require_ref(input.object_ref, "retention remote clearance object ref")?;
     validate_name(input.object_kind, "retention remote clearance object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     validate_action(input.action)?;
     require_ref(input.remote_ref, "retention remote clearance remote ref")?;
     require_ref(input.policy_ref, "retention remote clearance policy ref")?;
@@ -7628,7 +7609,7 @@ fn validate_remote_gc_clearance_request_input(input: &RemoteGcClearanceRequestIn
     require_ref(input.peer_ref, "retention remote clearance request peer ref")?;
     require_ref(input.object_ref, "retention remote clearance request object ref")?;
     validate_name(input.object_kind, "retention remote clearance request object kind")?;
-    validate_retention_class(input.retention_class)?;
+    validate_class(input.retention_class)?;
     validate_action(input.action)?;
     require_ref(input.remote_ref, "retention remote clearance request remote ref")?;
     require_ref(input.policy_ref, "retention remote clearance request policy ref")?;
@@ -8740,7 +8721,7 @@ mod tests {
         let text = crate::preserves_rail::to_text(&tombstone.value).expect("text");
         assert!(text.contains("redacted-or-deleted"));
         assert!(!text.contains("plaintext"));
-        let summary = retention_summary(&tombstone.value).expect("summary");
+        let summary = summary(&tombstone.value).expect("summary");
         assert!(summary.contains("retention tombstone"));
     }
 
@@ -9035,7 +9016,7 @@ mod tests {
         assert_eq!(store_file_count(&tombstones_dir(&root)), 1);
         let parsed = parse_gc_apply(&apply.value).expect("parse apply");
         assert_eq!(parsed.apply_ref, apply.apply_ref);
-        read_retention_receipt(&root, parsed.retention_receipt_ref.as_deref().expect("receipt ref"))
+        read_receipt(&root, parsed.retention_receipt_ref.as_deref().expect("receipt ref"))
             .expect("read retention receipt");
     }
 
@@ -11036,7 +11017,7 @@ mod tests {
     }
 
     fn assert_retention_summary_contains(value: &IoValue, expected: &str) {
-        let summary = retention_summary(value).expect("retention summary");
+        let summary = summary(value).expect("retention summary");
         assert!(summary.contains(expected), "{summary}");
     }
 
