@@ -2003,10 +2003,6 @@ mod tests {
     use hegel::generators;
 
     use super::*;
-    use crate::artifacts;
-    use crate::catalog;
-    use crate::catalog_mcp;
-    use crate::ledger;
 
     fn temp_dir(label: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
@@ -2061,7 +2057,7 @@ mod tests {
     fn catalog_and_mcp_render_redaction_markers_without_plaintext() {
         let root = temp_dir("secrets-catalog");
         let registry = root.join("registry");
-        let artifact = artifacts::install_artifact(&registry, &artifacts::ArtifactInstallInput {
+        let artifact = crate::artifacts::install_artifact(&registry, &crate::artifacts::ArtifactInstallInput {
             kind: "doc".to_string(),
             payload: parse_text("<doc <credential \"do-not-render\">>").expect("secret doc"),
             schema_refs: Vec::new(),
@@ -2073,22 +2069,22 @@ mod tests {
             capability_refs: vec![fixture_ref("catalog-capability")],
         })
         .expect("install");
-        let viewed = catalog::view(&registry, None, &catalog::CatalogViewInput {
+        let viewed = crate::catalog::view(&registry, None, &crate::catalog::CatalogViewInput {
             reference: artifact.artifact_ref.clone(),
             include_payload: true,
             redacted: true,
-            visibility: catalog::CatalogVisibilityInput::default(),
+            visibility: crate::catalog::CatalogVisibilityInput::default(),
         })
         .expect("view");
         let text = to_text(&viewed.value).expect("view text");
         assert!(text.contains("redaction-marker-v1"));
         assert!(!text.contains("do-not-render"));
-        let request = catalog_mcp::mcp_request_value("catalog.view", vec![
+        let request = crate::catalog_mcp::mcp_request_value("catalog.view", vec![
             record("reference", vec![string(&artifact.artifact_ref)]),
             record("payload", vec![bool_value(true)]),
         ])
         .expect("mcp request");
-        let response = catalog_mcp::call(&registry, None, &request).expect("mcp call");
+        let response = crate::catalog_mcp::call(&registry, None, &request).expect("mcp call");
         let response_text = to_text(&response.response_value).expect("response");
         assert!(response_text.contains("redaction-marker-v1"));
         assert!(!response_text.contains("do-not-render"));
@@ -2125,26 +2121,26 @@ mod tests {
     #[test]
     fn ledger_catalog_and_mcp_classify_confidentiality_artifacts() {
         let run = run_secrets_fixture().expect("fixture");
-        assert_eq!(ledger::artifact_kind(&run.secret.value), "secret-ref");
-        assert_eq!(ledger::artifact_kind(&run.encrypted.value), "encrypted-ref");
-        assert_eq!(ledger::artifact_kind(&run.marker.value), "redaction-marker");
-        assert_eq!(ledger::artifact_kind(&run.transform.value), "redaction-transform-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&run.secret.value), "secret-ref");
+        assert_eq!(crate::ledger::artifact_kind(&run.encrypted.value), "encrypted-ref");
+        assert_eq!(crate::ledger::artifact_kind(&run.marker.value), "redaction-marker");
+        assert_eq!(crate::ledger::artifact_kind(&run.transform.value), "redaction-transform-receipt");
         let root = temp_dir("secrets-ledger");
         let registry = root.join("registry");
         let ledger_root = root.join("ledger");
         std::fs::create_dir_all(&registry).expect("registry");
-        ledger::import_artifact(&ledger_root, &run.secret.value).expect("import");
-        let list = catalog::list(&registry, Some(&ledger_root), &catalog::CatalogListInput {
+        crate::ledger::import_artifact(&ledger_root, &run.secret.value).expect("import");
+        let list = crate::catalog::list(&registry, Some(&ledger_root), &crate::catalog::CatalogListInput {
             kind: Some("secret-ref".to_string()),
-            visibility: catalog::CatalogVisibilityInput::default(),
+            visibility: crate::catalog::CatalogVisibilityInput::default(),
         })
         .expect("list");
         assert_eq!(list.items.len(), 1);
-        let request = catalog_mcp::mcp_request_value("catalog.view", vec![record("reference", vec![string(
+        let request = crate::catalog_mcp::mcp_request_value("catalog.view", vec![record("reference", vec![string(
             &run.secret.secret_ref,
         )])])
         .expect("mcp request");
-        let response = catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("mcp call");
+        let response = crate::catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("mcp call");
         assert_eq!(response.decision, "pass");
     }
 
