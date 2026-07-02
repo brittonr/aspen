@@ -1,6 +1,6 @@
 use std::fs;
 
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
 
 use crate::ledger;
 
@@ -15,11 +15,11 @@ const OCTET_GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::OCTET_GATE_RECEIP
 const OCTET_REVIEW_MANIFEST_SCHEMA: &str = crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
 const OCTET_WARNING_BASELINE_SCHEMA: &str = crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA;
 
-fn bool_value(value: bool) -> IOValue {
+fn bool_value(value: bool) -> IoValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
@@ -31,23 +31,23 @@ fn content_ref_hex(value: &str) -> Result<&str> {
     crate::preserves_rail::content_ref_hex(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -101,7 +101,7 @@ pub struct OctetGateInput {
 pub struct OctetGateEvaluation {
     pub decision: String,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub diagnostics: Vec<String>,
 }
 
@@ -116,7 +116,7 @@ pub struct OctetWarningBaselineInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OctetWarningBaselineArtifact {
     pub baseline_ref: String,
-    pub baseline_value: IOValue,
+    pub baseline_value: IoValue,
     pub finding_count: u64,
     pub critical_count: u64,
 }
@@ -124,17 +124,17 @@ pub struct OctetWarningBaselineArtifact {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OctetBaselineCheckInput {
     pub artifacts_dir: PathBuf,
-    pub baseline_value: IOValue,
+    pub baseline_value: IoValue,
     pub profile: String,
     pub as_of: String,
-    pub review_values: Vec<IOValue>,
+    pub review_values: Vec<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OctetBaselineEvaluation {
     pub decision: String,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub diagnostics: Vec<String>,
 }
 
@@ -149,7 +149,7 @@ pub struct OctetReviewManifestInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OctetReviewManifestArtifact {
     pub review_ref: String,
-    pub review_value: IOValue,
+    pub review_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,7 +163,7 @@ pub struct OctetArtifactLedgerImport {
     pub decision: String,
     pub imported_refs: Vec<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub diagnostics: Vec<String>,
 }
 
@@ -171,7 +171,7 @@ pub struct OctetArtifactLedgerImport {
 pub struct OctetSourceGateValidationInput {
     pub consumer: String,
     pub subject_ref: String,
-    pub gate_receipt_value: Option<IOValue>,
+    pub gate_receipt_value: Option<IoValue>,
     pub source_scope: Vec<String>,
 }
 
@@ -181,7 +181,7 @@ pub struct OctetSourceGateValidation {
     pub requirement_ref: String,
     pub validation_ref: String,
     pub gate_receipt_ref: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
     pub diagnostics: Vec<String>,
 }
 
@@ -672,7 +672,7 @@ fn push_outcome_checks(
 }
 
 #[doc(hidden)]
-pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IOValue> {
+pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IoValue> {
     let metadata = expected_metadata_for_command(DEFAULT_GATE_COMMAND)
         .map_err(|message| MoltenError::invalid_harness(format!("current octet metadata fixture: {message}")))?;
     let policy = octet_gate_policy_value(&OctetGateInput {
@@ -800,7 +800,7 @@ fn read_import_files(
     }
 }
 
-fn raw_values(files: &InputFiles) -> Vec<IOValue> {
+fn raw_values(files: &InputFiles) -> Vec<IoValue> {
     let mut values = Vec::with_capacity(MAX_OCTET_ARTIFACT_VALUES);
     if let Some(command) = files.command.as_ref() {
         values.push(octet_raw_artifact_value(
@@ -838,7 +838,7 @@ fn raw_values(files: &InputFiles) -> Vec<IOValue> {
 }
 
 fn add_structured_value(
-    values: &mut impl crate::bounded::VecSink<IOValue>,
+    values: &mut impl crate::bounded::VecSink<IoValue>,
     files: &InputFiles,
     checks: &mut impl crate::bounded::VecSink<GateCheck>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
@@ -860,7 +860,7 @@ fn add_structured_value(
 }
 
 fn add_fingerprint_value(
-    values: &mut impl crate::bounded::VecSink<IOValue>,
+    values: &mut impl crate::bounded::VecSink<IoValue>,
     files: &InputFiles,
     checks: &mut impl crate::bounded::VecSink<GateCheck>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
@@ -1130,7 +1130,7 @@ fn prepare_source_validation(
 }
 
 fn parse_source_receipt(
-    value: Option<&IOValue>,
+    value: Option<&IoValue>,
     checks: &mut impl crate::bounded::VecSink<GateCheck>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Option<ParsedOctetGateReceipt> {
@@ -1287,7 +1287,7 @@ fn octet_source_gate_requirement_value(
     source_scope: &[String],
     expected: Option<&ExpectedMetadata>,
     checks: &[GateCheck],
-) -> IOValue {
+) -> IoValue {
     record("octet-source-gate-requirement-v1", vec![
         string(crate::preserves_rail::OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA),
         record("consumer", vec![string(consumer)]),
@@ -1324,7 +1324,7 @@ pub fn default_source_scope(consumer: &str) -> Result<Vec<String>> {
     Ok(scope.into_iter().map(ToOwned::to_owned).collect())
 }
 
-pub fn octet_gate_policy_value(input: &OctetGateInput) -> IOValue {
+pub fn octet_gate_policy_value(input: &OctetGateInput) -> IoValue {
     record("octet-gate-policy-v1", vec![
         string(crate::preserves_rail::OCTET_GATE_POLICY_SCHEMA),
         record("profile", vec![string(&input.profile)]),
@@ -1400,7 +1400,7 @@ struct OctetSourceGateValidationValueInput<'a> {
     checks: &'a [GateCheck],
 }
 
-fn octet_source_gate_validation_value(input: OctetSourceGateValidationValueInput<'_>) -> IOValue {
+fn octet_source_gate_validation_value(input: OctetSourceGateValidationValueInput<'_>) -> IoValue {
     record("octet-source-gate-validation-v1", vec![
         string(crate::preserves_rail::OCTET_SOURCE_GATE_VALIDATION_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -1418,7 +1418,7 @@ fn octet_source_gate_validation_value(input: OctetSourceGateValidationValueInput
     ])
 }
 
-fn parse_octet_gate_receipt(value: &IOValue) -> Result<ParsedOctetGateReceipt> {
+fn parse_octet_gate_receipt(value: &IoValue) -> Result<ParsedOctetGateReceipt> {
     let fields = value
         .collect_simple_record("octet-gate-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <octet-gate-receipt-v1 ...>"))?;
@@ -1450,7 +1450,7 @@ fn parsed_check_pass(parsed: &ParsedOctetGateReceipt, name: &str) -> bool {
     parsed.checks.iter().any(|(check_name, status)| check_name == name && status == "pass")
 }
 
-fn parse_counts(value: &Value<IOValue>) -> Result<FindingCounts> {
+fn parse_counts(value: &Value<IoValue>) -> Result<FindingCounts> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("counts", Some(6))
@@ -1465,7 +1465,7 @@ fn parse_counts(value: &Value<IOValue>) -> Result<FindingCounts> {
     })
 }
 
-fn parse_check_pairs(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_check_pairs(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("checks", Some(1))
@@ -1485,7 +1485,7 @@ fn parse_check_pairs(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
         .collect()
 }
 
-fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -1493,7 +1493,7 @@ fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<
     optional_string(&fields[0], label)
 }
 
-fn optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
@@ -1509,7 +1509,7 @@ fn is_content_ref(value: &str) -> bool {
         && value.split_once(':').is_some_and(|(_, hash)| !hash.is_empty())
 }
 
-fn octet_raw_artifact_value(label: &'static str, schema: &str, name: &str, file: &GateFile) -> IOValue {
+fn octet_raw_artifact_value(label: &'static str, schema: &str, name: &str, file: &GateFile) -> IoValue {
     record(label, vec![
         string(schema),
         record("name", vec![string(name)]),
@@ -1534,7 +1534,7 @@ fn octet_artifact_ledger_receipt_value(
     imported_refs: &[String],
     diagnostics: &[String],
     checks: &[GateCheck],
-) -> IOValue {
+) -> IoValue {
     record("octet-artifact-ledger-receipt-v1", vec![
         string(crate::preserves_rail::OCTET_ARTIFACT_LEDGER_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
@@ -1545,7 +1545,7 @@ fn octet_artifact_ledger_receipt_value(
     ])
 }
 
-fn octet_gate_receipt_value(input: OctetGateReceiptInput<'_>) -> IOValue {
+fn octet_gate_receipt_value(input: OctetGateReceiptInput<'_>) -> IoValue {
     record("octet-gate-receipt-v1", vec![
         string(OCTET_GATE_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -1743,7 +1743,7 @@ fn validate_object_corpus(
     }
 }
 
-fn octet_fingerprint_evidence_value(object_corpus: &GateFile, receipt: &OctetObjectCorpusReceipt) -> Result<IOValue> {
+fn octet_fingerprint_evidence_value(object_corpus: &GateFile, receipt: &OctetObjectCorpusReceipt) -> Result<IoValue> {
     let object_set_hash = receipt
         .object_set_hash
         .as_deref()
@@ -2102,7 +2102,7 @@ fn load_current_octet_run(
     })
 }
 
-fn octet_warning_baseline_value(input: &OctetWarningBaselineValueInput<'_>) -> IOValue {
+fn octet_warning_baseline_value(input: &OctetWarningBaselineValueInput<'_>) -> IoValue {
     let critical_keys = critical_keys(&input.run.findings);
     record("octet-warning-baseline-v1", vec![
         string(OCTET_WARNING_BASELINE_SCHEMA),
@@ -2126,7 +2126,7 @@ fn octet_warning_baseline_value(input: &OctetWarningBaselineValueInput<'_>) -> I
     ])
 }
 
-fn octet_baseline_receipt_value(input: OctetBaselineReceiptInput<'_>) -> IOValue {
+fn octet_baseline_receipt_value(input: OctetBaselineReceiptInput<'_>) -> IoValue {
     record("octet-baseline-receipt-v1", vec![
         string(crate::preserves_rail::OCTET_BASELINE_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -2149,11 +2149,11 @@ fn octet_baseline_receipt_value(input: OctetBaselineReceiptInput<'_>) -> IOValue
     ])
 }
 
-fn parse_review_manifests(values: &[IOValue]) -> Result<Vec<ParsedReviewManifest>> {
+fn parse_review_manifests(values: &[IoValue]) -> Result<Vec<ParsedReviewManifest>> {
     values.iter().map(parse_review_manifest).collect()
 }
 
-fn parse_review_manifest(value: &IOValue) -> Result<ParsedReviewManifest> {
+fn parse_review_manifest(value: &IoValue) -> Result<ParsedReviewManifest> {
     let fields = value
         .collect_simple_record("octet-review-manifest-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <octet-review-manifest-v1 ...>"))?;
@@ -2174,7 +2174,7 @@ fn finding_is_reviewed(finding: &FindingEntry, reviews: &[ParsedReviewManifest],
     })
 }
 
-fn parse_warning_baseline(value: &IOValue) -> Result<ParsedWarningBaseline> {
+fn parse_warning_baseline(value: &IoValue) -> Result<ParsedWarningBaseline> {
     let fields = value
         .collect_simple_record("octet-warning-baseline-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <octet-warning-baseline-v1 ...>"))?;
@@ -2202,7 +2202,7 @@ fn octet_structured_findings_value(
     status_file: &GateFile,
     summary: &GateFile,
     status: &OctetStatusArtifact,
-) -> (IOValue, u64) {
+) -> (IoValue, u64) {
     let (findings, parsed_count) = parse_summary_findings(summary, status);
     let unkeyed_findings = status.total_findings.saturating_sub(parsed_count);
     let critical_count = findings.values().filter(|finding| is_critical_lint(&finding.lint)).count() as u64;
@@ -2277,7 +2277,7 @@ fn finding_key(lint: &str, crate_name: &str, location: &str, config_hash: &str, 
     ))
 }
 
-fn finding_entry_value(finding: &FindingEntry) -> IOValue {
+fn finding_entry_value(finding: &FindingEntry) -> IoValue {
     record("finding-key", vec![
         string(&finding.key),
         string(&finding.lint),
@@ -2358,7 +2358,7 @@ fn source_snapshot_ref(run: &CurrentOctetRun) -> Result<String> {
     ]))
 }
 
-fn record_finding_entries(value: &Value<IOValue>, label: &str) -> Result<OrderedMap<String, FindingEntry>> {
+fn record_finding_entries(value: &Value<IoValue>, label: &str) -> Result<OrderedMap<String, FindingEntry>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -2391,7 +2391,7 @@ fn record_finding_entries(value: &Value<IOValue>, label: &str) -> Result<Ordered
     Ok(findings)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -2399,7 +2399,7 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&record[0], label)
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -2407,7 +2407,7 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     required_u64(&record[0], label)
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -2423,7 +2423,7 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
     Ok(strings)
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, label: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result<()> {
     let actual = required_string(value, label)?;
     if actual == expected {
         Ok(())
@@ -2432,14 +2432,14 @@ fn require_schema(value: &Value<IOValue>, expected: &str, label: &str) -> Result
     }
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -2459,7 +2459,7 @@ fn finding_counts(status: Option<&OctetStatusArtifact>, lint_counts: &OrderedMap
     counts
 }
 
-fn counts_value(counts: &FindingCounts) -> IOValue {
+fn counts_value(counts: &FindingCounts) -> IoValue {
     record("counts", vec![
         record("findings", vec![u64_value(counts.total)]),
         record("warnings", vec![u64_value(counts.warnings)]),
@@ -2470,13 +2470,13 @@ fn counts_value(counts: &FindingCounts) -> IOValue {
     ])
 }
 
-fn checks_value(checks: &[GateCheck]) -> IOValue {
+fn checks_value(checks: &[GateCheck]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|check| record("check", vec![string(check.name), string(check.status)])).collect(),
     )])
 }
 
-fn optional_ref(value: Option<&str>) -> IOValue {
+fn optional_ref(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
@@ -2550,11 +2550,11 @@ fn b3_ref_from_bytes(bytes: &[u8]) -> Result<String> {
 mod tests {
     use super::*;
 
-    fn parse_text(source: &str) -> Result<IOValue> {
+    fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
     }
 
-    fn to_text(value: &IOValue) -> Result<String> {
+    fn to_text(value: &IoValue) -> Result<String> {
         crate::preserves_rail::to_text(value)
     }
 
@@ -2939,7 +2939,7 @@ mod tests {
         }
     }
 
-    fn receipt_findings_ref(value: &IOValue) -> String {
+    fn receipt_findings_ref(value: &IoValue) -> String {
         let fields = value.collect_simple_record("octet-gate-receipt-v1", Some(15)).expect("gate receipt");
         let findings_value = value_to_iovalue(&fields[6]);
         let findings = findings_value.collect_simple_record("findings", Some(1)).expect("findings");
@@ -2956,15 +2956,15 @@ mod tests {
         }
     }
 
-    fn baseline_check_input(dir: &Path, baseline_value: &IOValue, as_of: &str) -> OctetBaselineCheckInput {
+    fn baseline_check_input(dir: &Path, baseline_value: &IoValue, as_of: &str) -> OctetBaselineCheckInput {
         baseline_check_input_with_reviews(dir, baseline_value, as_of, Vec::new())
     }
 
     fn baseline_check_input_with_reviews(
         dir: &Path,
-        baseline_value: &IOValue,
+        baseline_value: &IoValue,
         as_of: &str,
-        review_values: Vec<IOValue>,
+        review_values: Vec<IoValue>,
     ) -> OctetBaselineCheckInput {
         OctetBaselineCheckInput {
             artifacts_dir: dir.to_path_buf(),
