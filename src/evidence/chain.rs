@@ -11,8 +11,6 @@ type BTreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
 type Path = std::path::Path;
 
-use crate::ledger;
-
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
@@ -741,8 +739,8 @@ fn finish_heads(index: &mut ChainIndex) -> Result<()> {
 
 pub fn build_chain_index(root: &Path) -> Result<ChainIndex> {
     let mut index = ChainIndex::default();
-    for entry in ledger::list_artifacts(root)? {
-        let value = ledger::read_artifact(root, &entry.artifact_ref)?;
+    for entry in crate::ledger::list_artifacts(root)? {
+        let value = crate::ledger::read_artifact(root, &entry.artifact_ref)?;
         match entry.artifact_kind.as_str() {
             "chain-link" => index_link_entry(&mut index, &entry.artifact_ref, &value)?,
             "chain-predicate-receipt" => index_predicate_entry(&mut index, &entry.artifact_ref, &value)?,
@@ -828,7 +826,7 @@ pub fn append_chain_link(root: &Path, value: &IoValue) -> Result<ChainAppend> {
             link.link_ref
         )));
     }
-    ledger::read_artifact(root, &link.payload.artifact_ref).map_err(|error| {
+    crate::ledger::read_artifact(root, &link.payload.artifact_ref).map_err(|error| {
         MoltenError::invalid_harness(format!(
             "chain link payload {} is unavailable in ledger: {error}",
             link.payload.artifact_ref
@@ -836,7 +834,7 @@ pub fn append_chain_link(root: &Path, value: &IoValue) -> Result<ChainAppend> {
     })?;
 
     let head_before = prior_head(&index, &link)?;
-    let imported = ledger::import_artifact(root, value)?;
+    let imported = crate::ledger::import_artifact(root, value)?;
     if imported.artifact_ref != link.link_ref {
         return Err(MoltenError::invalid_harness(format!(
             "imported chain link ref mismatch: got {}, expected {}",
@@ -847,7 +845,7 @@ pub fn append_chain_link(root: &Path, value: &IoValue) -> Result<ChainAppend> {
     let predicate_receipt_ref = append_predicate_ref(root, &link, head_before.as_deref())?;
     let receipt_value = chain_append_receipt_value(&link, head_before.as_deref(), &predicate_receipt_ref);
     let receipt_ref = canonical_hash(&receipt_value)?;
-    let imported_receipt = ledger::import_artifact(root, &receipt_value)?;
+    let imported_receipt = crate::ledger::import_artifact(root, &receipt_value)?;
     if imported_receipt.artifact_ref != receipt_ref {
         return Err(MoltenError::invalid_harness(format!(
             "imported chain append receipt ref mismatch: got {}, expected {receipt_ref}",
@@ -919,7 +917,7 @@ pub fn publish_chain_anchor(
     policy_refs: &[String],
     producer: &ChainProducer,
 ) -> Result<ChainAnchor> {
-    let link_value = ledger::read_artifact(root, link_ref)?;
+    let link_value = crate::ledger::read_artifact(root, link_ref)?;
     let link = parse_chain_link(&link_value)?;
     if &link.chain != chain {
         return Err(MoltenError::invalid_harness(format!(
@@ -932,8 +930,8 @@ pub fn publish_chain_anchor(
     }
     validate_producer(producer)?;
     let value = chain_anchor_value(chain, link_ref, policy_refs, producer);
-    let imported = ledger::import_artifact(root, &value)?;
-    parse_chain_anchor(&ledger::read_artifact(root, &imported.artifact_ref)?)
+    let imported = crate::ledger::import_artifact(root, &value)?;
+    parse_chain_anchor(&crate::ledger::read_artifact(root, &imported.artifact_ref)?)
 }
 
 pub fn chain_checkpoint_value(input: &ChainCheckpointInput) -> IoValue {
@@ -961,8 +959,8 @@ pub fn chain_checkpoint_value(input: &ChainCheckpointInput) -> IoValue {
 pub fn accept_chain_checkpoint(root: &Path, input: &ChainCheckpointInput) -> Result<ChainCheckpoint> {
     validate_checkpoint_input(root, input)?;
     let value = chain_checkpoint_value(input);
-    let imported = ledger::import_artifact(root, &value)?;
-    parse_chain_checkpoint(&ledger::read_artifact(root, &imported.artifact_ref)?)
+    let imported = crate::ledger::import_artifact(root, &value)?;
+    parse_chain_checkpoint(&crate::ledger::read_artifact(root, &imported.artifact_ref)?)
 }
 
 pub fn validate_chain_checkpoint_freshness(
@@ -971,7 +969,7 @@ pub fn validate_chain_checkpoint_freshness(
     checkpoint_ref: &str,
     expected_head: Option<&str>,
 ) -> Result<ChainCheckpoint> {
-    let value = ledger::read_artifact(root, checkpoint_ref)?;
+    let value = crate::ledger::read_artifact(root, checkpoint_ref)?;
     let checkpoint = parse_chain_checkpoint(&value)?;
     if &checkpoint.chain != chain {
         return Err(MoltenError::invalid_harness(format!(
@@ -1193,7 +1191,7 @@ fn note_payload(
     state: &mut WalkState,
     diagnostics: &mut impl crate::bounded::VecSink<ChainDiagnostic>,
 ) {
-    if let Err(error) = ledger::read_artifact(root, &link.payload.artifact_ref) {
+    if let Err(error) = crate::ledger::read_artifact(root, &link.payload.artifact_ref) {
         diagnostics.push_item(ChainDiagnostic::new(
             "missing-payload",
             format!("payload ref is unavailable in the ledger: {error}"),
@@ -1207,7 +1205,7 @@ fn note_payload(
 fn finish_verify(input: FinishInput<'_>) -> Result<ChainVerify> {
     let receipt_value = finish_value(&input);
     let receipt_ref = canonical_hash(&receipt_value)?;
-    let imported_receipt = ledger::import_artifact(input.root, &receipt_value)?;
+    let imported_receipt = crate::ledger::import_artifact(input.root, &receipt_value)?;
     if imported_receipt.artifact_ref != receipt_ref {
         return Err(MoltenError::invalid_harness(format!(
             "imported chain verify receipt ref mismatch: got {}, expected {receipt_ref}",
@@ -1501,7 +1499,7 @@ fn validate_checkpoint_input(root: &Path, input: &ChainCheckpointInput) -> Resul
     require_ref(&input.verify_receipt_ref, "checkpoint verify receipt ref")?;
     require_ref(&input.range_predicate_ref, "checkpoint range predicate ref")?;
     if let Some(prior_checkpoint_ref) = &input.prior_checkpoint_ref {
-        let prior_value = ledger::read_artifact(root, prior_checkpoint_ref)?;
+        let prior_value = crate::ledger::read_artifact(root, prior_checkpoint_ref)?;
         let prior = parse_chain_checkpoint(&prior_value)?;
         if prior.chain != input.chain {
             return Err(MoltenError::invalid_harness(format!(
@@ -1535,7 +1533,7 @@ fn validate_checkpoint_input(root: &Path, input: &ChainCheckpointInput) -> Resul
             input.head_ref, head.chain, input.chain
         )));
     }
-    let verify_value = ledger::read_artifact(root, &input.verify_receipt_ref)?;
+    let verify_value = crate::ledger::read_artifact(root, &input.verify_receipt_ref)?;
     validate_checkpoint_verify_receipt(CheckpointVerifyReceiptValidationInput {
         root,
         value: &verify_value,
@@ -1620,7 +1618,7 @@ fn validate_range_binding(input: RangeBindingInput<'_>) -> Result<()> {
             input.range_predicate_ref
         )));
     }
-    let predicate_value = ledger::read_artifact(input.root, input.range_predicate_ref).map_err(|error| {
+    let predicate_value = crate::ledger::read_artifact(input.root, input.range_predicate_ref).map_err(|error| {
         MoltenError::invalid_harness(format!(
             "checkpoint range predicate {} is unavailable in ledger: {error}",
             input.range_predicate_ref
@@ -1789,7 +1787,7 @@ fn store_chain_fork_evidence(input: StoreChainForkEvidenceInput<'_>) -> Result<S
         fork_policy: input.fork_policy,
     });
     let parsed = parse_chain_fork_evidence(&value)?;
-    let imported = ledger::import_artifact(input.root, &value)?;
+    let imported = crate::ledger::import_artifact(input.root, &value)?;
     if imported.artifact_ref != parsed.evidence_ref {
         return Err(MoltenError::invalid_harness(format!(
             "imported fork evidence ref mismatch: got {}, expected {}",
@@ -1802,7 +1800,7 @@ fn store_chain_fork_evidence(input: StoreChainForkEvidenceInput<'_>) -> Result<S
 fn store_chain_predicate_receipt(input: StoreChainPredicateReceiptInput<'_>) -> Result<String> {
     let value = chain_predicate_receipt_value(&input.receipt);
     let parsed = parse_chain_predicate_receipt(&value)?;
-    let imported = ledger::import_artifact(input.root, &value)?;
+    let imported = crate::ledger::import_artifact(input.root, &value)?;
     if imported.artifact_ref != parsed.receipt_ref {
         return Err(MoltenError::invalid_harness(format!(
             "imported chain predicate receipt ref mismatch: got {}, expected {}",
@@ -2645,13 +2643,17 @@ mod tests {
         let append_predicates = record_ref_sequence(&append_receipt[7], "predicates").expect("append predicates");
         assert_eq!(append_predicates, vec![genesis_append.predicate_receipt_ref.clone()]);
         let append_predicate = parse_chain_predicate_receipt(
-            &ledger::read_artifact(&root, &genesis_append.predicate_receipt_ref).expect("append predicate receipt"),
+            &crate::ledger::read_artifact(&root, &genesis_append.predicate_receipt_ref)
+                .expect("append predicate receipt"),
         )
         .expect("parse append predicate");
         assert_eq!(append_predicate.predicate, GENESIS_VALID_PREDICATE);
-        assert_eq!(ledger::read_artifact(&root, &genesis_append.link_ref).expect("stored genesis"), genesis_value);
         assert_eq!(
-            ledger::read_artifact(&root, &genesis_append.receipt_ref).expect("stored append receipt"),
+            crate::ledger::read_artifact(&root, &genesis_append.link_ref).expect("stored genesis"),
+            genesis_value
+        );
+        assert_eq!(
+            crate::ledger::read_artifact(&root, &genesis_append.receipt_ref).expect("stored append receipt"),
             genesis_append.receipt_value
         );
 
@@ -2771,7 +2773,7 @@ mod tests {
         assert!(predicate_names.contains(&DESCENDS_FROM_ANCHOR_PREDICATE.to_string()));
         assert!(predicate_names.contains(&CHECKPOINT_COVERS_RANGE_PREDICATE.to_string()));
         assert_eq!(
-            ledger::read_artifact(&root, &verified.receipt_ref).expect("stored verify receipt"),
+            crate::ledger::read_artifact(&root, &verified.receipt_ref).expect("stored verify receipt"),
             verified.receipt_value
         );
     }
@@ -2861,7 +2863,7 @@ mod tests {
         let scope = ChainScope::new("evidence-ledger", "node-a", "epoch-1");
         let value = chain_link_value(&sample_genesis_input(&scope.scope, &scope.id, &scope.epoch, "missing-payload"));
         let link = parse_chain_link(&value).expect("parse missing payload link");
-        ledger::import_artifact(&root, &value).expect("raw import missing payload link");
+        crate::ledger::import_artifact(&root, &value).expect("raw import missing payload link");
         let verified = verify_chain_segment(&root, &scope, None, Some(&link.link_ref)).expect("verify missing payload");
         assert_eq!(verified.decision, "fail");
         assert!(has_diagnostic(&verified, "missing-payload"));
@@ -2893,7 +2895,7 @@ mod tests {
         );
 
         let signed_append_ref = canonical_hash(&signed_append).expect("signed append receipt ref");
-        ledger::import_artifact(&root, &signed_append).expect("import signed append receipt");
+        crate::ledger::import_artifact(&root, &signed_append).expect("import signed append receipt");
         let signed_chain = ChainScope::new("evidence-ledger", "signed-receipts", "epoch-1");
         let signed_payload_link_value = chain_link_value(&ChainLinkInput::genesis(
             signed_chain.clone(),
@@ -3191,7 +3193,7 @@ mod tests {
             context_refs: &checkpoint_context_refs,
             checks: &predicate_checkpoint_checks,
         });
-        let tampered_predicate_ref = ledger::import_artifact(case.root, &tampered_predicate_value)
+        let tampered_predicate_ref = crate::ledger::import_artifact(case.root, &tampered_predicate_value)
             .expect("import tampered predicate")
             .artifact_ref;
         let fake_verify_link_refs = vec![case.genesis.link_ref.clone()];
@@ -3212,7 +3214,7 @@ mod tests {
             predicate_receipt_refs: &fake_verify_predicate_refs,
             fork_policy: ChainForkPolicy::RejectUnexpectedForks,
         });
-        let fake_verify_ref = ledger::import_artifact(case.root, &fake_verify_value)
+        let fake_verify_ref = crate::ledger::import_artifact(case.root, &fake_verify_value)
             .expect("import fake verify receipt")
             .artifact_ref;
         let tampered_predicate = accept_chain_checkpoint(case.root, &ChainCheckpointInput {
@@ -3237,7 +3239,7 @@ mod tests {
             .predicate_receipt_refs
             .iter()
             .find(|predicate_ref| {
-                let value = ledger::read_artifact(case.root, predicate_ref).expect("read predicate");
+                let value = crate::ledger::read_artifact(case.root, predicate_ref).expect("read predicate");
                 parse_chain_predicate_receipt(&value).expect("parse predicate").predicate == SEGMENT_NO_GAP_PREDICATE
             })
             .expect("no-gap predicate")
@@ -3328,7 +3330,7 @@ mod tests {
 
     fn stored_payload(root: &Path, label: &str) -> ChainPayload {
         let artifact = record("test-payload", vec![string(label)]);
-        let imported = ledger::import_artifact(root, &artifact).expect("import payload");
+        let imported = crate::ledger::import_artifact(root, &artifact).expect("import payload");
         ChainPayload::new("test-payload", imported.artifact_ref, "molten.test.payload.v1")
     }
 
@@ -3346,7 +3348,7 @@ mod tests {
     fn import_raw_link(root: &Path, input: &ChainLinkInput) -> ChainLink {
         let value = chain_link_value(input);
         let link = parse_chain_link(&value).expect("parse raw link");
-        ledger::import_artifact(root, &value).expect("raw import link");
+        crate::ledger::import_artifact(root, &value).expect("raw import link");
         link
     }
 
@@ -3359,7 +3361,7 @@ mod tests {
             .predicate_receipt_refs
             .iter()
             .find(|predicate_ref| {
-                let value = ledger::read_artifact(root, predicate_ref).expect("read predicate receipt");
+                let value = crate::ledger::read_artifact(root, predicate_ref).expect("read predicate receipt");
                 parse_chain_predicate_receipt(&value).expect("parse predicate receipt").predicate
                     == CHECKPOINT_COVERS_RANGE_PREDICATE
             })
@@ -3371,7 +3373,7 @@ mod tests {
         predicate_refs
             .iter()
             .map(|predicate_ref| {
-                let value = ledger::read_artifact(root, predicate_ref).expect("read predicate receipt");
+                let value = crate::ledger::read_artifact(root, predicate_ref).expect("read predicate receipt");
                 parse_chain_predicate_receipt(&value).expect("parse predicate receipt").predicate
             })
             .collect()
