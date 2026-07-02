@@ -1,16 +1,25 @@
-use std::collections::BTreeSet;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
+type Counter = std::sync::atomic::AtomicU64;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type PathBuf = std::path::PathBuf;
+type PreservesRecord<T> = preserves::Record<T>;
+type PreservesValue<T> = preserves::Value<T>;
+type Result<T> = crate::error::Result<T>;
+type Set<T> = std::collections::BTreeSet<T>;
 
-use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
+const RELAXED: std::sync::atomic::Ordering = std::sync::atomic::Ordering::Relaxed;
+
+mod fs {
+    pub(super) fn create_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir(path)
+    }
+
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+}
 
 use crate::artifacts;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::eval_cache;
 use crate::harness;
 use crate::schema_identity;
@@ -21,31 +30,31 @@ const TRANSCRIPT_RUN_RECEIPT_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_RU
 const TRANSCRIPT_STANZA_OUTCOME_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_STANZA_OUTCOME_SCHEMA;
 const TRANSCRIPT_STANZA_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_STANZA_SCHEMA;
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn parse_text(source: &str) -> Result<IOValue> {
+fn parse_text(source: &str) -> Result<IoValue> {
     crate::preserves_rail::parse_text(source)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn to_text(value: &IOValue) -> Result<String> {
+fn to_text(value: &IoValue) -> Result<String> {
     crate::preserves_rail::to_text(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -53,7 +62,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
-fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+fn value_to_iovalue(value: &PreservesValue<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
@@ -64,7 +73,7 @@ const MAX_TRANSCRIPT_SEQUENCE_ITEMS: usize = 4_096;
 
 const _: () = assert!(MAX_TRANSCRIPT_SEQUENCE_ITEMS > 0);
 
-static TEMP_STATE_ROOT_COUNTER: AtomicU64 = AtomicU64::new(0);
+static TEMP_STATE_ROOT_COUNTER: Counter = Counter::new(0);
 
 pub const KIND_MOLTEN_CLI: &str = "molten-cli";
 pub const KIND_PRESERVES: &str = "preserves";
@@ -104,7 +113,7 @@ pub struct TranscriptArtifact {
     pub revocation_refs: Vec<String>,
     pub seed_ref: Option<String>,
     pub expected_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,7 +125,7 @@ pub struct TranscriptStanza {
     pub content: String,
     pub content_ref: String,
     pub declared_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,9 +185,9 @@ pub struct TranscriptRun {
     pub transcript_ref: String,
     pub decision: String,
     pub stanza_outcomes: Vec<StanzaOutcome>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub receipt_ref: String,
-    pub cache_receipt_value: Option<IOValue>,
+    pub cache_receipt_value: Option<IoValue>,
     pub state_root: Option<PathBuf>,
 }
 
@@ -188,9 +197,9 @@ pub struct StanzaOutcome {
     pub index: u64,
     pub kind: String,
     pub decision: String,
-    pub output: Option<IOValue>,
+    pub output: Option<IoValue>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -201,7 +210,7 @@ pub struct TranscriptRunReceipt {
     pub transcript_ref: String,
     pub mode: String,
     pub outcome_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 struct RunReceiptValueInput<'a> {
@@ -210,7 +219,7 @@ struct RunReceiptValueInput<'a> {
     transcript_ref: &'a str,
     mode: &'a str,
     outcomes: &'a [StanzaOutcome],
-    output: Option<&'a IOValue>,
+    output: Option<&'a IoValue>,
     refs: Vec<String>,
     diagnostics: &'a [String],
     checks: &'a [(&'a str, &'a str)],
@@ -222,7 +231,7 @@ struct RunnerState {
     registry: PathBuf,
     storage: PathBuf,
     cache: PathBuf,
-    last_output: Option<IOValue>,
+    last_output: Option<IoValue>,
     last_decision: Option<String>,
     last_kind: Option<String>,
     last_artifact_ref: Option<String>,
@@ -259,7 +268,7 @@ pub fn parse_markdown(source: &str, input: &TranscriptParseInput) -> Result<Tran
     parse_transcript_artifact(&value)
 }
 
-pub fn parse_transcript_artifact(value: &IOValue) -> Result<TranscriptArtifact> {
+pub fn parse_transcript_artifact(value: &IoValue) -> Result<TranscriptArtifact> {
     let fields = value
         .collect_simple_record("transcript-artifact-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <transcript-artifact-v1 ...>"))?;
@@ -288,7 +297,7 @@ pub fn parse_transcript_artifact(value: &IOValue) -> Result<TranscriptArtifact> 
     })
 }
 
-pub fn parse_transcript_stanza(value: &IOValue) -> Result<TranscriptStanza> {
+pub fn parse_transcript_stanza(value: &IoValue) -> Result<TranscriptStanza> {
     let fields = value
         .collect_simple_record("transcript-stanza-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <transcript-stanza-v1 ...>"))?;
@@ -431,8 +440,8 @@ fn store_run(
     input: &TranscriptRunInput,
     transcript: &TranscriptArtifact,
     decision: &str,
-    receipt: &IOValue,
-) -> Result<Option<IOValue>> {
+    receipt: &IoValue,
+) -> Result<Option<IoValue>> {
     if decision == DECISION_PASS
         && let Some(cache_root) = input.cache_root.as_ref()
     {
@@ -452,7 +461,7 @@ fn store_run(
     }
 }
 
-pub fn parse_transcript_run_receipt(value: &IOValue) -> Result<TranscriptRunReceipt> {
+pub fn parse_transcript_run_receipt(value: &IoValue) -> Result<TranscriptRunReceipt> {
     let fields = value
         .collect_simple_record("transcript-run-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <transcript-run-receipt-v1 ...>"))?;
@@ -714,7 +723,7 @@ fn execute_stanza(
     state: &mut RunnerState,
     _transcript: &TranscriptArtifact,
     stanza: &TranscriptStanza,
-) -> Result<Option<IOValue>> {
+) -> Result<Option<IoValue>> {
     match stanza.kind.as_str() {
         KIND_COMMENT => Ok(None),
         KIND_POLICY => {
@@ -736,7 +745,7 @@ fn execute_stanza(
     }
 }
 
-fn execute_molten_cli(state: &mut RunnerState, content: &str) -> Result<Option<IOValue>> {
+fn execute_molten_cli(state: &mut RunnerState, content: &str) -> Result<Option<IoValue>> {
     let args = content.split_whitespace().collect::<Vec<_>>();
     if args.is_empty() {
         return Err(MoltenError::invalid_harness("empty molten-cli stanza"));
@@ -757,7 +766,7 @@ fn execute_molten_cli(state: &mut RunnerState, content: &str) -> Result<Option<I
     }
 }
 
-fn execute_artifact_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IOValue>> {
+fn execute_artifact_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IoValue>> {
     match args.first().copied() {
         Some("install") => {
             let kind = option_value(args, "--kind").unwrap_or("artifact");
@@ -799,7 +808,7 @@ fn execute_artifact_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option
     }
 }
 
-fn execute_schema_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IOValue>> {
+fn execute_schema_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IoValue>> {
     match args.first().copied() {
         Some("identity") => {
             let schema_ref = option_value(args, "--schema-ref")
@@ -826,7 +835,7 @@ fn execute_schema_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<I
     }
 }
 
-fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IOValue>> {
+fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IoValue>> {
     match args.first().copied() {
         Some("put") => {
             let namespace = option_value(args, "--namespace").unwrap_or("transcript").to_string();
@@ -864,7 +873,7 @@ fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<
     }
 }
 
-fn execute_cache_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IOValue>> {
+fn execute_cache_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IoValue>> {
     match args.first().copied() {
         Some("status") => {
             let status = eval_cache::status(&state.cache)?;
@@ -886,7 +895,7 @@ fn execute_cache_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IO
     }
 }
 
-fn execute_report_cli(state: &RunnerState) -> Result<Option<IOValue>> {
+fn execute_report_cli(state: &RunnerState) -> Result<Option<IoValue>> {
     let value = state
         .last_output
         .as_ref()
@@ -895,7 +904,7 @@ fn execute_report_cli(state: &RunnerState) -> Result<Option<IOValue>> {
     Ok(Some(record("report-validation", vec![string(validation.report_ref)])))
 }
 
-fn execute_expectation(state: &RunnerState, content: &str) -> Result<Option<IOValue>> {
+fn execute_expectation(state: &RunnerState, content: &str) -> Result<Option<IoValue>> {
     let expectation = parse_text(content)?;
     if let Some(fields) = expectation.collect_simple_record("expect-output", Some(1)) {
         let expected = value_to_iovalue(&fields[0]);
@@ -952,7 +961,7 @@ fn execute_expectation(state: &RunnerState, content: &str) -> Result<Option<IOVa
 fn stanza_outcome(
     stanza: &TranscriptStanza,
     decision: &str,
-    output: Option<IOValue>,
+    output: Option<IoValue>,
     diagnostics: Vec<String>,
 ) -> Result<StanzaOutcome> {
     validate_decision(decision)?;
@@ -992,7 +1001,7 @@ fn denial_outcome(index: u64, kind: &str, diagnostic: String) -> Result<StanzaOu
     stanza_outcome(&stanza, DECISION_DENY, None, vec![diagnostic])
 }
 
-fn run_receipt_value(input: &RunReceiptValueInput<'_>) -> Result<IOValue> {
+fn run_receipt_value(input: &RunReceiptValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.transcript_ref, "transcript ref")?;
     validate_decision(input.decision)?;
     let output_ref = input.output.map(canonical_hash).transpose()?;
@@ -1028,7 +1037,7 @@ fn parse_modifier_token(token: &str) -> Result<TranscriptModifier> {
     })
 }
 
-fn modifier_value(modifier: &TranscriptModifier) -> IOValue {
+fn modifier_value(modifier: &TranscriptModifier) -> IoValue {
     record("modifier", vec![string(&modifier.name), optional_string_value(modifier.value.as_deref())])
 }
 
@@ -1108,7 +1117,7 @@ fn option_value<'a>(args: &'a [&str], name: &str) -> Option<&'a str> {
 
 fn temp_state_root(label: &str) -> Result<PathBuf> {
     for _ in 0..MAX_TEMP_STATE_ROOT_ATTEMPTS {
-        let nonce = TEMP_STATE_ROOT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let nonce = TEMP_STATE_ROOT_COUNTER.fetch_add(1, RELAXED);
         let path = std::env::temp_dir().join(format!("molten-transcript-{label}-{}-{nonce}", std::process::id()));
         match fs::create_dir(&path) {
             Ok(()) => return Ok(path),
@@ -1123,15 +1132,15 @@ fn local_ref(kind: &str, label: &str) -> Result<String> {
     canonical_hash(&record("transcript-local-ref", vec![string(kind), string(label)]))
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &PreservesValue<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1141,7 +1150,7 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_string_value(value: &PreservesValue<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1151,43 +1160,43 @@ fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>>
     required_string(value, "optional string").map(Some)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &PreservesValue<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_u64(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &PreservesValue<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
 }
 
-fn record_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
+fn record_sequence(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<PreservesValue<IoValue>>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     Ok(required_sequence(&record[0], label)?.iter().cloned().collect())
 }
 
-fn record_modifier_sequence(value: &Value<IOValue>) -> Result<Vec<TranscriptModifier>> {
+fn record_modifier_sequence(value: &PreservesValue<IoValue>) -> Result<Vec<TranscriptModifier>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, "modifiers", 1)?;
     let items = required_sequence(&record[0], "modifiers")?;
@@ -1211,7 +1220,7 @@ fn record_modifier_sequence(value: &Value<IOValue>) -> Result<Vec<TranscriptModi
     Ok(modifiers)
 }
 
-fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_value(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     let mut refs = Vec::with_capacity(items.len());
     for item in items.iter() {
@@ -1220,25 +1229,25 @@ fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<S
     Ok(refs)
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
 fn sorted_unique(refs: &[String]) -> Vec<String> {
-    refs.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
+    refs.iter().cloned().collect::<Set<_>>().into_iter().collect()
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
 }
 
-fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &PreservesValue<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
@@ -1264,7 +1273,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &PreservesValue<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -1274,36 +1283,39 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, PreservesRecord<PreservesValue<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(
+    value: &'a PreservesValue<IoValue>,
+    field: &str,
+) -> Result<std::borrow::Cow<'a, Vec<PreservesValue<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &PreservesValue<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -1350,10 +1362,9 @@ fn validate_decision(decision: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
+
+    type Case = hegel::TestCase;
 
     #[test]
     fn parse_markdown_preserves_order_modifiers_and_stable_refs() {
@@ -1466,8 +1477,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_stanza_order_identity_and_denied_ambient_properties(tc: TestCase) {
-        let n = tc.draw(generators::integers::<u64>().min_value(0).max_value(1000));
+    fn hegel_stanza_order_identity_and_denied_ambient_properties(tc: Case) {
+        let n = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1000));
         let source = format!("```preserves\n<value {}>\n```\n```expect\n<expect-output <value {}>>\n```\n", n, n);
         let transcript = parse_markdown(&source, &TranscriptParseInput::default()).expect("parse");
         let reparsed = parse_transcript_artifact(&transcript.value).expect("reparse");
