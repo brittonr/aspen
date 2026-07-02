@@ -1,20 +1,34 @@
-use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Record<T> = preserves::Record<T>;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::octet_gate;
-use crate::preserves_rail::NODE_ADAPTER_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONFIG_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_REQUEST_SCHEMA;
-use crate::preserves_rail::NODE_STARTUP_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::value_to_iovalue;
+const NODE_ADAPTER_RECEIPT_SCHEMA: &str = crate::preserves_rail::NODE_ADAPTER_RECEIPT_SCHEMA;
+const NODE_CONFIG_SCHEMA: &str = crate::preserves_rail::NODE_CONFIG_SCHEMA;
+const NODE_CONTROL_RECEIPT_SCHEMA: &str = crate::preserves_rail::NODE_CONTROL_RECEIPT_SCHEMA;
+const NODE_CONTROL_REQUEST_SCHEMA: &str = crate::preserves_rail::NODE_CONTROL_REQUEST_SCHEMA;
+const NODE_STARTUP_RECEIPT_SCHEMA: &str = crate::preserves_rail::NODE_STARTUP_RECEIPT_SCHEMA;
+
+fn canonical_hash(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeAdapterBinding {
@@ -30,11 +44,11 @@ pub struct NodeAdapterReceiptRef {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeRuntimeStartInput {
-    pub config_value: IOValue,
+    pub config_value: IoValue,
     pub identity_receipt_ref: String,
     pub index_receipt_refs: Vec<String>,
     pub source_gate_receipt_refs: Vec<String>,
-    pub source_gate_receipt_values: Vec<IOValue>,
+    pub source_gate_receipt_values: Vec<IoValue>,
     pub capability_receipt_refs: Vec<String>,
     pub resource_receipt_refs: Vec<String>,
     pub version_refs: Vec<String>,
@@ -134,7 +148,7 @@ pub struct RestartHealthReceiptValueInput<'a> {
 pub struct NodeRuntimeStart {
     pub decision: String,
     pub config: NodeConfig,
-    pub adapter_receipt_values: Vec<IOValue>,
+    pub adapter_receipt_values: Vec<IoValue>,
     pub adapter_receipts: Vec<NodeAdapterReceiptRef>,
     pub startup_receipt: NodeStartupReceipt,
 }
@@ -149,7 +163,7 @@ pub struct NodeControlRequest {
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,7 +177,7 @@ pub struct NodeControlReceipt {
     pub subreceipt_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,7 +190,7 @@ pub struct NodeShutdownReceipt {
     pub index_receipt_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,7 +206,7 @@ pub struct NodeHealthReceipt {
     pub replay_status: String,
     pub diagnostics: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,7 +220,7 @@ pub struct NodeConfig {
     pub resource_refs: Vec<String>,
     pub effect_profile_refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,7 +238,7 @@ pub struct NodeStartupReceipt {
     pub version_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 pub fn node_adapter_binding(name: &str, profile_ref: &str) -> Result<NodeAdapterBinding> {
@@ -236,7 +250,7 @@ pub fn node_adapter_binding(name: &str, profile_ref: &str) -> Result<NodeAdapter
     })
 }
 
-pub fn node_config_value(input: &ConfigValueInput<'_>) -> Result<IOValue> {
+pub fn node_config_value(input: &ConfigValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.node_identity_ref, "node config identity ref")?;
     validate_ref(input.state_root_ref, "node config state root ref")?;
     if input.adapters.is_empty() {
@@ -292,7 +306,7 @@ struct GateScan {
 }
 
 struct AdapterStart {
-    values: Vec<IOValue>,
+    values: Vec<IoValue>,
     receipts: Vec<NodeAdapterReceiptRef>,
 }
 
@@ -366,12 +380,13 @@ fn scan_gates(config_ref: &str, input: &NodeRuntimeStartInput) -> Result<GateSca
     let mut validation_refs = Vec::with_capacity(input.source_gate_receipt_values.len());
     let mut diagnostics = Vec::new();
     for (index, value) in input.source_gate_receipt_values.iter().enumerate() {
-        let validation = octet_gate::validate_octet_source_gate(&octet_gate::OctetSourceGateValidationInput {
-            consumer: "node-startup".to_string(),
-            subject_ref: config_ref.to_string(),
-            gate_receipt_value: Some(value.clone()),
-            source_scope: Vec::new(),
-        })?;
+        let validation =
+            crate::octet_gate::validate_octet_source_gate(&crate::octet_gate::OctetSourceGateValidationInput {
+                consumer: "node-startup".to_string(),
+                subject_ref: config_ref.to_string(),
+                gate_receipt_value: Some(value.clone()),
+                source_scope: Vec::new(),
+            })?;
         if let Some(expected_ref) = input.source_gate_receipt_refs.get(index)
             && validation.gate_receipt_ref.as_ref() != Some(expected_ref)
         {
@@ -482,7 +497,7 @@ pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeSt
     })
 }
 
-pub fn parse_node_config(value: &IOValue) -> Result<NodeConfig> {
+pub fn parse_node_config(value: &IoValue) -> Result<NodeConfig> {
     let fields = value
         .collect_simple_record("node-config-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-config-v1 ...>"))?;
@@ -513,7 +528,7 @@ pub fn node_adapter_receipt_value(
     decision: &str,
     adapter: &NodeAdapterBinding,
     diagnostics: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     node_adapter_lifecycle_receipt_value(&AdapterLifecycleReceiptInput {
         operation,
         decision,
@@ -524,7 +539,7 @@ pub fn node_adapter_receipt_value(
     })
 }
 
-pub fn node_adapter_lifecycle_receipt_value(input: &AdapterLifecycleReceiptInput<'_>) -> Result<IOValue> {
+pub fn node_adapter_lifecycle_receipt_value(input: &AdapterLifecycleReceiptInput<'_>) -> Result<IoValue> {
     validate_adapter_operation(input.operation)?;
     validate_decision(input.decision)?;
     validate_refs(input.index_receipt_refs, "node adapter index receipt ref")?;
@@ -548,7 +563,7 @@ pub fn node_adapter_lifecycle_receipt_value(input: &AdapterLifecycleReceiptInput
     ]))
 }
 
-pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Result<IOValue> {
+pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_ref(input.identity_receipt_ref, "node startup identity receipt ref")?;
     validate_refs(input.source_gate_receipt_refs, "node startup source gate receipt ref")?;
@@ -590,7 +605,7 @@ pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Resul
     ]))
 }
 
-pub fn node_control_request_value(input: &ControlRequestValueInput<'_>) -> Result<IOValue> {
+pub fn node_control_request_value(input: &ControlRequestValueInput<'_>) -> Result<IoValue> {
     validate_control_operation(input.operation)?;
     if let Some(target_ref) = input.target_ref {
         validate_ref(target_ref, "node control target ref")?;
@@ -622,7 +637,7 @@ pub fn node_control_request_value(input: &ControlRequestValueInput<'_>) -> Resul
     ]))
 }
 
-pub fn legacy_node_control_request_value(input: &ControlRequestValueInput<'_>) -> Result<IOValue> {
+pub fn legacy_node_control_request_value(input: &ControlRequestValueInput<'_>) -> Result<IoValue> {
     validate_control_operation(input.operation)?;
     if let Some(target_ref) = input.target_ref {
         validate_ref(target_ref, "node control target ref")?;
@@ -651,7 +666,7 @@ pub fn legacy_node_control_request_value(input: &ControlRequestValueInput<'_>) -
     ]))
 }
 
-pub fn parse_node_control_request(value: &IOValue) -> Result<NodeControlRequest> {
+pub fn parse_node_control_request(value: &IoValue) -> Result<NodeControlRequest> {
     if let Some(fields) = value.collect_simple_record("node-control-request-v1", Some(10)) {
         require_schema(&fields[0], NODE_CONTROL_REQUEST_SCHEMA, "node control request")?;
         let operation = record_string(&fields[1], "operation")?;
@@ -687,7 +702,7 @@ pub fn parse_node_control_request(value: &IOValue) -> Result<NodeControlRequest>
     })
 }
 
-pub fn node_control_receipt_value(input: &ControlReceiptValueInput<'_>) -> Result<IOValue> {
+pub fn node_control_receipt_value(input: &ControlReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_ref(input.startup_receipt_ref, "node control startup receipt ref")?;
     validate_refs(input.authority_receipt_refs, "node control authority receipt ref")?;
@@ -716,7 +731,7 @@ pub fn node_control_receipt_value(input: &ControlReceiptValueInput<'_>) -> Resul
     ]))
 }
 
-pub fn parse_node_control_receipt(value: &IOValue) -> Result<NodeControlReceipt> {
+pub fn parse_node_control_receipt(value: &IoValue) -> Result<NodeControlReceipt> {
     let fields = value
         .collect_simple_record("node-control-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-receipt-v1 ...>"))?;
@@ -741,7 +756,7 @@ pub fn node_control_deny_receipt_value(
     request: &NodeControlRequest,
     startup_receipt_ref: &str,
     diagnostic: &str,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     let diagnostics = [diagnostic.to_string()];
     node_control_receipt_value(&ControlReceiptValueInput {
         decision: "deny",
@@ -754,7 +769,7 @@ pub fn node_control_deny_receipt_value(
     })
 }
 
-pub fn node_shutdown_receipt_value(input: &ShutdownReceiptValueInput<'_>) -> Result<IOValue> {
+pub fn node_shutdown_receipt_value(input: &ShutdownReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_ref(input.startup_receipt_ref, "node shutdown startup receipt ref")?;
     validate_refs(input.drained_job_refs, "node shutdown drained job ref")?;
@@ -786,7 +801,7 @@ pub fn node_shutdown_receipt_value(input: &ShutdownReceiptValueInput<'_>) -> Res
     ]))
 }
 
-pub fn parse_node_shutdown_receipt(value: &IOValue) -> Result<NodeShutdownReceipt> {
+pub fn parse_node_shutdown_receipt(value: &IoValue) -> Result<NodeShutdownReceipt> {
     let fields = value
         .collect_simple_record("node-shutdown-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-shutdown-receipt-v1 ...>"))?;
@@ -806,7 +821,7 @@ pub fn parse_node_shutdown_receipt(value: &IOValue) -> Result<NodeShutdownReceip
     })
 }
 
-pub fn node_health_receipt_value(input: &HealthReceiptValueInput<'_>) -> Result<IOValue> {
+pub fn node_health_receipt_value(input: &HealthReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_ref(input.startup_receipt_ref, "node health startup receipt ref")?;
     if let Some(shutdown_receipt_ref) = input.shutdown_receipt_ref {
@@ -848,7 +863,7 @@ pub fn node_health_receipt_value(input: &HealthReceiptValueInput<'_>) -> Result<
     ]))
 }
 
-pub fn parse_node_health_receipt(value: &IOValue) -> Result<NodeHealthReceipt> {
+pub fn parse_node_health_receipt(value: &IoValue) -> Result<NodeHealthReceipt> {
     let fields = value
         .collect_simple_record("node-health-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-health-receipt-v1 ...>"))?;
@@ -871,7 +886,7 @@ pub fn parse_node_health_receipt(value: &IOValue) -> Result<NodeHealthReceipt> {
     })
 }
 
-pub fn node_restart_health_receipt_value(input: &RestartHealthReceiptValueInput<'_>) -> Result<IOValue> {
+pub fn node_restart_health_receipt_value(input: &RestartHealthReceiptValueInput<'_>) -> Result<IoValue> {
     let mut health_diagnostics = input.diagnostics.to_vec();
     if input.startup_receipt.decision != "pass" {
         health_diagnostics.push("previous startup receipt did not pass".to_string());
@@ -900,7 +915,7 @@ pub fn node_restart_health_receipt_value(input: &RestartHealthReceiptValueInput<
     })
 }
 
-pub fn parse_node_startup_receipt(value: &IOValue) -> Result<NodeStartupReceipt> {
+pub fn parse_node_startup_receipt(value: &IoValue) -> Result<NodeStartupReceipt> {
     let fields = value
         .collect_simple_record("node-startup-receipt-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-startup-receipt-v1 ...>"))?;
@@ -959,15 +974,15 @@ fn ensure_unique_adapter_names(adapters: &[NodeAdapterBinding]) -> Result<()> {
     Ok(())
 }
 
-fn adapter_binding_value(binding: &NodeAdapterBinding) -> IOValue {
+fn adapter_binding_value(binding: &NodeAdapterBinding) -> IoValue {
     record("adapter", vec![string(&binding.name), string(&binding.profile_ref)])
 }
 
-fn adapter_receipt_ref_value(receipt: &NodeAdapterReceiptRef) -> IOValue {
+fn adapter_receipt_ref_value(receipt: &NodeAdapterReceiptRef) -> IoValue {
     record("adapter", vec![string(&receipt.name), string(&receipt.receipt_ref)])
 }
 
-fn parse_adapter_bindings(value: &Value<IOValue>) -> Result<Vec<NodeAdapterBinding>> {
+fn parse_adapter_bindings(value: &Value<IoValue>) -> Result<Vec<NodeAdapterBinding>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, "adapters", 1)?;
     let items = required_sequence(&record[0], "node adapters")?;
@@ -985,7 +1000,7 @@ fn parse_adapter_bindings(value: &Value<IOValue>) -> Result<Vec<NodeAdapterBindi
     Ok(adapters)
 }
 
-fn parse_adapter_receipt_refs(value: &Value<IOValue>) -> Result<Vec<NodeAdapterReceiptRef>> {
+fn parse_adapter_receipt_refs(value: &Value<IoValue>) -> Result<Vec<NodeAdapterReceiptRef>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, "adapters", 1)?;
     let items = required_sequence(&record[0], "node adapter receipt refs")?;
@@ -1004,25 +1019,25 @@ fn parse_adapter_receipt_refs(value: &Value<IOValue>) -> Result<Vec<NodeAdapterR
     Ok(adapters)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
@@ -1033,7 +1048,7 @@ fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String
     Ok(refs)
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
@@ -1045,44 +1060,44 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1092,13 +1107,13 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn checks_value(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
@@ -1124,7 +1139,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -1219,8 +1234,9 @@ mod tests {
         canonical_hash(&record("node-runtime-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    fn clean_source_gate() -> (String, IOValue) {
-        let value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate fixture");
+    fn clean_source_gate() -> (String, IoValue) {
+        let value =
+            crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate fixture");
         let reference = canonical_hash(&value).expect("octet gate ref");
         (reference, value)
     }
@@ -1245,7 +1261,7 @@ mod tests {
         .collect()
     }
 
-    fn test_node_config_value(adapters: &[NodeAdapterBinding]) -> IOValue {
+    fn test_node_config_value(adapters: &[NodeAdapterBinding]) -> IoValue {
         let node_identity_ref = test_ref("node-id");
         let state_root_ref = test_ref("state-root");
         let policy_refs = vec![test_ref("policy")];
