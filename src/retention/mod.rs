@@ -1,20 +1,44 @@
-use std::borrow::Cow;
-use std::collections::BTreeSet;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-
-use preserves::CompoundClass;
-use preserves::IOValue;
-use preserves::Value;
-use preserves::ValueClass;
-
 use crate::bounded::VecSink;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::node_daemon;
 use crate::node_runtime;
 use crate::preserves_rail;
+
+type BTreeSet<T> = std::collections::BTreeSet<T>;
+type CompoundClass = preserves::CompoundClass;
+type IOValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Path = std::path::Path;
+type PathBuf = std::path::PathBuf;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
+type ValueClass = preserves::ValueClass;
+
+mod fs {
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    pub(super) fn read_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<std::fs::ReadDir> {
+        std::fs::read_dir(path)
+    }
+
+    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
+        std::fs::read_to_string(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+
+    pub(super) fn remove_file(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_file(path)
+    }
+
+    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path, contents)
+    }
+}
 
 pub const CLASS_EPHEMERAL_CACHE: &str = "ephemeral-cache";
 pub const CLASS_DEBUG_TRACE: &str = "debug-trace";
@@ -5916,7 +5940,7 @@ fn record_label_string(value: &IOValue) -> Option<String> {
     if !value.is_record() {
         return None;
     }
-    value.label().as_symbol().map(Cow::into_owned)
+    value.label().as_symbol().map(std::borrow::Cow::into_owned)
 }
 
 fn retention_candidate_bundle_profile_value(input: &RetentionCandidateBundleProfileValueInput<'_>) -> Result<IOValue> {
@@ -8581,17 +8605,14 @@ const ADMISSION_KINDS: &[&str] = &[
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::net::Ipv4Addr;
-    use std::path::Path;
-    use std::path::PathBuf;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-    use std::time::Duration;
-
     use n0_future::StreamExt;
 
     use super::*;
+
+    type AtomicU64 = std::sync::atomic::AtomicU64;
+    type Duration = std::time::Duration;
+    type Ipv4Addr = std::net::Ipv4Addr;
+    type Ordering = std::sync::atomic::Ordering;
 
     #[test]
     fn pinned_objects_are_not_delete_eligible_until_unpinned() {
