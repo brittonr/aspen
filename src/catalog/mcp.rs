@@ -1,5 +1,3 @@
-use crate::catalog;
-
 type Path = std::path::Path;
 type IoValue = preserves::IOValue;
 type PreservesRecord<T> = preserves::Record<T>;
@@ -271,7 +269,7 @@ fn dispatch_read_only(
 
 fn list_result(registry_root: &Path, ledger_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
     let kind = optional_arg_string(&request.args, "kind");
-    catalog::list(registry_root, ledger_root, &catalog::CatalogListInput {
+    crate::catalog::list(registry_root, ledger_root, &crate::catalog::CatalogListInput {
         kind,
         visibility: request.visibility.clone(),
     })
@@ -282,7 +280,7 @@ fn view_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Catal
     let reference = required_arg_string(&request.args, "reference")?;
     let should_include_payload = arg_bool(&request.args, "payload", false)?;
     let should_redact_payload = arg_bool(&request.args, "redacted", true)?;
-    catalog::view(registry_root, ledger_root, &catalog::CatalogViewInput {
+    crate::catalog::view(registry_root, ledger_root, &crate::catalog::CatalogViewInput {
         reference,
         include_payload: should_include_payload,
         redacted: should_redact_payload,
@@ -297,7 +295,7 @@ fn chunk_store_result(chunk_root: Option<&Path>, request: &CatalogMcpRequest) ->
             "catalog MCP chunk-store tool requires a chunk store root supplied by the caller",
         ));
     };
-    catalog::chunk_store(chunk_root, &catalog::CatalogChunkStoreInput {
+    crate::catalog::chunk_store(chunk_root, &crate::catalog::CatalogChunkStoreInput {
         visibility: request.visibility.clone(),
     })
     .map(CoreResult::Query)
@@ -305,7 +303,7 @@ fn chunk_store_result(chunk_root: Option<&Path>, request: &CatalogMcpRequest) ->
 
 fn deps_result(registry_root: &Path, ledger_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
     let graph_input = graph_input(request)?;
-    catalog::dependencies(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
+    crate::catalog::dependencies(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
 }
 
 fn dependents_result(
@@ -314,7 +312,7 @@ fn dependents_result(
     request: &CatalogMcpRequest,
 ) -> Result<CoreResult> {
     let graph_input = graph_input(request)?;
-    catalog::dependents(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
+    crate::catalog::dependents(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
 }
 
 fn receipts_result(
@@ -323,11 +321,11 @@ fn receipts_result(
     request: &CatalogMcpRequest,
 ) -> Result<CoreResult> {
     let graph_input = graph_input(request)?;
-    catalog::receipts(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
+    crate::catalog::receipts(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
 }
 
-fn graph_input(request: &CatalogMcpRequest) -> Result<catalog::CatalogGraphInput> {
-    Ok(catalog::CatalogGraphInput {
+fn graph_input(request: &CatalogMcpRequest) -> Result<crate::catalog::CatalogGraphInput> {
+    Ok(crate::catalog::CatalogGraphInput {
         reference: required_arg_string(&request.args, "reference")?,
         transitive: arg_bool(&request.args, "transitive", false)?,
         visibility: request.visibility.clone(),
@@ -341,9 +339,9 @@ fn short_id_result(
 ) -> Result<CoreResult> {
     let prefix = required_arg_string(&request.args, "prefix")?;
     let min_length =
-        usize::try_from(arg_u64(&request.args, "min-length", catalog::DEFAULT_SHORT_ID_MIN_LENGTH as u64)?)
+        usize::try_from(arg_u64(&request.args, "min-length", crate::catalog::DEFAULT_SHORT_ID_MIN_LENGTH as u64)?)
             .map_err(|error| MoltenError::invalid_harness(format!("catalog MCP min-length is unsupported: {error}")))?;
-    catalog::resolve_short_id(registry_root, ledger_root, &catalog::CatalogShortIdInput {
+    crate::catalog::resolve_short_id(registry_root, ledger_root, &crate::catalog::CatalogShortIdInput {
         prefix,
         min_length,
         visibility: request.visibility.clone(),
@@ -496,7 +494,7 @@ fn search_result(
     request: &CatalogMcpRequest,
     filters: Vec<CatalogFilter>,
 ) -> Result<CoreResult> {
-    catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
+    crate::catalog::search(registry_root, ledger_root, &crate::catalog::CatalogSearchInput {
         root_refs: arg_strings(&request.args, "root")?,
         include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
         include_dependents: arg_bool(&request.args, "include-dependents", true)?,
@@ -607,8 +605,8 @@ fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IoValue> {
 }
 
 enum CoreResult {
-    Query(catalog::CatalogQueryResult),
-    ShortId(catalog::CatalogShortIdResolution),
+    Query(crate::catalog::CatalogQueryResult),
+    ShortId(crate::catalog::CatalogShortIdResolution),
 }
 
 impl From<CoreResult> for DispatchPayload {
