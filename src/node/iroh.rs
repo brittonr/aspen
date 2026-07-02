@@ -1,18 +1,3 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
-use preserves::IOValue;
-
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-
 pub const IROH_PROTOCOL_ROUTER_SCHEMA: &str = "molten.node.iroh-protocol-router-receipt.v1";
 pub const IROH_FRAMED_ENVELOPE_SCHEMA: &str = "molten.node.iroh-framed-envelope-receipt.v1";
 pub const IROH_STREAM_SESSION_SCHEMA: &str = "molten.node.iroh-stream-session-receipt.v1";
@@ -72,7 +57,7 @@ pub struct ProtocolHandlerDescriptor {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProtocolRegistry {
-    pub handlers: BTreeMap<String, ProtocolHandlerDescriptor>,
+    pub handlers: std::collections::BTreeMap<String, ProtocolHandlerDescriptor>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,7 +84,7 @@ pub struct RouterDecision {
     pub previous_generation: Option<u64>,
     pub diagnostics: Vec<String>,
     pub registry: ProtocolRegistry,
-    pub receipt_value: IOValue,
+    pub receipt_value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,7 +133,7 @@ pub struct FramedEnvelopeDecision {
     pub declared_envelope_ref: String,
     pub actual_envelope_ref: Option<String>,
     pub diagnostics: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -177,7 +162,7 @@ pub struct ServiceSessionDecision {
     pub interaction_kind: String,
     pub path_kind: String,
     pub diagnostics: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,7 +182,7 @@ pub struct NetworkDiagnosticsInput {
 pub struct DiagnosticDecision {
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -222,12 +207,12 @@ impl DiagnosticLog {
         self.values
     }
 
-    fn push(&mut self, diagnostic: impl Into<String>) -> Result<()> {
+    fn push(&mut self, diagnostic: impl Into<String>) -> crate::error::Result<()> {
         let next = self
             .values
             .len()
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("diagnostic count overflow"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("diagnostic count overflow"))?;
         validate_bounded_value_count(next, MAX_DIAGNOSTICS, "diagnostic")?;
         self.values.push(diagnostic.into());
         Ok(())
@@ -235,19 +220,21 @@ impl DiagnosticLog {
 }
 
 trait DiagnosticSink {
-    fn push_bounded(&mut self, diagnostic: String) -> Result<()>;
+    fn push_bounded(&mut self, diagnostic: String) -> crate::error::Result<()>;
 }
 
 impl DiagnosticSink for DiagnosticLog {
-    fn push_bounded(&mut self, diagnostic: String) -> Result<()> {
+    fn push_bounded(&mut self, diagnostic: String) -> crate::error::Result<()> {
         self.push(diagnostic)
     }
 }
 
 impl DiagnosticSink for Vec<String> {
-    fn push_bounded(&mut self, diagnostic: String) -> Result<()> {
-        let next =
-            self.len().checked_add(1).ok_or_else(|| MoltenError::invalid_harness("diagnostic count overflow"))?;
+    fn push_bounded(&mut self, diagnostic: String) -> crate::error::Result<()> {
+        let next = self
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("diagnostic count overflow"))?;
         validate_bounded_value_count(next, MAX_DIAGNOSTICS, "diagnostic")?;
         self.push(diagnostic);
         Ok(())
@@ -320,7 +307,7 @@ pub struct MetricsSnapshotDecision {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub openmetrics: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -367,7 +354,7 @@ impl<'a> RouterEvaluator<'a> {
         }
     }
 
-    fn evaluate(mut self) -> Result<RouterEvaluation> {
+    fn evaluate(mut self) -> crate::error::Result<RouterEvaluation> {
         let is_dispatchable = self.collect_admission_diagnostics()?;
         let mutation = if is_dispatchable {
             self.dispatch_operation()?
@@ -380,7 +367,7 @@ impl<'a> RouterEvaluator<'a> {
         })
     }
 
-    fn collect_admission_diagnostics(&mut self) -> Result<bool> {
+    fn collect_admission_diagnostics(&mut self) -> crate::error::Result<bool> {
         let is_alpn_valid = collect_alpn_diagnostic(&self.input.alpn, &mut self.diagnostics).is_ok();
         let is_handler_valid = collect_handler_diagnostic(&self.input.handler_kind, &mut self.diagnostics).is_ok();
         collect_ref_diagnostics(&self.input.authority_refs, "authority", &mut self.diagnostics)?;
@@ -409,7 +396,7 @@ impl<'a> RouterEvaluator<'a> {
             && !self.input.evidence_refs.is_empty()
     }
 
-    fn dispatch_operation(&mut self) -> Result<RouterMutation> {
+    fn dispatch_operation(&mut self) -> crate::error::Result<RouterMutation> {
         match self.input.operation.as_str() {
             "install" => self.install_operation(),
             "replace" => self.replace_operation(),
@@ -422,7 +409,7 @@ impl<'a> RouterEvaluator<'a> {
         }
     }
 
-    fn install_operation(&mut self) -> Result<RouterMutation> {
+    fn install_operation(&mut self) -> crate::error::Result<RouterMutation> {
         if let Some(current_generation) = self.current_generation() {
             push_diagnostic(&mut self.diagnostics, "ALPN already registered; use replace with current generation")?;
             return Ok(self.denied(Some(current_generation)));
@@ -439,7 +426,7 @@ impl<'a> RouterEvaluator<'a> {
         })
     }
 
-    fn replace_operation(&mut self) -> Result<RouterMutation> {
+    fn replace_operation(&mut self) -> crate::error::Result<RouterMutation> {
         let Some(current_generation) = self.current_generation() else {
             push_diagnostic(&mut self.diagnostics, "cannot replace unknown ALPN")?;
             return Ok(self.denied(None));
@@ -460,7 +447,7 @@ impl<'a> RouterEvaluator<'a> {
         })
     }
 
-    fn remove_operation(&mut self) -> Result<RouterMutation> {
+    fn remove_operation(&mut self) -> crate::error::Result<RouterMutation> {
         let Some(current_generation) = self.current_generation() else {
             push_diagnostic(&mut self.diagnostics, "cannot remove unknown ALPN")?;
             return Ok(self.denied(None));
@@ -479,7 +466,7 @@ impl<'a> RouterEvaluator<'a> {
         })
     }
 
-    fn unsupported_alpn_operation(&mut self) -> Result<RouterMutation> {
+    fn unsupported_alpn_operation(&mut self) -> crate::error::Result<RouterMutation> {
         if self.current_generation().is_some() {
             push_diagnostic(&mut self.diagnostics, "ALPN is registered; unsupported-alpn denial is not applicable")?;
             return Ok(self.denied(None));
@@ -497,7 +484,7 @@ impl<'a> RouterEvaluator<'a> {
         self.registry.handlers.get(&self.input.alpn).map(|handler| handler.generation)
     }
 
-    fn is_replacement_admitted(&mut self, current_generation: u64) -> Result<bool> {
+    fn is_replacement_admitted(&mut self, current_generation: u64) -> crate::error::Result<bool> {
         let expected_generation = Some(current_generation);
         if self.input.prior_generation != expected_generation {
             push_diagnostic(
@@ -518,7 +505,7 @@ impl<'a> RouterEvaluator<'a> {
         Ok(true)
     }
 
-    fn is_remove_admitted(&mut self, current_generation: u64) -> Result<bool> {
+    fn is_remove_admitted(&mut self, current_generation: u64) -> crate::error::Result<bool> {
         let expected_generation = Some(current_generation);
         if self.input.prior_generation != expected_generation {
             push_diagnostic(
@@ -545,7 +532,10 @@ impl<'a> RouterEvaluator<'a> {
     }
 }
 
-pub fn evaluate_router_operation(registry: &ProtocolRegistry, input: &RouterOperationInput) -> Result<RouterDecision> {
+pub fn evaluate_router_operation(
+    registry: &ProtocolRegistry,
+    input: &RouterOperationInput,
+) -> crate::error::Result<RouterDecision> {
     let evaluation = RouterEvaluator::new(registry, input).evaluate()?;
     let decision = if evaluation.diagnostics.is_empty() {
         "pass"
@@ -601,7 +591,7 @@ impl<'a> FrameEvaluator<'a> {
         }
     }
 
-    fn evaluate(mut self) -> Result<FrameEvaluation> {
+    fn evaluate(mut self) -> crate::error::Result<FrameEvaluation> {
         self.collect_admission_diagnostics()?;
         let actual_ref = if self.should_parse_payload() {
             Some(self.evaluate_payload()?)
@@ -614,7 +604,7 @@ impl<'a> FrameEvaluator<'a> {
         })
     }
 
-    fn collect_admission_diagnostics(&mut self) -> Result<()> {
+    fn collect_admission_diagnostics(&mut self) -> crate::error::Result<()> {
         collect_alpn_diagnostic(&self.input.alpn, &mut self.diagnostics).ok();
         validate_text(&self.input.peer, "frame peer", &mut self.diagnostics)?;
         validate_text(&self.input.node, "frame node", &mut self.diagnostics)?;
@@ -637,14 +627,14 @@ impl<'a> FrameEvaluator<'a> {
         self.collect_limit_diagnostics()
     }
 
-    fn collect_registry_diagnostics(&mut self) -> Result<()> {
+    fn collect_registry_diagnostics(&mut self) -> crate::error::Result<()> {
         if !self.registry.handlers.contains_key(&self.input.alpn) {
             push_diagnostic(&mut self.diagnostics, "unsupported ALPN denied before payload delivery")?;
         }
         Ok(())
     }
 
-    fn collect_limit_diagnostics(&mut self) -> Result<()> {
+    fn collect_limit_diagnostics(&mut self) -> crate::error::Result<()> {
         if self.input.declared_length > self.input.limits.max_frame_bytes {
             push_diagnostic(&mut self.diagnostics, "oversized frame denied before parsing payload")?;
         }
@@ -666,7 +656,7 @@ impl<'a> FrameEvaluator<'a> {
         !self.diagnostics.iter().any(|diagnostic| diagnostic.contains("oversized frame"))
     }
 
-    fn evaluate_payload(&mut self) -> Result<String> {
+    fn evaluate_payload(&mut self) -> crate::error::Result<String> {
         let byte_len = self.input.envelope_bytes.len() as u64;
         if byte_len != self.input.declared_length {
             push_diagnostic(
@@ -678,14 +668,14 @@ impl<'a> FrameEvaluator<'a> {
             Ok(value) => value,
             Err(error) => {
                 push_diagnostic(&mut self.diagnostics, format!("malformed Preserves frame: {error}"))?;
-                record("invalid-frame", Vec::new())
+                crate::preserves_rail::record("invalid-frame", Vec::new())
             }
         };
-        let encoded = canonical_bytes(&parsed).unwrap_or_default();
+        let encoded = crate::preserves_rail::canonical_bytes(&parsed).unwrap_or_default();
         if encoded != self.input.envelope_bytes && !self.input.envelope_bytes.is_empty() {
             push_diagnostic(&mut self.diagnostics, "frame payload is not canonical Preserves bytes")?;
         }
-        let computed = content_ref_from_bytes(&self.input.envelope_bytes);
+        let computed = crate::preserves_rail::content_ref_from_bytes(&self.input.envelope_bytes);
         if computed != self.input.declared_envelope_ref {
             push_diagnostic(
                 &mut self.diagnostics,
@@ -702,7 +692,7 @@ impl<'a> FrameEvaluator<'a> {
 pub fn evaluate_framed_envelope(
     registry: &ProtocolRegistry,
     input: &FramedEnvelopeInput,
-) -> Result<FramedEnvelopeDecision> {
+) -> crate::error::Result<FramedEnvelopeDecision> {
     let evaluation = FrameEvaluator::new(registry, input).evaluate()?;
     let decision = if evaluation.diagnostics.is_empty() {
         "pass"
@@ -741,7 +731,7 @@ pub fn evaluate_framed_envelope(
     })
 }
 
-pub fn evaluate_service_session(input: &ServiceSessionInput) -> Result<ServiceSessionDecision> {
+pub fn evaluate_service_session(input: &ServiceSessionInput) -> crate::error::Result<ServiceSessionDecision> {
     let mut diagnostics = Vec::new();
     validate_bounded_text(&input.service_id, "service id", MAX_SERVICE_ID_BYTES, &mut diagnostics)?;
     validate_bounded_text(&input.operation_id, "operation id", MAX_OPERATION_ID_BYTES, &mut diagnostics)?;
@@ -774,7 +764,7 @@ pub fn evaluate_service_session(input: &ServiceSessionInput) -> Result<ServiceSe
     })
 }
 
-pub fn network_diagnostics_report(input: &NetworkDiagnosticsInput) -> Result<DiagnosticDecision> {
+pub fn network_diagnostics_report(input: &NetworkDiagnosticsInput) -> crate::error::Result<DiagnosticDecision> {
     let mut diagnostics = input.diagnostics.clone();
     ensure_string_count(&diagnostics, MAX_DIAGNOSTICS, "network diagnostics")?;
     validate_status(&input.udp_status, &["pass", "deny", "degraded", "unavailable"], "UDP status")?;
@@ -797,23 +787,25 @@ pub fn network_diagnostics_report(input: &NetworkDiagnosticsInput) -> Result<Dia
         "degraded"
     }
     .to_string();
-    let receipt_value = record("network-diagnostics-report-v1", vec![
-        string(NETWORK_DIAGNOSTICS_REPORT_SCHEMA),
-        record("decision", vec![string(&decision)]),
-        record("nat", vec![string(&input.nat_class)]),
-        record("udp", vec![string(&input.udp_status)]),
-        record("direct-path", vec![string(&input.direct_path_status)]),
-        record("relay-latency-ms", vec![optional_u64_value(input.relay_latency_ms)]),
-        record("port-map-protocols", vec![sequence(input.port_map_protocols.iter().map(string).collect())]),
-        record("interfaces", vec![refs_value(&input.interface_refs)?]),
-        record("routes", vec![refs_value(&input.route_refs)?]),
-        record("diagnostics", vec![strings_value(&diagnostics)?]),
+    let receipt_value = crate::preserves_rail::record("network-diagnostics-report-v1", vec![
+        crate::preserves_rail::string(NETWORK_DIAGNOSTICS_REPORT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(&decision)]),
+        crate::preserves_rail::record("nat", vec![crate::preserves_rail::string(&input.nat_class)]),
+        crate::preserves_rail::record("udp", vec![crate::preserves_rail::string(&input.udp_status)]),
+        crate::preserves_rail::record("direct-path", vec![crate::preserves_rail::string(&input.direct_path_status)]),
+        crate::preserves_rail::record("relay-latency-ms", vec![optional_u64_value(input.relay_latency_ms)]),
+        crate::preserves_rail::record("port-map-protocols", vec![crate::preserves_rail::sequence(
+            input.port_map_protocols.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("interfaces", vec![refs_value(&input.interface_refs)?]),
+        crate::preserves_rail::record("routes", vec![refs_value(&input.route_refs)?]),
+        crate::preserves_rail::record("diagnostics", vec![strings_value(&diagnostics)?]),
         checks_value(&[
             ("diagnostics-evidence-only", "pass"),
             ("live-observations-recorded", pass_fail(input.live_observations_recorded)),
             ("no-transport-derived-authority", "pass"),
         ]),
-        record("caveat", vec![string(EVIDENCE_ONLY_CAVEAT)]),
+        crate::preserves_rail::record("caveat", vec![crate::preserves_rail::string(EVIDENCE_ONLY_CAVEAT)]),
     ]);
     Ok(DiagnosticDecision {
         decision,
@@ -822,7 +814,7 @@ pub fn network_diagnostics_report(input: &NetworkDiagnosticsInput) -> Result<Dia
     })
 }
 
-pub fn connectivity_probe_receipt(input: &ConnectivityProbeInput) -> Result<DiagnosticDecision> {
+pub fn connectivity_probe_receipt(input: &ConnectivityProbeInput) -> crate::error::Result<DiagnosticDecision> {
     let mut diagnostics = Vec::new();
     validate_text(&input.source_node, "source node", &mut diagnostics)?;
     validate_text(&input.target_node, "target node", &mut diagnostics)?;
@@ -861,19 +853,23 @@ pub fn connectivity_probe_receipt(input: &ConnectivityProbeInput) -> Result<Diag
         "pass"
     }
     .to_string();
-    let receipt_value = record("network-connectivity-probe-receipt-v1", vec![
-        string(NETWORK_CONNECTIVITY_PROBE_SCHEMA),
-        record("decision", vec![string(&decision)]),
-        record("source", vec![string(&input.source_node)]),
-        record("target", vec![string(&input.target_node)]),
-        record("path", vec![string(path_status)]),
-        record("expected-endpoint", vec![string(&input.expected_endpoint_ref)]),
-        record("observed-endpoint", vec![optional_string_value(input.observed_endpoint_ref.as_deref())]),
-        record("authority", vec![refs_value(&input.authority_refs)?]),
-        record("policy", vec![refs_value(&input.policy_refs)?]),
-        record("resource", vec![refs_value(&input.resource_refs)?]),
-        record("evidence", vec![refs_value(&input.evidence_refs)?]),
-        record("diagnostics", vec![strings_value(&diagnostics)?]),
+    let receipt_value = crate::preserves_rail::record("network-connectivity-probe-receipt-v1", vec![
+        crate::preserves_rail::string(NETWORK_CONNECTIVITY_PROBE_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(&decision)]),
+        crate::preserves_rail::record("source", vec![crate::preserves_rail::string(&input.source_node)]),
+        crate::preserves_rail::record("target", vec![crate::preserves_rail::string(&input.target_node)]),
+        crate::preserves_rail::record("path", vec![crate::preserves_rail::string(path_status)]),
+        crate::preserves_rail::record("expected-endpoint", vec![crate::preserves_rail::string(
+            &input.expected_endpoint_ref,
+        )]),
+        crate::preserves_rail::record("observed-endpoint", vec![optional_string_value(
+            input.observed_endpoint_ref.as_deref(),
+        )]),
+        crate::preserves_rail::record("authority", vec![refs_value(&input.authority_refs)?]),
+        crate::preserves_rail::record("policy", vec![refs_value(&input.policy_refs)?]),
+        crate::preserves_rail::record("resource", vec![refs_value(&input.resource_refs)?]),
+        crate::preserves_rail::record("evidence", vec![refs_value(&input.evidence_refs)?]),
+        crate::preserves_rail::record("diagnostics", vec![strings_value(&diagnostics)?]),
         checks_value(&[
             ("connectivity-diagnostic-only", "pass"),
             ("no-state-mutation", pass_fail(decision != "pass" || !input.evidence_refs.is_empty())),
@@ -887,7 +883,7 @@ pub fn connectivity_probe_receipt(input: &ConnectivityProbeInput) -> Result<Diag
     })
 }
 
-pub fn port_mapping_receipt(input: &PortMappingInput) -> Result<DiagnosticDecision> {
+pub fn port_mapping_receipt(input: &PortMappingInput) -> crate::error::Result<DiagnosticDecision> {
     let mut diagnostics = Vec::new();
     validate_status(&input.mode, &["probe", "mutate"], "port mapping mode")?;
     validate_bounded_value_count(input.available_protocols.len(), MAX_NETWORK_OBSERVATIONS, "available protocol")?;
@@ -918,22 +914,24 @@ pub fn port_mapping_receipt(input: &PortMappingInput) -> Result<DiagnosticDecisi
         "deny"
     }
     .to_string();
-    let receipt_value = record("network-port-mapping-receipt-v1", vec![
-        string(NETWORK_PORT_MAPPING_SCHEMA),
-        record("decision", vec![string(&decision)]),
-        record("mode", vec![string(&input.mode)]),
-        record("protocol", vec![string(&input.protocol)]),
-        record("requester", vec![optional_string_value(input.requester_ref.as_deref())]),
-        record("node", vec![optional_string_value(input.node_identity_ref.as_deref())]),
-        record("external-port", vec![optional_u64_value(input.external_port)]),
-        record("internal-port", vec![optional_u64_value(input.internal_port)]),
-        record("duration-seconds", vec![optional_u64_value(input.duration_seconds)]),
-        record("available-protocols", vec![sequence(input.available_protocols.iter().map(string).collect())]),
-        record("authority", vec![refs_value(&input.authority_refs)?]),
-        record("policy", vec![refs_value(&input.policy_refs)?]),
-        record("resource", vec![refs_value(&input.resource_refs)?]),
-        record("operator-evidence", vec![refs_value(&input.operator_evidence_refs)?]),
-        record("diagnostics", vec![strings_value(&diagnostics)?]),
+    let receipt_value = crate::preserves_rail::record("network-port-mapping-receipt-v1", vec![
+        crate::preserves_rail::string(NETWORK_PORT_MAPPING_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(&decision)]),
+        crate::preserves_rail::record("mode", vec![crate::preserves_rail::string(&input.mode)]),
+        crate::preserves_rail::record("protocol", vec![crate::preserves_rail::string(&input.protocol)]),
+        crate::preserves_rail::record("requester", vec![optional_string_value(input.requester_ref.as_deref())]),
+        crate::preserves_rail::record("node", vec![optional_string_value(input.node_identity_ref.as_deref())]),
+        crate::preserves_rail::record("external-port", vec![optional_u64_value(input.external_port)]),
+        crate::preserves_rail::record("internal-port", vec![optional_u64_value(input.internal_port)]),
+        crate::preserves_rail::record("duration-seconds", vec![optional_u64_value(input.duration_seconds)]),
+        crate::preserves_rail::record("available-protocols", vec![crate::preserves_rail::sequence(
+            input.available_protocols.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("authority", vec![refs_value(&input.authority_refs)?]),
+        crate::preserves_rail::record("policy", vec![refs_value(&input.policy_refs)?]),
+        crate::preserves_rail::record("resource", vec![refs_value(&input.resource_refs)?]),
+        crate::preserves_rail::record("operator-evidence", vec![refs_value(&input.operator_evidence_refs)?]),
+        crate::preserves_rail::record("diagnostics", vec![strings_value(&diagnostics)?]),
         checks_value(&[
             ("probe-does-not-mutate", pass_fail(input.mode == "probe")),
             ("mutation-deny-by-default", pass_fail(input.mode != "mutate" || decision == "pass")),
@@ -947,7 +945,7 @@ pub fn port_mapping_receipt(input: &PortMappingInput) -> Result<DiagnosticDecisi
     })
 }
 
-pub fn watcher_snapshot_value(input: &NetworkWatcherInput) -> Result<DiagnosticDecision> {
+pub fn watcher_snapshot_value(input: &NetworkWatcherInput) -> crate::error::Result<DiagnosticDecision> {
     let mut diagnostics = Vec::new();
     validate_text(&input.node, "watcher node", &mut diagnostics)?;
     validate_text(&input.interface_state, "interface state", &mut diagnostics)?;
@@ -958,26 +956,31 @@ pub fn watcher_snapshot_value(input: &NetworkWatcherInput) -> Result<DiagnosticD
     if input.retained_event_count > input.observed_event_count {
         push_diagnostic(&mut diagnostics, "retained watcher event count exceeds observed event count")?;
     }
-    let retained_event_count = usize::try_from(input.retained_event_count)
-        .map_err(|error| MoltenError::invalid_harness(format!("retained watcher event count unsupported: {error}")))?;
+    let retained_event_count = usize::try_from(input.retained_event_count).map_err(|error| {
+        crate::error::MoltenError::invalid_harness(format!("retained watcher event count unsupported: {error}"))
+    })?;
     if retained_event_count > MAX_WATCHER_ITEMS {
         push_diagnostic(&mut diagnostics, "retained watcher events exceed latest-state bound")?;
     }
     collect_ref_diagnostics(&input.evidence_refs, "watcher evidence", &mut diagnostics)?;
     let decision = if diagnostics.is_empty() { "pass" } else { "degraded" }.to_string();
-    let receipt_value = record("network-watcher-snapshot-v1", vec![
-        string(NETWORK_WATCHER_SNAPSHOT_SCHEMA),
-        record("decision", vec![string(&decision)]),
-        record("node", vec![string(&input.node)]),
-        record("interface", vec![string(&input.interface_state)]),
-        record("address", vec![string(&input.address_state)]),
-        record("default-route", vec![string(&input.default_route)]),
-        record("relay", vec![string(&input.relay_state)]),
-        record("endpoint", vec![string(&input.endpoint_state)]),
-        record("observed-events", vec![u64_value(input.observed_event_count)]),
-        record("retained-events", vec![u64_value(input.retained_event_count)]),
-        record("evidence", vec![refs_value(&input.evidence_refs)?]),
-        record("diagnostics", vec![strings_value(&diagnostics)?]),
+    let receipt_value = crate::preserves_rail::record("network-watcher-snapshot-v1", vec![
+        crate::preserves_rail::string(NETWORK_WATCHER_SNAPSHOT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(&decision)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(&input.node)]),
+        crate::preserves_rail::record("interface", vec![crate::preserves_rail::string(&input.interface_state)]),
+        crate::preserves_rail::record("address", vec![crate::preserves_rail::string(&input.address_state)]),
+        crate::preserves_rail::record("default-route", vec![crate::preserves_rail::string(&input.default_route)]),
+        crate::preserves_rail::record("relay", vec![crate::preserves_rail::string(&input.relay_state)]),
+        crate::preserves_rail::record("endpoint", vec![crate::preserves_rail::string(&input.endpoint_state)]),
+        crate::preserves_rail::record("observed-events", vec![crate::preserves_rail::u64_value(
+            input.observed_event_count,
+        )]),
+        crate::preserves_rail::record("retained-events", vec![crate::preserves_rail::u64_value(
+            input.retained_event_count,
+        )]),
+        crate::preserves_rail::record("evidence", vec![refs_value(&input.evidence_refs)?]),
+        crate::preserves_rail::record("diagnostics", vec![strings_value(&diagnostics)?]),
         checks_value(&[
             ("latest-state-only", "pass"),
             ("bounded-event-buffer", pass_fail(retained_event_count <= MAX_WATCHER_ITEMS)),
@@ -991,7 +994,7 @@ pub fn watcher_snapshot_value(input: &NetworkWatcherInput) -> Result<DiagnosticD
     })
 }
 
-pub fn metrics_snapshot(input: &MetricsSnapshotInput) -> Result<MetricsSnapshotDecision> {
+pub fn metrics_snapshot(input: &MetricsSnapshotInput) -> crate::error::Result<MetricsSnapshotDecision> {
     let mut diagnostics = Vec::new();
     validate_text(&input.node, "metrics node", &mut diagnostics)?;
     collect_ref_diagnostics(std::slice::from_ref(&input.scrape_ref), "scrape", &mut diagnostics)?;
@@ -1006,18 +1009,26 @@ pub fn metrics_snapshot(input: &MetricsSnapshotInput) -> Result<MetricsSnapshotD
     let metric_refs = input
         .samples
         .iter()
-        .map(|sample| record("metric", vec![string(&sample.name), string(&sample.kind), u64_value(sample.value)]))
+        .map(|sample| {
+            crate::preserves_rail::record("metric", vec![
+                crate::preserves_rail::string(&sample.name),
+                crate::preserves_rail::string(&sample.kind),
+                crate::preserves_rail::u64_value(sample.value),
+            ])
+        })
         .collect();
-    let receipt_value = record("metrics-snapshot-receipt-v1", vec![
-        string(METRICS_SNAPSHOT_SCHEMA),
-        record("decision", vec![string(&decision)]),
-        record("node", vec![string(&input.node)]),
-        record("scrape", vec![string(&input.scrape_ref)]),
-        record("policy", vec![refs_value(&input.policy_refs)?]),
-        record("redaction", vec![refs_value(&input.redaction_refs)?]),
-        record("metrics", vec![sequence(metric_refs)]),
-        record("openmetrics-ref", vec![string(content_ref_from_bytes(openmetrics.as_bytes()))]),
-        record("diagnostics", vec![strings_value(&diagnostics)?]),
+    let receipt_value = crate::preserves_rail::record("metrics-snapshot-receipt-v1", vec![
+        crate::preserves_rail::string(METRICS_SNAPSHOT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(&decision)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(&input.node)]),
+        crate::preserves_rail::record("scrape", vec![crate::preserves_rail::string(&input.scrape_ref)]),
+        crate::preserves_rail::record("policy", vec![refs_value(&input.policy_refs)?]),
+        crate::preserves_rail::record("redaction", vec![refs_value(&input.redaction_refs)?]),
+        crate::preserves_rail::record("metrics", vec![crate::preserves_rail::sequence(metric_refs)]),
+        crate::preserves_rail::record("openmetrics-ref", vec![crate::preserves_rail::string(
+            crate::preserves_rail::content_ref_from_bytes(openmetrics.as_bytes()),
+        )]),
+        crate::preserves_rail::record("diagnostics", vec![strings_value(&diagnostics)?]),
         checks_value(&[
             ("labels-bounded", pass_fail(diagnostics.is_empty())),
             ("labels-redacted", pass_fail(diagnostics.is_empty())),
@@ -1032,7 +1043,9 @@ pub fn metrics_snapshot(input: &MetricsSnapshotInput) -> Result<MetricsSnapshotD
     })
 }
 
-pub fn external_diagnostics_bridge_receipt(input: &ExternalDiagnosticsBridgeInput) -> Result<DiagnosticDecision> {
+pub fn external_diagnostics_bridge_receipt(
+    input: &ExternalDiagnosticsBridgeInput,
+) -> crate::error::Result<DiagnosticDecision> {
     let mut diagnostics = Vec::new();
     validate_status(&input.mode, &["push", "remote-request"], "external diagnostics mode")?;
     if !input.enabled {
@@ -1056,19 +1069,27 @@ pub fn external_diagnostics_bridge_receipt(input: &ExternalDiagnosticsBridgeInpu
         "deny"
     }
     .to_string();
-    let receipt_value = record("external-diagnostics-bridge-receipt-v1", vec![
-        string(EXTERNAL_DIAGNOSTICS_BRIDGE_SCHEMA),
-        record("decision", vec![string(&decision)]),
-        record("mode", vec![string(&input.mode)]),
-        record("enabled", vec![string(if input.enabled { "true" } else { "false" })]),
-        record("target-service", vec![optional_string_value(input.target_service_ref.as_deref())]),
-        record("capability", vec![refs_value(&input.capability_refs)?]),
-        record("policy", vec![refs_value(&input.policy_refs)?]),
-        record("redaction-policy", vec![refs_value(&input.redaction_policy_refs)?]),
-        record("api-secret-provenance", vec![optional_string_value(input.api_secret_provenance_ref.as_deref())]),
-        record("operator-evidence", vec![refs_value(&input.operator_evidence_refs)?]),
-        record("expiry", vec![optional_string_value(input.expiry_ref.as_deref())]),
-        record("diagnostics", vec![strings_value(&diagnostics)?]),
+    let receipt_value = crate::preserves_rail::record("external-diagnostics-bridge-receipt-v1", vec![
+        crate::preserves_rail::string(EXTERNAL_DIAGNOSTICS_BRIDGE_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(&decision)]),
+        crate::preserves_rail::record("mode", vec![crate::preserves_rail::string(&input.mode)]),
+        crate::preserves_rail::record("enabled", vec![crate::preserves_rail::string(if input.enabled {
+            "true"
+        } else {
+            "false"
+        })]),
+        crate::preserves_rail::record("target-service", vec![optional_string_value(
+            input.target_service_ref.as_deref(),
+        )]),
+        crate::preserves_rail::record("capability", vec![refs_value(&input.capability_refs)?]),
+        crate::preserves_rail::record("policy", vec![refs_value(&input.policy_refs)?]),
+        crate::preserves_rail::record("redaction-policy", vec![refs_value(&input.redaction_policy_refs)?]),
+        crate::preserves_rail::record("api-secret-provenance", vec![optional_string_value(
+            input.api_secret_provenance_ref.as_deref(),
+        )]),
+        crate::preserves_rail::record("operator-evidence", vec![refs_value(&input.operator_evidence_refs)?]),
+        crate::preserves_rail::record("expiry", vec![optional_string_value(input.expiry_ref.as_deref())]),
+        crate::preserves_rail::record("diagnostics", vec![strings_value(&diagnostics)?]),
         checks_value(&[
             ("disabled-by-default", pass_fail(!input.enabled || decision == "pass")),
             ("secret-redacted", "pass"),
@@ -1098,22 +1119,22 @@ struct RouterReceiptInput<'a> {
     diagnostics: &'a [String],
 }
 
-fn router_receipt_value(input: RouterReceiptInput<'_>) -> Result<IOValue> {
-    Ok(record("iroh-protocol-router-receipt-v1", vec![
-        string(IROH_PROTOCOL_ROUTER_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("operation", vec![string(input.operation)]),
-        record("outcome", vec![string(input.outcome)]),
-        record("alpn", vec![string(input.alpn)]),
-        record("handler", vec![string(input.handler_kind)]),
-        record("generation", vec![optional_u64_value(input.generation)]),
-        record("previous-generation", vec![optional_u64_value(input.previous_generation)]),
-        record("authority", vec![refs_value(input.authority_refs)?]),
-        record("policy", vec![refs_value(input.policy_refs)?]),
-        record("resource", vec![refs_value(input.resource_refs)?]),
-        record("evidence", vec![refs_value(input.evidence_refs)?]),
-        record("shutdown-evidence", vec![optional_string_value(input.shutdown_evidence_ref)]),
-        record("diagnostics", vec![strings_value(input.diagnostics)?]),
+fn router_receipt_value(input: RouterReceiptInput<'_>) -> crate::error::Result<preserves::IOValue> {
+    Ok(crate::preserves_rail::record("iroh-protocol-router-receipt-v1", vec![
+        crate::preserves_rail::string(IROH_PROTOCOL_ROUTER_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(input.operation)]),
+        crate::preserves_rail::record("outcome", vec![crate::preserves_rail::string(input.outcome)]),
+        crate::preserves_rail::record("alpn", vec![crate::preserves_rail::string(input.alpn)]),
+        crate::preserves_rail::record("handler", vec![crate::preserves_rail::string(input.handler_kind)]),
+        crate::preserves_rail::record("generation", vec![optional_u64_value(input.generation)]),
+        crate::preserves_rail::record("previous-generation", vec![optional_u64_value(input.previous_generation)]),
+        crate::preserves_rail::record("authority", vec![refs_value(input.authority_refs)?]),
+        crate::preserves_rail::record("policy", vec![refs_value(input.policy_refs)?]),
+        crate::preserves_rail::record("resource", vec![refs_value(input.resource_refs)?]),
+        crate::preserves_rail::record("evidence", vec![refs_value(input.evidence_refs)?]),
+        crate::preserves_rail::record("shutdown-evidence", vec![optional_string_value(input.shutdown_evidence_ref)]),
+        crate::preserves_rail::record("diagnostics", vec![strings_value(input.diagnostics)?]),
         checks_value(&[
             ("authority-policy-resource-explicit", pass_fail(input.decision == "pass")),
             ("generationed-router", "pass"),
@@ -1141,24 +1162,26 @@ struct FramedReceiptInput<'a> {
     diagnostics: &'a [String],
 }
 
-fn framed_receipt_value(input: FramedReceiptInput<'_>) -> Result<IOValue> {
-    Ok(record("iroh-framed-envelope-receipt-v1", vec![
-        string(IROH_FRAMED_ENVELOPE_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("alpn", vec![string(input.alpn)]),
-        record("peer", vec![string(input.peer)]),
-        record("node", vec![string(input.node)]),
-        record("stream", vec![string(input.stream_id)]),
-        record("sequence", vec![u64_value(input.sequence)]),
-        record("length", vec![u64_value(input.declared_length)]),
-        record("declared-envelope", vec![string(input.declared_envelope_ref)]),
-        record("actual-envelope", vec![optional_string_value(input.actual_envelope_ref)]),
-        record("limit-profile", vec![string(input.limit_profile_ref)]),
-        record("authority", vec![refs_value(input.authority_refs)?]),
-        record("policy", vec![refs_value(input.policy_refs)?]),
-        record("resource", vec![refs_value(input.resource_refs)?]),
-        record("evidence", vec![refs_value(input.evidence_refs)?]),
-        record("diagnostics", vec![strings_value(input.diagnostics)?]),
+fn framed_receipt_value(input: FramedReceiptInput<'_>) -> crate::error::Result<preserves::IOValue> {
+    Ok(crate::preserves_rail::record("iroh-framed-envelope-receipt-v1", vec![
+        crate::preserves_rail::string(IROH_FRAMED_ENVELOPE_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
+        crate::preserves_rail::record("alpn", vec![crate::preserves_rail::string(input.alpn)]),
+        crate::preserves_rail::record("peer", vec![crate::preserves_rail::string(input.peer)]),
+        crate::preserves_rail::record("node", vec![crate::preserves_rail::string(input.node)]),
+        crate::preserves_rail::record("stream", vec![crate::preserves_rail::string(input.stream_id)]),
+        crate::preserves_rail::record("sequence", vec![crate::preserves_rail::u64_value(input.sequence)]),
+        crate::preserves_rail::record("length", vec![crate::preserves_rail::u64_value(input.declared_length)]),
+        crate::preserves_rail::record("declared-envelope", vec![crate::preserves_rail::string(
+            input.declared_envelope_ref,
+        )]),
+        crate::preserves_rail::record("actual-envelope", vec![optional_string_value(input.actual_envelope_ref)]),
+        crate::preserves_rail::record("limit-profile", vec![crate::preserves_rail::string(input.limit_profile_ref)]),
+        crate::preserves_rail::record("authority", vec![refs_value(input.authority_refs)?]),
+        crate::preserves_rail::record("policy", vec![refs_value(input.policy_refs)?]),
+        crate::preserves_rail::record("resource", vec![refs_value(input.resource_refs)?]),
+        crate::preserves_rail::record("evidence", vec![refs_value(input.evidence_refs)?]),
+        crate::preserves_rail::record("diagnostics", vec![strings_value(input.diagnostics)?]),
         checks_value(&[
             ("canonical-preserves-frame", pass_fail(input.decision == "pass")),
             ("frame-limits-bound", pass_fail(input.decision == "pass")),
@@ -1172,25 +1195,25 @@ fn service_session_receipt_value(
     input: &ServiceSessionInput,
     decision: &str,
     diagnostics: &[String],
-) -> Result<IOValue> {
-    Ok(record("iroh-stream-session-receipt-v1", vec![
-        string(IROH_STREAM_SESSION_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("service", vec![string(&input.service_id)]),
-        record("operation", vec![string(&input.operation_id)]),
-        record("interaction", vec![string(&input.interaction_kind)]),
-        record("path", vec![string(&input.path_kind)]),
-        record("request", vec![string(&input.request_ref)]),
-        record("responses", vec![refs_value(&input.response_refs)?]),
-        record("capability", vec![refs_value(&input.capability_refs)?]),
-        record("policy", vec![refs_value(&input.policy_refs)?]),
-        record("resource", vec![refs_value(&input.resource_refs)?]),
-        record("alpn", vec![optional_string_value(input.alpn.as_deref())]),
-        record("peer", vec![optional_string_value(input.peer.as_deref())]),
-        record("node", vec![optional_string_value(input.node.as_deref())]),
-        record("stream", vec![optional_string_value(input.stream_id.as_deref())]),
-        record("frames", vec![refs_value(&input.frame_receipt_refs)?]),
-        record("diagnostics", vec![strings_value(diagnostics)?]),
+) -> crate::error::Result<preserves::IOValue> {
+    Ok(crate::preserves_rail::record("iroh-stream-session-receipt-v1", vec![
+        crate::preserves_rail::string(IROH_STREAM_SESSION_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(decision)]),
+        crate::preserves_rail::record("service", vec![crate::preserves_rail::string(&input.service_id)]),
+        crate::preserves_rail::record("operation", vec![crate::preserves_rail::string(&input.operation_id)]),
+        crate::preserves_rail::record("interaction", vec![crate::preserves_rail::string(&input.interaction_kind)]),
+        crate::preserves_rail::record("path", vec![crate::preserves_rail::string(&input.path_kind)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&input.request_ref)]),
+        crate::preserves_rail::record("responses", vec![refs_value(&input.response_refs)?]),
+        crate::preserves_rail::record("capability", vec![refs_value(&input.capability_refs)?]),
+        crate::preserves_rail::record("policy", vec![refs_value(&input.policy_refs)?]),
+        crate::preserves_rail::record("resource", vec![refs_value(&input.resource_refs)?]),
+        crate::preserves_rail::record("alpn", vec![optional_string_value(input.alpn.as_deref())]),
+        crate::preserves_rail::record("peer", vec![optional_string_value(input.peer.as_deref())]),
+        crate::preserves_rail::record("node", vec![optional_string_value(input.node.as_deref())]),
+        crate::preserves_rail::record("stream", vec![optional_string_value(input.stream_id.as_deref())]),
+        crate::preserves_rail::record("frames", vec![refs_value(&input.frame_receipt_refs)?]),
+        crate::preserves_rail::record("diagnostics", vec![strings_value(diagnostics)?]),
         checks_value(&[
             ("canonical-local-remote-model", pass_fail(decision == "pass")),
             (
@@ -1202,7 +1225,7 @@ fn service_session_receipt_value(
     ]))
 }
 
-fn descriptor_from_input(input: &RouterOperationInput) -> Result<ProtocolHandlerDescriptor> {
+fn descriptor_from_input(input: &RouterOperationInput) -> crate::error::Result<ProtocolHandlerDescriptor> {
     Ok(ProtocolHandlerDescriptor {
         alpn: input.alpn.clone(),
         handler_kind: input.handler_kind.clone(),
@@ -1215,7 +1238,7 @@ fn descriptor_from_input(input: &RouterOperationInput) -> Result<ProtocolHandler
     })
 }
 
-fn collect_alpn_diagnostic(alpn: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn collect_alpn_diagnostic(alpn: &str, diagnostics: &mut impl DiagnosticSink) -> crate::error::Result<()> {
     validate_bounded_text(alpn, "ALPN", MAX_ALPN_BYTES, diagnostics)?;
     if alpn.bytes().all(is_alpn_byte) {
         Ok(())
@@ -1224,11 +1247,11 @@ fn collect_alpn_diagnostic(alpn: &str, diagnostics: &mut impl DiagnosticSink) ->
     }
 }
 
-fn collect_handler_diagnostic(handler: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn collect_handler_diagnostic(handler: &str, diagnostics: &mut impl DiagnosticSink) -> crate::error::Result<()> {
     validate_bounded_text(handler, "handler kind", MAX_HANDLER_KIND_BYTES, diagnostics)
 }
 
-fn validate_interaction_kind(kind: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn validate_interaction_kind(kind: &str, diagnostics: &mut impl DiagnosticSink) -> crate::error::Result<()> {
     if matches!(kind, "unary" | "server-streaming" | "client-streaming" | "bidirectional-streaming") {
         Ok(())
     } else {
@@ -1236,7 +1259,7 @@ fn validate_interaction_kind(kind: &str, diagnostics: &mut impl DiagnosticSink) 
     }
 }
 
-fn validate_path_kind(kind: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn validate_path_kind(kind: &str, diagnostics: &mut impl DiagnosticSink) -> crate::error::Result<()> {
     if matches!(kind, "local" | "remote") {
         Ok(())
     } else {
@@ -1244,15 +1267,15 @@ fn validate_path_kind(kind: &str, diagnostics: &mut impl DiagnosticSink) -> Resu
     }
 }
 
-fn validate_status(value: &str, allowed: &[&str], label: &str) -> Result<()> {
+fn validate_status(value: &str, allowed: &[&str], label: &str) -> crate::error::Result<()> {
     if allowed.iter().any(|allowed| allowed == &value) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {label} {value}")))
+        Err(crate::error::MoltenError::invalid_harness(format!("unsupported {label} {value}")))
     }
 }
 
-fn validate_port(value: Option<u64>, label: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn validate_port(value: Option<u64>, label: &str, diagnostics: &mut impl DiagnosticSink) -> crate::error::Result<()> {
     match value {
         Some(port) if (MIN_PORT_NUMBER..=MAX_PORT_NUMBER).contains(&port) => Ok(()),
         Some(port) => push_diagnostic(diagnostics, format!("{label} {port} outside valid port range")),
@@ -1264,27 +1287,32 @@ fn collect_required_optional_ref(
     value: Option<&str>,
     label: &str,
     diagnostics: &mut impl DiagnosticSink,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     match value {
         Some(reference) => collect_ref_diagnostics(&[reference.to_string()], label, diagnostics),
         None => push_diagnostic(diagnostics, format!("{label} ref is required")),
     }
 }
 
-fn collect_ref_diagnostics(refs: &[String], label: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn collect_ref_diagnostics(
+    refs: &[String],
+    label: &str,
+    diagnostics: &mut impl DiagnosticSink,
+) -> crate::error::Result<()> {
     validate_bounded_value_count(refs.len(), MAX_REF_COUNT, label)?;
     for reference in refs {
-        if let Err(error) = validate_content_ref(reference) {
+        if let Err(error) = crate::preserves_rail::validate_content_ref(reference) {
             push_diagnostic(diagnostics, format!("invalid {label} ref {reference}: {error}"))?;
         }
     }
     Ok(())
 }
 
-fn validate_optional_ref(value: Option<&str>, label: &str) -> Result<()> {
+fn validate_optional_ref(value: Option<&str>, label: &str) -> crate::error::Result<()> {
     if let Some(reference) = value {
-        validate_content_ref(reference)
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))?;
+        crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}"))
+        })?;
     }
     Ok(())
 }
@@ -1294,7 +1322,7 @@ fn validate_bounded_text(
     label: &str,
     maximum: usize,
     diagnostics: &mut impl DiagnosticSink,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if value.trim().is_empty() {
         return push_diagnostic(diagnostics, format!("{label} must not be empty"));
     }
@@ -1304,23 +1332,25 @@ fn validate_bounded_text(
     Ok(())
 }
 
-fn validate_text(value: &str, label: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn validate_text(value: &str, label: &str, diagnostics: &mut impl DiagnosticSink) -> crate::error::Result<()> {
     validate_bounded_text(value, label, MAX_SERVICE_ID_BYTES, diagnostics)
 }
 
-fn validate_bounded_value_count(actual: usize, maximum: usize, label: &str) -> Result<()> {
+fn validate_bounded_value_count(actual: usize, maximum: usize, label: &str) -> crate::error::Result<()> {
     if actual <= maximum {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+        Err(crate::error::MoltenError::invalid_harness(format!(
+            "{label} count {actual} exceeds bound {maximum}"
+        )))
     }
 }
 
-fn ensure_string_count(values: &[String], maximum: usize, label: &str) -> Result<()> {
+fn ensure_string_count(values: &[String], maximum: usize, label: &str) -> crate::error::Result<()> {
     validate_bounded_value_count(values.len(), maximum, label)
 }
 
-fn push_diagnostic(diagnostics: &mut impl DiagnosticSink, diagnostic: impl Into<String>) -> Result<()> {
+fn push_diagnostic(diagnostics: &mut impl DiagnosticSink, diagnostic: impl Into<String>) -> crate::error::Result<()> {
     diagnostics.push_bounded(diagnostic.into())
 }
 
@@ -1328,33 +1358,41 @@ fn is_alpn_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'/')
 }
 
-fn refs_value(refs: &[String]) -> Result<IOValue> {
+fn refs_value(refs: &[String]) -> crate::error::Result<preserves::IOValue> {
     validate_bounded_value_count(refs.len(), MAX_REF_COUNT, "ref")?;
-    Ok(sequence(refs.iter().map(string).collect()))
+    Ok(crate::preserves_rail::sequence(refs.iter().map(crate::preserves_rail::string).collect()))
 }
 
-fn strings_value(values: &[String]) -> Result<IOValue> {
+fn strings_value(values: &[String]) -> crate::error::Result<preserves::IOValue> {
     ensure_string_count(values, MAX_DIAGNOSTICS, "string")?;
-    Ok(sequence(values.iter().map(string).collect()))
+    Ok(crate::preserves_rail::sequence(values.iter().map(crate::preserves_rail::string).collect()))
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> preserves::IOValue {
     match value {
-        Some(value) => record("some", vec![string(value)]),
-        None => record("none", Vec::new()),
+        Some(value) => crate::preserves_rail::record("some", vec![crate::preserves_rail::string(value)]),
+        None => crate::preserves_rail::record("none", Vec::new()),
     }
 }
 
-fn optional_u64_value(value: Option<u64>) -> IOValue {
+fn optional_u64_value(value: Option<u64>) -> preserves::IOValue {
     match value {
-        Some(value) => record("some", vec![u64_value(value)]),
-        None => record("none", Vec::new()),
+        Some(value) => crate::preserves_rail::record("some", vec![crate::preserves_rail::u64_value(value)]),
+        None => crate::preserves_rail::record("none", Vec::new()),
     }
 }
 
-fn checks_value(checks: &[(&'static str, &'static str)]) -> IOValue {
-    record("checks", vec![sequence(
-        checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
+fn checks_value(checks: &[(&'static str, &'static str)]) -> preserves::IOValue {
+    crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(
+        checks
+            .iter()
+            .map(|(name, status)| {
+                crate::preserves_rail::record("check", vec![
+                    crate::preserves_rail::string(name),
+                    crate::preserves_rail::string(status),
+                ])
+            })
+            .collect(),
     )])
 }
 
@@ -1362,9 +1400,12 @@ fn pass_fail(is_pass: bool) -> &'static str {
     if is_pass { "pass" } else { "fail" }
 }
 
-fn render_openmetrics(input: &MetricsSnapshotInput, diagnostics: &mut impl DiagnosticSink) -> Result<String> {
+fn render_openmetrics(
+    input: &MetricsSnapshotInput,
+    diagnostics: &mut impl DiagnosticSink,
+) -> crate::error::Result<String> {
     let mut output = String::new();
-    let mut names = BTreeSet::new();
+    let mut names = std::collections::BTreeSet::new();
     for sample in &input.samples {
         validate_metric_sample(sample, diagnostics)?;
         names.insert(sample.name.as_str());
@@ -1397,7 +1438,7 @@ fn render_openmetrics(input: &MetricsSnapshotInput, diagnostics: &mut impl Diagn
     Ok(output)
 }
 
-fn validate_metric_sample(sample: &MetricSample, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
+fn validate_metric_sample(sample: &MetricSample, diagnostics: &mut impl DiagnosticSink) -> crate::error::Result<()> {
     validate_bounded_text(&sample.name, "metric name", MAX_METRIC_NAME_BYTES, diagnostics)?;
     if !sample.name.bytes().all(is_metric_name_byte) {
         push_diagnostic(diagnostics, "metric name contains unsupported characters")?;
@@ -1432,7 +1473,7 @@ fn label_leaks_sensitive_value(key: &str, value: &str) -> bool {
 }
 
 pub fn fixture_ref(label: &str) -> String {
-    content_ref_from_bytes(label.as_bytes())
+    crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
 }
 
 pub fn default_limit_profile_ref() -> String {
@@ -1442,7 +1483,6 @@ pub fn default_limit_profile_ref() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preserves_rail::to_text;
 
     const ROUTER_GENERATION_ONE: u64 = 1;
     const ROUTER_GENERATION_TWO: u64 = 2;
@@ -1529,9 +1569,10 @@ mod tests {
     }
 
     fn framed_input(registry: &ProtocolRegistry) -> FramedEnvelopeInput {
-        let envelope = record("node-control-envelope", vec![string("status")]);
-        let bytes = canonical_bytes(&envelope).expect("bytes");
-        let declared = content_ref_from_bytes(&bytes);
+        let envelope =
+            crate::preserves_rail::record("node-control-envelope", vec![crate::preserves_rail::string("status")]);
+        let bytes = crate::preserves_rail::canonical_bytes(&envelope).expect("bytes");
+        let declared = crate::preserves_rail::content_ref_from_bytes(&bytes);
         assert!(registry.handlers.contains_key("molten/node-control/1"));
         FramedEnvelopeInput {
             alpn: "molten/node-control/1".to_string(),
@@ -1623,7 +1664,7 @@ mod tests {
         };
         let remote_decision = evaluate_service_session(&remote).expect("remote");
         assert_eq!(remote_decision.decision, "pass");
-        let text = to_text(&remote_decision.receipt_value).expect("text");
+        let text = crate::preserves_rail::to_text(&remote_decision.receipt_value).expect("text");
         assert!(text.contains("postcard-not-canonical-boundary"));
     }
 
