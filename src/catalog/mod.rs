@@ -309,7 +309,7 @@ pub fn chunk_store(chunk_root: &Path, input: &ChunkStoreInput) -> Result<QueryRe
     let mut items = Vec::new();
     push_bounded(
         &mut items,
-        chunk_store_catalog_status_value(&ChunkStoreCatalogStatusInput {
+        chunk_store_status_value(&ChunkStoreStatusInput {
             manifest_refs: &scan.visible_manifest_refs,
             total_chunk_refs: scan.total_chunk_refs,
             unique_chunks: scan.visible_unique_chunks.len(),
@@ -407,7 +407,7 @@ impl<'a> StoreScan<'a> {
         let stats = self.add_chunks(&manifest.chunks)?;
         push_bounded(
             &mut self.manifest_items,
-            chunk_manifest_catalog_value(&ChunkManifestCatalogInput {
+            chunk_manifest_value(&ChunkManifestInput {
                 manifest: &manifest,
                 is_manifest_pinned,
                 available_chunks: stats.available,
@@ -2077,7 +2077,7 @@ fn short_id_resolution_value(
     ]))
 }
 
-struct ChunkStoreCatalogStatusInput<'a> {
+struct ChunkStoreStatusInput<'a> {
     manifest_refs: &'a [String],
     total_chunk_refs: usize,
     unique_chunks: usize,
@@ -2088,7 +2088,7 @@ struct ChunkStoreCatalogStatusInput<'a> {
     dedup_hits: usize,
 }
 
-fn chunk_store_catalog_status_value(input: &ChunkStoreCatalogStatusInput<'_>) -> Result<IoValue> {
+fn chunk_store_status_value(input: &ChunkStoreStatusInput<'_>) -> Result<IoValue> {
     validate_refs(input.manifest_refs, "chunk catalog manifest ref")?;
     Ok(record("chunk-store-catalog-v1", vec![
         string("molten.catalog.chunk-store.v1"),
@@ -2120,7 +2120,7 @@ fn chunk_store_catalog_status_value(input: &ChunkStoreCatalogStatusInput<'_>) ->
     ]))
 }
 
-struct ChunkManifestCatalogInput<'a> {
+struct ChunkManifestInput<'a> {
     manifest: &'a crate::chunk_store::ChunkManifest,
     is_manifest_pinned: bool,
     available_chunks: usize,
@@ -2130,7 +2130,7 @@ struct ChunkManifestCatalogInput<'a> {
     visible_chunks: &'a [String],
 }
 
-fn chunk_manifest_catalog_value(input: &ChunkManifestCatalogInput<'_>) -> Result<IoValue> {
+fn chunk_manifest_value(input: &ChunkManifestInput<'_>) -> Result<IoValue> {
     let manifest = input.manifest;
     validate_ref(&manifest.manifest_ref, "chunk catalog manifest ref")?;
     validate_ref(&manifest.root_ref, "chunk catalog root ref")?;
@@ -2575,7 +2575,7 @@ mod tests {
     }
 
     #[test]
-    fn chunk_store_catalog_exposes_availability_dedup_and_pins() {
+    fn chunk_store_exposes_availability_dedup_and_pins() {
         let dir = temp_dir("catalog-chunk-store");
         let chunks = dir.join("chunks");
         let first = crate::chunk_store::put_bytes(&chunks, "artifact", b"aaaabbbb", 4).expect("first chunk put");
@@ -2820,7 +2820,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_classifies_generic_replay_receipts_and_divergence() {
+    fn classifies_generic_replay_receipts_and_divergence() {
         let dir = temp_dir("catalog-replay");
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
@@ -2875,7 +2875,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_classifies_provenance_records_receipts_and_build_evidence() {
+    fn classifies_provenance_records_receipts_and_build_evidence() {
         let dir = temp_dir("catalog-provenance");
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
@@ -3065,7 +3065,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_view_renders_octet_baseline_quarantine_metadata() {
+    fn view_renders_octet_baseline_quarantine_metadata() {
         let dir = temp_dir("catalog-octet-baseline");
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
