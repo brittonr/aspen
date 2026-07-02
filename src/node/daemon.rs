@@ -8721,53 +8721,24 @@ fn live_workflow_receipt_value(input: &LiveWorkflowReceiptValueInput<'_>) -> Res
         crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
             input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("ticket-admission-bound"),
-                crate::preserves_rail::string(if input.admission.ticket_ref == input.ticket.ticket_ref {
-                    "pass"
-                } else {
-                    "fail"
-                }),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("authority-grant-bound"),
-                crate::preserves_rail::string(
-                    if input.authority.peer_id == input.admission.peer_id
-                        && input.authority.node_id == input.ticket.node_id
-                    {
-                        "pass"
-                    } else {
-                        "fail"
-                    },
-                ),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("send-ticket-bound"),
-                crate::preserves_rail::string(if input.send.receiver_ticket_ref == input.ticket.ticket_ref {
-                    "pass"
-                } else {
-                    "fail"
-                }),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("receive-before-service"),
-                crate::preserves_rail::string(if input.receive_receipt_refs.is_empty() {
-                    "fail"
-                } else {
-                    "pass"
-                }),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("transport-is-not-authority"),
-                crate::preserves_rail::string("pass"),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("durable-inbox-boundary"),
-                crate::preserves_rail::string("pass"),
-            ]),
-        ])]),
+        crate::preserves_rail::record("checks", vec![live_workflow_check_sequence(input)]),
     ]))
+}
+
+fn live_workflow_check_sequence(input: &LiveWorkflowReceiptValueInput<'_>) -> IoValue {
+    crate::preserves_rail::sequence(vec![
+        receipt_check_value("ticket-admission-bound", pass_if(input.admission.ticket_ref == input.ticket.ticket_ref)),
+        receipt_check_value(
+            "authority-grant-bound",
+            pass_if(
+                input.authority.peer_id == input.admission.peer_id && input.authority.node_id == input.ticket.node_id,
+            ),
+        ),
+        receipt_check_value("send-ticket-bound", pass_if(input.send.receiver_ticket_ref == input.ticket.ticket_ref)),
+        receipt_check_value("receive-before-service", fail_if(input.receive_receipt_refs.is_empty())),
+        receipt_check_value("transport-is-not-authority", "pass"),
+        receipt_check_value("durable-inbox-boundary", "pass"),
+    ])
 }
 
 struct LiveSendReceiptChecks {
@@ -9156,10 +9127,6 @@ fn ingress_envelope_value(
 
 fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
-    let has_peer_bootstrap = !input.envelope.peer_bootstrap_refs.is_empty();
-    let has_authority = !input.envelope.authority_refs.is_empty() && !input.envelope.request.authority_refs.is_empty();
-    let has_policy = !input.envelope.policy_refs.is_empty() && !input.envelope.request.policy_refs.is_empty();
-    let has_resource = !input.envelope.resource_refs.is_empty() && !input.envelope.request.resource_refs.is_empty();
     Ok(crate::preserves_rail::record("node-control-ingress-receipt-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA),
         crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
@@ -9181,49 +9148,30 @@ fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IoValue
         crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
             input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
-        crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("peer-bootstrap-bound"),
-                crate::preserves_rail::string(if has_peer_bootstrap { "pass" } else { "fail" }),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("authority-before-enqueue"),
-                crate::preserves_rail::string(if has_authority { "pass" } else { "fail" }),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("authority-delegation-before-enqueue"),
-                crate::preserves_rail::string(
-                    if input.envelope.transport != LIVE_CONTROL_INGRESS_TRANSPORT || input.decision == "pass" {
-                        "pass"
-                    } else {
-                        "fail"
-                    },
-                ),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("policy-before-enqueue"),
-                crate::preserves_rail::string(if has_policy { "pass" } else { "fail" }),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("resource-before-enqueue"),
-                crate::preserves_rail::string(if has_resource { "pass" } else { "fail" }),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("delivery-idempotency-before-enqueue"),
-                crate::preserves_rail::string(
-                    if input.phase == "publish" || input.idempotency_receipt_ref.is_some() || input.decision == "deny" {
-                        "pass"
-                    } else {
-                        "fail"
-                    },
-                ),
-            ]),
-            crate::preserves_rail::record("check", vec![
-                crate::preserves_rail::string("durable-inbox-boundary"),
-                crate::preserves_rail::string("pass"),
-            ]),
-        ])]),
+        crate::preserves_rail::record("checks", vec![ingress_check_sequence(input)]),
     ]))
+}
+
+fn ingress_check_sequence(input: &IngressReceiptValueInput<'_>) -> IoValue {
+    let has_peer_bootstrap = !input.envelope.peer_bootstrap_refs.is_empty();
+    let has_authority = !input.envelope.authority_refs.is_empty() && !input.envelope.request.authority_refs.is_empty();
+    let has_policy = !input.envelope.policy_refs.is_empty() && !input.envelope.request.policy_refs.is_empty();
+    let has_resource = !input.envelope.resource_refs.is_empty() && !input.envelope.request.resource_refs.is_empty();
+    crate::preserves_rail::sequence(vec![
+        receipt_check_value("peer-bootstrap-bound", pass_if(has_peer_bootstrap)),
+        receipt_check_value("authority-before-enqueue", pass_if(has_authority)),
+        receipt_check_value(
+            "authority-delegation-before-enqueue",
+            pass_if(input.envelope.transport != LIVE_CONTROL_INGRESS_TRANSPORT || input.decision == "pass"),
+        ),
+        receipt_check_value("policy-before-enqueue", pass_if(has_policy)),
+        receipt_check_value("resource-before-enqueue", pass_if(has_resource)),
+        receipt_check_value(
+            "delivery-idempotency-before-enqueue",
+            pass_if(input.phase == "publish" || input.idempotency_receipt_ref.is_some() || input.decision == "deny"),
+        ),
+        receipt_check_value("durable-inbox-boundary", "pass"),
+    ])
 }
 
 fn queue_receipt_value(input: &QueueReceiptValueInput<'_>) -> Result<IoValue> {
