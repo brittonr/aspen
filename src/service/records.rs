@@ -1311,14 +1311,21 @@ mod tests {
     use hegel::generators;
 
     use super::*;
-    use crate::catalog;
-    use crate::catalog::CatalogListInput;
-    use crate::catalog::CatalogVisibilityInput;
-    use crate::catalog_mcp;
-    use crate::ledger;
-    use crate::preserves_rail::content_ref_from_bytes;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
+
+    type CatalogListInput = crate::catalog::CatalogListInput;
+    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+
+    fn content_ref_from_bytes(bytes: &[u8]) -> String {
+        crate::preserves_rail::content_ref_from_bytes(bytes)
+    }
+
+    fn parse_text(source: &str) -> Result<IoValue> {
+        crate::preserves_rail::parse_text(source)
+    }
+
+    fn to_text(value: &IoValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     fn test_ref(label: &str) -> String {
         content_ref_from_bytes(label.as_bytes())
@@ -1611,9 +1618,9 @@ mod tests {
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
         let manifest = service_manifest_value(&manifest_input()).expect("manifest");
-        let imported = ledger::import_artifact(&ledger_root, &manifest).expect("ledger import");
+        let imported = crate::ledger::import_artifact(&ledger_root, &manifest).expect("ledger import");
         assert_eq!(imported.artifact_kind, "service-manifest");
-        let listed = catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
             kind: Some("service-manifest".to_string()),
             visibility: CatalogVisibilityInput::default(),
         })
@@ -1621,10 +1628,11 @@ mod tests {
         assert_eq!(listed.items.len(), 1);
         let rendered = to_text(&listed.value).expect("render catalog result");
         assert!(rendered.contains("ledger-kind:service-manifest"));
-        let request =
-            catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string("service-manifest")])])
-                .expect("MCP request");
-        let mcp = catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("MCP list service manifest");
+        let request = crate::catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string(
+            "service-manifest",
+        )])])
+        .expect("MCP request");
+        let mcp = crate::catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("MCP list service manifest");
         assert_eq!(mcp.decision, "pass");
         assert!(to_text(&mcp.response_value).expect("render MCP response").contains("service-manifest"));
     }
