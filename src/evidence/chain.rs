@@ -6,11 +6,10 @@
 //! authority. A link's identity is only the Blake3 hash of its canonical
 //! Preserves bytes; linking names payload refs without rewriting the payloads.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::path::Path;
-
+type BTreeMap<K, V> = std::collections::BTreeMap<K, V>;
+type BTreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
+type Path = std::path::Path;
 
 use crate::ledger;
 
@@ -2495,16 +2494,30 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
-    use std::path::PathBuf;
-
     use hegel::TestCase;
     use hegel::generators;
 
     use super::*;
-    use crate::preserves_rail::canonical_bytes;
-    use crate::preserves_rail::parse_text;
+
+    type PathBuf = std::path::PathBuf;
+
+    mod fs {
+        pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+            std::fs::create_dir_all(path)
+        }
+
+        pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+            std::fs::remove_dir_all(path)
+        }
+    }
+
+    fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
+        crate::preserves_rail::canonical_bytes(value)
+    }
+
+    fn parse_text(source: &str) -> Result<IoValue> {
+        crate::preserves_rail::parse_text(source)
+    }
 
     #[test]
     fn chain_link_identity_is_canonical_and_stable() {
