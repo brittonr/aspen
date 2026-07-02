@@ -152,7 +152,7 @@ pub fn gc(root: &std::path::Path, input: LedgerGcInput<'_>) -> crate::error::Res
     let candidates = scan_unpinned(root, &pins)?;
     let action = action_for(input.dry_run);
     let requester_ref =
-        crate::retention::destructive_retention_requester_ref(input.retention_evidence, "ledger-gc-missing-requester")?;
+        crate::retention::destructive_requester_ref(input.retention_evidence, "ledger-gc-missing-requester")?;
     let evidence_summary = crate::retention::destructive_retention_evidence_value(input.retention_evidence)?;
     let review = review_entries(
         ReviewInput {
@@ -223,15 +223,14 @@ fn review_entries(input: ReviewInput<'_>, candidates: &[LedgerEntry]) -> crate::
     let mut review = Review::default();
     for entry in candidates {
         let retention_class = ledger_retention_class(&entry.artifact_kind);
-        let admission =
-            crate::retention::admit_destructive_retention_evidence(crate::retention::DestructiveAdmissionInput {
-                root: input.root,
-                evidence: input.source.retention_evidence,
-                object_ref: &entry.artifact_ref,
-                object_kind: &entry.artifact_kind,
-                retention_class,
-                action: input.action,
-            })?;
+        let admission = crate::retention::admit_destructive_evidence(crate::retention::DestructiveAdmissionInput {
+            root: input.root,
+            evidence: input.source.retention_evidence,
+            object_ref: &entry.artifact_ref,
+            object_kind: &entry.artifact_kind,
+            retention_class,
+            action: input.action,
+        })?;
         extend_refs(
             &mut review.admission_diagnostics,
             &admission.diagnostics,

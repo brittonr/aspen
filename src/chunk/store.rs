@@ -2020,15 +2020,14 @@ struct GcNotes {
 
 impl GcNotes {
     fn consider(&mut self, env: &GcEnv<'_>, object: GcObject<'_>) -> Result<()> {
-        let admission =
-            crate::retention::admit_destructive_retention_evidence(crate::retention::DestructiveAdmissionInput {
-                root: env.root,
-                evidence: env.evidence,
-                object_ref: object.object_ref,
-                object_kind: object.object_kind,
-                retention_class: object.retention_class,
-                action: env.action,
-            })?;
+        let admission = crate::retention::admit_destructive_evidence(crate::retention::DestructiveAdmissionInput {
+            root: env.root,
+            evidence: env.evidence,
+            object_ref: object.object_ref,
+            object_kind: object.object_kind,
+            retention_class: object.retention_class,
+            action: env.action,
+        })?;
         self.note_admission(&admission)?;
         let evaluation = crate::retention::evaluate(crate::retention::EvaluationInput {
             root: env.root,
@@ -2269,10 +2268,8 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
     } else {
         crate::retention::ACTION_DELETE
     };
-    let requester_ref = crate::retention::destructive_retention_requester_ref(
-        input.retention_evidence,
-        "chunk-store-gc-missing-requester",
-    )?;
+    let requester_ref =
+        crate::retention::destructive_requester_ref(input.retention_evidence, "chunk-store-gc-missing-requester")?;
     let evidence_summary = crate::retention::destructive_retention_evidence_value(input.retention_evidence)?;
     let env = GcEnv {
         root,

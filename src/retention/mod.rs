@@ -2562,7 +2562,7 @@ struct PlanGateBuildInput<'a> {
     diagnostics: Vec<String>,
 }
 
-struct LocalRetentionGateInput<'a> {
+struct LocalGateInput<'a> {
     input: &'a GcPlanInput<'a>,
     index: &'a ReferenceIndex,
     has_delete_authority: bool,
@@ -2942,7 +2942,7 @@ fn push_index_gates(gates: &mut impl VecSink<PlanGate>, input: &GateInputs<'_>, 
     )?;
     push_bounded(
         gates,
-        local_retention_gate(LocalRetentionGateInput {
+        local_retention_gate(LocalGateInput {
             input: input.input,
             index,
             has_delete_authority: input.has_delete_authority,
@@ -3026,7 +3026,7 @@ fn requester_gate(requester_ref: Option<&str>) -> Result<PlanGate> {
     })
 }
 
-fn local_retention_gate(input: LocalRetentionGateInput<'_>) -> Result<PlanGate> {
+fn local_retention_gate(input: LocalGateInput<'_>) -> Result<PlanGate> {
     let requester_ref = match input.input.evidence.requester_ref.as_ref() {
         Some(reference) => reference.clone(),
         None => synthetic_ref("retention-gc-plan-missing-requester")?,
@@ -3236,7 +3236,7 @@ fn parse_destructive_retention_evidence_summary_to_evidence(value: &IoValue) -> 
         is_reference_index_complete: record_pass_bool(&fields[10], "reference-index-complete")?,
     };
     parse_checks(&fields[11])?;
-    validate_destructive_retention_evidence(&evidence)?;
+    validate_destructive_evidence(&evidence)?;
     Ok(evidence)
 }
 
@@ -3698,9 +3698,9 @@ where
     push_admit_refs(admitted_refs, set.remote_clearance.admitted_refs)
 }
 
-pub fn admit_destructive_retention_evidence(input: DestructiveAdmissionInput<'_>) -> Result<DestructiveAdmission> {
+pub fn admit_destructive_evidence(input: DestructiveAdmissionInput<'_>) -> Result<DestructiveAdmission> {
     ensure_store(input.root)?;
-    validate_destructive_retention_evidence(input.evidence)?;
+    validate_destructive_evidence(input.evidence)?;
     require_ref(input.object_ref, "retention admission object ref")?;
     validate_name(input.object_kind, "retention admission object kind")?;
     validate_class(input.retention_class)?;
@@ -3733,8 +3733,8 @@ pub fn admit_destructive_retention_evidence(input: DestructiveAdmissionInput<'_>
     })
 }
 
-pub fn destructive_retention_requester_ref(input: &DestructiveEvidence, fallback_label: &str) -> Result<String> {
-    validate_destructive_retention_evidence(input)?;
+pub fn destructive_requester_ref(input: &DestructiveEvidence, fallback_label: &str) -> Result<String> {
+    validate_destructive_evidence(input)?;
     if let Some(requester_ref) = input.requester_ref.as_ref() {
         Ok(requester_ref.clone())
     } else {
@@ -3742,11 +3742,11 @@ pub fn destructive_retention_requester_ref(input: &DestructiveEvidence, fallback
     }
 }
 
-pub fn destructive_retention_has_authority(input: &DestructiveEvidence) -> bool {
+pub fn destructive_has_authority(input: &DestructiveEvidence) -> bool {
     input.requester_ref.is_some() && !input.authority_refs.is_empty()
 }
 
-pub fn validate_destructive_retention_evidence(input: &DestructiveEvidence) -> Result<()> {
+pub fn validate_destructive_evidence(input: &DestructiveEvidence) -> Result<()> {
     if let Some(requester_ref) = input.requester_ref.as_ref() {
         require_ref(requester_ref, "retention requester ref")?;
     }
@@ -3767,7 +3767,7 @@ fn validate_gc_plan_input(input: &GcPlanInput<'_>) -> Result<()> {
     validate_name(input.object_kind, "retention GC plan object kind")?;
     validate_class(input.retention_class)?;
     validate_action(input.action)?;
-    validate_destructive_retention_evidence(input.evidence)
+    validate_destructive_evidence(input.evidence)
 }
 
 struct MissingNote<'a> {
@@ -3791,7 +3791,7 @@ where S: VecSink<String> {
 }
 
 pub fn destructive_retention_evidence_diagnostics(input: &DestructiveEvidence, action: &str) -> Result<Vec<String>> {
-    validate_destructive_retention_evidence(input)?;
+    validate_destructive_evidence(input)?;
     validate_action(action)?;
     let is_destructive = is_destructive_action(action);
     let mut diagnostics = Vec::new();
@@ -3840,7 +3840,7 @@ pub fn destructive_retention_evidence_diagnostics(input: &DestructiveEvidence, a
 }
 
 pub fn destructive_retention_evidence_value(input: &DestructiveEvidence) -> Result<IoValue> {
-    validate_destructive_retention_evidence(input)?;
+    validate_destructive_evidence(input)?;
     let requester_value = input
         .requester_ref
         .as_deref()
@@ -4040,7 +4040,7 @@ pub fn apply_gc_plan(input: GcApplyFromPlanInput<'_>) -> Result<GcApply> {
         action: &original.action,
         evidence: &original.evidence,
     })?;
-    let admission = admit_destructive_retention_evidence(DestructiveAdmissionInput {
+    let admission = admit_destructive_evidence(DestructiveAdmissionInput {
         root: input.root,
         evidence: &original.evidence,
         object_ref: &original.object_ref,
@@ -4120,8 +4120,7 @@ fn apply_diagnostics(original: &GcPlan, recomputed: &GcPlan, admission: &Destruc
 }
 
 fn apply_success_outcome(root: &Path, original: &GcPlan, admission: &DestructiveAdmission) -> Result<ApplyOutcome> {
-    let requester_ref =
-        destructive_retention_requester_ref(&original.evidence, "retention-gc-apply-missing-requester")?;
+    let requester_ref = destructive_requester_ref(&original.evidence, "retention-gc-apply-missing-requester")?;
     let evaluation = evaluate(EvaluationInput {
         root,
         object_ref: &original.object_ref,
@@ -5435,18 +5434,18 @@ fn export_groups(root: &Path, artifact_dir: &Path, explain: &CandidateExplain) -
         GroupSpec {
             dir_name: "receipts",
             refs: &explain.retention_receipt_refs,
-            read: read_retention_receipt_value,
+            read: read_receipt_value,
         },
         GroupSpec {
             dir_name: "tombstones",
             refs: &explain.tombstone_refs,
-            read: read_retention_tombstone_value,
+            read: read_tombstone_value,
         },
     ];
     let mut artifact_refs = Vec::new();
     let mut diagnostics = Vec::new();
     for group in groups {
-        export_retention_bundle_artifact_group(
+        export_bundle_artifact_group(
             BundleArtifactGroupInput {
                 root,
                 bundle_dir: artifact_dir,
@@ -5465,7 +5464,7 @@ fn export_groups(root: &Path, artifact_dir: &Path, explain: &CandidateExplain) -
     Ok((artifact_refs, diagnostics))
 }
 
-fn export_retention_bundle_artifact_group(
+fn export_bundle_artifact_group(
     input: BundleArtifactGroupInput<'_>,
     artifact_refs: &mut impl VecSink<String>,
     diagnostics: &mut impl VecSink<String>,
@@ -6142,12 +6141,12 @@ fn verify_artifact_groups(
         Group {
             dir_name: "receipts",
             refs: &bundle.retention_receipt_refs,
-            parse: parse_retention_receipt_kind,
+            parse: parse_receipt_kind,
         },
         Group {
             dir_name: "tombstones",
             refs: &bundle.tombstone_refs,
-            parse: parse_retention_tombstone_kind,
+            parse: parse_tombstone_kind,
         },
     ];
     for group in groups {
@@ -6576,11 +6575,11 @@ fn parse_gc_audit_kind(value: &IoValue) -> Result<()> {
     parse_gc_audit(value).map(|_| ())
 }
 
-fn parse_retention_receipt_kind(value: &IoValue) -> Result<()> {
+fn parse_receipt_kind(value: &IoValue) -> Result<()> {
     parse_receipt(value).map(|_| ())
 }
 
-fn parse_retention_tombstone_kind(value: &IoValue) -> Result<()> {
+fn parse_tombstone_kind(value: &IoValue) -> Result<()> {
     parse_tombstone(value).map(|_| ())
 }
 
@@ -6624,11 +6623,11 @@ fn read_gc_audit_value(root: &Path, reference: &str) -> Result<IoValue> {
     Ok(read_gc_audit(root, reference)?.value)
 }
 
-fn read_retention_receipt_value(root: &Path, reference: &str) -> Result<IoValue> {
+fn read_receipt_value(root: &Path, reference: &str) -> Result<IoValue> {
     Ok(read_receipt(root, reference)?.value)
 }
 
-fn read_retention_tombstone_value(root: &Path, reference: &str) -> Result<IoValue> {
+fn read_tombstone_value(root: &Path, reference: &str) -> Result<IoValue> {
     Ok(read_tombstone(root, reference)?.value)
 }
 
@@ -8792,7 +8791,7 @@ mod tests {
             remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         };
-        let admission = admit_destructive_retention_evidence(DestructiveAdmissionInput {
+        let admission = admit_destructive_evidence(DestructiveAdmissionInput {
             root: &root,
             evidence: &evidence,
             object_ref: &object_ref,
@@ -8833,7 +8832,7 @@ mod tests {
             remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         };
-        let admission = admit_destructive_retention_evidence(DestructiveAdmissionInput {
+        let admission = admit_destructive_evidence(DestructiveAdmissionInput {
             root: &root,
             evidence: &evidence,
             object_ref: &object_ref,
@@ -8851,7 +8850,7 @@ mod tests {
     fn destructive_admission_accepts_matching_remote_gc_refs() {
         let root = temp_dir("retention-admission-remote");
         let fixture = store_passing_plan_fixture(&root, "admission-remote");
-        let admission = admit_destructive_retention_evidence(DestructiveAdmissionInput {
+        let admission = admit_destructive_evidence(DestructiveAdmissionInput {
             root: &root,
             evidence: &fixture.evidence,
             object_ref: &fixture.object_ref,
@@ -8975,7 +8974,7 @@ mod tests {
         assert!(plan.diagnostics.iter().any(|diagnostic| diagnostic == "remote-clearance-evidence-missing"));
         let mut plan_as_clearance = evidence;
         plan_as_clearance.remote_clearance_refs = vec![plan.plan_ref];
-        let admission = admit_destructive_retention_evidence(DestructiveAdmissionInput {
+        let admission = admit_destructive_evidence(DestructiveAdmissionInput {
             root: &root,
             evidence: &plan_as_clearance,
             object_ref: &fixture.object_ref,
@@ -9062,7 +9061,7 @@ mod tests {
         assert_eq!(audit.retention_receipt_ref, apply.retention_receipt_ref);
         assert_eq!(audit.tombstone_ref, apply.tombstone_ref);
         assert_eq!(store_file_count(&gc_audits_dir(&root)), 1);
-        assert_retention_summary_contains(&audit.value, "retention gc audit");
+        assert_summary_contains(&audit.value, "retention gc audit");
     }
 
     #[test]
@@ -9089,7 +9088,7 @@ mod tests {
         assert_eq!(explain.retention_receipt_refs.len(), 1);
         assert_eq!(explain.tombstone_refs.len(), 1);
         assert!(explain.diagnostics.is_empty());
-        assert_retention_summary_contains(&explain.value, "retention candidate explain");
+        assert_summary_contains(&explain.value, "retention candidate explain");
         let bundle_dir = root.join("bundle");
         let bundle = export_candidate_bundle(CandidateBundleExportInput {
             root: &root,
@@ -9104,7 +9103,7 @@ mod tests {
         assert!(bundle_dir.join("bundle.preserves").exists());
         assert!(bundle_dir.join("explain.preserves").exists());
         assert!(bundle_dir.join("artifacts/gc-plans").exists());
-        assert_retention_summary_contains(&bundle.value, "retention candidate bundle");
+        assert_summary_contains(&bundle.value, "retention candidate bundle");
         let verify = verify_candidate_bundle(CandidateBundleVerifyInput {
             bundle_dir: &bundle_dir,
         })
@@ -9115,7 +9114,7 @@ mod tests {
         assert_eq!(verify.artifact_refs.len(), 6);
         assert_eq!(verify.file_refs.len(), 6);
         assert!(verify.diagnostics.is_empty());
-        assert_retention_summary_contains(&verify.value, "retention candidate bundle verify");
+        assert_summary_contains(&verify.value, "retention candidate bundle verify");
         let tampered_path = bundle_dir
             .join("artifacts/gc-plans")
             .join(format!("{}.preserves", ref_file_name(&flow.plan.plan_ref).expect("plan file name")));
@@ -10009,7 +10008,7 @@ mod tests {
             index,
             remote_gc,
         } = refs;
-        let admission = admit_destructive_retention_evidence(DestructiveAdmissionInput {
+        let admission = admit_destructive_evidence(DestructiveAdmissionInput {
             root,
             evidence: &DestructiveEvidence {
                 requester_ref: Some(requester_ref),
@@ -10678,7 +10677,7 @@ mod tests {
     }
 
     fn assert_denial(root: &Path, case: &DenyCase, evidence: &DestructiveEvidence, reason: &str, expected: &[&str]) {
-        let admission = admit_destructive_retention_evidence(DestructiveAdmissionInput {
+        let admission = admit_destructive_evidence(DestructiveAdmissionInput {
             root,
             evidence,
             object_ref: &case.object,
@@ -10730,7 +10729,7 @@ mod tests {
     }
 
     fn assert_case_pass(root: &Path, case: &LiveCase, clearance: String) {
-        let admission = admit_destructive_retention_evidence(DestructiveAdmissionInput {
+        let admission = admit_destructive_evidence(DestructiveAdmissionInput {
             root,
             evidence: &DestructiveEvidence {
                 requester_ref: Some(case.requester.clone()),
@@ -11016,7 +11015,7 @@ mod tests {
         }
     }
 
-    fn assert_retention_summary_contains(value: &IoValue, expected: &str) {
+    fn assert_summary_contains(value: &IoValue, expected: &str) {
         let summary = summary(value).expect("retention summary");
         assert!(summary.contains(expected), "{summary}");
     }

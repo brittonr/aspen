@@ -571,7 +571,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
     validate_invalidate_input(input)?;
     let selected_key_refs = selected_keys(root, input)?;
     let reason = invalidation_reason(input);
-    let requester_ref = crate::retention::destructive_retention_requester_ref(
+    let requester_ref = crate::retention::destructive_requester_ref(
         &input.retention_evidence,
         "eval-cache-invalidate-missing-requester",
     )?;
@@ -747,15 +747,14 @@ fn evaluate_invalidate_key(
     requester_ref: &str,
     key_ref: &str,
 ) -> Result<InvalStep> {
-    let admission =
-        crate::retention::admit_destructive_retention_evidence(crate::retention::DestructiveAdmissionInput {
-            root,
-            evidence: &input.retention_evidence,
-            object_ref: key_ref,
-            object_kind: "eval-cache-key",
-            retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
-            action: crate::retention::ACTION_TOMBSTONE,
-        })?;
+    let admission = crate::retention::admit_destructive_evidence(crate::retention::DestructiveAdmissionInput {
+        root,
+        evidence: &input.retention_evidence,
+        object_ref: key_ref,
+        object_kind: "eval-cache-key",
+        retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
+        action: crate::retention::ACTION_TOMBSTONE,
+    })?;
     let evaluation = crate::retention::evaluate(crate::retention::EvaluationInput {
         root,
         object_ref: key_ref,
@@ -1544,7 +1543,7 @@ fn validate_invalidate_input(input: &EvalCacheInvalidateInput) -> Result<()> {
         validate_operation(operation)?;
     }
     validate_refs(&input.apply_refs, "invalidate apply ref")?;
-    crate::retention::validate_destructive_retention_evidence(&input.retention_evidence)?;
+    crate::retention::validate_destructive_evidence(&input.retention_evidence)?;
     Ok(())
 }
 
