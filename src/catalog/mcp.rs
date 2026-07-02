@@ -957,10 +957,16 @@ fn sorted_unique(refs: &[String]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::artifacts;
-    use crate::ledger;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
+
+    type ArtifactInstall = crate::artifacts::ArtifactInstall;
+
+    fn parse_text(source: &str) -> Result<IoValue> {
+        crate::preserves_rail::parse_text(source)
+    }
+
+    fn to_text(value: &IoValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     #[test]
     fn readonly_list_view_search_match_catalog_core_and_bind_receipts() {
@@ -1010,7 +1016,7 @@ mod tests {
         let schema_ref = test_ref("schema-ref");
         let effect_ref = test_ref("effect-ref");
         let base = install_fixture(&registry, "schema", parse_text("<schema \"alias\">").expect("schema"), &[], &[]);
-        let doc = artifacts::install_artifact(&registry, &artifacts::ArtifactInstallInput {
+        let doc = crate::artifacts::install_artifact(&registry, &crate::artifacts::ArtifactInstallInput {
             kind: "doc".to_string(),
             payload: parse_text("<doc \"alias-visible\">").expect("doc"),
             schema_refs: vec![schema_ref.clone()],
@@ -1065,8 +1071,8 @@ mod tests {
             prior_diagnostics: &[],
         })
         .expect("evaluate provenance");
-        ledger::import_artifact(&ledger_root, &provenance_record).expect("import provenance record");
-        ledger::import_artifact(&ledger_root, &evaluation.receipt_value).expect("import provenance receipt");
+        crate::ledger::import_artifact(&ledger_root, &provenance_record).expect("import provenance record");
+        crate::ledger::import_artifact(&ledger_root, &evaluation.receipt_value).expect("import provenance receipt");
         let record_request =
             mcp_request_value("list_provenance", vec![record("trust-state", vec![string("reviewed")])])
                 .expect("provenance record request");
@@ -1102,7 +1108,7 @@ mod tests {
         let ledger_root = root.join("ledger");
         let retention_root = root.join("retention");
         let fixture = retention_gc_audit_fixture(&retention_root, "catalog-mcp-retention-gc", "chunk-gc");
-        ledger::import_artifact(&ledger_root, &fixture.audit.value).expect("import retention GC audit");
+        crate::ledger::import_artifact(&ledger_root, &fixture.audit.value).expect("import retention GC audit");
 
         let request = mcp_request_value("search_retention_gc", vec![
             record("stage", vec![string("audit")]),
@@ -1215,10 +1221,10 @@ mod tests {
         let divergence = replay_divergence_record(&fixture);
         let rollup = replay_rollup(&verify);
         let index = replay_index(&verify, &rollup);
-        ledger::import_artifact(ledger_root, &verify).expect("import replay verify");
-        ledger::import_artifact(ledger_root, &divergence).expect("import first divergence");
-        ledger::import_artifact(ledger_root, &rollup.value).expect("import replay rollup");
-        ledger::import_artifact(ledger_root, &index.value).expect("import replay index");
+        crate::ledger::import_artifact(ledger_root, &verify).expect("import replay verify");
+        crate::ledger::import_artifact(ledger_root, &divergence).expect("import first divergence");
+        crate::ledger::import_artifact(ledger_root, &rollup.value).expect("import replay rollup");
+        crate::ledger::import_artifact(ledger_root, &index.value).expect("import replay index");
         fixture
     }
 
@@ -1458,8 +1464,8 @@ mod tests {
         payload: IoValue,
         dependency_refs: &[String],
         schema_refs: &[String],
-    ) -> artifacts::ArtifactInstall {
-        artifacts::install_artifact(root, &artifacts::ArtifactInstallInput {
+    ) -> ArtifactInstall {
+        crate::artifacts::install_artifact(root, &crate::artifacts::ArtifactInstallInput {
             kind: kind.to_string(),
             payload,
             schema_refs: schema_refs.to_vec(),
