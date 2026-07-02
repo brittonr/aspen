@@ -2194,8 +2194,8 @@ mod tests {
         shape: IoValue,
         metadata_label: &str,
         context: &str,
-    ) -> crate::schema_identity::SchemaIdentity {
-        let value = crate::schema_identity::schema_identity_value(&crate::schema_identity::SchemaIdentityInput {
+    ) -> crate::schema_identity::Identity {
+        let value = crate::schema_identity::identity_value(&crate::schema_identity::IdentityInput {
             mode: mode.to_string(),
             schema_ref,
             shape,
@@ -2205,16 +2205,16 @@ mod tests {
             evidence_refs: vec![test_ref("schema-evidence")],
         })
         .expect(context);
-        crate::schema_identity::parse_schema_identity(&value).expect(context)
+        crate::schema_identity::parse_identity(&value).expect(context)
     }
 
     fn compatible(
-        expected: crate::schema_identity::SchemaIdentity,
-        actual: crate::schema_identity::SchemaIdentity,
-        alias: Option<crate::schema_identity::SchemaAlias>,
+        expected: crate::schema_identity::Identity,
+        actual: crate::schema_identity::Identity,
+        alias: Option<crate::schema_identity::Alias>,
         context: &str,
     ) -> IoValue {
-        crate::schema_identity::compatibility_decision_value(&crate::schema_identity::SchemaCompatibilityInput {
+        crate::schema_identity::compatibility_decision_value(&crate::schema_identity::CompatibilityInput {
             expected,
             actual,
             alias,
@@ -2226,8 +2226,8 @@ mod tests {
         .expect(context)
     }
 
-    fn parsed_binding(from_schema_ref: &str, to_schema_ref: &str) -> crate::schema_identity::SchemaAlias {
-        let value = crate::schema_identity::schema_alias_value(&crate::schema_identity::SchemaAliasInput {
+    fn parsed_binding(from_schema_ref: &str, to_schema_ref: &str) -> crate::schema_identity::Alias {
+        let value = crate::schema_identity::alias_value(&crate::schema_identity::AliasInput {
             from_schema_ref: from_schema_ref.to_string(),
             to_schema_ref: to_schema_ref.to_string(),
             scope: "storage".to_string(),
@@ -2235,7 +2235,7 @@ mod tests {
             evidence_refs: vec![test_ref("alias-evidence")],
         })
         .expect("alias");
-        crate::schema_identity::parse_schema_alias(&value).expect("parse alias")
+        crate::schema_identity::parse_alias(&value).expect("parse alias")
     }
 
     #[test]

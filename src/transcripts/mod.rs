@@ -814,7 +814,7 @@ fn execute_schema_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<I
                 .last_output
                 .clone()
                 .ok_or_else(|| MoltenError::invalid_harness("schema identity requires prior preserves shape output"))?;
-            let value = crate::schema_identity::schema_identity_value(&crate::schema_identity::SchemaIdentityInput {
+            let value = crate::schema_identity::identity_value(&crate::schema_identity::IdentityInput {
                 mode,
                 schema_ref,
                 shape,

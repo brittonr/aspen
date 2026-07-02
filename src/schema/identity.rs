@@ -42,11 +42,11 @@ pub const DECISION_MIGRATION_AVAILABLE: &str = "migration-available";
 pub const DECISION_MISMATCH_REQUIRES_MIGRATION: &str = "mismatch-requires-migration";
 pub const DECISION_DENIED_BY_POLICY: &str = "denied-by-policy";
 
-const MAX_SCHEMA_SEARCH_MATCHES: usize = 4_096;
-const _: () = assert!(MAX_SCHEMA_SEARCH_MATCHES > 0);
+const MAX_SEARCH_MATCHES: usize = 4_096;
+const _: () = assert!(MAX_SEARCH_MATCHES > 0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaIdentityInput {
+pub struct IdentityInput {
     pub mode: String,
     pub schema_ref: String,
     pub shape: IoValue,
@@ -57,7 +57,7 @@ pub struct SchemaIdentityInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaIdentity {
+pub struct Identity {
     pub identity_ref: String,
     pub mode: String,
     pub schema_ref: String,
@@ -71,7 +71,7 @@ pub struct SchemaIdentity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaAliasInput {
+pub struct AliasInput {
     pub from_schema_ref: String,
     pub to_schema_ref: String,
     pub scope: String,
@@ -80,7 +80,7 @@ pub struct SchemaAliasInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaAlias {
+pub struct Alias {
     pub alias_ref: String,
     pub from_schema_ref: String,
     pub to_schema_ref: String,
@@ -91,10 +91,10 @@ pub struct SchemaAlias {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaCompatibilityInput {
-    pub expected: SchemaIdentity,
-    pub actual: SchemaIdentity,
-    pub alias: Option<SchemaAlias>,
+pub struct CompatibilityInput {
+    pub expected: Identity,
+    pub actual: Identity,
+    pub alias: Option<Alias>,
     pub migration_ref: Option<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -102,7 +102,7 @@ pub struct SchemaCompatibilityInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaCompatibility {
+pub struct Compatibility {
     pub compatibility_ref: String,
     pub decision: String,
     pub expected_identity_ref: String,
@@ -115,7 +115,7 @@ pub struct SchemaCompatibility {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SchemaCompatibilityReceipt {
+pub struct CompatibilityReceipt {
     pub receipt_ref: String,
     pub operation: String,
     pub decision: String,
@@ -158,7 +158,7 @@ pub fn structural_fingerprint(shape: &IoValue) -> Result<(IoValue, String, Strin
     Ok((normalized, normalized_shape_ref, fingerprint))
 }
 
-pub fn schema_identity_value(input: &SchemaIdentityInput) -> Result<IoValue> {
+pub fn identity_value(input: &IdentityInput) -> Result<IoValue> {
     validate_mode(&input.mode)?;
     validate_ref(&input.schema_ref, "schema identity schema ref")?;
     validate_refs(&input.metadata_refs, "schema identity metadata ref")?;
@@ -192,7 +192,7 @@ pub fn schema_identity_value(input: &SchemaIdentityInput) -> Result<IoValue> {
     ]))
 }
 
-pub fn parse_schema_identity(value: &IoValue) -> Result<SchemaIdentity> {
+pub fn parse_identity(value: &IoValue) -> Result<Identity> {
     let fields = value
         .collect_simple_record("schema-identity-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-identity-v1 ...>"))?;
@@ -217,7 +217,7 @@ pub fn parse_schema_identity(value: &IoValue) -> Result<SchemaIdentity> {
     if mode != MODE_BRANDED_STRUCTURAL && brand_ref.is_some() {
         return Err(MoltenError::invalid_harness("non-branded schema identity includes brand ref"));
     }
-    Ok(SchemaIdentity {
+    Ok(Identity {
         identity_ref: canonical_hash(value)?,
         mode,
         schema_ref: record_ref(&fields[2], "schema")?,
@@ -231,7 +231,7 @@ pub fn parse_schema_identity(value: &IoValue) -> Result<SchemaIdentity> {
     })
 }
 
-pub fn schema_alias_value(input: &SchemaAliasInput) -> Result<IoValue> {
+pub fn alias_value(input: &AliasInput) -> Result<IoValue> {
     validate_ref(&input.from_schema_ref, "schema alias from ref")?;
     validate_ref(&input.to_schema_ref, "schema alias to ref")?;
     validate_alias_scope(&input.scope)?;
@@ -248,7 +248,7 @@ pub fn schema_alias_value(input: &SchemaAliasInput) -> Result<IoValue> {
     ]))
 }
 
-pub fn parse_schema_alias(value: &IoValue) -> Result<SchemaAlias> {
+pub fn parse_alias(value: &IoValue) -> Result<Alias> {
     let fields = value
         .collect_simple_record("schema-alias-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-alias-v1 ...>"))?;
@@ -257,7 +257,7 @@ pub fn parse_schema_alias(value: &IoValue) -> Result<SchemaAlias> {
     require_check(&checks, "alias-is-not-name", "schema alias")?;
     let scope = record_string(&fields[3], "scope")?;
     validate_alias_scope(&scope)?;
-    Ok(SchemaAlias {
+    Ok(Alias {
         alias_ref: canonical_hash(value)?,
         from_schema_ref: record_ref(&fields[1], "from")?,
         to_schema_ref: record_ref(&fields[2], "to")?,
@@ -268,7 +268,7 @@ pub fn parse_schema_alias(value: &IoValue) -> Result<SchemaAlias> {
     })
 }
 
-pub fn compatibility_decision_value(input: &SchemaCompatibilityInput) -> Result<IoValue> {
+pub fn compatibility_decision_value(input: &CompatibilityInput) -> Result<IoValue> {
     validate_refs(&input.policy_refs, "schema compatibility policy ref")?;
     validate_refs(&input.evidence_refs, "schema compatibility evidence ref")?;
     if let Some(migration_ref) = input.migration_ref.as_ref() {
@@ -295,7 +295,7 @@ pub fn compatibility_decision_value(input: &SchemaCompatibilityInput) -> Result<
     ]))
 }
 
-pub fn parse_schema_compatibility(value: &IoValue) -> Result<SchemaCompatibility> {
+pub fn parse_compatibility(value: &IoValue) -> Result<Compatibility> {
     let fields = value
         .collect_simple_record("schema-compatibility-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-compatibility-v1 ...>"))?;
@@ -304,7 +304,7 @@ pub fn parse_schema_compatibility(value: &IoValue) -> Result<SchemaCompatibility
     require_check(&checks, "unique-not-structural-by-default", "schema compatibility")?;
     let expected = parse_compatibility_identity(&fields[2], "expected")?;
     let actual = parse_compatibility_identity(&fields[3], "actual")?;
-    Ok(SchemaCompatibility {
+    Ok(Compatibility {
         compatibility_ref: canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         expected_identity_ref: expected.0,
@@ -355,7 +355,7 @@ fn compatibility_admits_scope(
     actual_schema_ref: &str,
     context: &str,
 ) -> Result<bool> {
-    let parsed = parse_schema_compatibility(value)?;
+    let parsed = parse_compatibility(value)?;
     if parsed.expected_schema_ref != expected_schema_ref || parsed.actual_schema_ref != actual_schema_ref {
         return Err(MoltenError::invalid_harness(format!("schema compatibility refs do not match {context}")));
     }
@@ -371,7 +371,7 @@ fn compatibility_admits_scope(
 
 pub fn compatibility_receipt_value(operation: &str, compatibility_value: &IoValue) -> Result<IoValue> {
     validate_non_empty(operation, "schema compatibility receipt operation")?;
-    let compatibility = parse_schema_compatibility(compatibility_value)?;
+    let compatibility = parse_compatibility(compatibility_value)?;
     let decision = if matches!(
         compatibility.decision.as_str(),
         DECISION_EXACT_ARTIFACT_MATCH
@@ -395,7 +395,7 @@ pub fn compatibility_receipt_value(operation: &str, compatibility_value: &IoValu
     ]))
 }
 
-pub fn parse_compatibility_receipt(value: &IoValue) -> Result<SchemaCompatibilityReceipt> {
+pub fn parse_compatibility_receipt(value: &IoValue) -> Result<CompatibilityReceipt> {
     let fields = value
         .collect_simple_record("schema-compatibility-receipt-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-compatibility-receipt-v1 ...>"))?;
@@ -406,7 +406,7 @@ pub fn parse_compatibility_receipt(value: &IoValue) -> Result<SchemaCompatibilit
     )?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "schema-compatibility-recorded", "schema compatibility receipt")?;
-    Ok(SchemaCompatibilityReceipt {
+    Ok(CompatibilityReceipt {
         receipt_ref: canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision: record_string(&fields[2], "decision")?,
@@ -415,25 +415,22 @@ pub fn parse_compatibility_receipt(value: &IoValue) -> Result<SchemaCompatibilit
     })
 }
 
-pub fn search_registry_by_fingerprint(
-    registry_root: &std::path::Path,
-    fingerprint: &str,
-) -> Result<Vec<SchemaIdentity>> {
+pub fn search_registry_by_fingerprint(registry_root: &std::path::Path, fingerprint: &str) -> Result<Vec<Identity>> {
     validate_ref(fingerprint, "schema structural fingerprint")?;
     let mut matches = Vec::new();
     for artifact in crate::artifacts::list_artifacts(registry_root, Some("schema-identity"))? {
         let payload = crate::artifacts::read_payload(registry_root, &artifact.artifact_ref)?;
-        if let Ok(identity) = parse_schema_identity(&payload)
+        if let Ok(identity) = parse_identity(&payload)
             && identity.structural_fingerprint == fingerprint
         {
-            push_bounded(&mut matches, identity, MAX_SCHEMA_SEARCH_MATCHES, "schema search matches")?;
+            push_bounded(&mut matches, identity, MAX_SEARCH_MATCHES, "schema search matches")?;
         }
     }
     matches.sort_by(|left, right| left.identity_ref.cmp(&right.identity_ref));
     Ok(matches)
 }
 
-fn compatibility_decision(input: &SchemaCompatibilityInput) -> Result<String> {
+fn compatibility_decision(input: &CompatibilityInput) -> Result<String> {
     if input.deny_by_policy {
         return Ok(DECISION_DENIED_BY_POLICY.to_string());
     }
@@ -509,7 +506,7 @@ fn normalize_binary_shape(kind: &'static str, fields: &Record<Value<IoValue>>) -
     ]))
 }
 
-fn compatibility_identity_record(label: &'static str, identity: &SchemaIdentity) -> IoValue {
+fn compatibility_identity_record(label: &'static str, identity: &Identity) -> IoValue {
     record(label, vec![
         string(&identity.identity_ref),
         string(&identity.schema_ref),
@@ -736,7 +733,7 @@ mod tests {
         let shape = parse_text(r#"<shape "record" "id" [<shape "field" "value" <shape "string">>]>"#).expect("shape");
         let expected = identity(MODE_UNIQUE, "user-id", &shape, None);
         let actual = identity(MODE_UNIQUE, "order-id", &shape, None);
-        let mismatch = compatibility_decision_value(&SchemaCompatibilityInput {
+        let mismatch = compatibility_decision_value(&CompatibilityInput {
             expected: expected.clone(),
             actual: actual.clone(),
             alias: None,
@@ -747,11 +744,11 @@ mod tests {
         })
         .expect("mismatch");
         assert_eq!(
-            parse_schema_compatibility(&mismatch).expect("parse mismatch").decision,
+            parse_compatibility(&mismatch).expect("parse mismatch").decision,
             DECISION_MISMATCH_REQUIRES_MIGRATION
         );
-        let alias = parse_schema_alias(
-            &schema_alias_value(&SchemaAliasInput {
+        let alias = parse_alias(
+            &alias_value(&AliasInput {
                 from_schema_ref: actual.schema_ref.clone(),
                 to_schema_ref: expected.schema_ref.clone(),
                 scope: "storage".to_string(),
@@ -761,7 +758,7 @@ mod tests {
             .expect("alias value"),
         )
         .expect("alias");
-        let admitted = compatibility_decision_value(&SchemaCompatibilityInput {
+        let admitted = compatibility_decision_value(&CompatibilityInput {
             expected: expected.clone(),
             actual: actual.clone(),
             alias: Some(alias.clone()),
@@ -771,8 +768,8 @@ mod tests {
             deny_by_policy: false,
         })
         .expect("alias admitted");
-        assert_eq!(parse_schema_compatibility(&admitted).expect("parse admitted").decision, DECISION_ADMITTED_ALIAS);
-        let migration = compatibility_decision_value(&SchemaCompatibilityInput {
+        assert_eq!(parse_compatibility(&admitted).expect("parse admitted").decision, DECISION_ADMITTED_ALIAS);
+        let migration = compatibility_decision_value(&CompatibilityInput {
             expected: expected.clone(),
             actual: actual.clone(),
             alias: None,
@@ -782,11 +779,8 @@ mod tests {
             deny_by_policy: false,
         })
         .expect("migration available");
-        assert_eq!(
-            parse_schema_compatibility(&migration).expect("parse migration").decision,
-            DECISION_MIGRATION_AVAILABLE
-        );
-        let reverse = compatibility_decision_value(&SchemaCompatibilityInput {
+        assert_eq!(parse_compatibility(&migration).expect("parse migration").decision, DECISION_MIGRATION_AVAILABLE);
+        let reverse = compatibility_decision_value(&CompatibilityInput {
             expected: actual,
             actual: expected,
             alias: Some(alias),
@@ -797,7 +791,7 @@ mod tests {
         })
         .expect("alias reverse");
         assert_eq!(
-            parse_schema_compatibility(&reverse).expect("parse reverse").decision,
+            parse_compatibility(&reverse).expect("parse reverse").decision,
             DECISION_MISMATCH_REQUIRES_MIGRATION
         );
     }
@@ -807,7 +801,7 @@ mod tests {
         let shape = parse_text(r#"<shape "sequence" <shape "string">>"#).expect("shape");
         let left = identity(MODE_STRUCTURAL, "left", &shape, None);
         let right = identity(MODE_STRUCTURAL, "right", &shape, None);
-        let structural = compatibility_decision_value(&SchemaCompatibilityInput {
+        let structural = compatibility_decision_value(&CompatibilityInput {
             expected: left,
             actual: right,
             alias: None,
@@ -817,15 +811,12 @@ mod tests {
             deny_by_policy: false,
         })
         .expect("structural compat");
-        assert_eq!(
-            parse_schema_compatibility(&structural).expect("parse structural").decision,
-            DECISION_STRUCTURAL_MATCH
-        );
+        assert_eq!(parse_compatibility(&structural).expect("parse structural").decision, DECISION_STRUCTURAL_MATCH);
 
         let brand = test_ref("brand");
         let branded_left = identity(MODE_BRANDED_STRUCTURAL, "brand-left", &shape, Some(brand.clone()));
         let branded_right = identity(MODE_BRANDED_STRUCTURAL, "brand-right", &shape, Some(brand));
-        let branded = compatibility_decision_value(&SchemaCompatibilityInput {
+        let branded = compatibility_decision_value(&CompatibilityInput {
             expected: branded_left,
             actual: branded_right,
             alias: None,
@@ -835,7 +826,7 @@ mod tests {
             deny_by_policy: false,
         })
         .expect("brand compat");
-        assert_eq!(parse_schema_compatibility(&branded).expect("parse brand").decision, DECISION_BRAND_MATCH);
+        assert_eq!(parse_compatibility(&branded).expect("parse brand").decision, DECISION_BRAND_MATCH);
     }
 
     #[test]
@@ -850,8 +841,8 @@ mod tests {
             ("effect", compatibility_admits_effect_schema),
             ("policy", compatibility_admits_policy_contract_schema),
         ] {
-            let alias = parse_schema_alias(
-                &schema_alias_value(&SchemaAliasInput {
+            let alias = parse_alias(
+                &alias_value(&AliasInput {
                     from_schema_ref: actual.schema_ref.clone(),
                     to_schema_ref: expected.schema_ref.clone(),
                     scope: scope.to_string(),
@@ -861,7 +852,7 @@ mod tests {
                 .expect("alias value"),
             )
             .expect("alias");
-            let compatibility = compatibility_decision_value(&SchemaCompatibilityInput {
+            let compatibility = compatibility_decision_value(&CompatibilityInput {
                 expected: expected.clone(),
                 actual: actual.clone(),
                 alias: Some(alias),
@@ -872,7 +863,7 @@ mod tests {
             })
             .expect("compatibility");
             assert_eq!(
-                parse_schema_compatibility(&compatibility).expect("parse compatibility").decision,
+                parse_compatibility(&compatibility).expect("parse compatibility").decision,
                 DECISION_ADMITTED_ALIAS
             );
             assert!(admits(&compatibility, &expected.schema_ref, &actual.schema_ref).expect("admitted"));
@@ -946,7 +937,7 @@ mod tests {
         assert_eq!(first_fp, second_fp);
         let expected = identity(MODE_STRUCTURAL, &format!("expected-{salt}"), &shape, None);
         let actual = identity(MODE_STRUCTURAL, &format!("actual-{salt}"), &shape, None);
-        let compatibility = compatibility_decision_value(&SchemaCompatibilityInput {
+        let compatibility = compatibility_decision_value(&CompatibilityInput {
             expected: expected.clone(),
             actual: actual.clone(),
             alias: None,
@@ -956,12 +947,12 @@ mod tests {
             deny_by_policy: false,
         })
         .expect("compatibility");
-        let parsed = parse_schema_compatibility(&compatibility).expect("parse compatibility");
+        let parsed = parse_compatibility(&compatibility).expect("parse compatibility");
         assert_eq!(parsed.decision, DECISION_STRUCTURAL_MATCH);
         assert!(
             compatibility_admits_storage(&compatibility, &expected.schema_ref, &actual.schema_ref).expect("admits")
         );
-        let denied = compatibility_decision_value(&SchemaCompatibilityInput {
+        let denied = compatibility_decision_value(&CompatibilityInput {
             expected,
             actual,
             alias: None,
@@ -971,20 +962,15 @@ mod tests {
             deny_by_policy: true,
         })
         .expect("denied compatibility");
-        assert_eq!(parse_schema_compatibility(&denied).expect("parse denied").decision, DECISION_DENIED_BY_POLICY);
+        assert_eq!(parse_compatibility(&denied).expect("parse denied").decision, DECISION_DENIED_BY_POLICY);
     }
 
-    fn identity(mode: &str, label: &str, shape: &IoValue, brand_ref: Option<String>) -> SchemaIdentity {
+    fn identity(mode: &str, label: &str, shape: &IoValue, brand_ref: Option<String>) -> Identity {
         identity_with_schema(mode, &test_ref(&format!("schema-{label}")), shape, brand_ref)
     }
 
-    fn identity_with_schema(
-        mode: &str,
-        schema_ref: &str,
-        shape: &IoValue,
-        brand_ref: Option<String>,
-    ) -> SchemaIdentity {
-        let value = schema_identity_value(&SchemaIdentityInput {
+    fn identity_with_schema(mode: &str, schema_ref: &str, shape: &IoValue, brand_ref: Option<String>) -> Identity {
+        let value = identity_value(&IdentityInput {
             mode: mode.to_string(),
             schema_ref: schema_ref.to_string(),
             shape: shape.clone(),
@@ -994,7 +980,7 @@ mod tests {
             evidence_refs: vec![test_ref("evidence")],
         })
         .expect("identity value");
-        parse_schema_identity(&value).expect("identity")
+        parse_identity(&value).expect("identity")
     }
 
     fn test_ref(label: &str) -> String {

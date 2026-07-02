@@ -11,7 +11,7 @@ pub(super) fn identity(command: super::Command) -> molten::error::Result<()> {
         return dispatch_mismatch("identity");
     };
     let shape = super::io::read_preserves_file(&shape)?;
-    let value = molten::schema_identity::schema_identity_value(&molten::schema_identity::SchemaIdentityInput {
+    let value = molten::schema_identity::identity_value(&molten::schema_identity::IdentityInput {
         mode,
         schema_ref,
         shape,
@@ -20,10 +20,10 @@ pub(super) fn identity(command: super::Command) -> molten::error::Result<()> {
         policy_refs: vec![super::io::local_ref("policy", "identity")?],
         evidence_refs: vec![super::io::local_ref("evidence", "identity")?],
     })?;
-    let identity = molten::schema_identity::parse_schema_identity(&value)?;
+    let identity = molten::schema_identity::parse_identity(&value)?;
     let receipt = molten::schema_identity::compatibility_receipt_value(
         "fingerprint",
-        &molten::schema_identity::compatibility_decision_value(&molten::schema_identity::SchemaCompatibilityInput {
+        &molten::schema_identity::compatibility_decision_value(&molten::schema_identity::CompatibilityInput {
             expected: identity.clone(),
             actual: identity.clone(),
             alias: None,
@@ -56,18 +56,18 @@ pub(super) fn alias(command: super::Command) -> molten::error::Result<()> {
     else {
         return dispatch_mismatch("alias");
     };
-    let value = molten::schema_identity::schema_alias_value(&molten::schema_identity::SchemaAliasInput {
+    let value = molten::schema_identity::alias_value(&molten::schema_identity::AliasInput {
         from_schema_ref: from_ref,
         to_schema_ref: to_ref,
         scope,
         policy_refs: vec![super::io::local_ref("policy", "alias")?],
         evidence_refs: vec![super::io::local_ref("evidence", "alias")?],
     })?;
-    let alias = molten::schema_identity::parse_schema_alias(&value)?;
+    let alias = molten::schema_identity::parse_alias(&value)?;
     let expected = local_unique_schema_identity(&alias.to_schema_ref)?;
     let actual = local_unique_schema_identity(&alias.from_schema_ref)?;
     let compatibility =
-        molten::schema_identity::compatibility_decision_value(&molten::schema_identity::SchemaCompatibilityInput {
+        molten::schema_identity::compatibility_decision_value(&molten::schema_identity::CompatibilityInput {
             expected,
             actual,
             alias: Some(alias.clone()),
@@ -101,17 +101,14 @@ pub(super) fn compat(command: super::Command) -> molten::error::Result<()> {
     else {
         return dispatch_mismatch("compat");
     };
-    let expected =
-        molten::schema_identity::parse_schema_identity(&super::io::read_preserves_file(&expected_identity)?)?;
-    let actual = molten::schema_identity::parse_schema_identity(&super::io::read_preserves_file(&actual_identity)?)?;
+    let expected = molten::schema_identity::parse_identity(&super::io::read_preserves_file(&expected_identity)?)?;
+    let actual = molten::schema_identity::parse_identity(&super::io::read_preserves_file(&actual_identity)?)?;
     let alias = alias
         .as_ref()
-        .map(|path| {
-            super::io::read_preserves_file(path).and_then(|value| molten::schema_identity::parse_schema_alias(&value))
-        })
+        .map(|path| super::io::read_preserves_file(path).and_then(|value| molten::schema_identity::parse_alias(&value)))
         .transpose()?;
     let compatibility =
-        molten::schema_identity::compatibility_decision_value(&molten::schema_identity::SchemaCompatibilityInput {
+        molten::schema_identity::compatibility_decision_value(&molten::schema_identity::CompatibilityInput {
             expected,
             actual,
             alias,
@@ -120,7 +117,7 @@ pub(super) fn compat(command: super::Command) -> molten::error::Result<()> {
             evidence_refs: vec![super::io::local_ref("evidence", "compat")?],
             deny_by_policy: false,
         })?;
-    let parsed = molten::schema_identity::parse_schema_compatibility(&compatibility)?;
+    let parsed = molten::schema_identity::parse_compatibility(&compatibility)?;
     let receipt = molten::schema_identity::compatibility_receipt_value("compatibility", &compatibility)?;
     if let Some(path) = out.as_ref() {
         super::io::write_file(path, &molten::preserves_rail::to_text(&compatibility)?)?;
@@ -142,9 +139,9 @@ pub(super) fn search_fingerprint(command: super::Command) -> molten::error::Resu
     Ok(())
 }
 
-fn local_unique_schema_identity(schema_ref: &str) -> molten::error::Result<molten::schema_identity::SchemaIdentity> {
+fn local_unique_schema_identity(schema_ref: &str) -> molten::error::Result<molten::schema_identity::Identity> {
     let shape = molten::preserves_rail::record("shape", vec![molten::preserves_rail::string("any-preserves")]);
-    let value = molten::schema_identity::schema_identity_value(&molten::schema_identity::SchemaIdentityInput {
+    let value = molten::schema_identity::identity_value(&molten::schema_identity::IdentityInput {
         mode: molten::schema_identity::MODE_UNIQUE.to_string(),
         schema_ref: schema_ref.to_string(),
         shape,
@@ -153,7 +150,7 @@ fn local_unique_schema_identity(schema_ref: &str) -> molten::error::Result<molte
         policy_refs: vec![super::io::local_ref("policy", schema_ref)?],
         evidence_refs: vec![super::io::local_ref("evidence", schema_ref)?],
     })?;
-    molten::schema_identity::parse_schema_identity(&value)
+    molten::schema_identity::parse_identity(&value)
 }
 
 fn dispatch_mismatch(command: &str) -> molten::error::Result<()> {

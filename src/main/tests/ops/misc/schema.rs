@@ -97,7 +97,7 @@
             capability_refs: vec![test_ref("capability")],
         })
         .expect("install schema artifact");
-        let identity_value = molten::schema_identity::schema_identity_value(&molten::schema_identity::SchemaIdentityInput {
+        let identity_value = molten::schema_identity::identity_value(&molten::schema_identity::IdentityInput {
             mode: "structural".to_string(),
             schema_ref: schema_artifact.artifact_ref.clone(),
             shape: parse_text(shape).expect("parse shape"),
@@ -107,7 +107,7 @@
             evidence_refs: vec![test_ref("evidence")],
         })
         .expect("identity value");
-        let identity = molten::schema_identity::parse_schema_identity(&identity_value).expect("parse identity");
+        let identity = molten::schema_identity::parse_identity(&identity_value).expect("parse identity");
         molten::artifacts::install_artifact(registry, &molten::artifacts::ArtifactInstallInput {
             kind: "schema-identity".to_string(),
             payload: identity_value,
