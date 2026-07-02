@@ -1,6 +1,4 @@
-use std::fs;
-
-use preserves::IOValue;
+type IOValue = preserves::IOValue;
 use redb::ReadableDatabase;
 use redb::ReadableTableMetadata;
 
@@ -1816,7 +1814,7 @@ fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
 }
 
 fn ensure_store_tables(root: &Path) -> Result<Database> {
-    fs::create_dir_all(root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
     let db = Database::create(root.join(STORE_FILE)).map_err(store_error)?;
     let write_txn = db.begin_write().map_err(store_error)?;
     {
