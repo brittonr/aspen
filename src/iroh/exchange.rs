@@ -1018,12 +1018,10 @@ mod tests {
 
     type AtomicU64 = std::sync::atomic::AtomicU64;
     type Ordering = std::sync::atomic::Ordering;
-    use crate::evidence_chain;
-    use crate::harness::run_suite_value;
-    use crate::harness::sealed_repro_bundle_value_with_command;
-    use crate::ledger;
-    use crate::preserves_rail::canonical_hash;
-    use crate::preserves_rail::parse_text;
+
+    fn parse_text(source: &str) -> Result<IoValue> {
+        crate::preserves_rail::parse_text(source)
+    }
 
     #[test]
     fn local_iroh_publish_fetch_verifies_bundle_refs() {
@@ -1036,9 +1034,9 @@ mod tests {
               [<assert "a" "ready">]>"#,
         )
         .expect("parse suite");
-        let run = run_suite_value(&suite).expect("run suite");
-        let bundle =
-            sealed_repro_bundle_value_with_command(&run.report_value, &["molten".to_string()]).expect("seal bundle");
+        let run = crate::harness::run_suite_value(&suite).expect("run suite");
+        let bundle = crate::harness::sealed_repro_bundle_value_with_command(&run.report_value, &["molten".to_string()])
+            .expect("seal bundle");
         let published = publish_bundle(&root, &bundle, "node:local").expect("publish bundle");
         let fetched = fetch_bundle(&FetchBundleInput {
             root: &root,
