@@ -239,7 +239,7 @@ fn review_entries(input: ReviewInput<'_>, candidates: &[LedgerEntry]) -> crate::
             "ledger retention admission diagnostics",
         )?;
         extend_refs(&mut review.admission_refs, &admission.admitted_refs, "ledger retention admission refs")?;
-        let evaluation = crate::retention::evaluate_retention(crate::retention::RetentionEvaluationInput {
+        let evaluation = crate::retention::evaluate(crate::retention::EvaluationInput {
             root: input.root,
             object_ref: &entry.artifact_ref,
             object_kind: &entry.artifact_kind,

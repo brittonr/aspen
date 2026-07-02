@@ -200,7 +200,7 @@ pub(crate) fn check(args: super::command::ops::Check) -> molten::error::Result<(
         has_remote_gc_clearance,
         receipt_out,
     } = args;
-    let evaluation = molten::retention::evaluate_retention(molten::retention::RetentionEvaluationInput {
+    let evaluation = molten::retention::evaluate(molten::retention::EvaluationInput {
         root: &root,
         object_ref: &object_ref,
         object_kind: &object_kind,

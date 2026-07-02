@@ -2031,7 +2031,7 @@ impl GcNotes {
             },
         )?;
         self.note_admission(&admission)?;
-        let evaluation = crate::retention::evaluate_retention(crate::retention::RetentionEvaluationInput {
+        let evaluation = crate::retention::evaluate(crate::retention::EvaluationInput {
             root: env.root,
             object_ref: object.object_ref,
             object_kind: object.object_kind,

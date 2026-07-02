@@ -756,7 +756,7 @@ fn evaluate_invalidate_key(
             retention_class: crate::retention::CLASS_EPHEMERAL_CACHE,
             action: crate::retention::ACTION_TOMBSTONE,
         })?;
-    let evaluation = crate::retention::evaluate_retention(crate::retention::RetentionEvaluationInput {
+    let evaluation = crate::retention::evaluate(crate::retention::EvaluationInput {
         root,
         object_ref: key_ref,
         object_kind: "eval-cache-key",

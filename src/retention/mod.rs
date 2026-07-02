@@ -201,7 +201,7 @@ pub struct ReferenceIndexForObjectInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionEvaluationInput<'a> {
+pub struct EvaluationInput<'a> {
     pub root: &'a Path,
     pub object_ref: &'a str,
     pub object_kind: &'a str,
@@ -882,7 +882,7 @@ pub struct PinOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetentionEvaluation {
+pub struct Evaluation {
     pub receipt: RetentionReceipt,
     pub index: ReferenceIndex,
     pub tombstone: Option<RetentionTombstone>,
@@ -1161,7 +1161,7 @@ pub fn reference_index_for_object(input: ReferenceIndexForObjectInput<'_>) -> Re
     parse_reference_index(&value)
 }
 
-pub fn evaluate_retention(input: RetentionEvaluationInput<'_>) -> Result<RetentionEvaluation> {
+pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
     ensure_store(input.root)?;
     validate_retention_class(input.retention_class)?;
     validate_action(input.action)?;
@@ -1216,13 +1216,13 @@ pub fn evaluate_retention(input: RetentionEvaluationInput<'_>) -> Result<Retenti
     write_store_value(&receipt_path(input.root, &receipt.receipt_ref)?, &receipt.value)?;
     if let Some(created) = tombstone {
         write_store_value(&tombstone_path(input.root, &created.tombstone_ref)?, &created.value)?;
-        return Ok(RetentionEvaluation {
+        return Ok(Evaluation {
             receipt,
             index,
             tombstone: Some(created),
         });
     }
-    Ok(RetentionEvaluation {
+    Ok(Evaluation {
         receipt,
         index,
         tombstone: None,
@@ -3058,7 +3058,7 @@ fn local_retention_gate(input: LocalRetentionGateInput<'_>) -> Result<RetentionP
         Some(reference) => reference.clone(),
         None => synthetic_ref("retention-gc-plan-missing-requester")?,
     };
-    let local_input = RetentionEvaluationInput {
+    let local_input = EvaluationInput {
         root: input.input.root,
         object_ref: input.input.object_ref,
         object_kind: input.input.object_kind,
@@ -4174,7 +4174,7 @@ fn apply_success_outcome(
 ) -> Result<ApplyOutcome> {
     let requester_ref =
         destructive_retention_requester_ref(&original.evidence, "retention-gc-apply-missing-requester")?;
-    let evaluation = evaluate_retention(RetentionEvaluationInput {
+    let evaluation = evaluate(EvaluationInput {
         root,
         object_ref: &original.object_ref,
         object_kind: &original.object_kind,
@@ -7353,8 +7353,8 @@ fn pin_step(root: &Path, seed: &SeedRefs) -> Result<PinOperation> {
     })
 }
 
-fn eval_step(root: &Path, seed: &SeedRefs, action: &str) -> Result<RetentionEvaluation> {
-    evaluate_retention(RetentionEvaluationInput {
+fn eval_step(root: &Path, seed: &SeedRefs, action: &str) -> Result<Evaluation> {
+    evaluate(EvaluationInput {
         root,
         object_ref: &seed.object_ref,
         object_kind: "encrypted-ref",
@@ -7374,9 +7374,9 @@ fn eval_step(root: &Path, seed: &SeedRefs, action: &str) -> Result<RetentionEval
 struct OutputValues {
     class: IoValue,
     pin: PinOperation,
-    deny: RetentionEvaluation,
+    deny: Evaluation,
     unpin: RetentionReceipt,
-    delete: RetentionEvaluation,
+    delete: Evaluation,
 }
 
 fn output_values(parts: OutputValues) -> Result<Vec<(String, IoValue)>> {
@@ -7391,10 +7391,10 @@ fn output_values(parts: OutputValues) -> Result<Vec<(String, IoValue)>> {
         pin,
         receipt: pin_receipt,
     } = pin;
-    let RetentionEvaluation {
+    let Evaluation {
         receipt: deny_receipt, ..
     } = deny;
-    let RetentionEvaluation {
+    let Evaluation {
         receipt: delete_receipt,
         tombstone,
         ..
@@ -7494,7 +7494,7 @@ fn build_tombstone(input: TombstoneBuildInput<'_>) -> Result<RetentionTombstone>
     parse_tombstone(&value)
 }
 
-fn retention_diagnostics(input: &RetentionEvaluationInput<'_>, index: &ReferenceIndex) -> Result<Vec<String>> {
+fn retention_diagnostics(input: &EvaluationInput<'_>, index: &ReferenceIndex) -> Result<Vec<String>> {
     let is_destructive = is_destructive_action(input.action);
     let mut diagnostics = Vec::new();
     push_notes(&mut diagnostics, [
@@ -8663,7 +8663,7 @@ mod tests {
             has_authority: true,
         })
         .expect("pin");
-        let denied = evaluate_retention(RetentionEvaluationInput {
+        let denied = evaluate(EvaluationInput {
             root: &root,
             object_ref: &object_ref,
             object_kind: "artifact",
@@ -8691,7 +8691,7 @@ mod tests {
         })
         .expect("unpin");
         assert_eq!(unpin.decision, "pass");
-        let allowed = evaluate_retention(RetentionEvaluationInput {
+        let allowed = evaluate(EvaluationInput {
             root: &root,
             object_ref: &object_ref,
             object_kind: "artifact",
@@ -8717,7 +8717,7 @@ mod tests {
         let object_ref = fake_ref("object");
         let requester_ref = fake_ref("requester");
         let policy_refs = vec![fake_ref("policy")];
-        let receipt = evaluate_retention(RetentionEvaluationInput {
+        let receipt = evaluate(EvaluationInput {
             root: &root,
             object_ref: &object_ref,
             object_kind: "receipt",
@@ -8745,7 +8745,7 @@ mod tests {
         let requester_ref = fake_ref("requester");
         let policy_refs = vec![fake_ref("policy")];
         let retained_refs = vec![fake_ref("receipt-dependency")];
-        let retained = evaluate_retention(RetentionEvaluationInput {
+        let retained = evaluate(EvaluationInput {
             root: &root,
             object_ref: &object_ref,
             object_kind: "receipt",
@@ -8762,7 +8762,7 @@ mod tests {
         })
         .expect("retained deny");
         assert_eq!(retained.receipt.decision, "deny");
-        let legal = evaluate_retention(RetentionEvaluationInput {
+        let legal = evaluate(EvaluationInput {
             root: &root,
             object_ref: &object_ref,
             object_kind: "receipt",
@@ -8788,7 +8788,7 @@ mod tests {
         let requester_ref = fake_ref("requester");
         let policy_refs = vec![fake_ref("policy")];
         let evidence_refs = vec![fake_ref("redaction")];
-        let evaluation = evaluate_retention(RetentionEvaluationInput {
+        let evaluation = evaluate(EvaluationInput {
             root: &root,
             object_ref: &object_ref,
             object_kind: "encrypted-ref",
@@ -8822,7 +8822,7 @@ mod tests {
             let evidence_refs = vec![fake_ref("evidence")];
             let retained_refs =
                 (0..count).map(|index| fake_ref(&format!("retained-{count}-{index}"))).collect::<Vec<_>>();
-            let evaluation = evaluate_retention(RetentionEvaluationInput {
+            let evaluation = evaluate(EvaluationInput {
                 root: &root,
                 object_ref: &object_ref,
                 object_kind: "audit-receipt",
@@ -8950,7 +8950,7 @@ mod tests {
         assert_eq!(admission.decision, "pass");
         assert!(admission.has_delete_authority);
         assert!(admission.has_remote_gc_clearance);
-        let evaluation = evaluate_retention(RetentionEvaluationInput {
+        let evaluation = evaluate(EvaluationInput {
             root: &root,
             object_ref: &fixture.object_ref,
             object_kind: "chunk",

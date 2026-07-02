@@ -1290,7 +1290,7 @@ struct FixtureReceipts {
 }
 
 struct FixtureTail {
-    retention: crate::retention::RetentionEvaluation,
+    retention: crate::retention::Evaluation,
     cleanup: SecretCleanupReceipt,
     private_bundle: PrivateBundleProfile,
 }
@@ -1454,9 +1454,9 @@ fn fixture_receipts(core: &FixtureCore) -> Result<FixtureReceipts> {
     })
 }
 
-fn fixture_retention(core: &FixtureCore) -> Result<crate::retention::RetentionEvaluation> {
+fn fixture_retention(core: &FixtureCore) -> Result<crate::retention::Evaluation> {
     let retention_root = secrets_fixture_retention_root(&core.secret.secret_ref)?;
-    crate::retention::evaluate_retention(crate::retention::RetentionEvaluationInput {
+    crate::retention::evaluate(crate::retention::EvaluationInput {
         root: &retention_root,
         object_ref: &core.secret.secret_ref,
         object_kind: "secret-ref",
@@ -1473,10 +1473,7 @@ fn fixture_retention(core: &FixtureCore) -> Result<crate::retention::RetentionEv
     })
 }
 
-fn fixture_cleanup(
-    core: &FixtureCore,
-    retention: &crate::retention::RetentionEvaluation,
-) -> Result<SecretCleanupReceipt> {
+fn fixture_cleanup(core: &FixtureCore, retention: &crate::retention::Evaluation) -> Result<SecretCleanupReceipt> {
     let tombstone_ref = retention
         .receipt
         .tombstone_ref
