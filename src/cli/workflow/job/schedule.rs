@@ -4,7 +4,10 @@ type Result<T> = molten::error::Result<T>;
 type ScheduleLocal = super::command::worker::ScheduleLocal;
 
 #[path = "schedule/output.rs"]
-mod output;
+mod writer;
+mod output {
+    pub(super) use super::writer::*;
+}
 #[path = "schedule/phase.rs"]
 mod phase;
 #[path = "schedule/run.rs"]

@@ -851,7 +851,7 @@
                   --input "$input_manifest@5@bytes" \
                   --output-mode chunk-manifest \
                   --handler-profile local-echo-v1 \
-                  --authority-context-ref "$authority_ref" \
+                  --context-ref "$authority_ref" \
                   --policy-ref "$policy_ref" \
                   --provenance-ref "$provenance_ref" \
                   --effect-ref "$effect_ref" \

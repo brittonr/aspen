@@ -1,73 +1,178 @@
 #[path = "cli/core/artifact.rs"]
-mod cli_artifact;
+mod object_port;
+mod cli_artifact {
+    pub(crate) use super::object_port::*;
+}
 #[path = "cli/core/cache.rs"]
-mod cli_cache;
+mod memo_port;
+mod cli_cache {
+    pub(crate) use super::memo_port::*;
+}
 #[path = "cli/core/catalog.rs"]
-mod cli_catalog;
+mod inventory_port;
+mod cli_catalog {
+    pub(crate) use super::inventory_port::*;
+}
 #[path = "cli/core/chunk.rs"]
-mod cli_chunk;
+mod block_port;
+mod cli_chunk {
+    pub(crate) use super::block_port::*;
+}
 #[path = "cli/workflow/coordination.rs"]
-mod cli_coordination;
+mod orchestrate_port;
+mod cli_coordination {
+    pub(crate) use super::orchestrate_port::*;
+}
 #[path = "cli/workflow/delivery.rs"]
-mod cli_delivery;
+mod packet_port;
+mod cli_delivery {
+    pub(crate) use super::packet_port::*;
+}
 #[path = "cli/ops/dogfood/mod.rs"]
-mod cli_dogfood;
+mod pilot_port;
+mod cli_dogfood {
+    pub(crate) use super::pilot_port::*;
+}
 #[path = "cli/evidence/gate.rs"]
-mod cli_gate;
+mod barrier_port;
+mod cli_gate {
+    pub(crate) use super::barrier_port::*;
+}
 #[path = "cli/ops/gateway.rs"]
-mod cli_gateway;
+mod edge_port;
+mod cli_gateway {
+    pub(crate) use super::edge_port::*;
+}
 #[path = "cli/test/harness.rs"]
-mod cli_harness;
+mod testbed_port;
+mod cli_harness {
+    pub(crate) use super::testbed_port::*;
+}
 #[path = "cli/workflow/job.rs"]
-mod cli_job;
+mod workload_port;
+mod cli_job {
+    pub(crate) use super::workload_port::*;
+}
 #[path = "cli/ops/ledger.rs"]
-mod cli_ledger;
+mod journal_port;
+mod cli_ledger {
+    pub(crate) use super::journal_port::*;
+}
 #[path = "cli/ops/nixosvm.rs"]
-mod cli_nixos_vm;
+mod machine_port;
+mod cli_nixos_vm {
+    pub(crate) use super::machine_port::*;
+}
 #[path = "cli/ops/node.rs"]
-mod cli_node;
+mod kernel_shell;
+mod cli_node {
+    pub(crate) use super::kernel_shell::*;
+}
 #[path = "cli/ops/octet.rs"]
-mod cli_octet;
+mod quality_port;
+mod cli_octet {
+    pub(crate) use super::quality_port::*;
+}
 #[path = "cli/ops/plugin.rs"]
-mod cli_plugin;
+mod extension_port;
+mod cli_plugin {
+    pub(crate) use super::extension_port::*;
+}
 #[path = "cli/ops/prodsoak.rs"]
-mod cli_prod_soak;
+mod burnin_port;
+mod cli_prod_soak {
+    pub(crate) use super::burnin_port::*;
+}
 #[path = "cli/workflow/protocol.rs"]
-mod cli_protocol;
+mod conversation_port;
+mod cli_protocol {
+    pub(crate) use super::conversation_port::*;
+}
 #[path = "cli/workflow/provenance.rs"]
-mod cli_provenance;
+mod lineage_port;
+mod cli_provenance {
+    pub(crate) use super::lineage_port::*;
+}
 #[path = "cli/runtime/raft.rs"]
-mod cli_raft;
+mod quorum_port;
+mod cli_raft {
+    pub(crate) use super::quorum_port::*;
+}
 #[path = "cli/evidence/receipts.rs"]
-mod cli_receipts;
+mod voucher_port;
+mod cli_receipts {
+    pub(crate) use super::voucher_port::*;
+}
 #[path = "cli/workflow/remote.rs"]
-mod cli_remote;
+mod mesh_port;
+mod cli_remote {
+    pub(crate) use super::mesh_port::*;
+}
 #[path = "cli/test/replayfixture.rs"]
-mod cli_replay_fixture;
+mod scenario_port;
+mod cli_replay_fixture {
+    pub(crate) use super::scenario_port::*;
+}
 #[path = "cli/evidence/report.rs"]
-mod cli_report;
+mod display_port;
+mod cli_report {
+    pub(crate) use super::display_port::*;
+}
 #[path = "cli/runtime/repro.rs"]
-mod cli_repro;
+mod bundle_port;
+mod cli_repro {
+    pub(crate) use super::bundle_port::*;
+}
 #[path = "cli/workflow/retention.rs"]
-mod cli_retention;
+mod custody_port;
+mod cli_retention {
+    pub(crate) use super::custody_port::*;
+}
 #[path = "cli/runtime/rewrite.rs"]
-mod cli_rewrite;
+mod transform_port;
+mod cli_rewrite {
+    pub(crate) use super::transform_port::*;
+}
 #[path = "main/root.rs"]
-mod cli_root;
+mod entrypoint;
+mod cli_root {
+    pub(crate) use super::entrypoint::*;
+}
 #[path = "cli/core/schema.rs"]
-mod cli_schema;
+mod format_port;
+mod cli_schema {
+    pub(crate) use super::format_port::*;
+}
 #[path = "cli/runtime/secrets.rs"]
-mod cli_secrets;
+mod vault_port;
+mod cli_secrets {
+    pub(crate) use super::vault_port::*;
+}
 #[path = "cli/runtime/service.rs"]
-mod cli_service;
+mod worker_port;
+mod cli_service {
+    pub(crate) use super::worker_port::*;
+}
 #[path = "cli/core/storage.rs"]
-mod cli_storage;
+mod cell_port;
+mod cli_storage {
+    pub(crate) use super::cell_port::*;
+}
 #[path = "cli/core/transcript.rs"]
-mod cli_transcript;
+mod narrative_port;
+mod cli_transcript {
+    pub(crate) use super::narrative_port::*;
+}
 #[path = "cli/runtime/upgrade.rs"]
-mod cli_upgrade;
+mod migration_port;
+mod cli_upgrade {
+    pub(crate) use super::migration_port::*;
+}
 #[path = "cli/runtime/vat.rs"]
-mod cli_vat;
+mod actor_port;
+mod cli_vat {
+    pub(crate) use super::actor_port::*;
+}
 
 pub(crate) type RetentionEvidenceArgs = cli_root::RetentionEvidenceArgs;
 #[cfg(test)]

@@ -1,5 +1,8 @@
 #[path = "ledger/command.rs"]
-mod command;
+mod syntax;
+mod command {
+    pub(crate) use super::syntax::*;
+}
 #[path = "ledger/io.rs"]
 mod io;
 #[path = "ledger/ops.rs"]

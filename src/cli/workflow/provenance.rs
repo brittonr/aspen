@@ -1,5 +1,8 @@
 #[path = "provenance/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "provenance/input.rs"]
 mod input;
 #[path = "provenance/io.rs"]

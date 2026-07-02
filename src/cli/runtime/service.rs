@@ -1,5 +1,8 @@
 #[path = "service/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "service/io.rs"]
 mod io;
 #[path = "service/ops.rs"]

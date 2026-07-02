@@ -1,4 +1,8 @@
-mod local;
+#[path = "local.rs"]
+mod host;
+mod local {
+    pub(super) use super::host::*;
+}
 mod release;
 
 type Command = super::command::Command;

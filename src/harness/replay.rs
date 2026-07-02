@@ -4,6 +4,7 @@ type Divergence = crate::error::HarnessDivergence;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 
+#[path = "replay/compare.rs"]
 mod compare;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

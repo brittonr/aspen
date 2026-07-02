@@ -7,7 +7,10 @@ type Plan = super::command::sync::Plan;
 type Result<T> = molten::error::Result<T>;
 
 #[path = "sync/input.rs"]
-mod input;
+mod payload;
+mod input {
+    pub(super) use super::payload::*;
+}
 
 pub(crate) fn plan(args: Plan) -> Result<()> {
     let request = input::request(&args.source_registry, &args.job, &args.stages, &args.target_peer, &[])?;

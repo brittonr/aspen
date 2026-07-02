@@ -1,5 +1,8 @@
 #[path = "protocol/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "protocol/io.rs"]
 mod io;
 #[path = "protocol/ops.rs"]

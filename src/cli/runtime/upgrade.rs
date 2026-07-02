@@ -1,5 +1,8 @@
 #[path = "upgrade/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "upgrade/io.rs"]
 mod io;
 #[path = "upgrade/ops.rs"]

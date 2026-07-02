@@ -3,15 +3,24 @@ pub(crate) mod command;
 #[path = "job/core.rs"]
 mod core;
 #[path = "job/io.rs"]
-mod io;
+pub(crate) mod transfer;
+pub(crate) mod io {
+    pub(crate) use super::transfer::*;
+}
 #[path = "job/refs.rs"]
 mod refs;
 #[path = "job/schedule.rs"]
-mod schedule;
+mod timeline;
+mod schedule {
+    pub(crate) use super::timeline::*;
+}
+#[path = "job/worker.rs"]
+mod agent;
 #[path = "job/sync.rs"]
 mod sync;
-#[path = "job/worker.rs"]
-mod worker;
+mod worker {
+    pub(crate) use super::agent::*;
+}
 
 const COORDINATION_CLI_BATCH_REF_LIMIT: usize = 4096;
 const COORDINATION_CLI_BATCH_EVIDENCE_LIMIT: usize = 16384;

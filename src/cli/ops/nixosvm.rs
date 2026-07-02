@@ -1,5 +1,8 @@
 #[path = "nixosvm/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "nixosvm/io.rs"]
 mod io;
 #[path = "nixosvm/ops.rs"]

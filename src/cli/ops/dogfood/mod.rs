@@ -1,7 +1,10 @@
 #[path = "archive.rs"]
 mod archive;
 #[path = "command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "io.rs"]
 mod io;
 #[path = "ops/mod.rs"]

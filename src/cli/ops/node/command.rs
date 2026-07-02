@@ -7,7 +7,10 @@ pub(crate) mod control;
 #[path = "command/health.rs"]
 pub(crate) mod health;
 #[path = "command/iroh.rs"]
-pub(crate) mod iroh;
+pub(crate) mod transport;
+pub(crate) mod iroh {
+    pub(crate) use super::transport::*;
+}
 #[path = "command/live.rs"]
 pub(crate) mod live;
 

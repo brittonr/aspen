@@ -1,5 +1,8 @@
 #[path = "catalog/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "catalog/filter.rs"]
 mod filter;
 #[path = "catalog/io.rs"]

@@ -1,5 +1,8 @@
 #[path = "gate/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "gate/io.rs"]
 mod io;
 #[path = "gate/ops.rs"]

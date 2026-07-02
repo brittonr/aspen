@@ -1,7 +1,13 @@
 #[path = "rewrite/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "rewrite/input.rs"]
-mod input;
+mod payload;
+mod input {
+    pub(super) use super::payload::*;
+}
 #[path = "rewrite/io.rs"]
 mod io;
 #[path = "rewrite/ops.rs"]

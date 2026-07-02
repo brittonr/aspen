@@ -1,0 +1,291 @@
+use redb::ReadableDatabase;
+use redb::ReadableTable;
+
+type Path = std::path::Path;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+type TableDef<'a, K, V> = redb::TableDefinition<'a, K, V>;
+type RailValue = preserves::Value<IoValue>;
+
+pub const INLINE_PAYLOAD_LIMIT: usize = 4096;
+
+const MAX_ARTIFACT_REF_LIST: usize = 4096;
+const MAX_ARTIFACT_RECORDS: usize = 100_000;
+const MAX_ARTIFACT_POINTERS: usize = 100_000;
+const MAX_ARTIFACT_RECEIPTS: usize = 100_000;
+const MAX_ARTIFACT_DIAGNOSTICS: usize = 256;
+const MAX_ARTIFACT_CHECKS: usize = 64;
+
+const _: () = assert!(INLINE_PAYLOAD_LIMIT <= 1_048_576);
+const _: () = assert!(MAX_ARTIFACT_REF_LIST <= 100_000);
+const _: () = assert!(MAX_ARTIFACT_RECORDS <= 1_000_000);
+const _: () = assert!(MAX_ARTIFACT_POINTERS <= 1_000_000);
+const _: () = assert!(MAX_ARTIFACT_RECEIPTS <= 1_000_000);
+const _: () = assert!(MAX_ARTIFACT_DIAGNOSTICS <= 10_000);
+const _: () = assert!(MAX_ARTIFACT_CHECKS <= 1_000);
+
+const INDEX_FILE: &str = "artifact-registry.redb";
+const INDEX_ARTIFACTS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_artifacts_v1");
+const INDEX_PAYLOADS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_payloads_v1");
+const INDEX_NAMES: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_names_v1");
+const INDEX_DEPS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_dependencies_v1");
+const INDEX_REVERSE: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_reverse_dependencies_v1");
+const INDEX_KIND: TableDef<&str, &str> = TableDef::new("artifact_registry_kind_v1");
+const INDEX_SCHEMA: TableDef<&str, &str> = TableDef::new("artifact_registry_schema_v1");
+const INDEX_EFFECT: TableDef<&str, &str> = TableDef::new("artifact_registry_effect_v1");
+const INDEX_POLICY: TableDef<&str, &str> = TableDef::new("artifact_registry_policy_v1");
+const INDEX_EVIDENCE: TableDef<&str, &str> = TableDef::new("artifact_registry_evidence_v1");
+const INDEX_RECEIPTS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_receipts_v1");
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArtifactPayloadRef {
+    Inline { value_ref: String, length: u64 },
+    ContentRef { manifest_ref: String, length: u64 },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactInstallInput {
+    pub kind: String,
+    pub payload: IoValue,
+    pub schema_refs: Vec<String>,
+    pub dependency_refs: Vec<String>,
+    pub effect_manifest_ref: Option<String>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub installer_ref: String,
+    pub capability_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ArtifactValueInput<'a> {
+    pub kind: &'a str,
+    pub payload: &'a ArtifactPayloadRef,
+    pub schema_refs: &'a [String],
+    pub dependency_refs: &'a [String],
+    pub effect_manifest_ref: Option<&'a str>,
+    pub policy_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SetNamePointerInput<'a> {
+    pub pointer_kind: &'a str,
+    pub name: &'a str,
+    pub artifact_ref: &'a str,
+    pub policy_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactRecord {
+    pub artifact_ref: String,
+    pub kind: String,
+    pub domain: String,
+    pub payload: ArtifactPayloadRef,
+    pub schema_refs: Vec<String>,
+    pub dependency_refs: Vec<String>,
+    pub effect_manifest_ref: Option<String>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactInstall {
+    pub artifact_ref: String,
+    pub decision: String,
+    pub artifact: ArtifactRecord,
+    pub missing_dependencies: Vec<String>,
+    pub receipt_value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactNamePointer {
+    pub pointer_ref: String,
+    pub pointer_kind: String,
+    pub name: String,
+    pub artifact_ref: String,
+    pub previous_ref: Option<String>,
+    pub policy_refs: Vec<String>,
+    pub receipt_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactReceipt {
+    pub receipt_ref: String,
+    pub operation: String,
+    pub decision: String,
+    pub subject_ref: String,
+    pub name: Option<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactClosure {
+    pub roots: Vec<String>,
+    pub closure_refs: Vec<String>,
+    pub missing_refs: Vec<String>,
+    pub closure_hash: String,
+    pub receipt_value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactImpact {
+    pub seeds: Vec<String>,
+    pub impacted_refs: Vec<String>,
+    pub impact_hash: String,
+    pub receipt_value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactIndexRebuild {
+    pub artifacts: usize,
+    pub names: usize,
+    pub receipt_value: IoValue,
+}
+
+pub fn install_artifact(root: &Path, input: &ArtifactInstallInput) -> Result<ArtifactInstall> {
+    validate_install_input(input)?;
+    ensure_dirs(root)?;
+    let payload = prepare_install_payload(root, &input.payload)?;
+    let artifact = build_install_artifact(input, &payload.payload_ref)?;
+    let missing_dependencies = missing_dependencies(root, &input.dependency_refs)?;
+    let decision = install_decision(&missing_dependencies);
+    let refs = install_refs(input, &artifact, payload.chunk_receipt_ref.as_ref())?;
+    let diagnostics = install_diagnostics(&missing_dependencies)?;
+    let receipt_value = install_receipt_value(&artifact, decision, &refs, &diagnostics, &missing_dependencies)?;
+    commit_install(root, &artifact, &payload.payload_bytes, &receipt_value, missing_dependencies.is_empty())?;
+    Ok(ArtifactInstall {
+        artifact_ref: artifact.artifact_ref.clone(),
+        decision: decision.to_string(),
+        artifact,
+        missing_dependencies,
+        receipt_value,
+    })
+}
+
+struct InstallPayload {
+    payload_bytes: Vec<u8>,
+    payload_ref: ArtifactPayloadRef,
+    chunk_receipt_ref: Option<String>,
+}
+
+fn prepare_install_payload(root: &Path, payload: &IoValue) -> Result<InstallPayload> {
+    let payload_bytes = canonical_bytes(payload)?;
+    let payload_value_ref = canonical_hash(payload)?;
+    let (payload_ref, chunk_receipt_ref) = if payload_bytes.len() <= INLINE_PAYLOAD_LIMIT {
+        (
+            ArtifactPayloadRef::Inline {
+                value_ref: payload_value_ref,
+                length: payload_bytes.len() as u64,
+            },
+            None,
+        )
+    } else {
+        let put = put_payload_bytes(&chunk_root(root), &payload_bytes)?;
+        (
+            ArtifactPayloadRef::ContentRef {
+                manifest_ref: put.manifest_ref,
+                length: payload_bytes.len() as u64,
+            },
+            Some(canonical_hash(&put.receipt_value)?),
+        )
+    };
+    Ok(InstallPayload {
+        payload_bytes,
+        payload_ref,
+        chunk_receipt_ref,
+    })
+}
+
+fn build_install_artifact(input: &ArtifactInstallInput, payload_ref: &ArtifactPayloadRef) -> Result<ArtifactRecord> {
+    let value = artifact_value(ArtifactValueInput {
+        kind: &input.kind,
+        payload: payload_ref,
+        schema_refs: &input.schema_refs,
+        dependency_refs: &input.dependency_refs,
+        effect_manifest_ref: input.effect_manifest_ref.as_deref(),
+        policy_refs: &input.policy_refs,
+        evidence_refs: &input.evidence_refs,
+    })?;
+    parse_artifact_value(&value)
+}
+
+fn install_decision(missing_dependencies: &[String]) -> &'static str {
+    if missing_dependencies.is_empty() {
+        "pass"
+    } else {
+        "deny"
+    }
+}
+
+fn install_refs(
+    input: &ArtifactInstallInput,
+    artifact: &ArtifactRecord,
+    chunk_receipt_ref: Option<&String>,
+) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
+    push_bounded(&mut refs, artifact.artifact_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    push_bounded(&mut refs, input.installer_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    extend_cloned_bounded(&mut refs, &input.capability_refs, MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    extend_cloned_bounded(&mut refs, &input.dependency_refs, MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    extend_cloned_bounded(&mut refs, &input.schema_refs, MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    extend_cloned_bounded(&mut refs, &input.policy_refs, MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    extend_cloned_bounded(&mut refs, &input.evidence_refs, MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    if let Some(effect_manifest_ref) = input.effect_manifest_ref.as_ref() {
+        push_bounded(&mut refs, effect_manifest_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    }
+    if let Some(chunk_receipt_ref) = chunk_receipt_ref {
+        push_bounded(&mut refs, chunk_receipt_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    }
+    Ok(refs)
+}
+
+fn install_diagnostics(missing_dependencies: &[String]) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    for dependency in missing_dependencies {
+        push_bounded(
+            &mut diagnostics,
+            format!("missing dependency {dependency}"),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "artifact install diagnostics",
+        )?;
+    }
+    Ok(diagnostics)
+}
+
+fn install_receipt_value(
+    artifact: &ArtifactRecord,
+    decision: &str,
+    refs: &[String],
+    diagnostics: &[String],
+    missing_dependencies: &[String],
+) -> Result<IoValue> {
+    artifact_receipt_value(&ArtifactReceiptValueInput {
+        operation: "install",
+        decision,
+        subject_ref: &artifact.artifact_ref,
+        name: None,
+        refs,
+        diagnostics,
+        checks: &[
+            ("domain-separated-identity", "pass"),
+            ("canonical-payload-ref", "pass"),
+            ("dependency-closure", dependency_check(missing_dependencies)),
+            ("policy-admission", "pass"),
+            ("capability-admission", "pass"),
+            ("names-are-metadata", "pass"),
+        ],
+    })
+}
+
+fn dependency_check(missing_dependencies: &[String]) -> &'static str {
+    if missing_dependencies.is_empty() {
+        "pass"
+    } else {
+        "fail"
+    }
+}

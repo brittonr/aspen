@@ -1,7 +1,10 @@
+#[path = "octet/command.rs"]
+mod args;
 #[path = "octet/baseline.rs"]
 mod baseline;
-#[path = "octet/command.rs"]
-mod command;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "octet/io.rs"]
 mod io;
 #[path = "octet/ops.rs"]

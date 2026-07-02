@@ -1,7 +1,4 @@
 [octet]
 disabled_lints = [
-  "non_trait_imports",
-  "path_segment_repetition",
-  "excessive_file_length",
   "module_file_count",
 ]

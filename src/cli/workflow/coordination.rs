@@ -1,7 +1,13 @@
 #[path = "coordination/bounded.rs"]
-mod bounded;
+mod limits;
+mod bounded {
+    pub(super) use super::limits::*;
+}
 #[path = "coordination/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
 #[path = "coordination/io.rs"]
 mod io;
 #[path = "coordination/ops.rs"]

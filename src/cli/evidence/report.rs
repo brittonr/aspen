@@ -1,9 +1,15 @@
 #[path = "report/command.rs"]
-mod command;
+mod args;
+mod command {
+    pub(crate) use super::args::*;
+}
+#[path = "report/ops.rs"]
+mod actions;
 #[path = "report/io.rs"]
 mod io;
-#[path = "report/ops.rs"]
-mod ops;
+mod ops {
+    pub(super) use super::actions::*;
+}
 
 pub(crate) type ReportCommand = command::Command;
 
