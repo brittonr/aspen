@@ -31,6 +31,27 @@
     }
 
     #[test]
+    fn strict_profile_accepts_replay_inventory_for_shell_critical_paths() {
+        let dir = temp_dir("clean-replay-critical-paths");
+        write_artifacts(&dir, clean_status_json(), clean_summary(), object_corpus_with_replay_inventory_json());
+        let evaluation = evaluate_octet_gate(&input(&dir)).expect("evaluate octet gate");
+
+        assert_eq!(evaluation.decision, "pass");
+        assert!(evaluation.diagnostics.is_empty());
+        assert!(to_text(&evaluation.receipt_value).expect("receipt text").contains("fingerprint <some \"blake3:"));
+    }
+
+    #[test]
+    fn strict_profile_denies_missing_replay_inventory_critical_paths() {
+        let dir = temp_dir("missing-replay-critical-paths");
+        write_artifacts(&dir, clean_status_json(), clean_summary(), object_corpus_without_critical_inventory_json());
+        let evaluation = evaluate_octet_gate(&input(&dir)).expect("evaluate octet gate");
+
+        assert_eq!(evaluation.decision, "deny");
+        assert!(evaluation.diagnostics.iter().any(|diagnostic| diagnostic.contains("required critical paths")));
+    }
+
+    #[test]
     fn source_gate_validation_accepts_clean_strict_receipt() {
         let gate = synthetic_clean_octet_gate_receipt_for_tests().expect("clean gate fixture");
         let validation = validate_octet_source_gate(&OctetSourceGateValidationInput {

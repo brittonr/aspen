@@ -115,7 +115,8 @@ fn validate_object_corpus(
         receipt.schema.as_deref() == Some(OCTET_OBJECT_CORPUS_SCHEMA) && receipt.schema_version == Some(1);
     let has_objects = receipt.object_count.is_some_and(|count| count > 0);
     let has_object_set_fingerprint = receipt.object_set_hash.as_deref().is_some_and(is_b3_ref);
-    let has_required_source_paths = receipt.source_paths.as_ref().is_some_and(|paths| {
+    let coverage_paths = object_corpus_coverage_paths(&receipt);
+    let has_required_source_paths = coverage_paths.as_ref().is_some_and(|paths| {
         REQUIRED_OBJECT_CORPUS_SOURCE_PATHS.iter().all(|required| paths.iter().any(|path| path == required))
     });
     push_check(checks, "object-corpus-json-parse", true);
@@ -147,21 +148,17 @@ fn octet_fingerprint_evidence_value(object_corpus: &GateFile, receipt: &ObjectCo
         .object_set_hash
         .as_deref()
         .ok_or_else(|| MoltenError::invalid_harness("object corpus missing object_set_hash"))?;
-    let source_paths = receipt
-        .source_paths
-        .as_ref()
+    let source_paths = object_corpus_coverage_paths(receipt)
         .ok_or_else(|| MoltenError::invalid_harness("object corpus missing source_paths"))?;
     let object_count = receipt
         .object_count
         .ok_or_else(|| MoltenError::invalid_harness("object corpus missing object_count"))?;
     let pure_cache_blocked = receipt.pure_cache_blocked_count.unwrap_or(0);
-    let mut sorted_paths = source_paths.clone();
-    sorted_paths.sort();
     Ok(record("octet-fingerprint-evidence-v1", vec![
         string(crate::preserves_rail::OCTET_FINGERPRINT_EVIDENCE_SCHEMA),
         record("object-corpus", vec![string(&object_corpus.artifact_ref)]),
         record("object-set-hash", vec![string(object_set_hash)]),
-        record("source-paths", vec![sequence(sorted_paths.iter().map(string).collect())]),
+        record("source-paths", vec![sequence(source_paths.iter().map(string).collect())]),
         record("object-count", vec![u64_value(object_count)]),
         record("pure-cache-blocked", vec![u64_value(pure_cache_blocked)]),
         checks_value(&[
@@ -175,6 +172,18 @@ fn octet_fingerprint_evidence_value(object_corpus: &GateFile, receipt: &ObjectCo
             },
         ]),
     ]))
+}
+
+fn object_corpus_coverage_paths(receipt: &ObjectCorpusReceipt) -> Option<Vec<String>> {
+    let mut paths = receipt.source_paths.clone()?;
+    if let Some(command) = receipt.replay.as_ref().and_then(|replay| replay.command.as_deref()) {
+        for token in command.split_whitespace().filter(|token| token.ends_with(RUST_SOURCE_EXTENSION)) {
+            paths.push(token.to_string());
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    Some(paths)
 }
 
 fn is_b3_ref(value: &str) -> bool {

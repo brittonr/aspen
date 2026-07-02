@@ -227,6 +227,12 @@ struct ObjectCorpusReceipt {
     source_paths: Option<Vec<String>>,
     object_set_hash: Option<String>,
     pure_cache_blocked_count: Option<u64>,
+    replay: Option<ObjectCorpusReplay>,
+}
+
+#[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
+struct ObjectCorpusReplay {
+    command: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]

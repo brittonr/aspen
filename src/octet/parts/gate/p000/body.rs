@@ -87,6 +87,7 @@ const MAX_OCTET_COMMAND_TOKENS: usize = 256;
 const MAX_OCTET_FINDING_ENTRIES: usize = 100_000;
 const MAX_OCTET_STRING_SEQUENCE: usize = 100_000;
 const SUPPORTED_OCTET_TOOL_VERSION: &str = "0.1.0";
+const RUST_SOURCE_EXTENSION: &str = ".rs";
 
 const _: () = assert!(MAX_OCTET_IMPORTED_REFS <= MAX_OCTET_ARTIFACT_VALUES);
 const _: () = assert!(MAX_OCTET_SUMMARY_LINTS > 0);

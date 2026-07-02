@@ -1,4 +1,2 @@
 [octet]
-disabled_lints = [
-  "module_file_count",
-]
+disabled_lints = []

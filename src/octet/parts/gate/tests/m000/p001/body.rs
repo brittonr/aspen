@@ -231,6 +231,14 @@
         r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":3,"source_paths":["src/job/dag.rs","src/main.rs","src/node/runtime.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":3}"#
     }
 
+    fn object_corpus_with_replay_inventory_json() -> &'static str {
+        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":1,"source_paths":["src/main.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":1,"replay":{"command":"cargo octet object corpus receipt --output RECEIPT.json src/job/dag.rs src/main.rs src/node/runtime.rs"}}"#
+    }
+
+    fn object_corpus_without_critical_inventory_json() -> &'static str {
+        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":1,"source_paths":["src/main.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":1,"replay":{"command":"cargo octet object corpus receipt --output RECEIPT.json src/main.rs"}}"#
+    }
+
     fn temp_dir(label: &str) -> PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
