@@ -3,7 +3,6 @@ use preserves::ValueImpl;
 use super::core;
 use crate::effects;
 use crate::runtime;
-use crate::secrets;
 
 type CompoundClass = preserves::CompoundClass;
 type IoValue = preserves::IOValue;
@@ -3478,7 +3477,7 @@ pub fn profiled_repro_bundle_value_with_command(
     artifact_refs.push(("redaction-transform-manifest".to_string(), transform.manifest_ref.clone()));
     artifact_refs.push(("redaction-transform".to_string(), transform.receipt_ref.clone()));
     let private_profile_value = if profile == ReproExportProfile::EncryptedPrivate {
-        let value = secrets::private_bundle_profile_value(&secrets::PrivateBundleProfileInput {
+        let value = crate::secrets::private_bundle_profile_value(&crate::secrets::PrivateBundleProfileInput {
             profile_ref: canonical_hash(&export_profile_value)?,
             encrypted_refs: transform.encrypted_refs.clone(),
             reveal_receipt_refs: Vec::new(),
@@ -3841,7 +3840,7 @@ fn transform_sensitive_record(
         ));
     }
     if label == "encrypted-ref-v1" {
-        let encrypted = secrets::parse_encrypted_ref(value)?;
+        let encrypted = crate::secrets::parse_encrypted_ref(value)?;
         if state.profile != ReproExportProfile::EncryptedPrivate {
             return redaction_marker_for_value(value, label, path, state);
         }
@@ -3870,7 +3869,7 @@ fn redaction_marker_for_value(
         string(&path_ref),
         string(&state.policy_ref),
     ]))?;
-    let marker_value = secrets::redaction_marker_value(&secrets::RedactionMarkerInput {
+    let marker_value = crate::secrets::redaction_marker_value(&crate::secrets::RedactionMarkerInput {
         reason: label.to_string(),
         commitment_ref: commitment_ref.clone(),
         schema_ref: canonical_hash(&string(label))?,
@@ -3878,7 +3877,7 @@ fn redaction_marker_for_value(
         policy_refs: vec![state.policy_ref.clone()],
         receipt_ref,
     })?;
-    let marker = secrets::parse_redaction_marker(&marker_value)?;
+    let marker = crate::secrets::parse_redaction_marker(&marker_value)?;
     state.marker_refs.push(marker.marker_ref.clone());
     state.marker_entries.push(RedactionManifestEntry {
         path: path.to_string(),
@@ -3899,7 +3898,7 @@ fn encrypted_ref_for_value(
     let commitment_ref = canonical_hash(value)?;
     let ciphertext_ref =
         canonical_hash(&record("encrypted-redaction-ciphertext", vec![string(&commitment_ref), string(path)]))?;
-    let encrypted_value = secrets::encrypted_ref_value(&secrets::EncryptedRefInput {
+    let encrypted_value = crate::secrets::encrypted_ref_value(&crate::secrets::EncryptedRefInput {
         ciphertext_ref,
         commitment_ref: commitment_ref.clone(),
         encryption_ref: canonical_hash(&repro_export_profile_value(state.profile))?,
@@ -3907,7 +3906,7 @@ fn encrypted_ref_for_value(
         policy_refs: vec![state.policy_ref.clone()],
         evidence_refs: vec![canonical_hash(&string(path))?],
     })?;
-    let encrypted = secrets::parse_encrypted_ref(&encrypted_value)?;
+    let encrypted = crate::secrets::parse_encrypted_ref(&encrypted_value)?;
     state.encrypted_refs.push(encrypted.encrypted_ref.clone());
     state.marker_entries.push(RedactionManifestEntry {
         path: path.to_string(),
@@ -7119,7 +7118,7 @@ fn parse_profiled_private(
         });
     }
     let private_value = value_to_iovalue(&bundle[22]);
-    let private = secrets::parse_private_bundle_profile(&private_value)?;
+    let private = crate::secrets::parse_private_bundle_profile(&private_value)?;
     require_artifact_ref(&body.artifact_refs, "private-bundle-profile", &canonical_hash(&private_value)?)?;
     if body.export_profile.profile != ReproExportProfile::EncryptedPrivate {
         return Err(MoltenError::invalid_harness(
@@ -7247,7 +7246,7 @@ fn collect_redaction_marker_refs(value: &IoValue) -> Result<Vec<String>> {
     while let Some(current) = stack.pop() {
         if current.collect_simple_record("redaction-marker-v1", None).is_some() {
             ensure_redaction_bound(refs.len() + 1, MAX_REDACTION_MARKER_REFS, "redaction marker refs")?;
-            refs.push(secrets::parse_redaction_marker(&current)?.marker_ref);
+            refs.push(crate::secrets::parse_redaction_marker(&current)?.marker_ref);
             continue;
         }
         match current.value_class() {
@@ -7993,7 +7992,7 @@ fn validate_profiled_output(value: &IoValue, profile: ReproExportProfile) -> Res
                             "encrypted refs are allowed only in encrypted-private repro bundles",
                         ));
                     }
-                    let encrypted = secrets::parse_encrypted_ref(&current)?;
+                    let encrypted = crate::secrets::parse_encrypted_ref(&current)?;
                     ensure_redaction_bound(
                         encrypted_refs.len() + 1,
                         MAX_REDACTION_ENCRYPTED_REFS,
