@@ -42,16 +42,15 @@ pub fn evaluate(input: &EvaluationInput<'_>) -> Result<Evaluation> {
     diagnostics.extend(record_match.diagnostics);
     let matched = record_match.record;
     let matched_record_ref = matched.as_ref().map(|record| record.record_ref.clone());
-    let (trust_state, trust_admission) = trust_status(matched.as_ref(), input.profile);
+    let threshold = operation_profile_threshold(input.operation, input.profile);
+    let (trust_state, trust_admission) = trust_status(matched.as_ref(), &threshold);
 
     if trust_admission == TrustAdmission::Denied {
-        diagnostics.push(format!("provenance trust state {trust_state} is not admitted for profile {}", input.profile));
-    }
-    if let Some(record) = matched.as_ref() {
-        diagnostics.extend(stronger_diagnostics(record, input.operation, input.profile));
+        diagnostics.extend(threshold_diagnostics(trust_state, &threshold, input.artifact_ref));
     }
     if let Some(record) = matched.as_ref().filter(|record| record.trust_state == TRUST_STATE_REPRODUCIBLE_VERIFIED) {
-        diagnostics.extend(reproducible_build_binding_diagnostics(record, input.artifact_ref, &build_checks.receipts));
+        let binding = evaluate_build_verification_binding(record, input.artifact_ref, &build_checks.receipts);
+        diagnostics.extend(binding.diagnostics);
     }
 
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
@@ -145,9 +144,12 @@ fn find_matching_record(values: &[IoValue], artifact_ref: &str) -> RecordMatch {
     }
 }
 
-fn trust_status<'a>(record: Option<&'a Record>, profile: &str) -> (&'a str, TrustAdmission) {
+fn trust_status<'a>(
+    record: Option<&'a Record>,
+    threshold: &ProvenanceProfileThreshold<'_>,
+) -> (&'a str, TrustAdmission) {
     let trust_state = record.map(|record| record.trust_state.as_str()).unwrap_or(TRUST_STATE_UNKNOWN);
-    let has_admitted_trust_state = is_trust_state_admitted(trust_state, profile);
+    let has_admitted_trust_state = trust_state_satisfies_threshold(trust_state, threshold);
     let admission = if record.is_some() && has_admitted_trust_state {
         TrustAdmission::Admitted
     } else if record.is_some() {

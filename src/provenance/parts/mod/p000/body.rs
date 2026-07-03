@@ -31,7 +31,12 @@ const TRUST_STATE_UNKNOWN: &str = "unknown";
 const TRUST_STATE_SOURCE_KNOWN: &str = "source-known";
 const TRUST_STATE_BUILDER_ATTESTED: &str = "builder-attested";
 const TRUST_STATE_DENIED: &str = "denied";
+const PROFILE_NODE_CONTROL: &str = "node-control";
 const PROFILE_LOCAL_TEST: &str = "local-test";
+const OPERATION_INSTALL_POLICY_ARTIFACT: &str = "install-policy-artifact";
+const OPERATION_INSTALL_MIGRATION_RECIPE: &str = "install-migration-recipe";
+const OPERATION_INSTALL_PRODUCTION_EXECUTABLE: &str = "install-production-executable";
+const OPERATION_REMOTE_SYNC_EXECUTE: &str = "remote-sync-execute";
 const MAX_PROVENANCE_REFS: usize = 64;
 const MAX_BUILD_PARAMS: usize = 64;
 const MAX_BUILD_PARAM_BYTES: usize = 256;
@@ -89,6 +94,33 @@ pub struct BuildVerificationInput<'a> {
     pub build_record_value: &'a IoValue,
     pub actual_artifact_ref: &'a str,
     pub prior_diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProvenanceProfileThreshold<'a> {
+    pub operation: &'a str,
+    pub profile: &'a str,
+    pub minimum_trust_state: &'static str,
+    pub reproducible_build_verification_required: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EvidenceOnlyBoundaryInput<'a> {
+    pub operation: &'a str,
+    pub provenance_receipt_refs: &'a [String],
+    pub authority_refs: &'a [String],
+    pub policy_refs: &'a [String],
+    pub resource_refs: &'a [String],
+    pub source_gate_refs: &'a [String],
+    pub transport_refs: &'a [String],
+    pub retention_refs: &'a [String],
+    pub execution_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvidenceOnlyBoundaryDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -193,6 +225,16 @@ pub struct BuildVerificationReceipt {
     pub build_record_ref: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuildVerificationBinding {
+    pub provenance_record_ref: String,
+    pub artifact_ref: String,
+    pub matched_receipt_ref: Option<String>,
+    pub matched_build_record_ref: Option<String>,
+    pub is_bound: bool,
+    pub diagnostics: Vec<String>,
 }
 
 pub fn record_value(input: &RecordInput<'_>) -> Result<IoValue> {

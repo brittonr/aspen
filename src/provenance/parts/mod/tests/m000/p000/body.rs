@@ -202,6 +202,7 @@
     }
 
     fn assert_missing(case: &Case) {
+        // r[verify molten.provenance_state_proof.build_verification_binding]
         let receipt = evaluate(&EvaluationInput {
             operation: "install",
             profile: "node-control",
@@ -221,6 +222,8 @@
     }
 
     fn assert_match(case: &Case) -> BuildVerification {
+        // r[verify molten.provenance_state_proof.profile_thresholds]
+        // r[verify molten.provenance_state_proof.build_verification_binding]
         let verification = verify_build(&BuildVerificationInput {
             build_record_value: &case.build_record,
             actual_artifact_ref: &case.artifact_ref,
@@ -228,7 +231,7 @@
         })
         .expect("verify reproducible build");
         let pass = evaluate(&EvaluationInput {
-            operation: "install",
+            operation: OPERATION_INSTALL_PRODUCTION_EXECUTABLE,
             profile: "node-control",
             artifact_ref: &case.artifact_ref,
             provenance_values: std::slice::from_ref(&case.provenance),
@@ -237,7 +240,58 @@
         })
         .expect("matching build verification passes");
         assert_eq!(pass.decision, "pass");
+        let parsed_record = parse_record(&case.provenance).expect("parse provenance");
+        let parsed_receipt = parse_build_verification_receipt(&verification.receipt_value).expect("parse receipt");
+        let binding = evaluate_build_verification_binding(&parsed_record, &case.artifact_ref, &[parsed_receipt]);
+        assert!(binding.is_bound);
+        assert_eq!(binding.provenance_record_ref, parsed_record.record_ref);
+        assert_eq!(binding.matched_build_record_ref, Some(verification.build_record_ref.clone()));
         verification
+    }
+
+    fn assert_wrong_artifact(case: &Case) {
+        // r[verify molten.provenance_state_proof.build_verification_binding]
+        let wrong_artifact_ref = synthetic_ref("artifact", "wrong-verification-target").expect("wrong artifact ref");
+        let wrong_artifact = verify_build(&BuildVerificationInput {
+            build_record_value: &case.build_record,
+            actual_artifact_ref: &wrong_artifact_ref,
+            prior_diagnostics: &[],
+        })
+        .expect("verify wrong artifact");
+        let eval = evaluate(&EvaluationInput {
+            operation: OPERATION_INSTALL_PRODUCTION_EXECUTABLE,
+            profile: "node-control",
+            artifact_ref: &case.artifact_ref,
+            provenance_values: std::slice::from_ref(&case.provenance),
+            build_verification_values: std::slice::from_ref(&wrong_artifact.receipt_value),
+            prior_diagnostics: &[],
+        })
+        .expect("wrong artifact verification denies");
+        assert_eq!(eval.decision, "deny");
+        assert!(eval.diagnostics.iter().any(|diagnostic| diagnostic.contains("decision is deny")));
+        assert!(eval.diagnostics.iter().any(|diagnostic| diagnostic.contains("does not match artifact")));
+    }
+
+    fn assert_stale_verification(case: &Case) {
+        // r[verify molten.provenance_state_proof.build_verification_binding]
+        let stale_diagnostic = "stale build verification receipt".to_string();
+        let stale = verify_build(&BuildVerificationInput {
+            build_record_value: &case.build_record,
+            actual_artifact_ref: &case.artifact_ref,
+            prior_diagnostics: std::slice::from_ref(&stale_diagnostic),
+        })
+        .expect("verify stale artifact");
+        let eval = evaluate(&EvaluationInput {
+            operation: OPERATION_INSTALL_PRODUCTION_EXECUTABLE,
+            profile: "node-control",
+            artifact_ref: &case.artifact_ref,
+            provenance_values: std::slice::from_ref(&case.provenance),
+            build_verification_values: std::slice::from_ref(&stale.receipt_value),
+            prior_diagnostics: &[],
+        })
+        .expect("stale verification denies");
+        assert_eq!(eval.decision, "deny");
+        assert!(eval.diagnostics.iter().any(|diagnostic| diagnostic.contains("decision is deny")));
     }
 
     fn assert_wrong(case: &Case, verification: &BuildVerification) {
@@ -260,5 +314,24 @@
         let case = seed();
         assert_missing(&case);
         let verification = assert_match(&case);
+        assert_wrong_artifact(&case);
+        assert_stale_verification(&case);
         assert_wrong(&case, &verification);
+    }
+
+    #[test]
+    fn wrong_profile_is_rejected_before_admission() {
+        // r[verify molten.provenance_state_proof.profile_thresholds]
+        let artifact_ref = synthetic_ref("artifact", "wrong-profile").expect("artifact ref");
+        let record = synthetic_reviewed_record(&artifact_ref).expect("record");
+        let error = evaluate(&EvaluationInput {
+            operation: "install",
+            profile: "unknown-profile",
+            artifact_ref: &artifact_ref,
+            provenance_values: &[record],
+            build_verification_values: &[],
+            prior_diagnostics: &[],
+        })
+        .expect_err("wrong profile rejects");
+        assert!(error.to_string().contains("invalid provenance evaluation profile"));
     }

@@ -105,24 +105,73 @@ fn build_verify_receipt_value(input: &BuildVerifyReceiptValueInput<'_>) -> Resul
     ]))
 }
 
-fn reproducible_build_binding_diagnostics(
+pub fn evaluate_evidence_only_boundary(input: &EvidenceOnlyBoundaryInput<'_>) -> Result<EvidenceOnlyBoundaryDecision> {
+    validate_refs(input.provenance_receipt_refs, "provenance receipt ref")?;
+    validate_refs(input.authority_refs, "authority ref")?;
+    validate_refs(input.policy_refs, "policy ref")?;
+    validate_refs(input.resource_refs, "resource ref")?;
+    validate_refs(input.source_gate_refs, "source-gate ref")?;
+    validate_refs(input.transport_refs, "transport ref")?;
+    validate_refs(input.retention_refs, "retention ref")?;
+    validate_refs(input.execution_refs, "execution ref")?;
+
+    let mut diagnostics = Vec::new();
+    if input.provenance_receipt_refs.is_empty() {
+        diagnostics.push(format!("provenance receipt evidence missing for operation {}", input.operation));
+    }
+    push_missing_boundary_diagnostic(&mut diagnostics, input.operation, input.authority_refs, "authority");
+    push_missing_boundary_diagnostic(&mut diagnostics, input.operation, input.policy_refs, "policy");
+    push_missing_boundary_diagnostic(&mut diagnostics, input.operation, input.resource_refs, "resource");
+    push_missing_boundary_diagnostic(&mut diagnostics, input.operation, input.source_gate_refs, "source-gate");
+    push_missing_boundary_diagnostic(&mut diagnostics, input.operation, input.transport_refs, "transport");
+    push_missing_boundary_diagnostic(&mut diagnostics, input.operation, input.retention_refs, "retention");
+    push_missing_boundary_diagnostic(&mut diagnostics, input.operation, input.execution_refs, "execution");
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
+    Ok(EvidenceOnlyBoundaryDecision { decision, diagnostics })
+}
+
+fn push_missing_boundary_diagnostic(diagnostics: &mut Vec<String>, operation: &str, refs: &[String], gate: &str) {
+    if refs.is_empty() {
+        diagnostics.push(format!(
+            "provenance receipts for operation {operation} remain evidence-only and do not grant {gate} trust"
+        ));
+    }
+}
+
+pub fn evaluate_build_verification_binding(
     record: &Record,
     artifact_ref: &str,
     receipts: &[BuildVerificationReceipt],
-) -> Vec<String> {
+) -> BuildVerificationBinding {
     if receipts.is_empty() {
-        return vec![format!(
-            "reproducible-verified provenance for {artifact_ref} requires a passing build verification receipt"
-        )];
+        return BuildVerificationBinding {
+            provenance_record_ref: record.record_ref.clone(),
+            artifact_ref: artifact_ref.to_string(),
+            matched_receipt_ref: None,
+            matched_build_record_ref: None,
+            is_bound: false,
+            diagnostics: vec![format!(
+                "reproducible-verified provenance for {artifact_ref} requires a passing build verification receipt"
+            )],
+        };
     }
     if record.build_record_refs.is_empty() {
-        return vec![format!(
-            "reproducible-verified provenance for {artifact_ref} must bind at least one build record ref"
-        )];
+        return BuildVerificationBinding {
+            provenance_record_ref: record.record_ref.clone(),
+            artifact_ref: artifact_ref.to_string(),
+            matched_receipt_ref: None,
+            matched_build_record_ref: None,
+            is_bound: false,
+            diagnostics: vec![format!(
+                "reproducible-verified provenance for {artifact_ref} must bind at least one build record ref"
+            )],
+        };
     }
-    let mut candidate_diagnostics = Vec::with_capacity(receipts.len().saturating_mul(3));
+    let mut candidate_diagnostics = Vec::new();
     for receipt in receipts {
-        let mut receipt_diagnostics = Vec::with_capacity(3);
+        let mut receipt_diagnostics = Vec::new();
         if receipt.decision != "pass" {
             receipt_diagnostics
                 .push(format!("build verification receipt {} decision is {}", receipt.receipt_ref, receipt.decision));
@@ -140,41 +189,86 @@ fn reproducible_build_binding_diagnostics(
             ));
         }
         if receipt_diagnostics.is_empty() {
-            return Vec::new();
+            return BuildVerificationBinding {
+                provenance_record_ref: record.record_ref.clone(),
+                artifact_ref: artifact_ref.to_string(),
+                matched_receipt_ref: Some(receipt.receipt_ref.clone()),
+                matched_build_record_ref: Some(receipt.build_record_ref.clone()),
+                is_bound: true,
+                diagnostics: Vec::new(),
+            };
         }
         candidate_diagnostics.extend(receipt_diagnostics);
     }
-    candidate_diagnostics
+    BuildVerificationBinding {
+        provenance_record_ref: record.record_ref.clone(),
+        artifact_ref: artifact_ref.to_string(),
+        matched_receipt_ref: None,
+        matched_build_record_ref: None,
+        is_bound: false,
+        diagnostics: candidate_diagnostics,
+    }
 }
 
-fn is_trust_state_admitted(trust_state: &str, profile: &str) -> bool {
-    matches!(trust_state, TRUST_STATE_REVIEWED | TRUST_STATE_REPRODUCIBLE_VERIFIED | TRUST_STATE_POLICY_TRUSTED)
-        || (trust_state == TRUST_STATE_SANDBOX_ONLY && profile == PROFILE_LOCAL_TEST)
-}
-
-fn stronger_diagnostics(record: &Record, operation: &str, profile: &str) -> Vec<String> {
-    let has_strong_trust = is_strong_trust_state(&record.trust_state);
-    if operation_requires_strong_provenance(operation) {
-        if has_strong_trust {
-            Vec::new()
-        } else {
-            vec![format!(
-                "operation {operation} under profile {profile} requires stronger provenance than {} for artifact {}",
-                record.trust_state, record.artifact_ref
-            )]
-        }
+pub fn operation_profile_threshold<'a>(operation: &'a str, profile: &'a str) -> ProvenanceProfileThreshold<'a> {
+    let minimum_trust_state = if operation_requires_strong_provenance(operation) {
+        TRUST_STATE_REPRODUCIBLE_VERIFIED
+    } else if profile == PROFILE_LOCAL_TEST {
+        TRUST_STATE_SANDBOX_ONLY
     } else {
-        Vec::new()
+        TRUST_STATE_REVIEWED
+    };
+    ProvenanceProfileThreshold {
+        operation,
+        profile,
+        minimum_trust_state,
+        reproducible_build_verification_required: operation_requires_strong_provenance(operation),
+    }
+}
+
+fn trust_state_satisfies_threshold(trust_state: &str, threshold: &ProvenanceProfileThreshold<'_>) -> bool {
+    match threshold.minimum_trust_state {
+        TRUST_STATE_SANDBOX_ONLY => matches!(
+            trust_state,
+            TRUST_STATE_SANDBOX_ONLY
+                | TRUST_STATE_REVIEWED
+                | TRUST_STATE_REPRODUCIBLE_VERIFIED
+                | TRUST_STATE_POLICY_TRUSTED
+        ),
+        TRUST_STATE_REVIEWED => matches!(
+            trust_state,
+            TRUST_STATE_REVIEWED | TRUST_STATE_REPRODUCIBLE_VERIFIED | TRUST_STATE_POLICY_TRUSTED
+        ),
+        TRUST_STATE_REPRODUCIBLE_VERIFIED => is_strong_trust_state(trust_state),
+        _ => false,
+    }
+}
+
+fn threshold_diagnostics(
+    trust_state: &str,
+    threshold: &ProvenanceProfileThreshold<'_>,
+    artifact_ref: &str,
+) -> Vec<String> {
+    if threshold.minimum_trust_state == TRUST_STATE_REPRODUCIBLE_VERIFIED && !is_strong_trust_state(trust_state) {
+        vec![format!(
+            "operation {} under profile {} requires stronger provenance than {trust_state} for artifact {artifact_ref}",
+            threshold.operation, threshold.profile
+        )]
+    } else {
+        vec![format!(
+            "provenance trust state {trust_state} is below required {} for operation {} under profile {} for artifact {artifact_ref}",
+            threshold.minimum_trust_state, threshold.operation, threshold.profile
+        )]
     }
 }
 
 fn operation_requires_strong_provenance(operation: &str) -> bool {
     matches!(
         operation,
-        "install-policy-artifact"
-            | "install-migration-recipe"
-            | "install-production-executable"
-            | "remote-sync-execute"
+        OPERATION_INSTALL_POLICY_ARTIFACT
+            | OPERATION_INSTALL_MIGRATION_RECIPE
+            | OPERATION_INSTALL_PRODUCTION_EXECUTABLE
+            | OPERATION_REMOTE_SYNC_EXECUTE
     )
 }
 
@@ -201,7 +295,7 @@ fn validate_trust_state(trust_state: &str) -> Result<()> {
 }
 
 fn validate_profile(profile: &str) -> Result<()> {
-    if matches!(profile, "node-control" | PROFILE_LOCAL_TEST) {
+    if matches!(profile, PROFILE_NODE_CONTROL | PROFILE_LOCAL_TEST) {
         Ok(())
     } else {
         Err(MoltenError::invalid_harness(format!("invalid provenance evaluation profile `{profile}`")))
