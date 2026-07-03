@@ -5,6 +5,11 @@ type ContentRef = crate::runtime::ContentRef;
 type EnvelopeInput = crate::runtime::EnvelopeInput;
 type EvidenceRef = crate::runtime::EvidenceRef;
 
+const RECORDED_EFFECT_TEST_SEED: u64 = 7;
+const RECORDED_CLOCK_VALUE: u64 = 42;
+const RECORDED_RANDOM_VALUE: u64 = 3;
+const RECORDED_RANDOM_UPPER: u64 = 10;
+
 #[test]
 fn local_routes_matching_envelope_subject() {
     let subject = Value::string("service.ready").expect("subject");
@@ -162,6 +167,60 @@ fn clock_and_random_emit_request_response_pairs() {
             upper: 10
         })
     );
+}
+
+#[test]
+fn recorded_effect_response_transition_is_pure_and_validated() {
+    // r[verify molten.runtime_state_machine_proof.turn_commit_delta]
+    let mut state = RuntimeState::new(RECORDED_EFFECT_TEST_SEED);
+    let clock_request = state
+        .begin_effect_for_step(&Step::Clock {
+            actor: "clock-actor".into(),
+        })
+        .expect("clock effect request");
+    let before_clock = state.snapshot();
+    let clock_law =
+        recorded_effect_response_transition(&before_clock, &clock_request, RECORDED_CLOCK_VALUE).expect("clock law");
+    let clock_response = state
+        .apply_recorded_effect_response(&clock_request, RECORDED_CLOCK_VALUE)
+        .expect("apply clock response");
+    assert_eq!(clock_response, clock_law.response);
+    assert_eq!(state.snapshot(), clock_law.after);
+    assert_eq!(state.snapshot().logical_time, RECORDED_CLOCK_VALUE + 1);
+
+    let random_request = state
+        .begin_effect_for_step(&Step::Random {
+            actor: "random-actor".into(),
+            upper: RECORDED_RANDOM_UPPER,
+        })
+        .expect("random effect request");
+    let before_random = state.snapshot();
+    let random_law = recorded_effect_response_transition(&before_random, &random_request, RECORDED_RANDOM_VALUE)
+        .expect("random law");
+    let random_response = state
+        .apply_recorded_effect_response(&random_request, RECORDED_RANDOM_VALUE)
+        .expect("apply random response");
+    assert_eq!(random_response, random_law.response);
+    assert_eq!(state.snapshot(), random_law.after);
+    assert_ne!(state.snapshot().rng_state, before_random.rng_state);
+
+    let malformed_random = Event::EffectRequest {
+        effect: Effect::Random,
+        actor: "random-actor".into(),
+        sequence: before_random.effect_sequence,
+        upper: None,
+    };
+    let missing_upper = recorded_effect_response_transition(&before_random, &malformed_random, RECORDED_RANDOM_VALUE)
+        .expect_err("missing upper is denied");
+    assert!(missing_upper.to_string().contains("recorded random effect request missing upper bound"));
+
+    let non_effect_request = Event::TurnRolledBack {
+        actor: "svc".into(),
+        reason: "not an effect request".into(),
+    };
+    let non_effect = recorded_effect_response_transition(&before_random, &non_effect_request, RECORDED_RANDOM_VALUE)
+        .expect_err("non-effect request is denied");
+    assert!(non_effect.to_string().contains("recorded effect response requires an effect request"));
 }
 
 #[test]

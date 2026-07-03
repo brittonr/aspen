@@ -55,7 +55,40 @@ fn action_summary_value(action: &TurnAction) -> IoValue {
     }
 }
 
-fn apply_actions_to_snapshot(before: &RuntimeSnapshot, turn: &PendingTurn) -> RuntimeSnapshot {
+fn turn_event_refs_value(turn: &PendingTurn) -> Result<IoValue> {
+    let event_refs = turn.events.iter().map(|event| event.event_ref()).collect::<Result<Vec<_>>>()?;
+    Ok(crate::preserves_rail::record("event-refs", vec![crate::preserves_rail::sequence(
+        event_refs.iter().map(crate::preserves_rail::string).collect(),
+    )]))
+}
+
+fn turn_transition_input_value(
+    before: &RuntimeSnapshot,
+    turn: &PendingTurn,
+    after: &RuntimeSnapshot,
+    outcome: TurnOutcome,
+) -> Result<IoValue> {
+    Ok(crate::preserves_rail::record("runtime-predicate-turn-transition-input-v1", vec![
+        crate::preserves_rail::record("before-ref", vec![crate::preserves_rail::string(before.snapshot_ref()?)]),
+        crate::preserves_rail::record("after-ref", vec![crate::preserves_rail::string(after.snapshot_ref()?)]),
+        crate::preserves_rail::string(outcome.as_str()),
+        crate::preserves_rail::sequence(turn.actions.iter().map(action_summary_value).collect()),
+        turn_event_refs_value(turn)?,
+    ]))
+}
+
+// r[impl molten.runtime_state_machine_proof.turn_predicate_receipts]
+pub fn turn_transition_input_ref(
+    before: &RuntimeSnapshot,
+    turn: &PendingTurn,
+    after: &RuntimeSnapshot,
+    outcome: TurnOutcome,
+) -> Result<String> {
+    crate::preserves_rail::canonical_hash(&turn_transition_input_value(before, turn, after, outcome)?)
+}
+
+// r[impl molten.runtime_state_machine_proof.turn_commit_delta]
+pub fn committed_turn_snapshot(before: &RuntimeSnapshot, turn: &PendingTurn) -> RuntimeSnapshot {
     let mut after = before.clone();
     for action in &turn.actions {
         match action {
@@ -74,6 +107,18 @@ fn apply_actions_to_snapshot(before: &RuntimeSnapshot, turn: &PendingTurn) -> Ru
         }
     }
     after
+}
+
+// r[impl molten.runtime_state_machine_proof.turn_rollback_no_mutation]
+pub fn rolled_back_turn_snapshot(before: &RuntimeSnapshot) -> RuntimeSnapshot {
+    before.clone()
+}
+
+pub fn expected_turn_snapshot(before: &RuntimeSnapshot, turn: &PendingTurn, outcome: TurnOutcome) -> RuntimeSnapshot {
+    match outcome {
+        TurnOutcome::Committed => committed_turn_snapshot(before, turn),
+        TurnOutcome::RolledBack | TurnOutcome::Denied | TurnOutcome::Failed => rolled_back_turn_snapshot(before),
+    }
 }
 
 #[cfg(test)]

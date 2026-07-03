@@ -23,6 +23,10 @@ fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
+fn committed_turn_snapshot(before: &RuntimeSnapshot, turn: &PendingTurn) -> RuntimeSnapshot {
+    super::committed_turn_snapshot(before, turn)
+}
+
 fn evaluate_turn_transition(
     before: &RuntimeSnapshot,
     turn: &PendingTurn,
@@ -138,6 +142,8 @@ impl LocalAdapter {
 }
 
 mod state;
+pub use state::RuntimeRecordedEffectTransition;
+pub use state::recorded_effect_response_transition;
 
 #[cfg(test)]
 mod tests;

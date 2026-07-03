@@ -1,5 +1,16 @@
 use super::*;
 
+const RANDOM_XORSHIFT_RIGHT_A: u32 = 12;
+const RANDOM_XORSHIFT_LEFT_B: u32 = 25;
+const RANDOM_XORSHIFT_RIGHT_C: u32 = 27;
+const RANDOM_XORSHIFT_MULTIPLIER: u64 = 0x2545_F491_4F6C_DD1D;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeRecordedEffectTransition {
+    pub after: RuntimeSnapshot,
+    pub response: Event,
+}
+
 fn effect_response(effect: Effect, actor: String, sequence: u64, upper: Option<u64>, value: u64) -> Event {
     Event::EffectResponse {
         effect,
@@ -7,6 +18,57 @@ fn effect_response(effect: Effect, actor: String, sequence: u64, upper: Option<u
         sequence,
         upper,
         value,
+    }
+}
+
+fn deterministic_random_step(rng_state: u64, upper: u64) -> (u64, u64) {
+    let mut next_state = rng_state;
+    next_state ^= next_state >> RANDOM_XORSHIFT_RIGHT_A;
+    next_state ^= next_state << RANDOM_XORSHIFT_LEFT_B;
+    next_state ^= next_state >> RANDOM_XORSHIFT_RIGHT_C;
+    let mixed = next_state.wrapping_mul(RANDOM_XORSHIFT_MULTIPLIER);
+    let value = if upper == 0 { 0 } else { mixed % upper };
+    (next_state, value)
+}
+
+// r[impl molten.runtime_state_machine_proof.turn_commit_delta]
+pub fn recorded_effect_response_transition(
+    before: &RuntimeSnapshot,
+    request: &Event,
+    value: u64,
+) -> Result<RuntimeRecordedEffectTransition> {
+    match request {
+        Event::EffectRequest {
+            effect: Effect::Clock,
+            actor,
+            sequence,
+            upper,
+        } => {
+            let mut after = before.clone();
+            after.logical_time = value + 1;
+            Ok(RuntimeRecordedEffectTransition {
+                after,
+                response: effect_response(Effect::Clock, actor.clone(), *sequence, *upper, value),
+            })
+        }
+        Event::EffectRequest {
+            effect: Effect::Random,
+            actor,
+            sequence,
+            upper: Some(upper),
+        } => {
+            let mut after = before.clone();
+            let (next_state, _ignored_local_value) = deterministic_random_step(after.rng_state, *upper);
+            after.rng_state = next_state;
+            Ok(RuntimeRecordedEffectTransition {
+                after,
+                response: effect_response(Effect::Random, actor.clone(), *sequence, Some(*upper), value),
+            })
+        }
+        Event::EffectRequest {
+            effect: Effect::Random, ..
+        } => Err(MoltenError::invalid_harness("recorded random effect request missing upper bound")),
+        _ => Err(MoltenError::invalid_harness("recorded effect response requires an effect request")),
     }
 }
 
@@ -85,22 +147,8 @@ impl RuntimeState {
     }
 
     pub(crate) fn commit_turn(&mut self, turn: PendingTurn) -> Vec<Event> {
-        for action in turn.actions {
-            match action {
-                TurnAction::Send(message) => {
-                    self.messages.insert(message);
-                }
-                TurnAction::Observe(observer) => {
-                    self.observers.insert(observer);
-                }
-                TurnAction::Assert(assertion) => {
-                    self.assertions.insert(assertion);
-                }
-                TurnAction::Retract(assertion) => {
-                    self.assertions.remove(&assertion);
-                }
-            }
-        }
+        let after = committed_turn_snapshot(&self.snapshot(), &turn);
+        self.overwrite_from_snapshot(after);
         turn.events
     }
 
@@ -183,30 +231,9 @@ impl RuntimeState {
     }
 
     pub fn apply_recorded_effect_response(&mut self, request: &Event, value: u64) -> Result<Event> {
-        match request {
-            Event::EffectRequest {
-                effect: Effect::Clock,
-                actor,
-                sequence,
-                upper,
-            } => {
-                self.logical_time = value + 1;
-                Ok(effect_response(Effect::Clock, actor.clone(), *sequence, *upper, value))
-            }
-            Event::EffectRequest {
-                effect: Effect::Random,
-                actor,
-                sequence,
-                upper: Some(upper),
-            } => {
-                let _ignored_local_value = self.next_random(*upper);
-                Ok(effect_response(Effect::Random, actor.clone(), *sequence, Some(*upper), value))
-            }
-            Event::EffectRequest {
-                effect: Effect::Random, ..
-            } => Err(MoltenError::invalid_harness("recorded random effect request missing upper bound")),
-            _ => Err(MoltenError::invalid_harness("recorded effect response requires an effect request")),
-        }
+        let transition = recorded_effect_response_transition(&self.snapshot(), request, value)?;
+        self.overwrite_from_snapshot(transition.after);
+        Ok(transition.response)
     }
 
     fn stage_step(&self, turn: &mut PendingTurn, step: &Step) {
@@ -288,6 +315,15 @@ impl RuntimeState {
         logical_time
     }
 
+    fn overwrite_from_snapshot(&mut self, snapshot: RuntimeSnapshot) {
+        self.logical_time = snapshot.logical_time;
+        self.rng_state = snapshot.rng_state;
+        self.effect_sequence = snapshot.effect_sequence;
+        self.messages = snapshot.messages;
+        self.assertions = snapshot.assertions;
+        self.observers = snapshot.observers;
+    }
+
     fn next_effect_sequence(&mut self) -> u64 {
         let sequence = self.effect_sequence;
         self.effect_sequence += 1;
@@ -296,12 +332,8 @@ impl RuntimeState {
 
     fn next_random(&mut self, upper: u64) -> u64 {
         // Deterministic xorshift64* profile; not cryptographic and not ambient entropy.
-        let mut x = self.rng_state;
-        x ^= x >> 12;
-        x ^= x << 25;
-        x ^= x >> 27;
-        self.rng_state = x;
-        let value = x.wrapping_mul(0x2545_F491_4F6C_DD1D);
-        if upper == 0 { 0 } else { value % upper }
+        let (next_state, value) = deterministic_random_step(self.rng_state, upper);
+        self.rng_state = next_state;
+        value
     }
 }

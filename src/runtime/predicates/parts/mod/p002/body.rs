@@ -111,10 +111,7 @@ pub fn evaluate_turn_transition(
     after: &RuntimeSnapshot,
     outcome: TurnOutcome,
 ) -> Result<RuntimePredicateReceipt> {
-    let expected = match outcome {
-        TurnOutcome::Committed => apply_actions_to_snapshot(before, turn),
-        TurnOutcome::RolledBack | TurnOutcome::Denied | TurnOutcome::Failed => before.clone(),
-    };
+    let expected = expected_turn_snapshot(before, turn, outcome);
     let decision = if expected == *after {
         PredicateDecision::Pass
     } else {
@@ -125,17 +122,13 @@ pub fn evaluate_turn_transition(
     } else {
         vec!["turn-transition-state-mismatch".to_string()]
     };
-    let input_value = crate::preserves_rail::record("runtime-predicate-turn-transition-input-v1", vec![
-        crate::preserves_rail::record("before-ref", vec![crate::preserves_rail::string(before.snapshot_ref()?)]),
-        crate::preserves_rail::record("after-ref", vec![crate::preserves_rail::string(after.snapshot_ref()?)]),
-        crate::preserves_rail::string(outcome.as_str()),
-        crate::preserves_rail::sequence(turn.actions.iter().map(action_summary_value).collect()),
-    ]);
+    let input_value = turn_transition_input_value(before, turn, after, outcome)?;
     let checks = vec![
         "trellis-bounded-turn-delta".to_string(),
         "pending-actions-invisible-before-commit".to_string(),
         "atomic-commit".to_string(),
         "rollback-preserves-committed-state".to_string(),
+        "turn-event-refs-bound".to_string(),
     ];
 
     build_runtime_predicate_receipt(RuntimePredicateReceiptInput {

@@ -1,4 +1,44 @@
 
+    const GENERATED_TRACE_SEED_OFFSET: u64 = 10_000;
+    const GENERATED_TRACE_MIN_LEN: usize = 2;
+    const GENERATED_TRACE_ACTION_KIND_COUNT: usize = 4;
+    const GENERATED_TRACE_OBSERVE_KIND: usize = 0;
+    const GENERATED_TRACE_ASSERT_KIND: usize = 1;
+    const GENERATED_TRACE_SEND_KIND: usize = 2;
+    const GENERATED_TRACE_OUTCOME_PERIOD: usize = 2;
+    const GENERATED_TRACE_ROLLBACK_REASON: &str = "generated-denial";
+
+    fn draw_generated_trace_len(tc: &TestCase) -> usize {
+        tc.draw(
+            hegel::generators::integers::<usize>()
+                .min_value(GENERATED_TRACE_MIN_LEN)
+                .max_value(PROPERTY_MAX_COLLECTION_LEN),
+        )
+    }
+
+    fn generated_trace_step(salt: u64, index: usize) -> RuntimeStep {
+        let value = RuntimeValue::string(format!("trace-value-{salt}-{index}")).expect("trace value");
+        match index % GENERATED_TRACE_ACTION_KIND_COUNT {
+            GENERATED_TRACE_OBSERVE_KIND => RuntimeStep::Observe {
+                actor: format!("trace-observer-{salt}"),
+                pattern: value,
+            },
+            GENERATED_TRACE_ASSERT_KIND => RuntimeStep::Assert {
+                actor: format!("trace-owner-{salt}"),
+                value,
+            },
+            GENERATED_TRACE_SEND_KIND => RuntimeStep::Send {
+                from: format!("trace-sender-{salt}"),
+                to: format!("trace-receiver-{salt}"),
+                body: value,
+            },
+            _retract_kind => RuntimeStep::Retract {
+                actor: format!("trace-owner-{salt}"),
+                value,
+            },
+        }
+    }
+
     #[hegel::test(test_cases = 16)]
     fn hegel_assertion_turn_and_pattern_predicates_are_bounded_and_deterministic(tc: TestCase) {
         let salt = draw_property_salt(&tc);
@@ -51,6 +91,83 @@
         assert!(wildcard.is_match);
         assert_eq!(wildcard.bindings, vec![("binding".to_string(), value.value_ref().to_string())]);
         assert!(!mismatch.is_match);
+    }
+
+    #[hegel::test(test_cases = 16)]
+    fn hegel_mixed_turn_commit_and_rollback_trace_preserves_transition_laws(tc: TestCase) {
+        // r[verify molten.runtime_state_machine_proof.turn_commit_delta]
+        // r[verify molten.runtime_state_machine_proof.turn_rollback_no_mutation]
+        // r[verify molten.runtime_state_machine_proof.turn_predicate_receipts]
+        // r[verify molten.runtime_state_machine_proof.generated_turn_traces]
+        let salt = draw_property_salt(&tc);
+        let trace_len = draw_generated_trace_len(&tc);
+        let invert_outcomes = draw_property_bool(&tc);
+        let seed = salt.saturating_add(GENERATED_TRACE_SEED_OFFSET);
+        let mut state = RuntimeState::new(seed);
+        let mut replay = RuntimeState::new(seed);
+
+        for index in 0..trace_len {
+            let step = generated_trace_step(salt, index);
+            let before = state.snapshot();
+            let replay_before = replay.snapshot();
+            assert_eq!(before, replay_before);
+            let turn = state.begin_turn(&step);
+            let replay_turn = replay.begin_turn(&step);
+            assert_eq!(turn, replay_turn);
+            let should_commit = (index % GENERATED_TRACE_OUTCOME_PERIOD == 0) != invert_outcomes;
+
+            if should_commit {
+                let expected = expected_turn_snapshot(&before, &turn, TurnOutcome::Committed);
+                assert_eq!(expected, committed_turn_snapshot(&before, &turn));
+                let (events, receipt) = state
+                    .commit_turn_with_predicate_receipt(turn.clone())
+                    .expect("generated commit receipt");
+                let (replay_events, replay_receipt) = replay
+                    .commit_turn_with_predicate_receipt(replay_turn)
+                    .expect("generated replay commit receipt");
+                assert_eq!(events, replay_events);
+                assert_eq!(receipt.receipt_ref, replay_receipt.receipt_ref);
+                assert_eq!(state.snapshot(), expected);
+                assert_eq!(state.snapshot(), replay.snapshot());
+                assert_turn_receipt_binds_transition(
+                    &receipt,
+                    &before,
+                    &turn,
+                    &expected,
+                    TurnOutcome::Committed,
+                    PredicateDecision::Pass,
+                );
+            } else {
+                let expected = expected_turn_snapshot(&before, &turn, TurnOutcome::Denied);
+                assert_eq!(expected, rolled_back_turn_snapshot(&before));
+                let (events, receipt) = state
+                    .rollback_turn_with_predicate_receipt(
+                        turn.clone(),
+                        step.primary_actor(),
+                        GENERATED_TRACE_ROLLBACK_REASON,
+                    )
+                    .expect("generated rollback receipt");
+                let (replay_events, replay_receipt) = replay
+                    .rollback_turn_with_predicate_receipt(
+                        replay_turn,
+                        step.primary_actor(),
+                        GENERATED_TRACE_ROLLBACK_REASON,
+                    )
+                    .expect("generated replay rollback receipt");
+                assert_eq!(events, replay_events);
+                assert_eq!(receipt.receipt_ref, replay_receipt.receipt_ref);
+                assert_eq!(state.snapshot(), expected);
+                assert_eq!(state.snapshot(), replay.snapshot());
+                assert_turn_receipt_binds_transition(
+                    &receipt,
+                    &before,
+                    &turn,
+                    &expected,
+                    TurnOutcome::Denied,
+                    PredicateDecision::Pass,
+                );
+            }
+        }
     }
 
     #[hegel::test(test_cases = 16)]
