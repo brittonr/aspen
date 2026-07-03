@@ -549,6 +549,8 @@ NixOS VM evidence is validated by canonical receipts and preserved through the `
 
 ## Development
 
+Proof-affecting changes should follow [`docs/proof-workflow.md`](docs/proof-workflow.md) for checklists, receipt-backed traceability, deny-path evidence, layered proof boundaries, and readbacks.
+
 ```sh
 nix develop
 cargo nextest run

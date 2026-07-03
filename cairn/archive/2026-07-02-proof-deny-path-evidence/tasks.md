@@ -1,0 +1,18 @@
+# Tasks: proof-deny-path-evidence
+
+## Phase 1: Matrix and receipts
+
+- [x] [serial] r[molten.evidence.proof_deny_matrix.catalog] Define a deny-path matrix model for proof-bearing gates.
+- [x] [serial] r[molten.evidence.proof_deny_matrix.fail_closed_fixtures] Enumerate required negative fixture classes for supported proof gates.
+- [x] [serial] r[molten.evidence.proof_deny_matrix.no_mutation_evidence] Bind no-mutation evidence for denials that happen before side effects.
+
+## Phase 2: Gate integration
+
+- [x] [parallel] r[molten.evidence.proof_deny_matrix.schema_tamper_cases] Add schema/tamper denial coverage to relevant gates.
+- [x] [parallel] r[molten.evidence.proof_deny_matrix.signature_tamper_cases] Add signer, purpose, key, and duplicate denial coverage where signed evidence is accepted.
+- [x] [parallel] r[molten.evidence.proof_deny_matrix.diagnostic_only] Ensure diagnostic-only evidence cannot satisfy pass gates.
+
+## Phase 3: Hegel RS and docs
+
+- [x] [parallel] r[molten.evidence.proof_deny_matrix.hegel_properties] Add Hegel RS generated tests for stale refs, malformed schemas, duplicate receipts, and denied mutations.
+- [x] [serial] r[molten.evidence.proof_deny_matrix.docs] Document the deny-path matrix and release-review expectations.

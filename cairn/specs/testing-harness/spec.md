@@ -1451,3 +1451,191 @@ r[molten.testing.vm_evidence.docs] User-facing documentation SHOULD explain whic
 - GIVEN an operator reviewing a realized VM check output
 - WHEN they follow the documented inspection procedure
 - THEN they can identify the authoritative VM receipts, their content refs, the validation decision, child workflow evidence, and diagnostic log refs without relying on raw build-log scraping.
+
+### Requirement: Proof obligation manifests
+r[molten.testing.proof_obligations.manifest] Molten SHOULD represent broad proof claims as deterministic proof-obligation manifests that list child obligations, subject refs, prerequisite refs, receipt refs, decisions, diagnostics, and evidence-only caveats.
+
+#### Scenario: Aggregate proof lists child obligations
+- GIVEN a workflow proof that depends on multiple semantic checks
+- WHEN Molten renders the aggregate proof manifest
+- THEN the manifest names each child obligation and the canonical receipt refs that satisfy it.
+
+### Requirement: Standard proof obligation classes
+r[molten.testing.proof_obligations.classes] Proof obligation manifests SHOULD distinguish input-validation, canonicalization, admission, mutation-boundary, replay-determinism, and fail-closed-negative obligations when those classes are part of a workflow claim.
+
+#### Scenario: Mutation boundary is separate from admission
+- GIVEN a workflow that denies an operation before mutation
+- WHEN its proof manifest is rendered
+- THEN admission evidence and no-mutation evidence appear as separate obligations.
+
+### Requirement: Aggregate obligation gate
+r[molten.testing.proof_obligations.aggregate_gate] Aggregate proof validation MUST fail closed when a required child obligation is missing, duplicated, bound to the wrong subject, bound to the wrong prerequisite, or has the wrong expected decision.
+
+#### Scenario: Missing replay obligation denies aggregate proof
+- GIVEN an aggregate proof requiring replay-determinism evidence
+- WHEN the replay obligation receipt is absent
+- THEN aggregate validation emits deny evidence for the missing child obligation.
+
+### Requirement: Traceability can reference aggregate proofs
+r[molten.testing.proof_obligations.traceability] Traceability MAY accept aggregate proof manifest refs as coverage evidence when the manifest exposes matching requirement ids and positive or negative coverage kinds.
+
+#### Scenario: Requirement coverage comes from child obligation
+- GIVEN an aggregate proof manifest with child obligations linked to requirement ids
+- WHEN traceability consumes the manifest
+- THEN the requirement is covered only by matching child obligations, not by the aggregate label alone.
+
+### Requirement: Obligation summaries are operator-readable
+r[molten.testing.proof_obligations.operator_summary] Proof obligation readbacks SHOULD group obligations by class, decision, subject, and missing or stale diagnostics.
+
+#### Scenario: Summary names missing child
+- GIVEN an aggregate proof manifest missing a mutation-boundary child
+- WHEN the operator summary is rendered
+- THEN it names the missing obligation class and subject ref.
+
+### Requirement: Obligation Hegel properties
+r[molten.testing.proof_obligations.hegel_properties] Proof obligation validation SHOULD include Hegel RS property tests for deterministic ordering, stable refs, missing-child denial, duplicate-child denial, mismatched-subject denial, and positive/negative substitution denial.
+
+#### Scenario: Generated duplicate child denies
+- GIVEN Hegel RS generates an aggregate manifest with duplicate child obligation ids
+- WHEN aggregate validation runs
+- THEN validation denies the aggregate proof.
+
+### Requirement: Obligation fixtures
+r[molten.testing.proof_obligations.fixtures] Proof obligation tests SHOULD include complete positive fixtures and negative fixtures for missing child, duplicate child, wrong subject, wrong prerequisite, stale receipt, and wrong expected decision.
+
+#### Scenario: Wrong subject fixture fails
+- GIVEN a child obligation receipt for a different subject ref
+- WHEN aggregate validation runs
+- THEN the aggregate proof is denied before satisfying coverage.
+
+### Requirement: Obligation decomposition docs
+r[molten.testing.proof_obligations.docs] Proof workflow documentation SHOULD explain how to decompose broad claims into child obligations and how aggregate proof manifests remain evidence-only.
+
+#### Scenario: Contributor decomposes workflow claim
+- GIVEN a contributor adds a new workflow proof
+- WHEN they follow the documentation
+- THEN they identify child obligations and attach explicit positive and negative receipts for review.
+
+### Requirement: Verification run receipts
+r[molten.testing.verification_run_receipts.schema] Molten MUST emit canonical verification run receipts for test, validation, and proof commands that are used as requirement coverage evidence.
+
+#### Scenario: Command run emits a receipt
+- GIVEN a proof command selected for requirement coverage
+- WHEN the command completes
+- THEN Molten emits a `verification-run-receipt-v1` artifact
+- AND the artifact binds the requirement id, coverage kind, target, normalized argv, execution profile, exit status, captured output refs, and produced artifact refs.
+
+### Requirement: Verification receipts bind command identity
+r[molten.testing.verification_run_receipts.command_binding] Verification run receipts MUST bind command identity and execution profile without treating rendered logs as normative evidence.
+
+#### Scenario: Changed command does not satisfy old coverage
+- GIVEN a traceability entry that expects one normalized argv and execution profile
+- WHEN a verification receipt names different argv or profile refs
+- THEN traceability reports stale or mismatched evidence before accepting coverage.
+
+### Requirement: Verification receipts bind artifacts
+r[molten.testing.verification_run_receipts.artifact_binding] Verification run receipts MUST bind produced artifact refs and fail closed when a named artifact ref is missing, malformed, stale, or inconsistent with the command result.
+
+#### Scenario: Tampered artifact ref denies coverage
+- GIVEN a verification receipt whose produced artifact ref does not validate
+- WHEN traceability consumes the receipt
+- THEN the corresponding coverage entry is denied with an artifact-binding diagnostic.
+
+### Requirement: Traceability accepts receipt-backed coverage
+r[molten.testing.verification_run_receipts.traceability] Traceability SHOULD accept verification-run receipt refs as first-class positive and negative coverage inputs and SHOULD prefer them over raw command strings when both are present.
+
+#### Scenario: Receipt-backed positive and negative coverage passes
+- GIVEN a changed evidence-bearing requirement
+- AND matching positive and negative verification-run receipts
+- WHEN traceability scanning runs
+- THEN the requirement is covered without relying on manually entered command text.
+
+### Requirement: Compatibility coverage remains explicit
+r[molten.testing.verification_run_receipts.compatibility] Compatibility coverage strings MAY remain supported, but traceability MUST identify whether each coverage entry is receipt-backed or compatibility-only.
+
+#### Scenario: Compatibility entry is visible
+- GIVEN a coverage entry supplied as raw requirement, kind, target, command, and ref fields
+- WHEN the traceability summary is rendered
+- THEN the entry remains usable under compatibility policy
+- AND the summary identifies that no verification-run receipt backed the entry.
+
+### Requirement: Verification receipt Hegel properties
+r[molten.testing.verification_run_receipts.hegel_properties] Verification receipt validation SHOULD include Hegel RS property tests for stable canonical refs, command binding drift, requirement/kind mismatches, stale targets, malformed refs, and deny receipts not satisfying positive coverage.
+
+#### Scenario: Generated receipt drift is denied
+- GIVEN Hegel RS generates a valid receipt input and a mutated command or artifact binding
+- WHEN both receipts are validated for the same traceability entry
+- THEN only the unmutated matching receipt can satisfy coverage.
+
+### Requirement: Verification receipt fixtures
+r[molten.testing.verification_run_receipts.fixtures] Verification receipt coverage SHOULD include positive fixtures for matching pass and expected-deny receipts and negative fixtures for stale target, missing output, malformed artifact ref, wrong requirement id, and wrong coverage kind.
+
+#### Scenario: Wrong coverage kind fails
+- GIVEN a positive coverage slot and a verification-run receipt marked as negative coverage
+- WHEN traceability validates the entry
+- THEN the entry is denied as a kind mismatch.
+
+### Requirement: Verification receipt workflow docs
+r[molten.testing.verification_run_receipts.docs] User-facing proof workflow documentation SHOULD describe how to generate verification-run receipts and feed them into traceability.
+
+#### Scenario: Contributor adds receipt-backed coverage
+- GIVEN a contributor adds or changes a requirement
+- WHEN they follow the proof workflow documentation
+- THEN they generate positive and negative verification-run receipts and pass those refs to the traceability gate.
+
+### Requirement: Receipt-backed coverage source model
+r[molten.testing.receipt_driven_traceability.source_model] Traceability SHOULD accept canonical proof receipt refs as coverage sources and treat hand-authored coverage tuples as compatibility-only input.
+
+#### Scenario: Receipt ref is a coverage source
+- GIVEN a verification or proof receipt that names a requirement id and coverage kind
+- WHEN traceability scanning receives the receipt ref
+- THEN the scanner derives a coverage entry from the canonical receipt fields.
+
+### Requirement: Coverage is derived from receipts
+r[molten.testing.receipt_driven_traceability.coverage_derivation] Receipt-driven traceability MUST derive requirement id, coverage kind, target, command identity, artifact refs, and diagnostics from validated canonical receipt fields rather than from rendered logs.
+
+#### Scenario: Derived entry binds artifact refs
+- GIVEN a receipt with produced artifact refs
+- WHEN coverage derivation runs
+- THEN the derived traceability entry names those refs and validates their content-ref shape.
+
+### Requirement: Raw coverage claims are labeled
+r[molten.testing.receipt_driven_traceability.raw_claim_policy] Traceability summaries MUST identify compatibility-only raw coverage entries and MAY allow release profiles to require receipt-backed coverage for changed evidence-bearing requirements.
+
+#### Scenario: Raw tuple remains visible
+- GIVEN a raw coverage tuple without a receipt ref
+- WHEN the summary is rendered
+- THEN the entry is labeled compatibility-only rather than indistinguishable from receipt-backed evidence.
+
+### Requirement: Stale receipt coverage denies
+r[molten.testing.receipt_driven_traceability.stale_receipt_denial] Receipt-driven traceability MUST deny stale receipt refs, duplicate coverage receipts for the same slot unless policy permits aggregation, wrong requirement ids, wrong coverage kinds, malformed refs, and receipts whose decision cannot satisfy the requested coverage kind.
+
+#### Scenario: Wrong requirement receipt fails
+- GIVEN a coverage slot for one requirement
+- AND a receipt naming another requirement id
+- WHEN traceability derives coverage
+- THEN the slot remains uncovered and the receipt is reported as stale or mismatched.
+
+### Requirement: Receipt-driven traceability has a gate surface
+r[molten.testing.receipt_driven_traceability.nix_gate] Molten SHOULD expose receipt-driven traceability through the same release, Nix, or Cairn gate surface used by existing traceability scanning.
+
+#### Scenario: Release gate requires receipt-backed coverage
+- GIVEN a release profile that requires receipt-backed traceability
+- WHEN a changed evidence-bearing requirement has only raw tuple coverage
+- THEN the gate denies or marks the requirement as not release-covered.
+
+### Requirement: Receipt-driven Hegel properties
+r[molten.testing.receipt_driven_traceability.hegel_properties] Receipt-driven traceability SHOULD include Hegel RS property tests for deterministic derivation, positive/negative separation, duplicate handling, stale receipt denial, and deny-monotonicity when bad receipts are added.
+
+#### Scenario: Adding stale receipt cannot create pass
+- GIVEN Hegel RS generates a passing receipt-backed coverage set
+- WHEN a stale receipt for a deleted requirement is added
+- THEN the resulting traceability decision is deny or the stale receipt is explicitly excluded by policy with diagnostics.
+
+### Requirement: Receipt-driven coverage docs
+r[molten.testing.receipt_driven_traceability.docs] User-facing documentation SHOULD explain how to provide receipt refs to traceability and how compatibility-only raw tuples differ from receipt-backed coverage.
+
+#### Scenario: Contributor migrates raw coverage
+- GIVEN an existing raw coverage tuple
+- WHEN a contributor follows the documentation
+- THEN they can replace it with a receipt ref that derives the same requirement coverage.
