@@ -1,4 +1,6 @@
 type IoValue = preserves::IOValue;
+type Record<T> = preserves::Record<T>;
+type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 type PendingTurn = crate::runtime::PendingTurn;
@@ -307,6 +309,15 @@ pub struct TransitionRecord {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransitionReceipt {
+    pub receipt_ref: String,
+    pub transition_ref: String,
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransitionReceiptValidation {
     pub receipt_ref: String,
     pub transition_ref: String,
     pub decision: String,
