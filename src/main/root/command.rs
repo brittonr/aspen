@@ -63,6 +63,10 @@ pub(crate) enum Test {
         #[command(subcommand)]
         command: crate::cli_gate::GateCommand,
     },
+    Drift {
+        #[command(subcommand)]
+        command: crate::cli_drift::DriftCommand,
+    },
     Gateway {
         #[command(subcommand)]
         command: crate::cli_gateway::Command,
@@ -166,6 +170,10 @@ pub(crate) enum Test {
     NixosVm {
         #[command(subcommand)]
         command: crate::cli_nixos_vm::NixosVmCommand,
+    },
+    Traceability {
+        #[command(subcommand)]
+        command: crate::cli_traceability::TraceabilityCommand,
     },
     ProdSoak {
         #[command(subcommand)]

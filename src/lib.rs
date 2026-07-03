@@ -193,6 +193,14 @@ compat_module!(service_runtime, worker_core);
 pub mod watchdog;
 compat_module!(service_supervision, watchdog);
 #[doc(hidden)]
+#[path = "testing/drift.rs"]
+pub mod drift_core;
+compat_module!(deterministic_drift, drift_core);
+#[doc(hidden)]
+#[path = "testing/traceability.rs"]
+pub mod trace_core;
+compat_module!(requirement_traceability, trace_core);
+#[doc(hidden)]
 #[path = "transcripts/mod.rs"]
 pub mod narratives;
 compat_module!(transcripts, narratives);

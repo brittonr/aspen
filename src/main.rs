@@ -33,6 +33,11 @@ mod pilot_port;
 mod cli_dogfood {
     pub(crate) use super::pilot_port::*;
 }
+#[path = "cli/ops/drift.rs"]
+mod drift_port;
+mod cli_drift {
+    pub(crate) use super::drift_port::*;
+}
 #[path = "cli/evidence/gate.rs"]
 mod barrier_port;
 mod cli_gate {
@@ -162,6 +167,11 @@ mod cli_storage {
 mod narrative_port;
 mod cli_transcript {
     pub(crate) use super::narrative_port::*;
+}
+#[path = "cli/ops/traceability.rs"]
+mod trace_port;
+mod cli_traceability {
+    pub(crate) use super::trace_port::*;
 }
 #[path = "cli/runtime/upgrade.rs"]
 mod migration_port;

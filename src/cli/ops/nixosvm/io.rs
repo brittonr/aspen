@@ -29,7 +29,7 @@ pub(super) fn raw_file_refs(paths: &[FilePath]) -> Outcome<Vec<String>> {
     Ok(refs)
 }
 
-fn raw_file_ref(path: &std::path::Path) -> Outcome<String> {
+pub(super) fn raw_file_ref(path: &std::path::Path) -> Outcome<String> {
     let bytes = std::fs::read(path).map_err(molten::error::MoltenError::from)?;
     Ok(molten::preserves_rail::content_ref_from_bytes(&bytes))
 }
@@ -72,6 +72,12 @@ pub(super) fn kind(text: &str) -> &'static str {
         "node-evidence"
     } else if text.contains("nixos-vm-test-run-v1") {
         "test-run"
+    } else if text.contains("nixos-vm-evidence-validation-v1") {
+        "vm-evidence-validation"
+    } else if text.contains("nixos-vm-evidence-manifest-v1") {
+        "vm-evidence-manifest"
+    } else if text.contains("prod-soak-run-v1") {
+        "prod-soak-run"
     } else {
         "artifact"
     }

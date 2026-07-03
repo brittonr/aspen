@@ -1256,3 +1256,198 @@ r[molten.testing.nixos_vm_multinode.network_diagnostics] Molten SHOULD bind loca
 - WHEN the VM check requests that diagnostic
 - THEN Molten records unavailable or degraded diagnostics
 - AND the VM check does not convert the unavailable diagnostic into pass evidence.
+
+### Requirement: Deterministic drift comparison core
+r[molten.testing.deterministic_drift.comparison_core] Molten MUST provide a pure deterministic drift comparator that accepts paired workflow evidence summaries, canonical receipt or report refs, and explicit allowed-variance declarations, then returns a pass or deny result with first-drift diagnostics.
+
+#### Scenario: Equal canonical evidence passes drift comparison
+- GIVEN two evidence summaries produced from the same declared deterministic inputs
+- WHEN the drift comparator evaluates their canonical refs and normalized values
+- THEN comparison passes only if all semantic refs and normalized canonical values match.
+
+#### Scenario: Unexplained ref drift fails closed
+- GIVEN two evidence summaries from the same declared inputs with different report or receipt refs
+- WHEN no allowed-variance declaration accounts for the difference
+- THEN comparison fails closed with a diagnostic naming the first differing ref or field.
+
+### Requirement: Allowed variance is explicit and canonical
+r[molten.testing.deterministic_drift.variance_declarations] Deterministic drift checks MUST allow volatile fields only when each variance is explicitly declared, justified by a reason class, and removed or normalized through canonical comparison rules before equality is evaluated.
+
+#### Scenario: Declared volatile field is normalized
+- GIVEN two workflow evidence summaries that differ only in a declared non-semantic volatile field
+- WHEN the drift comparator applies the allowed-variance declaration
+- THEN the normalized semantic evidence matches and the comparison may pass.
+
+#### Scenario: Undeclared volatile field fails comparison
+- GIVEN two workflow evidence summaries that differ in an undeclared field
+- WHEN drift comparison runs
+- THEN the comparison fails closed even if the field appears incidental in rendered logs.
+
+### Requirement: Fresh rerun drift gate
+r[molten.testing.deterministic_drift.fresh_rerun_gate] Molten MUST provide an explicit drift gate that runs selected evidence-bearing workflows in fresh isolated state roots with the same declared inputs and compares their canonical evidence through the drift comparator.
+
+#### Scenario: Same workflow rerun produces same evidence
+- GIVEN a deterministic evidence-bearing workflow and a declared input set
+- WHEN the drift gate runs the workflow in separate fresh state roots
+- THEN the gate compares canonical output refs from each run and passes only if semantic evidence is identical after declared normalization.
+
+#### Scenario: Ambient state drift is denied
+- GIVEN a workflow that reads undeclared ambient state and changes canonical evidence between fresh runs
+- WHEN the drift gate compares the outputs
+- THEN the gate fails closed with an ambient-state or unexplained-drift diagnostic.
+
+### Requirement: Release workflows are covered by drift checks
+r[molten.testing.deterministic_drift.release_workflows] Molten SHOULD cover dogfood local-node, sealed repro verify/unpack, release bundle verify, release promotion, release export verification, and deterministic VM child evidence with drift checks where those workflows claim deterministic evidence.
+
+#### Scenario: Dogfood evidence is stable across fresh roots
+- GIVEN the same source tree and declared dogfood inputs
+- WHEN the drift gate runs dogfood local-node twice in fresh state roots
+- THEN release-gate, replay-verify, replay-index, bundle-verify, promotion, and export-verify semantic evidence refs match or fail with declared variance diagnostics.
+
+### Requirement: Drift gate has positive and negative fixtures
+r[molten.testing.deterministic_drift.negative_fixtures] Molten SHOULD test deterministic drift validation with positive same-input/same-ref fixtures and negative fixtures for injected ref drift, undeclared volatile fields, ambient state use, unstable map ordering, and rendered-output-only changes.
+
+#### Scenario: Injected drift fixture is rejected
+- GIVEN a fixture pair whose second evidence summary has a changed canonical child ref
+- WHEN the drift comparator evaluates the pair
+- THEN validation fails closed with a first-drift diagnostic before accepting the workflow as deterministic evidence.
+
+### Requirement: Drift gate has an explicit validation surface
+r[molten.testing.deterministic_drift.gate_surface] Molten SHOULD expose deterministic drift validation through an explicit Nix check, app, or release-readiness command. The gate MUST NOT treat retry success as proof that drift was absent.
+
+#### Scenario: Retry does not mask drift
+- GIVEN a workflow that alternates between two canonical evidence refs across runs
+- WHEN the drift validation surface is invoked
+- THEN the gate reports drift instead of retrying until two matching outputs appear.
+
+### Requirement: Drift workflow is documented
+r[molten.testing.deterministic_drift.docs] User-facing documentation SHOULD describe which workflows are compared, what refs are authoritative, how allowed variance is declared, and how to diagnose first-drift failures.
+
+#### Scenario: Operator diagnoses a drift failure
+- GIVEN a drift gate failure in release evidence review
+- WHEN an operator follows the documented workflow
+- THEN they can identify the first differing canonical ref, the workflow step that emitted it, and whether a variance declaration or code fix is required.
+
+### Requirement: Requirement coverage manifest
+r[molten.testing.requirement_traceability.manifest] Molten MUST be able to generate a deterministic requirement coverage manifest that lists accepted and changed `r[...]` requirement ids, their source spec locations, positive verification evidence, negative verification evidence, validation commands, evidence artifact refs, and exemption status.
+
+#### Scenario: Manifest records positive and negative coverage
+- GIVEN accepted testing and evidence requirements with associated verification markers
+- WHEN the requirement coverage manifest is generated
+- THEN each covered requirement entry identifies its requirement id, source spec, positive test or evidence, negative test or evidence, validation command, and current coverage status.
+
+#### Scenario: Documentation-only requirement is explicitly exempted
+- GIVEN a requirement whose only required outcome is operator documentation
+- WHEN the manifest is generated
+- THEN the entry records a reviewed exemption class and supporting documentation evidence instead of silently appearing covered by unrelated tests.
+
+### Requirement: Traceability gate requires covered evidence-bearing requirements
+r[molten.testing.requirement_traceability.coverage_gate] Molten MUST provide a traceability gate that fails closed, or emits non-pass evidence, when an evidence-bearing or changed requirement lacks required positive and negative coverage and has no documented exemption.
+
+#### Scenario: Missing negative coverage fails the gate
+- GIVEN a changed evidence-bearing requirement with a positive test and no negative test or exemption
+- WHEN the traceability gate runs
+- THEN the gate fails closed with a diagnostic naming the requirement id and missing negative coverage.
+
+#### Scenario: Complete coverage passes the gate
+- GIVEN a changed evidence-bearing requirement with positive coverage, negative coverage, validation command evidence, and no stale refs
+- WHEN the traceability gate runs
+- THEN the gate emits pass evidence for that requirement coverage entry.
+
+### Requirement: Traceability detects stale references
+r[molten.testing.requirement_traceability.stale_detection] Traceability validation MUST detect stale requirement ids, missing test targets, missing validation commands, missing evidence artifacts, and references to deleted or renamed specs.
+
+#### Scenario: Stale test reference fails closed
+- GIVEN a manifest entry that points to a test target or fixture path that no longer exists
+- WHEN traceability validation runs
+- THEN validation fails closed with a stale-reference diagnostic.
+
+#### Scenario: Removed requirement id is not counted as covered
+- GIVEN a coverage entry for a requirement id that no longer appears in accepted specs or active change deltas
+- WHEN traceability validation runs
+- THEN the entry is reported as stale and cannot satisfy coverage for any current requirement.
+
+### Requirement: Traceability fixtures cover success and failure
+r[molten.testing.requirement_traceability.fixtures] Molten SHOULD test traceability validation with fixtures for complete coverage, missing positive coverage, missing negative coverage, stale requirement ids, missing test targets, missing evidence artifact refs, and documented exemptions.
+
+#### Scenario: Missing evidence fixture is denied
+- GIVEN a traceability fixture with a requirement entry whose evidence artifact ref is absent
+- WHEN fixture validation runs
+- THEN the validator reports a denial for the missing evidence artifact ref.
+
+### Requirement: Traceability has an explicit gate surface
+r[molten.testing.requirement_traceability.nix_surface] Molten SHOULD expose requirement traceability validation through an explicit Nix or Cairn command that can be invoked by release evidence review and local development.
+
+#### Scenario: Release review invokes traceability gate
+- GIVEN a release candidate source tree
+- WHEN release evidence validation requests requirement traceability
+- THEN the explicit gate command emits a machine-readable result and a compact summary without requiring manual source search.
+
+### Requirement: Traceability summary is operator-readable
+r[molten.testing.requirement_traceability.operator_summary] Molten SHOULD render a compact traceability summary grouped by covered, exempt, missing-positive, missing-negative, stale-reference, and unsupported requirement entries.
+
+#### Scenario: Summary names actionable gaps
+- GIVEN a manifest with missing negative coverage and stale references
+- WHEN the operator summary is rendered
+- THEN it names the affected requirement ids, gap class, and next validation evidence needed.
+
+### Requirement: Traceability workflow is documented
+r[molten.testing.requirement_traceability.docs] User-facing documentation SHOULD explain how to add positive coverage, negative coverage, validation commands, evidence refs, and exemptions when adding or changing requirements.
+
+#### Scenario: Contributor updates coverage with a requirement
+- GIVEN a contributor adding a new evidence-bearing requirement
+- WHEN they follow the traceability documentation
+- THEN they add both positive and negative coverage entries or a reviewed exemption before the traceability gate can pass.
+
+### Requirement: VM evidence is semantically validated
+r[molten.testing.vm_evidence.semantic_validation] Molten MUST validate NixOS VM evidence by parsing canonical receipt contents, not only by checking marker strings or command success. Validation MUST bind the expected topology, node ids, state roots, Nix store refs, child workflow refs, replay status, diagnostics, decision status, and evidence-only caveats.
+
+#### Scenario: Passing VM evidence validates by content
+- GIVEN a completed multi-node VM test with topology, node evidence, VM test-run, and production-soak receipts
+- WHEN the VM evidence validator evaluates the canonical receipts against the expected topology
+- THEN validation passes only if receipt contents bind the expected nodes, package refs, state roots, child receipt refs, replay status, diagnostics, and pass decision
+- AND raw terminal output is not accepted as a substitute for the canonical receipts.
+
+#### Scenario: Marker-only evidence is rejected
+- GIVEN VM-local files that contain expected receipt kind strings but omit required topology, child refs, replay status, or decision fields
+- WHEN the VM evidence validator evaluates the files
+- THEN validation fails closed with diagnostics for the missing semantic bindings.
+
+### Requirement: VM check outputs preserve canonical evidence
+r[molten.testing.vm_evidence.artifact_preservation] Molten MUST preserve canonical VM evidence receipts from platform integration checks as explicit Nix output artifacts with a manifest that binds artifact paths, receipt kinds, BLAKE3 content refs, diagnostic log refs, and evidence-only caveats.
+
+#### Scenario: VM check output contains reviewable evidence
+- GIVEN a successful `nixos-vm-multinode` check
+- WHEN an operator inspects the realized Nix output path
+- THEN the output contains a manifest plus the canonical topology, node evidence, VM test-run, production-soak, and child evidence receipts needed for review
+- AND each manifest entry binds a stable content ref and receipt kind.
+
+#### Scenario: Empty VM output cannot satisfy release evidence
+- GIVEN a VM test derivation that completes but does not preserve canonical evidence artifacts
+- WHEN release evidence validation evaluates the derivation output
+- THEN the output is denied or marked unavailable for release-evidence purposes even if the build log contains passing assertions.
+
+### Requirement: VM logs remain diagnostic evidence
+r[molten.testing.vm_evidence.log_boundary] VM terminal output, QEMU logs, systemd journals, and rendered summaries MUST be treated as diagnostic evidence only. They MAY be preserved and referenced by the VM evidence manifest, but they MUST NOT replace canonical receipt validation for pass evidence.
+
+#### Scenario: Log text cannot override a deny receipt
+- GIVEN preserved VM logs that contain successful-looking text and a canonical VM test-run receipt with a deny decision
+- WHEN VM evidence validation runs
+- THEN validation follows the canonical deny receipt
+- AND the successful-looking log text remains diagnostic-only.
+
+### Requirement: VM semantic validation has negative fixtures
+r[molten.testing.vm_evidence.negative_fixtures] Molten SHOULD test VM evidence validation with negative fixtures covering missing receipts, stale refs, tampered receipt bytes, wrong topology membership, wrong decision status, incomplete child refs, missing replay status, and unbound diagnostic logs.
+
+#### Scenario: Tampered VM evidence fails closed
+- GIVEN a previously passing VM evidence bundle whose node evidence or child receipt ref has been changed
+- WHEN the semantic validator evaluates the bundle
+- THEN validation fails closed before the bundle can satisfy release or pilot evidence review.
+
+### Requirement: VM evidence inspection is documented
+r[molten.testing.vm_evidence.docs] User-facing documentation SHOULD explain which VM output artifacts are authoritative, how to inspect the manifest and canonical receipts, and why logs are diagnostic-only.
+
+#### Scenario: Operator follows VM evidence docs
+- GIVEN an operator reviewing a realized VM check output
+- WHEN they follow the documented inspection procedure
+- THEN they can identify the authoritative VM receipts, their content refs, the validation decision, child workflow evidence, and diagnostic log refs without relying on raw build-log scraping.

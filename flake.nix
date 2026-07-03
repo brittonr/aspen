@@ -38,8 +38,22 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { nixpkgs, unit2nix, rust-overlay, flake-utils, onix-kache-lib, onix-kache-package-src, basalt-src, cairn-src, octet-src, ucan-src, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      nixpkgs,
+      unit2nix,
+      rust-overlay,
+      flake-utils,
+      onix-kache-lib,
+      onix-kache-package-src,
+      basalt-src,
+      cairn-src,
+      octet-src,
+      ucan-src,
+      ...
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgsBase = import nixpkgs {
           localSystem = system;
@@ -47,31 +61,37 @@
         };
 
         localGitSources = {
-          "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" = basalt-src;
+          "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" =
+            basalt-src;
           "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" = cairn-src;
           "ssh://git@github.com/OnixResearch/octet.git#9b6a2065ef9e8e363d81299cf59d74f885926215" = octet-src;
           "ssh://git@github.com/OnixResearch/ucan.git#2aad993027d48ff148028c537cdaf91f6e5285ca" = ucan-src;
         };
 
         pkgs = pkgsBase;
-        unit2nixPkgsBase = pkgsBase.extend (final: prev: {
-          fetchgit = (prev.lib.makeOverridable (args:
-            let
-              localGitKey = if args ? rev then "${args.url}#${args.rev}" else "";
-              localGitSource = localGitSources.${localGitKey} or null;
-            in
-            if localGitSource != null then
-              prev.runCommand (args.name or "local-git-source") { } ''
-                cp -R ${localGitSource} "$out"
-                chmod -R u+w "$out"
-                ${args.postFetch or ""}
-              ''
-            else
-              prev.fetchgit args
-          )) // {
-            inherit (prev.fetchgit) getRevWithTag;
-          };
-        });
+        unit2nixPkgsBase = pkgsBase.extend (
+          final: prev: {
+            fetchgit =
+              (prev.lib.makeOverridable (
+                args:
+                let
+                  localGitKey = if args ? rev then "${args.url}#${args.rev}" else "";
+                  localGitSource = localGitSources.${localGitKey} or null;
+                in
+                if localGitSource != null then
+                  prev.runCommand (args.name or "local-git-source") { } ''
+                    cp -R ${localGitSource} "$out"
+                    chmod -R u+w "$out"
+                    ${args.postFetch or ""}
+                  ''
+                else
+                  prev.fetchgit args
+              ))
+              // {
+                inherit (prev.fetchgit) getRevWithTag;
+              };
+          }
+        );
 
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
         rustToolchainCompat = rustToolchain // {
@@ -79,14 +99,16 @@
             configureFlags = [ "--target=${pkgs.stdenv.hostPlatform.rust.rustcTarget}" ];
           };
         };
-        unit2nixPkgs = unit2nixPkgsBase.extend (final: prev: {
-          # unit2nix auto mode forwards the custom toolchain to Cargo's
-          # unit-graph generation, but this pinned revision does not forward it
-          # to the clippy wrapper. Make pkgs.clippy/pkgs.rustc match the
-          # dependency compiler so Nix flake checks do not mix rustc metadata.
-          clippy = rustToolchain;
-          rustc = rustToolchainCompat;
-        });
+        unit2nixPkgs = unit2nixPkgsBase.extend (
+          final: prev: {
+            # unit2nix auto mode forwards the custom toolchain to Cargo's
+            # unit-graph generation, but this pinned revision does not forward it
+            # to the clippy wrapper. Make pkgs.clippy/pkgs.rustc match the
+            # dependency compiler so Nix flake checks do not mix rustc metadata.
+            clippy = rustToolchain;
+            rustc = rustToolchainCompat;
+          }
+        );
 
         kacheCacheDir = "/var/cache/kache-nix";
         kacheKeySalt = "molten-unit2nix-kache-v1";
@@ -95,7 +117,12 @@
           lib = pkgs.lib;
           inherit pkgs kachePackage;
         };
-        mkUnit2nixRust = { enableKache ? false, cacheDir ? kacheCacheDir, keySalt ? kacheKeySalt }:
+        mkUnit2nixRust =
+          {
+            enableKache ? false,
+            cacheDir ? kacheCacheDir,
+            keySalt ? kacheKeySalt,
+          }:
           if enableKache then
             kacheLib.mkWrappedRustPackage {
               name = "molten-kache-rust";
@@ -104,7 +131,13 @@
             }
           else
             rustToolchain;
-        mkBuildRustCrateForPkgs = { enableKache ? false, cacheDir ? kacheCacheDir, keySalt ? kacheKeySalt }: pkgs:
+        mkBuildRustCrateForPkgs =
+          {
+            enableKache ? false,
+            cacheDir ? kacheCacheDir,
+            keySalt ? kacheKeySalt,
+          }:
+          pkgs:
           let
             unit2nixRust = mkUnit2nixRust { inherit enableKache cacheDir keySalt; };
           in
@@ -112,7 +145,12 @@
             cargo = unit2nixRust;
             rustc = unit2nixRust;
           };
-        mkUnit2nixWorkspace = { enableKache ? false, cacheDir ? kacheCacheDir, keySalt ? kacheKeySalt }:
+        mkUnit2nixWorkspace =
+          {
+            enableKache ? false,
+            cacheDir ? kacheCacheDir,
+            keySalt ? kacheKeySalt,
+          }:
           unit2nix.lib.${system}.buildFromUnitGraph {
             pkgs = unit2nixPkgs;
             inherit rustToolchain;
@@ -120,7 +158,10 @@
             # Keep the unit graph checked in so package evaluation does not
             # depend on unit2nix IFD.
             resolvedJson = ./build-plan.json;
-            clippyArgs = [ "-D" "warnings" ];
+            clippyArgs = [
+              "-D"
+              "warnings"
+            ];
             buildRustCrateForPkgs = mkBuildRustCrateForPkgs { inherit enableKache cacheDir keySalt; };
             extraCrateOverrides = {
               # nickel-lang-core declares links="nix", but the Nix FFI is behind
@@ -142,74 +183,90 @@
         rustLibDir = "${rustToolchain}/lib/rustlib/${targetTriple}/lib";
         nextestCi = pkgs.writeShellApplication {
           name = "molten-nextest-ci";
-          runtimeInputs = [ rustToolchain pkgs.cargo-nextest ];
+          runtimeInputs = [
+            rustToolchain
+            pkgs.cargo-nextest
+          ];
           text = ''
             exec cargo nextest run --profile ci "$@"
           '';
         };
         sourceForConfigChecks = pkgs.lib.cleanSourceWith {
           src = ./.;
-          filter = path: type:
+          filter =
+            path: type:
             let
               base = baseNameOf path;
             in
-              !(base == "target" || base == ".direnv" || base == ".git");
+            !(base == "target" || base == ".direnv" || base == ".git");
         };
 
-        moltenVmNodeModule = nodeId: { pkgs, ... }: {
-          virtualisation.graphics = false;
-          networking.hostName = nodeId;
-          networking.firewall.enable = false;
-          networking.extraHosts = ''
-            192.168.1.1 node-a node_a
-            192.168.1.2 node-b node_b
-          '';
-          environment.systemPackages = [ moltenPkg pkgs.coreutils pkgs.gnugrep pkgs.iputils ];
-          systemd.services.molten-node = {
-            description = "Molten node VM integration service";
-            wantedBy = [ "multi-user.target" ];
-            after = [ "network-online.target" ];
-            wants = [ "network-online.target" ];
-            path = [ moltenPkg pkgs.coreutils pkgs.gnugrep ];
-            serviceConfig = {
-              Type = "oneshot";
-              RemainAfterExit = true;
-              StateDirectory = "molten";
-              WorkingDirectory = "${sourceForConfigChecks}";
-              ExecStop = "${moltenPkg}/bin/molten node stop --state-root /var/lib/molten --shutdown-out /var/lib/molten/vm-evidence/shutdown.preserves --receipt-out /var/lib/molten/vm-evidence/shutdown-control.preserves";
-            };
-            script = ''
-              set -euo pipefail
-              state=/var/lib/molten
-              evidence="$state/vm-evidence"
-              mkdir -p "$evidence"
-              if [ ! -f "$state/config.preserves" ]; then
-                molten node init \
-                  --state-root "$state" \
-                  --node-id "node:${nodeId}" \
-                  --config-out "$evidence/node-config.preserves" \
-                  --identity-receipt-out "$evidence/identity.preserves" \
-                  > "$evidence/init.txt"
-              fi
-              molten node run \
-                --state-root "$state" \
-                --startup-out "$evidence/startup.preserves" \
-                > "$evidence/run.txt"
-              molten node status \
-                --state-root "$state" \
-                --health-out "$evidence/health.preserves" \
-                --receipt-out "$evidence/status.preserves" \
-                > "$evidence/status.txt"
-              molten node run-loop \
-                --state-root "$state" \
-                --max-requests 1 \
-                --receipt-out "$evidence/control-loop.preserves" \
-                --heartbeat-out "$evidence/heartbeat.preserves" \
-                > "$evidence/run-loop.txt"
+        moltenVmNodeModule =
+          nodeId:
+          { pkgs, ... }:
+          {
+            virtualisation.graphics = false;
+            networking.hostName = nodeId;
+            networking.firewall.enable = false;
+            networking.extraHosts = ''
+              192.168.1.1 node-a node_a
+              192.168.1.2 node-b node_b
             '';
+            environment.systemPackages = [
+              moltenPkg
+              pkgs.coreutils
+              pkgs.gnugrep
+              pkgs.iputils
+            ];
+            systemd.services.molten-node = {
+              description = "Molten node VM integration service";
+              wantedBy = [ "multi-user.target" ];
+              after = [ "network-online.target" ];
+              wants = [ "network-online.target" ];
+              path = [
+                moltenPkg
+                pkgs.coreutils
+                pkgs.gnugrep
+              ];
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+                StateDirectory = "molten";
+                WorkingDirectory = "${sourceForConfigChecks}";
+                ExecStop = "${moltenPkg}/bin/molten node stop --state-root /var/lib/molten --shutdown-out /var/lib/molten/vm-evidence/shutdown.preserves --receipt-out /var/lib/molten/vm-evidence/shutdown-control.preserves";
+              };
+              script = ''
+                set -euo pipefail
+                state=/var/lib/molten
+                evidence="$state/vm-evidence"
+                mkdir -p "$evidence"
+                if [ ! -f "$state/config.preserves" ]; then
+                  molten node init \
+                    --state-root "$state" \
+                    --node-id "node:${nodeId}" \
+                    --config-out "$evidence/node-config.preserves" \
+                    --identity-receipt-out "$evidence/identity.preserves" \
+                    > "$evidence/init.txt"
+                fi
+                molten node run \
+                  --state-root "$state" \
+                  --startup-out "$evidence/startup.preserves" \
+                  > "$evidence/run.txt"
+                molten node status \
+                  --state-root "$state" \
+                  --health-out "$evidence/health.preserves" \
+                  --receipt-out "$evidence/status.preserves" \
+                  > "$evidence/status.txt"
+                molten node run-loop \
+                  --state-root "$state" \
+                  --max-requests 1 \
+                  --receipt-out "$evidence/control-loop.preserves" \
+                  --heartbeat-out "$evidence/heartbeat.preserves" \
+                  > "$evidence/run-loop.txt"
+              '';
+            };
+            system.stateVersion = "24.11";
           };
-          system.stateVersion = "24.11";
-        };
       in
       {
         packages = {
@@ -226,34 +283,137 @@
           molten = nextest;
           clippy = ws.clippy.allWorkspaceMembers;
 
-          production-profile-fixtures = pkgs.runCommand "molten-production-profile-fixtures"
-            {
-              nativeBuildInputs = [ pkgs.nickel pkgs.diffutils ];
-              src = sourceForConfigChecks;
-            } ''
-            set -euo pipefail
-            cp -R $src source
-            chmod -R u+w source
-            cd source
+          deterministic-drift-gate =
+            pkgs.runCommand "molten-deterministic-drift-gate"
+              {
+                nativeBuildInputs = [ moltenPkg ];
+                src = sourceForConfigChecks;
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out"
+                cp -R $src source
+                chmod -R u+w source
+                cd source
 
-            nickel export docs/production-node-profile.ncl > "$TMPDIR/production-node-profile.json"
-            nickel export docs/production-profile-fixtures/valid.ncl > "$TMPDIR/production-profile-valid.json"
-            nickel export docs/production-node-profile.ncl --field profile.resource_limits > "$TMPDIR/resource-limits.json"
-            diff -u docs/production-profile-fixtures/expected-resource-limits.json "$TMPDIR/resource-limits.json"
+                printf '%s\n' '<release-evidence-fixture "stable">' > left.preserves
+                cp left.preserves right.preserves
+                molten test drift compare \
+                  --workflow release-evidence \
+                  --left left.preserves \
+                  --right right.preserves \
+                  --out "$out/drift-pass.preserves" \
+                  > "$out/drift-pass.txt"
 
-            failed=0
-            for fixture in docs/production-profile-fixtures/negative/*.ncl; do
-              name=$(basename "$fixture")
-              if nickel export "$fixture" > "$TMPDIR/$name.json" 2> "$TMPDIR/$name.err"; then
-                echo "negative fixture unexpectedly exported: $fixture" >&2
-                failed=1
-              fi
-            done
-            if [ "$failed" -ne 0 ]; then
-              exit 1
-            fi
-            touch "$out"
-          '';
+                molten test drift rerun \
+                  --workflow nixos-vm-topology \
+                  --left-root "$TMPDIR/left-root" \
+                  --right-root "$TMPDIR/right-root" \
+                  --command molten \
+                  --arg test \
+                  --arg nixos-vm \
+                  --arg topology \
+                  --arg=--node \
+                  --arg node_a \
+                  --arg=--node \
+                  --arg node_b \
+                  --arg=--package-ref \
+                  --arg blake3:0000000000000000000000000000000000000000000000000000000000000000 \
+                  --arg=--package-path \
+                  --arg /nix/store/example-molten \
+                  --arg=--network \
+                  --arg nixos-test-private \
+                  --arg=--caveat \
+                  --arg 'topology rerun fixture is deterministic evidence only' \
+                  --arg=--out \
+                  --arg '{root}/topology.preserves' \
+                  --artifact topology.preserves \
+                  --out "$out/topology-drift-rerun.preserves" \
+                  > "$out/topology-drift-rerun.txt"
+
+                printf '%s\n' '<release-evidence-fixture "drifted">' > drifted.preserves
+                if molten test drift compare \
+                  --workflow release-evidence \
+                  --left left.preserves \
+                  --right drifted.preserves \
+                  --out "$out/drift-deny.preserves" \
+                  > "$out/drift-deny.txt" 2> "$out/drift-deny.err"; then
+                  echo "negative drift fixture unexpectedly passed" >&2
+                  exit 1
+                fi
+              '';
+
+          requirement-traceability-gate =
+            pkgs.runCommand "molten-requirement-traceability-gate"
+              {
+                nativeBuildInputs = [ moltenPkg ];
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out" fixture/cairn/changes/traceability/specs/testing-harness fixture/tests
+                {
+                  printf '%s\n' '## ADDED Requirements'
+                  printf '\n'
+                  printf '%s\n' '### Requirement: Traceability fixture'
+                  printf '%s\n' 'r[molten.testing.traceability.fixture] Molten MUST bind positive and negative coverage in this fixture.'
+                } > fixture/cairn/changes/traceability/specs/testing-harness/spec.md
+                touch fixture/tests/coverage.rs
+                artifact_ref=blake3:0000000000000000000000000000000000000000000000000000000000000000
+                positive='molten.testing.traceability.fixture|positive|tests/coverage.rs|cargo test coverage|'
+                negative='molten.testing.traceability.fixture|negative|tests/coverage.rs|cargo test coverage|'
+                molten test traceability scan \
+                  --root fixture \
+                  --changed-only \
+                  --coverage "$positive$artifact_ref" \
+                  --coverage "$negative$artifact_ref" \
+                  --out "$out/traceability-pass.preserves" \
+                  --summary-out "$out/traceability-pass.txt"
+
+                if molten test traceability scan \
+                  --root fixture \
+                  --changed-only \
+                  --coverage "$positive$artifact_ref" \
+                  --out "$out/traceability-deny.preserves" \
+                  --summary-out "$out/traceability-deny.txt" \
+                  > "$out/traceability-deny.stdout" 2> "$out/traceability-deny.stderr"; then
+                  echo "negative traceability fixture unexpectedly passed" >&2
+                  exit 1
+                fi
+              '';
+
+          production-profile-fixtures =
+            pkgs.runCommand "molten-production-profile-fixtures"
+              {
+                nativeBuildInputs = [
+                  pkgs.nickel
+                  pkgs.diffutils
+                ];
+                src = sourceForConfigChecks;
+              }
+              ''
+                set -euo pipefail
+                cp -R $src source
+                chmod -R u+w source
+                cd source
+
+                nickel export docs/production-node-profile.ncl > "$TMPDIR/production-node-profile.json"
+                nickel export docs/production-profile-fixtures/valid.ncl > "$TMPDIR/production-profile-valid.json"
+                nickel export docs/production-node-profile.ncl --field profile.resource_limits > "$TMPDIR/resource-limits.json"
+                diff -u docs/production-profile-fixtures/expected-resource-limits.json "$TMPDIR/resource-limits.json"
+
+                failed=0
+                for fixture in docs/production-profile-fixtures/negative/*.ncl; do
+                  name=$(basename "$fixture")
+                  if nickel export "$fixture" > "$TMPDIR/$name.json" 2> "$TMPDIR/$name.err"; then
+                    echo "negative fixture unexpectedly exported: $fixture" >&2
+                    failed=1
+                  fi
+                done
+                if [ "$failed" -ne 0 ]; then
+                  exit 1
+                fi
+                touch "$out"
+              '';
 
           kache-nix-rust-wrapper-contract =
             let
@@ -350,255 +510,266 @@
               touch "$out"
             '';
 
-          nextest = pkgs.runCommand "molten-nextest"
-            {
-              nativeBuildInputs = [ rustToolchain pkgs.cargo-nextest pkgs.perl ];
-              src = sourceForConfigChecks;
-              testBinaries = moltenTestBinaries;
-              inherit targetTriple rustLibDir;
-            } ''
-            set -euo pipefail
-            export HOME="$TMPDIR/home"
-            mkdir -p "$HOME"
-            cp -R $src source
-            chmod -R u+w source
-            cd source
-            cargo metadata --format-version 1 --no-deps --locked > cargo-metadata.json
-            perl -MJSON::PP -e '
-              use strict;
-              use warnings;
-              my $metadata_path = "cargo-metadata.json";
-              my $test_dir = "$ENV{testBinaries}/tests";
-              my $target_triple = $ENV{targetTriple};
-              my $rust_lib_dir = $ENV{rustLibDir};
-              die "missing unit2nix test binary directory: $test_dir\n" unless -d $test_dir;
-
-              my $metadata = decode_json(do { local $/; open my $fh, "<", $metadata_path or die "open $metadata_path: $!"; <$fh> });
-              my ($package) = grep { $_->{name} eq "molten" } @{$metadata->{packages}};
-              die "cargo metadata did not contain package molten\n" unless $package;
-
-              my @binaries;
-              for my $path (sort glob("$test_dir/*")) {
-                next unless -f $path && -x $path;
-                next unless system("$path --list --format terse >/dev/null 2>&1") == 0;
-                push @binaries, $path;
+          nextest =
+            pkgs.runCommand "molten-nextest"
+              {
+                nativeBuildInputs = [
+                  rustToolchain
+                  pkgs.cargo-nextest
+                  pkgs.perl
+                ];
+                src = sourceForConfigChecks;
+                testBinaries = moltenTestBinaries;
+                inherit targetTriple rustLibDir;
               }
-              die "no libtest-compatible binaries found in $test_dir\n" unless @binaries;
+              ''
+                set -euo pipefail
+                export HOME="$TMPDIR/home"
+                mkdir -p "$HOME"
+                cp -R $src source
+                chmod -R u+w source
+                cd source
+                cargo metadata --format-version 1 --no-deps --locked > cargo-metadata.json
+                perl -MJSON::PP -e '
+                  use strict;
+                  use warnings;
+                  my $metadata_path = "cargo-metadata.json";
+                  my $test_dir = "$ENV{testBinaries}/tests";
+                  my $target_triple = $ENV{targetTriple};
+                  my $rust_lib_dir = $ENV{rustLibDir};
+                  die "missing unit2nix test binary directory: $test_dir\n" unless -d $test_dir;
 
-              my %rust_binaries;
-              my $index = 0;
-              for my $path (@binaries) {
-                (my $name = $path) =~ s{.*/}{};
-                my $id = "molten::nix-test/$index/$name";
-                $rust_binaries{$id} = {
-                  "binary-id" => $id,
-                  "binary-name" => $name,
-                  "package-id" => $package->{id},
-                  "kind" => "test",
-                  "binary-path" => $path,
-                  "build-platform" => "target",
-                };
-                $index++;
-              }
+                  my $metadata = decode_json(do { local $/; open my $fh, "<", $metadata_path or die "open $metadata_path: $!"; <$fh> });
+                  my ($package) = grep { $_->{name} eq "molten" } @{$metadata->{packages}};
+                  die "cargo metadata did not contain package molten\n" unless $package;
 
-              my $binaries_metadata = {
-                "rust-build-meta" => {
-                  "target-directory" => $ENV{testBinaries},
-                  "base-output-directories" => ["tests"],
-                  "non-test-binaries" => {},
-                  "build-script-out-dirs" => {},
-                  "build-script-info" => {},
-                  "linked-paths" => [],
-                  "platforms" => {
-                    "host" => {
-                      "platform" => {
+                  my @binaries;
+                  for my $path (sort glob("$test_dir/*")) {
+                    next unless -f $path && -x $path;
+                    next unless system("$path --list --format terse >/dev/null 2>&1") == 0;
+                    push @binaries, $path;
+                  }
+                  die "no libtest-compatible binaries found in $test_dir\n" unless @binaries;
+
+                  my %rust_binaries;
+                  my $index = 0;
+                  for my $path (@binaries) {
+                    (my $name = $path) =~ s{.*/}{};
+                    my $id = "molten::nix-test/$index/$name";
+                    $rust_binaries{$id} = {
+                      "binary-id" => $id,
+                      "binary-name" => $name,
+                      "package-id" => $package->{id},
+                      "kind" => "test",
+                      "binary-path" => $path,
+                      "build-platform" => "target",
+                    };
+                    $index++;
+                  }
+
+                  my $binaries_metadata = {
+                    "rust-build-meta" => {
+                      "target-directory" => $ENV{testBinaries},
+                      "base-output-directories" => ["tests"],
+                      "non-test-binaries" => {},
+                      "build-script-out-dirs" => {},
+                      "build-script-info" => {},
+                      "linked-paths" => [],
+                      "platforms" => {
+                        "host" => {
+                          "platform" => {
+                            "triple" => $target_triple,
+                            "target-features" => "unknown",
+                          },
+                          "libdir" => {
+                            "status" => "available",
+                            "path" => $rust_lib_dir,
+                          },
+                        },
+                        "targets" => [],
+                      },
+                      "target-platforms" => [{
                         "triple" => $target_triple,
                         "target-features" => "unknown",
-                      },
-                      "libdir" => {
-                        "status" => "available",
-                        "path" => $rust_lib_dir,
-                      },
+                      }],
+                      "target-platform" => undef,
                     },
-                    "targets" => [],
-                  },
-                  "target-platforms" => [{
-                    "triple" => $target_triple,
-                    "target-features" => "unknown",
-                  }],
-                  "target-platform" => undef,
-                },
-                "rust-binaries" => \%rust_binaries,
-              };
+                    "rust-binaries" => \%rust_binaries,
+                  };
 
-              open my $out, ">", "binaries-metadata.json" or die "write binaries-metadata.json: $!";
-              print $out JSON::PP->new->canonical->pretty->encode($binaries_metadata);
-            '
-            cargo nextest run \
-              --profile ci \
-              --user-config-file none \
-              --cargo-metadata cargo-metadata.json \
-              --binaries-metadata binaries-metadata.json \
-              --no-tests fail
-            mkdir -p "$out"
-            cp cargo-metadata.json binaries-metadata.json "$out"/
-            if [ -f target/nextest/junit.xml ]; then
-              cp target/nextest/junit.xml "$out"/
-            fi
-          '';
+                  open my $out, ">", "binaries-metadata.json" or die "write binaries-metadata.json: $!";
+                  print $out JSON::PP->new->canonical->pretty->encode($binaries_metadata);
+                '
+                cargo nextest run \
+                  --profile ci \
+                  --user-config-file none \
+                  --cargo-metadata cargo-metadata.json \
+                  --binaries-metadata binaries-metadata.json \
+                  --no-tests fail
+                mkdir -p "$out"
+                cp cargo-metadata.json binaries-metadata.json "$out"/
+                if [ -f target/nextest/junit.xml ]; then
+                  cp target/nextest/junit.xml "$out"/
+                fi
+              '';
 
-          dogfood-local-node = pkgs.runCommand "molten-dogfood-local-node"
-            {
-              nativeBuildInputs = [ moltenPkg pkgs.gnugrep ];
-              src = sourceForConfigChecks;
-              nextestCheck = nextest;
-            } ''
-            set -euo pipefail
-            export HOME="$TMPDIR/home"
-            mkdir -p "$HOME"
-            cp -R $src source
-            chmod -R u+w source
-            cd source
-            molten dogfood local-node \
-              --state-root "$TMPDIR/dogfood-state" \
-              --out dogfood-report.preserves \
-              --release-gate-out release-gate.preserves \
-              --replay-verify-out replay-verify.preserves \
-              --replay-index-out replay-evidence-index.preserves \
-              > dogfood-summary.txt
-            grep -q 'decision=pass' dogfood-summary.txt
-            grep -q 'dogfood-report-v1' dogfood-report.preserves
-            grep -q 'release-gate-receipt-v1' release-gate.preserves
-            grep -q 'deterministic-replay-verify-v1' replay-verify.preserves
-            grep -q 'deterministic-replay-index-v1' replay-evidence-index.preserves
-            mkdir -p "$out"
-            cp dogfood-summary.txt dogfood-report.preserves release-gate.preserves replay-verify.preserves replay-evidence-index.preserves "$out"/
-            printf '%s\n' "$nextestCheck" > "$out/after-nextest.txt"
-            molten dogfood nix-release-export \
-              --output-path "$out" \
-              --out "$out/nix-dogfood-evidence.preserves"
-            molten dogfood nix-release-verify \
-              --output-path "$out" \
-              --evidence "$out/nix-dogfood-evidence.preserves" \
-              --receipt-out "$out/nix-dogfood-verify.preserves" \
-              | tee "$out/nix-dogfood-verify.txt"
-            grep -q 'decision=pass' "$out/nix-dogfood-verify.txt"
-            molten dogfood release-bundle-export \
-              --output-path "$out" \
-              --out "$out/release-evidence-bundle.preserves"
-            mkdir -p "$out/signed-keyring"
-            molten receipts key import \
-              --ledger "$out/signed-keyring" \
-              --key-id local-release-key-v1 \
-              --signer local-release-signer \
-              --trust-root local-release-trust-root \
-              --key local-release-key \
-              > "$out/signed-keyring-import.txt"
-            molten receipts sign "$out/dogfood-report.preserves" \
-              --out "$out/dogfood-report.signed.preserves" \
-              --signer local-release-signer \
-              --purpose release-evidence \
-              --trust-root local-release-trust-root \
-              --key local-release-key
-            molten receipts sign "$out/release-gate.preserves" \
-              --out "$out/release-gate.signed.preserves" \
-              --signer local-release-signer \
-              --purpose release-evidence \
-              --trust-root local-release-trust-root \
-              --key local-release-key
-            molten receipts sign "$out/replay-verify.preserves" \
-              --out "$out/replay-verify.signed.preserves" \
-              --signer local-release-signer \
-              --purpose release-evidence \
-              --trust-root local-release-trust-root \
-              --key local-release-key
-            molten receipts sign "$out/replay-evidence-index.preserves" \
-              --out "$out/replay-evidence-index.signed.preserves" \
-              --signer local-release-signer \
-              --purpose release-evidence \
-              --trust-root local-release-trust-root \
-              --key local-release-key
-            molten receipts sign "$out/nix-dogfood-evidence.preserves" \
-              --out "$out/nix-dogfood-evidence.signed.preserves" \
-              --signer local-release-signer \
-              --purpose release-evidence \
-              --trust-root local-release-trust-root \
-              --key local-release-key
-            molten receipts sign "$out/nix-dogfood-verify.preserves" \
-              --out "$out/nix-dogfood-verify.signed.preserves" \
-              --signer local-release-signer \
-              --purpose release-evidence \
-              --trust-root local-release-trust-root \
-              --key local-release-key
-            molten dogfood release-bundle-verify \
-              --output-path "$out" \
-              --bundle "$out/release-evidence-bundle.preserves" \
-              --receipt-out "$out/release-evidence-bundle-verify.preserves" \
-              --require-signed-members \
-              --signed-purpose release-evidence \
-              --signed-trust-root local-release-trust-root \
-              --signed-key-ledger "$out/signed-keyring" \
-              --signed-key-id local-release-key-v1 \
-              --signed-signer local-release-signer \
-              --signed-member "$out/dogfood-report.signed.preserves" \
-              --signed-member "$out/release-gate.signed.preserves" \
-              --signed-member "$out/replay-verify.signed.preserves" \
-              --signed-member "$out/replay-evidence-index.signed.preserves" \
-              --signed-member "$out/nix-dogfood-evidence.signed.preserves" \
-              --signed-member "$out/nix-dogfood-verify.signed.preserves" \
-              | tee "$out/release-evidence-bundle-verify.txt"
-            grep -q 'decision=pass' "$out/release-evidence-bundle-verify.txt"
-            molten dogfood release-promote \
-              --output-path "$out" \
-              --bundle-verify "$out/release-evidence-bundle-verify.preserves" \
-              --receipt-out "$out/release-promotion-gate.preserves" \
-              --signed-key-ledger "$out/signed-keyring" \
-              --signed-key-id local-release-key-v1 \
-              --signed-trust-root local-release-trust-root \
-              --signed-signer local-release-signer \
-              --source-evidence "flake-source:$src" \
-              --octet-evidence "octet:external-clean-gate-required" \
-              --cairn-evidence "cairn:external-strict-validate-required" \
-              | tee "$out/release-promotion-gate.txt"
-            grep -q 'decision=pass' "$out/release-promotion-gate.txt"
-            molten receipts sign "$out/release-promotion-gate.preserves" \
-              --out "$out/release-promotion-gate.signed.preserves" \
-              --signer local-release-signer \
-              --purpose release-promotion \
-              --trust-root local-release-trust-root \
-              --key local-release-key
-            promotion_ref=$(sed -n 's/.* receipt=\([^ ]*\).*/\1/p' "$out/release-promotion-gate.txt")
-            test -n "$promotion_ref"
-            molten receipts verify-signed "$out/release-promotion-gate.signed.preserves" \
-              --purpose release-promotion \
-              --trust-root local-release-trust-root \
-              --key-ledger "$out/signed-keyring" \
-              --key-id local-release-key-v1 \
-              --signer local-release-signer \
-              --subject-ref "$promotion_ref" \
-              | tee "$out/release-promotion-gate-signed-verify.txt"
-            grep -q 'receipts verify-signed ok' "$out/release-promotion-gate-signed-verify.txt"
-            molten dogfood release-promotion-summary \
-              --output-path "$out" \
-              --out "$out/release-promotion-summary.preserves" \
-              --signed-key-ledger "$out/signed-keyring" \
-              --signed-key-id local-release-key-v1 \
-              --signed-trust-root local-release-trust-root \
-              --signed-signer local-release-signer \
-              | tee "$out/release-promotion-summary.txt"
-            grep -q 'decision=pass' "$out/release-promotion-summary.txt"
-            molten dogfood release-export \
-              --output-path "$out" \
-              --out "$out/release-evidence.tar.zst" \
-              --manifest-out "$out/release-export-manifest.preserves" \
-              | tee "$out/release-export.txt"
-            grep -q 'release-export manifest=' "$out/release-export.txt"
-            molten dogfood release-export-verify \
-              --bundle "$out/release-evidence.tar.zst" \
-              --receipt-out "$out/release-export-verify.preserves" \
-              | tee "$out/release-export-verify.txt"
-            grep -q 'decision=pass' "$out/release-export-verify.txt"
-          '';
+          dogfood-local-node =
+            pkgs.runCommand "molten-dogfood-local-node"
+              {
+                nativeBuildInputs = [
+                  moltenPkg
+                  pkgs.gnugrep
+                ];
+                src = sourceForConfigChecks;
+                nextestCheck = nextest;
+              }
+              ''
+                set -euo pipefail
+                export HOME="$TMPDIR/home"
+                mkdir -p "$HOME"
+                cp -R $src source
+                chmod -R u+w source
+                cd source
+                molten dogfood local-node \
+                  --state-root "$TMPDIR/dogfood-state" \
+                  --out dogfood-report.preserves \
+                  --release-gate-out release-gate.preserves \
+                  --replay-verify-out replay-verify.preserves \
+                  --replay-index-out replay-evidence-index.preserves \
+                  > dogfood-summary.txt
+                grep -q 'decision=pass' dogfood-summary.txt
+                grep -q 'dogfood-report-v1' dogfood-report.preserves
+                grep -q 'release-gate-receipt-v1' release-gate.preserves
+                grep -q 'deterministic-replay-verify-v1' replay-verify.preserves
+                grep -q 'deterministic-replay-index-v1' replay-evidence-index.preserves
+                mkdir -p "$out"
+                cp dogfood-summary.txt dogfood-report.preserves release-gate.preserves replay-verify.preserves replay-evidence-index.preserves "$out"/
+                printf '%s\n' "$nextestCheck" > "$out/after-nextest.txt"
+                molten dogfood nix-release-export \
+                  --output-path "$out" \
+                  --out "$out/nix-dogfood-evidence.preserves"
+                molten dogfood nix-release-verify \
+                  --output-path "$out" \
+                  --evidence "$out/nix-dogfood-evidence.preserves" \
+                  --receipt-out "$out/nix-dogfood-verify.preserves" \
+                  | tee "$out/nix-dogfood-verify.txt"
+                grep -q 'decision=pass' "$out/nix-dogfood-verify.txt"
+                molten dogfood release-bundle-export \
+                  --output-path "$out" \
+                  --out "$out/release-evidence-bundle.preserves"
+                mkdir -p "$out/signed-keyring"
+                molten receipts key import \
+                  --ledger "$out/signed-keyring" \
+                  --key-id local-release-key-v1 \
+                  --signer local-release-signer \
+                  --trust-root local-release-trust-root \
+                  --key local-release-key \
+                  > "$out/signed-keyring-import.txt"
+                molten receipts sign "$out/dogfood-report.preserves" \
+                  --out "$out/dogfood-report.signed.preserves" \
+                  --signer local-release-signer \
+                  --purpose release-evidence \
+                  --trust-root local-release-trust-root \
+                  --key local-release-key
+                molten receipts sign "$out/release-gate.preserves" \
+                  --out "$out/release-gate.signed.preserves" \
+                  --signer local-release-signer \
+                  --purpose release-evidence \
+                  --trust-root local-release-trust-root \
+                  --key local-release-key
+                molten receipts sign "$out/replay-verify.preserves" \
+                  --out "$out/replay-verify.signed.preserves" \
+                  --signer local-release-signer \
+                  --purpose release-evidence \
+                  --trust-root local-release-trust-root \
+                  --key local-release-key
+                molten receipts sign "$out/replay-evidence-index.preserves" \
+                  --out "$out/replay-evidence-index.signed.preserves" \
+                  --signer local-release-signer \
+                  --purpose release-evidence \
+                  --trust-root local-release-trust-root \
+                  --key local-release-key
+                molten receipts sign "$out/nix-dogfood-evidence.preserves" \
+                  --out "$out/nix-dogfood-evidence.signed.preserves" \
+                  --signer local-release-signer \
+                  --purpose release-evidence \
+                  --trust-root local-release-trust-root \
+                  --key local-release-key
+                molten receipts sign "$out/nix-dogfood-verify.preserves" \
+                  --out "$out/nix-dogfood-verify.signed.preserves" \
+                  --signer local-release-signer \
+                  --purpose release-evidence \
+                  --trust-root local-release-trust-root \
+                  --key local-release-key
+                molten dogfood release-bundle-verify \
+                  --output-path "$out" \
+                  --bundle "$out/release-evidence-bundle.preserves" \
+                  --receipt-out "$out/release-evidence-bundle-verify.preserves" \
+                  --require-signed-members \
+                  --signed-purpose release-evidence \
+                  --signed-trust-root local-release-trust-root \
+                  --signed-key-ledger "$out/signed-keyring" \
+                  --signed-key-id local-release-key-v1 \
+                  --signed-signer local-release-signer \
+                  --signed-member "$out/dogfood-report.signed.preserves" \
+                  --signed-member "$out/release-gate.signed.preserves" \
+                  --signed-member "$out/replay-verify.signed.preserves" \
+                  --signed-member "$out/replay-evidence-index.signed.preserves" \
+                  --signed-member "$out/nix-dogfood-evidence.signed.preserves" \
+                  --signed-member "$out/nix-dogfood-verify.signed.preserves" \
+                  | tee "$out/release-evidence-bundle-verify.txt"
+                grep -q 'decision=pass' "$out/release-evidence-bundle-verify.txt"
+                molten dogfood release-promote \
+                  --output-path "$out" \
+                  --bundle-verify "$out/release-evidence-bundle-verify.preserves" \
+                  --receipt-out "$out/release-promotion-gate.preserves" \
+                  --signed-key-ledger "$out/signed-keyring" \
+                  --signed-key-id local-release-key-v1 \
+                  --signed-trust-root local-release-trust-root \
+                  --signed-signer local-release-signer \
+                  --source-evidence "flake-source:$src" \
+                  --octet-evidence "octet:external-clean-gate-required" \
+                  --cairn-evidence "cairn:external-strict-validate-required" \
+                  | tee "$out/release-promotion-gate.txt"
+                grep -q 'decision=pass' "$out/release-promotion-gate.txt"
+                molten receipts sign "$out/release-promotion-gate.preserves" \
+                  --out "$out/release-promotion-gate.signed.preserves" \
+                  --signer local-release-signer \
+                  --purpose release-promotion \
+                  --trust-root local-release-trust-root \
+                  --key local-release-key
+                promotion_ref=$(sed -n 's/.* receipt=\([^ ]*\).*/\1/p' "$out/release-promotion-gate.txt")
+                test -n "$promotion_ref"
+                molten receipts verify-signed "$out/release-promotion-gate.signed.preserves" \
+                  --purpose release-promotion \
+                  --trust-root local-release-trust-root \
+                  --key-ledger "$out/signed-keyring" \
+                  --key-id local-release-key-v1 \
+                  --signer local-release-signer \
+                  --subject-ref "$promotion_ref" \
+                  | tee "$out/release-promotion-gate-signed-verify.txt"
+                grep -q 'receipts verify-signed ok' "$out/release-promotion-gate-signed-verify.txt"
+                molten dogfood release-promotion-summary \
+                  --output-path "$out" \
+                  --out "$out/release-promotion-summary.preserves" \
+                  --signed-key-ledger "$out/signed-keyring" \
+                  --signed-key-id local-release-key-v1 \
+                  --signed-trust-root local-release-trust-root \
+                  --signed-signer local-release-signer \
+                  | tee "$out/release-promotion-summary.txt"
+                grep -q 'decision=pass' "$out/release-promotion-summary.txt"
+                molten dogfood release-export \
+                  --output-path "$out" \
+                  --out "$out/release-evidence.tar.zst" \
+                  --manifest-out "$out/release-export-manifest.preserves" \
+                  | tee "$out/release-export.txt"
+                grep -q 'release-export manifest=' "$out/release-export.txt"
+                molten dogfood release-export-verify \
+                  --bundle "$out/release-evidence.tar.zst" \
+                  --receipt-out "$out/release-export-verify.preserves" \
+                  | tee "$out/release-export-verify.txt"
+                grep -q 'decision=pass' "$out/release-export-verify.txt"
+              '';
 
           nixos-vm-multinode = pkgs.testers.runNixOSTest {
             name = "molten-nixos-vm-multinode";
@@ -1285,37 +1456,77 @@
               node_a.succeed("grep -q nixos-vm-node-evidence-v1 /var/lib/molten/vm-evidence/node-evidence.preserves")
               node_a.succeed("grep -q nixos-vm-test-run-v1 /var/lib/molten/vm-evidence/vm-test-run.preserves")
               node_a.succeed("grep -q prod-soak-run-v1 /var/lib/molten/vm-evidence/prod-soak-run.preserves")
+              node_a.succeed("""
+                molten test nixos-vm validate \
+                  --topology /var/lib/molten/vm-evidence/topology.preserves \
+                  --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
+                  --node-evidence /var/lib/molten/vm-evidence/node-b-evidence.preserves \
+                  --test-run /var/lib/molten/vm-evidence/vm-test-run.preserves \
+                  --prod-soak /var/lib/molten/vm-evidence/prod-soak-run.preserves \
+                  --expected-node node_a \
+                  --expected-node node_b \
+                  --out /var/lib/molten/vm-evidence/vm-evidence-validation.preserves
+                molten test nixos-vm manifest \
+                  --root /var/lib/molten/vm-evidence \
+                  --artifact /var/lib/molten/vm-evidence/topology.preserves \
+                  --artifact /var/lib/molten/vm-evidence/node-evidence.preserves \
+                  --artifact /var/lib/molten/vm-evidence/node-b-evidence.preserves \
+                  --artifact /var/lib/molten/vm-evidence/vm-test-run.preserves \
+                  --artifact /var/lib/molten/vm-evidence/prod-soak-run.preserves \
+                  --artifact /var/lib/molten/vm-evidence/vm-evidence-validation.preserves \
+                  --log /var/lib/molten/vm-evidence/run.txt \
+                  --log /var/lib/molten/vm-evidence/status.txt \
+                  --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
+                  --log /var/lib/molten/vm-evidence/service-job/job-ref-execute.txt \
+                  --caveat 'VM canonical receipts are authoritative; preserved logs are diagnostic only' \
+                  --out /var/lib/molten/vm-evidence/vm-evidence-manifest.preserves
+                grep -q nixos-vm-evidence-validation-v1 /var/lib/molten/vm-evidence/vm-evidence-validation.preserves
+                grep -q nixos-vm-evidence-manifest-v1 /var/lib/molten/vm-evidence/vm-evidence-manifest.preserves
+                mkdir -p /tmp/molten-vm-output
+                cp -R /var/lib/molten/vm-evidence /tmp/molten-vm-output/
+              """)
+              import os
+              out_dir = os.environ["out"]
+              os.makedirs(out_dir, exist_ok=True)
+              node_a.copy_from_vm("/tmp/molten-vm-output/vm-evidence", os.path.join(out_dir, "vm-evidence"))
             '';
           };
 
-          nextest-config = pkgs.runCommand "molten-nextest-config-check"
-            {
-              nativeBuildInputs = [ rustToolchain pkgs.cargo-nextest ];
-              src = sourceForConfigChecks;
-            } ''
-            cp -R $src source
-            chmod -R u+w source
-            cd source
-            cargo nextest show-config version --user-config-file none --profile default > default.txt
-            cargo nextest show-config version --user-config-file none --profile ci > ci.txt
-            cargo nextest show-config version --user-config-file none --profile deterministic > deterministic.txt
-            cargo nextest show-config version --user-config-file none --profile exploratory > exploratory.txt
-            mkdir -p $out
-            cp default.txt ci.txt deterministic.txt exploratory.txt $out/
-            printf 'cargo nextest run --profile ci\n' > $out/ci-command.txt
-          '';
+          nextest-config =
+            pkgs.runCommand "molten-nextest-config-check"
+              {
+                nativeBuildInputs = [
+                  rustToolchain
+                  pkgs.cargo-nextest
+                ];
+                src = sourceForConfigChecks;
+              }
+              ''
+                cp -R $src source
+                chmod -R u+w source
+                cd source
+                cargo nextest show-config version --user-config-file none --profile default > default.txt
+                cargo nextest show-config version --user-config-file none --profile ci > ci.txt
+                cargo nextest show-config version --user-config-file none --profile deterministic > deterministic.txt
+                cargo nextest show-config version --user-config-file none --profile exploratory > exploratory.txt
+                mkdir -p $out
+                cp default.txt ci.txt deterministic.txt exploratory.txt $out/
+                printf 'cargo nextest run --profile ci\n' > $out/ci-command.txt
+              '';
 
-          fmt = pkgs.runCommand "cargo-fmt-check"
-            {
-              nativeBuildInputs = [ rustToolchain ];
-              src = ./.;
-            } ''
-            cp -R $src source
-            chmod -R u+w source
-            cd source
-            cargo fmt --check
-            touch $out
-          '';
+          fmt =
+            pkgs.runCommand "cargo-fmt-check"
+              {
+                nativeBuildInputs = [ rustToolchain ];
+                src = ./.;
+              }
+              ''
+                cp -R $src source
+                chmod -R u+w source
+                cd source
+                cargo fmt --check
+                touch $out
+              '';
         };
 
         apps = {
@@ -1353,6 +1564,6 @@
         };
 
         formatter = pkgs.nixpkgs-fmt;
-      });
+      }
+    );
 }
-

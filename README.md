@@ -539,6 +539,14 @@ The production readiness runbooks live in [`docs/production-operator-runbooks.md
 
 `molten test prod-soak` now also emits canonical production readiness receipts for deployment profiles, backup/restore drills, upgrade/rollback drills, observability/SLO snapshots, runbook checks, security threat models, security drills, redaction audits, supply-chain reviews, boundary negative suites, incident response drills, security readiness reports, pilot decisions, and release-candidate gates. These receipts bind review evidence only; they do not grant authority, policy, provenance, retention, transport, source-gate, or destructive-operation trust. A release candidate with only configuration-clean Octet evidence must carry a source-gate caveat and can only support an explicitly scoped pilot decision.
 
+## Testing evidence gates
+
+Deterministic drift checks compare canonical evidence refs, not rendered logs. Use `molten test drift compare --workflow NAME --left A.preserves --right B.preserves` for artifact-level checks, or `molten test drift compare-summary` with `--left-ref path=blake3:...`, `--right-ref path=blake3:...`, and explicit `--variance path=temporary-root|runtime-path|store-path|diagnostic-log|rendered-output` declarations for non-semantic fields. Retry success is not accepted as proof that drift was absent.
+
+Requirement traceability is available with `molten test traceability scan --root . --changed-only --coverage 'REQ|positive|tests/path.rs|cargo test name|blake3:...' --coverage 'REQ|negative|tests/path.rs|cargo test name|blake3:...'`. The generated manifest groups covered, exempt, missing-positive, missing-negative, stale-reference, and unsupported entries so release review can see which requirement needs positive or negative evidence.
+
+NixOS VM evidence is validated by canonical receipts and preserved through the `nixos-vm-multinode` check output. Inspect the realized output's `vm-evidence/vm-evidence-manifest.preserves`, `vm-evidence/vm-evidence-validation.preserves`, `topology.preserves`, node evidence receipts, `vm-test-run.preserves`, and `prod-soak-run.preserves`; terminal, QEMU, and systemd logs are diagnostic-only and cannot override a canonical deny receipt.
+
 ## Development
 
 ```sh

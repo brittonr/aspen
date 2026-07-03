@@ -64,6 +64,36 @@ pub(crate) enum Command {
         #[arg(long)]
         out: Option<FilePath>,
     },
+    Validate {
+        #[arg(long)]
+        topology: FilePath,
+        #[arg(long = "node-evidence")]
+        node_evidence: Vec<FilePath>,
+        #[arg(long = "test-run")]
+        test_run: FilePath,
+        #[arg(long = "prod-soak")]
+        prod_soak: Vec<FilePath>,
+        #[arg(long = "expected-node")]
+        expected_nodes: Vec<String>,
+        #[arg(long = "expected-package-ref")]
+        expected_package_ref: Option<String>,
+        #[arg(long = "expected-child-ref")]
+        expected_child_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<FilePath>,
+    },
+    Manifest {
+        #[arg(long)]
+        root: Option<FilePath>,
+        #[arg(long = "artifact")]
+        artifacts: Vec<FilePath>,
+        #[arg(long = "log")]
+        logs: Vec<FilePath>,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
+        #[arg(long)]
+        out: Option<FilePath>,
+    },
     Show {
         artifact: FilePath,
     },

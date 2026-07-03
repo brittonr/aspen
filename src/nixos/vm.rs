@@ -259,6 +259,10 @@ fn check_value(name: &'static str, status: &'static str) -> IoValue {
     record("check", vec![string(name), string(status)])
 }
 
+#[path = "vm_validation.rs"]
+mod validation;
+pub use validation::*;
+
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
