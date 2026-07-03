@@ -42,17 +42,38 @@ pub fn propose_control_registry_command(
 ) -> Result<ControlRegistryProposal> {
     let envelope = parse_raft_command_envelope(envelope_value)?;
     let (command, diagnostics) = admitted_command(&envelope.command);
-    if let Some(existing) = duplicate_receipt(runtime, &envelope) {
-        let commit_receipt = deny_commit_receipt(runtime, &envelope, "duplicate-client-sequence", &[])?;
-        return Ok(ControlRegistryProposal {
-            decision: existing.decision.clone(),
-            duplicate: true,
-            envelope,
-            predicates: Vec::new(),
-            log_entry: None,
-            commit_receipt,
-            registry_receipt: existing,
-        });
+    if let Some(duplicate) = duplicate_sequence(runtime, &envelope) {
+        match duplicate {
+            DuplicateSequence::Replay(existing) => {
+                let commit_receipt = deny_commit_receipt(runtime, &envelope, "duplicate-client-sequence", &[])?;
+                return Ok(ControlRegistryProposal {
+                    decision: existing.decision.clone(),
+                    duplicate: true,
+                    envelope,
+                    predicates: Vec::new(),
+                    log_entry: None,
+                    commit_receipt,
+                    registry_receipt: existing,
+                });
+            }
+            DuplicateSequence::Conflict(session) => {
+                let diagnostics = vec![format!(
+                    "conflicting duplicate client sequence {} for {}; prior command {}",
+                    envelope.sequence, envelope.client_session, session.result_command_ref
+                )];
+                let commit_receipt = deny_commit_receipt(runtime, &envelope, "duplicate-client-sequence", &diagnostics)?;
+                let registry_receipt = deny_duplicate_registry_receipt(runtime, &envelope, command.as_ref(), &diagnostics)?;
+                return Ok(ControlRegistryProposal {
+                    decision: "deny".to_string(),
+                    duplicate: true,
+                    envelope,
+                    predicates: Vec::new(),
+                    log_entry: None,
+                    commit_receipt,
+                    registry_receipt,
+                });
+            }
+        }
     }
     let admission = proposal_diagnostics(ProposalDecisionInput {
         runtime,

@@ -85,6 +85,25 @@ fn deny_registry_receipt(
     command: Option<&ControlRegistryCommand>,
     diagnostics: &[String],
 ) -> Result<ControlRegistryReceipt> {
+    deny_registry_receipt_with_duplicate(runtime, envelope, command, diagnostics, false)
+}
+
+fn deny_duplicate_registry_receipt(
+    runtime: &ControlRegistryRuntime,
+    envelope: &RaftCommandEnvelope,
+    command: Option<&ControlRegistryCommand>,
+    diagnostics: &[String],
+) -> Result<ControlRegistryReceipt> {
+    deny_registry_receipt_with_duplicate(runtime, envelope, command, diagnostics, true)
+}
+
+fn deny_registry_receipt_with_duplicate(
+    runtime: &ControlRegistryRuntime,
+    envelope: &RaftCommandEnvelope,
+    command: Option<&ControlRegistryCommand>,
+    diagnostics: &[String],
+    duplicate: bool,
+) -> Result<ControlRegistryReceipt> {
     let operation = command.map(|value| value.operation.as_str()).unwrap_or("deny");
     let value = registry_receipt_value(&RegistryReceiptValueInput {
         decision: "deny",
@@ -95,7 +114,7 @@ fn deny_registry_receipt(
         state_after_ref: None,
         client_session: &envelope.client_session,
         sequence: envelope.sequence,
-        duplicate: false,
+        duplicate,
         authority_refs: &envelope.authority_refs,
         policy_refs: &envelope.policy_refs,
         resource_refs: &envelope.resource_refs,

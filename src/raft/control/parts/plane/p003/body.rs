@@ -267,21 +267,20 @@ fn proposal_diagnostics(input: ProposalDecisionInput<'_>) -> Result<Vec<String>>
     Ok(diagnostics)
 }
 
-fn duplicate_receipt(
-    runtime: &ControlRegistryRuntime,
-    envelope: &RaftCommandEnvelope,
-) -> Option<ControlRegistryReceipt> {
-    let has_session = runtime
+fn duplicate_sequence(runtime: &ControlRegistryRuntime, envelope: &RaftCommandEnvelope) -> Option<DuplicateSequence> {
+    let session = runtime
         .state
         .client_sessions
         .iter()
-        .any(|session| session.client_session == envelope.client_session && session.sequence == envelope.sequence);
-    if !has_session {
-        return None;
+        .find(|session| session.client_session == envelope.client_session && session.sequence == envelope.sequence)?;
+    if session.result_command_ref != envelope.envelope_ref {
+        return Some(DuplicateSequence::Conflict(session.clone()));
     }
     runtime
         .registry_receipts
         .iter()
         .find(|receipt| receipt.command_ref == envelope.envelope_ref)
         .cloned()
+        .map(DuplicateSequence::Replay)
+        .or_else(|| Some(DuplicateSequence::Conflict(session.clone())))
 }

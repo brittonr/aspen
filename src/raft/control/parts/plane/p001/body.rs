@@ -19,6 +19,11 @@ struct ProposalDecisionInput<'a> {
     diagnostics: Vec<String>,
 }
 
+enum DuplicateSequence {
+    Replay(ControlRegistryReceipt),
+    Conflict(ClientSessionRecord),
+}
+
 struct PassDraft {
     next_index: u64,
     append_predicate: RaftPredicateReceipt,

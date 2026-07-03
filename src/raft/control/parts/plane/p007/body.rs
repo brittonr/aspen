@@ -37,6 +37,82 @@ mod tests {
         path
     }
 
+    const RAFT_DECISION_PASS: &str = "pass";
+    const RAFT_DECISION_DENY: &str = "deny";
+    const RAFT_TEST_INITIAL_SEQUENCE: u64 = 1;
+    const RAFT_TEST_SEQUENCE_STEP: u64 = 1;
+    const GENERATED_RAFT_MIN_COMMANDS: u64 = 1;
+    const GENERATED_RAFT_MAX_COMMANDS: u64 = 4;
+    const SNAPSHOT_RECORD_FIELD_COUNT: usize = 10;
+    const SNAPSHOT_CONTENT_REF_FIELD_INDEX: usize = 5;
+    const SNAPSHOT_STATE_FIELD_INDEX: usize = 6;
+
+    fn next_raft_sequence(sequence: &mut u64) -> u64 {
+        let current = *sequence;
+        *sequence = sequence.saturating_add(RAFT_TEST_SEQUENCE_STEP);
+        current
+    }
+
+    fn command_for_receipt_index(name: impl Into<String>, target_label: &str) -> IoValue {
+        control_registry_command_value(&ControlRegistryCommandInput {
+            operation: "set-receipt-index".to_string(),
+            namespace: "receipt-index".to_string(),
+            name: name.into(),
+            target_ref: Some(test_ref(target_label)),
+        })
+        .expect("receipt-index command")
+    }
+
+    fn envelope_for(
+        runtime: &ControlRegistryRuntime,
+        client_session: &str,
+        sequence: u64,
+        command: IoValue,
+    ) -> IoValue {
+        raft_command_envelope_value(&RaftCommandEnvelopeInput {
+            group_ref: runtime.manifest.manifest_ref.clone(),
+            client_session: client_session.to_string(),
+            sequence,
+            command,
+            authority_refs: auth(),
+            policy_refs: runtime.manifest.policy_refs.clone(),
+            resource_refs: runtime.manifest.resource_refs.clone(),
+            evidence_refs: vec![test_ref("evidence")],
+        })
+        .expect("raft command envelope")
+    }
+
+    fn assert_matching_pass(
+        left: &ControlRegistryRuntime,
+        right: &ControlRegistryRuntime,
+        left_result: &ControlRegistryProposal,
+        right_result: &ControlRegistryProposal,
+    ) {
+        // r[verify molten.consensus_state_machine_proof.registry_log_determinism]
+        assert_eq!(left_result.decision, RAFT_DECISION_PASS);
+        assert_eq!(right_result.decision, RAFT_DECISION_PASS);
+        let left_entry = left_result.log_entry.as_ref().expect("left log entry");
+        let right_entry = right_result.log_entry.as_ref().expect("right log entry");
+        assert_eq!(left.state.state_ref, right.state.state_ref);
+        assert_eq!(left_entry.entry_ref, right_entry.entry_ref);
+        assert_eq!(left_result.commit_receipt.receipt_ref, right_result.commit_receipt.receipt_ref);
+        assert_eq!(left_result.registry_receipt.receipt_ref, right_result.registry_receipt.receipt_ref);
+        assert_eq!(left_result.commit_receipt.log_entry_ref.as_deref(), Some(left_entry.entry_ref.as_str()));
+        assert_eq!(right_result.commit_receipt.log_entry_ref.as_deref(), Some(right_entry.entry_ref.as_str()));
+    }
+
+    fn replace_snapshot_field(snapshot: &IoValue, field_index: usize, replacement: IoValue) -> IoValue {
+        if let Some(fields) = snapshot.collect_simple_record("raft-snapshot-v1", Some(SNAPSHOT_RECORD_FIELD_COUNT)) {
+            let mut fields = (0..SNAPSHOT_RECORD_FIELD_COUNT)
+                .map(|index| value_to_iovalue(&fields[index]))
+                .collect::<Vec<_>>();
+            fields[field_index] = replacement;
+            record("raft-snapshot-v1", fields)
+        } else {
+            snapshot.clone()
+        }
+    }
+
     #[test]
     fn local_cluster_applies_reads_snapshots_and_recovers() {
         let runtime = run_control_registry_fixture().expect("run fixture");
@@ -256,6 +332,184 @@ mod tests {
         let mcp = crate::catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("mcp call");
         assert_eq!(mcp.decision, "pass");
         assert!(to_text(&mcp.response_value).expect("render mcp").contains("control-registry-receipt"));
+    }
+
+    #[hegel::test(test_cases = 16)]
+    fn hegel_raft_control_registry_generated_logs_match_after_each_commit(tc: hegel::TestCase) {
+        // r[verify molten.consensus_state_machine_proof.registry_log_determinism]
+        let command_count = usize::try_from(
+            tc.draw(
+                hegel::generators::integers::<u64>()
+                    .min_value(GENERATED_RAFT_MIN_COMMANDS)
+                    .max_value(GENERATED_RAFT_MAX_COMMANDS),
+            ),
+        )
+        .expect("command count");
+        let manifest = control_registry_fixture_manifest_value().expect("manifest");
+        let mut left = new_control_registry_runtime(&manifest).expect("left runtime");
+        let mut right = new_control_registry_runtime(&manifest).expect("right runtime");
+        let mut sequence = RAFT_TEST_INITIAL_SEQUENCE;
+        for index in 0..command_count {
+            let envelope = envelope_for(
+                &left,
+                "client:generated-raft-log",
+                next_raft_sequence(&mut sequence),
+                command_for_receipt_index(format!("scope-{index}"), &format!("target-{index}")),
+            );
+            let left_result = propose_control_registry_command(&mut left, &envelope).expect("left proposal");
+            let right_result = propose_control_registry_command(&mut right, &envelope).expect("right proposal");
+            assert_matching_pass(&left, &right, &left_result, &right_result);
+            assert_eq!(left.committed_index, right.committed_index);
+            assert_eq!(left.log_entries.len(), right.log_entries.len());
+            assert_eq!(left.commit_receipts.len(), right.commit_receipts.len());
+            assert_eq!(left.registry_receipts.len(), right.registry_receipts.len());
+        }
+    }
+
+    #[test]
+    fn raft_control_registry_duplicate_and_negative_inputs_do_not_advance() {
+        // r[verify molten.consensus_state_machine_proof.duplicate_client_sequence]
+        let manifest = control_registry_fixture_manifest_value().expect("manifest");
+        let mut runtime = new_control_registry_runtime(&manifest).expect("runtime");
+        let mut sequence = RAFT_TEST_INITIAL_SEQUENCE;
+        let first_sequence = next_raft_sequence(&mut sequence);
+        let first_envelope = envelope_for(
+            &runtime,
+            "client:duplicate-proof",
+            first_sequence,
+            command_for_receipt_index("duplicate-scope", "duplicate-target-v1"),
+        );
+        let first = propose_control_registry_command(&mut runtime, &first_envelope).expect("first proposal");
+        assert_eq!(first.decision, RAFT_DECISION_PASS);
+        let state_after_first = runtime.state.state_ref.clone();
+        let log_count_after_first = runtime.log_entries.len();
+        let commit_count_after_first = runtime.commit_receipts.len();
+        let registry_count_after_first = runtime.registry_receipts.len();
+
+        let replay = propose_control_registry_command(&mut runtime, &first_envelope).expect("duplicate replay");
+        assert!(replay.duplicate);
+        assert_eq!(replay.decision, RAFT_DECISION_PASS);
+        assert_eq!(replay.registry_receipt.receipt_ref, first.registry_receipt.receipt_ref);
+        assert_eq!(runtime.state.state_ref, state_after_first);
+        assert_eq!(runtime.log_entries.len(), log_count_after_first);
+        assert_eq!(runtime.commit_receipts.len(), commit_count_after_first);
+        assert_eq!(runtime.registry_receipts.len(), registry_count_after_first);
+
+        let conflicting_envelope = envelope_for(
+            &runtime,
+            "client:duplicate-proof",
+            first_sequence,
+            command_for_receipt_index("duplicate-scope", "duplicate-target-v2"),
+        );
+        let conflict = propose_control_registry_command(&mut runtime, &conflicting_envelope).expect("conflict denial");
+        assert!(conflict.duplicate);
+        assert_eq!(conflict.decision, RAFT_DECISION_DENY);
+        assert_eq!(conflict.registry_receipt.decision, RAFT_DECISION_DENY);
+        assert!(conflict.log_entry.is_none());
+        assert_eq!(runtime.state.state_ref, state_after_first);
+        assert_eq!(runtime.log_entries.len(), log_count_after_first);
+        assert!(conflict
+            .registry_receipt
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("conflicting duplicate client sequence")));
+
+        let malformed_envelope = envelope_for(
+            &runtime,
+            "client:malformed-command",
+            next_raft_sequence(&mut sequence),
+            record("mystery-raft-payload-v1", vec![string("malformed")]),
+        );
+        let malformed = propose_control_registry_command(&mut runtime, &malformed_envelope).expect("malformed denial");
+        assert_eq!(malformed.decision, RAFT_DECISION_DENY);
+        assert_eq!(runtime.state.state_ref, state_after_first);
+        assert_eq!(runtime.log_entries.len(), log_count_after_first);
+        assert!(malformed
+            .registry_receipt
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("unknown Raft command schema")));
+
+        let stale_read = read_control_registry(&ControlRegistryReadInput {
+            state: runtime.state.value.clone(),
+            group_ref: runtime.manifest.manifest_ref.clone(),
+            committed_term: runtime.term,
+            committed_index: runtime.committed_index,
+            read_index: runtime.committed_index.saturating_sub(RAFT_TEST_SEQUENCE_STEP),
+            namespace: "receipt-index".to_string(),
+            name: "duplicate-scope".to_string(),
+            authority_refs: auth(),
+            resource_refs: resources(),
+        })
+        .expect("stale read");
+        assert_eq!(stale_read.decision, RAFT_DECISION_DENY);
+        assert!(stale_read.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale read-index")));
+
+        let wrong_state_machine_manifest = raft_group_manifest_value(&RaftGroupManifestInput {
+            group_id: DEFAULT_GROUP_ID.to_string(),
+            members: vec![test_ref("member-a")],
+            state_machine: "unsupported-state-machine".to_string(),
+            command_schemas: allowed_command_schemas().iter().map(|value| (*value).to_string()).collect(),
+            read_mode: READ_MODE_READ_INDEX.to_string(),
+            snapshot_policy_ref: test_ref("snapshot-policy"),
+            policy_refs: vec![test_ref("policy")],
+            resource_refs: vec![test_ref("resource")],
+        })
+        .expect("wrong state machine manifest");
+        let wrong_state_machine = new_control_registry_runtime(&wrong_state_machine_manifest).expect_err("state machine denial");
+        assert!(wrong_state_machine.to_string().contains("unsupported raft state machine"));
+    }
+
+    #[test]
+    fn raft_control_registry_snapshot_restore_equivalence_and_negative_evidence() {
+        // r[verify molten.consensus_state_machine_proof.snapshot_restore_equivalence]
+        let runtime = run_control_registry_fixture().expect("runtime");
+        let snapshot = snapshot_control_registry(&RaftSnapshotInput {
+            group_ref: runtime.manifest.manifest_ref.clone(),
+            term: runtime.term,
+            index: runtime.committed_index,
+            state: runtime.state.value.clone(),
+            log_refs: runtime.log_entries.iter().map(|entry| entry.entry_ref.clone()).collect(),
+        })
+        .expect("snapshot");
+        let recovery = recover_control_registry(&RaftRecoveryInput {
+            group_ref: runtime.manifest.manifest_ref.clone(),
+            snapshot: snapshot.value.clone(),
+            log_entries: Vec::new(),
+        })
+        .expect("recover");
+        assert_eq!(recovery.decision, RAFT_DECISION_PASS);
+        assert_eq!(snapshot.state.state_ref, runtime.state.state_ref);
+        assert_eq!(recovery.restored_state_ref.as_deref(), Some(snapshot.state.state_ref.as_str()));
+        validate_content_ref(&snapshot.snapshot_ref).expect("snapshot ref");
+        validate_content_ref(&recovery.receipt_ref).expect("recovery receipt ref");
+
+        let tampered_snapshot = replace_snapshot_field(
+            &snapshot.value,
+            SNAPSHOT_CONTENT_REF_FIELD_INDEX,
+            record("content-ref", vec![string(test_ref("tampered-content"))]),
+        );
+        let tampered = parse_raft_snapshot(&tampered_snapshot).expect_err("tampered snapshot denial");
+        assert!(tampered.to_string().contains("raft snapshot state/content ref mismatch"));
+
+        let missing_state_snapshot = replace_snapshot_field(
+            &snapshot.value,
+            SNAPSHOT_STATE_FIELD_INDEX,
+            record("state", vec![record("none", Vec::new())]),
+        );
+        assert!(parse_raft_snapshot(&missing_state_snapshot).is_err());
+
+        let mismatched_group = recover_control_registry(&RaftRecoveryInput {
+            group_ref: test_ref("wrong-recovery-group"),
+            snapshot: snapshot.value,
+            log_entries: Vec::new(),
+        })
+        .expect("mismatched group recovery");
+        assert_eq!(mismatched_group.decision, RAFT_DECISION_DENY);
+        assert!(mismatched_group
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("snapshot group does not match recovery group")));
     }
 
     #[hegel::test(test_cases = 16)]
