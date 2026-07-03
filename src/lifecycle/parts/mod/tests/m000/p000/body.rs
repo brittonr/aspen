@@ -223,6 +223,47 @@
     }
 
     #[test]
+    fn service_demand_waits_without_start_until_dependencies_are_ready() {
+        let demand_ref = content_ref_from_bytes(b"service-demand");
+        let manifest_ref = content_ref_from_bytes(b"service-manifest");
+        let dependency_ref = content_ref_from_bytes(b"database-ready");
+        let authority_ref = content_ref_from_bytes(b"service-authority");
+        let resource_ref = content_ref_from_bytes(b"service-resource");
+        let evidence_ref = content_ref_from_bytes(b"service-evidence");
+        let wait = super::evaluate_service_demand(&super::ServiceDemandEvaluationInput {
+            service_id: "service:frontend",
+            demand_ref: &demand_ref,
+            manifest_ref: &manifest_ref,
+            required_dependency_refs: std::slice::from_ref(&dependency_ref),
+            ready_dependency_refs: &[],
+            authority_refs: std::slice::from_ref(&authority_ref),
+            resource_refs: std::slice::from_ref(&resource_ref),
+            evidence_refs: std::slice::from_ref(&evidence_ref),
+        })
+        .expect("dependency wait");
+        assert_eq!(wait.decision, "wait");
+        assert_eq!(wait.lifecycle_kind, "dependency-wait");
+        assert!(!wait.start_side_effect_admitted);
+        assert!(wait.readiness_assertion.is_none());
+
+        let ready = super::evaluate_service_demand(&super::ServiceDemandEvaluationInput {
+            service_id: "service:frontend",
+            demand_ref: &demand_ref,
+            manifest_ref: &manifest_ref,
+            required_dependency_refs: std::slice::from_ref(&dependency_ref),
+            ready_dependency_refs: std::slice::from_ref(&dependency_ref),
+            authority_refs: std::slice::from_ref(&authority_ref),
+            resource_refs: std::slice::from_ref(&resource_ref),
+            evidence_refs: std::slice::from_ref(&evidence_ref),
+        })
+        .expect("service ready demand");
+        assert_eq!(ready.decision, "pass");
+        assert_eq!(ready.lifecycle_kind, "start");
+        assert!(ready.start_side_effect_admitted);
+        assert!(ready.readiness_assertion.is_some());
+    }
+
+    #[test]
     fn supervisor_restart_strategies_and_windows_are_deterministic() {
         let policy_ref = content_ref_from_bytes(b"supervisor-policy");
         let failure_ref = content_ref_from_bytes(b"child-failure");
@@ -264,6 +305,122 @@
         .expect("bounded decision");
         assert_eq!(denied.decision, "deny");
         assert_eq!(denied.diagnostics, vec!["restart budget exhausted".to_owned()]);
+    }
+
+    #[test]
+    fn monitor_notifications_bind_failure_refs_deterministically() {
+        let policy_ref = content_ref_from_bytes(b"monitor-policy");
+        let failure_ref = content_ref_from_bytes(b"service-failure");
+        let first = super::monitor_receipt(&super::MonitorInput {
+            observer_id: "monitor:service",
+            child_id: "service:frontend",
+            child_failure_ref: &failure_ref,
+            policy_refs: std::slice::from_ref(&policy_ref),
+            evidence_refs: &[],
+            logical_step: 11,
+        })
+        .expect("first monitor receipt");
+        let replay = super::monitor_receipt(&super::MonitorInput {
+            observer_id: "monitor:service",
+            child_id: "service:frontend",
+            child_failure_ref: &failure_ref,
+            policy_refs: std::slice::from_ref(&policy_ref),
+            evidence_refs: &[],
+            logical_step: 11,
+        })
+        .expect("replayed monitor receipt");
+        let rendered = to_text(&first.value).expect("monitor text");
+        assert_eq!(first.receipt_ref, replay.receipt_ref);
+        assert!(rendered.contains(&failure_ref));
+        assert!(rendered.contains("authority-escalated #f"));
+    }
+
+    #[test]
+    fn service_scope_cleanup_is_idempotent_and_ownership_bound() {
+        let mut state = crate::runtime::RuntimeState::new(1);
+        let ready = crate::runtime::RuntimeValue::string("service.ready").expect("runtime value");
+        state.apply_step(&crate::runtime::RuntimeStep::Assert {
+            actor: "service:frontend".to_owned(),
+            value: ready,
+        });
+        let before_first = state.snapshot();
+        let first_cleanup = state.cleanup_actor_scope("service:frontend").expect("first cleanup");
+        let after_first = state.snapshot();
+        let first_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
+            entity_kind: super::EntityKind::Service,
+            entity_id: "service:frontend",
+            cause: "stop",
+            before: &before_first,
+            after_cleanup: &after_first,
+            cleanup: &first_cleanup,
+            live_ref_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[],
+            logical_step: 12,
+        })
+        .expect("first service cleanup receipt");
+        let before_second = state.snapshot();
+        let second_cleanup = state.cleanup_actor_scope("service:frontend").expect("second cleanup");
+        let after_second = state.snapshot();
+        let second_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
+            entity_kind: super::EntityKind::Service,
+            entity_id: "service:frontend",
+            cause: "stop",
+            before: &before_second,
+            after_cleanup: &after_second,
+            cleanup: &second_cleanup,
+            live_ref_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[],
+            logical_step: 13,
+        })
+        .expect("second service cleanup receipt");
+        let stale_cleanup = crate::runtime::RuntimeScopeCleanup {
+            actor: "service:frontend".to_owned(),
+            assertion_refs: vec![content_ref_from_bytes(b"stale-assertion")],
+            observer_refs: Vec::new(),
+            message_refs: Vec::new(),
+        };
+        let stale_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
+            entity_kind: super::EntityKind::Service,
+            entity_id: "service:frontend",
+            cause: "stale-cleanup",
+            before: &before_second,
+            after_cleanup: &after_second,
+            cleanup: &stale_cleanup,
+            live_ref_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[],
+            logical_step: 14,
+        })
+        .expect("stale service cleanup receipt");
+        let non_owned_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
+            entity_kind: super::EntityKind::Service,
+            entity_id: "service:backend",
+            cause: "wrong-owner",
+            before: &before_first,
+            after_cleanup: &after_first,
+            cleanup: &first_cleanup,
+            live_ref_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[],
+            logical_step: 15,
+        })
+        .expect("non-owned service cleanup receipt");
+        assert_eq!(first_receipt.decision, "pass");
+        assert_eq!(second_receipt.decision, "pass");
+        assert_eq!(before_second, after_second);
+        assert!(second_cleanup.assertion_refs.is_empty());
+        assert_eq!(stale_receipt.decision, "deny");
+        assert!(stale_receipt
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("state did not change")));
+        assert_eq!(non_owned_receipt.decision, "deny");
+        assert!(non_owned_receipt
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("cleanup actor")));
     }
 
     #[test]

@@ -39,6 +39,7 @@ fn validate_content_ref(value: &str) -> Result<()> {
 
 const MAX_REFS: usize = 1024;
 const MAX_DIAGNOSTICS: usize = 32;
+const SERVICE_READINESS_BASE_REF_COUNT: usize = 2;
 
 const _: () = assert!(MAX_REFS <= 100_000);
 const _: () = assert!(MAX_DIAGNOSTICS <= 100_000);
@@ -466,4 +467,25 @@ pub struct SupervisorDecisionReceipt {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ServiceDemandEvaluationInput<'a> {
+    pub service_id: &'a str,
+    pub demand_ref: &'a str,
+    pub manifest_ref: &'a str,
+    pub required_dependency_refs: &'a [String],
+    pub ready_dependency_refs: &'a [String],
+    pub authority_refs: &'a [String],
+    pub resource_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServiceDemandEvaluation {
+    pub decision: String,
+    pub lifecycle_kind: String,
+    pub diagnostics: Vec<String>,
+    pub start_side_effect_admitted: bool,
+    pub readiness_assertion: Option<RuntimeValue>,
 }
