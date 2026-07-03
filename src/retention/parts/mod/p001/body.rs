@@ -64,6 +64,20 @@ pub struct GcAudit {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct RetentionGcLifecycleInput<'a> {
+    pub plan: Option<&'a GcPlan>,
+    pub apply: Option<&'a GcApply>,
+    pub execution: Option<&'a GcExecutionGate>,
+    pub audit: Option<&'a GcAudit>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionGcLifecycleDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct CandidateExplainInput<'a> {
     pub root: &'a Path,
     pub object_ref: &'a str,

@@ -291,6 +291,162 @@
         assert_eq!(audit.tombstone_ref, apply.tombstone_ref);
         assert_eq!(store_file_count(&gc_audits_dir(&root)), 1);
         assert_summary_contains(&audit.value, "retention gc audit");
+        let lifecycle = evaluate_gc_lifecycle(RetentionGcLifecycleInput {
+            plan: Some(&plan),
+            apply: Some(&apply),
+            execution: Some(&execution),
+            audit: Some(&audit),
+        });
+        assert_eq!(lifecycle.decision, "pass");
+    }
+
+    #[test]
+    fn gc_lifecycle_core_denies_broken_chain_links() {
+        let root = temp_dir("retention-gc-lifecycle-broken");
+        let fixture = store_passing_plan_fixture(&root, "lifecycle-broken");
+        let flow = passing_flow(&root, &fixture, "ledger-gc");
+        let mut wrong_execution = flow.execution.clone();
+        wrong_execution.plan_ref = Some(fake_ref("wrong-plan-link"));
+        let broken_execution = evaluate_gc_lifecycle(RetentionGcLifecycleInput {
+            plan: Some(&flow.plan),
+            apply: Some(&flow.apply),
+            execution: Some(&wrong_execution),
+            audit: Some(&flow.audit),
+        });
+        assert_eq!(broken_execution.decision, "deny");
+        assert!(broken_execution
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == "retention-gc-lifecycle-execution-plan-mismatch"));
+
+        let mut wrong_audit = flow.audit.clone();
+        wrong_audit.apply_ref = Some(fake_ref("wrong-apply-link"));
+        let broken_audit = evaluate_gc_lifecycle(RetentionGcLifecycleInput {
+            plan: Some(&flow.plan),
+            apply: Some(&flow.apply),
+            execution: Some(&flow.execution),
+            audit: Some(&wrong_audit),
+        });
+        assert_eq!(broken_audit.decision, "deny");
+        assert!(broken_audit
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == "retention-gc-lifecycle-audit-apply-mismatch"));
+    }
+
+    #[test]
+    fn gc_execution_scope_mismatch_denies_before_subsystem_mutation() {
+        let root = temp_dir("retention-gc-execution-scope-mismatch");
+        let fixture = store_passing_plan_fixture(&root, "execution-scope-mismatch");
+        let plan = store_gc_plan(GcPlanInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &fixture.evidence,
+        })
+        .expect("store plan");
+        let apply = apply_gc_plan(GcApplyFromPlanInput {
+            root: &root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply plan");
+        let wrong_object_ref = fake_ref("wrong-execution-object");
+        let execution = store_gc_execution_gate(GcExecutionGateInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            action: ACTION_DELETE,
+            object_ref: &wrong_object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            apply_ref: Some(&apply.apply_ref),
+        })
+        .expect("store mismatched execution gate");
+        assert_eq!(execution.decision, "deny");
+        assert!(execution
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == "retention-gc-execute-apply-scope-mismatch"));
+        let audit = audit_gc_execution(GcAuditInput {
+            root: &root,
+            execution_ref: &execution.execution_ref,
+        })
+        .expect("audit mismatched execution");
+        assert_eq!(audit.decision, "deny");
+        let lifecycle = evaluate_gc_lifecycle(RetentionGcLifecycleInput {
+            plan: Some(&plan),
+            apply: Some(&apply),
+            execution: Some(&execution),
+            audit: Some(&audit),
+        });
+        assert_eq!(lifecycle.decision, "deny");
+        assert!(lifecycle
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == "retention-gc-lifecycle-apply-execution-scope-mismatch"));
+    }
+
+    #[test]
+    fn gc_audit_and_lifecycle_deny_missing_tombstone_evidence() {
+        let root = temp_dir("retention-gc-missing-tombstone");
+        let fixture = store_passing_plan_fixture(&root, "missing-tombstone");
+        let plan = store_gc_plan(GcPlanInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &fixture.evidence,
+        })
+        .expect("store plan");
+        let apply = apply_gc_plan(GcApplyFromPlanInput {
+            root: &root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply plan");
+        assert!(apply.tombstone_ref.is_some());
+        let execution_value = execution_gate_value(&ExecutionGateValueInput {
+            decision: "pass",
+            subsystem: "ledger-gc",
+            action: ACTION_DELETE,
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            apply_ref: Some(&apply.apply_ref),
+            plan_ref: Some(&plan.plan_ref),
+            recomputed_plan_ref: Some(&plan.plan_ref),
+            retention_receipt_ref: apply.retention_receipt_ref.as_deref(),
+            tombstone_ref: None,
+            diagnostics: &[],
+        })
+        .expect("execution value without tombstone");
+        let execution = parse_gc_execution_gate(&execution_value).expect("parse forged execution");
+        write_store_value(&gc_execute_path(&root, &execution.execution_ref).expect("execution path"), &execution.value)
+            .expect("write forged execution");
+        let audit = audit_gc_execution(GcAuditInput {
+            root: &root,
+            execution_ref: &execution.execution_ref,
+        })
+        .expect("audit forged missing tombstone");
+        assert_eq!(audit.decision, "deny");
+        assert!(audit
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == "retention-gc-audit-tombstone-missing"));
+        let lifecycle = evaluate_gc_lifecycle(RetentionGcLifecycleInput {
+            plan: Some(&plan),
+            apply: Some(&apply),
+            execution: Some(&execution),
+            audit: Some(&audit),
+        });
+        assert_eq!(lifecycle.decision, "deny");
+        assert!(lifecycle
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == "retention-gc-lifecycle-execution-tombstone-mismatch"));
     }
 
     #[test]
