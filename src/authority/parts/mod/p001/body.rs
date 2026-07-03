@@ -45,6 +45,55 @@ pub fn parse_revocation(value: &IoValue) -> Result<Revocation> {
     })
 }
 
+pub fn authority_grant_currentness(input: AuthorityGrantCurrentnessInput<'_>) -> Result<AuthorityGrantCurrentness> {
+    validate_non_empty(input.requested_principal_ref, "authority requested principal ref")?;
+    validate_non_empty(input.requested_capability, "authority requested capability")?;
+    validate_non_empty(input.requested_operation, "authority requested operation")?;
+    validate_non_empty(input.requested_scope, "authority requested scope")?;
+
+    let mut diagnostics = Vec::with_capacity(AUTHORITY_CURRENTNESS_DIAGNOSTIC_CAPACITY);
+    if input.context.subject_ref != input.requested_principal_ref {
+        diagnostics.push("principal-mismatch".to_string());
+    }
+    if !input.context.capabilities.iter().any(|capability| {
+        capability_allows_current_action(
+            capability,
+            input.requested_capability,
+            input.requested_operation,
+            input.requested_scope,
+        )
+    }) {
+        diagnostics.push("capability-denied".to_string());
+    }
+    if input.grant_epoch < input.minimum_epoch {
+        diagnostics.push("stale-epoch".to_string());
+    }
+    if input.grant_epoch > input.current_epoch {
+        diagnostics.push("not-yet-current-epoch".to_string());
+    }
+    if input.context.not_before.is_some_and(|not_before| input.logical_time < not_before) {
+        diagnostics.push("not-yet-valid".to_string());
+    }
+    if input.context.expires_at.is_some_and(|expires_at| input.logical_time >= expires_at) {
+        diagnostics.push("expired".to_string());
+    }
+    if !has_current_authority_key(input.context, input.current_key_refs) {
+        diagnostics.push("key-not-current".to_string());
+    }
+    if input
+        .revocations
+        .iter()
+        .any(|revocation| revocation_hits_context(revocation, input.context, input.logical_time))
+    {
+        diagnostics.push("revoked".to_string());
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "fail" };
+    Ok(AuthorityGrantCurrentness {
+        decision: decision.to_string(),
+        diagnostics,
+    })
+}
+
 pub fn admit_authority(
     context_value: &IoValue,
     requested_capability: &str,
@@ -53,50 +102,27 @@ pub fn admit_authority(
     revocation_values: &[IoValue],
 ) -> Result<Admission> {
     let context = parse_context(context_value)?;
-    let has_revocation_hit = revocation_values
+    let revocations = revocation_values
         .iter()
         .map(parse_revocation)
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .any(|revocation| {
-            revocation.effective_at <= logical_time
-                && (revocation.target_ref == context.context_ref
-                    || revocation.target_ref == context.subject_ref
-                    || context.delegation_refs.iter().any(|delegation| delegation == &revocation.target_ref)
-                    || context.key_refs.iter().any(|key| key == &revocation.target_ref)
-                    || context.capabilities.iter().any(|capability| {
-                        capability_ref(&context.subject_ref, capability)
-                            .is_ok_and(|capability_ref| capability_ref == revocation.target_ref)
-                    }))
-        });
-    let is_context_expired = context.expires_at.is_some_and(|expires_at| logical_time >= expires_at);
-    let is_before_validity_start = context.not_before.is_some_and(|not_before| logical_time < not_before);
-    let has_matching_capability = context
-        .capabilities
-        .iter()
-        .any(|capability| capability_allows(capability, requested_capability, requested_scope));
-    let has_live_authority = !has_revocation_hit && !is_context_expired && !is_before_validity_start;
-    let decision = if has_live_authority && has_matching_capability {
-        "pass"
-    } else {
-        "fail"
-    };
-    let mut diagnostics = Vec::new();
-    if has_revocation_hit {
-        diagnostics.push("revoked");
-    }
-    if is_context_expired {
-        diagnostics.push("expired");
-    }
-    if is_before_validity_start {
-        diagnostics.push("not-yet-valid");
-    }
-    if !has_matching_capability {
-        diagnostics.push("capability-denied");
-    }
+        .collect::<Result<Vec<_>>>()?;
+    let currentness = authority_grant_currentness(AuthorityGrantCurrentnessInput {
+        context: &context,
+        requested_principal_ref: &context.subject_ref,
+        requested_capability,
+        requested_operation: requested_capability,
+        requested_scope,
+        logical_time,
+        grant_epoch: context.not_before.unwrap_or(AUTHORITY_DEFAULT_GRANT_EPOCH),
+        minimum_epoch: AUTHORITY_DEFAULT_GRANT_EPOCH,
+        current_epoch: logical_time,
+        current_key_refs: &context.key_refs,
+        revocations: &revocations,
+    })?;
+    let diagnostics = currentness.diagnostics.iter().map(String::as_str).collect::<Vec<_>>();
     let receipt_value = receipt_value(ReceiptValueInput {
         operation: "admission",
-        decision,
+        decision: &currentness.decision,
         context_ref: Some(&context.context_ref),
         capability: requested_capability,
         scope: requested_scope,
@@ -104,11 +130,11 @@ pub fn admit_authority(
         diagnostics: &diagnostics,
     });
     Ok(Admission {
-        decision: decision.to_string(),
+        decision: currentness.decision.clone(),
         receipt: Receipt {
             receipt_ref: canonical_hash(&receipt_value)?,
             operation: "admission".to_string(),
-            decision: decision.to_string(),
+            decision: currentness.decision,
             context_ref: Some(context.context_ref),
             value: receipt_value,
         },
@@ -250,10 +276,43 @@ fn parse_capability_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<
     values.iter().map(|value| parse_capability(&value_to_iovalue(value))).collect()
 }
 
-fn capability_allows(capability: &Capability, requested_capability: &str, requested_scope: &str) -> bool {
-    capability.capability == requested_capability
+fn revocation_hits_context(revocation: &Revocation, context: &Context, logical_time: u64) -> bool {
+    revocation.effective_at <= logical_time
+        && (revocation.target_ref == context.context_ref
+            || revocation.target_ref == context.subject_ref
+            || context.delegation_refs.iter().any(|delegation| delegation == &revocation.target_ref)
+            || context.key_refs.iter().any(|key| key == &revocation.target_ref)
+            || context.capabilities.iter().any(|capability| {
+                capability_ref(&context.subject_ref, capability)
+                    .is_ok_and(|capability_ref| capability_ref == revocation.target_ref)
+            }))
+}
+
+fn has_current_authority_key(context: &Context, current_key_refs: &[String]) -> bool {
+    context.key_refs.is_empty() || context.key_refs.iter().any(|key| current_key_refs.iter().any(|current| current == key))
+}
+
+fn capability_allows_current_action(
+    capability: &Capability,
+    requested_capability: &str,
+    requested_operation: &str,
+    requested_scope: &str,
+) -> bool {
+    capability_name_matches(&capability.capability, requested_capability, requested_operation)
         && (capability.scope == requested_scope || capability.scope == "*")
-        && capability.attenuation != "deny"
+        && attenuation_allows(&capability.attenuation)
+}
+
+fn capability_name_matches(capability: &str, requested_capability: &str, requested_operation: &str) -> bool {
+    let operation_capability = format!("{requested_capability}:{requested_operation}");
+    capability == "*"
+        || capability == requested_capability
+        || capability == requested_operation
+        || capability == operation_capability
+}
+
+fn attenuation_allows(attenuation: &str) -> bool {
+    matches!(attenuation, "scoped" | "unattenuated" | "*")
 }
 
 fn capability_ref(subject_ref: &str, capability: &Capability) -> Result<String> {

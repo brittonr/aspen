@@ -277,8 +277,20 @@ fn evaluate_live_peer_bootstrap(state_root: &Path, envelope: &ControlIngressEnve
                     }
                     diagnostics.extend(admission_diagnostics);
                 }
-                Err(error) => diagnostics
-                    .push(format!("node control live peer bootstrap ref {peer_ref} is not an admission: {error}")),
+                Err(error) => {
+                    if let Some(diagnostic) = transport_evidence_not_authority_diagnostic(
+                        &value,
+                        peer_ref,
+                        "node control live peer bootstrap ref",
+                        "bootstrap authority",
+                    ) {
+                        diagnostics.push(diagnostic);
+                    } else {
+                        diagnostics.push(format!(
+                            "node control live peer bootstrap ref {peer_ref} is not an admission: {error}"
+                        ));
+                    }
+                }
             },
             Err(error) => diagnostics.push(format!("node control live peer bootstrap {peer_ref} not found: {error}")),
         }

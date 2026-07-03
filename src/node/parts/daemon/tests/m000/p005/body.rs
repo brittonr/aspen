@@ -119,6 +119,13 @@
         );
         read_ledger_artifact(&case.sender, &case.ticket.ticket_ref).expect("ticket imported");
         read_ledger_artifact(&case.sender, &case.admission.admission_ref).expect("admission imported");
+        assert!(parse_control_live_ticket(&imported_ticket.receipt_value).is_err());
+        assert!(parse_control_live_peer_admission(&imported_ticket.receipt_value).is_err());
+        assert!(
+            crate::preserves_rail::to_text(&imported_ticket.receipt_value)
+                .expect("ticket import receipt text")
+                .contains("import-receipt-is-not-authority")
+        );
 
         let stale_ticket = import_control_live_ticket(&ControlLiveTicketImportInput {
             state_root: &case.sender,
@@ -134,6 +141,48 @@
         assert_eq!(stale_ticket.decision, "deny");
         assert!(stale_ticket.imported_refs.is_empty());
         assert!(stale_ticket.diagnostics.iter().any(|value| value.contains("expired at sequence")));
+
+        let wrong_topic = import_control_live_ticket(&ControlLiveTicketImportInput {
+            state_root: &case.sender,
+            ticket_value: &case.ticket.value,
+            peer_admission_value: Some(&case.admission.value),
+            expected_node: Some("node:live-import"),
+            expected_topic: Some("wrong-topic"),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
+            expected_peer: Some("peer:live-import"),
+            as_of_sequence: 2,
+        })
+        .expect("wrong topic ticket import receipt");
+        assert_eq!(wrong_topic.decision, "deny");
+        assert!(wrong_topic.imported_refs.is_empty());
+        assert!(wrong_topic.diagnostics.iter().any(|value| value.contains("wrong-topic")));
+
+        let wrong_peer = evaluate_live_ticket_scope(LiveTicketScopeInput {
+            ticket: &case.ticket,
+            admission: Some(&case.admission),
+            expected_node: Some("node:live-import"),
+            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
+            expected_peer: Some("peer:other-live-import"),
+            as_of_sequence: 2,
+            required_policy_refs: &case.policy_refs,
+        });
+        assert_eq!(wrong_peer.decision, "deny");
+        assert!(wrong_peer.diagnostics.iter().any(|value| value.contains("peer:other-live-import")));
+
+        let wrong_policy = vec![local_ref("node-control-policy", "wrong-ticket-policy").expect("wrong policy ref")];
+        let policy_denied = evaluate_live_ticket_scope(LiveTicketScopeInput {
+            ticket: &case.ticket,
+            admission: Some(&case.admission),
+            expected_node: Some("node:live-import"),
+            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
+            expected_peer: Some("peer:live-import"),
+            as_of_sequence: 2,
+            required_policy_refs: &wrong_policy,
+        });
+        assert_eq!(policy_denied.decision, "deny");
+        assert!(policy_denied.diagnostics.iter().any(|value| value.contains("missing required policy")));
     }
 
     fn assert_grant_imports(case: &ImportCase) {
@@ -169,6 +218,12 @@
             "node-control-authority-grant-import-receipt"
         );
         read_ledger_artifact(&case.sender, &imported_grant.grant_ref).expect("grant imported");
+        assert!(parse_control_authority_grant(&imported_grant.receipt_value).is_err());
+        assert!(
+            crate::preserves_rail::to_text(&imported_grant.receipt_value)
+                .expect("grant import receipt text")
+                .contains("import-receipt-is-not-authority")
+        );
 
         let bad_operations = vec!["shutdown".to_string()];
         let denied_grant = import_control_authority_grant_checked(&ControlAuthorityGrantImportInput {

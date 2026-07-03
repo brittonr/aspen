@@ -196,8 +196,20 @@ fn live_send_authority_grant_diagnostics(state_root: &Path, envelope: &ControlIn
                     }
                     diagnostics.extend(grant_diagnostics);
                 }
-                Err(error) => diagnostics
-                    .push(format!("node control live send authority ref {authority_ref} is not a grant: {error}")),
+                Err(error) => {
+                    if let Some(diagnostic) = transport_evidence_not_authority_diagnostic(
+                        &value,
+                        authority_ref,
+                        "node control live send authority ref",
+                        "authority",
+                    ) {
+                        diagnostics.push(diagnostic);
+                    } else {
+                        diagnostics.push(format!(
+                            "node control live send authority ref {authority_ref} is not a grant: {error}"
+                        ));
+                    }
+                }
             },
             Err(error) => diagnostics.push(format!(
                 "node control live send authority grant {authority_ref} not found in sender state root: {error}"

@@ -89,7 +89,16 @@ fn evaluate_live_authority_delegation(state_root: &Path, envelope: &ControlIngre
                     diagnostics.extend(grant_diagnostics);
                 }
                 Err(error) => {
-                    diagnostics.push(format!("node control authority ref {authority_ref} is not a grant: {error}"))
+                    if let Some(diagnostic) = transport_evidence_not_authority_diagnostic(
+                        &value,
+                        authority_ref,
+                        "node control authority ref",
+                        "authority",
+                    ) {
+                        diagnostics.push(diagnostic);
+                    } else {
+                        diagnostics.push(format!("node control authority ref {authority_ref} is not a grant: {error}"));
+                    }
                 }
             },
             Err(error) => diagnostics.push(format!("node control authority grant {authority_ref} not found: {error}")),
@@ -177,6 +186,28 @@ fn scope_matches_refs(scope: &str, envelope_refs: &[String], request_refs: &[Str
     scope == "*"
         || envelope_refs.iter().any(|reference| reference == scope)
         || request_refs.iter().any(|reference| reference == scope)
+}
+
+fn transport_evidence_not_authority_diagnostic(
+    value: &IoValue,
+    reference: &str,
+    reference_label: &str,
+    authority_label: &str,
+) -> Option<String> {
+    let kind = crate::ledger::artifact_kind(value);
+    is_transport_observation_kind(kind)
+        .then(|| format!("{reference_label} {reference} is transport evidence, not {authority_label}"))
+}
+
+fn is_transport_observation_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "node-control-live-transport-receipt"
+            | "node-control-live-listener-receipt"
+            | "node-control-live-send-receipt"
+            | "node-control-live-send-retry-receipt"
+            | "node-control-live-send-duplicate-receipt"
+    )
 }
 
 fn ingress_idempotency_evidence_refs(envelope: &ControlIngressEnvelope) -> Vec<String> {

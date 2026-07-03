@@ -1,4 +1,6 @@
 
+const LIVE_TICKET_SCOPE_DIAGNOSTIC_CAPACITY: usize = 8;
+
 fn authority_grant_expected_diagnostics(
     input: &LiveWorkflowBundleExpectedInput<'_>,
     authority: &ControlAuthorityGrant,
@@ -94,69 +96,107 @@ fn is_live_workflow_bundle_receipt_kind(kind: &str) -> bool {
     )
 }
 
+pub fn evaluate_live_ticket_scope(input: LiveTicketScopeInput<'_>) -> LiveTicketScopeDecision {
+    let mut diagnostics = Vec::with_capacity(LIVE_TICKET_SCOPE_DIAGNOSTIC_CAPACITY);
+    if let Some(expected) = input.expected_node
+        && input.ticket.node_id != expected
+    {
+        diagnostics.push(format!(
+            "node control live ticket import node {} does not match expected {expected}",
+            input.ticket.node_id
+        ));
+    }
+    if let Some(expected) = input.expected_topic
+        && input.ticket.topic != expected
+    {
+        diagnostics.push(format!(
+            "node control live ticket import topic {} does not match expected {expected}",
+            input.ticket.topic
+        ));
+    }
+    if let Some(expected) = input.expected_endpoint
+        && input.ticket.live_endpoint_id != expected
+    {
+        diagnostics.push(format!(
+            "node control live ticket import endpoint {} does not match expected {expected}",
+            input.ticket.live_endpoint_id
+        ));
+    }
+    for required_policy_ref in input.required_policy_refs {
+        if !input.ticket.policy_refs.iter().any(|policy_ref| policy_ref == required_policy_ref) {
+            diagnostics.push(format!(
+                "node control live ticket import missing required policy {required_policy_ref}"
+            ));
+        }
+    }
+    if let Some(admission) = input.admission {
+        diagnostics.extend(live_ticket_admission_scope_diagnostics(input, admission));
+    } else if let Some(expected) = input.expected_peer {
+        diagnostics.push(format!(
+            "node control live ticket import missing peer admission for expected peer {expected}"
+        ));
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    LiveTicketScopeDecision {
+        decision: decision.to_string(),
+        diagnostics,
+    }
+}
+
 fn live_ticket_import_diagnostics(
     input: &ControlLiveTicketImportInput<'_>,
     ticket: &ControlLiveTicket,
     admission: Option<&ControlLivePeerAdmission>,
 ) -> Vec<String> {
-    let mut diagnostics = Vec::with_capacity(8);
-    if let Some(expected) = input.expected_node
-        && ticket.node_id != expected
-    {
-        diagnostics.push(format!(
-            "node control live ticket import node {} does not match expected {expected}",
-            ticket.node_id
-        ));
-    }
-    if let Some(expected) = input.expected_topic
-        && ticket.topic != expected
-    {
-        diagnostics
-            .push(format!("node control live ticket import topic {} does not match expected {expected}", ticket.topic));
-    }
-    if let Some(expected) = input.expected_endpoint
-        && ticket.live_endpoint_id != expected
-    {
-        diagnostics.push(format!(
-            "node control live ticket import endpoint {} does not match expected {expected}",
-            ticket.live_endpoint_id
-        ));
-    }
-    if let Some(admission) = admission {
-        diagnostics.extend(live_ticket_admission_import_diagnostics(input, ticket, admission));
-    }
-    diagnostics
+    evaluate_live_ticket_scope(LiveTicketScopeInput {
+        ticket,
+        admission,
+        expected_node: input.expected_node,
+        expected_topic: input.expected_topic,
+        expected_endpoint: input.expected_endpoint,
+        expected_peer: input.expected_peer,
+        as_of_sequence: input.as_of_sequence,
+        required_policy_refs: &[],
+    })
+    .diagnostics
 }
 
-fn live_ticket_admission_import_diagnostics(
-    input: &ControlLiveTicketImportInput<'_>,
-    ticket: &ControlLiveTicket,
+fn live_ticket_admission_scope_diagnostics(
+    input: LiveTicketScopeInput<'_>,
     admission: &ControlLivePeerAdmission,
 ) -> Vec<String> {
-    let mut diagnostics = Vec::with_capacity(7);
+    let mut diagnostics = Vec::with_capacity(LIVE_TICKET_SCOPE_DIAGNOSTIC_CAPACITY);
     if admission.decision != "pass" {
         diagnostics.push(format!(
             "node control live peer admission {} decision {}",
             admission.admission_ref, admission.decision
         ));
     }
-    if admission.ticket_ref != ticket.ticket_ref {
+    if admission.ticket_ref != input.ticket.ticket_ref {
         diagnostics.push(format!(
             "node control live peer admission {} ticket {} does not match ticket {}",
-            admission.admission_ref, admission.ticket_ref, ticket.ticket_ref
+            admission.admission_ref, admission.ticket_ref, input.ticket.ticket_ref
         ));
     }
-    if admission.node_id != ticket.node_id {
+    if admission.node_id != input.ticket.node_id {
         diagnostics.push(format!(
             "node control live peer admission {} node {} does not match ticket node {}",
-            admission.admission_ref, admission.node_id, ticket.node_id
+            admission.admission_ref, admission.node_id, input.ticket.node_id
         ));
     }
-    if admission.topic != ticket.topic {
+    if admission.topic != input.ticket.topic {
         diagnostics.push(format!(
             "node control live peer admission {} topic {} does not match ticket topic {}",
-            admission.admission_ref, admission.topic, ticket.topic
+            admission.admission_ref, admission.topic, input.ticket.topic
         ));
+    }
+    for required_policy_ref in input.required_policy_refs {
+        if !admission.policy_refs.iter().any(|policy_ref| policy_ref == required_policy_ref) {
+            diagnostics.push(format!(
+                "node control live peer admission {} missing required policy {required_policy_ref}",
+                admission.admission_ref
+            ));
+        }
     }
     if let Some(expected) = input.expected_peer
         && admission.peer_id != expected

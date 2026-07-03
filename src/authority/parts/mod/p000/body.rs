@@ -31,6 +31,9 @@ type RuntimeAssertion = crate::runtime::RuntimeAssertion;
 #[cfg(test)]
 type RuntimeValue = crate::runtime::RuntimeValue;
 
+const AUTHORITY_DEFAULT_GRANT_EPOCH: u64 = 0;
+const AUTHORITY_CURRENTNESS_DIAGNOSTIC_CAPACITY: usize = 8;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
     pub identity_ref: String,
@@ -145,6 +148,27 @@ pub struct ReceiptValueInput<'a> {
     pub scope: &'a str,
     pub logical_time: u64,
     pub diagnostics: &'a [&'a str],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AuthorityGrantCurrentnessInput<'a> {
+    pub context: &'a Context,
+    pub requested_principal_ref: &'a str,
+    pub requested_capability: &'a str,
+    pub requested_operation: &'a str,
+    pub requested_scope: &'a str,
+    pub logical_time: u64,
+    pub grant_epoch: u64,
+    pub minimum_epoch: u64,
+    pub current_epoch: u64,
+    pub current_key_refs: &'a [String],
+    pub revocations: &'a [Revocation],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorityGrantCurrentness {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
 }
 
 pub fn identity_value(input: IdentityValueInput<'_>) -> Result<IoValue> {

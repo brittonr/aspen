@@ -221,6 +221,24 @@ pub struct ControlLivePeerAdmission {
     pub value: IoValue,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct LiveTicketScopeInput<'a> {
+    pub ticket: &'a ControlLiveTicket,
+    pub admission: Option<&'a ControlLivePeerAdmission>,
+    pub expected_node: Option<&'a str>,
+    pub expected_topic: Option<&'a str>,
+    pub expected_endpoint: Option<&'a str>,
+    pub expected_peer: Option<&'a str>,
+    pub as_of_sequence: u64,
+    pub required_policy_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveTicketScopeDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlLiveTicketImport {
     pub decision: String,
