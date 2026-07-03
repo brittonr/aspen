@@ -283,8 +283,52 @@ fn refs_for_key_value(key: &Key, value: &Value) -> Vec<String> {
     sorted_unique(&refs)
 }
 
-fn policy_current_refs_match(key: &Key, input: &GetInput) -> bool {
-    sorted_unique(&key.policy_refs) == sorted_unique(&input.current_policy_refs)
-        && sorted_unique(&key.capability_refs) == sorted_unique(&input.current_capability_refs)
-        && sorted_unique(&key.revocation_refs) == sorted_unique(&input.current_revocation_refs)
+pub fn evaluate_cache_hit_validity(input: CacheHitValidityInput<'_>) -> CacheHitValidityDecision {
+    let mut diagnostics = Vec::with_capacity(CACHE_HIT_VALIDITY_DIAGNOSTIC_CAPACITY);
+    if input.value.key_ref != input.key.key_ref {
+        diagnostics.push("cache-key-value-ref-mismatch".to_string());
+    }
+    if input.semantic && input.value.tier == TIER_PRODUCTION_TRACE_ONLY {
+        diagnostics.push("trace-only-not-semantic".to_string());
+    }
+    if input.value.tier == TIER_POLICY_CURRENT && !policy_current_refs_match_parts(input.key, input) {
+        diagnostics.push("policy-current-revalidation".to_string());
+    }
+    if !input.requested_dependency_refs.is_empty() {
+        let requested = sorted_unique(input.requested_dependency_refs);
+        let mut cached = input.key.dependency_refs.clone();
+        cached.extend(input.value.dependency_refs.iter().cloned());
+        if sorted_unique(&cached) != requested {
+            diagnostics.push("dependency-refs-changed".to_string());
+        }
+    }
+    if input
+        .current_revocation_refs
+        .iter()
+        .any(|revocation_ref| input.key.capability_refs.iter().any(|capability_ref| capability_ref == revocation_ref))
+    {
+        diagnostics.push("capability-revoked".to_string());
+    }
+    if let Some(expected_output_ref) = input.expected_output_ref {
+        let actual_output_ref = match &input.value.output {
+            OutputRef::Inline { output_ref, .. } | OutputRef::ContentRef { output_ref, .. } => Some(output_ref.as_str()),
+            OutputRef::None => None,
+        };
+        if actual_output_ref != Some(expected_output_ref) {
+            diagnostics.push("output-ref-mismatch".to_string());
+        }
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    CacheHitValidityDecision {
+        decision: decision.to_string(),
+        diagnostics,
+    }
+}
+
+fn policy_current_refs_match_parts(key: &Key, input: CacheHitValidityInput<'_>) -> bool {
+    sorted_unique(&key.policy_refs) == sorted_unique(input.current_policy_refs)
+        && sorted_unique(&key.capability_refs) == sorted_unique(input.current_capability_refs)
+        && sorted_unique(&key.revocation_refs) == sorted_unique(input.current_revocation_refs)
 }

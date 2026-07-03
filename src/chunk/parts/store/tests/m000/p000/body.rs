@@ -94,6 +94,41 @@
     }
 
     #[test]
+    fn chunk_availability_core_checks_index_and_partial_fetch_repair() {
+        let root = temp_dir("chunk-availability-core");
+        let put = put_bytes(&root, "artifact", b"aaaabbbbcccc", 4).expect("put source");
+        let manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");
+        let available = put.chunk_refs.clone();
+        let repaired = evaluate_chunk_availability(ChunkAvailabilityInput {
+            manifest: &manifest,
+            available_chunk_refs: &available,
+            missing_chunk_refs: &[],
+            indexed_available_refs: &available,
+            indexed_missing_refs: &[],
+            partial_fetch_missing_refs: std::slice::from_ref(&put.chunk_refs[2]),
+            partial_fetch_fetched_refs: std::slice::from_ref(&put.chunk_refs[2]),
+        });
+        assert_eq!(repaired.decision, "pass");
+
+        let missing = vec![put.chunk_refs[2].clone()];
+        let mut incomplete_available = put.chunk_refs.clone();
+        incomplete_available.pop();
+        let stale_index = evaluate_chunk_availability(ChunkAvailabilityInput {
+            manifest: &manifest,
+            available_chunk_refs: &incomplete_available,
+            missing_chunk_refs: &missing,
+            indexed_available_refs: &available,
+            indexed_missing_refs: &[],
+            partial_fetch_missing_refs: &missing,
+            partial_fetch_fetched_refs: &missing,
+        });
+        assert_eq!(stale_index.decision, "deny");
+        assert!(stale_index.diagnostics.iter().any(|value| value == "chunk-missing"));
+        assert!(stale_index.diagnostics.iter().any(|value| value == "index-availability-mismatch"));
+        assert!(stale_index.diagnostics.iter().any(|value| value == "partial-fetch-repair-incomplete"));
+    }
+
+    #[test]
     fn iroh_adapter_publishes_and_fetches_missing_verified_chunks() {
         let source = temp_dir("chunk-iroh-source");
         let dest = temp_dir("chunk-iroh-dest");
@@ -248,6 +283,33 @@
         assert!(gc.removed_chunks.is_empty());
         assert!(!gc.retention_receipt_refs.is_empty());
         read_object(&root, &put.manifest_ref).expect("retained object remains readable");
+    }
+
+    #[test]
+    fn chunk_gc_denies_apply_refs_for_the_wrong_object_scope() {
+        let root = temp_dir("chunk-retention-wrong-apply");
+        let protected = put_bytes(&root, "artifact", b"protected", 4).expect("put protected");
+        let wrong = put_bytes(&root, "artifact", b"wrong", 4).expect("put wrong");
+        let retention_evidence = retention_evidence(&root, "wrong-apply");
+        let wrong_apply_refs = gc_apply_refs(
+            &root,
+            std::slice::from_ref(&wrong.manifest_ref),
+            &[],
+            &retention_evidence,
+        );
+        let gc = gc(&root, ChunkStoreGcInput {
+            dry_run: false,
+            retention_evidence: &retention_evidence,
+            apply_refs: &wrong_apply_refs,
+        })
+        .expect("gc denied by wrong apply");
+        assert_eq!(gc.decision, "deny");
+        assert!(gc.removed_manifests.is_empty());
+        assert!(gc.removed_chunks.is_empty());
+        let receipt_text = to_text(&gc.receipt_value).expect("gc receipt text");
+        assert!(receipt_text.contains("retention-gc-execute-apply-scope-mismatch"), "{receipt_text}");
+        read_object(&root, &protected.manifest_ref).expect("protected object remains readable");
+        read_object(&root, &wrong.manifest_ref).expect("wrong-scope object remains readable");
     }
 
     #[test]

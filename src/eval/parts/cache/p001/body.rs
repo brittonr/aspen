@@ -177,11 +177,24 @@ pub fn get(root: &Path, key_ref: &str, input: &GetInput) -> Result<Get> {
         return Err(denied_missing(root, key_ref)?);
     };
     let refs = refs_for_key_value(&key, &value);
-    if value.tier == TIER_PRODUCTION_TRACE_ONLY && input.semantic {
+    let validity = evaluate_cache_hit_validity(CacheHitValidityInput {
+        key: &key,
+        value: &value,
+        current_policy_refs: &input.current_policy_refs,
+        current_capability_refs: &input.current_capability_refs,
+        current_revocation_refs: &input.current_revocation_refs,
+        requested_dependency_refs: &[],
+        expected_output_ref: None,
+        semantic: input.semantic,
+    });
+    if validity.diagnostics.iter().any(|diagnostic| diagnostic == "trace-only-not-semantic") {
         return Err(denied_trace_only(root, &key.key_ref, &value.value_ref, &refs)?);
     }
-    if value.tier == TIER_POLICY_CURRENT && !policy_current_refs_match(&key, input) {
+    if validity.diagnostics.iter().any(|diagnostic| diagnostic == "policy-current-revalidation") {
         return Err(denied_stale(root, &key.key_ref, &value.value_ref, &refs)?);
+    }
+    if validity.decision != "pass" {
+        return Err(denied_invalid_hit(root, &key.key_ref, &value.value_ref, &refs, &validity.diagnostics)?);
     }
     let output = read_output(root, &key.key_ref, &value)?;
     let receipt_value = hit_receipt(root, &key.key_ref, &value.value_ref, &refs)?;
@@ -253,6 +266,28 @@ fn denied_stale(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) ->
     })?;
     Ok(MoltenError::invalid_harness(format!(
         "eval cache stale policy-current entry denied: {}",
+        parse_receipt(&receipt)?.receipt_ref
+    )))
+}
+
+fn denied_invalid_hit(
+    root: &Path,
+    key_ref: &str,
+    value_ref: &str,
+    refs: &[String],
+    diagnostics: &[String],
+) -> Result<MoltenError> {
+    let receipt = store_and_return_receipt(root, &ReceiptValueInput {
+        operation: "invalid-hit-deny",
+        decision: "deny",
+        key_ref: Some(key_ref),
+        value_ref: Some(value_ref),
+        refs,
+        diagnostics,
+        checks: &[("cache-hit-validity", "fail"), ("stale-deny", "pass")],
+    })?;
+    Ok(MoltenError::invalid_harness(format!(
+        "eval cache hit denied by validity checks: {}",
         parse_receipt(&receipt)?.receipt_ref
     )))
 }

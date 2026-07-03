@@ -114,6 +114,7 @@ const MAX_CHUNK_STORE_CHECKS: usize = 64;
 const MAX_CHUNK_STORE_CONTEXT_REFS: usize = 100_000;
 const MAX_CHUNK_STORE_OBJECT_BYTES: usize = 1_073_741_824;
 const MAX_CHUNK_STORE_MANIFESTS: usize = 100_000;
+const CHUNK_AVAILABILITY_DIAGNOSTIC_CAPACITY: usize = 8;
 
 const _: () = assert!(DEFAULT_FIXED_V1_CHUNK_SIZE > 0);
 const _: () = assert!(MAX_CHUNK_STORE_CHUNKS <= 1_000_000);
@@ -283,6 +284,23 @@ pub struct ChunkStoreIndexStatus {
     pub chunk_pins: u64,
     pub partial_fetches: u64,
     pub receipts: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ChunkAvailabilityInput<'a> {
+    pub manifest: &'a ChunkManifest,
+    pub available_chunk_refs: &'a [String],
+    pub missing_chunk_refs: &'a [String],
+    pub indexed_available_refs: &'a [String],
+    pub indexed_missing_refs: &'a [String],
+    pub partial_fetch_missing_refs: &'a [String],
+    pub partial_fetch_fetched_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChunkAvailabilityDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

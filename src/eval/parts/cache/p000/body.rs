@@ -57,6 +57,7 @@ fn value_to_iovalue(value: &PreservesValue<IoValue>) -> IoValue {
 pub const INLINE_OUTPUT_LIMIT: usize = 4096;
 
 const MAX_EVAL_CACHE_SCAN_ENTRIES: usize = 100_000;
+const CACHE_HIT_VALIDITY_DIAGNOSTIC_CAPACITY: usize = 8;
 const _: () = assert!(MAX_EVAL_CACHE_SCAN_ENTRIES > 0);
 
 pub const TIER_PURE: &str = "pure";
@@ -178,6 +179,24 @@ pub struct GetInput {
     pub current_capability_refs: Vec<String>,
     pub current_revocation_refs: Vec<String>,
     pub semantic: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CacheHitValidityInput<'a> {
+    pub key: &'a Key,
+    pub value: &'a Value,
+    pub current_policy_refs: &'a [String],
+    pub current_capability_refs: &'a [String],
+    pub current_revocation_refs: &'a [String],
+    pub requested_dependency_refs: &'a [String],
+    pub expected_output_ref: Option<&'a str>,
+    pub semantic: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CacheHitValidityDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
 }
 
 impl Default for GetInput {

@@ -74,6 +74,85 @@
     }
 
     #[test]
+    fn cache_hit_validity_denies_dependency_revocation_trace_and_output_drift() {
+        let root = temp_dir("eval-cache-hit-validity");
+        let dependency = test_ref("dependency-v1");
+        let capability = test_ref("capability-v1");
+        let key = KeyInput {
+            capability_refs: vec![capability.clone()],
+            ..key_input("artifact-closure", "input", std::slice::from_ref(&dependency))
+        };
+        let output = record("closure", vec![string("ok")]);
+        let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[]))
+            .expect("put cache value");
+        let valid = evaluate_cache_hit_validity(CacheHitValidityInput {
+            key: &put.key,
+            value: &put.value,
+            current_policy_refs: &[],
+            current_capability_refs: &[],
+            current_revocation_refs: &[],
+            requested_dependency_refs: std::slice::from_ref(&dependency),
+            expected_output_ref: Some(match &put.value.output {
+                OutputRef::Inline { output_ref, .. } | OutputRef::ContentRef { output_ref, .. } => output_ref.as_str(),
+                OutputRef::None => panic!("cache output missing"),
+            }),
+            semantic: true,
+        });
+        assert_eq!(valid.decision, "pass");
+
+        let changed_dependency_refs = vec![test_ref("dependency-v2")];
+        let changed_dependency = evaluate_cache_hit_validity(CacheHitValidityInput {
+            key: &put.key,
+            value: &put.value,
+            current_policy_refs: &[],
+            current_capability_refs: &[],
+            current_revocation_refs: &[],
+            requested_dependency_refs: &changed_dependency_refs,
+            expected_output_ref: None,
+            semantic: true,
+        });
+        assert_eq!(changed_dependency.decision, "deny");
+        assert!(changed_dependency.diagnostics.iter().any(|value| value == "dependency-refs-changed"));
+
+        let revoked = get(&root, &put.key.key_ref, &GetInput {
+            current_revocation_refs: vec![capability],
+            ..GetInput::default()
+        })
+        .expect_err("revoked capability denies hit");
+        assert!(revoked.to_string().contains("validity"), "{revoked}");
+
+        let wrong_output = evaluate_cache_hit_validity(CacheHitValidityInput {
+            key: &put.key,
+            value: &put.value,
+            current_policy_refs: &[],
+            current_capability_refs: &[],
+            current_revocation_refs: &[],
+            requested_dependency_refs: &[],
+            expected_output_ref: Some(&test_ref("other-output")),
+            semantic: true,
+        });
+        assert_eq!(wrong_output.decision, "deny");
+        assert!(wrong_output.diagnostics.iter().any(|value| value == "output-ref-mismatch"));
+
+        let trace_value = Value {
+            tier: TIER_PRODUCTION_TRACE_ONLY.to_string(),
+            ..put.value.clone()
+        };
+        let trace_only = evaluate_cache_hit_validity(CacheHitValidityInput {
+            key: &put.key,
+            value: &trace_value,
+            current_policy_refs: &[],
+            current_capability_refs: &[],
+            current_revocation_refs: &[],
+            requested_dependency_refs: &[],
+            expected_output_ref: None,
+            semantic: true,
+        });
+        assert_eq!(trace_only.decision, "deny");
+        assert!(trace_only.diagnostics.iter().any(|value| value == "trace-only-not-semantic"));
+    }
+
+    #[test]
     fn trace_only_and_invalidation_fail_closed() {
         let root = temp_dir("eval-cache-trace");
         let dependency = test_ref("dependency");
@@ -140,6 +219,28 @@
         assert!(invalidated.invalidated_key_refs.is_empty());
         assert!(!invalidated.retention_receipt_refs.is_empty());
         let hit = get(&root, &put.key.key_ref, &GetInput::default()).expect("retained cache hit");
+        assert_eq!(hit.output, Some(output));
+    }
+
+    #[test]
+    fn invalidation_denies_missing_apply_ref_before_tombstone() {
+        let root = temp_dir("eval-cache-missing-apply");
+        let key = key_input("schema-fingerprint", "missing-apply", &[]);
+        let output = record("fingerprint", vec![string("missing-apply")]);
+        let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[]))
+            .expect("put cache value");
+        let invalidated = invalidate(&root, &InvalidateInput {
+            key_ref: Some(put.key.key_ref.clone()),
+            reason: "missing apply".to_string(),
+            retention_evidence: retention_evidence(&root, "missing-apply"),
+            apply_refs: Vec::new(),
+            ..InvalidateInput::default()
+        })
+        .expect("invalidate denied without apply");
+        assert_eq!(invalidated.decision, "deny");
+        assert!(invalidated.invalidated_key_refs.is_empty());
+        assert!(!invalidated.execution_gate_refs.is_empty());
+        let hit = get(&root, &put.key.key_ref, &GetInput::default()).expect("cache value remains");
         assert_eq!(hit.output, Some(output));
     }
 
@@ -274,6 +375,7 @@
         let display_name_key_ref =
             canonical_hash(&key_value(&display_name_key).expect("display key")).expect("display key ref");
         assert_ne!(put.key.key_ref, display_name_key_ref);
+        get(&root, &display_name_key_ref, &GetInput::default()).expect_err("name-only alias misses cache");
     }
 
     fn key_input(operation: &str, input_label: &str, dependency_refs: &[String]) -> KeyInput {
