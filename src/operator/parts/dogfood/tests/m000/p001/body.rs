@@ -130,7 +130,10 @@
             revocations: &[],
         });
         assert_eq!(denied_bundle_promotion.decision, "deny");
-        assert!(denied_bundle_promotion.diagnostics.iter().any(|diagnostic| diagnostic.contains("decision is deny")));
+        assert!(denied_bundle_promotion
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("current passing bundle verification")));
         let wrong_signer_verify = required_bundle_verify(case, signed_members, Some("wrong-signer"), None);
         assert_eq!(wrong_signer_verify.decision, "deny");
         assert!(wrong_signer_verify.diagnostics.iter().any(|diagnostic| diagnostic.contains("signer")));
@@ -142,6 +145,42 @@
                 .iter()
                 .any(|diagnostic| diagnostic.contains("missing signed member receipt"))
         );
+        let wrong_purpose_members = signed_members_with_purpose(case, RELEASE_PROMOTION_SIGNING_PURPOSE);
+        let wrong_purpose_verify = required_bundle_verify(
+            case,
+            &wrong_purpose_members,
+            Some("release-signer"),
+            Some(key),
+        );
+        assert_eq!(wrong_purpose_verify.decision, "deny");
+        assert!(wrong_purpose_verify.diagnostics.iter().any(|diagnostic| diagnostic.contains("purpose")));
+        let revocation = signed_revocation(key);
+        let revoked_member_verify = required_bundle_verify_with_revocations(
+            case,
+            signed_members,
+            Some("release-signer"),
+            Some(key),
+            std::slice::from_ref(&revocation),
+        );
+        assert_eq!(revoked_member_verify.decision, "deny");
+        assert!(revoked_member_verify
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("revoked") || diagnostic.contains("unrevoked")));
+        let stale_signed_member = sign_stale_member();
+        let mut signed_with_stale = signed_members.to_vec();
+        signed_with_stale.push(stale_signed_member);
+        let stale_member_verify = required_bundle_verify(
+            case,
+            &signed_with_stale,
+            Some("release-signer"),
+            Some(key),
+        );
+        assert_eq!(stale_member_verify.decision, "deny");
+        assert!(stale_member_verify
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("not a signable bundle member")));
     }
 
     fn required_bundle_verify(
@@ -149,6 +188,16 @@
         signed_member_values: &[IoValue],
         signed_signer: Option<&str>,
         key: Option<&SignedReceiptKey>,
+    ) -> ReleaseEvidenceBundleVerifyReceipt {
+        required_bundle_verify_with_revocations(case, signed_member_values, signed_signer, key, &[])
+    }
+
+    fn required_bundle_verify_with_revocations(
+        case: &NixCase,
+        signed_member_values: &[IoValue],
+        signed_signer: Option<&str>,
+        key: Option<&SignedReceiptKey>,
+        revocations: &[SignedReceiptKeyRevocation],
     ) -> ReleaseEvidenceBundleVerifyReceipt {
         let empty_keys: &[SignedReceiptKey] = &[];
         let signed_keys = key.map(std::slice::from_ref).unwrap_or(empty_keys);
@@ -160,13 +209,219 @@
             signed_trust_root: "release-root",
             signed_key: "release-key",
             signed_keys,
-            signed_key_revocations: &[],
+            signed_key_revocations: revocations,
             signed_key_ref: key.map(|key| key.key_ref.as_str()),
             signed_key_id: key.map(|_| "release-key-1"),
             signed_signer,
             is_signed_members_required: true,
         })
         .expect("verify required release bundle")
+    }
+
+    fn signed_members_with_purpose(case: &NixCase, purpose: &str) -> Vec<IoValue> {
+        [
+            &case.run.report_value,
+            case.run.release_gate_value.as_ref().expect("release gate"),
+            case.run.replay_verify_value.as_ref().expect("replay verify"),
+            case.run.replay_index_value.as_ref().expect("replay index"),
+            &case.evidence,
+            &case.receipt.value,
+        ]
+        .into_iter()
+        .map(|receipt| {
+            sign_receipt(&SignReceiptInput {
+                receipt,
+                signer: "release-signer",
+                purpose,
+                trust_root: "release-root",
+                key: "release-key",
+                parents: &[],
+            })
+            .expect("sign member with purpose")
+        })
+        .collect()
+    }
+
+    fn sign_stale_member() -> IoValue {
+        let stale = crate::preserves_rail::record("stale-release-member-v1", vec![crate::preserves_rail::string("stale")]);
+        sign_receipt(&SignReceiptInput {
+            receipt: &stale,
+            signer: "release-signer",
+            purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+            trust_root: "release-root",
+            key: "release-key",
+            parents: &[],
+        })
+        .expect("sign stale member")
+    }
+
+    fn assert_ordered_release_workflow(
+        case: &NixCase,
+        signed_bundle_verify: &ReleaseEvidenceBundleVerifyReceipt,
+        key: &SignedReceiptKey,
+    ) {
+        let promotion = promotion_receipt(PromotionInput {
+            output_path: &case.output_root,
+            bundle_verify_value: &signed_bundle_verify.value,
+            source_evidence: "source:working-tree-reviewed",
+            key,
+            revocations: &[],
+        });
+        let signed_promotion = sign_receipt(&SignReceiptInput {
+            receipt: &promotion.value,
+            signer: "release-signer",
+            purpose: RELEASE_PROMOTION_SIGNING_PURPOSE,
+            trust_root: "release-root",
+            key: "release-key",
+            parents: &[],
+        })
+        .expect("sign promotion");
+        let signed_promotion_ref = crate::preserves_rail::canonical_hash(&signed_promotion).expect("signed promotion ref");
+        let summary_ref = dogfood_ref("release-workflow-summary").expect("summary ref");
+        let manifest_ref = dogfood_ref("release-workflow-manifest").expect("manifest ref");
+        let export_verify_ref = dogfood_ref("release-workflow-export-verify").expect("export verify ref");
+        let required_signed_member_refs = release_required_signed_member_refs(case);
+        let pass = evaluate_release_workflow_state(&ReleaseWorkflowStateInput {
+            required_stage: RELEASE_WORKFLOW_STAGE_ARCHIVE_VERIFY,
+            dogfood_report_ref: Some(&case.parsed.report_ref),
+            dogfood_report_decision: "pass",
+            release_gate_ref: Some(&case.parsed.release_gate_ref),
+            bundle_ref: Some(&case.parsed_bundle.bundle_ref),
+            bundle_verify_ref: Some(&signed_bundle_verify.receipt_ref),
+            bundle_verify_decision: "pass",
+            signed_member_refs: &required_signed_member_refs,
+            required_signed_member_refs: &required_signed_member_refs,
+            promotion_ref: Some(&promotion.receipt_ref),
+            promotion_decision: "pass",
+            signed_promotion_ref: Some(&signed_promotion_ref),
+            signed_promotion_subject_ref: Some(&promotion.receipt_ref),
+            summary_ref: Some(&summary_ref),
+            summary_decision: "pass",
+            summary_promotion_ref: Some(&promotion.receipt_ref),
+            export_manifest_ref: Some(&manifest_ref),
+            export_manifest_summary_ref: Some(&summary_ref),
+            export_verify_ref: Some(&export_verify_ref),
+            export_verify_decision: "pass",
+            export_verify_manifest_ref: Some(&manifest_ref),
+        })
+        .expect("release workflow pass");
+        assert_eq!(pass.decision, "pass");
+        assert!(pass
+            .completed_stages
+            .iter()
+            .any(|stage| stage == RELEASE_WORKFLOW_STAGE_ARCHIVE_VERIFY));
+
+        let premature = evaluate_release_workflow_state(&ReleaseWorkflowStateInput {
+            required_stage: RELEASE_WORKFLOW_STAGE_PROMOTION,
+            dogfood_report_ref: Some(&case.parsed.report_ref),
+            dogfood_report_decision: "pass",
+            release_gate_ref: Some(&case.parsed.release_gate_ref),
+            bundle_ref: Some(&case.parsed_bundle.bundle_ref),
+            bundle_verify_ref: Some(&signed_bundle_verify.receipt_ref),
+            bundle_verify_decision: "deny",
+            signed_member_refs: &required_signed_member_refs,
+            required_signed_member_refs: &required_signed_member_refs,
+            promotion_ref: Some(&promotion.receipt_ref),
+            promotion_decision: "pass",
+            signed_promotion_ref: None,
+            signed_promotion_subject_ref: None,
+            summary_ref: None,
+            summary_decision: "deny",
+            summary_promotion_ref: None,
+            export_manifest_ref: None,
+            export_manifest_summary_ref: None,
+            export_verify_ref: None,
+            export_verify_decision: "deny",
+            export_verify_manifest_ref: None,
+        })
+        .expect("release workflow premature promotion");
+        assert_eq!(premature.decision, "deny");
+        assert!(premature
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("current passing bundle verification")));
+    }
+
+    fn release_required_signed_member_refs(case: &NixCase) -> Vec<String> {
+        case.parsed_bundle
+            .member_refs
+            .iter()
+            .filter_map(|(name, member_ref)| name.ends_with(".preserves").then_some(member_ref.clone()))
+            .collect()
+    }
+
+    fn assert_missing_duplicate_and_tampered_bundle_members_deny(case: &NixCase) {
+        let missing_member_refs = case
+            .parsed_bundle
+            .member_refs
+            .iter()
+            .filter(|(name, _)| name != "nix-dogfood-verify.preserves")
+            .cloned()
+            .collect::<Vec<_>>();
+        let missing_bundle = bundle_with_member_refs(case, missing_member_refs);
+        let missing_verify = unsigned_bundle_verify(&case.output_root, &missing_bundle);
+        assert_eq!(missing_verify.decision, "deny");
+        assert!(missing_verify
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("nix-dogfood-verify.preserves")));
+
+        let mut duplicate_member_refs = case.parsed_bundle.member_refs.clone();
+        duplicate_member_refs.push(case.parsed_bundle.member_refs[0].clone());
+        let duplicate_bundle = bundle_with_member_refs(case, duplicate_member_refs);
+        let duplicate_verify = unsigned_bundle_verify(&case.output_root, &duplicate_bundle);
+        assert_eq!(duplicate_verify.decision, "deny");
+        assert!(duplicate_verify.diagnostics.iter().any(|diagnostic| diagnostic.contains("duplicate")));
+
+        let summary_path = case.output_root.join("dogfood-summary.txt");
+        let original_summary = std::fs::read_to_string(&summary_path).expect("read summary");
+        std::fs::write(&summary_path, "tampered summary\n").expect("tamper summary");
+        let tampered_verify = unsigned_bundle_verify(&case.output_root, &case.bundle);
+        std::fs::write(&summary_path, original_summary).expect("restore summary");
+        assert_eq!(tampered_verify.decision, "deny");
+        assert!(tampered_verify
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("summary") || diagnostic.contains("observation failed")));
+    }
+
+    fn bundle_with_member_refs(case: &NixCase, member_refs: Vec<(String, String)>) -> IoValue {
+        crate::preserves_rail::record("release-evidence-bundle-v1", vec![
+            crate::preserves_rail::string(crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA),
+            crate::preserves_rail::record("output-path", vec![
+                crate::preserves_rail::string(case.parsed_bundle.output_path.as_str()),
+                crate::preserves_rail::string(&case.parsed_bundle.output_path_ref),
+            ]),
+            crate::preserves_rail::record("members", vec![file_refs_sequence(&member_refs)]),
+            crate::preserves_rail::record("dogfood", vec![
+                crate::preserves_rail::string(&case.parsed_bundle.report_ref),
+                crate::preserves_rail::string(&case.parsed_bundle.release_gate_ref),
+            ]),
+            crate::preserves_rail::record("replay", vec![
+                crate::preserves_rail::string(&case.parsed_bundle.replay_verify_ref),
+                crate::preserves_rail::string(&case.parsed_bundle.replay_index_ref),
+            ]),
+            crate::preserves_rail::record("nix", vec![
+                crate::preserves_rail::string(&case.parsed_bundle.nix_evidence_ref),
+                crate::preserves_rail::string(&case.parsed_bundle.nix_verify_ref),
+            ]),
+            crate::preserves_rail::record("nextest", vec![
+                crate::preserves_rail::string(&case.parsed_bundle.nextest_marker_ref),
+                crate::preserves_rail::string(case.parsed_bundle.nextest_check_path.as_str()),
+            ]),
+            checks_value_from_pairs(&[
+                ("dogfood-report-pass", "pass"),
+                ("release-gate-pass", "pass"),
+                ("replay-verify-bound", "pass"),
+                ("replay-index-bound", "pass"),
+                ("replay-index-is-evidence-only", "pass"),
+                ("nix-verify-pass", "pass"),
+                ("bundle-members-bound", "pass"),
+                ("nextest-dependency-bound", "pass"),
+                ("release-evidence-only", "pass"),
+                ("no-text-oracle", "pass"),
+            ]),
+        ])
     }
 
     fn assert_stale_bundle_denies(case: &NixCase) {

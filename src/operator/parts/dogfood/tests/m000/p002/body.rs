@@ -59,6 +59,59 @@
         assert!(report.diagnostics.iter().any(|diagnostic| diagnostic.contains("clean empty state root")));
     }
 
+    #[test]
+    fn release_evidence_remains_evidence_only_for_subsystem_gates() {
+        let release_ref = dogfood_ref("release-boundary").expect("release ref");
+        let authority_ref = dogfood_ref("release-boundary-authority").expect("authority ref");
+        let policy_ref = dogfood_ref("release-boundary-policy").expect("policy ref");
+        let provenance_ref = dogfood_ref("release-boundary-provenance").expect("provenance ref");
+        let source_gate_ref = dogfood_ref("release-boundary-source-gate").expect("source gate ref");
+        let retention_ref = dogfood_ref("release-boundary-retention").expect("retention ref");
+        let resource_ref = dogfood_ref("release-boundary-resource").expect("resource ref");
+        let transport_ref = dogfood_ref("release-boundary-transport").expect("transport ref");
+        let destructive_ref = dogfood_ref("release-boundary-destructive").expect("destructive ref");
+
+        let denied = evaluate_release_evidence_only_boundary(&ReleaseEvidenceBoundaryInput {
+            operation: "privileged-release-misuse",
+            release_receipt_refs: std::slice::from_ref(&release_ref),
+            authority_refs: &[],
+            policy_refs: &[],
+            provenance_refs: &[],
+            source_gate_refs: &[],
+            retention_refs: &[],
+            resource_refs: &[],
+            transport_refs: &[],
+            destructive_operation_refs: &[],
+        })
+        .expect("release boundary deny");
+        assert_eq!(denied.decision, "deny");
+        for gate in RELEASE_EVIDENCE_BOUNDARY_GATES {
+            assert!(
+                denied
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.contains(&format!("{gate} trust"))),
+                "missing release evidence-only diagnostic for {gate}: {:?}",
+                denied.diagnostics
+            );
+        }
+
+        let admitted = evaluate_release_evidence_only_boundary(&ReleaseEvidenceBoundaryInput {
+            operation: "fully-gated-release-review",
+            release_receipt_refs: std::slice::from_ref(&release_ref),
+            authority_refs: std::slice::from_ref(&authority_ref),
+            policy_refs: std::slice::from_ref(&policy_ref),
+            provenance_refs: std::slice::from_ref(&provenance_ref),
+            source_gate_refs: std::slice::from_ref(&source_gate_ref),
+            retention_refs: std::slice::from_ref(&retention_ref),
+            resource_refs: std::slice::from_ref(&resource_ref),
+            transport_refs: std::slice::from_ref(&transport_ref),
+            destructive_operation_refs: std::slice::from_ref(&destructive_ref),
+        })
+        .expect("release boundary pass with subsystem gates");
+        assert_eq!(admitted.decision, "pass");
+    }
+
     fn temp_dir(label: &str) -> PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

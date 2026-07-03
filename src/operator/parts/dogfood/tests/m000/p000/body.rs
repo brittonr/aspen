@@ -75,7 +75,9 @@
         let signed_bundle_verify = signed_bundle_pass(&case, &signed_members);
         let key = signed_key();
         assert_promotion_receipts(&case, &signed_bundle_verify, &key);
+        assert_ordered_release_workflow(&case, &signed_bundle_verify, &key);
         assert_signed_denials(&case, &signed_members, &key);
+        assert_missing_duplicate_and_tampered_bundle_members_deny(&case);
         assert_stale_bundle_denies(&case);
         assert_stale_evidence_denies(&case);
     }

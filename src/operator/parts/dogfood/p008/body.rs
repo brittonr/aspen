@@ -43,22 +43,23 @@ fn release_bundle_signature_diagnostics(
     if input.signed_member_values.is_empty() && !input.is_signed_members_required {
         return Ok(diagnostics);
     }
-    let mut signable_members = Vec::new();
-    for (name, member_ref) in &bundle.member_refs {
-        if name.ends_with(".preserves") {
-            signable_members.push_limited_value(
-                (name.clone(), member_ref.clone()),
-                MAX_OPERATOR_REFS,
-                "release bundle signable member refs",
-            )?;
-        }
+    let signable_members = release_bundle_signable_members(bundle)?;
+    if input.is_signed_members_required && signable_members.is_empty() {
+        diagnostics.push_limited_value(
+            "release bundle has no required signed-member class".to_string(),
+            MAX_OPERATOR_DIAGNOSTICS,
+            "release evidence bundle signed member diagnostics",
+        )?;
     }
-    let mut signed_subject_refs = Vec::new();
-    for signed_value in input.signed_member_values {
-        match verify_release_bundle_signed_member(signed_value, input) {
+    let mut signed_subject_refs: Vec<(usize, String)> = Vec::new();
+    for (signed_index, signed_value) in input.signed_member_values.iter().enumerate() {
+        match verify_release_bundle_signed_member(signed_value, input, None) {
             Ok(subject_ref) => {
                 if signable_members.iter().any(|(_, member_ref)| member_ref == &subject_ref) {
-                    if signed_subject_refs.iter().any(|known_ref| known_ref == &subject_ref) {
+                    if signed_subject_refs
+                        .iter()
+                        .any(|entry| entry.1.as_str() == subject_ref.as_str())
+                    {
                         diagnostics.push_limited_value(
                             format!("duplicate signed member receipt for subject {subject_ref}"),
                             MAX_OPERATOR_DIAGNOSTICS,
@@ -66,7 +67,7 @@ fn release_bundle_signature_diagnostics(
                         )?;
                     }
                     signed_subject_refs.push_limited_value(
-                        subject_ref,
+                        (signed_index, subject_ref),
                         MAX_OPERATOR_REFS,
                         "release evidence bundle signed member refs",
                     )?;
@@ -87,7 +88,19 @@ fn release_bundle_signature_diagnostics(
     }
     if input.is_signed_members_required {
         for (name, member_ref) in &signable_members {
-            if !signed_subject_refs.iter().any(|subject_ref| subject_ref == member_ref) {
+            if let Some((signed_index, _)) = signed_subject_refs.iter().find(|(_, subject_ref)| subject_ref == member_ref) {
+                if let Err(error) = verify_release_bundle_signed_member(
+                    &input.signed_member_values[*signed_index],
+                    input,
+                    Some(member_ref),
+                ) {
+                    diagnostics.push_limited_value(
+                        format!("signed member receipt for {name} failed subject binding: {error}"),
+                        MAX_OPERATOR_DIAGNOSTICS,
+                        "release evidence bundle signed member diagnostics",
+                    )?;
+                }
+            } else {
                 diagnostics.push_limited_value(
                     format!("missing signed member receipt for {name}: {member_ref}"),
                     MAX_OPERATOR_DIAGNOSTICS,
@@ -99,9 +112,24 @@ fn release_bundle_signature_diagnostics(
     Ok(diagnostics)
 }
 
+fn release_bundle_signable_members(bundle: &ReleaseEvidenceBundle) -> Result<Vec<(String, String)>> {
+    let mut signable_members = Vec::new();
+    for (name, member_ref) in &bundle.member_refs {
+        if name.ends_with(".preserves") {
+            signable_members.push_limited_value(
+                (name.clone(), member_ref.clone()),
+                MAX_OPERATOR_REFS,
+                "release bundle signable member refs",
+            )?;
+        }
+    }
+    Ok(signable_members)
+}
+
 fn verify_release_bundle_signed_member(
     signed_value: &IoValue,
     input: &ReleaseEvidenceBundleVerifyInput<'_>,
+    expected_subject_ref: Option<&str>,
 ) -> Result<String> {
     if input.signed_keys.is_empty() && input.signed_key_revocations.is_empty() {
         let signed = verify_signed_receipt_with_policy(signed_value, &VerifySignedReceiptPolicy {
@@ -109,7 +137,7 @@ fn verify_release_bundle_signed_member(
             trust_root: input.signed_trust_root,
             key: input.signed_key,
             expected_signer: input.signed_signer,
-            expected_subject_ref: None,
+            expected_subject_ref,
         })?;
         Ok(signed.subject_ref)
     } else {
@@ -117,7 +145,7 @@ fn verify_release_bundle_signed_member(
             required_purpose: input.signed_purpose,
             trust_root: input.signed_trust_root,
             expected_signer: input.signed_signer,
-            expected_subject_ref: None,
+            expected_subject_ref,
             required_key_ref: input.signed_key_ref,
             required_key_id: input.signed_key_id,
             keys: input.signed_keys,
@@ -246,6 +274,20 @@ fn mismatch_diagnostic(label: &str, expected: &str, actual: &str) -> Option<Stri
 
 fn file_ref_mismatch_diagnostics(expected: &[(String, String)], observed: &[(String, String)]) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
+    for diagnostic in duplicate_file_ref_diagnostics(expected, "evidence")? {
+        diagnostics.push_limited_value(
+            diagnostic,
+            MAX_OPERATOR_DIAGNOSTICS,
+            "Nix dogfood verify diagnostics",
+        )?;
+    }
+    for diagnostic in duplicate_file_ref_diagnostics(observed, "observed output")? {
+        diagnostics.push_limited_value(
+            diagnostic,
+            MAX_OPERATOR_DIAGNOSTICS,
+            "Nix dogfood verify diagnostics",
+        )?;
+    }
     if expected.len() != observed.len() {
         diagnostics.push_limited_value(
             format!("file ref count mismatch: evidence={} observed={}", expected.len(), observed.len()),
@@ -278,6 +320,23 @@ fn file_ref_mismatch_diagnostics(expected: &[(String, String)], observed: &[(Str
                 MAX_OPERATOR_DIAGNOSTICS,
                 "Nix dogfood verify diagnostics",
             )?;
+        }
+    }
+    Ok(diagnostics)
+}
+
+fn duplicate_file_ref_diagnostics(refs: &[(String, String)], label: &str) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    let mut seen_names = Vec::new();
+    for (name, _) in refs {
+        if seen_names.iter().any(|seen_name: &String| seen_name == name) {
+            diagnostics.push_limited_value(
+                format!("duplicate file ref path in {label}: {name}"),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "duplicate file ref diagnostics",
+            )?;
+        } else {
+            seen_names.push_limited_value(name.clone(), MAX_OPERATOR_REFS, "duplicate file ref names")?;
         }
     }
     Ok(diagnostics)

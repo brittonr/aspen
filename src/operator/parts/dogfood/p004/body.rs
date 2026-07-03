@@ -226,7 +226,7 @@ fn promotion_diagnostics(
     if bundle_verify.decision != "pass" {
         diagnostics.push_limited_value(
             format!(
-                "release evidence bundle verify receipt {} decision is {}",
+                "release promotion requires current passing bundle verification; release evidence bundle verify receipt {} decision is {}",
                 bundle_verify.receipt_ref, bundle_verify.decision
             ),
             MAX_OPERATOR_DIAGNOSTICS,

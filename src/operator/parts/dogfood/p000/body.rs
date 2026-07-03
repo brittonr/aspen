@@ -25,6 +25,41 @@ fn verify_signed_receipt_with_keyring_policy(
 
 pub const RELEASE_EVIDENCE_SIGNING_PURPOSE: &str = "release-evidence";
 pub const RELEASE_PROMOTION_SIGNING_PURPOSE: &str = "release-promotion";
+pub const RELEASE_WORKFLOW_STAGE_DOGFOOD: &str = "dogfood";
+pub const RELEASE_WORKFLOW_STAGE_BUNDLE_EXPORT: &str = "bundle-export";
+pub const RELEASE_WORKFLOW_STAGE_BUNDLE_VERIFY: &str = "bundle-verify";
+pub const RELEASE_WORKFLOW_STAGE_SIGNED_MEMBERS: &str = "signed-members";
+pub const RELEASE_WORKFLOW_STAGE_PROMOTION: &str = "promotion";
+pub const RELEASE_WORKFLOW_STAGE_SIGNED_PROMOTION: &str = "signed-promotion";
+pub const RELEASE_WORKFLOW_STAGE_SUMMARY: &str = "summary";
+pub const RELEASE_WORKFLOW_STAGE_ARCHIVE_EXPORT: &str = "archive-export";
+pub const RELEASE_WORKFLOW_STAGE_ARCHIVE_VERIFY: &str = "archive-verify";
+
+const RELEASE_WORKFLOW_STAGE_COUNT: usize = 9;
+const RELEASE_WORKFLOW_STAGES: [&str; RELEASE_WORKFLOW_STAGE_COUNT] = [
+    RELEASE_WORKFLOW_STAGE_DOGFOOD,
+    RELEASE_WORKFLOW_STAGE_BUNDLE_EXPORT,
+    RELEASE_WORKFLOW_STAGE_BUNDLE_VERIFY,
+    RELEASE_WORKFLOW_STAGE_SIGNED_MEMBERS,
+    RELEASE_WORKFLOW_STAGE_PROMOTION,
+    RELEASE_WORKFLOW_STAGE_SIGNED_PROMOTION,
+    RELEASE_WORKFLOW_STAGE_SUMMARY,
+    RELEASE_WORKFLOW_STAGE_ARCHIVE_EXPORT,
+    RELEASE_WORKFLOW_STAGE_ARCHIVE_VERIFY,
+];
+const RELEASE_EVIDENCE_BOUNDARY_GATE_COUNT: usize = 8;
+const RELEASE_EVIDENCE_BOUNDARY_GATES: [&str; RELEASE_EVIDENCE_BOUNDARY_GATE_COUNT] = [
+    "authority",
+    "policy",
+    "provenance",
+    "source-gate",
+    "retention",
+    "resource",
+    "transport",
+    "destructive-operation",
+];
+const _: () = assert!(RELEASE_WORKFLOW_STAGE_COUNT > 0);
+const _: () = assert!(RELEASE_EVIDENCE_BOUNDARY_GATE_COUNT > 0);
 
 const LOCAL_NODE_WORKFLOW_ID: &str = "dogfood:local-node";
 const DOGFOOD_HARNESS_SUITE: &str = r#"<harness-suite-v1 "molten.harness.suite.v1" "dogfood-repro" 3
@@ -295,4 +330,56 @@ pub struct ReleaseExportVerifyInput<'a> {
     pub manifest_value: Option<&'a IoValue>,
     pub member_refs: &'a [(String, String)],
     pub archive_diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReleaseWorkflowStateInput<'a> {
+    pub required_stage: &'a str,
+    pub dogfood_report_ref: Option<&'a str>,
+    pub dogfood_report_decision: &'a str,
+    pub release_gate_ref: Option<&'a str>,
+    pub bundle_ref: Option<&'a str>,
+    pub bundle_verify_ref: Option<&'a str>,
+    pub bundle_verify_decision: &'a str,
+    pub signed_member_refs: &'a [String],
+    pub required_signed_member_refs: &'a [String],
+    pub promotion_ref: Option<&'a str>,
+    pub promotion_decision: &'a str,
+    pub signed_promotion_ref: Option<&'a str>,
+    pub signed_promotion_subject_ref: Option<&'a str>,
+    pub summary_ref: Option<&'a str>,
+    pub summary_decision: &'a str,
+    pub summary_promotion_ref: Option<&'a str>,
+    pub export_manifest_ref: Option<&'a str>,
+    pub export_manifest_summary_ref: Option<&'a str>,
+    pub export_verify_ref: Option<&'a str>,
+    pub export_verify_decision: &'a str,
+    pub export_verify_manifest_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseWorkflowStateDecision {
+    pub decision: String,
+    pub completed_stages: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReleaseEvidenceBoundaryInput<'a> {
+    pub operation: &'a str,
+    pub release_receipt_refs: &'a [String],
+    pub authority_refs: &'a [String],
+    pub policy_refs: &'a [String],
+    pub provenance_refs: &'a [String],
+    pub source_gate_refs: &'a [String],
+    pub retention_refs: &'a [String],
+    pub resource_refs: &'a [String],
+    pub transport_refs: &'a [String],
+    pub destructive_operation_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseEvidenceBoundaryDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
 }
