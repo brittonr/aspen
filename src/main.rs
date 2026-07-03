@@ -78,6 +78,11 @@ mod quality_port;
 mod cli_octet {
     pub(crate) use super::quality_port::*;
 }
+#[path = "cli/ops/peer.rs"]
+mod peer_port;
+mod cli_peer {
+    pub(crate) use super::peer_port::*;
+}
 #[path = "cli/ops/plugin.rs"]
 mod extension_port;
 mod cli_plugin {

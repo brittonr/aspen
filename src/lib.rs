@@ -29,6 +29,10 @@ compat_module!(catalog_mcp, inventory_api);
 pub mod blocks;
 compat_module!(chunk_store, blocks);
 #[doc(hidden)]
+#[path = "capability/mod.rs"]
+pub mod capabilities_core;
+compat_module!(capability_tokens, capabilities_core);
+#[doc(hidden)]
 #[path = "coordination/mod.rs"]
 pub mod orchestration;
 compat_module!(coordination, orchestration);
@@ -137,6 +141,10 @@ compat_module!(preserves_rail, codec);
 pub mod launch;
 compat_module!(prod_readiness, launch);
 #[doc(hidden)]
+#[path = "prod/pilot.rs"]
+pub mod pilot_readiness;
+compat_module!(external_live_pilot, pilot_readiness);
+#[doc(hidden)]
 #[path = "prod/soak.rs"]
 pub mod burnin;
 compat_module!(prod_soak, burnin);
@@ -149,9 +157,17 @@ compat_module!(protocol_session, conversation);
 pub mod lineage_meta;
 compat_module!(provenance, lineage_meta);
 #[doc(hidden)]
+#[path = "propagation/mod.rs"]
+pub mod propagation_core;
+compat_module!(eventual_surface, propagation_core);
+#[doc(hidden)]
 #[path = "raft/control/plane.rs"]
 pub mod quorum;
 compat_module!(raft_control_plane, quorum);
+#[doc(hidden)]
+#[path = "raft/membership.rs"]
+pub mod raft_membership_core;
+compat_module!(raft_membership, raft_membership_core);
 #[doc(hidden)]
 #[path = "remote/dataspace.rs"]
 pub mod meshspace;

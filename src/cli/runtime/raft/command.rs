@@ -6,6 +6,12 @@ pub(crate) enum Command {
         #[arg(long)]
         out: FilePath,
     },
+    MembershipPreflight {
+        #[arg(long)]
+        out: FilePath,
+        #[arg(long)]
+        peer: String,
+    },
     Show {
         artifact: FilePath,
     },

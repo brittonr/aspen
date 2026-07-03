@@ -447,3 +447,92 @@ r[molten.node_live_workflow_state_proof.transport_evidence_only] Molten MUST pro
 - WHEN node control evaluates ingress admission
 - THEN the request is denied before enqueue
 - AND diagnostics state which non-transport evidence is missing.
+
+### Requirement: Node state stores peer session read model
+r[molten.peer_session.node_state_table] Molten MUST store a bounded node-local peer read model that indexes peer sessions by peer id, node id, profile ref, ticket ref, admission ref, and admitted scope while preserving canonical receipts as the authority source.
+
+#### Scenario: Status reads peer table without granting trust
+- GIVEN a node state root contains a peer session read-model entry
+- WHEN an operator runs peer status
+- THEN the status output reports lifecycle state, refs, scopes, freshness, and diagnostics
+- AND the read-model entry alone cannot satisfy authority, policy, provenance, source-gate, resource, retention, or execution gates.
+
+### Requirement: Static peer config is contract-bound
+r[molten.peer_session.nickel_config] Molten MUST validate static peer profile configuration through typed Nickel contracts before exporting runtime-consumed peer config, and runtime node operations MUST consume checked exports rather than evaluating Nickel live.
+
+#### Scenario: Invalid peer config fails before runtime
+- GIVEN a static peer profile uses an unsupported transport, malformed evidence ref, unsafe endpoint pattern, or contradictory resource bound
+- WHEN the profile is exported through Nickel
+- THEN export fails before node startup or peer connection can rely on that profile.
+
+### Requirement: Live tickets bind into peer sessions
+r[molten.peer_session.live_ticket_session_binding] Molten MUST bind existing live tickets, peer admissions, and imported authority grants into peer session records without changing their canonical receipt semantics or making imports authoritative by themselves.
+
+#### Scenario: Ticket import updates session readback only
+- GIVEN a sender imports a receiver live ticket and matching peer admission receipt
+- WHEN the peer session read model updates
+- THEN the session records the ticket and admission refs as bootstrap evidence
+- AND operation authority remains absent until a matching authority grant is imported.
+
+### Requirement: Peer lifecycle CLI wraps existing gates
+r[molten.peer_session.peer_cli] Molten SHOULD expose peer invite, connect, status, revoke, and diagnose commands as thin shells over canonical peer-session, ticket, admission, authority, policy, resource, and replay evidence.
+
+#### Scenario: Diagnose reports next missing live-send step
+- GIVEN a sender has a receiver ticket but no matching peer admission in its state root
+- WHEN `molten peer diagnose` runs for that peer and scope
+- THEN it reports the missing peer admission import
+- AND it does not attempt a live send or mutate authority state.
+
+### Requirement: Peer lifecycle validation is reproducible
+r[molten.peer_session.validation] Molten SHOULD validate peer-session lifecycle work with focused positive and negative tests, Nickel peer config fixtures, formatting, peer-related cargo tests, and Cairn validation before the change is archived.
+
+#### Scenario: Validation catches stale ticket regression
+- GIVEN a regression accepts an expired or wrong-topic peer ticket as an admitted session
+- WHEN focused peer-session validation runs
+- THEN the negative fixture fails
+- AND the change cannot be marked complete until the denial is restored.
+
+### Requirement: Node-control supports generic peer handoff bundles
+r[molten.peer_handoff.node_control_compat] Molten MUST preserve existing node-control live workflow receipt semantics while allowing node-control handoff export, verify, gate, import, and apply flows to use the generic peer handoff bundle model.
+
+#### Scenario: Existing node-control bundle remains readable
+- GIVEN a node-control live workflow bundle produced before the generic handoff model
+- WHEN the compatibility parser reads the bundle
+- THEN it can summarize the existing ticket, peer admission, authority grant, and receipt refs
+- AND it does not reinterpret the bundle as authority beyond the embedded grant artifacts.
+
+### Requirement: Handoff validation covers subsystem consumers
+r[molten.peer_handoff.consumer_scope_binding] Molten MUST require node-control, remote dataspace, job worker, retention clearance, and remote artifact sync consumers to check the handoff scope before using imported peer evidence.
+
+#### Scenario: Job handoff cannot satisfy node-control scope
+- GIVEN a peer handoff bundle is scoped to a job worker pool
+- WHEN a node-control live send tries to use that handoff as peer bootstrap evidence
+- THEN node-control preflight denies the scope mismatch
+- AND diagnostics name the expected node-control topic or operation scope.
+
+### Requirement: Peer handoff validation is reproducible
+r[molten.peer_handoff.validation] Molten SHOULD validate generic handoff work with focused handoff tests, node-control bundle compatibility tests, remote dataspace/job/retention/sync consumer tests, formatting, and Cairn validation before the change is archived.
+
+#### Scenario: Consumer regression is caught
+- GIVEN a subsystem consumer accepts a handoff bundle whose declared scope does not match the operation
+- WHEN focused peer handoff validation runs
+- THEN the negative consumer fixture fails
+- AND the change cannot complete until the scope denial is restored.
+
+### Requirement: Node runtime applies promotions only after gates pass
+r[molten.peer_promotion.node_apply_boundary] Molten MUST update node-local peer session read models for promoted or demoted capabilities only after promotion apply or demotion receipts pass all authority, policy, resource, expiry, revocation, and approval gates.
+
+#### Scenario: Failed promotion leaves read model unchanged
+- GIVEN a peer promotion apply operation fails because the issuer is revoked
+- WHEN the node runtime updates peer-session state
+- THEN the prior session capabilities remain unchanged
+- AND the failed promotion receipt is stored only as denial evidence.
+
+### Requirement: Promotion apply does not perform subsystem side effects
+r[molten.peer_promotion.apply_no_subsystem_side_effects] Molten SHOULD limit promotion apply to capability/session state changes and MUST NOT automatically execute node-control operations, job work, retention actions, sync imports, relay publication, or Raft membership changes.
+
+#### Scenario: Publisher promotion does not publish
+- GIVEN a peer is promoted from subscriber to scoped publisher
+- WHEN promotion apply passes
+- THEN the session records the new publish capability
+- AND no message is published until a separate publish operation passes its own gates.

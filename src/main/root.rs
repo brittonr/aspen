@@ -60,6 +60,7 @@ pub(crate) fn run() -> molten::error::Result<()> {
         Some(command::Top::Dogfood { command }) => crate::cli_dogfood::run_dogfood_command(command),
         Some(command::Top::Receipts { command }) => crate::cli_receipts::run_receipts_command(command),
         Some(command::Top::Node { command }) => crate::cli_node::run(command),
+        Some(command::Top::Peer { command }) => crate::cli_peer::run(command),
         Some(command::Top::Runtime { command }) => run_runtime_command(command),
     }
 }

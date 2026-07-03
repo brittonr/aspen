@@ -24,6 +24,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_node::Command,
     },
+    Peer {
+        #[command(subcommand)]
+        command: crate::cli_peer::Command,
+    },
     Runtime {
         #[command(subcommand)]
         command: Runtime,

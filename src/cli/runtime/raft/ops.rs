@@ -4,6 +4,7 @@ type Outcome<T> = molten::error::Result<T>;
 pub(super) fn run(command: Command) -> Outcome<()> {
     match command {
         Command::RunFixture { out } => run_fixture(out),
+        Command::MembershipPreflight { out, peer } => run_membership_preflight(out, &peer),
         Command::Show { artifact } => run_show(artifact),
     }
 }
@@ -43,6 +44,38 @@ fn run_fixture(out: std::path::PathBuf) -> Outcome<()> {
         runtime.committed_index,
         runtime.state.entries.len(),
         runtime.state.state_ref,
+        out.display()
+    );
+    Ok(())
+}
+
+fn run_membership_preflight(out: std::path::PathBuf, peer: &str) -> Outcome<()> {
+    let evidence_ref = cli_synthetic_ref("membership-evidence")?;
+    let request = molten::raft_membership::RaftMembershipRequest {
+        group_ref: cli_synthetic_ref("raft-group")?,
+        target_peer_ref: cli_synthetic_ref(peer)?,
+        target_session_ref: cli_synthetic_ref(&format!("session:{peer}"))?,
+        requested_role: "voter".to_string(),
+        configuration_ref: cli_synthetic_ref("configuration")?,
+        peer_session_scope: "raft-membership".to_string(),
+        authority_refs: vec![evidence_ref.clone()],
+        policy_refs: vec![evidence_ref.clone()],
+        resource_refs: vec![evidence_ref.clone()],
+        source_gate_refs: vec![evidence_ref.clone()],
+        provenance_refs: vec![evidence_ref.clone()],
+        compatibility_refs: vec![evidence_ref.clone()],
+        snapshot_refs: vec![evidence_ref.clone()],
+        replay_refs: vec![evidence_ref.clone()],
+        quorum_safety_refs: vec![evidence_ref.clone()],
+        operator_evidence_refs: vec![evidence_ref],
+    };
+    let receipt = molten::raft_membership::preflight_raft_membership(&request)?;
+    std::fs::write(&out, molten::preserves_rail::to_text(&receipt.value)?)?;
+    println!(
+        "raft membership preflight peer={} decision={} receipt={} out={}",
+        peer,
+        receipt.decision,
+        receipt.receipt_ref,
         out.display()
     );
     Ok(())

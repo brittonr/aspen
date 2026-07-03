@@ -80,3 +80,129 @@ r[molten.authority_peer_state_proof.replay_no_current_authority] Molten MUST pro
 - WHEN a new trust-boundary action attempts to reuse that receipt as current authority
 - THEN current admission is `deny`
 - AND replay may still validate the historical receipt as evidence-only.
+
+### Requirement: Capability tokens and proofsets are canonical
+r[molten.capability_token.record_model] Molten MUST define canonical capability token, capability proofset, and capability admission receipt records that bind issuer, holder, session or actor context, resource, ability, operation, scope, attenuation, caveats, freshness, expiry, revocation, key-currentness, policy refs, resource refs, delegation chain refs, and evidence refs.
+
+#### Scenario: Token admission binds holder and ability
+- GIVEN a capability proofset for a peer publishing to one topic
+- WHEN Molten emits a capability admission receipt
+- THEN the receipt binds the holder, peer/session ref, resource, ability, scope, selected token refs, caveat decisions, revocation/currentness checks, policy/resource refs, decision, and diagnostics
+- AND the receipt ref is derived from canonical Preserves bytes.
+
+### Requirement: Capability evidence taxonomy is explicit
+r[molten.capability_token.taxonomy] Molten MUST distinguish identity refs, transport receipts, peer sessions, handoff bundles, bootstrap tickets, read tokens, write tokens, promotion tokens, authority tokens, and membership evidence so that only admitted capability tokens or proofsets can authorize privileged actions.
+
+#### Scenario: Peer session is not a token
+- GIVEN a peer session records a connected peer and admitted bootstrap evidence
+- WHEN the peer requests a side-effecting operation without a matching capability token or authority grant
+- THEN authorization denies
+- AND diagnostics classify the session as context rather than a capability token.
+
+### Requirement: Capability admission is not bearer-only
+r[molten.capability_token.admission_law] Molten MUST validate capability proofsets at use time against exact holder, session or actor context, resource, ability, scope, attenuation, caveats, expiry, revocation, key-currentness, policy, resource, and subsystem constraints.
+
+#### Scenario: Wrong holder denies
+- GIVEN a valid token was issued to one peer session
+- WHEN another peer session presents the token for the same operation and scope
+- THEN capability admission denies
+- AND diagnostics identify the holder or session mismatch.
+
+### Requirement: Imported capability artifacts do not mint authority
+r[molten.capability_token.import_not_authority] Molten MUST treat imported capability tokens, imported proofsets, handoff-carried tokens, and historical capability receipts as evidence candidates only until the current capability admission law passes for the requested action.
+
+#### Scenario: Imported token wrong scope denies
+- GIVEN a state root imports a token for one topic
+- WHEN the holder requests a different topic scope
+- THEN capability admission denies
+- AND the imported artifact remains stored only as evidence.
+
+### Requirement: Basalt/UCAN proof seam is preserved
+r[molten.capability_token.basalt_ucan_seam] Molten MUST keep the capability verifier structured so Basalt/UCAN proofs, caveats, revocation evidence, and authority receipts can replace or augment local deterministic fixtures without weakening fail-closed admission.
+
+#### Scenario: Missing future UCAN caveat evidence denies
+- GIVEN a future UCAN-backed proofset requires caveat evidence
+- WHEN the caveat evidence is missing or stale
+- THEN capability admission denies
+- AND no local fallback grants ambient authority.
+
+### Requirement: Capability diagnostics are actionable
+r[molten.capability_token.diagnostics] Molten SHOULD emit diagnostics that identify missing or mismatched holder, session, resource, ability, scope, caveat, expiry, revocation, policy, resource, issuer, delegation chain, token kind, and subsystem boundary evidence.
+
+#### Scenario: Wrong ability diagnostic names token ability
+- GIVEN a token admits read projection but the request attempts publish
+- WHEN capability admission evaluates the proofset
+- THEN the decision is deny
+- AND diagnostics identify the admitted read ability and requested publish ability.
+
+### Requirement: Capability token tests cover authority boundaries
+r[molten.capability_token.positive_negative_tests] Molten SHOULD include positive token admission fixtures and negative tests for bearer-only use, wrong holder, wrong session, wrong operation, over-broad scope, expired tokens, revoked issuers or delegations, caveat failure, missing policy/resource, token import as authority, and handoff/session/transport-as-token attempts.
+
+#### Scenario: Bearer-only fixture denies
+- GIVEN a request presents a token value without matching holder/session/context evidence
+- WHEN capability admission evaluates the request
+- THEN the decision is deny
+- AND diagnostics state that bearer-only use is not admitted.
+
+### Requirement: Peer capability promotion records are canonical
+r[molten.peer_promotion.record_model] Molten MUST define canonical peer capability promotion request, promotion grant, promotion receipt, and demotion receipt records that bind target peer/session, current role evidence, requested role delta, issuer, approvals, attenuation, scope, expiry, revocation, policy refs, resource refs, and supporting evidence refs.
+
+#### Scenario: Promotion receipt binds role delta
+- GIVEN a peer requests promotion from subscriber to scoped publisher for one topic
+- WHEN promotion preflight emits a receipt
+- THEN the receipt binds the target peer/session ref, current role refs, requested role delta, promotion grant refs, policy/resource refs, decision, and diagnostics
+- AND the receipt ref is derived from canonical Preserves bytes.
+
+### Requirement: Promotion validates role deltas
+r[molten.peer_promotion.role_delta] Molten MUST validate promotions as explicit role/capability deltas from current admitted capabilities to requested capabilities, preserving attenuation, scope, expiry, and revocation constraints.
+
+#### Scenario: Over-broad target role denies
+- GIVEN a promotion grant allows publishing to one topic
+- WHEN a peer requests promotion to publish to all topics
+- THEN promotion validation denies the over-broad delta
+- AND diagnostics name the allowed and requested scopes.
+
+### Requirement: Promotion authority is separate from target capability
+r[molten.peer_promotion.authority_separation] Molten MUST require explicit promotion authority for role upgrades and MUST NOT satisfy promotion authority from transport identity, connected peer sessions, handoff bundles, subscription receipts, import receipts, or possession of the target capability alone.
+
+#### Scenario: Handoff cannot promote peer
+- GIVEN a peer handoff bundle imports a ticket and peer admission
+- WHEN the peer requests promotion to node-control operator without a promotion grant
+- THEN promotion denies
+- AND diagnostics state that handoff evidence is not promotion authority.
+
+### Requirement: Promotion approval policy is explicit
+r[molten.peer_promotion.approval_policy] Molten SHOULD support policy-selected approval evidence for high-risk peer promotions, including operator review refs or multi-approval refs when the target role grants mutation, relay, import, execution, retention, or authority-delegation capabilities.
+
+#### Scenario: High-risk promotion missing approval denies
+- GIVEN policy requires approval refs for promoting a peer to a job-execution role
+- WHEN the promotion request lacks the required approval evidence
+- THEN preflight denies
+- AND diagnostics name the missing approval class.
+
+### Requirement: Self-escalation and transitive escalation deny
+r[molten.peer_promotion.no_self_escalation] Molten MUST deny self-promotion, transitive escalation, stale grants, revoked issuers, and promotions that exceed the issuer's attenuated promotion authority unless explicit current policy admits that exact transition.
+
+#### Scenario: Subscriber self-promotion denies
+- GIVEN a subscriber holds no explicit self-promotion grant
+- WHEN it requests promotion to publisher for its subscribed topic
+- THEN promotion denies
+- AND no write capability is added to the peer session.
+
+### Requirement: Demotion cleans dependent authority surfaces
+r[molten.peer_promotion.demotion_cleanup] Molten MUST provide demotion or revocation receipts that narrow peer capabilities and trigger cleanup or retraction of dependent subscriptions, live refs, handler bindings, queued jobs, and session read-model state.
+
+#### Scenario: Demotion retracts subscriber projection
+- GIVEN a peer is demoted from subscriber to no-read role
+- WHEN the demotion receipt applies
+- THEN active subscription projections for that peer are retracted or marked denied
+- AND historical projection receipts remain evidence-only.
+
+### Requirement: Peer promotion tests cover privilege boundaries
+r[molten.peer_promotion.positive_negative_tests] Molten SHOULD include positive scoped promotion/demotion tests and negative tests for self-promotion, missing promotion authority, stale grant, revoked issuer, over-broad target, transitive escalation, subscriber write-upgrade, handoff-as-promotion, and Raft membership promotion.
+
+#### Scenario: Stale promotion grant denies
+- GIVEN a promotion grant has expired or is revoked
+- WHEN promotion preflight validates it
+- THEN the decision is deny
+- AND diagnostics identify expiry or revocation as the cause.
