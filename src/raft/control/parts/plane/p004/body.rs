@@ -28,11 +28,17 @@ fn apply_admitted_command(
             );
         }
     }
-    maps.sessions.insert(envelope.client_session.clone(), ClientSessionRecord {
-        client_session: envelope.client_session.clone(),
-        sequence: envelope.sequence,
-        result_command_ref: envelope.envelope_ref.clone(),
-    });
+    maps.sessions.insert(
+        ClientSequenceKey {
+            client_session: envelope.client_session.clone(),
+            sequence: envelope.sequence,
+        },
+        ClientSessionRecord {
+            client_session: envelope.client_session.clone(),
+            sequence: envelope.sequence,
+            result_command_ref: envelope.envelope_ref.clone(),
+        },
+    );
     runtime.state = parse_control_registry_state(&control_registry_state_value(
         entries_from_map(&maps.entries),
         sessions_from_map(&maps.sessions),

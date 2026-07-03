@@ -9,7 +9,7 @@ pub struct ControlRegistryStoreStatus {
 
 struct RegistryMaps {
     entries: OrderedMap<ControlRegistryKey, String>,
-    sessions: OrderedMap<String, ClientSessionRecord>,
+    sessions: OrderedMap<ClientSequenceKey, ClientSessionRecord>,
 }
 
 struct ProposalDecisionInput<'a> {
@@ -265,7 +265,12 @@ pub fn control_registry_state_value(
             .then_with(|| left.name.cmp(&right.name))
             .then_with(|| left.target_ref.cmp(&right.target_ref))
     });
-    client_sessions.sort_by(|left, right| left.client_session.cmp(&right.client_session));
+    client_sessions.sort_by(|left, right| {
+        left.client_session
+            .cmp(&right.client_session)
+            .then_with(|| left.sequence.cmp(&right.sequence))
+            .then_with(|| left.result_command_ref.cmp(&right.result_command_ref))
+    });
     let entry_values = entries
         .iter()
         .map(|entry| record("entry", vec![string(&entry.namespace), string(&entry.name), string(&entry.target_ref)]))

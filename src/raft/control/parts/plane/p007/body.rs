@@ -41,6 +41,7 @@ mod tests {
     const RAFT_DECISION_DENY: &str = "deny";
     const RAFT_TEST_INITIAL_SEQUENCE: u64 = 1;
     const RAFT_TEST_SEQUENCE_STEP: u64 = 1;
+    const STALE_RAFT_SEQUENCE_BEFORE_INITIAL: u64 = 0;
     const GENERATED_RAFT_MIN_COMMANDS: u64 = 1;
     const GENERATED_RAFT_MAX_COMMANDS: u64 = 4;
     const SNAPSHOT_RECORD_FIELD_COUNT: usize = 10;
@@ -303,10 +304,12 @@ mod tests {
         let root = temp_dir("redb-store");
         persist_control_registry_runtime(&root, &runtime, &snapshot).expect("persist runtime");
         let status = control_registry_store_status(&root).expect("store status");
-        assert_eq!(status.log_count, 3);
+        let expected_log_count = u64::try_from(runtime.log_entries.len()).expect("log count");
+        let expected_session_count = u64::try_from(runtime.state.client_sessions.len()).expect("session count");
+        assert_eq!(status.log_count, expected_log_count);
         assert_eq!(status.snapshot_count, 1);
-        assert_eq!(status.session_count, 1);
-        assert!(status.receipt_count >= 3);
+        assert_eq!(status.session_count, expected_session_count);
+        assert!(status.receipt_count >= expected_log_count);
     }
 
     #[test]
@@ -414,6 +417,57 @@ mod tests {
             .iter()
             .any(|diagnostic| diagnostic.contains("conflicting duplicate client sequence")));
 
+        let second_envelope = envelope_for(
+            &runtime,
+            "client:duplicate-proof",
+            next_raft_sequence(&mut sequence),
+            command_for_receipt_index("later-scope", "later-target"),
+        );
+        let second = propose_control_registry_command(&mut runtime, &second_envelope).expect("second sequence pass");
+        assert_eq!(second.decision, RAFT_DECISION_PASS);
+        let state_after_second = runtime.state.state_ref.clone();
+        let log_count_after_second = runtime.log_entries.len();
+        let commit_count_after_second = runtime.commit_receipts.len();
+        let registry_count_after_second = runtime.registry_receipts.len();
+
+        let old_replay = propose_control_registry_command(&mut runtime, &first_envelope).expect("old sequence replay");
+        assert!(old_replay.duplicate);
+        assert_eq!(old_replay.decision, RAFT_DECISION_PASS);
+        assert_eq!(old_replay.registry_receipt.receipt_ref, first.registry_receipt.receipt_ref);
+        assert!(old_replay.log_entry.is_none());
+        assert_eq!(runtime.state.state_ref, state_after_second);
+        assert_eq!(runtime.log_entries.len(), log_count_after_second);
+        assert_eq!(runtime.commit_receipts.len(), commit_count_after_second);
+        assert_eq!(runtime.registry_receipts.len(), registry_count_after_second);
+
+        let old_conflict_envelope = envelope_for(
+            &runtime,
+            "client:duplicate-proof",
+            first_sequence,
+            command_for_receipt_index("duplicate-scope", "duplicate-target-v3"),
+        );
+        let old_conflict =
+            propose_control_registry_command(&mut runtime, &old_conflict_envelope).expect("old conflict denial");
+        assert!(old_conflict.duplicate);
+        assert_eq!(old_conflict.decision, RAFT_DECISION_DENY);
+        assert!(old_conflict.log_entry.is_none());
+        assert_eq!(runtime.state.state_ref, state_after_second);
+        assert_eq!(runtime.log_entries.len(), log_count_after_second);
+
+        let stale_unseen_envelope = envelope_for(
+            &runtime,
+            "client:duplicate-proof",
+            STALE_RAFT_SEQUENCE_BEFORE_INITIAL,
+            command_for_receipt_index("stale-scope", "stale-target"),
+        );
+        let stale_unseen =
+            propose_control_registry_command(&mut runtime, &stale_unseen_envelope).expect("stale unseen denial");
+        assert!(stale_unseen.duplicate);
+        assert_eq!(stale_unseen.decision, RAFT_DECISION_DENY);
+        assert!(stale_unseen.log_entry.is_none());
+        assert_eq!(runtime.state.state_ref, state_after_second);
+        assert_eq!(runtime.log_entries.len(), log_count_after_second);
+
         let malformed_envelope = envelope_for(
             &runtime,
             "client:malformed-command",
@@ -422,8 +476,10 @@ mod tests {
         );
         let malformed = propose_control_registry_command(&mut runtime, &malformed_envelope).expect("malformed denial");
         assert_eq!(malformed.decision, RAFT_DECISION_DENY);
-        assert_eq!(runtime.state.state_ref, state_after_first);
-        assert_eq!(runtime.log_entries.len(), log_count_after_first);
+        assert_eq!(runtime.state.state_ref, state_after_second);
+        assert_eq!(runtime.log_entries.len(), log_count_after_second);
+        assert_eq!(runtime.commit_receipts.len(), commit_count_after_second);
+        assert_eq!(runtime.registry_receipts.len(), registry_count_after_second);
         assert!(malformed
             .registry_receipt
             .diagnostics

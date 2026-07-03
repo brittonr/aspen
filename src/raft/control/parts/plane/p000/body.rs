@@ -160,6 +160,12 @@ pub struct ClientSessionRecord {
     pub result_command_ref: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ClientSequenceKey {
+    client_session: String,
+    sequence: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlRegistryState {
     pub state_ref: String,

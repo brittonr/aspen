@@ -23,7 +23,7 @@ pub fn persist_control_registry_runtime(
         for session in &runtime.state.client_sessions {
             let value = session_record_value(session);
             let bytes = canonical_bytes(&value)?;
-            sessions.insert(session.client_session.as_str(), bytes.as_slice()).map_err(store_error)?;
+            sessions.insert(session.result_command_ref.as_str(), bytes.as_slice()).map_err(store_error)?;
         }
     }
     {
@@ -268,19 +268,29 @@ fn proposal_diagnostics(input: ProposalDecisionInput<'_>) -> Result<Vec<String>>
 }
 
 fn duplicate_sequence(runtime: &ControlRegistryRuntime, envelope: &RaftCommandEnvelope) -> Option<DuplicateSequence> {
-    let session = runtime
+    if let Some(session) = runtime
         .state
         .client_sessions
         .iter()
-        .find(|session| session.client_session == envelope.client_session && session.sequence == envelope.sequence)?;
-    if session.result_command_ref != envelope.envelope_ref {
-        return Some(DuplicateSequence::Conflict(session.clone()));
+        .find(|session| session.client_session == envelope.client_session && session.sequence == envelope.sequence)
+    {
+        if session.result_command_ref != envelope.envelope_ref {
+            return Some(DuplicateSequence::Conflict(session.clone()));
+        }
+        return runtime
+            .registry_receipts
+            .iter()
+            .find(|receipt| receipt.command_ref == envelope.envelope_ref)
+            .cloned()
+            .map(DuplicateSequence::Replay)
+            .or_else(|| Some(DuplicateSequence::Conflict(session.clone())));
     }
     runtime
-        .registry_receipts
+        .state
+        .client_sessions
         .iter()
-        .find(|receipt| receipt.command_ref == envelope.envelope_ref)
+        .filter(|session| session.client_session == envelope.client_session && envelope.sequence <= session.sequence)
+        .max_by_key(|session| session.sequence)
         .cloned()
-        .map(DuplicateSequence::Replay)
-        .or_else(|| Some(DuplicateSequence::Conflict(session.clone())))
+        .map(DuplicateSequence::Conflict)
 }

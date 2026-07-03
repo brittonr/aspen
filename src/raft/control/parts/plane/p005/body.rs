@@ -19,10 +19,18 @@ fn state_maps(state: &ControlRegistryState) -> Result<RegistryMaps> {
     let sessions = state
         .client_sessions
         .iter()
-        .map(|session| (session.client_session.clone(), session.clone()))
+        .map(|session| {
+            (
+                ClientSequenceKey {
+                    client_session: session.client_session.clone(),
+                    sequence: session.sequence,
+                },
+                session.clone(),
+            )
+        })
         .collect::<OrderedMap<_, _>>();
     if sessions.len() != state.client_sessions.len() {
-        return Err(MoltenError::invalid_harness("duplicate control registry client session"));
+        return Err(MoltenError::invalid_harness("duplicate control registry client sequence"));
     }
     Ok(RegistryMaps { entries, sessions })
 }
@@ -38,7 +46,7 @@ fn entries_from_map(entries: &OrderedMap<ControlRegistryKey, String>) -> Vec<Con
         .collect()
 }
 
-fn sessions_from_map(sessions: &OrderedMap<String, ClientSessionRecord>) -> Vec<ClientSessionRecord> {
+fn sessions_from_map(sessions: &OrderedMap<ClientSequenceKey, ClientSessionRecord>) -> Vec<ClientSessionRecord> {
     sessions.values().cloned().collect()
 }
 
