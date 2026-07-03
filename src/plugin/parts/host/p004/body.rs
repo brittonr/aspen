@@ -115,6 +115,303 @@ where S: VecSink<T>
     }
 }
 
+pub fn evaluate_plugin_lifecycle_state(input: &PluginLifecycleStateInput<'_>) -> Result<PluginLifecycleStateDecision> {
+    validate_optional_ref(input.recovery_receipt_ref, "plugin lifecycle recovery receipt ref")?;
+    let mut diagnostics = Vec::new();
+    let install_passes = plugin_install_passes(input.install, input.manifest, &mut diagnostics)?;
+    let permission_passes = plugin_permission_passes(input.permission, input.manifest, &mut diagnostics)?;
+    let activation_passes = plugin_activation_passes(input.activation, input.manifest, &mut diagnostics)?;
+    let hostcall_passes = plugin_hostcall_passes(input.hostcall, input.manifest, &mut diagnostics)?;
+    let health_passes = plugin_health_passes(input.health, input.recovery_receipt_ref, &mut diagnostics)?;
+    let removal_passes = plugin_removal_passes(input.removal, input.manifest, &mut diagnostics)?;
+    let upgrade_passes = plugin_upgrade_passes(input.upgrade, input.manifest, &mut diagnostics)?;
+
+    if requires_permission(input.evaluation_kind) && !permission_passes {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_PERMISSION_MISSING.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+    if requires_activation(input.evaluation_kind) && !activation_passes {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_ACTIVATION_MISSING.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+    if requires_healthy_use(input.evaluation_kind) && !health_passes {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_HEALTH_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+    if matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::HostcallRequest) && removal_passes {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_AUTHORITY_CLOSED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+    if matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::UpgradeRequest) && removal_passes {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_AUTHORITY_CLOSED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+
+    let decision = if install_passes && diagnostics.is_empty() {
+        "pass"
+    } else {
+        "deny"
+    };
+    let side_effect_authorized = decision == "pass"
+        && match input.evaluation_kind {
+            PluginLifecycleEvaluationKind::CompleteTrace => true,
+            PluginLifecycleEvaluationKind::ActivationRequest => activation_passes,
+            PluginLifecycleEvaluationKind::HostcallRequest => hostcall_passes && !removal_passes,
+            PluginLifecycleEvaluationKind::UpgradeRequest => upgrade_passes && !removal_passes,
+            PluginLifecycleEvaluationKind::RemovalRequest => removal_passes,
+        };
+    Ok(PluginLifecycleStateDecision {
+        decision: decision.to_string(),
+        diagnostics,
+        side_effect_authorized,
+        authority_closed: removal_passes,
+    })
+}
+
+fn plugin_install_passes(
+    install: Option<&PluginInstallReceipt>,
+    manifest: &PluginManifest,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<bool> {
+    let Some(install) = install else {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_INSTALL_MISSING.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    };
+    if install.decision != "pass" {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_INSTALL_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    let binding_matches = install.plugin_ref == manifest.plugin_ref
+        && install.manifest_ref == manifest.manifest_ref
+        && install.artifact_ref == manifest.artifact_ref;
+    if !binding_matches {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_INSTALL_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+    Ok(binding_matches)
+}
+
+fn plugin_permission_passes(
+    permission: Option<&PluginPermissionReceipt>,
+    manifest: &PluginManifest,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<bool> {
+    let Some(permission) = permission else {
+        return Ok(false);
+    };
+    if permission.decision != "pass" {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_PERMISSION_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    let binding_matches = permission.plugin_ref == manifest.plugin_ref && permission.manifest_ref == manifest.manifest_ref;
+    if !binding_matches {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_PERMISSION_BINDING_MISMATCH.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+    Ok(binding_matches)
+}
+
+fn plugin_activation_passes(
+    activation: Option<&PluginLifecycleReceipt>,
+    manifest: &PluginManifest,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<bool> {
+    let Some(activation) = activation else {
+        return Ok(false);
+    };
+    if activation.decision != "pass" {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_ACTIVATION_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    let binding_matches = activation.plugin_ref == manifest.plugin_ref
+        && activation.manifest_ref == manifest.manifest_ref
+        && activation.operation == PLUGIN_LIFECYCLE_ACTIVATION_OPERATION;
+    if !binding_matches {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_ACTIVATION_BINDING_MISMATCH.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+    Ok(binding_matches)
+}
+
+fn plugin_hostcall_passes(
+    hostcall: Option<&PluginHostcallReceipt>,
+    manifest: &PluginManifest,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<bool> {
+    let Some(hostcall) = hostcall else {
+        return Ok(false);
+    };
+    if hostcall.decision != "pass" {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_HOSTCALL_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    if hostcall.plugin_ref != manifest.plugin_ref {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_HOSTCALL_BINDING_MISMATCH.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    if !manifest.hostcall_refs.iter().any(|reference| reference == &hostcall.hostcall_ref) {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_HOSTCALL_UNDECLARED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn plugin_health_passes(
+    health: Option<&PluginHealthReceipt>,
+    recovery_receipt_ref: Option<&str>,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<bool> {
+    let Some(health) = health else {
+        return Ok(true);
+    };
+    if health.decision == "pass" || recovery_receipt_ref.is_some() {
+        Ok(true)
+    } else {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_HEALTH_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        Ok(false)
+    }
+}
+
+fn plugin_removal_passes(
+    removal: Option<&PluginRemovalReceipt>,
+    manifest: &PluginManifest,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<bool> {
+    let Some(removal) = removal else {
+        return Ok(false);
+    };
+    if removal.decision != "pass" {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_REMOVAL_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    if removal.plugin_ref != manifest.plugin_ref {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_REMOVAL_BINDING_MISMATCH.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn plugin_upgrade_passes(
+    upgrade: Option<&PluginUpgradeReceipt>,
+    manifest: &PluginManifest,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<bool> {
+    let Some(upgrade) = upgrade else {
+        return Ok(false);
+    };
+    if upgrade.decision != "pass" {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_UPGRADE_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    if upgrade.old_manifest_ref != manifest.manifest_ref {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_UPGRADE_BINDING_MISMATCH.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn requires_permission(evaluation_kind: PluginLifecycleEvaluationKind) -> bool {
+    matches!(
+        evaluation_kind,
+        PluginLifecycleEvaluationKind::ActivationRequest
+            | PluginLifecycleEvaluationKind::HostcallRequest
+            | PluginLifecycleEvaluationKind::UpgradeRequest
+            | PluginLifecycleEvaluationKind::RemovalRequest
+            | PluginLifecycleEvaluationKind::CompleteTrace
+    )
+}
+
+fn requires_activation(evaluation_kind: PluginLifecycleEvaluationKind) -> bool {
+    matches!(
+        evaluation_kind,
+        PluginLifecycleEvaluationKind::HostcallRequest
+            | PluginLifecycleEvaluationKind::UpgradeRequest
+            | PluginLifecycleEvaluationKind::RemovalRequest
+            | PluginLifecycleEvaluationKind::CompleteTrace
+    )
+}
+
+fn requires_healthy_use(evaluation_kind: PluginLifecycleEvaluationKind) -> bool {
+    matches!(
+        evaluation_kind,
+        PluginLifecycleEvaluationKind::ActivationRequest
+            | PluginLifecycleEvaluationKind::HostcallRequest
+            | PluginLifecycleEvaluationKind::UpgradeRequest
+    )
+}
+
 fn collect_missing_refs(
     required_refs: &[String],
     supplied_refs: &[String],

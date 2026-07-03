@@ -11,6 +11,24 @@ const MAX_PLUGIN_CALLBACKS: usize = 16;
 const MAX_PLUGIN_REFS: usize = 4096;
 const MAX_PLUGIN_DIAGNOSTICS: usize = 256;
 const MAX_PLUGIN_CHECKS: usize = 64;
+const PLUGIN_LIFECYCLE_INSTALL_MISSING: &str = "plugin lifecycle install receipt missing";
+const PLUGIN_LIFECYCLE_INSTALL_FAILED: &str = "plugin lifecycle install receipt did not pass";
+const PLUGIN_LIFECYCLE_PERMISSION_MISSING: &str = "plugin lifecycle permission receipt missing";
+const PLUGIN_LIFECYCLE_PERMISSION_FAILED: &str = "plugin lifecycle permission receipt did not pass";
+const PLUGIN_LIFECYCLE_PERMISSION_BINDING_MISMATCH: &str = "plugin lifecycle permission binding mismatch";
+const PLUGIN_LIFECYCLE_ACTIVATION_MISSING: &str = "plugin lifecycle activation receipt missing";
+const PLUGIN_LIFECYCLE_ACTIVATION_FAILED: &str = "plugin lifecycle activation receipt did not pass";
+const PLUGIN_LIFECYCLE_ACTIVATION_BINDING_MISMATCH: &str = "plugin lifecycle activation binding mismatch";
+const PLUGIN_LIFECYCLE_HOSTCALL_FAILED: &str = "plugin lifecycle hostcall receipt did not pass";
+const PLUGIN_LIFECYCLE_HOSTCALL_BINDING_MISMATCH: &str = "plugin lifecycle hostcall binding mismatch";
+const PLUGIN_LIFECYCLE_HOSTCALL_UNDECLARED: &str = "plugin lifecycle hostcall is not declared by manifest";
+const PLUGIN_LIFECYCLE_HEALTH_FAILED: &str = "plugin lifecycle failed health blocks further use";
+const PLUGIN_LIFECYCLE_UPGRADE_FAILED: &str = "plugin lifecycle upgrade receipt did not pass";
+const PLUGIN_LIFECYCLE_UPGRADE_BINDING_MISMATCH: &str = "plugin lifecycle upgrade manifest binding mismatch";
+const PLUGIN_LIFECYCLE_REMOVAL_FAILED: &str = "plugin lifecycle removal cleanup incomplete";
+const PLUGIN_LIFECYCLE_REMOVAL_BINDING_MISMATCH: &str = "plugin lifecycle removal binding mismatch";
+const PLUGIN_LIFECYCLE_AUTHORITY_CLOSED: &str = "plugin lifecycle authority closed by removal";
+const PLUGIN_LIFECYCLE_ACTIVATION_OPERATION: &str = "start";
 const _: () = assert!(MAX_PLUGIN_CALLBACKS > 0);
 const _: () = assert!(MAX_PLUGIN_REFS > MAX_PLUGIN_CALLBACKS);
 const _: () = assert!(MAX_PLUGIN_DIAGNOSTICS > 0);
@@ -113,6 +131,29 @@ pub struct RemovalReceiptInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PluginLifecycleEvaluationKind {
+    CompleteTrace,
+    ActivationRequest,
+    HostcallRequest,
+    UpgradeRequest,
+    RemovalRequest,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PluginLifecycleStateInput<'a> {
+    pub evaluation_kind: PluginLifecycleEvaluationKind,
+    pub manifest: &'a PluginManifest,
+    pub install: Option<&'a PluginInstallReceipt>,
+    pub permission: Option<&'a PluginPermissionReceipt>,
+    pub activation: Option<&'a PluginLifecycleReceipt>,
+    pub hostcall: Option<&'a PluginHostcallReceipt>,
+    pub health: Option<&'a PluginHealthReceipt>,
+    pub removal: Option<&'a PluginRemovalReceipt>,
+    pub upgrade: Option<&'a PluginUpgradeReceipt>,
+    pub recovery_receipt_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HostAbiResultInput<'a> {
     pub status: &'a str,
     pub payload_ref: Option<&'a str>,
@@ -206,6 +247,14 @@ pub struct PluginUpgradeReceipt {
     pub new_manifest_ref: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginLifecycleStateDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub side_effect_authorized: bool,
+    pub authority_closed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

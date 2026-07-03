@@ -14,6 +14,18 @@ pub fn minimal_plugin_fixture(root: &std::path::Path) -> Result<PluginFixtureRun
     let removal = removal_step(&manifest_value, &lifecycle.remove.receipt_ref, &service_ref)?;
     let upgraded_manifest_value = executor_manifest(&registry, &seed, "minimal-v2")?;
     let upgrade = upgrade_step(&manifest_value, &upgraded_manifest_value, &removal.receipt_ref)?;
+    let lifecycle_decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
+        evaluation_kind: PluginLifecycleEvaluationKind::CompleteTrace,
+        manifest: &manifest,
+        install: Some(&install),
+        permission: Some(&permission),
+        activation: Some(&lifecycle.start),
+        hostcall: Some(&call),
+        health: Some(&health),
+        removal: Some(&removal),
+        upgrade: Some(&upgrade),
+        recovery_receipt_ref: None,
+    })?;
     let evidence_values = vec![
         manifest_value.clone(),
         install.value.clone(),
@@ -52,6 +64,7 @@ pub fn minimal_plugin_fixture(root: &std::path::Path) -> Result<PluginFixtureRun
         lifecycle.stop.decision.as_str(),
         removal.decision.as_str(),
         upgrade.decision.as_str(),
+        lifecycle_decision.decision.as_str(),
     ]);
     Ok(PluginFixtureRun {
         decision,

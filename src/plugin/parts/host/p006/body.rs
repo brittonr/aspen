@@ -234,6 +234,146 @@ mod tests {
         assert!(to_text(&mcp.response_value).expect("render MCP response").contains("plugin-manifest"));
     }
 
+    #[test]
+    fn plugin_lifecycle_state_core_accepts_complete_ordered_trace() {
+        let fixture = lifecycle_proof_fixture("plugin-lifecycle-complete");
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
+            evaluation_kind: PluginLifecycleEvaluationKind::CompleteTrace,
+            manifest: &fixture.manifest,
+            install: Some(&fixture.install),
+            permission: Some(&fixture.permission),
+            activation: Some(&fixture.start),
+            hostcall: Some(&fixture.hostcall),
+            health: Some(&fixture.health),
+            removal: Some(&fixture.removal),
+            upgrade: Some(&fixture.upgrade),
+            recovery_receipt_ref: None,
+        })
+        .expect("evaluate lifecycle state");
+        assert_eq!(decision.decision, "pass");
+        assert!(decision.side_effect_authorized);
+        assert!(decision.authority_closed);
+        assert!(decision.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn plugin_lifecycle_state_core_denies_hostcall_before_permission() {
+        let fixture = lifecycle_proof_fixture("plugin-lifecycle-permission-deny");
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
+            evaluation_kind: PluginLifecycleEvaluationKind::HostcallRequest,
+            manifest: &fixture.manifest,
+            install: Some(&fixture.install),
+            permission: None,
+            activation: Some(&fixture.start),
+            hostcall: Some(&fixture.hostcall),
+            health: Some(&fixture.health),
+            removal: None,
+            upgrade: None,
+            recovery_receipt_ref: None,
+        })
+        .expect("evaluate lifecycle state");
+        assert_eq!(decision.decision, "deny");
+        assert!(!decision.side_effect_authorized);
+        assert!(decision
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == PLUGIN_LIFECYCLE_PERMISSION_MISSING));
+    }
+
+    #[test]
+    fn plugin_lifecycle_state_core_denies_failed_health_upgrade() {
+        let fixture = lifecycle_proof_fixture("plugin-lifecycle-health-deny");
+        let failed_health_value = plugin_health_receipt_value(&HealthReceiptInput {
+            manifest_value: &fixture.manifest_value,
+            lifecycle_receipt_ref: &fixture.start.receipt_ref,
+            service_refs: &[test_ref("service")],
+            health_status: "failed",
+            diagnostics: &["probe failed".to_string()],
+        })
+        .expect("failed health receipt");
+        let failed_health = parse_plugin_health_receipt(&failed_health_value).expect("parse failed health");
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
+            evaluation_kind: PluginLifecycleEvaluationKind::UpgradeRequest,
+            manifest: &fixture.manifest,
+            install: Some(&fixture.install),
+            permission: Some(&fixture.permission),
+            activation: Some(&fixture.start),
+            hostcall: None,
+            health: Some(&failed_health),
+            removal: None,
+            upgrade: Some(&fixture.upgrade),
+            recovery_receipt_ref: None,
+        })
+        .expect("evaluate lifecycle state");
+        assert_eq!(decision.decision, "deny");
+        assert!(!decision.side_effect_authorized);
+        assert!(decision
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == PLUGIN_LIFECYCLE_HEALTH_FAILED));
+    }
+
+    #[test]
+    fn plugin_lifecycle_state_core_denies_hostcall_after_removal() {
+        let fixture = lifecycle_proof_fixture("plugin-lifecycle-removal-deny");
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
+            evaluation_kind: PluginLifecycleEvaluationKind::HostcallRequest,
+            manifest: &fixture.manifest,
+            install: Some(&fixture.install),
+            permission: Some(&fixture.permission),
+            activation: Some(&fixture.start),
+            hostcall: Some(&fixture.hostcall),
+            health: Some(&fixture.health),
+            removal: Some(&fixture.removal),
+            upgrade: None,
+            recovery_receipt_ref: None,
+        })
+        .expect("evaluate lifecycle state");
+        assert_eq!(decision.decision, "deny");
+        assert!(!decision.side_effect_authorized);
+        assert!(decision.authority_closed);
+        assert!(decision
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == PLUGIN_LIFECYCLE_AUTHORITY_CLOSED));
+    }
+
+    #[test]
+    fn plugin_lifecycle_state_core_denies_incomplete_cleanup() {
+        let fixture = lifecycle_proof_fixture("plugin-lifecycle-cleanup-deny");
+        let incomplete_removal_value = plugin_removal_receipt_value(&RemovalReceiptInput {
+            manifest_value: &fixture.manifest_value,
+            lifecycle_receipt_ref: &fixture.start.receipt_ref,
+            owned_service_refs: &[test_ref("service")],
+            assertion_refs: &[],
+            handle_refs: &[],
+            catalog_entry_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("incomplete removal receipt");
+        let incomplete_removal = parse_plugin_removal_receipt(&incomplete_removal_value)
+            .expect("parse incomplete removal receipt");
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
+            evaluation_kind: PluginLifecycleEvaluationKind::RemovalRequest,
+            manifest: &fixture.manifest,
+            install: Some(&fixture.install),
+            permission: Some(&fixture.permission),
+            activation: Some(&fixture.start),
+            hostcall: None,
+            health: Some(&fixture.health),
+            removal: Some(&incomplete_removal),
+            upgrade: None,
+            recovery_receipt_ref: None,
+        })
+        .expect("evaluate lifecycle state");
+        assert_eq!(decision.decision, "deny");
+        assert!(!decision.side_effect_authorized);
+        assert!(decision
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == PLUGIN_LIFECYCLE_REMOVAL_FAILED));
+    }
+
     #[hegel::test(test_cases = 16)]
     fn hegel_plugin_lifecycle_refs_are_deterministic_and_authority_gated(tc: hegel::TestCase) {
         let callback_count = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(4));
@@ -271,6 +411,48 @@ mod tests {
         })
         .expect("permission receipt");
         assert_eq!(parse_plugin_permission_receipt(&permission).expect("parse permission").decision, "deny");
+    }
+
+    struct LifecycleProofFixture {
+        manifest_value: IoValue,
+        manifest: PluginManifest,
+        install: PluginInstallReceipt,
+        permission: PluginPermissionReceipt,
+        start: PluginLifecycleReceipt,
+        hostcall: PluginHostcallReceipt,
+        health: PluginHealthReceipt,
+        removal: PluginRemovalReceipt,
+        upgrade: PluginUpgradeReceipt,
+    }
+
+    fn lifecycle_proof_fixture(label: &str) -> LifecycleProofFixture {
+        let dir = temp_dir(label);
+        let registry = dir.join("registry");
+        let seed = seed_refs().expect("seed refs");
+        let manifest_value = executor_manifest(&registry, &seed, label).expect("executor manifest");
+        let manifest = parse_plugin_manifest(&manifest_value).expect("parse manifest");
+        let install = install_plugin(&registry, &manifest_value).expect("install plugin");
+        let permission = permission_step(&manifest_value, &seed).expect("permission step");
+        let start = life_step("start", &manifest_value, &permission.receipt_ref, &seed).expect("start lifecycle");
+        let hostcall = call_step(&manifest_value, &seed).expect("hostcall step");
+        let service_ref = plugin_ref("service-supervision").expect("service ref");
+        let health = health_step(&manifest_value, &start.receipt_ref, &service_ref).expect("health step");
+        let removal = removal_step(&manifest_value, &start.receipt_ref, &service_ref).expect("removal step");
+        let upgraded_manifest_value = executor_manifest(&registry, &seed, &format!("{label}-upgrade"))
+            .expect("upgraded manifest");
+        let upgrade = upgrade_step(&manifest_value, &upgraded_manifest_value, &removal.receipt_ref)
+            .expect("upgrade step");
+        LifecycleProofFixture {
+            manifest_value,
+            manifest,
+            install,
+            permission,
+            start,
+            hostcall,
+            health,
+            removal,
+            upgrade,
+        }
     }
 
     fn temp_dir(label: &str) -> std::path::PathBuf {
