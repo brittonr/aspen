@@ -50,6 +50,20 @@ fn build_remote_envelope(input: EnvelopeInput) -> Result<Envelope> {
 
 const MAX_PROTOCOL_ITEMS: usize = 1024;
 const MAX_PROTOCOL_STEPS: usize = 256;
+const PROTOCOL_TRANSITION_UNSUPPORTED_OPERATION: &str = "unsupported protocol endpoint operation";
+const PROTOCOL_TRANSITION_SEND_EXPECTED: &str = "endpoint does not expect send";
+const PROTOCOL_TRANSITION_RECEIVE_EXPECTED: &str = "endpoint does not expect receive";
+const PROTOCOL_TRANSITION_BRANCH_EXPECTED: &str = "endpoint does not expect internal choice";
+const PROTOCOL_TRANSITION_OFFER_EXPECTED: &str = "endpoint does not expect offer";
+const PROTOCOL_TRANSITION_SEND_MISMATCH: &str = "send does not match projected action";
+const PROTOCOL_TRANSITION_RECEIVE_MISMATCH: &str = "message does not match projected receive action";
+const PROTOCOL_TRANSITION_BRANCH_MISSING: &str = "branch label is not offered by projected state";
+const PROTOCOL_TRANSITION_OFFER_MISSING: &str = "offer label is not projected";
+const PROTOCOL_TRANSITION_MESSAGE_MISSING: &str = "protocol receive transition requires message evidence";
+const PROTOCOL_TRANSITION_NEXT_BINDING: &str = "protocol transition next state binding mismatch";
+const PROTOCOL_TRANSITION_NEXT_SEQUENCE: &str = "protocol transition next sequence is not prior+1";
+const PROTOCOL_TRANSITION_NEXT_STATE: &str = "protocol transition next local state mismatch";
+const PROTOCOL_TRANSITION_SEEN_MESSAGES: &str = "protocol transition seen message refs mismatch";
 
 const _: () = assert!(MAX_PROTOCOL_ITEMS > 0);
 const _: () = assert!(MAX_PROTOCOL_STEPS > 0);

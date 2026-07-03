@@ -83,17 +83,17 @@ pub fn send_protocol_message(input: ProtocolSendInput) -> Result<ProtocolOperati
     if !diagnostics.is_empty() {
         return deny_operation("send", &state, None, gates, diagnostics);
     }
-    let Some(action) = state.local_state.actions.first() else {
-        return deny_operation("send", &state, None, gates, vec!["endpoint does not expect send".to_string()]);
-    };
-    if action.direction != "send" {
-        return deny_operation("send", &state, None, gates, vec!["endpoint does not expect send".to_string()]);
-    }
-    if action.peer != input.to_role || action.label != input.label || action.payload_tag != input.payload_tag {
-        return deny_operation("send", &state, None, gates, vec![format!(
-            "send does not match projected action label={}",
-            action.label
-        )]);
+    let preflight = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
+        operation: "send",
+        prior: &state,
+        peer: Some(&input.to_role),
+        label: &input.label,
+        payload_tag: Some(&input.payload_tag),
+        message: None,
+        next: None,
+    })?;
+    if preflight.decision != "pass" {
+        return deny_operation("send", &state, None, gates, preflight.diagnostics);
     }
     let mut evidence_refs =
         Vec::with_capacity(input.evidence_refs.len() + input.authority_refs.len() + input.resource_refs.len());
@@ -112,11 +112,26 @@ pub fn send_protocol_message(input: ProtocolSendInput) -> Result<ProtocolOperati
         evidence_refs,
     })?;
     let message = parse_protocol_message(&message_value)?;
+    let transition = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
+        operation: "send",
+        prior: &state,
+        peer: Some(&message.to_role),
+        label: &message.label,
+        payload_tag: Some(&message.payload_tag),
+        message: Some(&message),
+        next: None,
+    })?;
+    if transition.decision != "pass" {
+        return deny_operation("send", &state, Some(&message), gates, transition.diagnostics);
+    }
+    let next_local_state = transition
+        .next_local_state
+        .ok_or_else(|| MoltenError::invalid_harness("send transition missing next local state"))?;
     let next_state = advance_state(
         &state,
-        consume_first_action(&state.local_state)?,
-        state.sequence + 1,
-        state.seen_message_refs.clone(),
+        next_local_state,
+        state.sequence.saturating_add(1),
+        transition.seen_message_refs,
     )?;
     pass_operation("send", &state, Some(&message), &next_state, gates)
 }
@@ -129,30 +144,27 @@ pub fn receive_protocol_message(input: ProtocolReceiveInput) -> Result<ProtocolO
     if !diagnostics.is_empty() {
         return deny_operation("receive", &state, Some(&message), gates, diagnostics);
     }
-    if state.seen_message_refs.iter().any(|reference| reference == &message.message_ref) {
-        return deny_operation("receive", &state, Some(&message), gates, vec![
-            "duplicate protocol message replay".to_string(),
-        ]);
+    let transition = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
+        operation: "receive",
+        prior: &state,
+        peer: Some(&message.from_role),
+        label: &message.label,
+        payload_tag: Some(&message.payload_tag),
+        message: Some(&message),
+        next: None,
+    })?;
+    if transition.decision != "pass" {
+        return deny_operation("receive", &state, Some(&message), gates, transition.diagnostics);
     }
-    let Some(action) = state.local_state.actions.first() else {
-        return deny_operation("receive", &state, Some(&message), gates, vec![
-            "endpoint does not expect receive".to_string(),
-        ]);
-    };
-    let expected = ExpectedReceive {
-        peer: &action.peer,
-        label: &action.label,
-        payload_tag: &action.payload_tag,
-    };
-    if action.direction != "recv" || !message_matches(&message, &state, expected) {
-        return deny_operation("receive", &state, Some(&message), gates, vec![
-            "message does not match projected receive action".to_string(),
-        ]);
-    }
-    let mut seen = Vec::with_capacity(state.seen_message_refs.len() + 1);
-    seen.extend(state.seen_message_refs.iter().cloned());
-    seen.push(message.message_ref.clone());
-    let next_state = advance_state(&state, consume_first_action(&state.local_state)?, state.sequence + 1, seen)?;
+    let next_local_state = transition
+        .next_local_state
+        .ok_or_else(|| MoltenError::invalid_harness("receive transition missing next local state"))?;
+    let next_state = advance_state(
+        &state,
+        next_local_state,
+        state.sequence.saturating_add(1),
+        transition.seen_message_refs,
+    )?;
     pass_operation("receive", &state, Some(&message), &next_state, gates)
 }
 
@@ -163,21 +175,27 @@ pub fn choose_protocol_branch(input: ProtocolBranchOperationInput) -> Result<Pro
     if !diagnostics.is_empty() {
         return deny_operation("branch", &state, None, gates, diagnostics);
     }
-    let ProtocolLocalTerminal::InternalChoice(branches) = &state.local_state.terminal else {
-        return deny_operation("branch", &state, None, gates, vec![
-            "endpoint does not expect internal choice".to_string(),
-        ]);
-    };
-    let Some(branch) = branch_for_label(branches, &input.label) else {
-        return deny_operation("branch", &state, None, gates, vec![
-            "branch label is not offered by projected state".to_string(),
-        ]);
-    };
-    let next_local = ProtocolLocalState {
-        actions: branch.actions.clone(),
-        terminal: ProtocolLocalTerminal::End,
-    };
-    let next_state = advance_state(&state, next_local, state.sequence + 1, state.seen_message_refs.clone())?;
+    let transition = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
+        operation: "branch",
+        prior: &state,
+        peer: None,
+        label: &input.label,
+        payload_tag: None,
+        message: None,
+        next: None,
+    })?;
+    if transition.decision != "pass" {
+        return deny_operation("branch", &state, None, gates, transition.diagnostics);
+    }
+    let next_local_state = transition
+        .next_local_state
+        .ok_or_else(|| MoltenError::invalid_harness("branch transition missing next local state"))?;
+    let next_state = advance_state(
+        &state,
+        next_local_state,
+        state.sequence.saturating_add(1),
+        transition.seen_message_refs,
+    )?;
     pass_operation("branch", &state, None, &next_state, gates)
 }
 
@@ -188,17 +206,27 @@ pub fn offer_protocol_branch(input: ProtocolBranchOperationInput) -> Result<Prot
     if !diagnostics.is_empty() {
         return deny_operation("offer", &state, None, gates, diagnostics);
     }
-    let ProtocolLocalTerminal::Offer { branches, .. } = &state.local_state.terminal else {
-        return deny_operation("offer", &state, None, gates, vec!["endpoint does not expect offer".to_string()]);
-    };
-    let Some(branch) = branch_for_label(branches, &input.label) else {
-        return deny_operation("offer", &state, None, gates, vec!["offer label is not projected".to_string()]);
-    };
-    let next_local = ProtocolLocalState {
-        actions: branch.actions.clone(),
-        terminal: ProtocolLocalTerminal::End,
-    };
-    let next_state = advance_state(&state, next_local, state.sequence + 1, state.seen_message_refs.clone())?;
+    let transition = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
+        operation: "offer",
+        prior: &state,
+        peer: None,
+        label: &input.label,
+        payload_tag: None,
+        message: None,
+        next: None,
+    })?;
+    if transition.decision != "pass" {
+        return deny_operation("offer", &state, None, gates, transition.diagnostics);
+    }
+    let next_local_state = transition
+        .next_local_state
+        .ok_or_else(|| MoltenError::invalid_harness("offer transition missing next local state"))?;
+    let next_state = advance_state(
+        &state,
+        next_local_state,
+        state.sequence.saturating_add(1),
+        transition.seen_message_refs,
+    )?;
     pass_operation("offer", &state, None, &next_state, gates)
 }
 

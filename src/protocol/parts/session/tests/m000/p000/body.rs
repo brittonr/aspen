@@ -154,6 +154,70 @@
     }
 
     #[test]
+    fn protocol_endpoint_transition_core_accepts_and_rejects_projected_edges() {
+        let lifecycle = request_response_lifecycle().expect("lifecycle");
+        let client0 = &lifecycle.initial_states[0];
+        let send_request = &lifecycle.operations[0];
+        let request_message = send_request.message.as_ref().expect("request message");
+        let client1 = send_request.next_state.as_ref().expect("client next state");
+        let legal_send = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
+            operation: "send",
+            prior: client0,
+            peer: Some("server"),
+            label: "request",
+            payload_tag: Some("request"),
+            message: Some(request_message),
+            next: Some(client1),
+        })
+        .expect("legal send transition");
+        assert_eq!(legal_send.decision, "pass");
+
+        let wrong_peer = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
+            operation: "send",
+            prior: client0,
+            peer: Some("client"),
+            label: "request",
+            payload_tag: Some("request"),
+            message: None,
+            next: None,
+        })
+        .expect("wrong peer transition");
+        assert_eq!(wrong_peer.decision, "deny");
+        assert!(wrong_peer
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains(PROTOCOL_TRANSITION_SEND_MISMATCH)));
+
+        let wrong_label = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
+            operation: "send",
+            prior: client0,
+            peer: Some("server"),
+            label: "response",
+            payload_tag: Some("response"),
+            message: None,
+            next: None,
+        })
+        .expect("wrong label transition");
+        assert_eq!(wrong_label.decision, "deny");
+
+        let wrong_next = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
+            operation: "send",
+            prior: client0,
+            peer: Some("server"),
+            label: "request",
+            payload_tag: Some("request"),
+            message: Some(request_message),
+            next: Some(&lifecycle.initial_states[1]),
+        })
+        .expect("wrong next transition");
+        assert_eq!(wrong_next.decision, "deny");
+        assert!(wrong_next
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == PROTOCOL_TRANSITION_NEXT_BINDING));
+    }
+
+    #[test]
     fn protocol_session_gate_denies_missing_next_state() {
         let lifecycle = request_response_lifecycle().expect("lifecycle");
         let mut input = gate_input(&lifecycle);
@@ -165,6 +229,210 @@
                 .iter()
                 .any(|diagnostic| diagnostic.contains("next state") || diagnostic.contains("terminal"))
         );
+    }
+
+    #[test]
+    fn protocol_session_gate_denies_missing_message_and_stale_receipt() {
+        let lifecycle = request_response_lifecycle().expect("lifecycle");
+        let mut missing_message = gate_input(&lifecycle);
+        missing_message.messages.clear();
+        let missing = gate_protocol_session_lifecycle(missing_message).expect("gate missing message");
+        assert_eq!(missing.decision, "deny");
+        assert!(missing.diagnostics.iter().any(|diagnostic| diagnostic.contains("message is missing")));
+
+        let mut stale = gate_input(&lifecycle);
+        let receipt = &lifecycle.operations[0].receipt;
+        stale.operation_receipts[0] = operation_receipt_value(&OperationReceiptValueInput {
+            operation: &receipt.operation,
+            decision: "pass",
+            protocol_ref: &receipt.protocol_ref,
+            session_id: &receipt.session_id,
+            role: &receipt.role,
+            prior_state_ref: &receipt.prior_state_ref,
+            message_ref: receipt.message_ref.as_deref(),
+            next_state_ref: receipt.next_state_ref.as_deref(),
+            sequence: receipt.sequence.saturating_add(1),
+            authority_refs: &receipt.authority_refs,
+            resource_refs: &receipt.resource_refs,
+            carrier_refs: &receipt.carrier_refs,
+            diagnostics: &[],
+        })
+        .expect("stale receipt value");
+        let stale_gate = gate_protocol_session_lifecycle(stale).expect("gate stale receipt");
+        assert_eq!(stale_gate.decision, "deny");
+        assert!(stale_gate
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("sequence") || diagnostic.contains("replay")));
+    }
+
+    #[test]
+    fn protocol_session_gate_denies_ambiguous_branch_replay() {
+        let empty_left = ProtocolBranchInput {
+            label: "left".to_string(),
+            steps: Vec::new(),
+        };
+        let empty_right = ProtocolBranchInput {
+            label: "right".to_string(),
+            steps: Vec::new(),
+        };
+        let global = protocol_global_choice_value(&ProtocolChoiceInput {
+            decider: "client".to_string(),
+            branches: vec![empty_left, empty_right],
+        })
+        .expect("ambiguous choice global");
+        let manifest_value = protocol_manifest_value(&ProtocolManifestInput {
+            protocol_id: "proto:ambiguous-choice".to_string(),
+            roles: vec!["client".to_string(), "server".to_string()],
+            labels: vec!["left".to_string(), "right".to_string()],
+            payloads: vec![
+                ProtocolPayloadInput {
+                    tag: "left".to_string(),
+                    schema_ref: test_ref("left-schema"),
+                },
+                ProtocolPayloadInput {
+                    tag: "right".to_string(),
+                    schema_ref: test_ref("right-schema"),
+                },
+            ],
+            global,
+            policy_refs: vec![test_ref("policy")],
+            capability_refs: vec![test_ref("capability")],
+            resource_refs: vec![test_ref("resource")],
+        })
+        .expect("ambiguous choice manifest");
+        let install = install_protocol_manifest_value(&manifest_value).expect("install ambiguous choice");
+        let client = start_protocol_session(&install, "client", "session:ambiguous", auth(), resources())
+            .expect("client state");
+        let branch = choose_protocol_branch(ProtocolBranchOperationInput {
+            state: client.value.clone(),
+            label: "left".to_string(),
+            authority_refs: auth(),
+            resource_refs: resources(),
+            carrier_refs: Vec::new(),
+        })
+        .expect("choose branch");
+        let gate = gate_protocol_session_lifecycle(ProtocolSessionGateInput {
+            install_receipt: install.value,
+            initial_states: vec![client.value],
+            operation_receipts: vec![branch.receipt.value],
+            messages: Vec::new(),
+            next_states: vec![branch.next_state.expect("branch next").value],
+        })
+        .expect("ambiguous branch gate");
+        assert_eq!(gate.decision, "deny");
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic.contains("ambiguous")));
+    }
+
+    #[test]
+    fn protocol_session_gate_accepts_generated_branch_offer_trace() {
+        let left = ProtocolBranchInput {
+            label: "left".to_string(),
+            steps: vec![ProtocolCommInput {
+                from_role: "client".to_string(),
+                to_role: "server".to_string(),
+                label: "left".to_string(),
+                payload_tag: "left".to_string(),
+            }],
+        };
+        let right = ProtocolBranchInput {
+            label: "right".to_string(),
+            steps: vec![ProtocolCommInput {
+                from_role: "client".to_string(),
+                to_role: "server".to_string(),
+                label: "right".to_string(),
+                payload_tag: "right".to_string(),
+            }],
+        };
+        let global = protocol_global_choice_value(&ProtocolChoiceInput {
+            decider: "client".to_string(),
+            branches: vec![left, right],
+        })
+        .expect("branch global");
+        let manifest_value = protocol_manifest_value(&ProtocolManifestInput {
+            protocol_id: "proto:branch-gate".to_string(),
+            roles: vec!["client".to_string(), "server".to_string()],
+            labels: vec!["left".to_string(), "right".to_string()],
+            payloads: vec![
+                ProtocolPayloadInput {
+                    tag: "left".to_string(),
+                    schema_ref: test_ref("left-schema"),
+                },
+                ProtocolPayloadInput {
+                    tag: "right".to_string(),
+                    schema_ref: test_ref("right-schema"),
+                },
+            ],
+            global,
+            policy_refs: vec![test_ref("policy")],
+            capability_refs: vec![test_ref("capability")],
+            resource_refs: vec![test_ref("resource")],
+        })
+        .expect("branch manifest");
+        let install = install_protocol_manifest_value(&manifest_value).expect("install branch");
+        let client = start_protocol_session(&install, "client", "session:branch-gate", auth(), resources())
+            .expect("client state");
+        let server = start_protocol_session(&install, "server", "session:branch-gate", auth(), resources())
+            .expect("server state");
+        let branch = choose_protocol_branch(ProtocolBranchOperationInput {
+            state: client.value.clone(),
+            label: "left".to_string(),
+            authority_refs: auth(),
+            resource_refs: resources(),
+            carrier_refs: Vec::new(),
+        })
+        .expect("choose branch");
+        let offer = offer_protocol_branch(ProtocolBranchOperationInput {
+            state: server.value.clone(),
+            label: "left".to_string(),
+            authority_refs: auth(),
+            resource_refs: resources(),
+            carrier_refs: Vec::new(),
+        })
+        .expect("offer branch");
+        let branch_next = branch.next_state.clone().expect("branch next");
+        let offer_next = offer.next_state.clone().expect("offer next");
+        let send = send_protocol_message(ProtocolSendInput {
+            state: branch_next.value.clone(),
+            to_role: "server".to_string(),
+            label: "left".to_string(),
+            payload_tag: "left".to_string(),
+            body_or_ref: record("body", vec![string("left")]),
+            authority_refs: auth(),
+            resource_refs: resources(),
+            evidence_refs: vec![branch.receipt.receipt_ref.clone()],
+        })
+        .expect("branch send");
+        let message = send.message.clone().expect("branch message");
+        let receive = receive_protocol_message(ProtocolReceiveInput {
+            state: offer_next.value.clone(),
+            message: message.value.clone(),
+            authority_refs: auth(),
+            resource_refs: resources(),
+            carrier_refs: Vec::new(),
+        })
+        .expect("branch receive");
+        let gate = gate_protocol_session_lifecycle(ProtocolSessionGateInput {
+            install_receipt: install.value,
+            initial_states: vec![client.value, server.value],
+            operation_receipts: vec![
+                branch.receipt.value,
+                offer.receipt.value,
+                send.receipt.value,
+                receive.receipt.value,
+            ],
+            messages: vec![message.value],
+            next_states: vec![
+                branch_next.value,
+                offer_next.value,
+                send.next_state.expect("send next").value,
+                receive.next_state.expect("receive next").value,
+            ],
+        })
+        .expect("branch gate");
+        let expected_terminal_roles = 2;
+        assert_eq!(gate.decision, "pass");
+        assert_eq!(gate.final_state_count, expected_terminal_roles);
     }
 
     #[test]

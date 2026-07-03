@@ -7,6 +7,25 @@ pub struct ProtocolOperationRun {
     pub receipt: ProtocolOperationReceipt,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProtocolEndpointTransitionInput<'a> {
+    pub operation: &'a str,
+    pub prior: &'a ProtocolSessionState,
+    pub peer: Option<&'a str>,
+    pub label: &'a str,
+    pub payload_tag: Option<&'a str>,
+    pub message: Option<&'a ProtocolMessage>,
+    pub next: Option<&'a ProtocolSessionState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtocolEndpointTransitionDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub next_local_state: Option<ProtocolLocalState>,
+    pub seen_message_refs: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolSendInput {
     pub state: IoValue,
