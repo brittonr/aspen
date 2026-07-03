@@ -124,6 +124,166 @@ impl Action {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StateTransition {
+    pub from_state: State,
+    pub to_state: State,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActionTarget {
+    pub action: Action,
+    pub to_state: State,
+}
+
+pub const LIFECYCLE_STATE_COUNT: usize = 10;
+pub const LIFECYCLE_ACTION_COUNT: usize = 9;
+pub const LIFECYCLE_TRANSITION_COUNT: usize = 15;
+pub const LIFECYCLE_ACTION_TARGET_COUNT: usize = 9;
+
+pub const LIFECYCLE_STATES: [State; LIFECYCLE_STATE_COUNT] = [
+    State::Declared,
+    State::Spawning,
+    State::Starting,
+    State::Ready,
+    State::Degraded,
+    State::Stopping,
+    State::Stopped,
+    State::Failed,
+    State::Restarting,
+    State::Cleaned,
+];
+
+pub const LIFECYCLE_ACTIONS: [Action; LIFECYCLE_ACTION_COUNT] = [
+    Action::Spawn,
+    Action::Start,
+    Action::Ready,
+    Action::Degrade,
+    Action::Fail,
+    Action::Restart,
+    Action::Stop,
+    Action::Cleanup,
+    Action::SupervisorDecision,
+];
+
+pub const LIFECYCLE_TRANSITIONS: [StateTransition; LIFECYCLE_TRANSITION_COUNT] = [
+    StateTransition {
+        from_state: State::Declared,
+        to_state: State::Spawning,
+    },
+    StateTransition {
+        from_state: State::Spawning,
+        to_state: State::Starting,
+    },
+    StateTransition {
+        from_state: State::Starting,
+        to_state: State::Ready,
+    },
+    StateTransition {
+        from_state: State::Ready,
+        to_state: State::Degraded,
+    },
+    StateTransition {
+        from_state: State::Ready,
+        to_state: State::Stopping,
+    },
+    StateTransition {
+        from_state: State::Ready,
+        to_state: State::Failed,
+    },
+    StateTransition {
+        from_state: State::Degraded,
+        to_state: State::Ready,
+    },
+    StateTransition {
+        from_state: State::Degraded,
+        to_state: State::Stopping,
+    },
+    StateTransition {
+        from_state: State::Degraded,
+        to_state: State::Failed,
+    },
+    StateTransition {
+        from_state: State::Stopping,
+        to_state: State::Stopped,
+    },
+    StateTransition {
+        from_state: State::Stopped,
+        to_state: State::Cleaned,
+    },
+    StateTransition {
+        from_state: State::Failed,
+        to_state: State::Restarting,
+    },
+    StateTransition {
+        from_state: State::Failed,
+        to_state: State::Cleaned,
+    },
+    StateTransition {
+        from_state: State::Restarting,
+        to_state: State::Starting,
+    },
+    StateTransition {
+        from_state: State::Restarting,
+        to_state: State::Cleaned,
+    },
+];
+
+pub const LIFECYCLE_ACTION_TARGETS: [ActionTarget; LIFECYCLE_ACTION_TARGET_COUNT] = [
+    ActionTarget {
+        action: Action::Spawn,
+        to_state: State::Spawning,
+    },
+    ActionTarget {
+        action: Action::Start,
+        to_state: State::Starting,
+    },
+    ActionTarget {
+        action: Action::Ready,
+        to_state: State::Ready,
+    },
+    ActionTarget {
+        action: Action::Degrade,
+        to_state: State::Degraded,
+    },
+    ActionTarget {
+        action: Action::Fail,
+        to_state: State::Failed,
+    },
+    ActionTarget {
+        action: Action::Restart,
+        to_state: State::Restarting,
+    },
+    ActionTarget {
+        action: Action::Stop,
+        to_state: State::Stopping,
+    },
+    ActionTarget {
+        action: Action::Stop,
+        to_state: State::Stopped,
+    },
+    ActionTarget {
+        action: Action::Cleanup,
+        to_state: State::Cleaned,
+    },
+];
+
+pub fn lifecycle_states() -> &'static [State] {
+    &LIFECYCLE_STATES
+}
+
+pub fn lifecycle_actions() -> &'static [Action] {
+    &LIFECYCLE_ACTIONS
+}
+
+pub fn allowed_transition_relation() -> &'static [StateTransition] {
+    &LIFECYCLE_TRANSITIONS
+}
+
+pub fn action_target_relation() -> &'static [ActionTarget] {
+    &LIFECYCLE_ACTION_TARGETS
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransitionInput {
     pub entity_kind: EntityKind,

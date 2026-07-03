@@ -140,3 +140,135 @@
         let error = super::transition_receipt(&input).expect_err("unsorted refs fail");
         assert!(error.to_string().contains("policy refs must be sorted and unique"));
     }
+
+    const MATRIX_ENTITY_ID: &str = "matrix-entity";
+    const MATRIX_CAUSE: &str = "matrix-proof";
+    const MATRIX_LOGICAL_STEP: u64 = 13;
+
+    fn matrix_transition_input(
+        from_state: super::State,
+        to_state: super::State,
+        action: super::Action,
+    ) -> super::TransitionInput {
+        super::TransitionInput {
+            entity_kind: super::EntityKind::Service,
+            entity_id: MATRIX_ENTITY_ID.to_owned(),
+            from_state,
+            to_state,
+            action,
+            cause: MATRIX_CAUSE.to_owned(),
+            policy_refs: Vec::new(),
+            resource_refs: Vec::new(),
+            evidence_refs: Vec::new(),
+            supervisor_ref: None,
+            logical_step: MATRIX_LOGICAL_STEP,
+        }
+    }
+
+    fn matching_action_for_target(to_state: super::State) -> super::Action {
+        super::action_target_relation()
+            .iter()
+            .find(|target| target.to_state == to_state)
+            .map_or(super::Action::SupervisorDecision, |target| target.action)
+    }
+
+    fn mismatched_action_for_target(to_state: super::State) -> super::Action {
+        super::lifecycle_actions()
+            .iter()
+            .copied()
+            .find(|action| *action != super::Action::SupervisorDecision && !super::action_matches_target(*action, to_state))
+            .expect("finite action set contains at least one mismatched action for every state")
+    }
+
+    fn contains_diagnostic(receipt: &super::TransitionReceipt, expected: &str) -> bool {
+        receipt.diagnostics.iter().any(|diagnostic| diagnostic == expected)
+    }
+
+    #[test]
+    fn lifecycle_transition_relation_table_is_unique_and_exposes_finite_sets() {
+        // r[verify molten.lifecycle_state_machine_proof.transition_relation_table]
+        assert_eq!(super::lifecycle_states().len(), super::LIFECYCLE_STATE_COUNT);
+        assert_eq!(super::lifecycle_actions().len(), super::LIFECYCLE_ACTION_COUNT);
+        assert_eq!(
+            super::allowed_transition_relation().len(),
+            super::LIFECYCLE_TRANSITION_COUNT
+        );
+        assert_eq!(super::action_target_relation().len(), super::LIFECYCLE_ACTION_TARGET_COUNT);
+        assert!(super::lifecycle_states().iter().all(|state| !state.as_str().is_empty()));
+        assert!(super::lifecycle_actions().iter().all(|action| !action.as_str().is_empty()));
+
+        for (left_index, left) in super::allowed_transition_relation().iter().enumerate() {
+            for right in super::allowed_transition_relation().iter().skip(left_index + 1) {
+                assert_ne!(left, right, "duplicate lifecycle transition edge");
+            }
+        }
+    }
+
+    #[test]
+    fn every_declared_lifecycle_edge_passes_with_matching_action() {
+        // r[verify molten.lifecycle_state_machine_proof.transition_relation_table]
+        // r[verify molten.lifecycle_state_machine_proof.action_target_matrix]
+        for transition in super::allowed_transition_relation() {
+            let input = matrix_transition_input(
+                transition.from_state,
+                transition.to_state,
+                matching_action_for_target(transition.to_state),
+            );
+            let receipt = super::transition_receipt(&input).expect("matrix receipt");
+
+            assert_eq!(receipt.decision, "pass");
+            assert!(receipt.diagnostics.is_empty());
+        }
+    }
+
+    #[test]
+    fn supervisor_decision_is_explicit_action_target_escape_hatch_for_allowed_edges() {
+        // r[verify molten.lifecycle_state_machine_proof.action_target_matrix]
+        for transition in super::allowed_transition_relation() {
+            let input = matrix_transition_input(
+                transition.from_state,
+                transition.to_state,
+                super::Action::SupervisorDecision,
+            );
+            let receipt = super::transition_receipt(&input).expect("supervisor matrix receipt");
+
+            assert_eq!(receipt.decision, "pass");
+            assert!(receipt.diagnostics.is_empty());
+        }
+    }
+
+    #[test]
+    fn every_unlisted_lifecycle_edge_denies() {
+        // r[verify molten.lifecycle_state_machine_proof.transition_relation_table]
+        for from_state in super::lifecycle_states() {
+            for to_state in super::lifecycle_states() {
+                if super::allowed_transition(*from_state, *to_state) {
+                    continue;
+                }
+                let input = matrix_transition_input(*from_state, *to_state, matching_action_for_target(*to_state));
+                let receipt = super::transition_receipt(&input).expect("matrix denial receipt");
+                let expected = format!("invalid transition {} -> {}", from_state.as_str(), to_state.as_str());
+
+                assert_eq!(receipt.decision, "deny");
+                assert!(contains_diagnostic(&receipt, &expected));
+            }
+        }
+    }
+
+    #[test]
+    fn mismatched_actions_deny_even_for_allowed_edges() {
+        // r[verify molten.lifecycle_state_machine_proof.action_target_matrix]
+        for transition in super::allowed_transition_relation() {
+            let action = mismatched_action_for_target(transition.to_state);
+            let input = matrix_transition_input(transition.from_state, transition.to_state, action);
+            let receipt = super::transition_receipt(&input).expect("action mismatch receipt");
+            let expected = format!(
+                "action {} does not match target state {}",
+                action.as_str(),
+                transition.to_state.as_str()
+            );
+
+            assert_eq!(receipt.decision, "deny");
+            assert_eq!(receipt.diagnostics, vec![expected]);
+        }
+    }

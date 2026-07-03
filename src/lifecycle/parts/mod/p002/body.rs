@@ -127,40 +127,17 @@ fn transition_diagnostics(input: &TransitionInput) -> Vec<String> {
     diagnostics
 }
 
-fn action_matches_target(action: Action, to_state: State) -> bool {
-    matches!(
-        (action, to_state),
-        (Action::Spawn, State::Spawning)
-            | (Action::Start, State::Starting)
-            | (Action::Ready, State::Ready)
-            | (Action::Degrade, State::Degraded)
-            | (Action::Fail, State::Failed)
-            | (Action::Restart, State::Restarting)
-            | (Action::Stop, State::Stopping | State::Stopped)
-            | (Action::Cleanup, State::Cleaned)
-            | (Action::SupervisorDecision, _)
-    )
+pub fn action_matches_target(action: Action, to_state: State) -> bool {
+    action == Action::SupervisorDecision
+        || LIFECYCLE_ACTION_TARGETS
+            .iter()
+            .any(|target| target.action == action && target.to_state == to_state)
 }
 
-fn allowed_transition(from_state: State, to_state: State) -> bool {
-    matches!(
-        (from_state, to_state),
-        (State::Declared, State::Spawning)
-            | (State::Spawning, State::Starting)
-            | (State::Starting, State::Ready)
-            | (State::Ready, State::Degraded)
-            | (State::Ready, State::Stopping)
-            | (State::Ready, State::Failed)
-            | (State::Degraded, State::Ready)
-            | (State::Degraded, State::Stopping)
-            | (State::Degraded, State::Failed)
-            | (State::Stopping, State::Stopped)
-            | (State::Stopped, State::Cleaned)
-            | (State::Failed, State::Restarting)
-            | (State::Failed, State::Cleaned)
-            | (State::Restarting, State::Starting)
-            | (State::Restarting, State::Cleaned)
-    )
+pub fn allowed_transition(from_state: State, to_state: State) -> bool {
+    LIFECYCLE_TRANSITIONS
+        .iter()
+        .any(|transition| transition.from_state == from_state && transition.to_state == to_state)
 }
 
 fn refs_sequence(refs: &[String]) -> IoValue {
