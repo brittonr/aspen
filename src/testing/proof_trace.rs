@@ -1,5 +1,4 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
 
 const MAX_PROOF_TRACE_STEPS: usize = 128;
 const MAX_PROOF_TRACE_CHECKS: usize = 32;

@@ -243,11 +243,11 @@ fn transition_offer(
         diagnostics.push(PROTOCOL_TRANSITION_OFFER_EXPECTED.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     };
-    if let Some(peer) = input.peer {
-        if peer != from_role {
-            diagnostics.push(PROTOCOL_TRANSITION_OFFER_EXPECTED.to_string());
-            return Ok((None, input.prior.seen_message_refs.clone()));
-        }
+    if let Some(peer) = input.peer
+        && peer != from_role
+    {
+        diagnostics.push(PROTOCOL_TRANSITION_OFFER_EXPECTED.to_string());
+        return Ok((None, input.prior.seen_message_refs.clone()));
     }
     let Some(branch) = branch_for_label(branches, input.label) else {
         diagnostics.push(PROTOCOL_TRANSITION_OFFER_MISSING.to_string());

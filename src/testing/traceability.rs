@@ -666,6 +666,8 @@ fn entry_for_requirement(
     let positive = coverage.map(|entry| entry.positive.clone()).unwrap_or_default();
     let negative = coverage.map(|entry| entry.negative.clone()).unwrap_or_default();
     let exemption = coverage.and_then(|entry| entry.exemption.clone());
+    let coverage_required = requires_coverage(requirement);
+    let has_coverage = !positive.is_empty() || !negative.is_empty();
 
     validate_evidence_list("positive", &positive, require_receipt_backed, &mut diagnostics)?;
     validate_evidence_list("negative", &negative, require_receipt_backed, &mut diagnostics)?;
@@ -677,15 +679,13 @@ fn entry_for_requirement(
         "stale-reference"
     } else if exemption.is_some() {
         "exempt"
-    } else if requires_coverage(requirement) && positive.is_empty() {
+    } else if coverage_required && positive.is_empty() {
         diagnostics.push("missing-positive-coverage".to_string());
         "missing-positive"
-    } else if requires_coverage(requirement) && negative.is_empty() {
+    } else if coverage_required && negative.is_empty() {
         diagnostics.push("missing-negative-coverage".to_string());
         "missing-negative"
-    } else if requires_coverage(requirement) {
-        "covered"
-    } else if !positive.is_empty() || !negative.is_empty() {
+    } else if coverage_required || has_coverage {
         "covered"
     } else {
         "unsupported"

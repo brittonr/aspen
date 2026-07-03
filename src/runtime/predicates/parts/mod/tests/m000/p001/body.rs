@@ -410,7 +410,7 @@
         let staged_observer_ref = deterministic_ref("rollback-staged-observer");
         let staged_pending_call_ref = deterministic_ref("rollback-staged-pending-call");
         let staged_authority_snapshot_ref = deterministic_ref("rollback-staged-authority-snapshot");
-        let mut state = RuntimeState::new(TURN_COMMIT_TEST_SEED);
+        let state = RuntimeState::new(TURN_COMMIT_TEST_SEED);
         let before = state.snapshot();
         let before_ref = before.snapshot_ref().expect("before snapshot ref");
         let step = RuntimeStep::Assert {

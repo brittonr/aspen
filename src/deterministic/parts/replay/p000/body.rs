@@ -31,6 +31,26 @@ const DEFAULT_RUNTIME_REF: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 const DEFAULT_TOOL_REF: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const MAX_REPLAY_ROLLUP_INPUTS: usize = 1024;
 const MAX_REPLAY_INDEX_INPUTS: usize = 4096;
+const FIXTURE_RECORD_FIELD_COUNT: usize = 9;
+const FIXTURE_SCHEMA_INDEX: usize = 0;
+const FIXTURE_IDENTITY_REF_INDEX: usize = 1;
+const FIXTURE_IDENTITY_VALUE_INDEX: usize = 2;
+const FIXTURE_EFFECT_LOG_REF_INDEX: usize = 3;
+const FIXTURE_EFFECT_LOG_VALUE_INDEX: usize = 4;
+const FIXTURE_TURN_JOURNALS_INDEX: usize = 5;
+const FIXTURE_OUTPUT_REF_INDEX: usize = 6;
+const FIXTURE_FINAL_STATE_REF_INDEX: usize = 7;
+const TURN_JOURNAL_FIELD_COUNT: usize = 13;
+const TURN_JOURNAL_SCHEMA_INDEX: usize = 0;
+const TURN_JOURNAL_SCHEDULER_REF_INDEX: usize = 3;
+const TURN_JOURNAL_INPUT_REF_INDEX: usize = 4;
+const TURN_JOURNAL_EFFECT_REQUEST_REF_INDEX: usize = 6;
+const TURN_JOURNAL_EFFECT_RESPONSE_REF_INDEX: usize = 7;
+const TURN_JOURNAL_POLICY_DECISION_REF_INDEX: usize = 8;
+const TURN_JOURNAL_ACTION_REF_INDEX: usize = 9;
+const TURN_JOURNAL_RECEIPT_REF_INDEX: usize = 10;
+const TURN_JOURNAL_OUTPUT_REF_INDEX: usize = 11;
+const TURN_JOURNAL_AFTER_STATE_REF_INDEX: usize = 12;
 
 fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)

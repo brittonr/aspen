@@ -99,9 +99,3 @@ fn b3_ref_from_bytes(bytes: &[u8]) -> Result<String> {
     Ok(format!("b3:{}", content_ref_hex(&reference)?))
 }
 
-#[cfg(test)]
-mod tests {
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/tests/m000/p000/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/tests/m000/p001/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/tests/m000/p002/body.rs"));
-}

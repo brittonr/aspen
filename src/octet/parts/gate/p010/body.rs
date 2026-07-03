@@ -21,3 +21,10 @@ pub fn default_source_scope(consumer: &str) -> Result<Vec<String>> {
     };
     Ok(scope.into_iter().map(ToOwned::to_owned).collect())
 }
+
+#[cfg(test)]
+mod tests {
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/tests/m000/p000/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/tests/m000/p001/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/tests/m000/p002/body.rs"));
+}

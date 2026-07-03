@@ -84,7 +84,7 @@
             record("decision", vec![string("duplicate")]),
             record("operation", vec![string(&delivery.envelope.operation_ref)]),
             record("scope", vec![string(&scope)]),
-            record("window", vec![string(&fake_ref("missing-prior-window"))]),
+            record("window", vec![string(fake_ref("missing-prior-window"))]),
             record("prior", vec![record("none", Vec::new())]),
             record("semantic-result", vec![record("none", Vec::new())]),
             record("side-effect", vec![string("suppress")]),

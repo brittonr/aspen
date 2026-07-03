@@ -19,14 +19,31 @@ struct ReplayRunParts {
 }
 
 pub fn record_fixture_value() -> Result<ReplayFixtureRecord> {
-    let parts = run_parts(ReplayFixtureVariant::Baseline)?;
+    replay_fixture_record_value(ReplayFixtureVariant::Baseline)
+}
+
+pub fn tampered_fixture_record_value(variant: ReplayFixtureVariant) -> Result<ReplayFixtureRecord> {
+    if variant == ReplayFixtureVariant::Baseline {
+        return Err(crate::error::MoltenError::invalid_harness(
+            "replay fixture tamper variant must differ from baseline",
+        ));
+    }
+    replay_fixture_record_value(variant)
+}
+
+fn replay_fixture_record_value(variant: ReplayFixtureVariant) -> Result<ReplayFixtureRecord> {
+    let parts = run_parts(variant)?;
+    fixture_record_from_parts(&parts)
+}
+
+fn fixture_record_from_parts(parts: &ReplayRunParts) -> Result<ReplayFixtureRecord> {
     let value = record("deterministic-fixture-record-v1", vec![
         string(DETERMINISTIC_FIXTURE_RECORD_SCHEMA),
         record("identity-ref", vec![string(&parts.identity_ref)]),
-        parts.identity,
+        parts.identity.clone(),
         record("effect-log-ref", vec![string(&parts.effect_log_ref)]),
-        parts.effect_log,
-        sequence(vec![parts.turn_journal]),
+        parts.effect_log.clone(),
+        sequence(vec![parts.turn_journal.clone()]),
         record("output-ref", vec![string(&parts.output_ref)]),
         record("final-state-ref", vec![string(&parts.after_state_ref)]),
         sequence(vec![
@@ -39,10 +56,10 @@ pub fn record_fixture_value() -> Result<ReplayFixtureRecord> {
     Ok(ReplayFixtureRecord {
         value,
         record_ref,
-        identity_ref: parts.identity_ref,
-        effect_log_ref: parts.effect_log_ref,
-        final_state_ref: parts.after_state_ref,
-        output_ref: parts.output_ref,
+        identity_ref: parts.identity_ref.clone(),
+        effect_log_ref: parts.effect_log_ref.clone(),
+        final_state_ref: parts.after_state_ref.clone(),
+        output_ref: parts.output_ref.clone(),
     })
 }
 
@@ -113,10 +130,25 @@ pub fn verify_fixture_value(variant: ReplayFixtureVariant) -> Result<ReplayVerif
     let expected = run_parts(ReplayFixtureVariant::Baseline)?;
     let actual = run_parts(variant)?;
     let divergence = first_divergence(&expected, &actual, variant);
+    replay_verify_receipt(&expected, &actual, divergence)
+}
+
+pub fn verify_fixture_record_value(value: &IoValue) -> Result<ReplayVerifyReceipt> {
+    let expected = run_parts(ReplayFixtureVariant::Baseline)?;
+    let actual = parse_fixture_record_run_parts(value)?;
+    let divergence = first_divergence_between_parts(&expected, &actual);
+    replay_verify_receipt(&expected, &actual, divergence)
+}
+
+fn replay_verify_receipt(
+    expected: &ReplayRunParts,
+    actual: &ReplayRunParts,
+    divergence: ReplayDivergenceKind,
+) -> Result<ReplayVerifyReceipt> {
     let first_divergence = if divergence == ReplayDivergenceKind::None {
         None
     } else {
-        Some(first_divergence_value(divergence, &expected, &actual)?)
+        Some(first_divergence_value(divergence, expected, actual)?)
     };
     let first_divergence_ref = match &first_divergence {
         Some(value) => canonical_hash(value)?,

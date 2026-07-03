@@ -23,10 +23,8 @@ fn record(out: std::path::PathBuf) -> molten::error::Result<()> {
 }
 
 fn verify(fixture: std::path::PathBuf, receipt_out: Option<std::path::PathBuf>) -> molten::error::Result<()> {
-    super::io::read_preserves_file(&fixture)?;
-    let receipt = molten::deterministic_replay::verify_fixture_value(
-        molten::deterministic_replay::ReplayFixtureVariant::Baseline,
-    )?;
+    let fixture_value = super::io::read_preserves_file(&fixture)?;
+    let receipt = molten::deterministic_replay::verify_fixture_record_value(&fixture_value)?;
     let is_written_to_file = super::io::write_optional_preserves(receipt_out.as_ref(), &receipt.value)?;
     super::io::print_or_log_summary(
         is_written_to_file,
@@ -43,13 +41,14 @@ fn verify(fixture: std::path::PathBuf, receipt_out: Option<std::path::PathBuf>) 
 fn tamper(fixture: std::path::PathBuf, kind: &str, out: std::path::PathBuf) -> molten::error::Result<()> {
     super::io::read_preserves_file(&fixture)?;
     let variant = replay_fixture_variant_from_kind(kind)?;
-    let receipt = molten::deterministic_replay::verify_fixture_value(variant)?;
-    super::io::write_file(&out, &molten::preserves_rail::to_text(&receipt.value)?)?;
+    let tampered = molten::deterministic_replay::tampered_fixture_record_value(variant)?;
+    super::io::write_file(&out, &molten::preserves_rail::to_text(&tampered.value)?)?;
     println!(
-        "deterministic replay tamper receipt written to {} ref={} divergence={}",
+        "deterministic replay tampered fixture written to {} ref={} kind={} final_state={}",
         out.display(),
-        receipt.receipt_ref,
-        receipt.divergence.as_str()
+        tampered.record_ref,
+        kind,
+        tampered.final_state_ref
     );
     Ok(())
 }

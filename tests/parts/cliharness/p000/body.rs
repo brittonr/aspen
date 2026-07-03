@@ -37,6 +37,59 @@ fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
     Ok(())
 }
 
+#[test]
+fn cli_replay_fixture_proves_deterministic_pass_and_tamper_denial() -> CliResult<()> {
+    let dir = temp_dir("cli-replay-fixture")?;
+    let fixture = dir.join("fixture.preserves");
+    let pass_receipt = dir.join("pass.receipt.preserves");
+    let tampered_fixture = dir.join("tampered.fixture.preserves");
+    let deny_receipt = dir.join("deny.receipt.preserves");
+
+    let record = molten_cmd()
+        .args(["test", "replay-fixture", "record", "--out"])
+        .arg(&fixture)
+        .output()?;
+    assert_success(&record, "replay fixture record");
+    assert!(stdout(&record).contains("deterministic replay fixture written"));
+
+    let pass = molten_cmd()
+        .args(["test", "replay-fixture", "verify"])
+        .arg(&fixture)
+        .args(["--receipt-out"])
+        .arg(&pass_receipt)
+        .output()?;
+    assert_success(&pass, "replay fixture verify pass");
+    assert!(stdout(&pass).contains("decision=pass"));
+    assert!(stdout(&pass).contains("divergence=none"));
+    let pass_text = std::fs::read_to_string(&pass_receipt)?;
+    assert!(pass_text.contains("deterministic-replay-verify-v1"));
+    assert!(pass_text.contains("ordered-boundary-comparison"));
+
+    let tamper = molten_cmd()
+        .args(["test", "replay-fixture", "tamper"])
+        .arg(&fixture)
+        .args(["--kind", "effect-response", "--out"])
+        .arg(&tampered_fixture)
+        .output()?;
+    assert_success(&tamper, "replay fixture tamper");
+    assert!(stdout(&tamper).contains("tampered fixture"));
+    assert!(std::fs::read_to_string(&tampered_fixture)?.contains("deterministic-fixture-record-v1"));
+
+    let deny = molten_cmd()
+        .args(["test", "replay-fixture", "verify"])
+        .arg(&tampered_fixture)
+        .args(["--receipt-out"])
+        .arg(&deny_receipt)
+        .output()?;
+    assert_success(&deny, "replay fixture verify deny");
+    assert!(stdout(&deny).contains("decision=deny"));
+    assert!(stdout(&deny).contains("divergence=effect-response"));
+    let deny_text = std::fs::read_to_string(&deny_receipt)?;
+    assert!(deny_text.contains("first-divergence-ref"));
+    assert!(deny_text.contains("recorded-effects-only"));
+    Ok(())
+}
+
 fn assert_report_repro_flow(
     dir: &std::path::Path,
     report: &std::path::Path,

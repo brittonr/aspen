@@ -53,6 +53,41 @@
     }
 
     #[test]
+    fn supplied_replay_fixture_verifies_against_recorded_refs() {
+        let fixture = record_fixture_value().expect("fixture record");
+        let from_fixture = verify_fixture_record_value(&fixture.value).expect("verify supplied fixture");
+        let generated = verify_fixture_value(ReplayFixtureVariant::Baseline).expect("verify generated baseline");
+        assert_eq!(from_fixture.decision, "pass");
+        assert_eq!(from_fixture.divergence, ReplayDivergenceKind::None);
+        assert_eq!(from_fixture.receipt_ref, generated.receipt_ref);
+        assert_eq!(from_fixture.receipt_ref, canonical_hash(&from_fixture.value).expect("fixture receipt hash"));
+    }
+
+    #[test]
+    fn supplied_tampered_replay_fixture_denies_at_first_divergence() {
+        let fixture = tampered_fixture_record_value(ReplayFixtureVariant::ChangedEffectResponse)
+            .expect("tampered fixture record");
+        let receipt = verify_fixture_record_value(&fixture.value).expect("verify tampered fixture");
+        assert_eq!(receipt.decision, "deny");
+        assert_eq!(receipt.divergence, ReplayDivergenceKind::EffectResponse);
+        let divergence = receipt.first_divergence.expect("first divergence");
+        let text = to_text(&divergence).expect("render divergence");
+        assert!(text.contains("effect-response"));
+        assert!(text.contains("safe-canonical-refs-only"));
+    }
+
+    #[test]
+    fn malformed_replay_fixture_ref_mismatch_fails_closed() {
+        const STALE_IDENTITY_REF: &str = "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        let fixture = record_fixture_value().expect("fixture record");
+        let text = to_text(&fixture.value).expect("render fixture")
+            .replacen(&fixture.identity_ref, STALE_IDENTITY_REF, 1);
+        let malformed = crate::preserves_rail::parse_text(&text).expect("parse malformed fixture");
+        let error = verify_fixture_record_value(&malformed).expect_err("malformed fixture denied");
+        assert!(error.to_string().contains("identity ref mismatch"));
+    }
+
+    #[test]
     fn replay_reports_first_divergence_matrix() {
         let cases = [
             (ReplayFixtureVariant::ChangedIdentity, ReplayDivergenceKind::Identity),
