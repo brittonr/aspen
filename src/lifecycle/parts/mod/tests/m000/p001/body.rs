@@ -144,6 +144,7 @@
     const MATRIX_ENTITY_ID: &str = "matrix-entity";
     const MATRIX_CAUSE: &str = "matrix-proof";
     const MATRIX_LOGICAL_STEP: u64 = 13;
+    const PATH_EDGE_WINDOW: usize = 2;
 
     fn matrix_transition_input(
         from_state: super::State,
@@ -271,4 +272,98 @@
             assert_eq!(receipt.decision, "deny");
             assert_eq!(receipt.diagnostics, vec![expected]);
         }
+    }
+
+    fn assert_path_passes(path: &[super::State]) {
+        for pair in path.windows(PATH_EDGE_WINDOW) {
+            let from_state = pair[0];
+            let to_state = pair[1];
+            let input = matrix_transition_input(from_state, to_state, matching_action_for_target(to_state));
+            let receipt = super::transition_receipt(&input).expect("path receipt");
+
+            assert_eq!(receipt.decision, "pass");
+            assert!(receipt.diagnostics.is_empty());
+        }
+    }
+
+    fn assert_transition_denies(from_state: super::State, to_state: super::State) {
+        let input = matrix_transition_input(from_state, to_state, super::Action::SupervisorDecision);
+        let receipt = super::transition_receipt(&input).expect("denial receipt");
+        let expected = format!("invalid transition {} -> {}", from_state.as_str(), to_state.as_str());
+
+        assert_eq!(receipt.decision, "deny");
+        assert!(contains_diagnostic(&receipt, &expected));
+    }
+
+    #[test]
+    fn lifecycle_reachability_from_declared_covers_expected_paths() {
+        // r[verify molten.lifecycle_state_machine_proof.reachability]
+        let reachable = super::reachable_lifecycle_states(super::State::Declared);
+        for state in super::lifecycle_states() {
+            assert!(reachable.contains(state), "state must be reachable: {}", state.as_str());
+            assert!(super::lifecycle_state_reachable(super::State::Declared, *state));
+        }
+
+        assert_path_passes(&[
+            super::State::Declared,
+            super::State::Spawning,
+            super::State::Starting,
+            super::State::Ready,
+        ]);
+        assert_path_passes(&[
+            super::State::Declared,
+            super::State::Spawning,
+            super::State::Starting,
+            super::State::Ready,
+            super::State::Degraded,
+            super::State::Stopping,
+            super::State::Stopped,
+            super::State::Cleaned,
+        ]);
+        assert_path_passes(&[
+            super::State::Declared,
+            super::State::Spawning,
+            super::State::Starting,
+            super::State::Ready,
+            super::State::Failed,
+            super::State::Restarting,
+            super::State::Starting,
+        ]);
+    }
+
+    #[test]
+    fn forbidden_lifecycle_shortcuts_deny() {
+        // r[verify molten.lifecycle_state_machine_proof.reachability]
+        assert_transition_denies(super::State::Declared, super::State::Ready);
+        assert_transition_denies(super::State::Ready, super::State::Cleaned);
+    }
+
+    #[test]
+    fn cleaned_state_has_no_outgoing_passing_transition() {
+        // r[verify molten.lifecycle_state_machine_proof.terminal_cleanup]
+        assert!(super::lifecycle_successor_states(super::State::Cleaned).is_empty());
+        for to_state in super::lifecycle_states() {
+            assert_transition_denies(super::State::Cleaned, *to_state);
+        }
+    }
+
+    #[test]
+    fn terminal_and_cleanup_boundary_successors_are_closed() {
+        // r[verify molten.lifecycle_state_machine_proof.terminal_cleanup]
+        assert_eq!(
+            super::lifecycle_successor_states(super::State::Stopped),
+            vec![super::State::Cleaned]
+        );
+        assert_eq!(
+            super::lifecycle_successor_states(super::State::Failed),
+            vec![super::State::Restarting, super::State::Cleaned]
+        );
+        assert_eq!(
+            super::lifecycle_successor_states(super::State::Restarting),
+            vec![super::State::Starting, super::State::Cleaned]
+        );
+
+        assert_transition_denies(super::State::Stopped, super::State::Starting);
+        assert_transition_denies(super::State::Failed, super::State::Ready);
+        assert_transition_denies(super::State::Restarting, super::State::Ready);
     }

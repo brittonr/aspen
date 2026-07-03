@@ -140,6 +140,37 @@ pub fn allowed_transition(from_state: State, to_state: State) -> bool {
         .any(|transition| transition.from_state == from_state && transition.to_state == to_state)
 }
 
+pub fn lifecycle_successor_states(from_state: State) -> Vec<State> {
+    LIFECYCLE_TRANSITIONS
+        .iter()
+        .filter(|transition| transition.from_state == from_state)
+        .map(|transition| transition.to_state)
+        .collect()
+}
+
+pub fn reachable_lifecycle_states(from_state: State) -> Vec<State> {
+    let mut reachable = Vec::with_capacity(LIFECYCLE_STATE_COUNT);
+    reachable.push(from_state);
+    let mut cursor = 0;
+    while cursor < reachable.len() {
+        let current = reachable[cursor];
+        cursor += 1;
+        for transition in LIFECYCLE_TRANSITIONS
+            .iter()
+            .filter(|transition| transition.from_state == current)
+        {
+            if !reachable.contains(&transition.to_state) {
+                reachable.push(transition.to_state);
+            }
+        }
+    }
+    reachable
+}
+
+pub fn lifecycle_state_reachable(from_state: State, to_state: State) -> bool {
+    reachable_lifecycle_states(from_state).contains(&to_state)
+}
+
 fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
