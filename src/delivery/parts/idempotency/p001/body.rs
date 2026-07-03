@@ -1,4 +1,65 @@
 
+pub fn classify_idempotency_decision(input: DecisionLawInput<'_>) -> Result<IdempotencyDecisionLaw> {
+    validate_refs(input.evidence_refs, "delivery decision evidence ref")?;
+    let law = if let Some(entry) = input.existing_entry {
+        let has_same_operation = entry.operation_ref == input.operation.operation_ref;
+        let has_same_payload = entry.payload_ref == input.operation.payload_ref;
+        let has_same_evidence = entry.evidence_refs == input.evidence_refs;
+        if has_same_operation && has_same_payload && has_same_evidence {
+            IdempotencyDecisionLaw {
+                kind: IdempotencyDecisionKind::Duplicate,
+                prior_receipt_ref: Some(entry.first_receipt_ref.clone()),
+                prior_semantic_result_ref: entry.semantic_result_ref.clone(),
+                diagnostics: Vec::new(),
+                should_commit_side_effect: false,
+            }
+        } else {
+            IdempotencyDecisionLaw {
+                kind: IdempotencyDecisionKind::Conflict,
+                prior_receipt_ref: Some(entry.first_receipt_ref.clone()),
+                prior_semantic_result_ref: None,
+                diagnostics: vec!["delivery operation sequence reused with different payload or evidence".to_string()],
+                should_commit_side_effect: false,
+            }
+        }
+    } else if input.operation.sequence < input.window.next_sequence {
+        IdempotencyDecisionLaw {
+            kind: IdempotencyDecisionKind::Stale,
+            prior_receipt_ref: None,
+            prior_semantic_result_ref: None,
+            diagnostics: vec![format!(
+                "delivery sequence {} is stale for window next {}",
+                input.operation.sequence, input.window.next_sequence
+            )],
+            should_commit_side_effect: false,
+        }
+    } else if input.operation.sequence > input.window.next_sequence {
+        let kind = match input.gap_policy {
+            GapPolicy::Deny => IdempotencyDecisionKind::Gap,
+            GapPolicy::Retry => IdempotencyDecisionKind::Retry,
+        };
+        IdempotencyDecisionLaw {
+            kind,
+            prior_receipt_ref: None,
+            prior_semantic_result_ref: None,
+            diagnostics: vec![format!(
+                "delivery sequence {} leaves gap before expected {}",
+                input.operation.sequence, input.window.next_sequence
+            )],
+            should_commit_side_effect: false,
+        }
+    } else {
+        IdempotencyDecisionLaw {
+            kind: IdempotencyDecisionKind::First,
+            prior_receipt_ref: None,
+            prior_semantic_result_ref: None,
+            diagnostics: Vec::new(),
+            should_commit_side_effect: true,
+        }
+    };
+    Ok(law)
+}
+
 pub fn check(input: CheckInput<'_>) -> Result<Decision> {
     validate_scope_profile(input.scope_profile)?;
     require_ref(input.scope_ref, "delivery scope ref")?;
@@ -20,14 +81,24 @@ pub fn check(input: CheckInput<'_>) -> Result<Decision> {
     let db = ensure_store_tables(input.root)?;
     let existing_entry = read_entry_from_store(&db, &dedup_key)?;
     let current_window = read_or_create_window(&db, input.scope_profile, input.scope_ref, input.policy_refs)?;
-    let decision = if let Some(entry) = existing_entry {
-        duplicate_or_conflict_decision(input, &db, operation, current_window, entry)?
-    } else if input.sequence < current_window.next_sequence {
-        stale_decision(input, &db, operation, current_window)?
-    } else if input.sequence > current_window.next_sequence {
-        gap_or_retry_decision(input, &db, operation, current_window)?
-    } else {
-        first_decision(input, &db, operation, current_window, dedup_key)?
+    let law = classify_idempotency_decision(DecisionLawInput {
+        operation: &operation,
+        window: &current_window,
+        existing_entry: existing_entry.as_ref(),
+        evidence_refs: input.evidence_refs,
+        gap_policy: input.gap_policy,
+    })?;
+    let decision = match law.kind {
+        IdempotencyDecisionKind::First => first_decision(input, &db, operation, current_window, dedup_key)?,
+        IdempotencyDecisionKind::Duplicate | IdempotencyDecisionKind::Conflict => {
+            let entry = existing_entry.ok_or_else(|| {
+                MoltenError::invalid_harness("delivery idempotency invariant violated: duplicate/conflict without entry")
+            })?;
+            duplicate_or_conflict_decision(input, &db, operation, current_window, entry, &law)?
+        }
+        IdempotencyDecisionKind::Stale | IdempotencyDecisionKind::Gap | IdempotencyDecisionKind::Retry => {
+            suppressed_decision_from_law(&db, operation, current_window, &law)?
+        }
     };
     Ok(decision)
 }
@@ -226,40 +297,33 @@ fn first_decision(
 }
 
 fn duplicate_or_conflict_decision(
-    input: CheckInput<'_>,
+    _input: CheckInput<'_>,
     db: &redb::Database,
     operation: OperationId,
     window: Window,
     entry: DedupEntry,
+    law: &IdempotencyDecisionLaw,
 ) -> Result<Decision> {
-    let has_same_operation = entry.operation_ref == operation.operation_ref;
-    let has_same_payload = entry.payload_ref == operation.payload_ref;
-    let has_same_evidence = entry.evidence_refs == input.evidence_refs;
-    let (decision, prior, semantic, diagnostics) = if has_same_operation && has_same_payload && has_same_evidence {
-        (
-            "duplicate",
-            Some(entry.first_receipt_ref.as_str()),
-            entry.semantic_result_ref.as_deref(),
-            Vec::new(),
-        )
-    } else {
-        ("conflict", Some(entry.first_receipt_ref.as_str()), None, vec![
-            "delivery operation sequence reused with different payload or evidence".to_string(),
-        ])
-    };
+    let decision = law.kind.as_str();
     let receipt_value = idempotency_receipt_value(IdempotencyReceiptValueInput {
         decision,
         operation_ref: &operation.operation_ref,
         scope_ref: &operation.scope_ref,
         window_ref: &window.window_ref,
-        prior_receipt_ref: prior,
-        semantic_result_ref: semantic,
+        prior_receipt_ref: law.prior_receipt_ref.as_deref(),
+        semantic_result_ref: law.prior_semantic_result_ref.as_deref(),
         side_effect: "suppress",
-        diagnostics: &diagnostics,
+        diagnostics: &law.diagnostics,
         checks: &[
             ("dedup-before-commit", "pass"),
-            ("duplicate-suppresses-side-effects", if decision == "duplicate" { "pass" } else { "n/a" }),
-            ("conflict-denies-before-side-effects", if decision == "conflict" { "pass" } else { "n/a" }),
+            (
+                "duplicate-suppresses-side-effects",
+                if matches!(law.kind, IdempotencyDecisionKind::Duplicate) { "pass" } else { "n/a" },
+            ),
+            (
+                "conflict-denies-before-side-effects",
+                if matches!(law.kind, IdempotencyDecisionKind::Conflict) { "pass" } else { "n/a" },
+            ),
         ],
     })?;
     let receipt = parse_receipt(&receipt_value)?;
@@ -268,21 +332,8 @@ fn duplicate_or_conflict_decision(
         operation,
         window,
         receipt,
-        entry: Some(entry.clone()),
-        should_commit_side_effect: false,
-        prior_semantic_result_ref: entry.semantic_result_ref,
+        entry: Some(entry),
+        should_commit_side_effect: law.should_commit_side_effect,
+        prior_semantic_result_ref: law.prior_semantic_result_ref.clone(),
     })
-}
-
-fn stale_decision(
-    input: CheckInput<'_>,
-    db: &redb::Database,
-    operation: OperationId,
-    window: Window,
-) -> Result<Decision> {
-    let diagnostics = vec![format!(
-        "delivery sequence {} is stale for window next {}",
-        input.sequence, window.next_sequence
-    )];
-    suppressed_decision(db, operation, window, "stale", diagnostics)
 }

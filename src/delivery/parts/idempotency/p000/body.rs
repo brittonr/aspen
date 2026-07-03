@@ -116,6 +116,51 @@ pub struct Decision {
     pub prior_semantic_result_ref: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdempotencyDecisionKind {
+    First,
+    Duplicate,
+    Conflict,
+    Stale,
+    Gap,
+    Retry,
+}
+
+impl IdempotencyDecisionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::First => "first",
+            Self::Duplicate => "duplicate",
+            Self::Conflict => "conflict",
+            Self::Stale => "stale",
+            Self::Gap => "gap",
+            Self::Retry => "retry",
+        }
+    }
+
+    pub fn should_commit_side_effect(self) -> bool {
+        matches!(self, Self::First)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdempotencyDecisionLaw {
+    pub kind: IdempotencyDecisionKind,
+    pub prior_receipt_ref: Option<String>,
+    pub prior_semantic_result_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+    pub should_commit_side_effect: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DecisionLawInput<'a> {
+    pub operation: &'a OperationId,
+    pub window: &'a Window,
+    pub existing_entry: Option<&'a DedupEntry>,
+    pub evidence_refs: &'a [String],
+    pub gap_policy: GapPolicy,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckInput<'a> {
     pub root: &'a std::path::Path,

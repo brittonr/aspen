@@ -1,20 +1,12 @@
 
-fn gap_or_retry_decision(
-    input: CheckInput<'_>,
+fn suppressed_decision_from_law(
     db: &redb::Database,
     operation: OperationId,
     window: Window,
+    law: &IdempotencyDecisionLaw,
 ) -> Result<Decision> {
-    let diagnostics = vec![format!(
-        "delivery sequence {} leaves gap before expected {}",
-        input.sequence, window.next_sequence
-    )];
-    let decision = match input.gap_policy {
-        GapPolicy::Deny => "gap",
-        GapPolicy::Retry => "retry",
-    };
-    let result = suppressed_decision(db, operation, window, decision, diagnostics)?;
-    if matches!(input.gap_policy, GapPolicy::Retry) {
+    let result = suppressed_decision(db, operation, window, law.kind.as_str(), law.diagnostics.clone())?;
+    if matches!(law.kind, IdempotencyDecisionKind::Retry) {
         let retry_value = retry_receipt_value(&result.operation, &result.window, &result.receipt.diagnostics)?;
         let retry_ref = crate::preserves_rail::canonical_hash(&retry_value)?;
         store_raw_receipt(db, &retry_ref, &retry_value)?;

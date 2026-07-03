@@ -116,6 +116,7 @@
             crate::ledger::artifact_kind(&applied.admission_receipt_value),
             "remote-dataspace-admission-receipt"
         );
+        // r[verify molten.delivery_state_machine_proof.denial_no_side_effect]
         let missing =
             admit_and_apply_delivered_envelope(&mut RuntimeState::new(1), &delivery, &DeliveryEvidence::default())
                 .expect_err("missing evidence denies before applying");
@@ -203,6 +204,8 @@
 
     #[test]
     fn recorded_delivery_log_replays_without_live_transport() {
+        // r[verify molten.delivery_state_machine_proof.replay_log_equivalence]
+        const REPLAY_SEED: u64 = 1;
         let root = temp_dir("remote-dataspace-delivery-log");
         let payload = record("service-ready", vec![string("db")]);
         let envelope = assert_envelope(AssertEnvelopeInput {
@@ -220,13 +223,42 @@
         let log = delivery_log(std::slice::from_ref(&delivery), true).expect("delivery log");
         assert_eq!(crate::ledger::artifact_kind(&log.value), "remote-dataspace-delivery-log");
         fs::remove_dir_all(root.join("gossip")).expect("remove live transport bytes");
-        let mut state = RuntimeState::new(1);
-        let events = replay_delivery_log(&mut state, &log).expect("replay from recorded log");
-        assert!(events.iter().any(|event| matches!(event, RuntimeEvent::AssertionCommitted { .. })));
-        let non_replayable = delivery_log(&[delivery], false).expect("non replayable log");
-        let error = replay_delivery_log(&mut RuntimeState::new(1), &non_replayable)
+        let mut observed_state = RuntimeState::new(REPLAY_SEED);
+        let observed_events = apply_delivered_envelope(&mut observed_state, &delivery.envelope).expect("observed apply");
+        let observed_state_ref = observed_state.snapshot().snapshot_ref().expect("observed state ref");
+        let mut replay_state = RuntimeState::new(REPLAY_SEED);
+        let replayed_events = replay_delivery_log(&mut replay_state, &log).expect("replay from recorded log");
+        assert_eq!(replayed_events, observed_events);
+        assert_eq!(replay_state.snapshot().snapshot_ref().expect("replayed state ref"), observed_state_ref);
+        assert!(replayed_events.iter().any(|event| matches!(event, RuntimeEvent::AssertionCommitted { .. })));
+
+        let non_replayable = delivery_log(std::slice::from_ref(&delivery), false).expect("non replayable log");
+        let error = replay_delivery_log(&mut RuntimeState::new(REPLAY_SEED), &non_replayable)
             .expect_err("non replayable live run excluded");
         assert!(error.to_string().contains("non-replayable"));
+
+        let mismatched_receipt = mismatched_idempotency_receipt(&root);
+        let tampered = delivery_log_with_idempotency_receipts(
+            std::slice::from_ref(&delivery),
+            std::slice::from_ref(&mismatched_receipt),
+            true,
+        )
+        .expect_err("mismatched idempotency receipt fails closed");
+        assert!(tampered.to_string().contains("operation ref mismatch"));
+        let missing_receipt = delivery_log_with_idempotency_receipts(
+            std::slice::from_ref(&delivery),
+            &[mismatched_receipt, fake_ref_value("extra-receipt")],
+            true,
+        )
+        .expect_err("extra idempotency receipt fails closed");
+        assert!(missing_receipt.to_string().contains("receipt count must match delivery count"));
+        let missing_prior = delivery_log_with_idempotency_receipts(
+            std::slice::from_ref(&delivery),
+            std::slice::from_ref(&duplicate_receipt_without_prior(&delivery)),
+            true,
+        )
+        .expect_err("duplicate receipt without prior fails closed");
+        assert!(missing_prior.to_string().contains("missing prior receipt"));
     }
 
     #[test]

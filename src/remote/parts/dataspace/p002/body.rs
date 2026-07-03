@@ -156,6 +156,7 @@ pub fn delivery_log_with_idempotency_receipts(
             if parsed.operation_ref != delivery.envelope.operation_ref {
                 return Err(MoltenError::invalid_harness("remote delivery log idempotency operation ref mismatch"));
             }
+            validate_replay_idempotency_receipt(&parsed)?;
             fields.push(record("idempotency-receipt", vec![receipt.clone()]));
         }
         entries.push(record("entry", fields));
@@ -178,6 +179,19 @@ pub fn delivery_log_with_idempotency_receipts(
         entries: deliveries.to_vec(),
         value,
     })
+}
+
+fn validate_replay_idempotency_receipt(receipt: &crate::delivery_idempotency::Receipt) -> Result<()> {
+    match receipt.decision.as_str() {
+        "first" => Ok(()),
+        "duplicate" if receipt.prior_receipt_ref.is_some() => Ok(()),
+        "duplicate" => Err(MoltenError::invalid_harness(
+            "remote delivery log duplicate idempotency receipt missing prior receipt",
+        )),
+        _ => Err(MoltenError::invalid_harness(
+            "remote delivery log idempotency receipt is not replay-admissible",
+        )),
+    }
 }
 
 pub fn replay_delivery_log(state: &mut RuntimeState, log: &DeliveryLog) -> Result<Vec<RuntimeEvent>> {

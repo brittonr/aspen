@@ -45,6 +45,57 @@
         crate::preserves_rail::canonical_hash(&value).expect("fake ref")
     }
 
+    fn fake_ref_value(label: &str) -> IoValue {
+        record("fake-ref-value", vec![string(label)])
+    }
+
+    fn mismatched_idempotency_receipt(root: &Path) -> IoValue {
+        const MISMATCH_SEQUENCE: u64 = 1;
+        let store_root = root.join("mismatched-idempotency");
+        let scope = crate::delivery_idempotency::remote_topic_scope_ref("other-services", "peer:b")
+            .expect("mismatch scope");
+        let policy_refs = vec![fake_ref("mismatch-policy")];
+        let evidence_refs = vec![fake_ref("mismatch-evidence")];
+        let result_ref = fake_ref("mismatch-result");
+        crate::delivery_idempotency::check(crate::delivery_idempotency::CheckInput {
+            root: &store_root,
+            scope_profile: crate::delivery_idempotency::SCOPE_REMOTE_TOPIC,
+            scope_ref: &scope,
+            producer: "peer:z/producer",
+            consumer: "peer:b",
+            sequence: MISMATCH_SEQUENCE,
+            intent: "remote-dataspace-assert",
+            payload_ref: &fake_ref("mismatch-payload"),
+            policy_refs: &policy_refs,
+            evidence_refs: &evidence_refs,
+            semantic_result_ref: Some(&result_ref),
+            gap_policy: crate::delivery_idempotency::GapPolicy::Deny,
+        })
+        .expect("mismatched idempotency receipt")
+        .receipt
+        .value
+    }
+
+    fn duplicate_receipt_without_prior(delivery: &Delivery) -> IoValue {
+        let scope = crate::delivery_idempotency::remote_topic_scope_ref(&delivery.envelope.topic, &delivery.envelope.to_peer)
+            .expect("delivery scope");
+        record("delivery-idempotency-receipt-v1", vec![
+            string(crate::preserves_rail::DELIVERY_IDEMPOTENCY_RECEIPT_SCHEMA),
+            record("decision", vec![string("duplicate")]),
+            record("operation", vec![string(&delivery.envelope.operation_ref)]),
+            record("scope", vec![string(&scope)]),
+            record("window", vec![string(&fake_ref("missing-prior-window"))]),
+            record("prior", vec![record("none", Vec::new())]),
+            record("semantic-result", vec![record("none", Vec::new())]),
+            record("side-effect", vec![string("suppress")]),
+            record("diagnostics", vec![sequence(Vec::new())]),
+            record("checks", vec![sequence(vec![record("check", vec![
+                string("dedup-before-commit"),
+                string("pass"),
+            ])])]),
+        ])
+    }
+
     fn temp_dir(name: &str) -> PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);

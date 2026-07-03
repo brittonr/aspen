@@ -34,6 +34,7 @@ fn parse_delivery_log_entry(value: &Value<IoValue>) -> Result<Delivery> {
         if receipt.operation_ref != envelope.operation_ref {
             return Err(MoltenError::invalid_harness("remote delivery log idempotency receipt mismatch"));
         }
+        validate_replay_idempotency_receipt(&receipt)?;
     }
     Ok(Delivery {
         envelope,
