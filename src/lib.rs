@@ -197,6 +197,10 @@ compat_module!(service_supervision, watchdog);
 pub mod drift_core;
 compat_module!(deterministic_drift, drift_core);
 #[doc(hidden)]
+#[path = "testing/proof_trace.rs"]
+pub mod proof_trace_core;
+compat_module!(state_machine_proof, proof_trace_core);
+#[doc(hidden)]
 #[path = "testing/traceability.rs"]
 pub mod trace_core;
 compat_module!(requirement_traceability, trace_core);
