@@ -196,7 +196,7 @@ pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
     let result_ref = canonical_hash(&string("far-call-result"))?;
     let cause_ref = canonical_hash(&string("target-turn-aborted"))?;
     let pending = crate::runtime::RuntimePromiseState::pending("promise:far-call");
-    let resolved = crate::runtime::RuntimePromiseState::resolved("promise:far-call", result_ref);
+    let resolved = crate::runtime::RuntimePromiseState::resolved("promise:far-call", result_ref.clone());
     let broken =
         crate::runtime::RuntimePromiseState::broken("promise:failed-call", "target turn aborted", vec![cause_ref]);
     let cancelled = crate::runtime::RuntimePromiseState::cancelled("promise:cancelled-call", "caller revoked interest");
@@ -230,6 +230,23 @@ pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
         ]),
     )?
     .receipt;
+    let dependent_call_ref = canonical_hash(&record("vat-dependent-call-v1", vec![string("use-promise-value")]))?;
+    let resolved_use = crate::runtime::evaluate_promise_use(&crate::runtime::RuntimePromiseUseState {
+        source: resolved.clone(),
+        use_kind: crate::runtime::RuntimePromiseUseKind::ResolvedValue,
+        dependent_call_ref: dependent_call_ref.clone(),
+        admitted_resolution_ref: Some(result_ref),
+        admitted_pipeline_ref: None,
+    })?
+    .receipt;
+    let unresolved_use_denial = crate::runtime::evaluate_promise_use(&crate::runtime::RuntimePromiseUseState {
+        source: pending.clone(),
+        use_kind: crate::runtime::RuntimePromiseUseKind::ResolvedValue,
+        dependent_call_ref,
+        admitted_resolution_ref: None,
+        admitted_pipeline_ref: None,
+    })?
+    .receipt;
 
     let receipts = vec![
         resolve_receipt,
@@ -238,6 +255,8 @@ pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
         timeout_receipt,
         terminal_denial,
         pipeline_cleanup,
+        resolved_use,
+        unresolved_use_denial,
     ];
     let diagnostics = fixture_diagnostics(&receipts);
     let value = record("vat-promise-fixture-v1", vec![

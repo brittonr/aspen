@@ -33,6 +33,44 @@ pub fn evaluate_promise_pipeline(state: &RuntimePromisePipelineState) -> Result<
     Ok(PromisePipelineResult { is_allowed, receipt })
 }
 
+// r[impl molten.vat_ref_state_proof.promise_lifecycle]
+pub fn evaluate_promise_use(state: &RuntimePromiseUseState) -> Result<PromiseUseResult> {
+    let diagnostics = validate_promise_use(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let use_ref = state.use_ref()?;
+    let source_ref = state.source.promise_ref()?;
+    let input_value = crate::preserves_rail::record("runtime-predicate-promise-use-input-v1", vec![
+        crate::preserves_rail::record("use-ref", vec![crate::preserves_rail::string(&use_ref)]),
+        crate::preserves_rail::record("source-promise-ref", vec![crate::preserves_rail::string(&source_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "promise-use-ref-canonical".to_string(),
+        "resolved-value-use-requires-resolution".to_string(),
+        "pending-pipeline-use-requires-proof".to_string(),
+        "terminal-promise-use-fails-closed".to_string(),
+    ];
+    let mut state_refs = vec![use_ref, source_ref];
+    if crate::preserves_rail::validate_content_ref(&state.dependent_call_ref).is_ok() {
+        state_refs.push(state.dependent_call_ref.clone());
+    }
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: PROMISE_USE_PREDICATE,
+        input_value,
+        decision,
+        state_refs,
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(PromiseUseResult { is_allowed, receipt })
+}
+
 pub fn evaluate_revocation_cleanup(state: &RuntimeRevocationCleanupState) -> Result<RevocationCleanupResult> {
     let diagnostics = validate_revocation_cleanup(state);
     let is_allowed = diagnostics.is_empty();
@@ -262,4 +300,50 @@ pub fn evaluate_distributed_ref_lifetime(
     })?;
 
     Ok(DistributedRefLifetimeResult { is_allowed, receipt })
+}
+
+// r[impl molten.vat_ref_state_proof.rollback_cleanup]
+pub fn evaluate_vat_rollback_cleanup(
+    state: &RuntimeVatRollbackCleanupState,
+) -> Result<VatRollbackCleanupResult> {
+    let diagnostics = validate_vat_rollback_cleanup(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let cleanup_ref = state.cleanup_ref()?;
+    let input_value = crate::preserves_rail::record("runtime-predicate-vat-rollback-cleanup-input-v1", vec![
+        crate::preserves_rail::record("cleanup-ref", vec![crate::preserves_rail::string(&cleanup_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "rollback-receipt-canonical".to_string(),
+        "rollback-preserves-snapshot-ref".to_string(),
+        "rolled-back-assertions-cleaned".to_string(),
+        "rolled-back-observers-cleaned".to_string(),
+        "rolled-back-pending-calls-cleaned".to_string(),
+        "rolled-back-authority-snapshots-cleaned".to_string(),
+    ];
+    let mut state_refs = vec![cleanup_ref];
+    for reference in [
+        &state.rollback_receipt_ref,
+        &state.before_snapshot_ref,
+        &state.final_snapshot_ref,
+    ] {
+        if crate::preserves_rail::validate_content_ref(reference).is_ok() {
+            state_refs.push(reference.clone());
+        }
+    }
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: VAT_ROLLBACK_CLEANUP_PREDICATE,
+        input_value,
+        decision,
+        state_refs,
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(VatRollbackCleanupResult { is_allowed, receipt })
 }

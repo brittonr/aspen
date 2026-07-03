@@ -2,6 +2,8 @@
 
     use super::*;
 
+    const VAT_PROMISE_FIXTURE_RECEIPT_COUNT: usize = 8;
+
     #[test]
     fn vat_fixture_binds_near_far_actormap_pipeline_and_revocation_predicates() {
         let run = run_vat_fixture().expect("vat fixture run");
@@ -164,7 +166,7 @@
     #[test]
     fn vat_promise_fixture_records_terminal_results_and_denials() {
         let promise = run_vat_promise_fixture().expect("promise fixture");
-        assert_eq!(promise.receipts.len(), 6);
+        assert_eq!(promise.receipts.len(), VAT_PROMISE_FIXTURE_RECEIPT_COUNT);
         assert!(promise.fixture_ref.starts_with("blake3:"));
         assert!(
             promise
@@ -177,6 +179,12 @@
                 .receipts
                 .iter()
                 .any(|receipt| receipt.predicate == "molten.trellis-runtime.promise-pipeline.v1")
+        );
+        assert!(
+            promise
+                .receipts
+                .iter()
+                .any(|receipt| receipt.predicate == "molten.trellis-runtime.promise-use.v1")
         );
         assert!(promise.receipts.iter().any(|receipt| receipt.decision == crate::runtime::PredicateDecision::Pass));
         assert!(promise.receipts.iter().any(|receipt| receipt.decision == crate::runtime::PredicateDecision::Deny));
@@ -193,6 +201,13 @@
                 .iter()
                 .flat_map(|receipt| receipt.diagnostics.iter())
                 .any(|diagnostic| diagnostic == "terminal-promise-pipeline-not-cleaned")
+        );
+        assert!(
+            promise
+                .receipts
+                .iter()
+                .flat_map(|receipt| receipt.diagnostics.iter())
+                .any(|diagnostic| diagnostic == "promise-use-requires-resolved-source")
         );
     }
 

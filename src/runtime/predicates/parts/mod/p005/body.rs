@@ -70,6 +70,60 @@ fn validate_promise_pipeline(state: &RuntimePromisePipelineState) -> Vec<String>
     diagnostics
 }
 
+fn validate_promise_use(state: &RuntimePromiseUseState) -> Vec<String> {
+    let mut diagnostics = validate_promise_shape(&state.source, "source");
+    if crate::preserves_rail::validate_content_ref(&state.dependent_call_ref).is_err() {
+        diagnostics.push("promise-use-dependent-call-ref-noncanonical".to_string());
+    }
+    if let Some(admitted_resolution_ref) = state.admitted_resolution_ref.as_deref()
+        && crate::preserves_rail::validate_content_ref(admitted_resolution_ref).is_err()
+    {
+        diagnostics.push("promise-use-resolution-ref-noncanonical".to_string());
+    }
+    if let Some(admitted_pipeline_ref) = state.admitted_pipeline_ref.as_deref()
+        && crate::preserves_rail::validate_content_ref(admitted_pipeline_ref).is_err()
+    {
+        diagnostics.push("promise-use-pipeline-ref-noncanonical".to_string());
+    }
+
+    match state.use_kind {
+        RuntimePromiseUseKind::ResolvedValue => validate_resolved_promise_use(state, &mut diagnostics),
+        RuntimePromiseUseKind::PipelineForward => validate_pipeline_promise_use(state, &mut diagnostics),
+    }
+
+    diagnostics.sort();
+    diagnostics.dedup();
+    diagnostics
+}
+
+fn validate_resolved_promise_use(state: &RuntimePromiseUseState, diagnostics: &mut Vec<String>) {
+    if state.source.status != RuntimePromiseStatus::Resolved {
+        diagnostics.push("promise-use-requires-resolved-source".to_string());
+    }
+    match (state.source.value_ref.as_deref(), state.admitted_resolution_ref.as_deref()) {
+        (Some(value_ref), Some(admitted_ref)) if value_ref == admitted_ref => {}
+        (Some(_), Some(_)) => diagnostics.push("promise-use-resolution-ref-mismatch".to_string()),
+        (Some(_), None) => diagnostics.push("promise-use-resolution-proof-missing".to_string()),
+        (None, Some(_)) => diagnostics.push("promise-use-resolution-without-value".to_string()),
+        (None, None) => diagnostics.push("promise-use-resolution-proof-missing".to_string()),
+    }
+    if state.admitted_pipeline_ref.is_some() {
+        diagnostics.push("promise-use-resolution-has-pipeline-proof".to_string());
+    }
+}
+
+fn validate_pipeline_promise_use(state: &RuntimePromiseUseState, diagnostics: &mut Vec<String>) {
+    if state.source.status != RuntimePromiseStatus::Pending {
+        diagnostics.push("promise-pipeline-forward-requires-pending-source".to_string());
+    }
+    if state.admitted_resolution_ref.is_some() {
+        diagnostics.push("promise-pipeline-forward-has-resolution-proof".to_string());
+    }
+    if state.admitted_pipeline_ref.is_none() {
+        diagnostics.push("promise-use-pipeline-proof-missing".to_string());
+    }
+}
+
 fn validate_revocation_cleanup(state: &RuntimeRevocationCleanupState) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(16);
     diagnostics.extend(validate_sorted_content_refs(&state.revoked_refs, "revocation", "revoked"));
@@ -119,6 +173,60 @@ fn has_revoked_intersection(revoked_refs: &OrderedSet<&str>, refs: &[String]) ->
         }
     }
     false
+}
+
+fn validate_vat_rollback_cleanup(state: &RuntimeVatRollbackCleanupState) -> Vec<String> {
+    let mut diagnostics = Vec::new();
+    if crate::preserves_rail::validate_content_ref(&state.rollback_receipt_ref).is_err() {
+        diagnostics.push("vat-rollback-receipt-ref-noncanonical".to_string());
+    }
+    if crate::preserves_rail::validate_content_ref(&state.before_snapshot_ref).is_err() {
+        diagnostics.push("vat-rollback-before-snapshot-ref-noncanonical".to_string());
+    }
+    if crate::preserves_rail::validate_content_ref(&state.final_snapshot_ref).is_err() {
+        diagnostics.push("vat-rollback-final-snapshot-ref-noncanonical".to_string());
+    }
+    diagnostics.extend(validate_sorted_content_refs(&state.rolled_back_refs, "vat-rollback", "rolled-back"));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.remaining_assertion_refs,
+        "vat-rollback",
+        "remaining-assertion",
+    ));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.remaining_observer_refs,
+        "vat-rollback",
+        "remaining-observer",
+    ));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.remaining_pending_call_refs,
+        "vat-rollback",
+        "remaining-pending-call",
+    ));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.remaining_authority_snapshot_refs,
+        "vat-rollback",
+        "remaining-authority-snapshot",
+    ));
+
+    if state.before_snapshot_ref != state.final_snapshot_ref {
+        diagnostics.push("vat-rollback-final-snapshot-changed".to_string());
+    }
+    let rolled_back_refs = string_set(&state.rolled_back_refs);
+    if has_revoked_intersection(&rolled_back_refs, &state.remaining_assertion_refs) {
+        diagnostics.push("vat-rollback-assertion-leak".to_string());
+    }
+    if has_revoked_intersection(&rolled_back_refs, &state.remaining_observer_refs) {
+        diagnostics.push("vat-rollback-observer-leak".to_string());
+    }
+    if has_revoked_intersection(&rolled_back_refs, &state.remaining_pending_call_refs) {
+        diagnostics.push("vat-rollback-pending-call-leak".to_string());
+    }
+    if has_revoked_intersection(&rolled_back_refs, &state.remaining_authority_snapshot_refs) {
+        diagnostics.push("vat-rollback-authority-snapshot-leak".to_string());
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    diagnostics
 }
 
 fn validate_actormap_transaction(state: &RuntimeActormapTransactionState) -> Vec<String> {

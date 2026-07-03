@@ -14,6 +14,7 @@ const PRESERVES_PATTERN_PREDICATE: &str = "molten.trellis-runtime.preserves-patt
 const OBSERVE_DELIVERY_PREDICATE: &str = "molten.trellis-runtime.observe-delivery.v1";
 const PROMISE_STATE_PREDICATE: &str = "molten.trellis-runtime.promise-state.v1";
 const PROMISE_PIPELINE_PREDICATE: &str = "molten.trellis-runtime.promise-pipeline.v1";
+const PROMISE_USE_PREDICATE: &str = "molten.trellis-runtime.promise-use.v1";
 const REVOCATION_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.revocation-cleanup.v1";
 const ACTORMAP_TRANSACTION_PREDICATE: &str = "molten.trellis-runtime.actormap-transaction.v1";
 const NEAR_FAR_REFS_PREDICATE: &str = "molten.trellis-runtime.near-far-refs.v1";
@@ -21,6 +22,7 @@ const SNAPSHOT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.snapshot-auth
 const OBJECT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.object-authority.v1";
 const RIGHTS_AMPLIFICATION_PREDICATE: &str = "molten.trellis-runtime.rights-amplification.v1";
 const DISTRIBUTED_REF_LIFETIME_PREDICATE: &str = "molten.trellis-runtime.distributed-ref-lifetime.v1";
+const VAT_ROLLBACK_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.vat-rollback-cleanup.v1";
 const SERVICE_DEPENDENCIES_PREDICATE: &str = "molten.trellis-runtime.service-dependencies.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -283,6 +285,54 @@ impl RuntimePromisePipelineState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromisePipelineResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimePromiseUseKind {
+    ResolvedValue,
+    PipelineForward,
+}
+
+impl RuntimePromiseUseKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::ResolvedValue => "resolved-value",
+            Self::PipelineForward => "pipeline-forward",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimePromiseUseState {
+    pub source: RuntimePromiseState,
+    pub use_kind: RuntimePromiseUseKind,
+    pub dependent_call_ref: String,
+    pub admitted_resolution_ref: Option<String>,
+    pub admitted_pipeline_ref: Option<String>,
+}
+
+impl RuntimePromiseUseState {
+    pub fn use_ref(&self) -> Result<String> {
+        crate::preserves_rail::canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IoValue {
+        crate::preserves_rail::record("runtime-promise-use-state-v1", vec![
+            self.source.to_value(),
+            crate::preserves_rail::string(self.use_kind.as_str()),
+            crate::preserves_rail::record("dependent-call-ref", vec![crate::preserves_rail::string(
+                &self.dependent_call_ref,
+            )]),
+            optional_ref_record("admitted-resolution-ref", self.admitted_resolution_ref.as_deref()),
+            optional_ref_record("admitted-pipeline-ref", self.admitted_pipeline_ref.as_deref()),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromiseUseResult {
     pub is_allowed: bool,
     pub receipt: RuntimePredicateReceipt,
 }

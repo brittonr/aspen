@@ -23,6 +23,49 @@ pub struct SnapshotAuthorityResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeVatRollbackCleanupState {
+    pub rollback_receipt_ref: String,
+    pub before_snapshot_ref: String,
+    pub final_snapshot_ref: String,
+    pub rolled_back_refs: Vec<String>,
+    pub remaining_assertion_refs: Vec<String>,
+    pub remaining_observer_refs: Vec<String>,
+    pub remaining_pending_call_refs: Vec<String>,
+    pub remaining_authority_snapshot_refs: Vec<String>,
+}
+
+impl RuntimeVatRollbackCleanupState {
+    pub fn cleanup_ref(&self) -> Result<String> {
+        crate::preserves_rail::canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IoValue {
+        crate::preserves_rail::record("runtime-vat-rollback-cleanup-state-v1", vec![
+            crate::preserves_rail::record("rollback-receipt-ref", vec![crate::preserves_rail::string(
+                &self.rollback_receipt_ref,
+            )]),
+            crate::preserves_rail::record("before-snapshot-ref", vec![crate::preserves_rail::string(
+                &self.before_snapshot_ref,
+            )]),
+            crate::preserves_rail::record("final-snapshot-ref", vec![crate::preserves_rail::string(
+                &self.final_snapshot_ref,
+            )]),
+            ref_list_value("rolled-back-refs", &self.rolled_back_refs),
+            ref_list_value("remaining-assertion-refs", &self.remaining_assertion_refs),
+            ref_list_value("remaining-observer-refs", &self.remaining_observer_refs),
+            ref_list_value("remaining-pending-call-refs", &self.remaining_pending_call_refs),
+            ref_list_value("remaining-authority-snapshot-refs", &self.remaining_authority_snapshot_refs),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VatRollbackCleanupResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeServiceDependenciesState {
     pub service_ref: String,
     pub demanded_service_refs: Vec<String>,

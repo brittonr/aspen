@@ -400,6 +400,78 @@
     }
 
     #[test]
+    fn promise_use_predicate_denies_unresolved_value_without_pipeline_proof() {
+        // r[verify molten.vat_ref_state_proof.promise_lifecycle]
+        let value_ref = deterministic_ref("promise-use-value");
+        let call_ref = deterministic_ref("promise-use-dependent-call");
+        let pipeline_ref = deterministic_ref("promise-use-pipeline-proof");
+        let pending = RuntimePromiseState::pending("promise-use");
+        let resolved = RuntimePromiseState::resolved("promise-use", value_ref.clone());
+
+        let resolved_use = evaluate_promise_use(&RuntimePromiseUseState {
+            source: resolved,
+            use_kind: RuntimePromiseUseKind::ResolvedValue,
+            dependent_call_ref: call_ref.clone(),
+            admitted_resolution_ref: Some(value_ref),
+            admitted_pipeline_ref: None,
+        })
+        .expect("resolved promise use");
+        assert!(resolved_use.is_allowed);
+        assert_eq!(resolved_use.receipt.decision, PredicateDecision::Pass);
+
+        let unresolved_use = evaluate_promise_use(&RuntimePromiseUseState {
+            source: pending.clone(),
+            use_kind: RuntimePromiseUseKind::ResolvedValue,
+            dependent_call_ref: call_ref.clone(),
+            admitted_resolution_ref: None,
+            admitted_pipeline_ref: None,
+        })
+        .expect("unresolved promise use");
+        assert!(!unresolved_use.is_allowed);
+        assert!(
+            unresolved_use
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "promise-use-requires-resolved-source")
+        );
+        assert!(
+            unresolved_use
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "promise-use-resolution-proof-missing")
+        );
+
+        let forwarded_use = evaluate_promise_use(&RuntimePromiseUseState {
+            source: pending.clone(),
+            use_kind: RuntimePromiseUseKind::PipelineForward,
+            dependent_call_ref: call_ref.clone(),
+            admitted_resolution_ref: None,
+            admitted_pipeline_ref: Some(pipeline_ref),
+        })
+        .expect("forwarded promise use");
+        assert!(forwarded_use.is_allowed);
+
+        let missing_pipeline = evaluate_promise_use(&RuntimePromiseUseState {
+            source: pending,
+            use_kind: RuntimePromiseUseKind::PipelineForward,
+            dependent_call_ref: call_ref,
+            admitted_resolution_ref: None,
+            admitted_pipeline_ref: None,
+        })
+        .expect("missing pipeline proof");
+        assert!(!missing_pipeline.is_allowed);
+        assert!(
+            missing_pipeline
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "promise-use-pipeline-proof-missing")
+        );
+    }
+
+    #[test]
     fn revocation_cleanup_predicate_denies_future_use_and_requires_cleanup() {
         let revoked =
             crate::preserves_rail::canonical_hash(&crate::preserves_rail::string("revoked-ref")).expect("revoked ref");
