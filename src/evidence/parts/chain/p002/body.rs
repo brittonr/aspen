@@ -210,6 +210,27 @@ fn prior_head(index: &ChainIndex, link: &ChainLink) -> Result<Option<String>> {
     Ok(None)
 }
 
+fn idempotent_head_before(index: &ChainIndex, link: &ChainLink) -> Result<Option<String>> {
+    if let Some(previous_ref) = &link.previous_link_ref {
+        let previous = index.links_by_ref.get(previous_ref).ok_or_else(|| {
+            MoltenError::invalid_harness(format!("existing append previous link {previous_ref} is unavailable in ledger"))
+        })?;
+        validate_append(previous, link)?;
+    } else {
+        validate_genesis(link)?;
+    }
+
+    let current_heads = index.heads_for_chain(&link.chain);
+    if current_heads == vec![link.link_ref.clone()] {
+        return Ok(link.previous_link_ref.clone());
+    }
+
+    Err(MoltenError::invalid_harness(format!(
+        "chain link {} is already present but is not the current chain head for {:?}: current heads {:?}",
+        link.link_ref, link.chain, current_heads
+    )))
+}
+
 fn append_predicate_ref(root: &Path, link: &ChainLink, head_before: Option<&str>) -> Result<String> {
     let predicate = if head_before.is_some() {
         APPEND_VALID_PREDICATE
@@ -239,12 +260,6 @@ fn append_predicate_ref(root: &Path, link: &ChainLink, head_before: Option<&str>
 pub fn append_chain_link(root: &Path, value: &IoValue) -> Result<ChainAppend> {
     let link = parse_chain_link(value)?;
     let index = build_chain_index(root)?;
-    if index.links_by_ref.contains_key(&link.link_ref) {
-        return Err(MoltenError::invalid_harness(format!(
-            "chain link {} is already present in the ledger",
-            link.link_ref
-        )));
-    }
     crate::ledger::read_artifact(root, &link.payload.artifact_ref).map_err(|error| {
         MoltenError::invalid_harness(format!(
             "chain link payload {} is unavailable in ledger: {error}",
@@ -252,14 +267,19 @@ pub fn append_chain_link(root: &Path, value: &IoValue) -> Result<ChainAppend> {
         ))
     })?;
 
-    let head_before = prior_head(&index, &link)?;
-    let imported = crate::ledger::import_artifact(root, value)?;
-    if imported.artifact_ref != link.link_ref {
-        return Err(MoltenError::invalid_harness(format!(
-            "imported chain link ref mismatch: got {}, expected {}",
-            imported.artifact_ref, link.link_ref
-        )));
-    }
+    let head_before = if index.links_by_ref.contains_key(&link.link_ref) {
+        idempotent_head_before(&index, &link)?
+    } else {
+        let head_before = prior_head(&index, &link)?;
+        let imported = crate::ledger::import_artifact(root, value)?;
+        if imported.artifact_ref != link.link_ref {
+            return Err(MoltenError::invalid_harness(format!(
+                "imported chain link ref mismatch: got {}, expected {}",
+                imported.artifact_ref, link.link_ref
+            )));
+        }
+        head_before
+    };
 
     let predicate_receipt_ref = append_predicate_ref(root, &link, head_before.as_deref())?;
     let receipt_value = chain_append_receipt_value(&link, head_before.as_deref(), &predicate_receipt_ref);
