@@ -181,11 +181,7 @@ pub fn run_job_dag_value(value: &IoValue, options: &JobRunOptions<'_>) -> Result
 }
 
 pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> {
-    let request = if let Some(output_request) = options.output_request.as_ref() {
-        parse_job_output_request_value(output_request, &dag.job_ref)?
-    } else {
-        default_output_request(dag)?
-    };
+    let request = request_for_dag(dag, options.output_request.as_ref())?;
     ensure_count_at_most(dag.nodes.len(), MAX_JOB_NODES, "job run nodes")?;
     ensure_count_at_most(dag.edges.len(), MAX_JOB_EDGES, "job run edges")?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;

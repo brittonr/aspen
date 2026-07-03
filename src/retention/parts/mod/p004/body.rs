@@ -20,21 +20,6 @@ pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
     })?;
     let diagnostics = evaluation_diagnostics(&input, &index)?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let mut tombstone = None;
-    let mut tombstone_ref = None;
-    if decision == "pass" && is_destructive_action(input.action) {
-        let created = build_tombstone(TombstoneBuildInput {
-            object_ref: input.object_ref,
-            object_kind: input.object_kind,
-            retention_class: input.retention_class,
-            action: input.action,
-            receipt_ref: "pending",
-            policy_refs: input.policy_refs,
-            evidence_refs: input.evidence_refs,
-        })?;
-        tombstone_ref = Some(created.tombstone_ref.clone());
-        tombstone = Some(created);
-    }
     let receipt = build_receipt(ReceiptBuildInput {
         decision,
         action: input.action,
@@ -48,16 +33,25 @@ pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
         remote_refs: input.remote_refs,
         policy_refs: input.policy_refs,
         evidence_refs: input.evidence_refs,
-        tombstone_ref: tombstone_ref.as_deref(),
+        tombstone_ref: None,
         diagnostics: &diagnostics,
     })?;
     write_store_value(&receipt_path(input.root, &receipt.receipt_ref)?, &receipt.value)?;
-    if let Some(created) = tombstone {
-        write_store_value(&tombstone_path(input.root, &created.tombstone_ref)?, &created.value)?;
+    if decision == "pass" && is_destructive_action(input.action) {
+        let tombstone = build_tombstone(TombstoneBuildInput {
+            object_ref: input.object_ref,
+            object_kind: input.object_kind,
+            retention_class: input.retention_class,
+            action: input.action,
+            receipt_ref: &receipt.receipt_ref,
+            policy_refs: input.policy_refs,
+            evidence_refs: input.evidence_refs,
+        })?;
+        write_store_value(&tombstone_path(input.root, &tombstone.tombstone_ref)?, &tombstone.value)?;
         return Ok(Evaluation {
             receipt,
             index,
-            tombstone: Some(created),
+            tombstone: Some(tombstone),
         });
     }
     Ok(Evaluation {

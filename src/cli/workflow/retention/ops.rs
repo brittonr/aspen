@@ -214,6 +214,8 @@ pub(crate) fn check(args: super::command::ops::Check) -> molten::error::Result<(
         has_remote_gc_clearance,
     })?;
     let is_written_to_file = super::io::write_optional_preserves(receipt_out.as_ref(), &evaluation.receipt.value)?;
+    let tombstone_ref =
+        evaluation.tombstone.as_ref().map(|tombstone| tombstone.tombstone_ref.as_str()).unwrap_or("none");
     super::io::print_or_log_summary(
         is_written_to_file,
         &format!(
@@ -222,7 +224,7 @@ pub(crate) fn check(args: super::command::ops::Check) -> molten::error::Result<(
             evaluation.receipt.action,
             evaluation.receipt.object_ref,
             evaluation.receipt.receipt_ref,
-            evaluation.receipt.tombstone_ref.as_deref().unwrap_or("none")
+            tombstone_ref
         ),
     );
     Ok(())

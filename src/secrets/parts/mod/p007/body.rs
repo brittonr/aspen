@@ -55,6 +55,7 @@ mod tests {
             tombstone_ref: fixture_ref("tombstone"),
             retention_refs: Vec::new(),
             retention_receipts: Vec::new(),
+            retention_tombstones: Vec::new(),
             authority_refs: vec![fixture_ref("authority")],
             policy_refs: vec![fixture_ref("policy")],
         })

@@ -247,17 +247,13 @@ struct TombstoneBuildInput<'a> {
 }
 
 fn build_tombstone(input: TombstoneBuildInput<'_>) -> Result<Tombstone> {
-    let receipt_ref = if input.receipt_ref == "pending" {
-        synthetic_ref("pending-retention-receipt")?
-    } else {
-        input.receipt_ref.to_string()
-    };
+    require_ref(input.receipt_ref, "retention tombstone receipt ref")?;
     let value = crate::preserves_rail::record("retention-tombstone-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::RETENTION_TOMBSTONE_SCHEMA),
         object_value(input.object_ref, input.object_kind),
         crate::preserves_rail::record("class", vec![crate::preserves_rail::string(input.retention_class)]),
         crate::preserves_rail::record("action", vec![crate::preserves_rail::string(input.action)]),
-        crate::preserves_rail::record("receipt", vec![crate::preserves_rail::string(&receipt_ref)]),
+        crate::preserves_rail::record("receipt", vec![crate::preserves_rail::string(input.receipt_ref)]),
         crate::preserves_rail::record("policy", vec![strings_sequence(input.policy_refs)]),
         crate::preserves_rail::record("evidence", vec![strings_sequence(input.evidence_refs)]),
         crate::preserves_rail::record("public-metadata", vec![crate::preserves_rail::sequence(vec![

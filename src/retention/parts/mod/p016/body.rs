@@ -234,11 +234,10 @@ fn tombstone_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditSco
         ) {
             push_diag(&mut diagnostics, "retention-gc-audit-tombstone-scope-mismatch")?;
         }
-        if let Some(receipt_ref) = execution.retention_receipt_ref.as_ref() {
-            let pending_receipt_ref = synthetic_ref("pending-retention-receipt")?;
-            if tombstone.receipt_ref != *receipt_ref && tombstone.receipt_ref != pending_receipt_ref {
-                push_diag(&mut diagnostics, "retention-gc-audit-tombstone-receipt-mismatch")?;
-            }
+        if let Some(receipt_ref) = execution.retention_receipt_ref.as_ref()
+            && tombstone.receipt_ref != *receipt_ref
+        {
+            push_diag(&mut diagnostics, "retention-gc-audit-tombstone-receipt-mismatch")?;
         }
     } else if is_destructive_action(&execution.action) {
         push_diag(&mut diagnostics, "retention-gc-audit-tombstone-missing")?;

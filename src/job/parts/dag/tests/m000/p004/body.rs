@@ -234,6 +234,39 @@
     }
 
     #[test]
+    fn planning_and_profile_reject_output_requests_for_missing_roots() {
+        let root = temp_dir("job-output-root-missing");
+        let dag_value = pipeline_value().expect("dag");
+        let dag = parse_job_dag_value(&dag_value).expect("parse dag");
+        let missing_roots = vec!["missing".to_string()];
+        let request = job_output_request_value(OutputRequestValueInput {
+            dag_ref: &dag.job_ref,
+            roots: &missing_roots,
+            materialization: "inline",
+            policy_refs: &[],
+            handler_profile_ref: None,
+            seed_config_ref: None,
+        })
+        .expect("syntactically valid output request");
+
+        let plan_error = plan_job_dag(&dag, Some(&request)).expect_err("plan rejects missing output root");
+        assert!(plan_error.to_string().contains("job output root missing is not a node"));
+        let profile_error = profile_job_dag(&dag, Some(&request), Some(&root.join("cache")))
+            .expect_err("profile rejects missing output root");
+        assert!(profile_error.to_string().contains("job output root missing is not a node"));
+        let run_error = run_job_dag(&dag, &JobRunOptions {
+            registry_root: &root.join("registry"),
+            storage_root: &root.join("storage"),
+            cache_root: &root.join("cache"),
+            chunk_root: &root.join("chunks"),
+            ledger_root: None,
+            output_request: Some(request),
+        })
+        .expect_err("run rejects missing output root before stage execution");
+        assert!(run_error.to_string().contains("job output root missing is not a node"));
+    }
+
+    #[test]
     fn raw_closure_config_denies_before_execution() {
         let source = test_node_value(
             "source",

@@ -34,6 +34,17 @@ impl RuntimeState {
     }
 
     pub fn apply_step(&mut self, step: &Step) -> Vec<Event> {
+        match self.apply_step_with_predicate_receipt(step) {
+            Ok((events, _receipt)) => events,
+            Err(error) => self.rollback_turn(
+                PendingTurn::new(),
+                step.primary_actor().to_string(),
+                format!("runtime predicate denied step: {error}"),
+            ),
+        }
+    }
+
+    pub fn apply_step_with_predicate_receipt(&mut self, step: &Step) -> Result<(Vec<Event>, Option<PredicateReceipt>)> {
         match step {
             Step::Clock { actor } => {
                 let sequence = self.next_effect_sequence();
@@ -45,7 +56,7 @@ impl RuntimeState {
                 };
                 let value = self.local_clock_response_value();
                 let response = effect_response(Effect::Clock, actor.clone(), sequence, None, value);
-                vec![request, response]
+                Ok((vec![request, response], None))
             }
             Step::Random { actor, upper } => {
                 let sequence = self.next_effect_sequence();
@@ -57,11 +68,12 @@ impl RuntimeState {
                 };
                 let value = self.next_random(*upper);
                 let response = effect_response(Effect::Random, actor.clone(), sequence, Some(*upper), value);
-                vec![request, response]
+                Ok((vec![request, response], None))
             }
             Step::Send { .. } | Step::Observe { .. } | Step::Assert { .. } | Step::Retract { .. } => {
                 let turn = self.begin_turn(step);
-                self.commit_turn(turn)
+                let (events, receipt) = self.commit_turn_with_predicate_receipt(turn)?;
+                Ok((events, Some(receipt)))
             }
         }
     }
@@ -72,7 +84,7 @@ impl RuntimeState {
         turn
     }
 
-    pub fn commit_turn(&mut self, turn: PendingTurn) -> Vec<Event> {
+    pub(crate) fn commit_turn(&mut self, turn: PendingTurn) -> Vec<Event> {
         for action in turn.actions {
             match action {
                 TurnAction::Send(message) => {

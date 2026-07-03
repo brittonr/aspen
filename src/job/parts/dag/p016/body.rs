@@ -118,11 +118,28 @@ fn sync_install_order_visit(
 }
 
 fn request_for_analysis(dag: &JobDag, output_request: Option<&IoValue>) -> Result<JobOutputRequest> {
-    if let Some(output_request) = output_request {
-        parse_job_output_request_value(output_request, &dag.job_ref)
+    request_for_dag(dag, output_request)
+}
+
+fn request_for_dag(dag: &JobDag, output_request: Option<&IoValue>) -> Result<JobOutputRequest> {
+    let request = if let Some(output_request) = output_request {
+        parse_job_output_request_value(output_request, &dag.job_ref)?
     } else {
-        default_output_request(dag)
+        default_output_request(dag)?
+    };
+    validate_output_request_roots(dag, &request)?;
+    Ok(request)
+}
+
+fn validate_output_request_roots(dag: &JobDag, request: &JobOutputRequest) -> Result<()> {
+    let roots = requested_output_roots(dag, request)?;
+    let node_ids = dag.nodes.iter().map(|node| node.id.clone()).collect::<OrderedSet<_>>();
+    for root in roots {
+        if !node_ids.contains(&root) {
+            return Err(MoltenError::invalid_harness(format!("job output root {root} is not a node")));
+        }
     }
+    Ok(())
 }
 
 fn dependency_ids(plan: &TrellisExecutionPlan, node_id: &str) -> Result<Vec<String>> {

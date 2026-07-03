@@ -153,14 +153,6 @@ fn execution_gate_receipt_diagnostics(
                     "retention GC execution diagnostics",
                 )?;
             }
-            if receipt.tombstone_ref.is_none() && is_destructive_action(input.action) {
-                push_bounded(
-                    &mut diagnostics,
-                    "retention-gc-execute-retention-receipt-tombstone-missing".to_string(),
-                    MAX_RETENTION_DIAGNOSTICS,
-                    "retention GC execution diagnostics",
-                )?;
-            }
         }
         Err(error) => push_bounded(
             &mut diagnostics,
@@ -213,16 +205,15 @@ fn execution_gate_tombstone_diagnostics(
                     "retention GC execution diagnostics",
                 )?;
             }
-            if let Some(expected_receipt_ref) = receipt_ref {
-                let pending_receipt_ref = synthetic_ref("pending-retention-receipt")?;
-                if tombstone.receipt_ref != expected_receipt_ref && tombstone.receipt_ref != pending_receipt_ref {
-                    push_bounded(
-                        &mut diagnostics,
-                        "retention-gc-execute-tombstone-receipt-mismatch".to_string(),
-                        MAX_RETENTION_DIAGNOSTICS,
-                        "retention GC execution diagnostics",
-                    )?;
-                }
+            if let Some(expected_receipt_ref) = receipt_ref
+                && tombstone.receipt_ref != expected_receipt_ref
+            {
+                push_bounded(
+                    &mut diagnostics,
+                    "retention-gc-execute-tombstone-receipt-mismatch".to_string(),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC execution diagnostics",
+                )?;
             }
         }
         Err(error) => push_bounded(

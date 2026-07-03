@@ -118,6 +118,81 @@
         assert_unsupported_transform_denials(&root, &transformed_manifest_ref);
     }
 
+    #[test]
+    fn manifest_parser_rejects_invalid_content_refs() {
+        let root = temp_dir("chunk-invalid-refs");
+        let put = put_bytes(&root, "artifact", b"aaaabbbb", 4).expect("put");
+        let manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");
+        let chunk_size = usize::try_from(manifest.chunk_size).expect("test chunk size fits usize");
+        let chunk_values = manifest
+            .chunks
+            .iter()
+            .map(|chunk| chunk_ref_value(&chunk.chunk_ref, chunk.length, chunk_size, &manifest.transforms))
+            .collect::<Vec<_>>();
+        let uppercase_metadata_ref = manifest.metadata_ref.to_ascii_uppercase();
+        let uppercase_manifest_value = manifest_value(&ChunkManifestValueInput {
+            object_kind: &manifest.object_kind,
+            total_len: manifest.total_len,
+            chunk_size: manifest.chunk_size,
+            transforms: &manifest.transforms,
+            metadata_ref: &uppercase_metadata_ref,
+            policy_refs: &manifest.policy_refs,
+            chunks: &chunk_values,
+            root_ref: &manifest.root_ref,
+            evidence_refs: &manifest.evidence_refs,
+        });
+        assert!(
+            parse_manifest_value(&uppercase_manifest_value, None)
+                .expect_err("uppercase metadata ref is rejected")
+                .to_string()
+                .contains("metadata-ref is invalid")
+        );
+
+        let non_blake3_policy_refs = vec!["sha256:abc123".to_string()];
+        let non_blake3_manifest_value = manifest_value(&ChunkManifestValueInput {
+            object_kind: &manifest.object_kind,
+            total_len: manifest.total_len,
+            chunk_size: manifest.chunk_size,
+            transforms: &manifest.transforms,
+            metadata_ref: &manifest.metadata_ref,
+            policy_refs: &non_blake3_policy_refs,
+            chunks: &chunk_values,
+            root_ref: &manifest.root_ref,
+            evidence_refs: &manifest.evidence_refs,
+        });
+        assert!(
+            parse_manifest_value(&non_blake3_manifest_value, None)
+                .expect_err("non-blake3 policy ref is rejected")
+                .to_string()
+                .contains("policy-ref is invalid")
+        );
+
+        let mut invalid_chunk_values = chunk_values.clone();
+        invalid_chunk_values[0] = chunk_ref_value(
+            "blake3:not-hex",
+            manifest.chunks[0].length,
+            chunk_size,
+            &manifest.transforms,
+        );
+        let malformed_chunk_manifest_value = manifest_value(&ChunkManifestValueInput {
+            object_kind: &manifest.object_kind,
+            total_len: manifest.total_len,
+            chunk_size: manifest.chunk_size,
+            transforms: &manifest.transforms,
+            metadata_ref: &manifest.metadata_ref,
+            policy_refs: &manifest.policy_refs,
+            chunks: &invalid_chunk_values,
+            root_ref: &manifest.root_ref,
+            evidence_refs: &manifest.evidence_refs,
+        });
+        assert!(
+            parse_manifest_value(&malformed_chunk_manifest_value, None)
+                .expect_err("malformed chunk ref is rejected")
+                .to_string()
+                .contains("chunk ref hash is invalid")
+        );
+    }
+
     fn assert_confidential_write_denials() {
         let confidential_root = temp_dir("chunk-confidential-deny");
         let metadata = record("chunk-metadata-v1", vec![record("object-kind", vec![string("artifact")])]);
@@ -141,7 +216,8 @@
             .filter(|receipt| receipt.decision == "deny" && receipt.operation == "manifest-create")
             .collect::<Vec<_>>();
         assert_eq!(denial_receipts.len(), 1);
-        let protected_shape = ChunkTransforms::confidential_protected("blake3:protected-commitment-fixture");
+        let protected_commitment_ref = content_ref_from_bytes(b"protected-commitment-fixture");
+        let protected_shape = ChunkTransforms::confidential_protected(&protected_commitment_ref);
         let protected_error = put_bytes_with_transforms(&PutBytesWithTransformsInput {
             root: &confidential_root,
             object_kind: "artifact",

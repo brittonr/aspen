@@ -167,8 +167,85 @@
         assert_eq!(store_file_count(&tombstones_dir(&root)), 1);
         let parsed = parse_gc_apply(&apply.value).expect("parse apply");
         assert_eq!(parsed.apply_ref, apply.apply_ref);
-        read_receipt(&root, parsed.retention_receipt_ref.as_deref().expect("receipt ref"))
+        let receipt = read_receipt(&root, parsed.retention_receipt_ref.as_deref().expect("receipt ref"))
             .expect("read retention receipt");
+        assert!(receipt.tombstone_ref.is_none());
+        let tombstone = read_tombstone(&root, parsed.tombstone_ref.as_deref().expect("tombstone ref"))
+            .expect("read retention tombstone");
+        assert_eq!(tombstone.receipt_ref, receipt.receipt_ref);
+    }
+
+    #[test]
+    fn gc_audit_rejects_tombstone_bound_to_pending_receipt() {
+        let root = temp_dir("retention-gc-pending-tombstone");
+        let fixture = store_passing_plan_fixture(&root, "pending-tombstone");
+        let plan = store_gc_plan(GcPlanInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &fixture.evidence,
+        })
+        .expect("store plan");
+        let apply = apply_gc_plan(GcApplyFromPlanInput {
+            root: &root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply plan");
+        let pending_receipt_ref = synthetic_ref("pending-retention-receipt").expect("pending ref");
+        let tombstone_value = crate::preserves_rail::record("retention-tombstone-v1", vec![
+            crate::preserves_rail::string(crate::preserves_rail::RETENTION_TOMBSTONE_SCHEMA),
+            object_value(&fixture.object_ref, "chunk"),
+            crate::preserves_rail::record("class", vec![crate::preserves_rail::string(CLASS_DURABLE_VALUE)]),
+            crate::preserves_rail::record("action", vec![crate::preserves_rail::string(ACTION_DELETE)]),
+            crate::preserves_rail::record("receipt", vec![crate::preserves_rail::string(&pending_receipt_ref)]),
+            crate::preserves_rail::record("policy", vec![strings_sequence(&fixture.evidence.policy_refs)]),
+            crate::preserves_rail::record("evidence", vec![strings_sequence(&fixture.evidence.evidence_refs)]),
+            crate::preserves_rail::record("public-metadata", vec![crate::preserves_rail::sequence(vec![
+                crate::preserves_rail::record("object-kind", vec![crate::preserves_rail::string("chunk")]),
+                crate::preserves_rail::record("class", vec![crate::preserves_rail::string(CLASS_DURABLE_VALUE)]),
+                crate::preserves_rail::record("content", vec![crate::preserves_rail::string("redacted-or-deleted")]),
+            ])]),
+            checks_value(&[
+                ("audit-visible-tombstone", "pass"),
+                ("secret-content-not-leaked", "pass"),
+                ("deletion-not-hidden", "pass"),
+            ]),
+        ]);
+        let tombstone = parse_tombstone(&tombstone_value).expect("parse pending tombstone");
+        write_store_value(&tombstone_path(&root, &tombstone.tombstone_ref).expect("tombstone path"), &tombstone.value)
+            .expect("write pending tombstone");
+        let execution_value = execution_gate_value(&ExecutionGateValueInput {
+            decision: "pass",
+            subsystem: "ledger-gc",
+            action: ACTION_DELETE,
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            apply_ref: Some(&apply.apply_ref),
+            plan_ref: Some(&plan.plan_ref),
+            recomputed_plan_ref: Some(&plan.plan_ref),
+            retention_receipt_ref: apply.retention_receipt_ref.as_deref(),
+            tombstone_ref: Some(&tombstone.tombstone_ref),
+            diagnostics: &[],
+        })
+        .expect("execution value");
+        let execution = parse_gc_execution_gate(&execution_value).expect("parse execution");
+        write_store_value(&gc_execute_path(&root, &execution.execution_ref).expect("execution path"), &execution.value)
+            .expect("write execution");
+
+        let audit = audit_gc_execution(GcAuditInput {
+            root: &root,
+            execution_ref: &execution.execution_ref,
+        })
+        .expect("audit forged execution");
+        assert_eq!(audit.decision, "deny");
+        assert!(audit
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == "retention-gc-audit-tombstone-receipt-mismatch"));
     }
 
     #[test]

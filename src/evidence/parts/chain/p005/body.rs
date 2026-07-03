@@ -81,17 +81,8 @@ fn validate_checkpoint_input(root: &Path, input: &ChainCheckpointInput) -> Resul
     require_ref(&input.head_ref, "checkpoint head ref")?;
     require_ref(&input.verify_receipt_ref, "checkpoint verify receipt ref")?;
     require_ref(&input.range_predicate_ref, "checkpoint range predicate ref")?;
-    if let Some(prior_checkpoint_ref) = &input.prior_checkpoint_ref {
-        let prior_value = crate::ledger::read_artifact(root, prior_checkpoint_ref)?;
-        let prior = parse_chain_checkpoint(&prior_value)?;
-        if prior.chain != input.chain {
-            return Err(MoltenError::invalid_harness(format!(
-                "prior checkpoint {prior_checkpoint_ref} belongs to {:?}, expected {:?}",
-                prior.chain, input.chain
-            )));
-        }
-    }
     let index = build_chain_index(root)?;
+    validate_checkpoint_prior(&index, input)?;
     let Some(anchor) = index.links_by_ref.get(&input.anchor_link_ref) else {
         return Err(MoltenError::invalid_harness(format!(
             "checkpoint anchor link {} is unavailable in ledger",
@@ -116,6 +107,7 @@ fn validate_checkpoint_input(root: &Path, input: &ChainCheckpointInput) -> Resul
             input.head_ref, head.chain, input.chain
         )));
     }
+    validate_checkpoint_head_freshness(&index, input)?;
     let verify_value = crate::ledger::read_artifact(root, &input.verify_receipt_ref)?;
     validate_checkpoint_verify_receipt(CheckpointVerifyReceiptValidationInput {
         root,
@@ -139,6 +131,112 @@ fn validate_checkpoint_input(root: &Path, input: &ChainCheckpointInput) -> Resul
     require_input_pass_check(input, "raft-control-plane-command")?;
     require_input_pass_check(input, "verified-range")?;
     require_input_pass_check(input, "checkpoint-freshness")
+}
+
+fn validate_checkpoint_prior(index: &ChainIndex, input: &ChainCheckpointInput) -> Result<()> {
+    match input.prior_checkpoint_ref.as_deref() {
+        Some(prior_checkpoint_ref) => {
+            let prior = index.checkpoints_by_ref.get(prior_checkpoint_ref).ok_or_else(|| {
+                MoltenError::invalid_harness(format!(
+                    "prior checkpoint {prior_checkpoint_ref} is unavailable in ledger"
+                ))
+            })?;
+            if prior.chain != input.chain {
+                return Err(MoltenError::invalid_harness(format!(
+                    "prior checkpoint {prior_checkpoint_ref} belongs to {:?}, expected {:?}",
+                    prior.chain, input.chain
+                )));
+            }
+            if checkpoint_child_count(index, prior_checkpoint_ref, &input.chain) > 0 {
+                return Err(MoltenError::invalid_harness(format!(
+                    "prior checkpoint {prior_checkpoint_ref} already has an accepted successor"
+                )));
+            }
+            ensure_link_descends_from(index, &input.chain, &input.head_ref, &prior.head_ref)
+        }
+        None => {
+            let existing = index.checkpoints_for_chain(&input.chain);
+            if existing.is_empty() {
+                Ok(())
+            } else {
+                Err(MoltenError::invalid_harness(format!(
+                    "checkpoint prior checkpoint is required for {:?}; existing checkpoints {:?}",
+                    input.chain, existing
+                )))
+            }
+        }
+    }
+}
+
+fn checkpoint_child_count(index: &ChainIndex, prior_checkpoint_ref: &str, chain: &ChainScope) -> usize {
+    index
+        .checkpoints_by_ref
+        .values()
+        .filter(|checkpoint| {
+            &checkpoint.chain == chain && checkpoint.prior_checkpoint_ref.as_deref() == Some(prior_checkpoint_ref)
+        })
+        .count()
+}
+
+fn validate_checkpoint_head_freshness(index: &ChainIndex, input: &ChainCheckpointInput) -> Result<()> {
+    let heads = index.heads_for_chain(&input.chain);
+    if heads == vec![input.head_ref.clone()] {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "checkpoint head {} is not the current chain head for {:?}: current heads {:?}",
+            input.head_ref, input.chain, heads
+        )))
+    }
+}
+
+fn ensure_link_descends_from(
+    index: &ChainIndex,
+    chain: &ChainScope,
+    descendant_ref: &str,
+    ancestor_ref: &str,
+) -> Result<()> {
+    let ancestor = index.links_by_ref.get(ancestor_ref).ok_or_else(|| {
+        MoltenError::invalid_harness(format!("prior checkpoint head {ancestor_ref} is unavailable in ledger"))
+    })?;
+    if &ancestor.chain != chain {
+        return Err(MoltenError::invalid_harness(format!(
+            "prior checkpoint head {ancestor_ref} belongs to {:?}, expected {:?}",
+            ancestor.chain, chain
+        )));
+    }
+    if descendant_ref == ancestor_ref {
+        return Ok(());
+    }
+
+    let mut current_ref = descendant_ref.to_string();
+    let mut seen = OrderedSet::new();
+    for _ in 0..=index.links_by_ref.len() {
+        if !seen.insert(current_ref.clone()) {
+            return Err(MoltenError::invalid_harness(format!(
+                "checkpoint descent from {descendant_ref} to {ancestor_ref} encountered a cycle at {current_ref}"
+            )));
+        }
+        let current = index.links_by_ref.get(&current_ref).ok_or_else(|| {
+            MoltenError::invalid_harness(format!("checkpoint head walk reached unavailable link {current_ref}"))
+        })?;
+        if &current.chain != chain {
+            return Err(MoltenError::invalid_harness(format!(
+                "checkpoint head walk crossed into {:?}, expected {:?}",
+                current.chain, chain
+            )));
+        }
+        let Some(previous_ref) = current.previous_link_ref.as_ref() else {
+            break;
+        };
+        if previous_ref == ancestor_ref {
+            return Ok(());
+        }
+        current_ref.clone_from(previous_ref);
+    }
+    Err(MoltenError::invalid_harness(format!(
+        "checkpoint head {descendant_ref} does not descend from prior checkpoint head {ancestor_ref}"
+    )))
 }
 
 fn validate_checkpoint_verify_receipt(input: CheckpointVerifyReceiptValidationInput<'_>) -> Result<()> {

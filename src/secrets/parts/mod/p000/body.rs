@@ -277,6 +277,7 @@ pub struct SecretCleanupInput {
     pub tombstone_ref: String,
     pub retention_refs: Vec<String>,
     pub retention_receipts: Vec<IoValue>,
+    pub retention_tombstones: Vec<IoValue>,
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
 }

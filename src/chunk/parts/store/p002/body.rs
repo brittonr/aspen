@@ -93,6 +93,10 @@ pub fn parse_manifest_value(value: &IoValue, expected_manifest_ref: Option<&str>
     ensure_count_at_most(policy_refs.len(), MAX_CHUNK_STORE_REFS, "chunk manifest policy refs")?;
     ensure_count_at_most(chunk_values.len(), MAX_CHUNK_STORE_CHUNKS, "chunk manifest chunks")?;
     ensure_count_at_most(evidence_refs.len(), MAX_CHUNK_STORE_REFS, "chunk manifest evidence refs")?;
+    validate_content_ref_field(&metadata_ref, "chunk manifest metadata-ref")?;
+    validate_content_ref_sequence(&policy_refs, "chunk manifest policy-ref")?;
+    validate_content_ref_field(&root_ref, "chunk manifest root-ref")?;
+    validate_content_ref_sequence(&evidence_refs, "chunk manifest evidence-ref")?;
     let manifest_ref = canonical_hash(value)?;
     if let Some(expected) = expected_manifest_ref
         && manifest_ref != expected
@@ -148,6 +152,17 @@ fn refs_from_values(values: &[IoValue], chunk_size: u64, transforms: &ChunkTrans
     Ok(chunks)
 }
 
+fn validate_content_ref_field(value: &str, label: &str) -> Result<()> {
+    validate_content_ref(value).map_err(|error| MoltenError::invalid_harness(format!("{label} is invalid: {error}")))
+}
+
+fn validate_content_ref_sequence(values: &[String], label: &str) -> Result<()> {
+    for value in values {
+        validate_content_ref_field(value, label)?;
+    }
+    Ok(())
+}
+
 fn ensure_distinct_commitments(chunks: &[ChunkRef]) -> Result<()> {
     for chunk in chunks {
         if chunk.transforms.protected_commitment_ref.as_deref() == Some(chunk.chunk_ref.as_str()) {
@@ -179,7 +194,9 @@ pub fn parse_chunk_ref_value(value: &IoValue, expected_chunk_size: u64) -> Resul
         (ChunkTransforms::public_plaintext(), 5)
     };
     let _location_hints = record_sequence(&fields[location_index], "location-hints")?;
-    let _evidence_refs = record_string_sequence(&fields[location_index + 1], "evidence-refs")?;
+    let evidence_refs = record_string_sequence(&fields[location_index + 1], "evidence-refs")?;
+    validate_content_ref_field(&chunk_ref, "chunk ref hash")?;
+    validate_content_ref_sequence(&evidence_refs, "chunk ref evidence-ref")?;
     if chunker != FIXED_V1_CHUNKER {
         return Err(MoltenError::invalid_harness(format!("unsupported chunk ref chunker {chunker}")));
     }

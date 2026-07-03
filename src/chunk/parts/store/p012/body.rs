@@ -64,11 +64,7 @@ fn validate_transform_shape(transforms: &ChunkTransforms) -> Result<()> {
                 "confidential chunk transforms require a protected commitment ref",
             ));
         };
-        if commitment_ref.trim().is_empty() {
-            return Err(MoltenError::invalid_harness(
-                "confidential chunk transforms require a non-empty protected commitment ref",
-            ));
-        }
+        validate_content_ref_field(commitment_ref, "confidential chunk protected commitment ref")?;
         if transforms.encryption != "protected-commitment" {
             return Err(MoltenError::invalid_harness(
                 "confidential chunk transforms require protected-commitment encryption",

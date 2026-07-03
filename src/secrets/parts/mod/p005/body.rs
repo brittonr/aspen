@@ -74,17 +74,17 @@ fn fixture_retention(core: &FixtureCore) -> Result<crate::retention::Evaluation>
 }
 
 fn fixture_cleanup(core: &FixtureCore, retention: &crate::retention::Evaluation) -> Result<SecretCleanupReceipt> {
-    let tombstone_ref = retention
-        .receipt
-        .tombstone_ref
-        .clone()
-        .ok_or_else(|| MoltenError::invalid_harness("secrets cleanup retention receipt missing tombstone"))?;
+    let tombstone = retention
+        .tombstone
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("secrets cleanup retention missing tombstone"))?;
     let value = secret_cleanup_receipt_value(&SecretCleanupInput {
         secret_ref: core.secret.secret_ref.clone(),
         revocation_ref: fixture_ref("secret-revocation"),
-        tombstone_ref,
+        tombstone_ref: tombstone.tombstone_ref.clone(),
         retention_refs: vec![retention.receipt.receipt_ref.clone()],
         retention_receipts: vec![retention.receipt.value.clone()],
+        retention_tombstones: vec![tombstone.value.clone()],
         authority_refs: core.refs.authority.clone(),
         policy_refs: core.refs.policy.clone(),
     })?;

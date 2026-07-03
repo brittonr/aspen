@@ -182,3 +182,20 @@ fn rollback_leaves_staged_actions_uncommitted() {
     assert!(matches!(committed.as_slice(), [Event::AssertionCommitted { .. }]));
     assert_ne!(state.snapshot(), before);
 }
+
+#[test]
+fn apply_step_with_predicate_receipt_gates_dataspace_commit() {
+    let mut state = RuntimeState::new(1);
+    let value = Value::string("service.ready").expect("runtime test value");
+    let step = Step::Assert {
+        actor: "producer".into(),
+        value,
+    };
+
+    let (events, receipt) = state.apply_step_with_predicate_receipt(&step).expect("predicate-gated apply succeeds");
+
+    assert!(matches!(events.as_slice(), [Event::AssertionCommitted { .. }]));
+    let receipt = receipt.expect("dataspace turn returns predicate receipt");
+    assert_eq!(receipt.decision, PredicateDecision::Pass);
+    assert!(state.assertions.iter().any(|assertion| assertion.actor == "producer"));
+}

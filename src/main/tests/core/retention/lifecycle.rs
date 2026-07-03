@@ -58,12 +58,23 @@ fn tombstone_retention_object(dir: &Path, fixture: &RetentionFixture) {
         Some(tombstone_receipt.clone()),
     ))
     .expect("tombstone retention object");
-    let tombstone = molten::retention::parse_receipt(
+    let receipt = molten::retention::parse_receipt(
         &read_preserves_file(&tombstone_receipt).expect("read tombstone receipt"),
     )
     .expect("parse tombstone receipt");
-    assert_eq!(tombstone.decision, "pass");
-    assert!(tombstone.tombstone_ref.is_some());
+    assert_eq!(receipt.decision, "pass");
+    let explain = molten::retention::explain_candidate(molten::retention::CandidateExplainInput {
+        root: &fixture.root,
+        object_ref: &fixture.object_ref,
+        object_kind: Some("encrypted-ref"),
+        retention_class: Some(molten::retention::CLASS_PRIVATE_SECRET_REF),
+        action: Some(molten::retention::ACTION_TOMBSTONE),
+        subsystem: None,
+    })
+    .expect("explain tombstone evidence");
+    let tombstone_ref = explain.tombstone_refs.first().expect("tombstone was stored");
+    let tombstone = molten::retention::read_tombstone(&fixture.root, tombstone_ref).expect("read tombstone");
+    assert_eq!(tombstone.receipt_ref, receipt.receipt_ref);
 }
 
 fn retention_check(fixture: &RetentionFixture, action: &str, receipt_out: Option<PathBuf>) -> RetentionCommand {

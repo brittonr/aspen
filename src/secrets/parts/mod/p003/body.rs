@@ -7,6 +7,7 @@ pub fn secret_cleanup_receipt_value(input: &SecretCleanupInput) -> Result<IoValu
     validate_refs(&input.authority_refs, "cleanup authority ref")?;
     validate_refs(&input.policy_refs, "cleanup policy ref")?;
     ensure_count_at_most(input.retention_receipts.len(), MAX_SECRET_REFS, "cleanup retention receipts")?;
+    ensure_count_at_most(input.retention_tombstones.len(), MAX_SECRET_REFS, "cleanup retention tombstones")?;
     let mut diagnostics = cleanup_retention_diagnostics(input)?;
     if input.authority_refs.is_empty() {
         diagnostics.push_limited(
@@ -39,8 +40,22 @@ fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<Strin
     let mut diagnostics = Vec::new();
     let expected_refs = input.retention_refs.iter().cloned().collect::<BtreeSet<_>>();
     let mut actual_refs = BtreeSet::new();
-    let mut has_matching_pass = false;
-    let mut has_matching_tombstone = false;
+    let mut matching_pass_refs = BtreeSet::new();
+    let mut tombstone_receipt_refs = BtreeSet::new();
+    for tombstone_value in &input.retention_tombstones {
+        match crate::retention::parse_tombstone(tombstone_value) {
+            Ok(tombstone) => {
+                if tombstone.tombstone_ref == input.tombstone_ref {
+                    tombstone_receipt_refs.insert(tombstone.receipt_ref.clone());
+                }
+            }
+            Err(_) => diagnostics.push_limited(
+                "secret cleanup retention tombstone invalid".to_string(),
+                MAX_SECRET_DIAGNOSTICS,
+                "secret cleanup diagnostics",
+            )?,
+        }
+    }
     for receipt_value in &input.retention_receipts {
         match crate::retention::parse_receipt(receipt_value) {
             Ok(receipt) => {
@@ -56,10 +71,7 @@ fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<Strin
                     && receipt.retention_class == crate::retention::CLASS_PRIVATE_SECRET_REF
                     && is_cleanup_action
                 {
-                    has_matching_pass = true;
-                    if receipt.tombstone_ref.as_deref() == Some(input.tombstone_ref.as_str()) {
-                        has_matching_tombstone = true;
-                    }
+                    matching_pass_refs.insert(receipt.receipt_ref.clone());
                 }
             }
             Err(_) => diagnostics.push_limited(
@@ -69,6 +81,10 @@ fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<Strin
             )?,
         }
     }
+    let has_matching_pass = !matching_pass_refs.is_empty();
+    let has_matching_tombstone = matching_pass_refs
+        .iter()
+        .any(|receipt_ref| tombstone_receipt_refs.contains(receipt_ref));
     if input.retention_receipts.is_empty() {
         diagnostics.push_limited(
             "secret cleanup requires retention receipt evidence".to_string(),
