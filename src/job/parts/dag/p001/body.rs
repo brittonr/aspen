@@ -155,6 +155,25 @@ pub struct JobWorkerScheduleReceipt {
     pub value: IoValue,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct JobWorkerScheduleReplayInput<'a> {
+    pub schedule: &'a JobWorkerScheduleReceipt,
+    pub request: &'a JobWorkerRequest,
+    pub result: Option<&'a JobWorkerResult>,
+    pub expected_stage_order: &'a [String],
+    pub expected_output_refs: &'a [String],
+    pub expected_diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JobWorkerScheduleReplayReport {
+    pub replay_ref: String,
+    pub decision: String,
+    pub completed_indices: Vec<u64>,
+    pub diagnostics: Vec<String>,
+    pub value: IoValue,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobWorkerExecution {
     pub request: Option<JobWorkerRequest>,

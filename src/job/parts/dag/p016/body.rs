@@ -201,6 +201,118 @@ fn analysis_receipt_value(input: AnalysisReceiptValueInput<'_>) -> Result<IoValu
     ]))
 }
 
+pub fn validate_worker_schedule_replay(
+    input: JobWorkerScheduleReplayInput<'_>,
+) -> Result<JobWorkerScheduleReplayReport> {
+    validate_refs(input.expected_output_refs, "job worker replay expected output ref")?;
+    ensure_count_at_most(input.expected_stage_order.len(), MAX_JOB_NODES, "job worker replay stage order")?;
+    ensure_count_at_most(input.expected_diagnostics.len(), MAX_JOB_REFS, "job worker replay diagnostics")?;
+    for stage_id in input.expected_stage_order {
+        validate_node_id(stage_id)?;
+    }
+    let mut diagnostics = Vec::new();
+    if input.schedule.job_ref != input.request.job_ref {
+        push_bounded(
+            &mut diagnostics,
+            "job worker schedule job ref does not match request".to_string(),
+            MAX_JOB_REFS,
+            "job worker replay diagnostics",
+        )?;
+    }
+    if input.schedule.request_ref != input.request.request_ref {
+        push_bounded(
+            &mut diagnostics,
+            "job worker schedule request ref does not match request".to_string(),
+            MAX_JOB_REFS,
+            "job worker replay diagnostics",
+        )?;
+    }
+    if input.schedule.diagnostics != input.expected_diagnostics {
+        push_bounded(
+            &mut diagnostics,
+            "job worker schedule diagnostics diverge from replay expectation".to_string(),
+            MAX_JOB_REFS,
+            "job worker replay diagnostics",
+        )?;
+    }
+    let mut completed_indices = Vec::new();
+    match input.result {
+        Some(result) => {
+            if input.schedule.result_ref.as_deref() != Some(result.result_ref.as_str()) {
+                push_bounded(
+                    &mut diagnostics,
+                    "job worker schedule result ref does not match worker result".to_string(),
+                    MAX_JOB_REFS,
+                    "job worker replay diagnostics",
+                )?;
+            }
+            let actual_stage_order = result
+                .stage_receipt_refs
+                .iter()
+                .map(|(stage_id, _)| stage_id.clone())
+                .collect::<Vec<_>>();
+            for (index, _) in actual_stage_order.iter().enumerate() {
+                push_bounded(
+                    &mut completed_indices,
+                    usize_to_u64(index, "job worker replay completed index")?,
+                    MAX_JOB_NODES,
+                    "job worker replay completed indices",
+                )?;
+            }
+            if actual_stage_order != input.expected_stage_order {
+                push_bounded(
+                    &mut diagnostics,
+                    "job worker schedule stage order does not match replay expectation".to_string(),
+                    MAX_JOB_REFS,
+                    "job worker replay diagnostics",
+                )?;
+            }
+            if result.output_refs != input.expected_output_refs {
+                push_bounded(
+                    &mut diagnostics,
+                    "job worker schedule output refs do not match replay expectation".to_string(),
+                    MAX_JOB_REFS,
+                    "job worker replay diagnostics",
+                )?;
+            }
+        }
+        None => {
+            if input.schedule.decision == "pass" {
+                push_bounded(
+                    &mut diagnostics,
+                    "passing job worker schedule replay requires worker result".to_string(),
+                    MAX_JOB_REFS,
+                    "job worker replay diagnostics",
+                )?;
+            }
+        }
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = crate::preserves_rail::record("job-worker-schedule-replay-v1", vec![
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(decision)]),
+        crate::preserves_rail::record("schedule", vec![crate::preserves_rail::string(&input.schedule.receipt_ref)]),
+        crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&input.request.request_ref)]),
+        crate::preserves_rail::record("stages", vec![crate::preserves_rail::sequence(
+            input.expected_stage_order.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("completed", vec![crate::preserves_rail::sequence(
+            completed_indices.iter().map(|index| crate::preserves_rail::u64_value(*index)).collect(),
+        )]),
+        crate::preserves_rail::record("outputs", vec![refs_sequence(input.expected_output_refs)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        checks_value_from_pairs(&[("schedule-replay", decision), ("stage-order-bound", decision)]),
+    ]);
+    Ok(JobWorkerScheduleReplayReport {
+        replay_ref: crate::preserves_rail::canonical_hash(&value)?,
+        decision: decision.to_string(),
+        completed_indices,
+        diagnostics,
+        value,
+    })
+}
+
 pub fn receipt_summary(value: &IoValue) -> Result<String> {
     if let Ok(receipt) = parse_job_worker_schedule_receipt_value(value) {
         return Ok(format!(
