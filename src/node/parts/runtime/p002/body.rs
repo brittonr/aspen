@@ -4,6 +4,7 @@ pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Resul
     validate_ref(input.identity_receipt_ref, "node startup identity receipt ref")?;
     validate_refs(input.source_gate_receipt_refs, "node startup source gate receipt ref")?;
     validate_refs(input.source_gate_validation_refs, "node startup source gate validation ref")?;
+    validate_refs(input.profile_metadata_refs, "node startup profile metadata ref")?;
     validate_refs(input.capability_receipt_refs, "node startup capability receipt ref")?;
     validate_refs(input.resource_receipt_refs, "node startup resource receipt ref")?;
     validate_refs(input.version_refs, "node startup version ref")?;
@@ -24,6 +25,7 @@ pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Resul
         record("policy", vec![refs_sequence(&input.config.policy_refs)]),
         record("source-gates", vec![refs_sequence(input.source_gate_receipt_refs)]),
         record("source-gate-validations", vec![refs_sequence(input.source_gate_validation_refs)]),
+        record("profile-metadata", vec![refs_sequence(input.profile_metadata_refs)]),
         record("capability", vec![refs_sequence(input.capability_receipt_refs)]),
         record("resource", vec![refs_sequence(input.resource_receipt_refs)]),
         record("version", vec![refs_sequence(input.version_refs)]),
@@ -35,6 +37,8 @@ pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Resul
                 "strict-octet-source-gate-bound",
                 status(!input.source_gate_receipt_refs.is_empty() && !input.source_gate_validation_refs.is_empty()),
             ),
+            ("profile-metadata-bound", status(!input.profile_metadata_refs.is_empty())),
+            ("profile-metadata-evidence-only", "pass"),
             ("no-ambient-authority", "pass"),
             ("canonical-receipt", "pass"),
         ]),

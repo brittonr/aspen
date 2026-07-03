@@ -10,6 +10,7 @@
             index_receipt_refs: vec![test_ref("startup-index")],
             source_gate_receipt_refs: vec![source_gate_ref],
             source_gate_receipt_values: vec![source_gate_value],
+            profile_metadata_refs: vec![test_ref("profile-metadata")],
             capability_receipt_refs: vec![test_ref("capability-receipt")],
             resource_receipt_refs: vec![test_ref("resource-receipt")],
             version_refs: vec![test_ref("version")],
@@ -79,6 +80,7 @@
             index_receipt_refs: vec![index_ref.clone()],
             source_gate_receipt_refs: vec![source_gate_ref],
             source_gate_receipt_values: vec![source_gate_value],
+            profile_metadata_refs: vec![test_ref("profile-metadata")],
             capability_receipt_refs: vec![test_ref("capability-receipt")],
             resource_receipt_refs: vec![resource_ref.clone()],
             version_refs: vec![test_ref("version")],
@@ -106,6 +108,7 @@
             index_receipt_refs: Vec::new(),
             source_gate_receipt_refs: Vec::new(),
             source_gate_receipt_values: Vec::new(),
+            profile_metadata_refs: Vec::new(),
             capability_receipt_refs: vec![test_ref("capability-receipt")],
             resource_receipt_refs: Vec::new(),
             version_refs: vec![test_ref("version")],
@@ -135,4 +138,25 @@
                 .any(|diagnostic| diagnostic.contains("strict Octet source gate"))
         );
         assert!(started.startup_receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("resource profile")));
+        assert!(started.startup_receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("profile metadata")));
+    }
+
+    #[test]
+    fn runtime_start_rejects_tampered_profile_metadata_ref() {
+        let adapters = required_adapter_bindings_scrambled();
+        let config_value = test_node_config_value(&adapters);
+        let (source_gate_ref, source_gate_value) = clean_source_gate();
+        let started = start_node_runtime(&NodeRuntimeStartInput {
+            config_value,
+            identity_receipt_ref: test_ref("identity-receipt"),
+            index_receipt_refs: vec![test_ref("startup-index")],
+            source_gate_receipt_refs: vec![source_gate_ref],
+            source_gate_receipt_values: vec![source_gate_value],
+            profile_metadata_refs: vec!["not-a-content-ref".to_string()],
+            capability_receipt_refs: vec![test_ref("capability-receipt")],
+            resource_receipt_refs: vec![test_ref("resource-receipt")],
+            version_refs: vec![test_ref("version")],
+        });
+
+        assert!(started.is_err());
     }

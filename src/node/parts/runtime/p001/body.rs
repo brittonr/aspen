@@ -13,6 +13,7 @@ struct AdapterStart {
 fn validate_start_input(config: &NodeConfig, input: &NodeRuntimeStartInput) -> Result<()> {
     validate_refs(&input.index_receipt_refs, "node runtime index receipt ref")?;
     validate_refs(&input.source_gate_receipt_refs, "node runtime source gate receipt ref")?;
+    validate_refs(&input.profile_metadata_refs, "node runtime profile metadata ref")?;
     validate_refs(&input.capability_receipt_refs, "node runtime capability receipt ref")?;
     validate_refs(&input.resource_receipt_refs, "node runtime resource receipt ref")?;
     validate_refs(&input.version_refs, "node runtime version ref")?;
@@ -61,6 +62,14 @@ fn startup_diagnostics(config: &NodeConfig, input: &NodeRuntimeStartInput) -> Re
         push_bounded(
             &mut diagnostics,
             "node runtime startup requires resource profile receipts".to_string(),
+            MAX_NODE_DIAGNOSTICS,
+            "node runtime startup diagnostics",
+        )?;
+    }
+    if input.profile_metadata_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "node runtime startup requires production profile metadata refs".to_string(),
             MAX_NODE_DIAGNOSTICS,
             "node runtime startup diagnostics",
         )?;
@@ -182,6 +191,7 @@ pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeSt
         adapter_receipts: &adapter_start.receipts,
         source_gate_receipt_refs: &input.source_gate_receipt_refs,
         source_gate_validation_refs: &source_gate_validation_refs,
+        profile_metadata_refs: &input.profile_metadata_refs,
         capability_receipt_refs: &input.capability_receipt_refs,
         resource_receipt_refs: &input.resource_receipt_refs,
         version_refs: &input.version_refs,

@@ -55,6 +55,8 @@ const _: () = assert!(MAX_PROD_TEXTS <= 100_000);
 const BROAD_PRODUCTION_SCOPE: &str = "broad-production";
 const CONFIGURATION_CLEAN_CAVEAT_STATUS: &str = "configuration-clean-caveat";
 const SOURCE_REMEDIATED_ZERO_STATUS: &str = "source-remediated-zero";
+const PRODUCTION_PROFILE_SCHEMA_VERSION: u64 = 1;
+const PRODUCTION_PROFILE_SOURCE_LANGUAGE: &str = "nickel";
 
 const SECURITY_DRILL_KINDS: &[&str] = &[
     "key-revocation",
@@ -78,6 +80,11 @@ const INCIDENT_KINDS: &[&str] = &[
 pub struct DeploymentProfileInput<'a> {
     pub decision: &'a str,
     pub profile_name: &'a str,
+    pub schema_id: &'a str,
+    pub schema_version: u64,
+    pub source_language: &'a str,
+    pub profile_identity: &'a str,
+    pub profile_ref: &'a str,
     pub state_layout_refs: &'a [String],
     pub required_adapter_refs: &'a [String],
     pub source_gate_refs: &'a [String],
@@ -257,6 +264,7 @@ pub struct ReleaseCandidateGateInput<'a> {
 pub fn deployment_profile_value(input: &DeploymentProfileInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("profile name", input.profile_name)?;
+    validate_profile_metadata(input)?;
     validate_diagnostics(input.diagnostics)?;
     require_pass_refs("state layout", input.state_layout_refs, input.decision)?;
     require_pass_refs("required adapter", input.required_adapter_refs, input.decision)?;
@@ -270,6 +278,11 @@ pub fn deployment_profile_value(input: &DeploymentProfileInput<'_>) -> Result<Io
         string(PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA),
         decision_field(input.decision),
         record("profile", vec![string(input.profile_name)]),
+        record("schema-id", vec![string(input.schema_id)]),
+        record("schema-version", vec![u64_value(input.schema_version)]),
+        record("source-language", vec![string(input.source_language)]),
+        record("profile-identity", vec![string(input.profile_identity)]),
+        record("profile-ref", vec![string(input.profile_ref)]),
         refs_field("state-layout", input.state_layout_refs)?,
         refs_field("required-adapters", input.required_adapter_refs)?,
         refs_field("source-gates", input.source_gate_refs)?,
@@ -291,7 +304,9 @@ pub fn deployment_profile_value(input: &DeploymentProfileInput<'_>) -> Result<Io
                         || input.live_transport_refs.is_empty(),
                 ),
             ),
+            check_value("profile-metadata-bound", "pass"),
             check_value("profile-receipt-does-not-grant-authority", "pass"),
+            check_value("profile-metadata-does-not-grant-subsystem-trust", "pass"),
         ]),
     ]))
 }

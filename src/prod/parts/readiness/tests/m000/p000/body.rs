@@ -19,9 +19,15 @@
     fn production_ops_receipts_bind_positive_and_denial_evidence() {
         let base_refs = refs(&["base"]);
         let diagnostics = texts(&["operator reviewed"]);
+        let profile_ref = reference("profile-export");
         let profile = deployment_profile_value(&DeploymentProfileInput {
             decision: "pass",
             profile_name: "pilot-node",
+            schema_id: PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
+            schema_version: PRODUCTION_PROFILE_SCHEMA_VERSION,
+            source_language: PRODUCTION_PROFILE_SOURCE_LANGUAGE,
+            profile_identity: "pilot-node",
+            profile_ref: &profile_ref,
             state_layout_refs: &base_refs,
             required_adapter_refs: &base_refs,
             source_gate_refs: &base_refs,
@@ -69,9 +75,15 @@
     fn production_ops_pass_denies_missing_or_degraded_evidence() {
         let base_refs = refs(&["base"]);
         let diagnostics = texts(&["queue pressure"]);
+        let profile_ref = reference("profile-export");
         let missing_profile = deployment_profile_value(&DeploymentProfileInput {
             decision: "pass",
             profile_name: "pilot-node",
+            schema_id: PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
+            schema_version: PRODUCTION_PROFILE_SCHEMA_VERSION,
+            source_language: PRODUCTION_PROFILE_SOURCE_LANGUAGE,
+            profile_identity: "pilot-node",
+            profile_ref: &profile_ref,
             state_layout_refs: &[],
             required_adapter_refs: &base_refs,
             source_gate_refs: &base_refs,
@@ -96,8 +108,65 @@
             import_export_failure_refs: &base_refs,
             diagnostics: &diagnostics,
         });
+        let mismatched_metadata = deployment_profile_value(&DeploymentProfileInput {
+            decision: "pass",
+            profile_name: "pilot-node",
+            schema_id: PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
+            schema_version: PRODUCTION_PROFILE_SCHEMA_VERSION,
+            source_language: PRODUCTION_PROFILE_SOURCE_LANGUAGE,
+            profile_identity: "other-node",
+            profile_ref: &profile_ref,
+            state_layout_refs: &base_refs,
+            required_adapter_refs: &base_refs,
+            source_gate_refs: &base_refs,
+            resource_limit_refs: &base_refs,
+            redaction_setting_refs: &base_refs,
+            live_transport_refs: &base_refs,
+            startup_expectation_refs: &base_refs,
+            shutdown_expectation_refs: &base_refs,
+            diagnostics: &diagnostics,
+        });
+        let unsupported_metadata = deployment_profile_value(&DeploymentProfileInput {
+            decision: "pass",
+            profile_name: "pilot-node",
+            schema_id: PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
+            schema_version: PRODUCTION_PROFILE_SCHEMA_VERSION + 1,
+            source_language: PRODUCTION_PROFILE_SOURCE_LANGUAGE,
+            profile_identity: "pilot-node",
+            profile_ref: &profile_ref,
+            state_layout_refs: &base_refs,
+            required_adapter_refs: &base_refs,
+            source_gate_refs: &base_refs,
+            resource_limit_refs: &base_refs,
+            redaction_setting_refs: &base_refs,
+            live_transport_refs: &base_refs,
+            startup_expectation_refs: &base_refs,
+            shutdown_expectation_refs: &base_refs,
+            diagnostics: &diagnostics,
+        });
+        let tampered_profile_ref = deployment_profile_value(&DeploymentProfileInput {
+            decision: "pass",
+            profile_name: "pilot-node",
+            schema_id: PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
+            schema_version: PRODUCTION_PROFILE_SCHEMA_VERSION,
+            source_language: PRODUCTION_PROFILE_SOURCE_LANGUAGE,
+            profile_identity: "pilot-node",
+            profile_ref: "not-a-content-ref",
+            state_layout_refs: &base_refs,
+            required_adapter_refs: &base_refs,
+            source_gate_refs: &base_refs,
+            resource_limit_refs: &base_refs,
+            redaction_setting_refs: &base_refs,
+            live_transport_refs: &base_refs,
+            startup_expectation_refs: &base_refs,
+            shutdown_expectation_refs: &base_refs,
+            diagnostics: &diagnostics,
+        });
         assert!(missing_profile.is_err());
         assert!(degraded_pass.is_err());
+        assert!(mismatched_metadata.is_err());
+        assert!(unsupported_metadata.is_err());
+        assert!(tampered_profile_ref.is_err());
         observability_slo_value(&ObservabilitySloInput {
             decision: "degraded",
             snapshot_name: "over-limit",

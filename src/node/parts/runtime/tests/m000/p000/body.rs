@@ -108,6 +108,7 @@
         let source_gate_validation_refs = vec![test_ref("octet-source-gate-validation")];
         let capability_receipt_refs = vec![test_ref("capability-receipt")];
         let resource_receipt_refs = vec![test_ref("resource-receipt")];
+        let profile_metadata_refs = vec![test_ref("profile-metadata")];
         let version_refs = vec![test_ref("version")];
         let receipt_value = node_startup_receipt_value(&StartupReceiptValueInput {
             decision: "pass",
@@ -116,6 +117,7 @@
             adapter_receipts: &adapter_receipts,
             source_gate_receipt_refs: &source_gate_receipt_refs,
             source_gate_validation_refs: &source_gate_validation_refs,
+            profile_metadata_refs: &profile_metadata_refs,
             capability_receipt_refs: &capability_receipt_refs,
             resource_receipt_refs: &resource_receipt_refs,
             version_refs: &version_refs,
@@ -127,6 +129,7 @@
         assert_eq!(receipt.config_ref, config.config_ref);
         assert_eq!(receipt.source_gate_receipt_refs, vec![test_ref("octet-gate-receipt")]);
         assert_eq!(receipt.source_gate_validation_refs, vec![test_ref("octet-source-gate-validation")]);
+        assert_eq!(receipt.profile_metadata_refs, profile_metadata_refs);
         assert_eq!(crate::ledger::artifact_kind(&receipt_value), "node-startup-receipt");
     }
 

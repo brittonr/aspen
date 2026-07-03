@@ -234,6 +234,7 @@ fn start_node(
         index_receipt_refs: vec![dogfood_ref("adapter-index")?],
         source_gate_receipt_refs: vec![source_gate_ref],
         source_gate_receipt_values: vec![source_gate_value],
+        profile_metadata_refs: vec![dogfood_ref("production-profile-metadata")?],
         capability_receipt_refs: capability_refs.to_vec(),
         resource_receipt_refs: resource_refs.to_vec(),
         version_refs: vec![dogfood_ref(env!("CARGO_PKG_VERSION"))?],

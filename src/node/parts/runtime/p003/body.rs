@@ -53,10 +53,10 @@ pub fn node_restart_health_receipt_value(input: &RestartHealthReceiptValueInput<
 
 pub fn parse_node_startup_receipt(value: &IoValue) -> Result<NodeStartupReceipt> {
     let fields = value
-        .collect_simple_record("node-startup-receipt-v1", Some(13))
+        .collect_simple_record("node-startup-receipt-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-startup-receipt-v1 ...>"))?;
     require_schema(&fields[0], NODE_STARTUP_RECEIPT_SCHEMA, "node startup receipt")?;
-    let checks = parse_checks(&fields[12])?;
+    let checks = parse_checks(&fields[13])?;
     require_check(&checks, "canonical-receipt", "node startup receipt")?;
     Ok(NodeStartupReceipt {
         receipt_ref: canonical_hash(value)?,
@@ -67,10 +67,11 @@ pub fn parse_node_startup_receipt(value: &IoValue) -> Result<NodeStartupReceipt>
         policy_refs: record_ref_sequence(&fields[5], "policy")?,
         source_gate_receipt_refs: record_ref_sequence(&fields[6], "source-gates")?,
         source_gate_validation_refs: record_ref_sequence(&fields[7], "source-gate-validations")?,
-        capability_receipt_refs: record_ref_sequence(&fields[8], "capability")?,
-        resource_receipt_refs: record_ref_sequence(&fields[9], "resource")?,
-        version_refs: record_ref_sequence(&fields[10], "version")?,
-        diagnostics: record_string_sequence(&fields[11], "diagnostics")?,
+        profile_metadata_refs: record_ref_sequence(&fields[8], "profile-metadata")?,
+        capability_receipt_refs: record_ref_sequence(&fields[9], "capability")?,
+        resource_receipt_refs: record_ref_sequence(&fields[10], "resource")?,
+        version_refs: record_ref_sequence(&fields[11], "version")?,
+        diagnostics: record_string_sequence(&fields[12], "diagnostics")?,
         checks,
         value: value.clone(),
     })

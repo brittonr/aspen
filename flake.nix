@@ -226,6 +226,35 @@
           molten = nextest;
           clippy = ws.clippy.allWorkspaceMembers;
 
+          production-profile-fixtures = pkgs.runCommand "molten-production-profile-fixtures"
+            {
+              nativeBuildInputs = [ pkgs.nickel pkgs.diffutils ];
+              src = sourceForConfigChecks;
+            } ''
+            set -euo pipefail
+            cp -R $src source
+            chmod -R u+w source
+            cd source
+
+            nickel export docs/production-node-profile.ncl > "$TMPDIR/production-node-profile.json"
+            nickel export docs/production-profile-fixtures/valid.ncl > "$TMPDIR/production-profile-valid.json"
+            nickel export docs/production-node-profile.ncl --field profile.resource_limits > "$TMPDIR/resource-limits.json"
+            diff -u docs/production-profile-fixtures/expected-resource-limits.json "$TMPDIR/resource-limits.json"
+
+            failed=0
+            for fixture in docs/production-profile-fixtures/negative/*.ncl; do
+              name=$(basename "$fixture")
+              if nickel export "$fixture" > "$TMPDIR/$name.json" 2> "$TMPDIR/$name.err"; then
+                echo "negative fixture unexpectedly exported: $fixture" >&2
+                failed=1
+              fi
+            done
+            if [ "$failed" -ne 0 ]; then
+              exit 1
+            fi
+            touch "$out"
+          '';
+
           kache-nix-rust-wrapper-contract =
             let
               missingCacheDiagnostic = "cache directory is not writable";

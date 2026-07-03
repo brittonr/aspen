@@ -182,6 +182,17 @@ fn capability_receipt_refs(state_root: &Path) -> Result<Vec<String>> {
     )?])
 }
 
+fn profile_metadata_refs(state_root: &Path) -> Result<Vec<String>> {
+    Ok(vec![local_ref(
+        "node-production-profile-metadata",
+        &format!(
+            "{}:{}",
+            crate::preserves_rail::PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
+            state_root_profile_ref(state_root)?
+        ),
+    )?])
+}
+
 fn state_root_profile_ref(state_root: &Path) -> Result<String> {
     local_ref("node-state-root-profile", &state_root.display().to_string())
 }

@@ -2,6 +2,11 @@ pub(super) fn deployment_profile(command: super::super::Command) -> super::super
     let super::super::Command::DeploymentProfile {
         decision,
         profile_name,
+        schema_id,
+        schema_version,
+        source_language,
+        profile_identity,
+        profile_ref,
         state_layout_refs,
         required_adapter_refs,
         source_gate_refs,
@@ -16,10 +21,16 @@ pub(super) fn deployment_profile(command: super::super::Command) -> super::super
     else {
         return Err(super::super::wrong_handler("deployment-profile"));
     };
+    let profile_identity = profile_identity.unwrap_or_else(|| profile_name.clone());
     Ok(super::Emission {
         value: molten::prod_readiness::deployment_profile_value(&molten::prod_readiness::DeploymentProfileInput {
             decision: &decision,
             profile_name: &profile_name,
+            schema_id: &schema_id,
+            schema_version,
+            source_language: &source_language,
+            profile_identity: &profile_identity,
+            profile_ref: &profile_ref,
             state_layout_refs: &state_layout_refs,
             required_adapter_refs: &required_adapter_refs,
             source_gate_refs: &source_gate_refs,

@@ -1,34 +1,11 @@
-let Ref = String in
-let Text = String in
-let ResourceLimits = {
-  max_queue_depth | Number,
-  max_receipt_bytes | Number,
-  max_store_bytes | Number,
-  max_delivery_latency_ms | Number,
-  max_recovery_time_ms | Number,
-} in
-let StateLayout = {
-  state_root | Text,
-  ledger_dir | Text,
-  redb_dir | Text,
-  chunk_dir | Text,
-  identity_dir | Text,
-  retention_dir | Text,
-  inbox_dir | Text,
-} in
-let ProductionNodeProfile = {
-  profile_name | Text,
-  state_layout | StateLayout,
-  required_adapters | Array Text,
-  source_gate_inputs | Array Ref,
-  resource_limits | ResourceLimits,
-  redaction_settings | Array Text,
-  live_transport_settings | Array Text,
-  startup_expectations | Array Text,
-  shutdown_expectations | Array Text,
-} in
+let Contracts = import "production-profile-contracts.ncl" in
+let Thresholds = Contracts.thresholds in
 {
-  profile | ProductionNodeProfile = {
+  schema_id = Contracts.schema_id,
+  schema_version = Contracts.schema_version,
+  source_language = Contracts.source_language,
+  profile_identity = "pilot-node",
+  profile = {
     profile_name = "pilot-node",
     state_layout = {
       state_root = "/var/lib/molten",
@@ -50,11 +27,11 @@ let ProductionNodeProfile = {
       "blake3:0000000000000000000000000000000000000000000000000000000000000000",
     ],
     resource_limits = {
-      max_queue_depth = 1024,
-      max_receipt_bytes = 134217728,
-      max_store_bytes = 10737418240,
-      max_delivery_latency_ms = 5000,
-      max_recovery_time_ms = 60000,
+      max_queue_depth = Thresholds.max_queue_depth,
+      max_receipt_bytes = Thresholds.max_receipt_bytes,
+      max_store_bytes = Thresholds.max_store_bytes,
+      max_delivery_latency_ms = Thresholds.max_delivery_latency_ms,
+      max_recovery_time_ms = Thresholds.max_recovery_time_ms,
     },
     redaction_settings = [
       "deny-sensitive-export-by-default",
@@ -77,4 +54,4 @@ let ProductionNodeProfile = {
       "active-lock-removed-after-pass",
     ],
   },
-}
+} | Contracts.ProductionProfileExport

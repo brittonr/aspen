@@ -33,6 +33,33 @@ fn validate_allowed_text(label: &str, value: &str, allowed: &[&str]) -> Result<(
     }
 }
 
+fn validate_profile_metadata(input: &DeploymentProfileInput<'_>) -> Result<()> {
+    if input.schema_id != PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported production profile schema id {}; expected {PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA}",
+            input.schema_id
+        )));
+    }
+    if input.schema_version != PRODUCTION_PROFILE_SCHEMA_VERSION {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported production profile schema version {}; expected {PRODUCTION_PROFILE_SCHEMA_VERSION}",
+            input.schema_version
+        )));
+    }
+    if input.source_language != PRODUCTION_PROFILE_SOURCE_LANGUAGE {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported production profile source language {}; expected {PRODUCTION_PROFILE_SOURCE_LANGUAGE}",
+            input.source_language
+        )));
+    }
+    validate_text_field("profile identity", input.profile_identity)?;
+    if input.profile_identity != input.profile_name {
+        return Err(MoltenError::invalid_harness("production profile identity must match profile name"));
+    }
+    validate_content_ref(input.profile_ref)
+        .map_err(|error| MoltenError::invalid_harness(format!("invalid production profile ref: {error}")))
+}
+
 fn validate_text_field(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
         Err(MoltenError::invalid_harness(format!("production readiness {label} must not be empty")))

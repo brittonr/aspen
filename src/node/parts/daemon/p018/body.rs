@@ -9,6 +9,7 @@ pub fn run_local(input: &RunInput<'_>) -> Result<Run> {
     let resource_receipt_refs = resource_receipt_refs(input.state_root)?;
     let capability_receipt_refs = capability_receipt_refs(input.state_root)?;
     let version_refs = vec![local_ref("molten-binary-version", env!("CARGO_PKG_VERSION"))?];
+    let profile_metadata_refs = profile_metadata_refs(input.state_root)?;
     let source_gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
     let source_gate_ref = crate::preserves_rail::canonical_hash(&source_gate_value)?;
     let run = crate::node_runtime::start_node_runtime(&crate::node_runtime::NodeRuntimeStartInput {
@@ -17,6 +18,7 @@ pub fn run_local(input: &RunInput<'_>) -> Result<Run> {
         index_receipt_refs,
         source_gate_receipt_refs: vec![source_gate_ref],
         source_gate_receipt_values: vec![source_gate_value],
+        profile_metadata_refs,
         capability_receipt_refs,
         resource_receipt_refs,
         version_refs,

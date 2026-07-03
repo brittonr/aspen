@@ -15,6 +15,220 @@ r[molten.prod_ops.deployment_profile] Molten MUST define an explicit production 
 - THEN the receipts bind the profile ref, required adapter refs, resource limits, source-gate refs, and redaction settings
 - AND startup denies if required profile evidence is missing or stale.
 
+### Requirement: Production profile scalar fields use domain contracts
+r[molten.prod_ops.profile_domain_contracts.scalar_types] The production node deployment profile MUST validate evidence refs, profile names, state roots, and state layout directory fields with domain-specific Nickel contracts before exporting profile JSON.
+
+#### Scenario: Valid scalar domains export
+- GIVEN a production node profile whose refs use the supported BLAKE3 content-ref syntax, whose profile name is non-empty, whose state root is absolute, and whose layout directories are safe relative directory names
+- WHEN the operator exports the profile through Nickel
+- THEN the export succeeds and preserves the reviewed profile field names and values
+
+#### Scenario: Malformed evidence ref fails early
+- GIVEN a production node profile containing a malformed, uppercase, empty, or non-BLAKE3 source-gate ref
+- WHEN the operator exports the profile through Nickel
+- THEN the export fails before any production readiness receipt can bind that profile
+
+#### Scenario: Unsafe state path fails early
+- GIVEN a production node profile whose state root is relative or whose layout directory is absolute, empty, current-directory, parent-directory, or path-traversal shaped
+- WHEN the operator exports the profile through Nickel
+- THEN the export fails with a contract diagnostic for the path field
+
+### Requirement: Production resource limits are positive integers
+r[molten.prod_ops.profile_domain_contracts.positive_limits] Production profile resource limits MUST be positive integer values at the Nickel contract boundary.
+
+#### Scenario: Positive integer limits export
+- GIVEN a production profile whose queue, receipt, store, delivery-latency, and recovery-time limits are positive integers
+- WHEN the operator exports the profile
+- THEN the exported JSON contains numeric limit values accepted by production readiness evidence generation
+
+#### Scenario: Non-positive or fractional limit fails
+- GIVEN a production profile with a zero, negative, fractional, or non-numeric resource limit
+- WHEN the operator exports the profile through Nickel
+- THEN the export fails before startup or production-readiness evidence can treat the limit as reviewed
+
+### Requirement: Production profile vocabularies are contract-bound
+r[molten.prod_ops.profile_enum_contracts.allowed_vocabularies] Production profile arrays for required adapters, redaction settings, live transport settings, startup expectations, and shutdown expectations MUST accept only reviewed vocabulary values through Nickel contracts.
+
+#### Scenario: Reviewed vocabulary values export
+- GIVEN a production profile whose adapter, redaction, transport, startup, and shutdown arrays contain only reviewed vocabulary values
+- WHEN the operator exports the profile through Nickel
+- THEN the export succeeds and the exported values remain the reviewed strings
+
+#### Scenario: Misspelled vocabulary value fails
+- GIVEN a production profile with a misspelled or unreviewed adapter, redaction setting, transport setting, startup expectation, or shutdown expectation
+- WHEN the operator exports the profile through Nickel
+- THEN the export fails before the unreviewed string can be bound into production readiness evidence
+
+### Requirement: Vocabulary growth is reviewed
+r[molten.prod_ops.profile_enum_contracts.reviewed_growth] New production profile vocabulary values MUST be added through an explicit contract and documentation update rather than accepted as arbitrary text.
+
+#### Scenario: New adapter requires contract update
+- GIVEN an operator wants to require a new production adapter in the deployment profile
+- WHEN the adapter name is not present in the reviewed vocabulary contract
+- THEN Nickel export rejects the profile until the contract and operator documentation are updated
+
+### Requirement: Production resource thresholds are named
+r[molten.prod_ops.profile_named_units.named_thresholds] Production deployment profile resource limits MUST be expressed in Nickel through named unit and threshold constants rather than unexplained numeric literals in the concrete profile body.
+
+#### Scenario: Named thresholds define profile limits
+- GIVEN a reviewer inspects the production profile source
+- WHEN they read queue, receipt, store, delivery-latency, and recovery-time limits
+- THEN each limit is derived from a named Nickel constant that states the unit and reviewed threshold meaning
+
+#### Scenario: Threshold change is review-visible
+- GIVEN a production resource threshold changes
+- WHEN the profile diff is reviewed
+- THEN the diff names the threshold being changed rather than exposing only an unexplained numeric literal
+
+### Requirement: Named units preserve exported profile values
+r[molten.prod_ops.profile_named_units.export_stability] Replacing production profile numeric literals with named Nickel constants MUST preserve the reviewed exported JSON values unless the same change explicitly updates the threshold.
+
+#### Scenario: Current profile export remains stable
+- GIVEN the current production profile is rewritten to use named unit and threshold constants
+- WHEN the operator exports the profile through Nickel
+- THEN the exported resource-limit values match the previous reviewed profile export
+
+#### Scenario: Unintended numeric drift is caught
+- GIVEN a named unit or threshold edit changes an exported resource-limit value without an explicit threshold-review update
+- WHEN profile fixture validation runs
+- THEN validation fails and reports export drift before production readiness receipts are updated
+
+### Requirement: Production profile requires startup evidence inputs
+r[molten.prod_ops.profile_invariants.required_evidence] Production deployment profile export MUST fail unless required evidence arrays are non-empty and the required adapter list includes the reviewed core production adapter set.
+
+#### Scenario: Complete startup evidence exports
+- GIVEN a production profile with at least one source-gate input and all reviewed core production adapters listed
+- WHEN the operator exports the profile through Nickel
+- THEN the export succeeds and the startup receipt can bind the declared evidence and adapter refs
+
+#### Scenario: Missing startup evidence fails
+- GIVEN a production profile with no source-gate inputs or with a required core production adapter omitted
+- WHEN the operator exports the profile through Nickel
+- THEN the export fails before startup receipts can claim the profile is deployment-ready
+
+### Requirement: Production state layout directories are distinct
+r[molten.prod_ops.profile_invariants.layout_distinct] Production deployment profile export MUST fail when two logical state layout directories resolve to the same relative directory name.
+
+#### Scenario: Distinct layout directories export
+- GIVEN a production profile whose ledger, Redb, chunk, identity, retention, and inbox directories are distinct relative directory names
+- WHEN the operator exports the profile
+- THEN the exported state layout preserves each logical directory mapping
+
+#### Scenario: Layout collision fails
+- GIVEN a production profile that assigns the same relative directory name to two logical state layout entries
+- WHEN the operator exports the profile through Nickel
+- THEN the export fails before runtime state can be initialized with an ambiguous layout
+
+### Requirement: Production resource limits are internally coherent
+r[molten.prod_ops.profile_invariants.resource_relationships] Production deployment profile export MUST fail when resource limits contradict each other, including store capacity smaller than receipt capacity or timing limits that invert the reviewed delivery and recovery envelope.
+
+#### Scenario: Coherent limits export
+- GIVEN a production profile whose store capacity can contain the maximum receipt size and whose timing limits preserve the reviewed delivery and recovery envelope
+- WHEN the operator exports the profile
+- THEN the resource-limit block exports as reviewed production profile evidence
+
+#### Scenario: Contradictory limits fail
+- GIVEN a production profile whose store limit is smaller than the maximum receipt size or whose timing limits contradict the reviewed delivery and recovery envelope
+- WHEN the operator exports the profile through Nickel
+- THEN the export fails with a resource-limit invariant diagnostic
+
+### Requirement: Production profile contracts are reusable
+r[molten.prod_ops.profile_contract_library.reusable_module] Production deployment profile Nickel contracts and constants MUST live in a reusable module that can be imported by the checked-in profile and by validation fixtures.
+
+#### Scenario: Profile and fixtures share one contract
+- GIVEN the checked-in production profile and profile validation fixtures
+- WHEN they are evaluated through Nickel
+- THEN they import the same reusable production profile contract module rather than carrying copied schema definitions
+
+#### Scenario: Contract update applies to all profiles
+- GIVEN a production profile contract is tightened or extended
+- WHEN profile instances and fixtures are exported
+- THEN each import path observes the same reviewed contract behavior
+
+### Requirement: Checked-in profile remains a concrete instance
+r[molten.prod_ops.profile_contract_library.instance_profile] The operator-facing production profile file MUST remain a concrete deployment profile instance that applies the reusable contract to reviewed values.
+
+#### Scenario: Operator exports concrete profile
+- GIVEN an operator follows the production deployment runbook
+- WHEN they export the checked-in production profile file
+- THEN the exported JSON represents the concrete reviewed profile instance, not only the reusable contract module
+
+### Requirement: Runtime does not evaluate Nickel for startup
+r[molten.prod_ops.profile_contract_library.no_runtime_nickel] Node startup MUST continue to consume checked exported profile JSON and MUST NOT introduce runtime Nickel evaluation as part of production startup side effects.
+
+#### Scenario: Startup uses exported profile evidence
+- GIVEN a production node startup receives profile evidence
+- WHEN startup validation runs
+- THEN it validates the exported profile JSON and bound receipts without invoking a Nickel interpreter at runtime
+
+### Requirement: Production profile contracts have positive and negative fixtures
+r[molten.prod_ops.profile_contract_fixtures.positive_negative] Production profile Nickel contracts MUST be covered by positive fixtures for reviewed valid profiles and negative fixtures for malformed refs, missing evidence arrays, unsafe paths, vocabulary typos, invalid resource limits, cross-field invariant failures, and metadata errors.
+
+#### Scenario: Reviewed profile fixture exports
+- GIVEN the checked-in production profile fixture represents the reviewed valid profile
+- WHEN fixture validation runs
+- THEN Nickel export succeeds and the exported JSON matches the reviewed profile expectation
+
+#### Scenario: Invalid profile fixtures fail
+- GIVEN negative fixtures that each violate one production profile contract or invariant
+- WHEN fixture validation runs
+- THEN each negative fixture fails Nickel export and reports the expected failure class
+
+### Requirement: Profile fixture validation is deterministic
+r[molten.prod_ops.profile_contract_fixtures.validation_gate] Production profile fixture validation MUST run without live network, production credentials, mutable state roots, or ambient filesystem assumptions beyond reading source-controlled fixture files.
+
+#### Scenario: Fixture gate runs locally
+- GIVEN the repository checkout contains the profile contract and fixture files
+- WHEN the profile fixture validation command runs
+- THEN it deterministically reports valid positive exports and rejected negative exports using only source-controlled inputs
+
+#### Scenario: Fixture regression blocks profile evidence update
+- GIVEN a profile contract edit accidentally accepts an invalid fixture or changes the valid export unexpectedly
+- WHEN the profile fixture validation command runs
+- THEN validation fails before production readiness receipt expectations are updated
+
+### Requirement: Profile fixtures are static-contract evidence only
+r[molten.prod_ops.profile_contract_fixtures.evidence_boundary] Production profile fixture results MUST NOT replace runtime startup receipts, source-gate freshness checks, adapter conformance evidence, resource-pressure observations, or production drill receipts.
+
+#### Scenario: Fixture pass does not grant runtime trust
+- GIVEN all profile contract fixtures pass
+- WHEN a production node startup or release gate needs live authority, source-gate, adapter, resource, or drill evidence
+- THEN the normal subsystem receipts remain required and fixture results alone are insufficient
+
+### Requirement: Production profile exports carry schema metadata
+r[molten.prod_ops.profile_schema_metadata.root_identity] Production deployment profile exports MUST include explicit schema identity, schema version, source language, and stable profile identity metadata.
+
+#### Scenario: Metadata identifies reviewed profile export
+- GIVEN a production profile exported from the reviewed Nickel contract boundary
+- WHEN the exported JSON is inspected or bound into evidence
+- THEN it includes metadata naming the production profile schema, schema version, source language, and profile identity
+
+#### Scenario: Missing metadata fails validation
+- GIVEN an exported profile JSON document without required schema or source-language metadata
+- WHEN deployment-profile or startup validation evaluates it
+- THEN validation fails before accepting the profile as production evidence
+
+### Requirement: Profile metadata is bound into receipts
+r[molten.prod_ops.profile_schema_metadata.receipt_binding] Deployment-profile and startup receipts MUST bind production profile metadata together with the profile content ref and MUST reject stale, unsupported, or tampered metadata bindings.
+
+#### Scenario: Receipt binds matching metadata
+- GIVEN a production profile export with supported metadata and a matching content ref
+- WHEN deployment-profile evidence is generated
+- THEN the receipt records the schema, version, source language, profile identity, and profile ref consistently
+
+#### Scenario: Tampered metadata denies
+- GIVEN a profile receipt whose schema, version, source language, profile identity, or profile ref no longer matches the exported profile under review
+- WHEN validation runs
+- THEN validation denies the profile evidence before startup can rely on it
+
+### Requirement: Profile metadata is evidence-only
+r[molten.prod_ops.profile_schema_metadata.evidence_only] Production profile metadata MUST NOT grant authority, source-gate acceptance, adapter readiness, provenance trust, resource sufficiency, retention clearance, or live transport correctness.
+
+#### Scenario: Metadata does not replace subsystem gates
+- GIVEN a profile export with valid metadata
+- WHEN a subsystem requires authority, source-gate, adapter, resource, retention, or transport evidence
+- THEN that subsystem still requires its own matching gate receipts and MUST NOT rely on metadata alone
+
 ### Requirement: State backup and restore drill evidence
 r[molten.prod_ops.state_backup_restore] Molten MUST provide backup and restore drill evidence for local ledgers, Redb stores, chunk-store state, retention pins, node identity metadata, and source-gate refs, and MUST verify restored refs before normal control operations resume.
 

@@ -12,17 +12,29 @@ REF2=blake3:2222222222222222222222222222222222222222222222222222222222222222
 
 ## Deployment profile
 
-The checked-in Nickel profile contract is `docs/production-node-profile.ncl`. Evaluate it before use:
+The reusable Nickel contract module is `docs/production-profile-contracts.ncl`; the checked-in pilot instance is `docs/production-node-profile.ncl`. Evaluate the instance and run its positive/negative fixture rail before use:
 
 ```sh
 nix develop -c nickel export docs/production-node-profile.ncl > target/production-node-profile.json
+nix build .#checks.$(nix eval --impure --raw --expr builtins.currentSystem).production-profile-fixtures --no-link
 ```
+
+The exported profile root carries `schema_id`, `schema_version`, `source_language`, and `profile_identity` metadata. Bind the reviewed profile content ref into canonical evidence; metadata identifies the profile evidence shape only and grants no authority, source-gate trust, adapter readiness, policy, resource, retention, or transport trust.
+
+Named production thresholds live in the contract module: `max_queue_depth`, `max_receipt_bytes`, `max_store_bytes`, `max_delivery_latency_ms`, and `max_recovery_time_ms`. Changing their exported numeric values requires threshold review and fixture expectation updates. Adding adapter, redaction, live-transport, startup, or shutdown vocabulary requires updating the allowed-value contracts plus a negative typo fixture before receipts are refreshed.
 
 Bind the reviewed profile inputs into canonical evidence:
 
 ```sh
+PROFILE_REF=blake3:<reviewed-production-node-profile-json-ref>
+
 molten test prod-soak deployment-profile \
   --profile-name pilot-node \
+  --schema-id molten.prod-ops.deployment-profile.v1 \
+  --schema-version 1 \
+  --source-language nickel \
+  --profile-identity pilot-node \
+  --profile-ref "$PROFILE_REF" \
   --state-layout-ref "$REF0" \
   --required-adapter-ref "$REF0" \
   --source-gate-ref "$REF0" \
