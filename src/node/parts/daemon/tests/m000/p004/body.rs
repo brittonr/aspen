@@ -55,7 +55,9 @@
         );
         read_ledger_artifact(&import_root, &ack_export.ack.ack_ref).expect("ack imported");
         read_ledger_artifact(&import_root, &reconciled.receipt_ref).expect("reconcile imported");
-        assert_protocol_pass(case, reconciled, &ack_export.ack.ack_value);
+        let protocol_gate = assert_protocol_pass(case, reconciled, &ack_export.ack.ack_value);
+        assert_lifecycle_pass(case, reconciled, &ack_export, &ack_import, &protocol_gate);
+        assert_lifecycle_wrong_operation_denied(case, reconciled, &ack_export, &ack_import, &protocol_gate);
         let wrong_ack_import = import_control_live_workflow_bundle_ack(&ControlLiveWorkflowBundleAckImportInput {
             state_root: &import_root,
             ack_value: &ack_export.ack.ack_value,
@@ -74,7 +76,7 @@
         case: &ReconcileCase,
         reconciled: &ControlLiveWorkflowBundleReconcile,
         ack_value: &IoValue,
-    ) {
+    ) -> ControlLiveWorkflowProtocolGate {
         let delivery = &case.delivery;
         let protocol_gate = gate_control_live_workflow_protocol(&ControlLiveWorkflowProtocolGateInput {
             bundle_value: &case.exported.bundle.bundle_value,
@@ -92,6 +94,73 @@
         assert_eq!(protocol_gate.message_count, 3);
         assert_eq!(crate::ledger::artifact_kind(&protocol_gate.receipt_value), "protocol-session-gate-receipt");
         assert!(parse_control_authority_grant(&protocol_gate.receipt_value).is_err());
+        protocol_gate
+    }
+
+    fn assert_lifecycle_pass(
+        case: &ReconcileCase,
+        reconciled: &ControlLiveWorkflowBundleReconcile,
+        ack_export: &ControlLiveWorkflowBundleAckExport,
+        ack_import: &ControlLiveWorkflowBundleAckImport,
+        protocol_gate: &ControlLiveWorkflowProtocolGate,
+    ) {
+        let delivery = &case.delivery;
+        let gate = parse_control_live_workflow_bundle_gate_receipt(&case.gated.receipt_value).expect("gate receipt");
+        let apply = parse_control_live_workflow_bundle_apply_receipt(&case.apply_receipt_value).expect("apply receipt");
+        let reconcile = parse_control_live_workflow_bundle_reconcile_receipt(&reconciled.receipt_value)
+            .expect("reconcile receipt");
+        let lifecycle = evaluate_live_workflow_lifecycle(LiveWorkflowLifecycleInput {
+            bundle: Some(&case.exported.bundle),
+            gate: Some(&gate),
+            apply: Some(&apply),
+            reconcile: Some(&reconcile),
+            ack: Some(&ack_export.ack),
+            ack_import: Some(ack_import),
+            protocol_gate: Some(protocol_gate),
+            expected_bundle_ref: Some(&case.exported.bundle.bundle_ref),
+            expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+            expected_operation_ref: Some(&delivery.envelope.operation_ref),
+            expected_request_ref: Some(&delivery.delivered.request_ref),
+        });
+        assert_eq!(lifecycle.decision, "pass");
+    }
+
+    fn assert_lifecycle_wrong_operation_denied(
+        case: &ReconcileCase,
+        reconciled: &ControlLiveWorkflowBundleReconcile,
+        ack_export: &ControlLiveWorkflowBundleAckExport,
+        ack_import: &ControlLiveWorkflowBundleAckImport,
+        protocol_gate: &ControlLiveWorkflowProtocolGate,
+    ) {
+        let delivery = &case.delivery;
+        let gate = parse_control_live_workflow_bundle_gate_receipt(&case.gated.receipt_value).expect("gate receipt");
+        let apply = parse_control_live_workflow_bundle_apply_receipt(&case.apply_receipt_value).expect("apply receipt");
+        let reconcile = parse_control_live_workflow_bundle_reconcile_receipt(&reconciled.receipt_value)
+            .expect("reconcile receipt");
+        let mut wrong_ack = ack_export.ack.clone();
+        wrong_ack.operation_ref = Some(local_ref("node-control-live-workflow-wrong-operation", "ack").expect("ref"));
+        let lifecycle = evaluate_live_workflow_lifecycle(LiveWorkflowLifecycleInput {
+            bundle: Some(&case.exported.bundle),
+            gate: Some(&gate),
+            apply: Some(&apply),
+            reconcile: Some(&reconcile),
+            ack: Some(&wrong_ack),
+            ack_import: Some(ack_import),
+            protocol_gate: Some(protocol_gate),
+            expected_bundle_ref: Some(&case.exported.bundle.bundle_ref),
+            expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+            expected_operation_ref: Some(&delivery.envelope.operation_ref),
+            expected_request_ref: Some(&delivery.delivered.request_ref),
+        });
+        assert_eq!(lifecycle.decision, "deny");
+        assert!(lifecycle
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == "node-control-live-workflow-ack-operation-mismatch"));
+        assert!(lifecycle
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("expected-operation-mismatch")));
     }
 
     fn assert_ack_denials(case: &ReconcileCase, denials: &ReconcileDenials, ack: &AckPass) {

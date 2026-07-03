@@ -74,6 +74,7 @@ pub const DEFAULT_CONTROL_LIVE_LISTENER_EVENTS: u64 = 1;
 pub const DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS: u64 = 250;
 const LIVE_WORKFLOW_PROTOCOL_ID: &str = "proto:molten.node-control.live-workflow-bundle.v1";
 const LIVE_WORKFLOW_PROTOCOL_SESSION_PREFIX: &str = "session:node-control-live-workflow:";
+const LIVE_WORKFLOW_LIFECYCLE_DIAGNOSTIC_CAPACITY: usize = 24;
 
 const _: () = assert!(MAX_PENDING_CONTROL_REQUESTS > 0);
 const _: () = assert!(MAX_CONTROL_LOOP_REQUESTS > 0);

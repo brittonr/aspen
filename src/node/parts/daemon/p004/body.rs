@@ -155,6 +155,27 @@ pub struct ControlLiveWorkflowBundleImport {
     pub decision: String,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct LiveWorkflowLifecycleInput<'a> {
+    pub bundle: Option<&'a ControlLiveWorkflowBundle>,
+    pub gate: Option<&'a ControlLiveWorkflowBundleGateReceipt>,
+    pub apply: Option<&'a ControlLiveWorkflowBundleApplyReceipt>,
+    pub reconcile: Option<&'a ControlLiveWorkflowBundleReconcileReceipt>,
+    pub ack: Option<&'a ControlLiveWorkflowBundleAck>,
+    pub ack_import: Option<&'a ControlLiveWorkflowBundleAckImport>,
+    pub protocol_gate: Option<&'a ControlLiveWorkflowProtocolGate>,
+    pub expected_bundle_ref: Option<&'a str>,
+    pub expected_envelope_ref: Option<&'a str>,
+    pub expected_operation_ref: Option<&'a str>,
+    pub expected_request_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveWorkflowLifecycleDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlLiveServe {
     pub listener_receipt_ref: String,
