@@ -158,121 +158,15 @@ pub fn cleanup_admission_with_registry(
     Ok(receipt)
 }
 
-#[derive(Clone, Copy)]
-struct GateFacts {
-    is_decision_pass: bool,
-    is_terminal: bool,
-    is_protocol_match: bool,
-}
-
-#[derive(Default)]
-struct DrainState {
-    diagnostics: Vec<String>,
-    has_gate: bool,
-    has_gate_decision_pass: bool,
-    has_terminal_state: bool,
-    has_protocol_match: bool,
-    has_drained_gate: bool,
-}
-
-impl DrainState {
-    fn push(&mut self, message: String) -> Result<()> {
-        push_bounded(&mut self.diagnostics, message, MAX_UPGRADE_DIAGNOSTICS, "upgrade protocol drain diagnostics")
-    }
-
-    fn require_refs(&mut self, refs: &[String]) -> Result<()> {
-        if refs.is_empty() {
-            self.push(
-                "drain-sessions task requires a protocol-session-gate-receipt-v1 precondition or postcondition ref"
-                    .to_string(),
-            )?;
-        }
-        Ok(())
-    }
-
-    fn inspect_ref(&mut self, ledger_root: &Path, evidence_ref: &str, expected_refs: &[String]) -> Result<()> {
-        let value = match crate::ledger::read_artifact(ledger_root, evidence_ref) {
-            Ok(value) => value,
-            Err(error) => {
-                self.push(format!("protocol drain evidence {evidence_ref} is not readable from ledger: {error}"))?;
-                return Ok(());
-            }
-        };
-        let gate = match crate::protocol_session::parse_protocol_session_gate_receipt(&value) {
-            Ok(gate) => gate,
-            Err(error) => {
-                self.push(format!(
-                    "protocol drain evidence {evidence_ref} is not a protocol session gate receipt: {error}"
-                ))?;
-                return Ok(());
-            }
-        };
-        self.observe(&gate, expected_refs)
-    }
-
-    fn observe(
-        &mut self,
-        gate: &crate::protocol_session::ProtocolSessionGateReceipt,
-        expected_refs: &[String],
-    ) -> Result<()> {
-        self.has_gate = true;
-        let facts = GateFacts {
-            is_decision_pass: gate.decision == "pass",
-            is_terminal: !gate.session_ids.is_empty() && !gate.final_state_refs.is_empty(),
-            is_protocol_match: expected_refs.iter().any(|expected| expected == &gate.protocol_ref),
-        };
-        self.has_gate_decision_pass |= facts.is_decision_pass;
-        self.has_terminal_state |= facts.is_terminal;
-        self.has_protocol_match |= facts.is_protocol_match;
-        self.note_gate(gate, expected_refs, facts)?;
-        self.has_drained_gate |= facts.is_decision_pass && facts.is_terminal && facts.is_protocol_match;
-        Ok(())
-    }
-
-    fn note_gate(
-        &mut self,
-        gate: &crate::protocol_session::ProtocolSessionGateReceipt,
-        expected_refs: &[String],
-        facts: GateFacts,
-    ) -> Result<()> {
-        if !facts.is_decision_pass {
-            self.push(format!("protocol drain gate {} denied with decision {}", gate.receipt_ref, gate.decision))?;
-        }
-        if !facts.is_terminal {
-            self.push(format!("protocol drain gate {} does not bind terminal session state", gate.receipt_ref))?;
-        }
-        if !facts.is_protocol_match {
-            self.push(format!(
-                "protocol drain gate {} is for {}, expected one of {}",
-                gate.receipt_ref,
-                gate.protocol_ref,
-                expected_refs.join(",")
-            ))?;
-        }
-        Ok(())
-    }
-
-    fn require_gate(&mut self, refs: &[String]) -> Result<()> {
-        if !refs.is_empty() && !self.has_gate {
-            self.push("drain-sessions task did not bind any readable protocol session gate receipts".to_string())?;
-        }
-        Ok(())
-    }
-
-    fn outcome(self) -> UpgradeTaskOutcome {
-        let decision = if self.diagnostics.is_empty() && self.has_drained_gate {
-            "pass"
-        } else {
-            "deny"
-        };
-        (decision, self.diagnostics, vec![
-            ("protocol-session-gate-bound", pass_fail(self.has_gate)),
-            ("protocol-session-gate-pass", pass_fail(self.has_gate_decision_pass)),
-            ("protocol-terminal-state", pass_fail(self.has_terminal_state)),
-            ("protocol-ref-bound", pass_fail(self.has_protocol_match)),
-            ("protocol-session-drain", pass_fail(self.has_drained_gate)),
-            ("protocol-drain-is-not-authority", "pass"),
-        ])
+fn protocol_drain_gate_evidence(
+    gate: &crate::protocol_session::ProtocolSessionGateReceipt,
+) -> ProtocolDrainGateEvidence {
+    ProtocolDrainGateEvidence {
+        gate_ref: gate.receipt_ref.clone(),
+        decision: gate.decision.clone(),
+        protocol_ref: gate.protocol_ref.clone(),
+        session_ids: gate.session_ids.clone(),
+        terminal_state_refs: gate.final_state_refs.clone(),
     }
 }
 
@@ -282,12 +176,252 @@ fn protocol_drain_task_outcome(
     task: &UpgradeTask,
 ) -> Result<UpgradeTaskOutcome> {
     let evidence_refs = protocol_drain_evidence_refs(task)?;
-    let expected_refs = protocol_drain_expected_protocol_refs(plan, task)?;
-    let mut state = DrainState::default();
-    state.require_refs(&evidence_refs)?;
+    let mut shell_diagnostics = Vec::new();
+    let mut gate_evidence = Vec::new();
     for evidence_ref in &evidence_refs {
-        state.inspect_ref(ledger_root, evidence_ref, &expected_refs)?;
+        match protocol_drain_gate_from_ledger(ledger_root, evidence_ref) {
+            Ok(gate) => push_bounded(
+                &mut gate_evidence,
+                protocol_drain_gate_evidence(&gate),
+                MAX_UPGRADE_REFS,
+                "upgrade protocol drain gate evidence",
+            )?,
+            Err(diagnostic) => push_bounded(
+                &mut shell_diagnostics,
+                diagnostic,
+                MAX_UPGRADE_DIAGNOSTICS,
+                "upgrade protocol drain diagnostics",
+            )?,
+        }
     }
-    state.require_gate(&evidence_refs)?;
-    Ok(state.outcome())
+    let readiness = evaluate_upgrade_drain_readiness(&UpgradeDrainReadinessInput {
+        task_id: &task.task_id,
+        subject: &task.subject,
+        from_ref: task.from_ref.as_deref(),
+        to_ref: task.to_ref.as_deref(),
+        affected_refs: &plan.affected_refs,
+        compatibility_old_refs: &plan.compatibility.old_refs,
+        compatibility_new_refs: &plan.compatibility.new_refs,
+        evidence_refs: &evidence_refs,
+        gate_evidence: &gate_evidence,
+    })?;
+    let mut diagnostics = shell_diagnostics;
+    for diagnostic in readiness.diagnostics {
+        push_bounded(
+            &mut diagnostics,
+            diagnostic,
+            MAX_UPGRADE_DIAGNOSTICS,
+            "upgrade protocol drain diagnostics",
+        )?;
+    }
+    let has_bound_terminal_refs = !readiness.terminal_state_refs.is_empty();
+    let decision = if diagnostics.is_empty() && has_bound_terminal_refs {
+        readiness.decision
+    } else {
+        "deny"
+    };
+    Ok((decision, diagnostics, readiness.checks))
+}
+
+fn protocol_drain_gate_from_ledger(
+    ledger_root: &Path,
+    evidence_ref: &str,
+) -> std::result::Result<crate::protocol_session::ProtocolSessionGateReceipt, String> {
+    let value = crate::ledger::read_artifact(ledger_root, evidence_ref)
+        .map_err(|error| format!("protocol drain evidence {evidence_ref} is not readable from ledger: {error}"))?;
+    crate::protocol_session::parse_protocol_session_gate_receipt(&value).map_err(|error| {
+        format!("protocol drain evidence {evidence_ref} is not a protocol session gate receipt: {error}")
+    })
+}
+
+fn evaluate_upgrade_drain_readiness(input: &UpgradeDrainReadinessInput<'_>) -> Result<UpgradeDrainReadinessDecision> {
+    validate_upgrade_drain_readiness_input(input)?;
+    let mut diagnostics = Vec::new();
+    if input.evidence_refs.is_empty() {
+        push_upgrade_drain_diagnostic(
+            &mut diagnostics,
+            "drain-sessions task requires a protocol-session-gate-receipt-v1 precondition or postcondition ref"
+                .to_string(),
+        )?;
+    }
+    let expected_refs = protocol_drain_expected_protocol_refs_from_bindings(
+        input.subject,
+        input.from_ref,
+        input.affected_refs,
+        input.compatibility_old_refs,
+    )?;
+    let has_affected_binding = note_affected_ref_binding(input, &mut diagnostics)?;
+    let has_compatibility_binding = note_compatibility_ref_binding(input, &mut diagnostics)?;
+    let mut has_gate = false;
+    let mut has_gate_decision_pass = false;
+    let mut has_terminal_state = false;
+    let mut has_protocol_match = false;
+    let mut has_drained_gate = false;
+    let mut terminal_state_refs = Vec::new();
+    for gate in input.gate_evidence {
+        has_gate = true;
+        let is_decision_pass = gate.decision == "pass";
+        let is_terminal = !gate.session_ids.is_empty() && !gate.terminal_state_refs.is_empty();
+        let is_protocol_match = expected_refs.iter().any(|expected| expected == &gate.protocol_ref);
+        has_gate_decision_pass |= is_decision_pass;
+        has_terminal_state |= is_terminal;
+        has_protocol_match |= is_protocol_match;
+        note_protocol_drain_gate(gate, &expected_refs, is_decision_pass, is_terminal, is_protocol_match, &mut diagnostics)?;
+        if is_decision_pass && is_terminal && is_protocol_match {
+            has_drained_gate = true;
+            for terminal_state_ref in &gate.terminal_state_refs {
+                push_bounded(
+                    &mut terminal_state_refs,
+                    terminal_state_ref.clone(),
+                    MAX_UPGRADE_REFS,
+                    "upgrade protocol drain terminal state refs",
+                )?;
+            }
+        }
+    }
+    if !input.evidence_refs.is_empty() && !has_gate {
+        push_upgrade_drain_diagnostic(
+            &mut diagnostics,
+            "drain-sessions task did not bind any readable protocol session gate receipts".to_string(),
+        )?;
+    }
+    let is_ready = diagnostics.is_empty()
+        && has_drained_gate
+        && has_affected_binding
+        && has_compatibility_binding
+        && !terminal_state_refs.is_empty();
+    Ok(UpgradeDrainReadinessDecision {
+        decision: if is_ready { "pass" } else { "deny" },
+        diagnostics,
+        checks: vec![
+            ("protocol-session-gate-bound", pass_fail(has_gate)),
+            ("protocol-session-gate-pass", pass_fail(has_gate_decision_pass)),
+            ("protocol-terminal-state", pass_fail(has_terminal_state)),
+            ("protocol-ref-bound", pass_fail(has_protocol_match)),
+            ("protocol-affected-ref-bound", pass_fail(has_affected_binding)),
+            ("protocol-compatibility-ref-bound", pass_fail(has_compatibility_binding)),
+            ("protocol-session-drain", pass_fail(is_ready)),
+            ("protocol-drain-is-not-authority", "pass"),
+        ],
+        terminal_state_refs,
+    })
+}
+
+fn validate_upgrade_drain_readiness_input(input: &UpgradeDrainReadinessInput<'_>) -> Result<()> {
+    validate_non_empty(input.task_id, "upgrade drain task id")?;
+    validate_non_empty(input.subject, "upgrade drain task subject")?;
+    if let Some(from_ref) = input.from_ref {
+        validate_ref(from_ref, "upgrade drain task from ref")?;
+    }
+    if let Some(to_ref) = input.to_ref {
+        validate_ref(to_ref, "upgrade drain task to ref")?;
+    }
+    validate_refs(input.affected_refs, "upgrade drain affected ref")?;
+    validate_refs(input.compatibility_old_refs, "upgrade drain compatibility old ref")?;
+    validate_refs(input.compatibility_new_refs, "upgrade drain compatibility new ref")?;
+    validate_refs(input.evidence_refs, "upgrade drain evidence ref")?;
+    for gate in input.gate_evidence {
+        validate_ref(&gate.gate_ref, "upgrade drain gate ref")?;
+        validate_ref(&gate.protocol_ref, "upgrade drain gate protocol ref")?;
+        validate_refs(&gate.terminal_state_refs, "upgrade drain gate terminal state ref")?;
+    }
+    Ok(())
+}
+
+fn note_protocol_drain_gate(
+    gate: &ProtocolDrainGateEvidence,
+    expected_refs: &[String],
+    is_decision_pass: bool,
+    is_terminal: bool,
+    is_protocol_match: bool,
+    diagnostics: &mut Vec<String>,
+) -> Result<()> {
+    if !is_decision_pass {
+        push_upgrade_drain_diagnostic(
+            diagnostics,
+            format!("protocol drain gate {} denied with decision {}", gate.gate_ref, gate.decision),
+        )?;
+    }
+    if !is_terminal {
+        push_upgrade_drain_diagnostic(
+            diagnostics,
+            format!("protocol drain gate {} does not bind terminal session state", gate.gate_ref),
+        )?;
+    }
+    if !is_protocol_match {
+        push_upgrade_drain_diagnostic(
+            diagnostics,
+            format!(
+                "protocol drain gate {} is for {}, expected one of {}",
+                gate.gate_ref,
+                gate.protocol_ref,
+                expected_refs.join(",")
+            ),
+        )?;
+    }
+    Ok(())
+}
+
+fn note_affected_ref_binding(input: &UpgradeDrainReadinessInput<'_>, diagnostics: &mut Vec<String>) -> Result<bool> {
+    let mut is_bound = true;
+    if let Some(from_ref) = input.from_ref
+        && !input.affected_refs.iter().any(|affected_ref| affected_ref == from_ref)
+    {
+        push_upgrade_drain_diagnostic(
+            diagnostics,
+            format!("upgrade drain task {} from ref {from_ref} is not in affected refs", input.task_id),
+        )?;
+        is_bound = false;
+    }
+    if let Some(to_ref) = input.to_ref
+        && !input.affected_refs.iter().any(|affected_ref| affected_ref == to_ref)
+    {
+        push_upgrade_drain_diagnostic(
+            diagnostics,
+            format!("upgrade drain task {} to ref {to_ref} is not in affected refs", input.task_id),
+        )?;
+        is_bound = false;
+    }
+    Ok(is_bound)
+}
+
+fn note_compatibility_ref_binding(
+    input: &UpgradeDrainReadinessInput<'_>,
+    diagnostics: &mut Vec<String>,
+) -> Result<bool> {
+    let mut is_bound = true;
+    if let Some(from_ref) = input.from_ref
+        && !input.compatibility_old_refs.iter().any(|old_ref| old_ref == from_ref)
+    {
+        push_upgrade_drain_diagnostic(
+            diagnostics,
+            format!(
+                "stale compatibility ref: upgrade drain task {} from ref {from_ref} is not in compatibility old refs",
+                input.task_id
+            ),
+        )?;
+        is_bound = false;
+    }
+    if let Some(to_ref) = input.to_ref
+        && !input.compatibility_new_refs.iter().any(|new_ref| new_ref == to_ref)
+    {
+        push_upgrade_drain_diagnostic(
+            diagnostics,
+            format!(
+                "stale compatibility ref: upgrade drain task {} to ref {to_ref} is not in compatibility new refs",
+                input.task_id
+            ),
+        )?;
+        is_bound = false;
+    }
+    Ok(is_bound)
+}
+
+fn push_upgrade_drain_diagnostic(diagnostics: &mut Vec<String>, diagnostic: String) -> Result<()> {
+    push_bounded(
+        diagnostics,
+        diagnostic,
+        MAX_UPGRADE_DIAGNOSTICS,
+        "upgrade protocol drain diagnostics",
+    )
 }

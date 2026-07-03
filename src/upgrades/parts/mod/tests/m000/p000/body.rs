@@ -246,6 +246,82 @@
             .expect("execute mismatch drain");
         assert_eq!(mismatch.receipt.decision, "deny");
         assert!(to_text(&mismatch.receipt.value).expect("mismatch text").contains("expected one of"));
+
+        let stale_store = root.join("stale-compat-upgrades");
+        let mut stale_input = protocol_drain_plan_input(&gate_ref, &gate.protocol_ref, &new_protocol_ref);
+        stale_input.compatibility.old_refs = vec![test_ref("stale-protocol-v1")];
+        let stale_plan = upgrade_plan_value(&stale_input).expect("stale compatibility plan");
+        let stale_created = create_session(&stale_store, &stale_plan).expect("create stale session");
+        let stale = execute_task(&stale_store, &ledger_root, &stale_created.plan.plan_ref, "drain-sessions")
+            .expect("execute stale drain");
+        assert_eq!(stale.receipt.decision, "deny");
+        assert!(to_text(&stale.receipt.value).expect("stale text").contains("stale compatibility ref"));
+
+        let empty_terminal_store = root.join("empty-terminal-upgrades");
+        let empty_terminal_gate = protocol_drain_gate_with_terminal_state_refs(&gate, Vec::new());
+        let empty_terminal_gate_ref = crate::ledger::import_artifact(&ledger_root, &empty_terminal_gate)
+            .expect("import empty terminal gate")
+            .artifact_ref;
+        let empty_terminal_plan =
+            protocol_drain_plan_value(&empty_terminal_gate_ref, &gate.protocol_ref, &new_protocol_ref)
+                .expect("empty terminal plan");
+        let empty_terminal_created =
+            create_session(&empty_terminal_store, &empty_terminal_plan).expect("create empty terminal session");
+        let empty_terminal = execute_task(
+            &empty_terminal_store,
+            &ledger_root,
+            &empty_terminal_created.plan.plan_ref,
+            "drain-sessions",
+        )
+        .expect("execute empty terminal drain");
+        assert_eq!(empty_terminal.receipt.decision, "deny");
+        assert!(
+            to_text(&empty_terminal.receipt.value)
+                .expect("empty terminal text")
+                .contains("does not bind terminal session state")
+        );
+    }
+
+    #[test]
+    fn denied_protocol_drain_and_cutover_preserve_pre_cutover_state() {
+        let root = temp_dir("upgrade-protocol-no-mutation");
+        let ledger_root = root.join("ledger");
+        let store = root.join("upgrades");
+        let gate = protocol_drain_gate();
+        let new_protocol_ref = test_ref("protocol-v2");
+        let missing_gate_ref = test_ref("missing-protocol-gate");
+        let plan_value =
+            protocol_drain_cutover_plan_value(&missing_gate_ref, &gate.protocol_ref, &new_protocol_ref)
+                .expect("cutover drain plan");
+        let created = create_session(&store, &plan_value).expect("create session");
+        set_name_pointer(&store, "request-response-protocol", &gate.protocol_ref).expect("initial routing pointer");
+        let transcript =
+            execute_task(&store, &ledger_root, &created.plan.plan_ref, "transcript-gate").expect("transcript pass");
+        assert_eq!(transcript.receipt.decision, "pass");
+
+        let before_drain = upgrade_state_snapshot_ref(&store).expect("before drain snapshot");
+        let denied_drain = execute_task(&store, &ledger_root, &created.plan.plan_ref, "drain-sessions")
+            .expect("execute denied drain");
+        let after_drain = upgrade_state_snapshot_ref(&store).expect("after drain snapshot");
+        assert_eq!(denied_drain.receipt.decision, "deny");
+        assert_eq!(before_drain, after_drain);
+        assert!(to_text(&denied_drain.receipt.value).expect("drain text").contains("no-mutation-on-deny"));
+
+        let before_cutover = upgrade_state_snapshot_ref(&store).expect("before cutover snapshot");
+        let denied_cutover =
+            execute_task(&store, &ledger_root, &created.plan.plan_ref, "cutover").expect("cutover denied");
+        let after_cutover = upgrade_state_snapshot_ref(&store).expect("after cutover snapshot");
+        assert_eq!(denied_cutover.receipt.decision, "deny");
+        assert_eq!(before_cutover, after_cutover);
+        assert!(
+            to_text(&denied_cutover.receipt.value)
+                .expect("cutover text")
+                .contains("no-mutation-on-deny")
+        );
+        let pointer = read_name_pointer(&store, "request-response-protocol")
+            .expect("read pointer")
+            .expect("pointer exists");
+        assert_eq!(pointer.artifact_ref, gate.protocol_ref);
     }
 
     #[test]

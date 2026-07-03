@@ -211,10 +211,28 @@ pub fn execute_task(root: &Path, ledger_root: &Path, plan_ref: &str, task_id: &s
         .iter()
         .position(|task| task.task_id == task_id)
         .ok_or_else(|| MoltenError::invalid_harness(format!("upgrade plan missing task {task_id}")))?;
-    ensure_prior_tasks_complete(root, &plan, task_index)?;
     let task = plan.tasks[task_index].clone();
-    let (decision, diagnostics, checks) = task_result(root, ledger_root, &plan, &task)?;
-    let refs = task_refs(&task);
+    if let Some(prior_task_id) = first_incomplete_prior_task(root, &plan, task_index)? {
+        if task.kind == "cutover" {
+            return cutover_denied_for_incomplete_prior(root, &plan, &task, &prior_task_id);
+        }
+        return Err(MoltenError::invalid_harness(format!(
+            "upgrade task {} cannot run before prior task {} completes",
+            task.task_id, prior_task_id
+        )));
+    }
+    let before_state_ref = upgrade_state_snapshot_ref(root)?;
+    let (decision, mut diagnostics, mut checks) = task_result(root, ledger_root, &plan, &task)?;
+    let mut refs = task_refs(&task);
+    append_no_mutation_boundary(
+        root,
+        &task.kind,
+        decision,
+        &before_state_ref,
+        &mut refs,
+        &mut diagnostics,
+        &mut checks,
+    )?;
     let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
         operation: if task.kind == "cutover" {
             "cutover"
@@ -240,6 +258,90 @@ pub fn execute_task(root: &Path, ledger_root: &Path, plan_ref: &str, task_id: &s
         task_kind: task.kind,
         receipt,
     })
+}
+
+fn cutover_denied_for_incomplete_prior(
+    root: &Path,
+    plan: &UpgradePlan,
+    task: &UpgradeTask,
+    prior_task_id: &str,
+) -> Result<UpgradeTaskExecution> {
+    let before_state_ref = upgrade_state_snapshot_ref(root)?;
+    let mut refs = task_refs(task);
+    let mut diagnostics = vec![format!(
+        "upgrade task {} cannot run before prior task {} completes",
+        task.task_id, prior_task_id
+    )];
+    let mut checks = vec![
+        ("task-order", "fail"),
+        ("metadata-cutover", "fail"),
+        ("transcript-gate-before-cutover", "fail"),
+    ];
+    append_no_mutation_boundary(
+        root,
+        "cutover",
+        "deny",
+        &before_state_ref,
+        &mut refs,
+        &mut diagnostics,
+        &mut checks,
+    )?;
+    let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
+        operation: "cutover",
+        decision: "deny",
+        session_id: &plan.session_id,
+        plan_ref: &plan.plan_ref,
+        task_id: Some(&task.task_id),
+        refs: &refs,
+        diagnostics: &diagnostics,
+        checks: &checks,
+    })?;
+    let receipt = parse_upgrade_receipt(&receipt_value)?;
+    store_receipt(root, &receipt_value)?;
+    Ok(UpgradeTaskExecution {
+        plan_ref: plan.plan_ref.clone(),
+        task_id: task.task_id.clone(),
+        task_kind: task.kind.clone(),
+        receipt,
+    })
+}
+
+fn append_no_mutation_boundary(
+    root: &Path,
+    operation: &str,
+    decision: &str,
+    before_state_ref: &str,
+    refs: &mut Vec<String>,
+    diagnostics: &mut Vec<String>,
+    checks: &mut Vec<UpgradeCheckPair>,
+) -> Result<()> {
+    if decision != "deny" {
+        return Ok(());
+    }
+    let after_state_ref = upgrade_state_snapshot_ref(root)?;
+    push_bounded(
+        refs,
+        before_state_ref.to_string(),
+        MAX_UPGRADE_REFS,
+        "upgrade denial state refs",
+    )?;
+    push_bounded(refs, after_state_ref.clone(), MAX_UPGRADE_REFS, "upgrade denial state refs")?;
+    let boundary = evaluate_upgrade_no_mutation_boundary(&UpgradeMutationBoundaryInput {
+        operation,
+        decision,
+        before_state_ref,
+        after_state_ref: &after_state_ref,
+    })?;
+    for diagnostic in boundary.diagnostics {
+        push_bounded(
+            diagnostics,
+            diagnostic,
+            MAX_UPGRADE_DIAGNOSTICS,
+            "upgrade no-mutation diagnostics",
+        )?;
+    }
+    checks.extend(boundary.checks);
+    Ok(())
 }
 
 fn task_result(root: &Path, ledger_root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {

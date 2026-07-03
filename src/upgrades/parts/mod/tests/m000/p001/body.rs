@@ -81,8 +81,56 @@
         .expect("protocol gate")
     }
 
+    const UPGRADE_TEST_COMPATIBILITY_EXPIRY: u64 = 32;
+
+    fn protocol_drain_gate_with_terminal_state_refs(
+        gate: &crate::protocol_session::ProtocolSessionGate,
+        terminal_state_refs: Vec<String>,
+    ) -> IoValue {
+        let receipt = crate::protocol_session::parse_protocol_session_gate_receipt(&gate.value)
+            .expect("parse protocol gate receipt");
+        let gate_status = if receipt.decision == "pass" { "pass" } else { "fail" };
+        record("protocol-session-gate-receipt-v1", vec![
+            string(crate::preserves_rail::PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA),
+            record("decision", vec![string(&receipt.decision)]),
+            record("install", vec![string(&receipt.install_ref)]),
+            record("protocol", vec![string(&receipt.protocol_ref)]),
+            record("sessions", vec![strings_sequence(&receipt.session_ids)]),
+            record("initial-states", vec![refs_sequence(&receipt.initial_state_refs)]),
+            record("operations", vec![refs_sequence(&receipt.operation_refs)]),
+            record("messages", vec![refs_sequence(&receipt.message_refs)]),
+            record("final-states", vec![refs_sequence(&terminal_state_refs)]),
+            record("diagnostics", vec![strings_sequence(&receipt.diagnostics)]),
+            record("checks", vec![sequence(vec![
+                record("check", vec![string("install-replay"), string(gate_status)]),
+                record("check", vec![string("projected-operation-replay"), string(gate_status)]),
+                record("check", vec![string("terminal-session-state"), string(gate_status)]),
+                record("check", vec![string("transport-neutral-message"), string(gate_status)]),
+                record("check", vec![string("protocol-session-gate-is-not-authority"), string("pass")]),
+            ])]),
+        ])
+    }
+
     fn protocol_drain_plan_value(gate_ref: &str, old_protocol_ref: &str, new_protocol_ref: &str) -> Result<IoValue> {
-        upgrade_plan_value(&UpgradePlanInput {
+        upgrade_plan_value(&protocol_drain_plan_input(gate_ref, old_protocol_ref, new_protocol_ref))
+    }
+
+    fn protocol_drain_cutover_plan_value(
+        gate_ref: &str,
+        old_protocol_ref: &str,
+        new_protocol_ref: &str,
+    ) -> Result<IoValue> {
+        let mut input = protocol_drain_plan_input(gate_ref, old_protocol_ref, new_protocol_ref);
+        input.tasks = vec![
+            protocol_transcript_task_input(gate_ref),
+            protocol_drain_task_input(gate_ref, old_protocol_ref, new_protocol_ref),
+            protocol_cutover_task_input(old_protocol_ref, new_protocol_ref),
+        ];
+        upgrade_plan_value(&input)
+    }
+
+    fn protocol_drain_plan_input(gate_ref: &str, old_protocol_ref: &str, new_protocol_ref: &str) -> UpgradePlanInput {
+        UpgradePlanInput {
             session_id: "session-protocol-drain".to_string(),
             reason: "protocol drain".to_string(),
             summary: "drain protocol sessions before cutover".to_string(),
@@ -90,27 +138,61 @@
             capability_refs: vec![test_ref("upgrade-capability")],
             affected_refs: vec![old_protocol_ref.to_string(), new_protocol_ref.to_string()],
             impact_refs: vec![old_protocol_ref.to_string()],
-            tasks: vec![UpgradeTaskInput {
-                task_id: "drain-sessions".to_string(),
-                kind: "drain-sessions".to_string(),
-                subject: "request-response-protocol".to_string(),
-                from_ref: Some(old_protocol_ref.to_string()),
-                to_ref: Some(new_protocol_ref.to_string()),
-                precondition_refs: vec![gate_ref.to_string()],
-                postcondition_refs: Vec::new(),
-                reversible: false,
-            }],
+            tasks: vec![protocol_drain_task_input(gate_ref, old_protocol_ref, new_protocol_ref)],
             compatibility: UpgradeCompatibilityWindow {
                 old_refs: vec![old_protocol_ref.to_string()],
                 new_refs: vec![new_protocol_ref.to_string()],
-                expires_at: Some(32),
+                expires_at: Some(UPGRADE_TEST_COMPATIBILITY_EXPIRY),
                 policy_refs: vec![test_ref("compat-policy")],
             },
             rollback_refs: vec![old_protocol_ref.to_string()],
             policy_refs: vec![test_ref("upgrade-policy")],
             evidence_refs: vec![gate_ref.to_string()],
             source_gate_receipt_values: source_gate_values(),
-        })
+        }
+    }
+
+    fn protocol_drain_task_input(gate_ref: &str, old_protocol_ref: &str, new_protocol_ref: &str) -> UpgradeTaskInput {
+        UpgradeTaskInput {
+            task_id: "drain-sessions".to_string(),
+            kind: "drain-sessions".to_string(),
+            subject: "request-response-protocol".to_string(),
+            from_ref: Some(old_protocol_ref.to_string()),
+            to_ref: Some(new_protocol_ref.to_string()),
+            precondition_refs: vec![gate_ref.to_string()],
+            postcondition_refs: Vec::new(),
+            reversible: false,
+        }
+    }
+
+    fn protocol_transcript_task_input(gate_ref: &str) -> UpgradeTaskInput {
+        UpgradeTaskInput {
+            task_id: "transcript-gate".to_string(),
+            kind: "transcript-rerun".to_string(),
+            subject: "request-response-protocol".to_string(),
+            from_ref: None,
+            to_ref: None,
+            precondition_refs: vec![gate_ref.to_string()],
+            postcondition_refs: Vec::new(),
+            reversible: true,
+        }
+    }
+
+    fn protocol_cutover_task_input(old_protocol_ref: &str, new_protocol_ref: &str) -> UpgradeTaskInput {
+        UpgradeTaskInput {
+            task_id: "cutover".to_string(),
+            kind: "cutover".to_string(),
+            subject: "request-response-protocol".to_string(),
+            from_ref: Some(old_protocol_ref.to_string()),
+            to_ref: Some(new_protocol_ref.to_string()),
+            precondition_refs: Vec::new(),
+            postcondition_refs: Vec::new(),
+            reversible: true,
+        }
+    }
+
+    fn strings_sequence(values: &[String]) -> IoValue {
+        sequence(values.iter().map(string).collect())
     }
 
     fn artifact_input(kind: &str, label: &str, dependency_refs: &[String]) -> crate::artifacts::ArtifactInstallInput {

@@ -8,16 +8,21 @@ fn protocol_drain_evidence_refs(task: &UpgradeTask) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-fn protocol_drain_expected_protocol_refs(plan: &UpgradePlan, task: &UpgradeTask) -> Result<Vec<String>> {
+fn protocol_drain_expected_protocol_refs_from_bindings(
+    subject: &str,
+    from_ref: Option<&str>,
+    affected_refs: &[String],
+    compatibility_old_refs: &[String],
+) -> Result<Vec<String>> {
     let mut refs = BtreeSet::new();
-    if let Some(from_ref) = task.from_ref.as_ref() {
-        refs.insert(from_ref.clone());
-    } else if is_canonical_ref(&task.subject) {
-        refs.insert(task.subject.clone());
+    if let Some(from_ref) = from_ref {
+        refs.insert(from_ref.to_string());
+    } else if is_canonical_ref(subject) {
+        refs.insert(subject.to_string());
     } else {
-        refs.extend(plan.compatibility.old_refs.iter().cloned());
+        refs.extend(compatibility_old_refs.iter().cloned());
         if refs.is_empty() {
-            refs.extend(plan.affected_refs.iter().cloned());
+            refs.extend(affected_refs.iter().cloned());
         }
     }
     if refs.is_empty() {

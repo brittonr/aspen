@@ -51,6 +51,7 @@ const MAX_UPGRADE_DIAGNOSTICS: usize = 4096;
 const MAX_UPGRADE_TASKS: usize = 1024;
 const MAX_UPGRADE_POINTERS: usize = 100_000;
 const MAX_UPGRADE_SOURCE_GATES: usize = 128;
+const UPGRADE_STATE_SNAPSHOT_DIRS: &[&str] = &["plans", "names", "status"];
 
 const _: () = assert!(MAX_UPGRADE_REFS <= 100_000);
 const _: () = assert!(MAX_UPGRADE_DIAGNOSTICS <= 100_000);
@@ -108,6 +109,48 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
 
 type UpgradeCheckPair = (&'static str, &'static str);
 type UpgradeTaskOutcome = (&'static str, Vec<String>, Vec<UpgradeCheckPair>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProtocolDrainGateEvidence {
+    gate_ref: String,
+    decision: String,
+    protocol_ref: String,
+    session_ids: Vec<String>,
+    terminal_state_refs: Vec<String>,
+}
+
+struct UpgradeDrainReadinessInput<'a> {
+    task_id: &'a str,
+    subject: &'a str,
+    from_ref: Option<&'a str>,
+    to_ref: Option<&'a str>,
+    affected_refs: &'a [String],
+    compatibility_old_refs: &'a [String],
+    compatibility_new_refs: &'a [String],
+    evidence_refs: &'a [String],
+    gate_evidence: &'a [ProtocolDrainGateEvidence],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UpgradeDrainReadinessDecision {
+    decision: &'static str,
+    diagnostics: Vec<String>,
+    checks: Vec<UpgradeCheckPair>,
+    terminal_state_refs: Vec<String>,
+}
+
+struct UpgradeMutationBoundaryInput<'a> {
+    operation: &'a str,
+    decision: &'a str,
+    before_state_ref: &'a str,
+    after_state_ref: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UpgradeMutationBoundaryDecision {
+    diagnostics: Vec<String>,
+    checks: Vec<UpgradeCheckPair>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpgradeTaskInput {

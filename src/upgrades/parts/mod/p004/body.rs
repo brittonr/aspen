@@ -132,13 +132,98 @@ fn task_refs(task: &UpgradeTask) -> Vec<String> {
     refs.into_iter().collect()
 }
 
-fn ensure_prior_tasks_complete(root: &Path, plan: &UpgradePlan, task_index: usize) -> Result<()> {
+fn first_incomplete_prior_task(root: &Path, plan: &UpgradePlan, task_index: usize) -> Result<Option<String>> {
     for task in &plan.tasks[..task_index] {
         if read_status_receipt_ref(root, plan, &task.task_id)?.is_none() {
-            return Err(MoltenError::invalid_harness(format!(
-                "upgrade task {} cannot run before prior task {} completes",
-                plan.tasks[task_index].task_id, task.task_id
-            )));
+            return Ok(Some(task.task_id.clone()));
+        }
+    }
+    Ok(None)
+}
+
+fn evaluate_upgrade_no_mutation_boundary(
+    input: &UpgradeMutationBoundaryInput<'_>,
+) -> Result<UpgradeMutationBoundaryDecision> {
+    validate_non_empty(input.operation, "upgrade no-mutation operation")?;
+    validate_ref(input.before_state_ref, "upgrade no-mutation before state ref")?;
+    validate_ref(input.after_state_ref, "upgrade no-mutation after state ref")?;
+    if input.decision != "pass" && input.decision != "deny" {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported upgrade no-mutation decision {}",
+            input.decision
+        )));
+    }
+    let is_preserved = input.before_state_ref == input.after_state_ref;
+    let mut diagnostics = Vec::new();
+    if input.decision == "deny" && !is_preserved {
+        push_bounded(
+            &mut diagnostics,
+            format!(
+                "upgrade {} denial mutated pre-cutover state: before {} after {}",
+                input.operation, input.before_state_ref, input.after_state_ref
+            ),
+            MAX_UPGRADE_DIAGNOSTICS,
+            "upgrade no-mutation diagnostics",
+        )?;
+    }
+    let check_status = if input.decision == "deny" {
+        pass_fail(is_preserved)
+    } else {
+        "pass"
+    };
+    Ok(UpgradeMutationBoundaryDecision {
+        diagnostics,
+        checks: vec![("no-mutation-on-deny", check_status)],
+    })
+}
+
+fn upgrade_state_snapshot_ref(root: &Path) -> Result<String> {
+    let mut entries = Vec::new();
+    for dir_name in UPGRADE_STATE_SNAPSHOT_DIRS {
+        collect_upgrade_state_snapshot_entries(root, dir_name, &mut entries)?;
+    }
+    entries.sort_by(|left, right| left.0.cmp(&right.0));
+    let values = entries
+        .iter()
+        .map(|(path, content_ref)| record("file", vec![string(path), string(content_ref)]))
+        .collect();
+    canonical_hash(&record("upgrade-state-snapshot-v1", vec![sequence(values)]))
+}
+
+fn collect_upgrade_state_snapshot_entries(
+    root: &Path,
+    dir_name: &str,
+    entries: &mut Vec<(String, String)>,
+) -> Result<()> {
+    let snapshot_root = root.join(dir_name);
+    if !snapshot_root.exists() {
+        return Ok(());
+    }
+    let mut pending_dirs = vec![snapshot_root];
+    while let Some(current_dir) = pending_dirs.pop() {
+        for entry in fs::read_dir(&current_dir).map_err(MoltenError::from)? {
+            let entry = entry.map_err(MoltenError::from)?;
+            let path = entry.path();
+            if entry.file_type().map_err(MoltenError::from)?.is_dir() {
+                push_bounded(
+                    &mut pending_dirs,
+                    path,
+                    MAX_UPGRADE_POINTERS,
+                    "upgrade state snapshot dirs",
+                )?;
+                continue;
+            }
+            let relative_path = path
+                .strip_prefix(root)
+                .map_err(|error| MoltenError::invalid_harness(format!("upgrade snapshot path escaped root: {error}")))?;
+            let text = fs::read_to_string(&path).map_err(MoltenError::from)?;
+            let content_ref = canonical_hash(&record("upgrade-state-file-v1", vec![string(&text)]))?;
+            push_bounded(
+                entries,
+                (relative_path.to_string_lossy().into_owned(), content_ref),
+                MAX_UPGRADE_POINTERS,
+                "upgrade state snapshot entries",
+            )?;
         }
     }
     Ok(())
