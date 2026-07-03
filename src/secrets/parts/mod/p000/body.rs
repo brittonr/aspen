@@ -66,6 +66,18 @@ const MAX_SECRET_DIAGNOSTICS: usize = 16;
 const MAX_SECRET_MARKERS: usize = 32;
 const DEFAULT_REDACTION_PROFILE: &str = "blake3:09d0a7256e7f74894f4f36bd105b6945ba299095f92af91b35826100bb68ca7d";
 const DEFAULT_REDACTION_POLICY: &str = "blake3:6d9a5a7e7b7f33c443f8edbe8c9f74af78e90ce8bf93517ff349be62a06f335a";
+const SECRET_ACCESS_REVEAL_MISSING: &str = "secret access reveal receipt missing";
+const SECRET_ACCESS_REVEAL_FAILED: &str = "secret access reveal receipt did not pass";
+const SECRET_ACCESS_REVEAL_SECRET_MISMATCH: &str = "secret access reveal secret mismatch";
+const SECRET_ACCESS_REVEAL_ENCRYPTED_MISMATCH: &str = "secret access reveal encrypted-ref mismatch";
+const SECRET_ACCESS_REVEAL_COMMITMENT_MISMATCH: &str = "secret access reveal commitment mismatch";
+const SECRET_ACCESS_DECRYPT_FAILED: &str = "secret access decrypt receipt did not pass";
+const SECRET_ACCESS_DECRYPT_ENCRYPTED_MISMATCH: &str = "secret access decrypt encrypted-ref mismatch";
+const SECRET_ACCESS_DECRYPT_REVEAL_MISMATCH: &str = "secret access decrypt reveal receipt mismatch";
+const SECRET_ACCESS_DECRYPT_COMMITMENT_MISMATCH: &str = "secret access decrypt commitment mismatch";
+const SECRET_ACCESS_PLAINTEXT_MISMATCH: &str = "secret access plaintext output ref mismatch";
+const SECRET_REDACTION_PROFILE_DIAGNOSTIC_ONLY: &str = "secret redaction profile is diagnostic-only, not gate-preserving";
+const SECRET_REDACTION_PROFILE_TRANSFORM_MISMATCH: &str = "secret redaction transform binding mismatch";
 
 const SENSITIVE_RECORD_LABELS: &[&str] = &[
     "secret",

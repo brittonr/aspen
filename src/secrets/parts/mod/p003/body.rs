@@ -1,5 +1,138 @@
 
-pub fn secret_cleanup_receipt_value(input: &SecretCleanupInput) -> Result<IoValue> {
+pub fn evaluate_secret_access_binding(input: SecretAccessBindingInput<'_>) -> Result<SecretStateDecision> {
+    if let Some(expected_plaintext_ref) = input.expected_plaintext_ref {
+        validate_ref(expected_plaintext_ref, "secret access expected plaintext ref")?;
+    }
+    let mut diagnostics = Vec::new();
+    let Some(reveal) = input.reveal else {
+        diagnostics.push_limited(
+            SECRET_ACCESS_REVEAL_MISSING.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+        return Ok(secret_decision(diagnostics, false, false, false));
+    };
+    if reveal.decision != "pass" {
+        diagnostics.push_limited(
+            SECRET_ACCESS_REVEAL_FAILED.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+    }
+    if reveal.secret_ref != input.secret.secret_ref {
+        diagnostics.push_limited(
+            SECRET_ACCESS_REVEAL_SECRET_MISMATCH.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+    }
+    if reveal.encrypted_ref.as_deref() != Some(input.encrypted.encrypted_ref.as_str()) {
+        diagnostics.push_limited(
+            SECRET_ACCESS_REVEAL_ENCRYPTED_MISMATCH.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+    }
+    if reveal.commitment_ref != input.secret.commitment_ref || reveal.commitment_ref != input.encrypted.commitment_ref {
+        diagnostics.push_limited(
+            SECRET_ACCESS_REVEAL_COMMITMENT_MISMATCH.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+    }
+    if let Some(decrypt) = input.decrypt {
+        collect_decrypt_binding_diagnostics(input, reveal, decrypt, &mut diagnostics)?;
+    }
+    if let Some(expected_plaintext_ref) = input.expected_plaintext_ref {
+        let decrypt_plaintext_mismatch = match input.decrypt.and_then(|decrypt| decrypt.plaintext_ref.as_deref()) {
+            Some(actual) => actual != expected_plaintext_ref,
+            None => false,
+        };
+        if reveal.plaintext_ref.as_deref() != Some(expected_plaintext_ref) || decrypt_plaintext_mismatch {
+            diagnostics.push_limited(
+                SECRET_ACCESS_PLAINTEXT_MISMATCH.to_string(),
+                MAX_SECRET_DIAGNOSTICS,
+                "secret access diagnostics",
+            )?;
+        }
+    }
+    Ok(secret_decision(diagnostics, true, false, false))
+}
+
+fn collect_decrypt_binding_diagnostics(
+    input: SecretAccessBindingInput<'_>,
+    reveal: &RevealReceipt,
+    decrypt: &DecryptReceipt,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<()> {
+    if decrypt.decision != "pass" {
+        diagnostics.push_limited(
+            SECRET_ACCESS_DECRYPT_FAILED.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+    }
+    if decrypt.encrypted_ref != input.encrypted.encrypted_ref {
+        diagnostics.push_limited(
+            SECRET_ACCESS_DECRYPT_ENCRYPTED_MISMATCH.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+    }
+    if decrypt.reveal_receipt_ref.as_deref() != Some(reveal.receipt_ref.as_str()) {
+        diagnostics.push_limited(
+            SECRET_ACCESS_DECRYPT_REVEAL_MISMATCH.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+    }
+    if decrypt.commitment_ref != input.encrypted.commitment_ref || decrypt.commitment_ref != input.secret.commitment_ref {
+        diagnostics.push_limited(
+            SECRET_ACCESS_DECRYPT_COMMITMENT_MISMATCH.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+    }
+    if decrypt.plaintext_ref != reveal.plaintext_ref {
+        diagnostics.push_limited(
+            SECRET_ACCESS_PLAINTEXT_MISMATCH.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret access diagnostics",
+        )?;
+    }
+    Ok(())
+}
+
+pub fn evaluate_secret_redaction_gate(input: SecretRedactionGateInput<'_>) -> Result<SecretStateDecision> {
+    validate_ref(input.required_source_ref, "secret redaction required source ref")?;
+    validate_ref(input.required_output_ref, "secret redaction required output ref")?;
+    let mut diagnostics = Vec::new();
+    if input.transform.decision != "pass"
+        || input.transform.source_ref != input.required_source_ref
+        || input.transform.output_ref != input.required_output_ref
+    {
+        diagnostics.push_limited(
+            SECRET_REDACTION_PROFILE_TRANSFORM_MISMATCH.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret redaction diagnostics",
+        )?;
+    }
+    let bundle_gate_preserving = match input.private_bundle {
+        Some(profile) => profile.is_gate_preserving && profile.transform_receipt_ref == input.transform.receipt_ref,
+        None => true,
+    };
+    let is_gate_preserving = input.transform.is_gate_preserving && bundle_gate_preserving;
+    if input.requires_gate_preserving && !is_gate_preserving {
+        diagnostics.push_limited(
+            SECRET_REDACTION_PROFILE_DIAGNOSTIC_ONLY.to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret redaction diagnostics",
+        )?;
+    }
+    Ok(secret_decision(diagnostics, false, is_gate_preserving, false))
+}
+
+pub fn evaluate_secret_cleanup_admission(input: &SecretCleanupInput) -> Result<SecretStateDecision> {
     validate_ref(&input.secret_ref, "cleanup secret ref")?;
     validate_ref(&input.revocation_ref, "cleanup revocation ref")?;
     validate_ref(&input.tombstone_ref, "cleanup tombstone ref")?;
@@ -23,7 +156,29 @@ pub fn secret_cleanup_receipt_value(input: &SecretCleanupInput) -> Result<IoValu
             "secret cleanup diagnostics",
         )?;
     }
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    Ok(secret_decision(diagnostics, false, false, true))
+}
+
+fn secret_decision(
+    diagnostics: Vec<String>,
+    plaintext_requested: bool,
+    gate_preserving: bool,
+    cleanup_requested: bool,
+) -> SecretStateDecision {
+    let is_pass = diagnostics.is_empty();
+    SecretStateDecision {
+        decision: if is_pass { "pass" } else { "deny" }.to_string(),
+        diagnostics,
+        plaintext_authorized: is_pass && plaintext_requested,
+        gate_preserving: is_pass && gate_preserving,
+        cleanup_authorized: is_pass && cleanup_requested,
+    }
+}
+
+pub fn secret_cleanup_receipt_value(input: &SecretCleanupInput) -> Result<IoValue> {
+    let cleanup_decision = evaluate_secret_cleanup_admission(input)?;
+    let decision = cleanup_decision.decision.as_str();
+    let diagnostics = cleanup_decision.diagnostics;
     Ok(record("secret-cleanup-receipt-v1", vec![
         string(SECRET_CLEANUP_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),

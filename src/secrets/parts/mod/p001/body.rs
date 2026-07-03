@@ -1,4 +1,31 @@
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SecretAccessBindingInput<'a> {
+    pub secret: &'a SecretRef,
+    pub encrypted: &'a EncryptedRef,
+    pub reveal: Option<&'a RevealReceipt>,
+    pub decrypt: Option<&'a DecryptReceipt>,
+    pub expected_plaintext_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SecretRedactionGateInput<'a> {
+    pub transform: &'a RedactionTransformReceipt,
+    pub private_bundle: Option<&'a PrivateBundleProfile>,
+    pub required_source_ref: &'a str,
+    pub required_output_ref: &'a str,
+    pub requires_gate_preserving: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecretStateDecision {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub plaintext_authorized: bool,
+    pub gate_preserving: bool,
+    pub cleanup_authorized: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrivateBundleProfileInput {
     pub profile_ref: String,

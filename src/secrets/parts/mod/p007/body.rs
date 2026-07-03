@@ -114,6 +114,157 @@ mod tests {
     }
 
     #[test]
+    fn exact_reveal_decrypt_binding_core_denies_mismatches() {
+        let run = run_secrets_fixture().expect("fixture");
+        let exact = evaluate_secret_access_binding(SecretAccessBindingInput {
+            secret: &run.secret,
+            encrypted: &run.encrypted,
+            reveal: Some(&run.reveal_pass),
+            decrypt: Some(&run.decrypt_pass),
+            expected_plaintext_ref: run.reveal_pass.plaintext_ref.as_deref(),
+        })
+        .expect("exact access binding");
+        assert_eq!(exact.decision, "pass");
+        assert!(exact.plaintext_authorized);
+
+        let wrong_encrypted_value = encrypted_ref_value(&EncryptedRefInput {
+            ciphertext_ref: fixture_ref("wrong-ciphertext"),
+            commitment_ref: run.encrypted.commitment_ref.clone(),
+            encryption_ref: run.encrypted.encryption_ref.clone(),
+            schema_ref: run.encrypted.schema_ref.clone(),
+            policy_refs: run.encrypted.policy_refs.clone(),
+            evidence_refs: run.encrypted.evidence_refs.clone(),
+        })
+        .expect("wrong encrypted value");
+        let wrong_encrypted = parse_encrypted_ref(&wrong_encrypted_value).expect("wrong encrypted");
+        let wrong_encrypted_decision = evaluate_secret_access_binding(SecretAccessBindingInput {
+            secret: &run.secret,
+            encrypted: &wrong_encrypted,
+            reveal: Some(&run.reveal_pass),
+            decrypt: Some(&run.decrypt_pass),
+            expected_plaintext_ref: run.reveal_pass.plaintext_ref.as_deref(),
+        })
+        .expect("wrong encrypted binding");
+        assert_eq!(wrong_encrypted_decision.decision, "deny");
+        assert!(!wrong_encrypted_decision.plaintext_authorized);
+        assert!(wrong_encrypted_decision
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == SECRET_ACCESS_DECRYPT_ENCRYPTED_MISMATCH));
+
+        let wrong_commitment_value = encrypted_ref_value(&EncryptedRefInput {
+            ciphertext_ref: fixture_ref("commitment-ciphertext"),
+            commitment_ref: fixture_ref("wrong-commitment"),
+            encryption_ref: run.encrypted.encryption_ref.clone(),
+            schema_ref: run.encrypted.schema_ref.clone(),
+            policy_refs: run.encrypted.policy_refs.clone(),
+            evidence_refs: run.encrypted.evidence_refs.clone(),
+        })
+        .expect("wrong commitment value");
+        let wrong_commitment = parse_encrypted_ref(&wrong_commitment_value).expect("wrong commitment");
+        let wrong_commitment_decision = evaluate_secret_access_binding(SecretAccessBindingInput {
+            secret: &run.secret,
+            encrypted: &wrong_commitment,
+            reveal: Some(&run.reveal_pass),
+            decrypt: Some(&run.decrypt_pass),
+            expected_plaintext_ref: run.reveal_pass.plaintext_ref.as_deref(),
+        })
+        .expect("wrong commitment binding");
+        assert_eq!(wrong_commitment_decision.decision, "deny");
+        assert!(wrong_commitment_decision
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == SECRET_ACCESS_DECRYPT_COMMITMENT_MISMATCH));
+
+        let stale_reveal = evaluate_secret_access_binding(SecretAccessBindingInput {
+            secret: &run.secret,
+            encrypted: &run.encrypted,
+            reveal: Some(&run.reveal_denied),
+            decrypt: Some(&run.decrypt_pass),
+            expected_plaintext_ref: run.reveal_pass.plaintext_ref.as_deref(),
+        })
+        .expect("stale reveal binding");
+        assert_eq!(stale_reveal.decision, "deny");
+        assert!(stale_reveal
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == SECRET_ACCESS_REVEAL_FAILED));
+    }
+
+    #[test]
+    fn redaction_gate_core_rejects_diagnostic_profiles() {
+        let run = run_secrets_fixture().expect("fixture");
+        let gate = evaluate_secret_redaction_gate(SecretRedactionGateInput {
+            transform: &run.transform,
+            private_bundle: Some(&run.private_bundle),
+            required_source_ref: &run.transform.source_ref,
+            required_output_ref: &run.transform.output_ref,
+            requires_gate_preserving: true,
+        })
+        .expect("gate preserving redaction");
+        assert_eq!(gate.decision, "pass");
+        assert!(gate.gate_preserving);
+
+        let diagnostic_transform_value = redaction_transform_receipt_value(&RedactionTransformInput {
+            source_ref: run.transform.source_ref.clone(),
+            output_ref: run.transform.output_ref.clone(),
+            policy_refs: vec![fixture_ref("diagnostic-policy")],
+            profile_ref: fixture_ref("diagnostic-redaction-profile"),
+            marker_refs: run.transform.marker_refs.clone(),
+            is_gate_preserving: false,
+            diagnostics: Vec::new(),
+        })
+        .expect("diagnostic transform");
+        let diagnostic_transform = parse_redaction_transform_receipt(&diagnostic_transform_value)
+            .expect("parse diagnostic transform");
+        let denied = evaluate_secret_redaction_gate(SecretRedactionGateInput {
+            transform: &diagnostic_transform,
+            private_bundle: None,
+            required_source_ref: &run.transform.source_ref,
+            required_output_ref: &run.transform.output_ref,
+            requires_gate_preserving: true,
+        })
+        .expect("diagnostic redaction gate");
+        assert_eq!(denied.decision, "deny");
+        assert!(!denied.gate_preserving);
+        assert!(denied
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == SECRET_REDACTION_PROFILE_DIAGNOSTIC_ONLY));
+    }
+
+    #[test]
+    fn cleanup_admission_core_requires_bound_retention_evidence() {
+        let core = fixture_core().expect("fixture core");
+        let retention = fixture_retention(&core).expect("fixture retention");
+        let tombstone = retention.tombstone.as_ref().expect("retention tombstone");
+        let admitted_input = SecretCleanupInput {
+            secret_ref: core.secret.secret_ref.clone(),
+            revocation_ref: fixture_ref("secret-revocation"),
+            tombstone_ref: tombstone.tombstone_ref.clone(),
+            retention_refs: vec![retention.receipt.receipt_ref.clone()],
+            retention_receipts: vec![retention.receipt.value.clone()],
+            retention_tombstones: vec![tombstone.value.clone()],
+            authority_refs: core.refs.authority.clone(),
+            policy_refs: core.refs.policy.clone(),
+        };
+        let admitted = evaluate_secret_cleanup_admission(&admitted_input).expect("cleanup admission");
+        assert_eq!(admitted.decision, "pass");
+        assert!(admitted.cleanup_authorized);
+
+        let denied_input = SecretCleanupInput {
+            retention_refs: Vec::new(),
+            retention_receipts: Vec::new(),
+            retention_tombstones: Vec::new(),
+            ..admitted_input
+        };
+        let denied = evaluate_secret_cleanup_admission(&denied_input).expect("cleanup denial");
+        assert_eq!(denied.decision, "deny");
+        assert!(!denied.cleanup_authorized);
+        assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("retention receipt")));
+    }
+
+    #[test]
     fn commitment_replay_and_private_bundle_profiles_are_receipted() {
         let run = run_secrets_fixture().expect("fixture");
         assert_eq!(run.private_bundle.transform_receipt_ref, run.transform.receipt_ref);
