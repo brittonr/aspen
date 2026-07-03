@@ -367,3 +367,119 @@
         assert_transition_denies(super::State::Failed, super::State::Ready);
         assert_transition_denies(super::State::Restarting, super::State::Ready);
     }
+
+    fn assert_error_contains(error: crate::error::MoltenError, expected: &str) {
+        assert!(
+            error.to_string().contains(expected),
+            "expected error to contain {expected:?}, got {error}"
+        );
+    }
+
+    #[test]
+    fn lifecycle_valid_transition_diagnostics_are_empty_and_receipts_pass() {
+        // r[verify molten.lifecycle_state_machine_proof.denial_diagnostics]
+        // r[verify molten.lifecycle_state_machine_proof.denial_receipt_binding]
+        for transition in super::allowed_transition_relation() {
+            let input = matrix_transition_input(
+                transition.from_state,
+                transition.to_state,
+                matching_action_for_target(transition.to_state),
+            );
+            let diagnostics = super::transition_diagnostics(&input);
+            let receipt = super::transition_receipt(&input).expect("valid receipt");
+
+            assert!(diagnostics.is_empty());
+            assert_eq!(receipt.decision, "pass");
+            assert!(receipt.diagnostics.is_empty());
+        }
+    }
+
+    #[test]
+    fn lifecycle_denial_diagnostics_are_stable_for_invalid_edges_and_action_mismatches() {
+        // r[verify molten.lifecycle_state_machine_proof.denial_diagnostics]
+        let invalid_edge = matrix_transition_input(
+            super::State::Declared,
+            super::State::Ready,
+            matching_action_for_target(super::State::Ready),
+        );
+        let invalid_edge_receipt = super::transition_receipt(&invalid_edge).expect("invalid edge receipt");
+        assert_eq!(invalid_edge_receipt.decision, "deny");
+        assert_eq!(
+            invalid_edge_receipt.diagnostics,
+            vec!["invalid transition declared -> ready".to_owned()]
+        );
+
+        let action_mismatch = matrix_transition_input(
+            super::State::Declared,
+            super::State::Spawning,
+            mismatched_action_for_target(super::State::Spawning),
+        );
+        let action_mismatch_receipt = super::transition_receipt(&action_mismatch).expect("action mismatch receipt");
+        assert_eq!(action_mismatch_receipt.decision, "deny");
+        assert_eq!(
+            action_mismatch_receipt.diagnostics,
+            vec!["action start does not match target state spawning".to_owned()]
+        );
+    }
+
+    #[test]
+    fn lifecycle_combined_denial_diagnostics_keep_order_and_receipt_refs_stable() {
+        // r[verify molten.lifecycle_state_machine_proof.denial_diagnostics]
+        // r[verify molten.lifecycle_state_machine_proof.denial_receipt_binding]
+        let input = matrix_transition_input(super::State::Declared, super::State::Cleaned, super::Action::Start);
+        let first = super::transition_receipt(&input).expect("first denial receipt");
+        let second = super::transition_receipt(&input).expect("second denial receipt");
+        let rendered = to_text(&first.value).expect("render denial receipt");
+
+        assert_eq!(first.decision, "deny");
+        assert_eq!(
+            first.diagnostics,
+            vec![
+                "action start does not match target state cleaned".to_owned(),
+                "invalid transition declared -> cleaned".to_owned(),
+            ]
+        );
+        assert_eq!(first.diagnostics, second.diagnostics);
+        assert_eq!(first.transition_ref, second.transition_ref);
+        assert_eq!(first.receipt_ref, second.receipt_ref);
+        assert!(first.transition_ref.starts_with("blake3:"));
+        assert!(rendered.contains(&first.transition_ref));
+        assert!(rendered.contains("deny"));
+    }
+
+    #[test]
+    fn lifecycle_malformed_transition_inputs_fail_closed_before_receipts() {
+        // r[verify molten.lifecycle_state_machine_proof.denial_receipt_binding]
+        let mut empty_entity = matrix_transition_input(
+            super::State::Declared,
+            super::State::Spawning,
+            super::Action::Spawn,
+        );
+        empty_entity.entity_id = " ".to_owned();
+        assert_error_contains(
+            super::transition_receipt(&empty_entity).expect_err("empty entity id denied"),
+            "lifecycle entity id must be non-empty",
+        );
+
+        let mut empty_cause = matrix_transition_input(
+            super::State::Declared,
+            super::State::Spawning,
+            super::Action::Spawn,
+        );
+        empty_cause.cause.clear();
+        assert_error_contains(
+            super::transition_receipt(&empty_cause).expect_err("empty cause denied"),
+            "lifecycle transition cause must be non-empty",
+        );
+
+        let mut malformed_ref = matrix_transition_input(
+            super::State::Declared,
+            super::State::Spawning,
+            super::Action::Spawn,
+        );
+        malformed_ref.policy_refs = vec!["not-a-content-ref".to_owned()];
+        assert_error_contains(
+            super::transition_receipt(&malformed_ref).expect_err("malformed ref denied"),
+            "content ref must start with blake3:",
+        );
+    }

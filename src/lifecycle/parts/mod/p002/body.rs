@@ -112,7 +112,7 @@ fn turn_action_value(action: &TurnAction) -> IoValue {
     }
 }
 
-fn transition_diagnostics(input: &TransitionInput) -> Vec<String> {
+pub fn transition_diagnostics(input: &TransitionInput) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(MAX_DIAGNOSTICS.min(2));
     if !action_matches_target(input.action, input.to_state) {
         diagnostics.push(format!(
