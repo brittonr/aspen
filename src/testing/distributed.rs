@@ -57,7 +57,7 @@ const RELEASE_PILOT_SCOPE: &str = "pilot-scope";
 const COST_FAST: &str = "fast";
 const COST_MEDIUM: &str = "medium";
 const COST_HEAVY: &str = "heavy";
-const METADATA_REQUIRED_FIELDS: usize = 10;
+const METADATA_REQUIRED_FIELDS: usize = 15;
 
 const _: () = assert!(MAX_DISTRIBUTED_PEERS > 0);
 const _: () = assert!(MAX_DISTRIBUTED_CHANNELS >= MAX_DISTRIBUTED_PEERS);
@@ -169,6 +169,7 @@ pub struct DistributedSimulationRun {
     pub test_binary_ref: String,
     pub child_workflow_refs: Vec<String>,
     pub event_refs: Vec<String>,
+    pub event_outcomes: Vec<SimulationEventOutcome>,
     pub committed_operation_ids: Vec<String>,
     pub denied_operation_ids: Vec<String>,
     pub final_state_ref: String,
@@ -217,6 +218,10 @@ pub struct DistributedTestMetadataInput {
     pub nix_input_refs: Vec<String>,
     pub test_binary_ref: String,
     pub profile_id: String,
+    pub command: String,
+    pub expected_artifact_kinds: Vec<String>,
+    pub cost_class: String,
+    pub release_review_status: String,
     pub shard_id: String,
     pub seed_ref: String,
     pub topology_ref: String,
@@ -229,6 +234,10 @@ pub struct DistributedTestMetadataInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DistributedTestMetadata {
     pub profile_id: String,
+    pub command: String,
+    pub expected_artifact_kinds: Vec<String>,
+    pub cost_class: String,
+    pub release_review_status: String,
     pub shard_id: String,
     pub metadata_ref: String,
     pub value: IoValue,
@@ -336,7 +345,7 @@ pub fn run_distributed_simulation(input: &DistributedSimulationInput) -> Result<
     let seed_ref = canonical_ref(&seed_value(&input.seed)?)?;
     let scheduler_ref = canonical_ref(&scheduler_profile_value(&input.scheduler)?)?;
     let fault_plan_ref = canonical_ref(&fault_plan_value(&input.fault_plan)?)?;
-    let mut events = Vec::with_capacity(input.commands.len());
+    let mut event_outcomes = Vec::with_capacity(input.commands.len());
     let mut committed = OrderedSet::new();
     let mut denied = OrderedSet::new();
     let mut diagnostics = OrderedSet::new();
@@ -353,7 +362,7 @@ pub fn run_distributed_simulation(input: &DistributedSimulationInput) -> Result<
         if evaluation.decision == DENY_DECISION {
             denied.insert(command.operation_id.clone());
         }
-        events.push(simulation_event_value(SimulationEventValueInput {
+        let event_value = simulation_event_value(SimulationEventValueInput {
             tick,
             operation_id: &command.operation_id,
             kind: &evaluation.kind,
@@ -361,10 +370,20 @@ pub fn run_distributed_simulation(input: &DistributedSimulationInput) -> Result<
             diagnostic: &evaluation.diagnostic,
             payload_ref: &command.payload_ref,
             commit_ref: &command.commit_ref,
-        })?);
+        })?;
+        let event_ref = canonical_ref(&event_value)?;
+        event_outcomes.push(SimulationEventOutcome {
+            tick,
+            operation_id: command.operation_id.clone(),
+            kind: evaluation.kind,
+            decision: evaluation.decision,
+            diagnostic: evaluation.diagnostic,
+            event_ref,
+            value: event_value,
+        });
     }
 
-    let event_refs = canonical_refs(&events)?;
+    let event_refs = event_outcomes.iter().map(|outcome| outcome.event_ref.clone()).collect::<Vec<_>>();
     let committed_operation_ids = committed.into_iter().collect::<Vec<_>>();
     let denied_operation_ids = denied.into_iter().collect::<Vec<_>>();
     let diagnostics = diagnostics.into_iter().collect::<Vec<_>>();
@@ -402,6 +421,7 @@ pub fn run_distributed_simulation(input: &DistributedSimulationInput) -> Result<
         test_binary_ref: input.test_binary_ref.clone(),
         child_workflow_refs: input.child_workflow_refs.clone(),
         event_refs,
+        event_outcomes,
         committed_operation_ids,
         denied_operation_ids,
         final_state_ref,
@@ -916,14 +936,6 @@ fn canonical_ref(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn canonical_refs(values: &[IoValue]) -> Result<Vec<String>> {
-    let mut refs = Vec::with_capacity(values.len());
-    for value in values {
-        refs.push(canonical_ref(value)?);
-    }
-    Ok(refs)
-}
-
 fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
@@ -1042,6 +1054,10 @@ pub fn build_distributed_test_metadata(input: &DistributedTestMetadataInput) -> 
     let metadata_ref = canonical_ref(&value)?;
     Ok(DistributedTestMetadata {
         profile_id: input.profile_id.clone(),
+        command: input.command.clone(),
+        expected_artifact_kinds: input.expected_artifact_kinds.clone(),
+        cost_class: input.cost_class.clone(),
+        release_review_status: input.release_review_status.clone(),
         shard_id: input.shard_id.clone(),
         metadata_ref,
         value,
@@ -1176,6 +1192,13 @@ fn validate_metadata_input(input: &DistributedTestMetadataInput) -> Result<()> {
     validate_ref_slice("distributed metadata nix input", &input.nix_input_refs)?;
     validate_ref(&input.test_binary_ref, "distributed metadata test binary")?;
     validate_text("distributed metadata profile", &input.profile_id)?;
+    validate_text("distributed metadata command", &input.command)?;
+    if input.expected_artifact_kinds.is_empty() {
+        return Err(MoltenError::invalid_harness("distributed metadata requires artifact kinds"));
+    }
+    validate_strings("distributed metadata artifact kind", &input.expected_artifact_kinds, MAX_DISTRIBUTED_TEXT)?;
+    validate_cost_class(&input.cost_class)?;
+    validate_release_status(&input.release_review_status)?;
     validate_text("distributed metadata shard", &input.shard_id)?;
     validate_ref(&input.seed_ref, "distributed metadata seed")?;
     validate_ref(&input.topology_ref, "distributed metadata topology")?;
@@ -1199,6 +1222,10 @@ fn distributed_test_metadata_value(input: &DistributedTestMetadataInput) -> Resu
         record("nix-inputs", vec![refs_sequence(&input.nix_input_refs)]),
         record("test-binary", vec![string(&input.test_binary_ref)]),
         record("profile", vec![string(&input.profile_id)]),
+        record("command", vec![string(&input.command)]),
+        record("artifact-kinds", vec![sequence(input.expected_artifact_kinds.iter().map(string).collect())]),
+        record("cost-class", vec![string(&input.cost_class)]),
+        record("release-review-status", vec![string(&input.release_review_status)]),
         record("shard", vec![string(&input.shard_id)]),
         record("seed", vec![string(&input.seed_ref)]),
         record("topology", vec![string(&input.topology_ref)]),
@@ -1208,6 +1235,10 @@ fn distributed_test_metadata_value(input: &DistributedTestMetadataInput) -> Resu
         record("diagnostic-logs", vec![refs_sequence(&input.diagnostic_log_refs)]),
         checks_value(&[
             ("source-bound", PASS_DECISION),
+            ("profile-command-bound", PASS_DECISION),
+            ("profile-artifacts-bound", PASS_DECISION),
+            ("profile-cost-bound", PASS_DECISION),
+            ("profile-release-status-bound", PASS_DECISION),
             ("profile-and-shard-bound", PASS_DECISION),
             ("variance-declared", PASS_DECISION),
             ("logs-diagnostic-only", PASS_DECISION),
@@ -1225,6 +1256,17 @@ fn gate_diagnostics(input: &DistributedCiGateInput<'_>) -> Result<Vec<String>> {
     }
     let metadata_refs = input.metadata.iter().map(|metadata| metadata.metadata_ref.as_str()).collect::<OrderedSet<_>>();
     let profile_ids = input.matrix.profiles.iter().map(|profile| profile.id.as_str()).collect::<OrderedSet<_>>();
+    let mut metadata_profile_ids = OrderedSet::new();
+    for metadata in input.metadata {
+        validate_metadata_surface(metadata)?;
+        if !metadata_profile_ids.insert(metadata.profile_id.as_str()) {
+            diagnostics.push(format!("duplicate-metadata-profile:{}", metadata.profile_id));
+        }
+        match input.matrix.profiles.iter().find(|profile| profile.id == metadata.profile_id) {
+            Some(profile) => collect_metadata_mismatch_diagnostics(metadata, profile, &mut diagnostics),
+            None => diagnostics.push(format!("metadata-profile-not-in-matrix:{}", metadata.profile_id)),
+        }
+    }
     for run in input.runs {
         validate_profile_run(run)?;
         if !profile_ids.contains(run.profile_id.as_str()) {
@@ -1263,6 +1305,38 @@ fn gate_diagnostics(input: &DistributedCiGateInput<'_>) -> Result<Vec<String>> {
         }
     }
     Ok(diagnostics)
+}
+
+fn validate_metadata_surface(metadata: &DistributedTestMetadata) -> Result<()> {
+    validate_text("distributed metadata profile", &metadata.profile_id)?;
+    validate_text("distributed metadata command", &metadata.command)?;
+    if metadata.expected_artifact_kinds.is_empty() {
+        return Err(MoltenError::invalid_harness("distributed metadata requires artifact kinds"));
+    }
+    validate_strings("distributed metadata artifact kind", &metadata.expected_artifact_kinds, MAX_DISTRIBUTED_TEXT)?;
+    validate_cost_class(&metadata.cost_class)?;
+    validate_release_status(&metadata.release_review_status)?;
+    validate_text("distributed metadata shard", &metadata.shard_id)?;
+    validate_ref(&metadata.metadata_ref, "distributed metadata ref")
+}
+
+fn collect_metadata_mismatch_diagnostics(
+    metadata: &DistributedTestMetadata,
+    profile: &DistributedCiProfile,
+    diagnostics: &mut Vec<String>,
+) {
+    if metadata.command != profile.command {
+        diagnostics.push(format!("metadata-command-mismatch:{}", metadata.profile_id));
+    }
+    if metadata.expected_artifact_kinds != profile.expected_artifact_kinds {
+        diagnostics.push(format!("metadata-artifact-kinds-mismatch:{}", metadata.profile_id));
+    }
+    if metadata.cost_class != profile.cost_class {
+        diagnostics.push(format!("metadata-cost-class-mismatch:{}", metadata.profile_id));
+    }
+    if metadata.release_review_status != profile.release_review_status {
+        diagnostics.push(format!("metadata-release-status-mismatch:{}", metadata.profile_id));
+    }
 }
 
 fn validate_profile_run(run: &DistributedProfileRun) -> Result<()> {
@@ -1399,6 +1473,46 @@ mod tests {
         }
     }
 
+    fn run_twice(input: &DistributedSimulationInput) -> (DistributedSimulationRun, DistributedSimulationRun) {
+        let first = run_distributed_simulation(input).expect("first distributed simulation run");
+        let second = run_distributed_simulation(input).expect("second distributed simulation run");
+        (first, second)
+    }
+
+    fn assert_stable_run_refs(first: &DistributedSimulationRun, second: &DistributedSimulationRun) {
+        assert_eq!(first.receipt_ref, second.receipt_ref);
+        assert_eq!(first.final_state_ref, second.final_state_ref);
+        assert_eq!(first.event_refs, second.event_refs);
+        assert_eq!(first.fault_plan_ref, second.fault_plan_ref);
+    }
+
+    fn event_for<'a>(run: &'a DistributedSimulationRun, operation_id: &str) -> &'a SimulationEventOutcome {
+        run.event_outcomes
+            .iter()
+            .find(|event| event.operation_id == operation_id)
+            .expect("event for operation")
+    }
+
+    fn assert_event_outcome(
+        run: &DistributedSimulationRun,
+        operation_id: &str,
+        expected_kind: &str,
+        expected_decision: &str,
+        expected_diagnostic: &str,
+    ) {
+        let event = event_for(run, operation_id);
+        let recomputed_ref = canonical_ref(&event.value).expect("event canonical ref");
+        assert_eq!(event.kind, expected_kind);
+        assert_eq!(event.decision, expected_decision);
+        assert_eq!(event.diagnostic, expected_diagnostic);
+        assert_eq!(event.event_ref, recomputed_ref);
+        assert!(run.event_refs.iter().any(|event_ref| event_ref == &event.event_ref));
+    }
+
+    fn assert_diagnostic(run: &DistributedSimulationRun, expected_diagnostic: &str) {
+        assert!(run.diagnostics.iter().any(|diagnostic| diagnostic == expected_diagnostic));
+    }
+
     #[test]
     fn distributed_simulation_is_deterministic_and_parseable() {
         // r[verify molten.testing.distributed_simulation.fault_plan_schema]
@@ -1438,6 +1552,202 @@ mod tests {
         let changed_ref = canonical_ref(&fault_plan_value(&changed).expect("changed plan")).expect("changed ref");
 
         assert_ne!(base_ref, changed_ref);
+    }
+
+    #[test]
+    fn direct_positive_fault_fixtures_cover_benign_faults() {
+        // r[verify molten.testing.distributed_simulation.direct_fault_fixtures]
+        let fixtures = [
+            (FAULT_DELAY, "op-delay", "bounded-delay", COMMIT_EVENT_KIND),
+            (FAULT_DROP, "op-drop", "declared-drop", COMMIT_EVENT_KIND),
+            (FAULT_REORDER, "op-reorder", "stable-reorder", COMMIT_EVENT_KIND),
+            (FAULT_REJOIN, "op-rejoin", "peer-rejoined", COMMIT_EVENT_KIND),
+            (FAULT_CRASH, "op-crash", "crash-replayed", REPLAY_EVENT_KIND),
+            (FAULT_RESTART, "op-restart", "restart-replayed", REPLAY_EVENT_KIND),
+        ];
+
+        for (fault_kind, operation_id, diagnostic, event_kind) in fixtures {
+            let input = input_with(
+                FaultPlan {
+                    events: vec![fault(fault_kind, operation_id, diagnostic)],
+                    caveats: vec!["direct benign fixture".to_string()],
+                },
+                vec![command(operation_id)],
+            );
+            let (first, second) = run_twice(&input);
+            let expected_diagnostic = format!("{fault_kind}:{diagnostic}");
+
+            assert_stable_run_refs(&first, &second);
+            assert_eq!(first.decision, PASS_DECISION);
+            assert_eq!(first.committed_operation_ids, vec![operation_id.to_string()]);
+            assert!(first.denied_operation_ids.is_empty());
+            assert_event_outcome(&first, operation_id, event_kind, PASS_DECISION, &expected_diagnostic);
+            assert_diagnostic(&first, &expected_diagnostic);
+        }
+
+        let duplicate_input = input_with(
+            FaultPlan {
+                events: vec![fault(FAULT_DUPLICATE, "op-duplicate", "duplicate-delivery")],
+                caveats: vec!["direct duplicate fixture".to_string()],
+            },
+            vec![command("op-duplicate")],
+        );
+        let (duplicate_first, duplicate_second) = run_twice(&duplicate_input);
+
+        assert_stable_run_refs(&duplicate_first, &duplicate_second);
+        assert_eq!(duplicate_first.decision, PASS_DECISION);
+        assert!(duplicate_first.committed_operation_ids.is_empty());
+        assert!(duplicate_first.denied_operation_ids.is_empty());
+        assert_event_outcome(
+            &duplicate_first,
+            "op-duplicate",
+            DUPLICATE_EVENT_KIND,
+            PASS_DECISION,
+            DUPLICATE_SUPPRESSED_DECISION,
+        );
+        assert_diagnostic(&duplicate_first, DUPLICATE_SUPPRESSED_DECISION);
+    }
+
+    #[test]
+    fn direct_negative_fault_fixtures_deny_before_side_effects() {
+        // r[verify molten.testing.distributed_simulation.direct_fault_fixtures]
+        struct NegativeFaultFixture {
+            fault_kind: &'static str,
+            operation_id: &'static str,
+            fault_diagnostic: &'static str,
+            expected_diagnostic: &'static str,
+            requires_quorum: bool,
+            drop_authority: bool,
+        }
+
+        let fixtures = [
+            NegativeFaultFixture {
+                fault_kind: FAULT_STALE_EVIDENCE,
+                operation_id: "op-stale",
+                fault_diagnostic: "stale-ledger-ref",
+                expected_diagnostic: "stale-evidence-denied-before-side-effects",
+                requires_quorum: false,
+                drop_authority: false,
+            },
+            NegativeFaultFixture {
+                fault_kind: FAULT_CORRUPTED_RECEIPT,
+                operation_id: "op-corrupt",
+                fault_diagnostic: "tampered-receipt",
+                expected_diagnostic: "corrupted-receipt-denied-before-side-effects",
+                requires_quorum: false,
+                drop_authority: false,
+            },
+            NegativeFaultFixture {
+                fault_kind: FAULT_RESOURCE_PRESSURE,
+                operation_id: "op-pressure",
+                fault_diagnostic: "budget-exhausted",
+                expected_diagnostic: "resource-pressure-denied-before-side-effects",
+                requires_quorum: false,
+                drop_authority: false,
+            },
+            NegativeFaultFixture {
+                fault_kind: FAULT_UNAUTHORIZED_TRANSPORT,
+                operation_id: "op-transport",
+                fault_diagnostic: "transport-only",
+                expected_diagnostic: "transport-evidence-does-not-grant-authority",
+                requires_quorum: false,
+                drop_authority: true,
+            },
+            NegativeFaultFixture {
+                fault_kind: FAULT_AMBIENT_STATE_DRIFT,
+                operation_id: "op-ambient",
+                fault_diagnostic: "host-path-drift",
+                expected_diagnostic: "undeclared-ambient-state",
+                requires_quorum: false,
+                drop_authority: false,
+            },
+            NegativeFaultFixture {
+                fault_kind: FAULT_PARTITION,
+                operation_id: "op-quorum",
+                fault_diagnostic: "partition-window",
+                expected_diagnostic: "partitioned-quorum-denied-before-side-effects",
+                requires_quorum: true,
+                drop_authority: false,
+            },
+        ];
+
+        for fixture in fixtures {
+            let mut candidate = command(fixture.operation_id);
+            candidate.requires_quorum = fixture.requires_quorum;
+            if fixture.drop_authority {
+                candidate.authority_ref = None;
+            }
+            let input = input_with(
+                FaultPlan {
+                    events: vec![fault(
+                        fixture.fault_kind,
+                        fixture.operation_id,
+                        fixture.fault_diagnostic,
+                    )],
+                    caveats: vec!["direct negative fixture".to_string()],
+                },
+                vec![candidate],
+            );
+            let (first, second) = run_twice(&input);
+
+            assert_stable_run_refs(&first, &second);
+            assert_eq!(first.decision, DENY_DECISION);
+            assert!(first.committed_operation_ids.is_empty());
+            assert_eq!(first.denied_operation_ids, vec![fixture.operation_id.to_string()]);
+            assert_event_outcome(
+                &first,
+                fixture.operation_id,
+                DENY_EVENT_KIND,
+                DENY_DECISION,
+                fixture.expected_diagnostic,
+            );
+            assert_diagnostic(&first, fixture.expected_diagnostic);
+        }
+    }
+
+    #[test]
+    fn direct_fault_fixture_mutations_change_evidence_or_fail_closed() {
+        // r[verify molten.testing.distributed_simulation.direct_fault_fixtures]
+        let base_input = input_with(
+            FaultPlan {
+                events: vec![fault(FAULT_DELAY, "op-mutation", "bounded-delay")],
+                caveats: Vec::new(),
+            },
+            vec![command("op-mutation")],
+        );
+        let base_run = run_distributed_simulation(&base_input).expect("base fixture run");
+
+        let mut peer_mutation = base_input.clone();
+        peer_mutation.topology.peers[0].id = "peer-mutated".to_string();
+        peer_mutation.topology.channels[0].from_peer = "peer-mutated".to_string();
+        peer_mutation.commands[0].from_peer = "peer-mutated".to_string();
+        let peer_run = run_distributed_simulation(&peer_mutation).expect("peer mutation run");
+
+        let mut operation_mutation = base_input.clone();
+        operation_mutation.fault_plan.events[0] = fault(FAULT_DELAY, "op-mutated", "bounded-delay");
+        operation_mutation.commands[0].operation_id = "op-mutated".to_string();
+        let operation_run = run_distributed_simulation(&operation_mutation).expect("operation mutation run");
+
+        let mut schedule_mutation = base_input.clone();
+        schedule_mutation.fault_plan.events[0].duration_ticks += 1;
+        let schedule_run = run_distributed_simulation(&schedule_mutation).expect("schedule mutation run");
+
+        let mut payload_mutation = base_input.clone();
+        payload_mutation.commands[0].payload_ref = local_ref("payload:mutated");
+        let payload_run = run_distributed_simulation(&payload_mutation).expect("payload mutation run");
+
+        let mut missing_evidence = base_input.clone();
+        missing_evidence.commands[0].authority_ref = None;
+        missing_evidence.commands[0].transport_ref = None;
+        let missing_evidence_run = run_distributed_simulation(&missing_evidence).expect("missing evidence run");
+
+        assert_ne!(base_run.topology_ref, peer_run.topology_ref);
+        assert_ne!(base_run.final_state_ref, operation_run.final_state_ref);
+        assert_ne!(base_run.fault_plan_ref, schedule_run.fault_plan_ref);
+        assert_ne!(base_run.event_refs, payload_run.event_refs);
+        assert_eq!(missing_evidence_run.decision, DENY_DECISION);
+        assert_ne!(base_run.receipt_ref, missing_evidence_run.receipt_ref);
+        assert_diagnostic(&missing_evidence_run, "missing-authority");
     }
 
     #[test]
@@ -1514,56 +1824,114 @@ mod tests {
     }
 
     fn traceability_manifest() -> crate::trace_core::TraceabilityManifest {
-        let requirement = crate::trace_core::RequirementInput {
-            id: "molten.testing.distributed_ci.fixture".to_string(),
-            source: "cairn/changes/distributed-test-ci-risk-matrix/specs/testing-harness/spec.md".to_string(),
-            kind: "evidence".to_string(),
-            changed: true,
-        };
-        let positive = verification_evidence("positive");
-        let negative = verification_evidence("negative");
-        crate::trace_core::build_traceability_manifest(&crate::trace_core::TraceabilityInput {
-            requirements: vec![requirement],
-            coverage: vec![crate::trace_core::CoverageInput {
-                requirement_id: "molten.testing.distributed_ci.fixture".to_string(),
-                positive: vec![positive],
-                negative: vec![negative],
+        let requirement_ids = [
+            "molten.testing.distributed_simulation.direct_fault_fixtures",
+            "molten.testing.distributed_simulation.fixture_traceability",
+            "molten.testing.distributed_ci.profile_wiring_evidence",
+        ];
+        let requirements = requirement_ids
+            .iter()
+            .map(|requirement_id| crate::trace_core::RequirementInput {
+                id: (*requirement_id).to_string(),
+                source: "cairn/changes/distributed-simulation-fixture-hardening/specs/testing-harness/spec.md"
+                    .to_string(),
+                kind: "evidence".to_string(),
+                changed: true,
+            })
+            .collect::<Vec<_>>();
+        let coverage = requirement_ids
+            .iter()
+            .map(|requirement_id| crate::trace_core::CoverageInput {
+                requirement_id: (*requirement_id).to_string(),
+                positive: vec![verification_evidence(requirement_id, "positive")],
+                negative: vec![verification_evidence(requirement_id, "negative")],
                 exemption: None,
-            }],
+            })
+            .collect::<Vec<_>>();
+        crate::trace_core::build_traceability_manifest(&crate::trace_core::TraceabilityInput {
+            requirements,
+            coverage,
             require_receipt_backed: false,
         })
         .expect("traceability manifest")
     }
 
-    fn verification_evidence(kind: &str) -> crate::trace_core::VerificationEvidence {
+    fn verification_evidence(requirement_id: &str, kind: &str) -> crate::trace_core::VerificationEvidence {
+        let artifact_ref = local_ref(&format!("traceability:{requirement_id}:{kind}"));
         crate::trace_core::VerificationEvidence {
-            target: format!("tests/distributed-{kind}.rs"),
-            command: format!("cargo test distributed_{kind}"),
-            artifact_ref: local_ref(&format!("traceability:{kind}")),
-            artifact_refs: vec![local_ref(&format!("traceability:{kind}"))],
+            target: format!("src/testing/distributed.rs::{requirement_id}:{kind}"),
+            command: format!("cargo test --lib {requirement_id}_{kind}"),
+            artifact_ref: artifact_ref.clone(),
+            artifact_refs: vec![artifact_ref.clone()],
             target_exists: true,
             artifact_present: true,
-            source: "compatibility".to_string(),
-            receipt_ref: None,
-            expected_decision: "compatibility".to_string(),
+            source: "verification-run-receipt".to_string(),
+            receipt_ref: Some(artifact_ref),
+            expected_decision: expected_trace_decision(kind).to_string(),
         }
     }
 
-    fn metadata(profile_id: &str) -> DistributedTestMetadata {
-        build_distributed_test_metadata(&DistributedTestMetadataInput {
+    fn expected_trace_decision(kind: &str) -> &'static str {
+        if kind == "positive" {
+            PASS_DECISION
+        } else {
+            DENY_DECISION
+        }
+    }
+
+    fn configured_profile(profile_id: &str) -> DistributedCiProfile {
+        default_distributed_ci_profiles()
+            .into_iter()
+            .find(|profile| profile.id == profile_id)
+            .expect("configured distributed CI profile")
+    }
+
+    fn metadata_input(profile: &DistributedCiProfile) -> DistributedTestMetadataInput {
+        DistributedTestMetadataInput {
             source_ref: local_ref("source-tree"),
             nix_input_refs: vec![local_ref("nix-inputs")],
             test_binary_ref: local_ref("test-binary"),
-            profile_id: profile_id.to_string(),
-            shard_id: format!("{profile_id}-shard"),
+            profile_id: profile.id.clone(),
+            command: profile.command.clone(),
+            expected_artifact_kinds: profile.expected_artifact_kinds.clone(),
+            cost_class: profile.cost_class.clone(),
+            release_review_status: profile.release_review_status.clone(),
+            shard_id: format!("{}-shard", profile.id),
             seed_ref: local_ref("seed"),
             topology_ref: local_ref("topology"),
             fault_plan_ref: local_ref("fault-plan"),
-            receipt_refs: vec![local_ref(&format!("receipt:{profile_id}"))],
+            receipt_refs: vec![local_ref(&format!("receipt:{}", profile.id))],
             variance_refs: vec![local_ref("variance:none")],
-            diagnostic_log_refs: vec![local_ref(&format!("log:{profile_id}"))],
-        })
-        .expect("metadata")
+            diagnostic_log_refs: vec![local_ref(&format!("log:{}", profile.id))],
+        }
+    }
+
+    fn metadata_from_profile(profile: &DistributedCiProfile) -> DistributedTestMetadata {
+        build_distributed_test_metadata(&metadata_input(profile)).expect("metadata")
+    }
+
+    fn metadata(profile_id: &str) -> DistributedTestMetadata {
+        metadata_from_profile(&configured_profile(profile_id))
+    }
+
+    #[test]
+    fn distributed_simulation_traceability_manifest_names_positive_and_negative_fixture_evidence() {
+        // r[verify molten.testing.distributed_simulation.fixture_traceability]
+        let manifest = traceability_manifest();
+        let direct_entry = manifest
+            .entries
+            .iter()
+            .find(|entry| entry.requirement_id == "molten.testing.distributed_simulation.direct_fault_fixtures")
+            .expect("direct fixture traceability entry");
+
+        assert_eq!(manifest.decision, PASS_DECISION);
+        assert!(manifest.summary.covered.iter().any(|item| item == &direct_entry.requirement_id));
+        assert_eq!(direct_entry.positive[0].expected_decision, PASS_DECISION);
+        assert_eq!(direct_entry.negative[0].expected_decision, DENY_DECISION);
+        assert!(direct_entry.positive[0].command.contains("cargo test --lib"));
+        assert!(direct_entry.negative[0].command.contains("cargo test --lib"));
+        assert!(direct_entry.positive[0].receipt_ref.is_some());
+        assert!(direct_entry.negative[0].receipt_ref.is_some());
     }
 
     fn profile_run(profile_id: &str, metadata_ref: String, traceability_ref: String) -> DistributedProfileRun {
@@ -1586,20 +1954,100 @@ mod tests {
     fn distributed_ci_matrix_declares_profiles_and_metadata() {
         // r[verify molten.testing.distributed_ci.profile_matrix]
         // r[verify molten.testing.distributed_ci.metadata_binding]
+        // r[verify molten.testing.distributed_ci.profile_wiring_evidence]
         let matrix = build_distributed_ci_matrix(default_distributed_ci_profiles()).expect("matrix");
-        let protocol_metadata = metadata(PROFILE_PROTOCOL);
+        let configured_protocol = configured_profile(PROFILE_PROTOCOL);
+        let protocol_metadata = metadata_from_profile(&configured_protocol);
         let rendered = crate::preserves_rail::to_text(&matrix.value).expect("render matrix");
+        let rendered_metadata = crate::preserves_rail::to_text(&protocol_metadata.value).expect("render metadata");
 
         assert_eq!(matrix.decision, PASS_DECISION);
         assert_eq!(matrix.profiles.len(), REQUIRED_DISTRIBUTED_PROFILE_COUNT);
         assert!(rendered.contains("vm-fault"));
         assert!(rendered.contains("nix build .#checks.x86_64-linux.nixos-vm-multinode"));
-        assert_eq!(protocol_metadata.profile_id, PROFILE_PROTOCOL);
-        assert!(
-            crate::preserves_rail::to_text(&protocol_metadata.value)
-                .expect("render metadata")
-                .contains("diagnostic-logs")
-        );
+        assert_eq!(protocol_metadata.profile_id, configured_protocol.id);
+        assert_eq!(protocol_metadata.command, configured_protocol.command);
+        assert_eq!(protocol_metadata.expected_artifact_kinds, configured_protocol.expected_artifact_kinds);
+        assert_eq!(protocol_metadata.cost_class, configured_protocol.cost_class);
+        assert_eq!(protocol_metadata.release_review_status, configured_protocol.release_review_status);
+        assert!(rendered_metadata.contains("diagnostic-logs"));
+        assert!(rendered_metadata.contains("artifact-kinds"));
+        assert!(rendered_metadata.contains("release-review-status"));
+    }
+
+    #[test]
+    fn distributed_ci_profile_wiring_gate_accepts_configured_matrix_metadata() {
+        // r[verify molten.testing.distributed_ci.profile_wiring_evidence]
+        let profiles = default_distributed_ci_profiles();
+        let matrix = build_distributed_ci_matrix(profiles.clone()).expect("matrix");
+        let traceability = traceability_manifest();
+        let metadata = profiles.iter().map(metadata_from_profile).collect::<Vec<_>>();
+        let runs = metadata
+            .iter()
+            .map(|item| profile_run(&item.profile_id, item.metadata_ref.clone(), traceability.manifest_ref.clone()))
+            .collect::<Vec<_>>();
+        let gate = evaluate_distributed_ci_gate(&DistributedCiGateInput {
+            matrix: &matrix,
+            metadata: &metadata,
+            traceability_manifest: &traceability,
+            runs: &runs,
+        })
+        .expect("gate");
+
+        assert_eq!(gate.decision, PASS_DECISION);
+        assert!(gate.diagnostics.is_empty());
+        assert_eq!(gate.metadata_refs.len(), metadata.len());
+        for (profile, item) in profiles.iter().zip(metadata.iter()) {
+            assert_eq!(item.profile_id, profile.id);
+            assert_eq!(item.command, profile.command);
+            assert_eq!(item.expected_artifact_kinds, profile.expected_artifact_kinds);
+            assert_eq!(item.cost_class, profile.cost_class);
+            assert_eq!(item.release_review_status, profile.release_review_status);
+        }
+    }
+
+    #[test]
+    fn distributed_ci_profile_wiring_negative_fixtures_report_errors() {
+        // r[verify molten.testing.distributed_ci.profile_wiring_evidence]
+        let matrix = build_distributed_ci_matrix(default_distributed_ci_profiles()).expect("matrix");
+        let traceability = traceability_manifest();
+        let mut protocol_metadata = metadata(PROFILE_PROTOCOL);
+        protocol_metadata.command = "cargo test --lib wrong-surface".to_string();
+        let mut protocol_run =
+            profile_run(PROFILE_PROTOCOL, protocol_metadata.metadata_ref.clone(), traceability.manifest_ref.clone());
+        protocol_run.retry_attempts = 1;
+        protocol_run.variance_declared = false;
+        let vm_metadata = metadata(PROFILE_VM_FAULT);
+        let mut vm_run =
+            profile_run(PROFILE_VM_FAULT, vm_metadata.metadata_ref.clone(), traceability.manifest_ref.clone());
+        vm_run.unavailable = true;
+        vm_run.required_for_release = true;
+        vm_run.unsupported_reason = Some("no-kvm".to_string());
+        let gate = evaluate_distributed_ci_gate(&DistributedCiGateInput {
+            matrix: &matrix,
+            metadata: &[protocol_metadata, vm_metadata],
+            traceability_manifest: &traceability,
+            runs: &[protocol_run, vm_run],
+        })
+        .expect("gate");
+
+        assert_eq!(gate.decision, DENY_DECISION);
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "metadata-command-mismatch:protocol"));
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "retry-only-success-denied:protocol"));
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "undeclared-variance:protocol"));
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "unavailable-profile-cannot-pass:vm-fault"));
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "required-profile-unavailable:vm-fault"));
+    }
+
+    #[test]
+    fn distributed_ci_metadata_rejects_missing_receipt_ref() {
+        // r[verify molten.testing.distributed_ci.profile_wiring_evidence]
+        let profile = configured_profile(PROFILE_FAST);
+        let mut input = metadata_input(&profile);
+        input.receipt_refs = Vec::new();
+        let error = build_distributed_test_metadata(&input).expect_err("missing receipt refs denied");
+
+        assert!(format!("{error}").contains("distributed metadata requires receipt refs"));
     }
 
     #[test]

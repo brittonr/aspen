@@ -16,6 +16,8 @@ Fault plans cover delay, drop, duplicate, reorder, partition, rejoin, crash, res
 
 Simulation receipts are regression and review evidence only. They do not grant authority, policy, provenance, resource, source-gate, retention, transport, destructive-operation, deployment, or production-readiness trust.
 
+Named direct fixtures cover benign `delay`, `drop`, `reorder`, `rejoin`, `crash`, `restart`, and `duplicate` suppression paths, plus deny-before-side-effects coverage for `stale-evidence`, `corrupted-receipt`, `resource-pressure`, `unauthorized-transport`, `ambient-state-drift`, and `partition` quorum faults. The focused command is `cargo test --lib distributed`.
+
 ## What reviewers inspect
 
 A `distributed-test-run-v1` receipt binds the source ref, test binary ref, topology ref, seed ref, scheduler profile ref, fault-plan ref, child workflow refs, emitted event refs, final state ref, replay status, allowed variance refs, diagnostics, and pass or deny decision.
@@ -37,7 +39,7 @@ Release review uses an explicit risk/cost matrix:
 
 Every distributed shard binds metadata for source/tree refs, Nix input refs, test binary/package refs, profile, shard, seed, topology, fault plan, emitted receipts, variance declarations, and diagnostic log refs. Diagnostic logs stay diagnostic-only; canonical receipts and metadata refs are the review surface.
 
-Traceability coverage is required for distributed evidence-bearing requirements. A release or CI gate must include positive evidence and negative evidence, or an explicit exemption. Missing positive coverage, missing negative coverage, stale refs, retry-only success, skipped VM support, or undeclared variance denies the distributed evidence gate.
+Traceability coverage is required for distributed evidence-bearing requirements. A release or CI gate must include positive evidence and negative evidence, or an explicit exemption. Direct simulation fixture traceability now names positive and negative coverage for `molten.testing.distributed_simulation.direct_fault_fixtures`, `molten.testing.distributed_simulation.fixture_traceability`, and `molten.testing.distributed_ci.profile_wiring_evidence`. Missing positive coverage, missing negative coverage, stale refs, retry-only success, skipped VM support, or undeclared variance denies the distributed evidence gate.
 
 CI/release pass evidence uses zero retries. Exploratory reruns may produce diagnostic or quarantine evidence, but a pass after retry is not deterministic pass evidence unless a separate review artifact accepts the remediation boundary.
 
