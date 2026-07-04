@@ -155,13 +155,58 @@ fn parse_admission_request(value: &Value<IoValue>) -> Result<super::core::Admiss
     })
 }
 
+fn required_record_iovalue(value: &Value<IoValue>, label: &str, _field: &str) -> Result<IoValue> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    Ok(value_to_iovalue(&record[0]))
+}
+
 fn parse_admission_authority(value: &Value<IoValue>) -> Result<AdmissionAuthorityEvidence> {
     let authority_value = value_to_iovalue(value);
-    let authority = simple_record(&authority_value, "authority", 3)?;
+    let authority = simple_record(&authority_value, "authority", 10)?;
+    let source = required_record_string(&authority[0], "source", "admission authority source")?;
+    let capability_ref = required_record_hash(&authority[1], "capability-ref", "admission authority capability ref")?;
+    let authorized = required_record_bool(&authority[2], "authorized", "admission authority authorized")?;
+    let grant_ref = optional_request_string(&authority[3], "admission authority grant ref")?;
+    let request_ref = required_record_hash(&authority[4], "request-ref", "admission authority request ref")?;
+    let proofset_ref = required_record_hash(&authority[5], "ucan-proofset-ref", "admission authority UCAN proofset ref")?;
+    let ucan_verification_receipt_refs = required_record_hash_sequence(
+        &authority[6],
+        "ucan-verification-receipt-refs",
+        "admission authority UCAN verification receipt refs",
+    )?;
+    let derived_grant_refs = required_record_hash_sequence(
+        &authority[7],
+        "derived-grant-refs",
+        "admission authority derived grant refs",
+    )?;
+    let basalt_enforcement_receipt_ref = required_record_hash(
+        &authority[8],
+        "basalt-enforcement-receipt-ref",
+        "admission authority Basalt enforcement receipt ref",
+    )?;
+    let basalt_enforcement_receipt_value = required_record_iovalue(
+        &authority[9],
+        "basalt-enforcement-receipt",
+        "admission authority Basalt enforcement receipt",
+    )?;
+    let actual_receipt_ref = canonical_hash(&basalt_enforcement_receipt_value)?;
+    if actual_receipt_ref != basalt_enforcement_receipt_ref {
+        return Err(MoltenError::invalid_harness(
+            "admission authority Basalt enforcement receipt ref does not match embedded receipt",
+        ));
+    }
     Ok(AdmissionAuthorityEvidence {
-        capability_ref: required_record_hash(&authority[0], "capability-ref", "admission authority capability ref")?,
-        authorized: required_record_bool(&authority[1], "authorized", "admission authority authorized")?,
-        grant_ref: optional_request_string(&authority[2], "admission authority grant ref")?,
+        source,
+        capability_ref,
+        authorized,
+        grant_ref,
+        request_ref,
+        proofset_ref,
+        ucan_verification_receipt_refs,
+        derived_grant_refs,
+        basalt_enforcement_receipt_ref,
+        basalt_enforcement_receipt_value,
     })
 }
 

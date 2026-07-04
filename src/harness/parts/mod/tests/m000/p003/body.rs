@@ -68,7 +68,7 @@
         );
         let tampered_report = parse_text(&tampered_text).expect("parse non-empty UCAN proofset report");
         let error = validate_report_value(&tampered_report).expect_err("non-empty UCAN proofset fails closed");
-        assert!(error.to_string().contains("UCAN proof refs require Basalt/UCAN proof validation"));
+        assert!(error.to_string().contains("UCAN proof refs require matching UCAN verification receipts"));
     }
 
     #[test]

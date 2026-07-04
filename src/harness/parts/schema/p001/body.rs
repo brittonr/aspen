@@ -23,6 +23,8 @@ pub struct CapabilityGateEvidence {
     pub authority_preflight_ref: String,
     pub proofset_ref: String,
     pub grant_refs: Vec<String>,
+    pub ucan_verification_receipt_refs: Vec<String>,
+    pub derived_grant_refs: Vec<String>,
     pub checks: Vec<String>,
 }
 
@@ -106,9 +108,16 @@ pub struct AdmissionDecisionEvent {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmissionAuthorityEvidence {
+    pub source: String,
     pub capability_ref: String,
     pub authorized: bool,
     pub grant_ref: Option<String>,
+    pub request_ref: String,
+    pub proofset_ref: String,
+    pub ucan_verification_receipt_refs: Vec<String>,
+    pub derived_grant_refs: Vec<String>,
+    pub basalt_enforcement_receipt_ref: String,
+    pub basalt_enforcement_receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

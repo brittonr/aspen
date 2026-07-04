@@ -79,6 +79,16 @@ pub fn receipt_value(check: &Check) -> IoValue {
         ("capability-gate", check.capability_gate_ref.as_str()),
         ("capability-authority-preflight", check.capability_authority_preflight_ref.as_str()),
         ("ucan-proofset", check.capability_proofset_ref.as_str()),
+        (
+            "ucan-verification-receipts",
+            check.capability_ucan_verification_receipts_ref.as_str(),
+        ),
+        ("derived-grants", check.capability_derived_grants_ref.as_str()),
+        (
+            "basalt-enforcement-receipts",
+            check.capability_authority_receipts_ref.as_str(),
+        ),
+        ("authority-requests", check.capability_request_refs_ref.as_str()),
         ("chain-link", check.chain_evidence.link_ref.as_str()),
         ("chain-anchor", check.chain_evidence.anchor_ref.as_str()),
         ("chain-verify-receipt", check.chain_evidence.verify_receipt_ref.as_str()),

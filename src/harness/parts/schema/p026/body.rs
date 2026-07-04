@@ -61,6 +61,7 @@ fn report_artifact_refs(
         .executor_preflights
         .as_ref()
         .ok_or_else(|| MoltenError::invalid_harness("report repro bundle missing executor preflight evidence"))?;
+    let authority_refs = report_authority_aggregate_refs(report)?;
     let mut refs = vec![
         ("report".to_string(), report.report_ref.clone()),
         ("suite".to_string(), report.suite_ref.clone()),
@@ -83,6 +84,16 @@ fn report_artifact_refs(
         ("capability-gate".to_string(), canonical_hash(&capability_gate.value)?),
         ("capability-authority-preflight".to_string(), capability_gate.authority_preflight_ref.clone()),
         ("ucan-proofset".to_string(), capability_gate.proofset_ref.clone()),
+        (
+            "ucan-verification-receipts".to_string(),
+            authority_refs.ucan_verification_receipts_ref,
+        ),
+        ("derived-grants".to_string(), authority_refs.derived_grants_ref),
+        (
+            "basalt-enforcement-receipts".to_string(),
+            authority_refs.authority_receipts_ref,
+        ),
+        ("authority-requests".to_string(), authority_refs.request_refs_ref),
     ];
     if let Some(gate_receipt_ref) = gate_receipt_ref {
         refs.push(("gate-receipt".to_string(), gate_receipt_ref.to_string()));
@@ -92,6 +103,53 @@ fn report_artifact_refs(
         refs.push(("redaction-gate".to_string(), redaction_gate_ref.to_string()));
     }
     Ok(refs)
+}
+
+struct ReportAuthorityAggregateRefs {
+    ucan_verification_receipts_ref: String,
+    derived_grants_ref: String,
+    authority_receipts_ref: String,
+    request_refs_ref: String,
+}
+
+fn report_authority_aggregate_refs(report: &Report) -> Result<ReportAuthorityAggregateRefs> {
+    let mut ucan_verification_receipt_refs: Vec<String> = Vec::new();
+    let mut derived_grant_refs: Vec<String> = Vec::new();
+    let mut authority_receipt_refs: Vec<String> = Vec::new();
+    let mut request_refs: Vec<String> = Vec::new();
+    for observation in &report.observations {
+        for event in &observation.events {
+            if event_boundary(event) != EventBoundary::PolicyDecision {
+                continue;
+            }
+            let admission = parse_admission_decision_event(event)?;
+            let Some(authority) = admission.authority else {
+                continue;
+            };
+            ucan_verification_receipt_refs.extend(authority.ucan_verification_receipt_refs);
+            derived_grant_refs.extend(authority.derived_grant_refs);
+            authority_receipt_refs.push(authority.basalt_enforcement_receipt_ref);
+            request_refs.push(authority.request_ref);
+        }
+    }
+    Ok(ReportAuthorityAggregateRefs {
+        ucan_verification_receipts_ref: canonical_hash(&record(
+            "ucan-verification-receipts",
+            vec![sequence(ucan_verification_receipt_refs.as_slice().iter().map(string).collect())],
+        ))?,
+        derived_grants_ref: canonical_hash(&record(
+            "derived-grants",
+            vec![sequence(derived_grant_refs.as_slice().iter().map(string).collect())],
+        ))?,
+        authority_receipts_ref: canonical_hash(&record(
+            "basalt-enforcement-receipts",
+            vec![sequence(authority_receipt_refs.as_slice().iter().map(string).collect())],
+        ))?,
+        request_refs_ref: canonical_hash(&record(
+            "authority-requests",
+            vec![sequence(request_refs.as_slice().iter().map(string).collect())],
+        ))?,
+    })
 }
 
 const FORBIDDEN_REDACTION_MARKERS: &[&str] = &[

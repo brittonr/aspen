@@ -1,3 +1,10 @@
+type IoValue = preserves::IOValue;
+
+const BASALT_UCAN_AUTHORITY_RECEIPT_SCHEMA: &str = "molten.runtime.basalt-ucan-authority-receipt.v1";
+const DECISION_PASS: &str = "pass";
+const DECISION_DENY: &str = "deny";
+const BASALT_AUTHORITY_COMPONENT: &str = "basalt-contract";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -21,6 +28,47 @@ pub struct BasaltRequest {
     pub resource: String,
     pub ability: String,
     pub ucan_ref: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct VerifiedBasaltGrant {
+    pub grant_ref: String,
+    pub verification_receipt_ref: String,
+    pub holder_ref: String,
+    pub session_ref: String,
+    pub context_ref: String,
+    pub resource: String,
+    pub ability: String,
+    pub scope: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct BasaltUcanAuthorityInput {
+    pub contract_id: String,
+    pub resource: String,
+    pub ability: String,
+    pub holder_ref: String,
+    pub session_ref: String,
+    pub context_ref: String,
+    pub request_ref: String,
+    pub basalt_policy_ref: String,
+    pub basalt_policy_source_ref: String,
+    pub basalt_policy_export_ref: String,
+    pub proofset_ref: String,
+    pub ucan_verification_receipt_refs: Vec<String>,
+    pub verified_grants: Vec<VerifiedBasaltGrant>,
+    pub policy_allows: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BasaltUcanAuthorityReceipt {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub derived_grant_refs: Vec<String>,
+    pub value: IoValue,
+    pub receipt_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,14 +123,156 @@ pub fn evaluate_basalt_request(
     expected_ability: &str,
 ) -> std::result::Result<(), super::RuntimeBoundaryError> {
     crate::preserves_rail::validate_content_ref(&request.ucan_ref)
-        .map_err(|error| super::RuntimeBoundaryError::invalid_input("basalt-contract", error.to_string()))?;
+        .map_err(|error| super::RuntimeBoundaryError::invalid_input(BASALT_AUTHORITY_COMPONENT, error.to_string()))?;
     if request.resource != expected_resource || request.ability != expected_ability {
         return Err(super::RuntimeBoundaryError::denied_operation(
-            "basalt-contract",
+            BASALT_AUTHORITY_COMPONENT,
             format!("request does not match resource={expected_resource} ability={expected_ability}"),
         ));
     }
+    Err(super::RuntimeBoundaryError::denied_operation(
+        BASALT_AUTHORITY_COMPONENT,
+        "bare ucan_ref is not current authority; verified grant refs and UCAN verification receipt refs are required",
+    ))
+}
+
+pub fn evaluate_basalt_ucan_authority(
+    input: &BasaltUcanAuthorityInput,
+) -> std::result::Result<BasaltUcanAuthorityReceipt, super::RuntimeBoundaryError> {
+    validate_basalt_ucan_input(input)?;
+    let diagnostics = basalt_ucan_diagnostics(input);
+    let decision = if diagnostics.is_empty() {
+        DECISION_PASS
+    } else {
+        DECISION_DENY
+    };
+    let derived_grant_refs = input.verified_grants.iter().map(|grant| grant.grant_ref.clone()).collect::<Vec<_>>();
+    let value = basalt_ucan_receipt_value(input, decision, &diagnostics, &derived_grant_refs);
+    let receipt_ref = crate::preserves_rail::canonical_hash(&value)
+        .map_err(|error| super::RuntimeBoundaryError::invalid_input(BASALT_AUTHORITY_COMPONENT, error.to_string()))?;
+    Ok(BasaltUcanAuthorityReceipt {
+        decision: decision.to_string(),
+        diagnostics,
+        derived_grant_refs,
+        value,
+        receipt_ref,
+    })
+}
+
+fn validate_basalt_ucan_input(
+    input: &BasaltUcanAuthorityInput,
+) -> std::result::Result<(), super::RuntimeBoundaryError> {
+    validate_ref(&input.holder_ref)?;
+    validate_ref(&input.session_ref)?;
+    validate_ref(&input.context_ref)?;
+    validate_ref(&input.request_ref)?;
+    validate_ref(&input.basalt_policy_ref)?;
+    validate_ref(&input.basalt_policy_source_ref)?;
+    validate_ref(&input.basalt_policy_export_ref)?;
+    validate_ref(&input.proofset_ref)?;
+    validate_refs(&input.ucan_verification_receipt_refs)?;
+    for grant in &input.verified_grants {
+        validate_ref(&grant.grant_ref)?;
+        validate_ref(&grant.verification_receipt_ref)?;
+        validate_ref(&grant.holder_ref)?;
+        validate_ref(&grant.session_ref)?;
+        validate_ref(&grant.context_ref)?;
+    }
     Ok(())
+}
+
+fn validate_ref(reference: &str) -> std::result::Result<(), super::RuntimeBoundaryError> {
+    crate::preserves_rail::validate_content_ref(reference)
+        .map_err(|error| super::RuntimeBoundaryError::invalid_input(BASALT_AUTHORITY_COMPONENT, error.to_string()))
+}
+
+fn validate_refs(refs: &[String]) -> std::result::Result<(), super::RuntimeBoundaryError> {
+    for reference in refs {
+        validate_ref(reference)?;
+    }
+    Ok(())
+}
+
+fn basalt_ucan_diagnostics(input: &BasaltUcanAuthorityInput) -> Vec<String> {
+    let mut diagnostics = Vec::new();
+    if input.ucan_verification_receipt_refs.is_empty() {
+        diagnostics.push("missing UCAN verification receipt refs".to_string());
+    }
+    if input.verified_grants.is_empty() {
+        diagnostics.push("missing verified UCAN-derived grants".to_string());
+    }
+    if !input.policy_allows {
+        diagnostics.push("Basalt policy denied requested resource or ability".to_string());
+    }
+    for grant in &input.verified_grants {
+        if !input
+            .ucan_verification_receipt_refs
+            .iter()
+            .any(|receipt_ref| receipt_ref == &grant.verification_receipt_ref)
+        {
+            diagnostics.push(format!("grant {} is not bound to a supplied UCAN verification receipt", grant.grant_ref));
+        }
+        push_authority_mismatch(&mut diagnostics, "holder", &grant.holder_ref, &input.holder_ref);
+        push_authority_mismatch(&mut diagnostics, "session", &grant.session_ref, &input.session_ref);
+        push_authority_mismatch(&mut diagnostics, "context", &grant.context_ref, &input.context_ref);
+        push_authority_mismatch(&mut diagnostics, "resource", &grant.resource, &input.resource);
+        push_authority_mismatch(&mut diagnostics, "ability", &grant.ability, &input.ability);
+    }
+    diagnostics
+}
+
+fn push_authority_mismatch(diagnostics: &mut Vec<String>, label: &str, actual: &str, expected: &str) {
+    if actual != expected {
+        diagnostics.push(format!("verified grant {label} mismatch expected {expected} actual {actual}"));
+    }
+}
+
+fn basalt_ucan_receipt_value(
+    input: &BasaltUcanAuthorityInput,
+    decision: &str,
+    diagnostics: &[String],
+    derived_grant_refs: &[String],
+) -> IoValue {
+    crate::preserves_rail::record("basalt-ucan-authority-receipt-v1", vec![
+        crate::preserves_rail::string(BASALT_UCAN_AUTHORITY_RECEIPT_SCHEMA),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(decision)]),
+        crate::preserves_rail::record("contract-id", vec![crate::preserves_rail::string(&input.contract_id)]),
+        crate::preserves_rail::record("resource", vec![crate::preserves_rail::string(&input.resource)]),
+        crate::preserves_rail::record("ability", vec![crate::preserves_rail::string(&input.ability)]),
+        crate::preserves_rail::record("holder-ref", vec![crate::preserves_rail::string(&input.holder_ref)]),
+        crate::preserves_rail::record("session-ref", vec![crate::preserves_rail::string(&input.session_ref)]),
+        crate::preserves_rail::record("context-ref", vec![crate::preserves_rail::string(&input.context_ref)]),
+        crate::preserves_rail::record("request-ref", vec![crate::preserves_rail::string(&input.request_ref)]),
+        crate::preserves_rail::record("basalt-policy-ref", vec![crate::preserves_rail::string(
+            &input.basalt_policy_ref,
+        )]),
+        crate::preserves_rail::record("basalt-policy-source-ref", vec![crate::preserves_rail::string(
+            &input.basalt_policy_source_ref,
+        )]),
+        crate::preserves_rail::record("basalt-policy-export-ref", vec![crate::preserves_rail::string(
+            &input.basalt_policy_export_ref,
+        )]),
+        crate::preserves_rail::record("ucan-proofset-ref", vec![crate::preserves_rail::string(&input.proofset_ref)]),
+        string_sequence_record("ucan-verification-receipt-refs", &input.ucan_verification_receipt_refs),
+        string_sequence_record("derived-grant-refs", derived_grant_refs),
+        string_sequence_record("diagnostics", diagnostics),
+        crate::preserves_rail::record("basalt-enforcement-result", vec![crate::preserves_rail::string(
+            if input.policy_allows {
+                DECISION_PASS
+            } else {
+                DECISION_DENY
+            },
+        )]),
+        crate::preserves_rail::record("evidence-only", vec![crate::preserves_rail::string(
+            "authority-receipt-does-not-grant-future-authority",
+        )]),
+    ])
+}
+
+fn string_sequence_record(label: &'static str, values: &[String]) -> IoValue {
+    crate::preserves_rail::record(label, vec![crate::preserves_rail::sequence(
+        values.iter().map(crate::preserves_rail::string).collect(),
+    )])
 }
 
 pub fn policy_gate_receipt(
@@ -150,6 +340,38 @@ pub fn integration_evidence(
 
 #[cfg(test)]
 mod tests {
+    fn authority_input(resource: &str, ability: &str, policy_allows: bool) -> super::BasaltUcanAuthorityInput {
+        super::BasaltUcanAuthorityInput {
+            contract_id: "contract:send".to_string(),
+            resource: resource.to_string(),
+            ability: ability.to_string(),
+            holder_ref: test_ref("holder"),
+            session_ref: test_ref("session"),
+            context_ref: test_ref("context"),
+            request_ref: test_ref("request"),
+            basalt_policy_ref: test_ref("policy"),
+            basalt_policy_source_ref: test_ref("policy-source"),
+            basalt_policy_export_ref: test_ref("policy-export"),
+            proofset_ref: test_ref("proofset"),
+            ucan_verification_receipt_refs: vec![test_ref("ucan-verification")],
+            verified_grants: vec![super::VerifiedBasaltGrant {
+                grant_ref: test_ref("grant"),
+                verification_receipt_ref: test_ref("ucan-verification"),
+                holder_ref: test_ref("holder"),
+                session_ref: test_ref("session"),
+                context_ref: test_ref("context"),
+                resource: resource.to_string(),
+                ability: ability.to_string(),
+                scope: "topic".to_string(),
+            }],
+            policy_allows,
+        }
+    }
+
+    fn test_ref(label: &str) -> String {
+        crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
+    }
+
     fn envelope(capability: &str) -> crate::runtime::Envelope {
         crate::runtime::Envelope::new(crate::runtime::EnvelopeInput {
             sender: crate::runtime::ActorId::parse("actor:policy").expect("sender"),
@@ -172,17 +394,37 @@ mod tests {
     }
 
     #[test]
-    fn basalt_request_matches_resource_and_ability() {
+    fn basalt_request_requires_verified_authority() {
         let request = super::BasaltRequest {
             contract_id: "contract:send".to_string(),
             resource: "subject:ready".to_string(),
             ability: "send".to_string(),
             ucan_ref: crate::preserves_rail::content_ref_from_bytes(b"ucan"),
         };
-        super::evaluate_basalt_request(&request, "subject:ready", "send").expect("request admitted");
+        let error =
+            super::evaluate_basalt_request(&request, "subject:ready", "send").expect_err("bare UCAN ref denied");
+        assert_eq!(error.category(), crate::runtime::RuntimeErrorCategory::DeniedOperation);
+        assert!(error.to_string().contains("bare ucan_ref"));
         let error =
             super::evaluate_basalt_request(&request, "subject:other", "send").expect_err("wrong resource denied");
         assert_eq!(error.category(), crate::runtime::RuntimeErrorCategory::DeniedOperation);
+    }
+
+    #[test]
+    fn basalt_ucan_authority_admits_verified_grant_and_denies_mismatches() {
+        let input = authority_input("subject:ready", "send", true);
+        let receipt = super::evaluate_basalt_ucan_authority(&input).expect("authority receipt");
+        assert_eq!(receipt.decision, "pass");
+        assert!(receipt.diagnostics.is_empty());
+        assert_eq!(receipt.receipt_ref, crate::preserves_rail::canonical_hash(&receipt.value).expect("hash"));
+
+        let mut denied = input.clone();
+        denied.policy_allows = false;
+        denied.verified_grants[0].resource = "subject:other".to_string();
+        let receipt = super::evaluate_basalt_ucan_authority(&denied).expect("deny receipt");
+        assert_eq!(receipt.decision, "deny");
+        assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("Basalt policy denied")));
+        assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("resource mismatch")));
     }
 
     #[test]

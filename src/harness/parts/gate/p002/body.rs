@@ -17,6 +17,17 @@ struct EvidenceRefs {
     capability_gate_ref: String,
     capability_authority_preflight_ref: String,
     capability_proofset_ref: String,
+    capability_ucan_verification_receipts_ref: String,
+    capability_derived_grants_ref: String,
+    capability_authority_receipts_ref: String,
+    capability_request_refs_ref: String,
+}
+
+struct AuthorityAggregateRefs {
+    ucan_verification_receipts_ref: String,
+    derived_grants_ref: String,
+    authority_receipts_ref: String,
+    request_refs_ref: String,
 }
 
 fn check_report(value: &IoValue, artifact_kind: String, artifact_ref: Option<String>) -> Result<Check> {
@@ -67,6 +78,10 @@ fn check_report(value: &IoValue, artifact_kind: String, artifact_ref: Option<Str
         capability_gate_ref: refs.capability_gate_ref,
         capability_authority_preflight_ref: refs.capability_authority_preflight_ref,
         capability_proofset_ref: refs.capability_proofset_ref,
+        capability_ucan_verification_receipts_ref: refs.capability_ucan_verification_receipts_ref,
+        capability_derived_grants_ref: refs.capability_derived_grants_ref,
+        capability_authority_receipts_ref: refs.capability_authority_receipts_ref,
+        capability_request_refs_ref: refs.capability_request_refs_ref,
         redaction_policy_ref: None,
         redaction_gate_ref: None,
         observations: validation.observations as u64,
@@ -94,6 +109,7 @@ fn evidence_refs(report: &super::schema::Report) -> Result<EvidenceRefs> {
         .executor_preflights
         .as_ref()
         .ok_or_else(|| MoltenError::invalid_harness("missing executor preflight evidence"))?;
+    let authority_refs = authority_aggregate_refs(&report.observations)?;
     Ok(EvidenceRefs {
         executor_preflights_ref: canonical_hash(&preflights.value)?,
         executor_execution_receipts_ref: executor_execution_receipts_ref(&report.observations)?,
@@ -112,6 +128,50 @@ fn evidence_refs(report: &super::schema::Report) -> Result<EvidenceRefs> {
         capability_gate_ref: canonical_hash(&capability.value)?,
         capability_authority_preflight_ref: capability.authority_preflight_ref.clone(),
         capability_proofset_ref: capability.proofset_ref.clone(),
+        capability_ucan_verification_receipts_ref: authority_refs.ucan_verification_receipts_ref,
+        capability_derived_grants_ref: authority_refs.derived_grants_ref,
+        capability_authority_receipts_ref: authority_refs.authority_receipts_ref,
+        capability_request_refs_ref: authority_refs.request_refs_ref,
+    })
+}
+
+fn authority_aggregate_refs(observations: &[super::schema::Observation]) -> Result<AuthorityAggregateRefs> {
+    let mut ucan_verification_receipt_refs: Vec<String> = Vec::new();
+    let mut derived_grant_refs: Vec<String> = Vec::new();
+    let mut authority_receipt_refs: Vec<String> = Vec::new();
+    let mut request_refs: Vec<String> = Vec::new();
+    for observation in observations {
+        for event in &observation.events {
+            if super::schema::event_boundary(event) != super::schema::EventBoundary::PolicyDecision {
+                continue;
+            }
+            let admission = super::schema::parse_admission_decision_event(event)?;
+            let Some(authority) = admission.authority else {
+                continue;
+            };
+            ucan_verification_receipt_refs.extend(authority.ucan_verification_receipt_refs);
+            derived_grant_refs.extend(authority.derived_grant_refs);
+            authority_receipt_refs.push(authority.basalt_enforcement_receipt_ref);
+            request_refs.push(authority.request_ref);
+        }
+    }
+    Ok(AuthorityAggregateRefs {
+        ucan_verification_receipts_ref: canonical_hash(&record(
+            "ucan-verification-receipts",
+            vec![sequence(ucan_verification_receipt_refs.as_slice().iter().map(string).collect())],
+        ))?,
+        derived_grants_ref: canonical_hash(&record(
+            "derived-grants",
+            vec![sequence(derived_grant_refs.as_slice().iter().map(string).collect())],
+        ))?,
+        authority_receipts_ref: canonical_hash(&record(
+            "basalt-enforcement-receipts",
+            vec![sequence(authority_receipt_refs.as_slice().iter().map(string).collect())],
+        ))?,
+        request_refs_ref: canonical_hash(&record(
+            "authority-requests",
+            vec![sequence(request_refs.as_slice().iter().map(string).collect())],
+        ))?,
     })
 }
 

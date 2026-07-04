@@ -101,13 +101,24 @@ pub fn parse_capability_gate(value: &IoValue) -> Result<CapabilityGateEvidence> 
     require_capability_gate_check(&checks, "basalt-authority-preflight")?;
     require_capability_gate_check(&checks, "basalt-authority-receipt")?;
     require_capability_gate_check(&checks, "capability-proofset-binding")?;
+    require_capability_gate_check(&checks, "ucan-verification-receipt-binding")?;
+    require_capability_gate_check(&checks, "basalt-enforcement-receipt-binding")?;
     require_capability_gate_check(&checks, "grant-ref-binding")?;
+    require_capability_gate_check(&checks, "derived-grant-ref-binding")?;
+    require_capability_gate_check(&checks, "fixture-authority-evidence-only")?;
+    let derived_grant_refs = if proofset.derived_grant_refs.is_empty() {
+        authority_preflight.grant_refs.clone()
+    } else {
+        proofset.derived_grant_refs.clone()
+    };
     Ok(CapabilityGateEvidence {
         value: value.clone(),
         capability_ref,
         authority_preflight_ref: authority_preflight.receipt_ref,
         proofset_ref: proofset.proofset_ref,
         grant_refs: authority_preflight.grant_refs,
+        ucan_verification_receipt_refs: proofset.verification_receipt_refs,
+        derived_grant_refs,
         checks,
     })
 }
@@ -138,6 +149,13 @@ pub fn validate_capability_gate_evidence(
     let expected_grant_refs = capability_grant_refs(&suite.capabilities)?;
     if capability_gate.grant_refs != expected_grant_refs {
         return Err(MoltenError::invalid_harness("capability gate grant refs do not match embedded capabilities"));
+    }
+    if capability_gate.ucan_verification_receipt_refs.is_empty()
+        && capability_gate.derived_grant_refs != expected_grant_refs
+    {
+        return Err(MoltenError::invalid_harness(
+            "local fixture derived grant refs do not match embedded capabilities",
+        ));
     }
     let expected_gate = capability_gate_value(&suite.capabilities)?;
     let expected_gate_ref = canonical_hash(&expected_gate)?;
@@ -172,6 +190,8 @@ struct BasaltAuthorityPreflightEvidence {
 
 struct UcanProofsetEvidence {
     proofset_ref: String,
+    verification_receipt_refs: Vec<String>,
+    derived_grant_refs: Vec<String>,
 }
 
 const CAPABILITY_CONTRACT_ID: &str = "molten.harness.capability-context";

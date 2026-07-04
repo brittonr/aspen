@@ -99,7 +99,15 @@ fn parse_basalt_authority_preflight_evidence(value: &Value<IoValue>) -> Result<B
 
 fn parse_ucan_proofset_evidence(value: &Value<IoValue>) -> Result<UcanProofsetEvidence> {
     let value = value_to_iovalue(value);
-    let proofset = simple_record(&value, "ucan-proofset-v1", 2)?;
+    let proofset = value
+        .collect_simple_record("ucan-proofset-v1", None)
+        .ok_or_else(|| MoltenError::invalid_harness("expected UCAN proofset evidence"))?;
+    let arity = proofset.fields_iter().count();
+    if arity != UCAN_PROOFSET_EMPTY_ARITY && arity != UCAN_PROOFSET_VERIFIED_ARITY {
+        return Err(MoltenError::invalid_harness(format!(
+            "expected UCAN proofset arity {UCAN_PROOFSET_EMPTY_ARITY} or {UCAN_PROOFSET_VERIFIED_ARITY}, got {arity}"
+        )));
+    }
     let schema = required_string(&proofset[0], "UCAN proofset schema")?;
     if schema != crate::preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
@@ -107,14 +115,98 @@ fn parse_ucan_proofset_evidence(value: &Value<IoValue>) -> Result<UcanProofsetEv
             crate::preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA
         )));
     }
-    let proofs = required_sequence(&proofset[1], "UCAN proofset refs")?;
-    if !proofs.is_empty() {
+    let proof_values = required_sequence(&proofset[1], "UCAN proofset refs")?;
+    let material_value = record("ucan-proofset-v1", vec![
+        string(crate::preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA),
+        value_to_iovalue(&proofset[1]),
+    ]);
+    let proofset_ref = canonical_hash(&material_value)?;
+    if proof_values.is_empty() {
+        return Ok(UcanProofsetEvidence {
+            proofset_ref,
+            verification_receipt_refs: Vec::new(),
+            derived_grant_refs: Vec::new(),
+        });
+    }
+    if arity != UCAN_PROOFSET_VERIFIED_ARITY {
         return Err(MoltenError::invalid_harness(
-            "UCAN proof refs require Basalt/UCAN proof validation and are disabled in local harness capability gates",
+            "UCAN proof refs require matching UCAN verification receipts bound to the proofset",
         ));
     }
+    let proof_refs = parse_ucan_proof_refs(&proofset[1])?;
+    let receipts = parse_ucan_verification_receipts(&proofset[2], &proofset_ref, &proof_refs)?;
     Ok(UcanProofsetEvidence {
-        proofset_ref: canonical_hash(&value)?,
+        proofset_ref,
+        verification_receipt_refs: receipts.verification_receipt_refs,
+        derived_grant_refs: receipts.derived_grant_refs,
+    })
+}
+
+const UCAN_PROOFSET_EMPTY_ARITY: usize = 2;
+const UCAN_PROOFSET_VERIFIED_ARITY: usize = 3;
+
+struct ParsedUcanVerificationReceipts {
+    verification_receipt_refs: Vec<String>,
+    derived_grant_refs: Vec<String>,
+}
+
+fn parse_ucan_proof_refs(value: &Value<IoValue>) -> Result<Vec<String>> {
+    let proofs = required_sequence(value, "UCAN proofset refs")?;
+    let mut refs = Vec::with_capacity(proofs.len());
+    for proof in proofs.as_ref() {
+        let proof_value = value_to_iovalue(proof);
+        let proof_ref = if let Some(record) = proof_value.collect_simple_record("proof-ref", Some(1)) {
+            required_hash(&record[0], "UCAN proof ref")?
+        } else {
+            required_hash(proof, "UCAN proof ref")?
+        };
+        refs.push(proof_ref);
+    }
+    Ok(refs)
+}
+
+fn parse_ucan_verification_receipts(
+    value: &Value<IoValue>,
+    proofset_ref: &str,
+    proof_refs: &[String],
+) -> Result<ParsedUcanVerificationReceipts> {
+    let receipts = required_sequence(value, "UCAN verification receipts")?;
+    if receipts.is_empty() {
+        return Err(MoltenError::invalid_harness(
+            "non-empty UCAN proofset requires at least one verification receipt",
+        ));
+    }
+    let mut verification_receipt_refs = Vec::with_capacity(receipts.len());
+    let mut derived_grant_refs = Vec::new();
+    for receipt in receipts.as_ref() {
+        let receipt_value = value_to_iovalue(receipt);
+        let parsed = crate::capability_tokens::parse_ucan_verification_receipt_value(&receipt_value)?;
+        if parsed.decision != "pass" {
+            return Err(MoltenError::invalid_harness("UCAN verification receipt must pass for harness proofset"));
+        }
+        if parsed.proofset_ref != proofset_ref {
+            return Err(MoltenError::invalid_harness(
+                "UCAN verification receipt proofset ref does not match harness proofset",
+            ));
+        }
+        for proof_ref in proof_refs {
+            if !parsed.proof_refs.as_slice().iter().any(|candidate| candidate == proof_ref) {
+                return Err(MoltenError::invalid_harness(
+                    "UCAN verification receipt does not bind every harness proof ref",
+                ));
+            }
+        }
+        if parsed.derived_grant_refs.is_empty() {
+            return Err(MoltenError::invalid_harness(
+                "UCAN verification receipt must derive at least one grant ref",
+            ));
+        }
+        verification_receipt_refs.push(parsed.receipt_ref);
+        derived_grant_refs.extend(parsed.derived_grant_refs);
+    }
+    Ok(ParsedUcanVerificationReceipts {
+        verification_receipt_refs,
+        derived_grant_refs,
     })
 }
 
@@ -128,11 +220,65 @@ pub fn admission_authority_evidence(
         .as_ref()
         .map(|grant| canonical_hash(&capability_grant_value(grant)))
         .transpose()?;
+    let capability_ref = canonical_hash(&capabilities_value(capabilities))?;
+    let request_ref = canonical_hash(&admission_request_value(request))?;
+    let proofset_ref = canonical_hash(&ucan_proofset_value())?;
+    let derived_grant_refs = grant_ref.iter().cloned().collect::<Vec<_>>();
+    let enforcement_value = harness_basalt_authority_receipt_value(HarnessBasaltAuthorityReceiptInput {
+        source: "local-fixture",
+        capability_ref: &capability_ref,
+        request_ref: &request_ref,
+        proofset_ref: &proofset_ref,
+        verification_receipt_refs: &[],
+        derived_grant_refs: &derived_grant_refs,
+        decision: if authorization.authorized { "pass" } else { "deny" },
+        diagnostic: if authorization.authorized {
+            "local fixture grant admitted as harness evidence candidate"
+        } else {
+            "missing local fixture grant; verified UCAN/Basalt authority absent"
+        },
+    });
+    let basalt_enforcement_receipt_ref = canonical_hash(&enforcement_value)?;
     Ok(AdmissionAuthorityEvidence {
-        capability_ref: canonical_hash(&capabilities_value(capabilities))?,
+        source: "local-fixture".to_string(),
+        capability_ref,
         authorized: authorization.authorized,
         grant_ref,
+        request_ref,
+        proofset_ref,
+        ucan_verification_receipt_refs: Vec::new(),
+        derived_grant_refs,
+        basalt_enforcement_receipt_ref,
+        basalt_enforcement_receipt_value: enforcement_value,
     })
+}
+
+struct HarnessBasaltAuthorityReceiptInput<'a> {
+    source: &'a str,
+    capability_ref: &'a str,
+    request_ref: &'a str,
+    proofset_ref: &'a str,
+    verification_receipt_refs: &'a [String],
+    derived_grant_refs: &'a [String],
+    decision: &'a str,
+    diagnostic: &'a str,
+}
+
+fn harness_basalt_authority_receipt_value(input: HarnessBasaltAuthorityReceiptInput<'_>) -> IoValue {
+    record("basalt-ucan-authority-receipt-v1", vec![
+        string("molten.runtime.basalt-ucan-authority-receipt.v1"),
+        record("decision", vec![string(input.decision)]),
+        record("source", vec![string(input.source)]),
+        record("capability-ref", vec![string(input.capability_ref)]),
+        record("request-ref", vec![string(input.request_ref)]),
+        record("ucan-proofset-ref", vec![string(input.proofset_ref)]),
+        record("ucan-verification-receipt-refs", vec![sequence(
+            input.verification_receipt_refs.iter().map(string).collect(),
+        )]),
+        record("derived-grant-refs", vec![sequence(input.derived_grant_refs.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(vec![string(input.diagnostic)])]),
+        record("evidence-only", vec![string("harness-fixture-does-not-grant-production-authority")]),
+    ])
 }
 
 pub fn parse_capabilities(value: &IoValue) -> Result<crate::runtime::CapabilityContext> {
@@ -179,7 +325,11 @@ fn capability_gate_checks_value() -> IoValue {
             "basalt-authority-preflight",
             "basalt-authority-receipt",
             "capability-proofset-binding",
+            "ucan-verification-receipt-binding",
+            "basalt-enforcement-receipt-binding",
             "grant-ref-binding",
+            "derived-grant-ref-binding",
+            "fixture-authority-evidence-only",
         ]
         .iter()
         .map(|name| record("check", vec![string(*name), string("pass")]))

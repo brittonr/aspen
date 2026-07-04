@@ -80,10 +80,21 @@ pub fn admission_decision_event_value_with_authority(
 
 fn admission_authority_value(authority: &AdmissionAuthorityEvidence) -> IoValue {
     record("authority", vec![
+        record("source", vec![string(&authority.source)]),
         record("capability-ref", vec![string(&authority.capability_ref)]),
         record("authorized", vec![bool_value(authority.authorized)]),
         optional_string_value(authority.grant_ref.as_deref()),
+        record("request-ref", vec![string(&authority.request_ref)]),
+        record("ucan-proofset-ref", vec![string(&authority.proofset_ref)]),
+        authority_ref_sequence("ucan-verification-receipt-refs", &authority.ucan_verification_receipt_refs),
+        authority_ref_sequence("derived-grant-refs", &authority.derived_grant_refs),
+        record("basalt-enforcement-receipt-ref", vec![string(&authority.basalt_enforcement_receipt_ref)]),
+        record("basalt-enforcement-receipt", vec![authority.basalt_enforcement_receipt_value.clone()]),
     ])
+}
+
+fn authority_ref_sequence(label: &'static str, refs: &[String]) -> IoValue {
+    record(label, vec![sequence(refs.iter().map(string).collect())])
 }
 
 fn admission_request_value(request: &super::core::AdmissionRequest) -> IoValue {
