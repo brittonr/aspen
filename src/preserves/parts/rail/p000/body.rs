@@ -248,6 +248,7 @@ pub const PLUGIN_INSTALL_RECEIPT_SCHEMA: &str = "molten.plugin.install-receipt.v
 pub const PLUGIN_PERMISSION_RECEIPT_SCHEMA: &str = "molten.plugin.permission-receipt.v1";
 pub const PLUGIN_LIFECYCLE_RECEIPT_SCHEMA: &str = "molten.plugin.lifecycle-receipt.v1";
 pub const PLUGIN_HOSTCALL_RECEIPT_SCHEMA: &str = "molten.plugin.hostcall-receipt.v1";
+pub const PLUGIN_CAPABILITY_GRANT_SCHEMA: &str = "molten.plugin.capability-grant.v1";
 pub const PLUGIN_HEALTH_RECEIPT_SCHEMA: &str = "molten.plugin.health-receipt.v1";
 pub const PLUGIN_UPGRADE_RECEIPT_SCHEMA: &str = "molten.plugin.upgrade-receipt.v1";
 pub const PLUGIN_REMOVAL_RECEIPT_SCHEMA: &str = "molten.plugin.removal-receipt.v1";

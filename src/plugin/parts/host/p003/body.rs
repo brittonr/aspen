@@ -192,10 +192,12 @@ fn call_step(manifest_value: &IoValue, seed: &SeedRefs) -> Result<PluginHostcall
         executor_receipt_ref: &seed.executor_ref,
         effect_receipt_ref: &seed.effect_receipt_ref,
         authority_refs: std::slice::from_ref(&seed.authority_ref),
+        capability_grants: &[],
         resource_refs: std::slice::from_ref(&seed.resource_ref),
         extension_contracts: &[],
         input_schema_ref: None,
         output_schema_ref: None,
+        evaluation_turn: PLUGIN_INITIAL_TURN,
     })?;
     parse_plugin_hostcall_receipt(&value)
 }
@@ -265,6 +267,15 @@ pub fn plugin_summary(value: &IoValue) -> Result<String> {
 }
 
 fn core_summary(value: &IoValue) -> Option<String> {
+    if let Ok(grant) = parse_plugin_capability_grant(value) {
+        return Some(format!(
+            "plugin capability grant ref={} plugin={} operation={} revoked={} (summary is non-normative)",
+            grant.grant_ref,
+            grant.plugin_id,
+            grant.operation,
+            grant.revoked
+        ));
+    }
     if let Ok(manifest) = parse_plugin_manifest(value) {
         return Some(format!(
             "plugin manifest ref={} id={} artifact={} hostcalls={} lifecycle={} (summary is non-normative)",

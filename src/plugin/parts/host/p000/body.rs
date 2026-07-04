@@ -14,13 +14,22 @@ const MAX_PLUGIN_CHECKS: usize = 64;
 const MAX_PLUGIN_HOSTCALL_DESCRIPTORS: usize = 128;
 const PLUGIN_MANIFEST_BASE_ARITY: usize = 12;
 const PLUGIN_MANIFEST_EXTENSION_ARITY: usize = 13;
-const PLUGIN_HOSTCALL_RECEIPT_ARITY: usize = 12;
+const PLUGIN_HOSTCALL_RECEIPT_ARITY: usize = 14;
+const PLUGIN_CAPABILITY_GRANT_ARITY: usize = 13;
+const PLUGIN_CAPABILITY_GRANT_SUBJECT_ARITY: usize = 3;
+const PLUGIN_CAPABILITY_GRANT_HOSTCALL_ARITY: usize = 4;
+const PLUGIN_CAPABILITY_GRANT_RESOURCE_ARITY: usize = 2;
+const PLUGIN_CAPABILITY_GRANT_EFFECTS_ARITY: usize = 2;
+const PLUGIN_CAPABILITY_GRANT_REVOCATION_ARITY: usize = 2;
+const PLUGIN_CAPABILITY_GRANT_ATTENUATION_ARITY: usize = 5;
+const PLUGIN_CAPABILITY_GRANT_VALIDITY_ARITY: usize = 2;
 const PLUGIN_EXTENSION_CONTRACT_ARITY: usize = 11;
 const PLUGIN_HOSTCALL_DESCRIPTOR_ARITY: usize = 9;
 const PLUGIN_CONFORMANCE_ARITY: usize = 3;
 const PLUGIN_NEGOTIATION_RECEIPT_ARITY: usize = 9;
 const PLUGIN_COMPATIBILITY_RECEIPT_ARITY: usize = 11;
 const PLUGIN_SEMVER_PARTS: usize = 3;
+const PLUGIN_INITIAL_TURN: u64 = 0;
 const PLUGIN_LIFECYCLE_INSTALL_MISSING: &str = "plugin lifecycle install receipt missing";
 const PLUGIN_LIFECYCLE_INSTALL_FAILED: &str = "plugin lifecycle install receipt did not pass";
 const PLUGIN_LIFECYCLE_PERMISSION_MISSING: &str = "plugin lifecycle permission receipt missing";
@@ -73,6 +82,14 @@ fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
+fn u64_value(value: u64) -> IoValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn bool_value(value: bool) -> IoValue {
+    crate::preserves_rail::bool_value(value)
+}
+
 fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
@@ -122,10 +139,12 @@ pub struct HostcallReceiptInput<'a> {
     pub executor_receipt_ref: &'a str,
     pub effect_receipt_ref: &'a str,
     pub authority_refs: &'a [String],
+    pub capability_grants: &'a [PluginCapabilityGrant],
     pub resource_refs: &'a [String],
     pub extension_contracts: &'a [PluginExtensionContract],
     pub input_schema_ref: Option<&'a str>,
     pub output_schema_ref: Option<&'a str>,
+    pub evaluation_turn: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -248,8 +267,103 @@ pub struct PluginHostcallReceipt {
     pub plugin_ref: String,
     pub manifest_ref: String,
     pub hostcall_ref: String,
+    pub capability_grant_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapabilityGrantRef {
+    value: String,
+}
+
+impl CapabilityGrantRef {
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PluginCapabilityGrantAttenuationInput<'a> {
+    pub delegated_scope: &'a str,
+    pub current_delegation_depth: u64,
+    pub max_delegation_depth: u64,
+    pub budget_refs: &'a [String],
+    pub valid_from_turn: u64,
+    pub valid_until_turn: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PluginCapabilityGrantInput<'a> {
+    pub plugin_ref: &'a str,
+    pub plugin_id: &'a str,
+    pub manifest_ref: &'a str,
+    pub extension_contract_ref: Option<&'a str>,
+    pub hostcall_descriptor_ref: &'a str,
+    pub operation: &'a str,
+    pub input_schema_ref: &'a str,
+    pub output_schema_ref: &'a str,
+    pub resource_refs: &'a [String],
+    pub resource_scope: &'a str,
+    pub effect_manifest_refs: &'a [String],
+    pub effect_receipt_refs: &'a [String],
+    pub policy_refs: &'a [String],
+    pub issuer_ref: &'a str,
+    pub proof_refs: &'a [String],
+    pub attenuation: PluginCapabilityGrantAttenuationInput<'a>,
+    pub revocation_refs: &'a [String],
+    pub revoked: bool,
+    pub replay_class: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginCapabilityGrantAttenuation {
+    pub delegated_scope: String,
+    pub current_delegation_depth: u64,
+    pub max_delegation_depth: u64,
+    pub budget_refs: Vec<String>,
+    pub valid_from_turn: u64,
+    pub valid_until_turn: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginCapabilityGrant {
+    pub grant_ref: String,
+    pub typed_ref: CapabilityGrantRef,
+    pub plugin_ref: String,
+    pub plugin_id: String,
+    pub manifest_ref: String,
+    pub extension_contract_ref: Option<String>,
+    pub hostcall_descriptor_ref: String,
+    pub operation: String,
+    pub input_schema_ref: String,
+    pub output_schema_ref: String,
+    pub resource_refs: Vec<String>,
+    pub resource_scope: String,
+    pub effect_manifest_refs: Vec<String>,
+    pub effect_receipt_refs: Vec<String>,
+    pub policy_refs: Vec<String>,
+    pub issuer_ref: String,
+    pub proof_refs: Vec<String>,
+    pub attenuation: PluginCapabilityGrantAttenuation,
+    pub revocation_refs: Vec<String>,
+    pub revoked: bool,
+    pub replay_class: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PluginReferenceRole {
+    CapabilityGrant,
+    OtherArtifact,
+}
+
+pub fn classify_plugin_reference_value(value: &IoValue) -> PluginReferenceRole {
+    if parse_plugin_capability_grant(value).is_ok() {
+        PluginReferenceRole::CapabilityGrant
+    } else {
+        PluginReferenceRole::OtherArtifact
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

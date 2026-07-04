@@ -6,6 +6,10 @@ mod tests {
     type ListInput = crate::catalog::ListInput;
     type VisibilityInput = crate::catalog::VisibilityInput;
 
+    const TEST_GRANT_VALID_UNTIL_TURN: u64 = 16;
+    const TEST_GRANT_EXPIRED_TURN: u64 = TEST_GRANT_VALID_UNTIL_TURN + 1;
+    const TEST_GRANT_MAX_DELEGATION_DEPTH: u64 = 2;
+
     fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
     }
@@ -124,10 +128,12 @@ mod tests {
             executor_receipt_ref: &test_ref("executor"),
             effect_receipt_ref: &test_ref("effect-receipt"),
             authority_refs: &[test_ref("authority")],
+            capability_grants: &[],
             resource_refs: &[test_ref("resource")],
             extension_contracts: &[],
             input_schema_ref: None,
             output_schema_ref: None,
+            evaluation_turn: PLUGIN_INITIAL_TURN,
         })
         .expect("hostcall receipt");
         let denied = parse_plugin_hostcall_receipt(&denied_hostcall).expect("parse hostcall");
@@ -171,10 +177,12 @@ mod tests {
             executor_receipt_ref: &test_ref("executor"),
             effect_receipt_ref: &test_ref("effect-receipt"),
             authority_refs: &[test_ref("authority")],
+            capability_grants: &[],
             resource_refs: &[test_ref("resource")],
             extension_contracts: &[],
             input_schema_ref: None,
             output_schema_ref: None,
+            evaluation_turn: PLUGIN_INITIAL_TURN,
         })
         .expect("matching hostcall receipt");
         assert_eq!(parse_plugin_hostcall_receipt(&pass).expect("parse pass").decision, PLUGIN_DECISION_PASS);
@@ -186,10 +194,12 @@ mod tests {
             executor_receipt_ref: &test_ref("executor"),
             effect_receipt_ref: &test_ref("effect-receipt"),
             authority_refs: &[test_ref("authority")],
+            capability_grants: &[],
             resource_refs: &[test_ref("resource")],
             extension_contracts: &[],
             input_schema_ref: None,
             output_schema_ref: None,
+            evaluation_turn: PLUGIN_INITIAL_TURN,
         })
         .expect("mismatched hostcall receipt");
         let parsed = parse_plugin_hostcall_receipt(&mismatch).expect("parse mismatch");
@@ -213,12 +223,15 @@ mod tests {
             record("executor", vec![string(test_ref("executor"))]),
             record("effect", vec![string(test_ref("effect"))]),
             record("authority", vec![refs_sequence(&[test_ref("authority")])]),
+            record("capability-grants", vec![refs_sequence(&Vec::<String>::new())]),
             record("resource", vec![refs_sequence(&[test_ref("resource")])]),
+            record("evaluation-turn", vec![u64_value(PLUGIN_INITIAL_TURN)]),
             record("diagnostics", vec![strings_sequence(&Vec::<String>::new())]),
             checks_value(&[
                 ("declared-hostcall", PLUGIN_CHECK_FAIL),
                 ("operation-ref-bound", PLUGIN_DECISION_PASS),
                 ("effect-handle-boundary", PLUGIN_DECISION_PASS),
+                ("capability-grant-match", PLUGIN_DECISION_PASS),
             ]),
         ]);
         assert!(parse_plugin_hostcall_receipt(&forged_pass).is_err());
@@ -233,12 +246,15 @@ mod tests {
             record("executor", vec![string(test_ref("executor"))]),
             record("effect", vec![string(test_ref("effect"))]),
             record("authority", vec![refs_sequence(&[test_ref("authority")])]),
+            record("capability-grants", vec![refs_sequence(&Vec::<String>::new())]),
             record("resource", vec![refs_sequence(&[test_ref("resource")])]),
+            record("evaluation-turn", vec![u64_value(PLUGIN_INITIAL_TURN)]),
             record("diagnostics", vec![strings_sequence(&Vec::<String>::new())]),
             checks_value(&[
                 ("declared-hostcall", PLUGIN_DECISION_PASS),
                 ("operation-ref-bound", PLUGIN_DECISION_PASS),
                 ("effect-handle-boundary", PLUGIN_DECISION_PASS),
+                ("capability-grant-match", PLUGIN_DECISION_PASS),
             ]),
         ]);
         assert!(parse_plugin_hostcall_receipt(&empty_deny).is_err());
@@ -399,6 +415,21 @@ mod tests {
         ));
         let invalid_value = parse_text(invalid_source).expect("parse invalid checked-in export");
         assert!(parse_plugin_extension_contract(&invalid_value).is_err());
+
+        let valid_grant_source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/docs/plugin-extension-contracts/storage.grant.preserves"
+        ));
+        let valid_grant_value = parse_text(valid_grant_source).expect("parse checked-in grant export");
+        let valid_grant = parse_plugin_capability_grant(&valid_grant_value).expect("validate checked-in grant export");
+        assert_eq!(valid_grant.plugin_id, "plugin:storage");
+
+        let invalid_grant_source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/docs/plugin-extension-contracts/storage-missing-proof.grant.preserves"
+        ));
+        let invalid_grant_value = parse_text(invalid_grant_source).expect("parse invalid checked-in grant export");
+        assert!(parse_plugin_capability_grant(&invalid_grant_value).is_err());
     }
 
     #[test]
@@ -416,10 +447,12 @@ mod tests {
             executor_receipt_ref: &test_ref("executor"),
             effect_receipt_ref: &test_ref("effect-receipt"),
             authority_refs: &[test_ref("unrelated-authority")],
+            capability_grants: &[],
             resource_refs: &[test_ref("unrelated-resource")],
             extension_contracts: std::slice::from_ref(&contract),
             input_schema_ref: Some(&descriptor.input_schema_ref),
             output_schema_ref: Some(&descriptor.output_schema_ref),
+            evaluation_turn: PLUGIN_INITIAL_TURN,
         })
         .expect("generic authority denial receipt");
         let denied = parse_plugin_hostcall_receipt(&generic_deny).expect("parse generic deny");
@@ -436,13 +469,263 @@ mod tests {
             executor_receipt_ref: &test_ref("executor"),
             effect_receipt_ref: &test_ref("effect-receipt"),
             authority_refs: &descriptor.authority_refs,
+            capability_grants: &[matching_capability_grant_fixture(&manifest_value, &contract, descriptor, false)],
             resource_refs: &descriptor.resource_refs,
             extension_contracts: std::slice::from_ref(&contract),
             input_schema_ref: Some(&descriptor.input_schema_ref),
             output_schema_ref: Some(&descriptor.output_schema_ref),
+            evaluation_turn: PLUGIN_INITIAL_TURN,
         })
         .expect("descriptor-specific hostcall pass");
         assert_eq!(parse_plugin_hostcall_receipt(&pass).expect("parse pass").decision, PLUGIN_DECISION_PASS);
+    }
+
+    #[test]
+    fn capability_grants_parse_classify_and_deny_mismatches() {
+        let contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
+        let descriptor = &contract.hostcall_descriptors[0];
+        let manifest_value = manifest_value_with_extension_refs(
+            &[contract.contract_ref.clone()],
+            &descriptor.effect_manifest_refs[0],
+        );
+        let matching_grant = matching_capability_grant_fixture(&manifest_value, &contract, descriptor, false);
+        assert_eq!(matching_grant.typed_ref.as_str(), matching_grant.grant_ref);
+        assert_eq!(
+            classify_plugin_reference_value(&matching_grant.value),
+            PluginReferenceRole::CapabilityGrant
+        );
+        assert_eq!(crate::ledger::artifact_kind(&matching_grant.value), "plugin-capability-grant");
+        assert!(plugin_summary(&matching_grant.value)
+            .expect("grant summary")
+            .contains("plugin capability grant"));
+
+        let mut wrong_manifest_grant = matching_grant.clone();
+        wrong_manifest_grant.manifest_ref = test_ref("wrong-manifest");
+        let wrong_manifest = hostcall_receipt_with_grant(
+            &manifest_value,
+            &contract,
+            descriptor,
+            &wrong_manifest_grant,
+            PLUGIN_INITIAL_TURN,
+        );
+        assert_eq!(wrong_manifest.decision, PLUGIN_DECISION_DENY);
+        assert!(wrong_manifest
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("wrong-manifest")));
+
+        let mut wrong_descriptor_grant = matching_grant.clone();
+        wrong_descriptor_grant.hostcall_descriptor_ref = test_ref("wrong-descriptor");
+        let wrong_descriptor = hostcall_receipt_with_grant(
+            &manifest_value,
+            &contract,
+            descriptor,
+            &wrong_descriptor_grant,
+            PLUGIN_INITIAL_TURN,
+        );
+        assert_eq!(wrong_descriptor.decision, PLUGIN_DECISION_DENY);
+        assert!(wrong_descriptor
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("wrong-descriptor")));
+
+        let mut wrong_schema_grant = matching_grant.clone();
+        wrong_schema_grant.input_schema_ref = test_ref("wrong-schema");
+        let wrong_schema = hostcall_receipt_with_grant(
+            &manifest_value,
+            &contract,
+            descriptor,
+            &wrong_schema_grant,
+            PLUGIN_INITIAL_TURN,
+        );
+        assert_eq!(wrong_schema.decision, PLUGIN_DECISION_DENY);
+        assert!(wrong_schema
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("wrong-schema")));
+
+        let empty_budget_refs = Vec::new();
+        let empty_budget_attenuation = PluginCapabilityGrantAttenuationInput {
+            delegated_scope: &descriptor.resource_refs[0],
+            current_delegation_depth: PLUGIN_INITIAL_TURN,
+            max_delegation_depth: TEST_GRANT_MAX_DELEGATION_DEPTH,
+            budget_refs: &empty_budget_refs,
+            valid_from_turn: PLUGIN_INITIAL_TURN,
+            valid_until_turn: TEST_GRANT_VALID_UNTIL_TURN,
+        };
+        let manifest = parse_plugin_manifest(&manifest_value).expect("parse manifest for budget negative");
+        let empty_budget_value = plugin_capability_grant_value(&PluginCapabilityGrantInput {
+            plugin_ref: &manifest.plugin_ref,
+            plugin_id: &manifest.plugin_id,
+            manifest_ref: &manifest.manifest_ref,
+            extension_contract_ref: Some(&contract.contract_ref),
+            hostcall_descriptor_ref: &descriptor.descriptor_ref,
+            operation: &descriptor.operation,
+            input_schema_ref: &descriptor.input_schema_ref,
+            output_schema_ref: &descriptor.output_schema_ref,
+            resource_refs: &descriptor.resource_refs,
+            resource_scope: &descriptor.resource_refs[0],
+            effect_manifest_refs: &descriptor.effect_manifest_refs,
+            effect_receipt_refs: &[test_ref("effect-receipt")],
+            policy_refs: &manifest.policy_refs,
+            issuer_ref: &test_ref("grant-issuer"),
+            proof_refs: &[test_ref("grant-proof")],
+            attenuation: empty_budget_attenuation,
+            revocation_refs: &[],
+            revoked: false,
+            replay_class: &descriptor.replay_class,
+        });
+        assert!(empty_budget_value.is_err());
+
+        let wrong_operation_grant = capability_grant_fixture(
+            &manifest_value,
+            &contract,
+            descriptor,
+            "storage.write",
+            &descriptor.resource_refs,
+            false,
+            TEST_GRANT_VALID_UNTIL_TURN,
+            PLUGIN_INITIAL_TURN,
+            TEST_GRANT_MAX_DELEGATION_DEPTH,
+        );
+        let wrong_operation = plugin_hostcall_receipt_value(&HostcallReceiptInput {
+            manifest_value: &manifest_value,
+            operation: &descriptor.operation,
+            hostcall_ref: &descriptor.descriptor_ref,
+            executor_receipt_ref: &test_ref("executor"),
+            effect_receipt_ref: &test_ref("effect-receipt"),
+            authority_refs: &descriptor.authority_refs,
+            capability_grants: std::slice::from_ref(&wrong_operation_grant),
+            resource_refs: &descriptor.resource_refs,
+            extension_contracts: std::slice::from_ref(&contract),
+            input_schema_ref: Some(&descriptor.input_schema_ref),
+            output_schema_ref: Some(&descriptor.output_schema_ref),
+            evaluation_turn: PLUGIN_INITIAL_TURN,
+        })
+        .expect("wrong operation grant receipt");
+        let wrong_operation = parse_plugin_hostcall_receipt(&wrong_operation).expect("parse wrong operation");
+        assert_eq!(wrong_operation.decision, PLUGIN_DECISION_DENY);
+        assert!(wrong_operation
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("wrong-operation")));
+
+        let wrong_resource_refs = vec![test_ref("wrong-resource")];
+        let wrong_resource_grant = capability_grant_fixture(
+            &manifest_value,
+            &contract,
+            descriptor,
+            &descriptor.operation,
+            &wrong_resource_refs,
+            false,
+            TEST_GRANT_VALID_UNTIL_TURN,
+            PLUGIN_INITIAL_TURN,
+            TEST_GRANT_MAX_DELEGATION_DEPTH,
+        );
+        let wrong_resource = plugin_hostcall_receipt_value(&HostcallReceiptInput {
+            manifest_value: &manifest_value,
+            operation: &descriptor.operation,
+            hostcall_ref: &descriptor.descriptor_ref,
+            executor_receipt_ref: &test_ref("executor"),
+            effect_receipt_ref: &test_ref("effect-receipt"),
+            authority_refs: &descriptor.authority_refs,
+            capability_grants: std::slice::from_ref(&wrong_resource_grant),
+            resource_refs: &descriptor.resource_refs,
+            extension_contracts: std::slice::from_ref(&contract),
+            input_schema_ref: Some(&descriptor.input_schema_ref),
+            output_schema_ref: Some(&descriptor.output_schema_ref),
+            evaluation_turn: PLUGIN_INITIAL_TURN,
+        })
+        .expect("wrong resource grant receipt");
+        let wrong_resource = parse_plugin_hostcall_receipt(&wrong_resource).expect("parse wrong resource");
+        assert_eq!(wrong_resource.decision, PLUGIN_DECISION_DENY);
+        assert!(wrong_resource
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("wrong-resource")));
+
+        let over_delegated_grant = capability_grant_fixture(
+            &manifest_value,
+            &contract,
+            descriptor,
+            &descriptor.operation,
+            &descriptor.resource_refs,
+            false,
+            TEST_GRANT_VALID_UNTIL_TURN,
+            TEST_GRANT_MAX_DELEGATION_DEPTH + 1,
+            TEST_GRANT_MAX_DELEGATION_DEPTH,
+        );
+        let over_delegated = plugin_hostcall_receipt_value(&HostcallReceiptInput {
+            manifest_value: &manifest_value,
+            operation: &descriptor.operation,
+            hostcall_ref: &descriptor.descriptor_ref,
+            executor_receipt_ref: &test_ref("executor"),
+            effect_receipt_ref: &test_ref("effect-receipt"),
+            authority_refs: &descriptor.authority_refs,
+            capability_grants: std::slice::from_ref(&over_delegated_grant),
+            resource_refs: &descriptor.resource_refs,
+            extension_contracts: std::slice::from_ref(&contract),
+            input_schema_ref: Some(&descriptor.input_schema_ref),
+            output_schema_ref: Some(&descriptor.output_schema_ref),
+            evaluation_turn: PLUGIN_INITIAL_TURN,
+        })
+        .expect("over-delegated grant receipt");
+        let over_delegated = parse_plugin_hostcall_receipt(&over_delegated).expect("parse over-delegated");
+        assert_eq!(over_delegated.decision, PLUGIN_DECISION_DENY);
+        assert!(over_delegated
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("over-delegated")));
+
+        let revoked_grant = matching_capability_grant_fixture(&manifest_value, &contract, descriptor, true);
+        let revoked = plugin_hostcall_receipt_value(&HostcallReceiptInput {
+            manifest_value: &manifest_value,
+            operation: &descriptor.operation,
+            hostcall_ref: &descriptor.descriptor_ref,
+            executor_receipt_ref: &test_ref("executor"),
+            effect_receipt_ref: &test_ref("effect-receipt"),
+            authority_refs: &descriptor.authority_refs,
+            capability_grants: std::slice::from_ref(&revoked_grant),
+            resource_refs: &descriptor.resource_refs,
+            extension_contracts: std::slice::from_ref(&contract),
+            input_schema_ref: Some(&descriptor.input_schema_ref),
+            output_schema_ref: Some(&descriptor.output_schema_ref),
+            evaluation_turn: PLUGIN_INITIAL_TURN,
+        })
+        .expect("revoked grant receipt");
+        let revoked = parse_plugin_hostcall_receipt(&revoked).expect("parse revoked");
+        assert_eq!(revoked.decision, PLUGIN_DECISION_DENY);
+        assert!(revoked.diagnostics.iter().any(|diagnostic| diagnostic.contains("revoked")));
+
+        let expired_grant = capability_grant_fixture(
+            &manifest_value,
+            &contract,
+            descriptor,
+            &descriptor.operation,
+            &descriptor.resource_refs,
+            false,
+            PLUGIN_INITIAL_TURN,
+            PLUGIN_INITIAL_TURN,
+            TEST_GRANT_MAX_DELEGATION_DEPTH,
+        );
+        let expired = plugin_hostcall_receipt_value(&HostcallReceiptInput {
+            manifest_value: &manifest_value,
+            operation: &descriptor.operation,
+            hostcall_ref: &descriptor.descriptor_ref,
+            executor_receipt_ref: &test_ref("executor"),
+            effect_receipt_ref: &test_ref("effect-receipt"),
+            authority_refs: &descriptor.authority_refs,
+            capability_grants: std::slice::from_ref(&expired_grant),
+            resource_refs: &descriptor.resource_refs,
+            extension_contracts: std::slice::from_ref(&contract),
+            input_schema_ref: Some(&descriptor.input_schema_ref),
+            output_schema_ref: Some(&descriptor.output_schema_ref),
+            evaluation_turn: TEST_GRANT_EXPIRED_TURN,
+        })
+        .expect("expired grant receipt");
+        let expired = parse_plugin_hostcall_receipt(&expired).expect("parse expired");
+        assert_eq!(expired.decision, PLUGIN_DECISION_DENY);
+        assert!(expired.diagnostics.iter().any(|diagnostic| diagnostic.contains("expired")));
     }
 
     #[test]
@@ -884,6 +1167,105 @@ mod tests {
             removal,
             upgrade,
         }
+    }
+
+    fn hostcall_receipt_with_grant(
+        manifest_value: &IoValue,
+        contract: &PluginExtensionContract,
+        descriptor: &PluginHostcallDescriptor,
+        grant: &PluginCapabilityGrant,
+        evaluation_turn: u64,
+    ) -> PluginHostcallReceipt {
+        let value = plugin_hostcall_receipt_value(&HostcallReceiptInput {
+            manifest_value,
+            operation: &descriptor.operation,
+            hostcall_ref: &descriptor.descriptor_ref,
+            executor_receipt_ref: &test_ref("executor"),
+            effect_receipt_ref: &test_ref("effect-receipt"),
+            authority_refs: &descriptor.authority_refs,
+            capability_grants: std::slice::from_ref(grant),
+            resource_refs: &descriptor.resource_refs,
+            extension_contracts: std::slice::from_ref(contract),
+            input_schema_ref: Some(&descriptor.input_schema_ref),
+            output_schema_ref: Some(&descriptor.output_schema_ref),
+            evaluation_turn,
+        })
+        .expect("hostcall receipt with grant");
+        parse_plugin_hostcall_receipt(&value).expect("parse hostcall receipt with grant")
+    }
+
+    fn matching_capability_grant_fixture(
+        manifest_value: &IoValue,
+        contract: &PluginExtensionContract,
+        descriptor: &PluginHostcallDescriptor,
+        revoked: bool,
+    ) -> PluginCapabilityGrant {
+        capability_grant_fixture(
+            manifest_value,
+            contract,
+            descriptor,
+            &descriptor.operation,
+            &descriptor.resource_refs,
+            revoked,
+            TEST_GRANT_VALID_UNTIL_TURN,
+            PLUGIN_INITIAL_TURN,
+            TEST_GRANT_MAX_DELEGATION_DEPTH,
+        )
+    }
+
+    fn capability_grant_fixture(
+        manifest_value: &IoValue,
+        contract: &PluginExtensionContract,
+        descriptor: &PluginHostcallDescriptor,
+        operation: &str,
+        resource_refs: &[String],
+        revoked: bool,
+        valid_until_turn: u64,
+        current_delegation_depth: u64,
+        max_delegation_depth: u64,
+    ) -> PluginCapabilityGrant {
+        let manifest = parse_plugin_manifest(manifest_value).expect("parse grant manifest");
+        let effect_receipt_refs = vec![test_ref("effect-receipt")];
+        let issuer_ref = test_ref("grant-issuer");
+        let proof_refs = vec![test_ref("grant-proof")];
+        let budget_refs = vec![test_ref("grant-budget")];
+        let revocation_refs = if revoked {
+            vec![test_ref("grant-revocation")]
+        } else {
+            Vec::new()
+        };
+        let resource_scope = resource_refs.first().expect("grant resource scope");
+        let attenuation = PluginCapabilityGrantAttenuationInput {
+            delegated_scope: resource_scope,
+            current_delegation_depth,
+            max_delegation_depth,
+            budget_refs: &budget_refs,
+            valid_from_turn: PLUGIN_INITIAL_TURN,
+            valid_until_turn,
+        };
+        let value = plugin_capability_grant_value(&PluginCapabilityGrantInput {
+            plugin_ref: &manifest.plugin_ref,
+            plugin_id: &manifest.plugin_id,
+            manifest_ref: &manifest.manifest_ref,
+            extension_contract_ref: Some(&contract.contract_ref),
+            hostcall_descriptor_ref: &descriptor.descriptor_ref,
+            operation,
+            input_schema_ref: &descriptor.input_schema_ref,
+            output_schema_ref: &descriptor.output_schema_ref,
+            resource_refs,
+            resource_scope,
+            effect_manifest_refs: &descriptor.effect_manifest_refs,
+            effect_receipt_refs: &effect_receipt_refs,
+            policy_refs: &manifest.policy_refs,
+            issuer_ref: &issuer_ref,
+            proof_refs: &proof_refs,
+            attenuation,
+            revocation_refs: &revocation_refs,
+            revoked,
+            replay_class: &descriptor.replay_class,
+        })
+        .expect("capability grant value");
+        parse_plugin_capability_grant(&value).expect("parse capability grant")
     }
 
     fn storage_extension_contract(profile: &str, version: &str) -> PluginExtensionContract {

@@ -179,6 +179,241 @@ pub fn parse_plugin_permission_receipt(value: &IoValue) -> Result<PluginPermissi
     })
 }
 
+pub fn plugin_capability_grant_value(input: &PluginCapabilityGrantInput<'_>) -> Result<IoValue> {
+    validate_ref(input.plugin_ref, "plugin capability grant subject plugin ref")?;
+    validate_plugin_id(input.plugin_id)?;
+    validate_ref(input.manifest_ref, "plugin capability grant manifest ref")?;
+    validate_optional_ref(input.extension_contract_ref, "plugin capability grant extension contract ref")?;
+    validate_ref(input.hostcall_descriptor_ref, "plugin capability grant hostcall descriptor ref")?;
+    validate_non_empty(input.operation, "plugin capability grant operation")?;
+    validate_ref(input.input_schema_ref, "plugin capability grant input schema ref")?;
+    validate_ref(input.output_schema_ref, "plugin capability grant output schema ref")?;
+    require_non_empty_refs(input.resource_refs, "plugin capability grant resource refs")?;
+    validate_non_empty(input.resource_scope, "plugin capability grant resource scope")?;
+    require_non_empty_refs(input.effect_manifest_refs, "plugin capability grant effect manifest refs")?;
+    require_non_empty_refs(input.effect_receipt_refs, "plugin capability grant effect receipt refs")?;
+    require_non_empty_refs(input.policy_refs, "plugin capability grant policy refs")?;
+    validate_ref(input.issuer_ref, "plugin capability grant issuer ref")?;
+    require_non_empty_refs(input.proof_refs, "plugin capability grant proof refs")?;
+    validate_grant_attenuation_input(&input.attenuation)?;
+    validate_refs(input.revocation_refs, "plugin capability grant revocation refs")?;
+    validate_replay_class(input.replay_class)?;
+    Ok(record("plugin-capability-grant-v1", vec![
+        string(crate::preserves_rail::PLUGIN_CAPABILITY_GRANT_SCHEMA),
+        record("subject", vec![
+            record("plugin", vec![string(input.plugin_ref)]),
+            record("plugin-id", vec![string(input.plugin_id)]),
+            record("manifest", vec![string(input.manifest_ref)]),
+        ]),
+        record("extension-contract", vec![optional_ref_value(input.extension_contract_ref)]),
+        record("hostcall", vec![
+            record("descriptor", vec![string(input.hostcall_descriptor_ref)]),
+            record("operation", vec![string(input.operation)]),
+            record("input-schema", vec![string(input.input_schema_ref)]),
+            record("output-schema", vec![string(input.output_schema_ref)]),
+        ]),
+        record("resource", vec![refs_sequence(input.resource_refs), string(input.resource_scope)]),
+        record("effects", vec![refs_sequence(input.effect_manifest_refs), refs_sequence(input.effect_receipt_refs)]),
+        record("policy", vec![refs_sequence(input.policy_refs)]),
+        record("issuer", vec![string(input.issuer_ref)]),
+        record("proofs", vec![refs_sequence(input.proof_refs)]),
+        attenuation_value(&input.attenuation),
+        record("revocation", vec![refs_sequence(input.revocation_refs), bool_value(input.revoked)]),
+        record("replay", vec![string(input.replay_class)]),
+        checks_value(&[
+            ("canonical-capability-grant", PLUGIN_DECISION_PASS),
+            ("typed-capability-ref", PLUGIN_DECISION_PASS),
+            ("subject-bound", PLUGIN_DECISION_PASS),
+            ("descriptor-bound", PLUGIN_DECISION_PASS),
+            ("policy-proof-bound", PLUGIN_DECISION_PASS),
+            ("attenuation-deterministic", PLUGIN_DECISION_PASS),
+            ("revocation-explicit", PLUGIN_DECISION_PASS),
+            ("no-ambient-authority", PLUGIN_DECISION_PASS),
+        ]),
+    ]))
+}
+
+pub fn parse_plugin_capability_grant(value: &IoValue) -> Result<PluginCapabilityGrant> {
+    let fields = simple_record(value, "plugin-capability-grant-v1", PLUGIN_CAPABILITY_GRANT_ARITY)?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::PLUGIN_CAPABILITY_GRANT_SCHEMA,
+        "plugin capability grant",
+    )?;
+    let (plugin_ref, plugin_id, manifest_ref) = parse_grant_subject(&fields[1])?;
+    let extension_contract_ref = parse_optional_ref_field(&fields[2], "extension-contract")?;
+    let (hostcall_descriptor_ref, operation, input_schema_ref, output_schema_ref) = parse_grant_hostcall(&fields[3])?;
+    let (resource_refs, resource_scope) = parse_grant_resource(&fields[4])?;
+    let (effect_manifest_refs, effect_receipt_refs) = parse_grant_effects(&fields[5])?;
+    let policy_refs = record_ref_sequence(&fields[6], "policy")?;
+    let issuer_ref = record_ref(&fields[7], "issuer")?;
+    let proof_refs = record_ref_sequence(&fields[8], "proofs")?;
+    let attenuation = parse_grant_attenuation(&fields[9])?;
+    let (revocation_refs, revoked) = parse_grant_revocation(&fields[10])?;
+    let replay_class = record_string(&fields[11], "replay")?;
+    let checks = parse_checks(&fields[12])?;
+    require_check_status(&checks, "canonical-capability-grant", PLUGIN_DECISION_PASS, "plugin capability grant")?;
+    require_check_status(&checks, "typed-capability-ref", PLUGIN_DECISION_PASS, "plugin capability grant")?;
+    require_check_status(&checks, "no-ambient-authority", PLUGIN_DECISION_PASS, "plugin capability grant")?;
+    validate_ref(&plugin_ref, "plugin capability grant subject plugin ref")?;
+    validate_plugin_id(&plugin_id)?;
+    validate_ref(&manifest_ref, "plugin capability grant manifest ref")?;
+    validate_optional_ref(extension_contract_ref.as_deref(), "plugin capability grant extension contract ref")?;
+    validate_ref(&hostcall_descriptor_ref, "plugin capability grant hostcall descriptor ref")?;
+    validate_non_empty(&operation, "plugin capability grant operation")?;
+    validate_ref(&input_schema_ref, "plugin capability grant input schema ref")?;
+    validate_ref(&output_schema_ref, "plugin capability grant output schema ref")?;
+    require_non_empty_refs(&resource_refs, "plugin capability grant resource refs")?;
+    validate_non_empty(&resource_scope, "plugin capability grant resource scope")?;
+    require_non_empty_refs(&effect_manifest_refs, "plugin capability grant effect manifest refs")?;
+    require_non_empty_refs(&effect_receipt_refs, "plugin capability grant effect receipt refs")?;
+    require_non_empty_refs(&policy_refs, "plugin capability grant policy refs")?;
+    require_non_empty_refs(&proof_refs, "plugin capability grant proof refs")?;
+    validate_grant_attenuation(&attenuation)?;
+    validate_refs(&revocation_refs, "plugin capability grant revocation refs")?;
+    validate_replay_class(&replay_class)?;
+    let grant_ref = canonical_hash(value)?;
+    Ok(PluginCapabilityGrant {
+        typed_ref: CapabilityGrantRef { value: grant_ref.clone() },
+        grant_ref,
+        plugin_ref,
+        plugin_id,
+        manifest_ref,
+        extension_contract_ref,
+        hostcall_descriptor_ref,
+        operation,
+        input_schema_ref,
+        output_schema_ref,
+        resource_refs,
+        resource_scope,
+        effect_manifest_refs,
+        effect_receipt_refs,
+        policy_refs,
+        issuer_ref,
+        proof_refs,
+        attenuation,
+        revocation_refs,
+        revoked,
+        replay_class,
+        value: value.clone(),
+    })
+}
+
+fn attenuation_value(input: &PluginCapabilityGrantAttenuationInput<'_>) -> IoValue {
+    record("attenuation", vec![
+        record("scope", vec![string(input.delegated_scope)]),
+        record("delegation-depth", vec![u64_value(input.current_delegation_depth)]),
+        record("max-delegation-depth", vec![u64_value(input.max_delegation_depth)]),
+        record("budgets", vec![refs_sequence(input.budget_refs)]),
+        record("validity", vec![
+            record("from", vec![u64_value(input.valid_from_turn)]),
+            record("until", vec![u64_value(input.valid_until_turn)]),
+        ]),
+    ])
+}
+
+fn parse_grant_subject(value: &Value<IoValue>) -> Result<(String, String, String)> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, "subject", PLUGIN_CAPABILITY_GRANT_SUBJECT_ARITY)?;
+    Ok((
+        record_ref(&fields[0], "plugin")?,
+        record_string(&fields[1], "plugin-id")?,
+        record_ref(&fields[2], "manifest")?,
+    ))
+}
+
+fn parse_grant_hostcall(value: &Value<IoValue>) -> Result<(String, String, String, String)> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, "hostcall", PLUGIN_CAPABILITY_GRANT_HOSTCALL_ARITY)?;
+    Ok((
+        record_ref(&fields[0], "descriptor")?,
+        record_string(&fields[1], "operation")?,
+        record_ref(&fields[2], "input-schema")?,
+        record_ref(&fields[3], "output-schema")?,
+    ))
+}
+
+fn parse_grant_resource(value: &Value<IoValue>) -> Result<(Vec<String>, String)> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, "resource", PLUGIN_CAPABILITY_GRANT_RESOURCE_ARITY)?;
+    let resource_refs = required_ref_sequence(&fields[0], "plugin capability grant resource refs")?;
+    let scope = required_string(&fields[1], "plugin capability grant resource scope")?;
+    Ok((resource_refs, scope))
+}
+
+fn parse_grant_effects(value: &Value<IoValue>) -> Result<(Vec<String>, Vec<String>)> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, "effects", PLUGIN_CAPABILITY_GRANT_EFFECTS_ARITY)?;
+    Ok((
+        required_ref_sequence(&fields[0], "plugin capability grant effect manifest refs")?,
+        required_ref_sequence(&fields[1], "plugin capability grant effect receipt refs")?,
+    ))
+}
+
+fn parse_grant_revocation(value: &Value<IoValue>) -> Result<(Vec<String>, bool)> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, "revocation", PLUGIN_CAPABILITY_GRANT_REVOCATION_ARITY)?;
+    let refs = required_ref_sequence(&fields[0], "plugin capability grant revocation refs")?;
+    let revoked = fields[1]
+        .as_boolean()
+        .ok_or_else(|| MoltenError::invalid_harness("plugin capability grant revoked flag must be boolean"))?;
+    Ok((refs, revoked))
+}
+
+fn parse_grant_attenuation(value: &Value<IoValue>) -> Result<PluginCapabilityGrantAttenuation> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, "attenuation", PLUGIN_CAPABILITY_GRANT_ATTENUATION_ARITY)?;
+    let validity = value_to_iovalue(&fields[4]);
+    let validity = simple_record(&validity, "validity", PLUGIN_CAPABILITY_GRANT_VALIDITY_ARITY)?;
+    Ok(PluginCapabilityGrantAttenuation {
+        delegated_scope: record_string(&fields[0], "scope")?,
+        current_delegation_depth: record_u64(&fields[1], "delegation-depth")?,
+        max_delegation_depth: record_u64(&fields[2], "max-delegation-depth")?,
+        budget_refs: record_ref_sequence(&fields[3], "budgets")?,
+        valid_from_turn: record_u64(&validity[0], "from")?,
+        valid_until_turn: record_u64(&validity[1], "until")?,
+    })
+}
+
+fn parse_optional_ref_field(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, label, 1)?;
+    parse_optional_ref_value(&fields[0], label)
+}
+
+fn parse_optional_ref_value(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
+    let optional = value_to_iovalue(value);
+    if optional.collect_simple_record("none", Some(0)).is_some() {
+        Ok(None)
+    } else if let Some(some) = optional.collect_simple_record("some", Some(1)) {
+        let reference = required_string(&some[0], label)?;
+        validate_ref(&reference, label)?;
+        Ok(Some(reference))
+    } else {
+        Err(MoltenError::invalid_harness(format!("expected optional ref for {label}")))
+    }
+}
+
+fn validate_grant_attenuation_input(input: &PluginCapabilityGrantAttenuationInput<'_>) -> Result<()> {
+    validate_non_empty(input.delegated_scope, "plugin capability grant delegated scope")?;
+    require_non_empty_refs(input.budget_refs, "plugin capability grant budget refs")?;
+    validate_turn_window(input.valid_from_turn, input.valid_until_turn)
+}
+
+fn validate_grant_attenuation(input: &PluginCapabilityGrantAttenuation) -> Result<()> {
+    validate_non_empty(&input.delegated_scope, "plugin capability grant delegated scope")?;
+    require_non_empty_refs(&input.budget_refs, "plugin capability grant budget refs")?;
+    validate_turn_window(input.valid_from_turn, input.valid_until_turn)
+}
+
+fn validate_turn_window(valid_from_turn: u64, valid_until_turn: u64) -> Result<()> {
+    if valid_from_turn > valid_until_turn {
+        Err(MoltenError::invalid_harness("plugin capability grant validity window is inverted"))
+    } else {
+        Ok(())
+    }
+}
+
 pub fn plugin_lifecycle_receipt_value(input: &LifecycleReceiptInput<'_>) -> Result<IoValue> {
     let manifest = parse_plugin_manifest(input.manifest_value)?;
     validate_lifecycle_operation(input.operation)?;

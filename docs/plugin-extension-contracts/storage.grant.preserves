@@ -1,0 +1,34 @@
+<plugin-capability-grant-v1 "molten.plugin.capability-grant.v1"
+  <subject
+    <plugin "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd">
+    <plugin-id "plugin:storage">
+    <manifest "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee">>
+  <extension-contract <some "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff">>
+  <hostcall
+    <descriptor "blake3:1111111111111111111111111111111111111111111111111111111111111111">
+    <operation "storage.read">
+    <input-schema "blake3:2222222222222222222222222222222222222222222222222222222222222222">
+    <output-schema "blake3:3333333333333333333333333333333333333333333333333333333333333333">>
+  <resource ["blake3:5555555555555555555555555555555555555555555555555555555555555555"] "blake3:5555555555555555555555555555555555555555555555555555555555555555">
+  <effects ["blake3:6666666666666666666666666666666666666666666666666666666666666666"] ["blake3:abababababababababababababababababababababababababababababababab"]>
+  <policy ["blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]>
+  <issuer "blake3:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd">
+  <proofs ["blake3:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"]>
+  <attenuation
+    <scope "blake3:5555555555555555555555555555555555555555555555555555555555555555">
+    <delegation-depth 0>
+    <max-delegation-depth 2>
+    <budgets ["blake3:1212121212121212121212121212121212121212121212121212121212121212"]>
+    <validity <from 0> <until 16>>>
+  <revocation [] #f>
+  <replay "idempotent">
+  <checks [
+    <check "canonical-capability-grant" "pass">
+    <check "typed-capability-ref" "pass">
+    <check "subject-bound" "pass">
+    <check "descriptor-bound" "pass">
+    <check "policy-proof-bound" "pass">
+    <check "attenuation-deterministic" "pass">
+    <check "revocation-explicit" "pass">
+    <check "no-ambient-authority" "pass">
+  ]>>

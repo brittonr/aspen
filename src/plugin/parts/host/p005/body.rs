@@ -81,6 +81,31 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
+    value
+        .as_u64()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+}
+
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, label, 1)?;
+    required_u64(&fields[0], label)
+}
+
+fn required_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
+    let items = required_sequence(value, label)?;
+    ensure_count_at_most(items.len(), MAX_PLUGIN_REFS, label)?;
+    let mut refs = Vec::new();
+    for item in items.iter() {
+        let reference = required_string(item, label)?;
+        validate_ref(&reference, label)?;
+        refs.push_limited(reference, MAX_PLUGIN_REFS, label)?;
+    }
+    Ok(refs)
+}
+
 pub fn plugin_extension_contract_value(input: &PluginExtensionContractInput<'_>) -> Result<IoValue> {
     validate_extension_id(input.extension_id)?;
     validate_extension_version(input.version)?;

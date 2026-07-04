@@ -1,0 +1,28 @@
+let PluginCapabilityGrant = import "grant.ncl" in
+{
+  plugin_ref = "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  plugin_id = "plugin:storage",
+  manifest_ref = "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  extension_contract_ref = "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  hostcall_descriptor_ref = "blake3:1111111111111111111111111111111111111111111111111111111111111111",
+  operation = "storage.read",
+  input_schema_ref = "blake3:2222222222222222222222222222222222222222222222222222222222222222",
+  output_schema_ref = "blake3:3333333333333333333333333333333333333333333333333333333333333333",
+  resource_refs = ["blake3:5555555555555555555555555555555555555555555555555555555555555555"],
+  resource_scope = "blake3:5555555555555555555555555555555555555555555555555555555555555555",
+  effect_manifest_refs = ["blake3:6666666666666666666666666666666666666666666666666666666666666666"],
+  effect_receipt_refs = ["blake3:abababababababababababababababababababababababababababababababab"],
+  policy_refs = ["blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+  issuer_ref = "blake3:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  attenuation = {
+    delegated_scope = "blake3:5555555555555555555555555555555555555555555555555555555555555555",
+    current_delegation_depth = 0,
+    max_delegation_depth = 2,
+    budget_refs = ["blake3:1212121212121212121212121212121212121212121212121212121212121212"],
+    valid_from_turn = 0,
+    valid_until_turn = 16,
+  },
+  revocation_refs = [],
+  revoked = false,
+  replay_class = "idempotent",
+} | PluginCapabilityGrant

@@ -4,9 +4,27 @@ struct HostcallAdmission {
     is_declared_hostcall: bool,
     operation_ref_bound: bool,
     has_authority: bool,
+    has_typed_capability_grant: bool,
+    has_matching_capability_grant: bool,
+    attenuation_valid: bool,
+    revocation_valid: bool,
     has_resources: bool,
     has_descriptor_requirements: bool,
     has_ambient_request: bool,
+    capability_grant_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BoundHostcallDescriptor<'a> {
+    contract_ref: &'a str,
+    descriptor: &'a PluginHostcallDescriptor,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct GrantMatchResult<'a> {
+    grant: Option<&'a PluginCapabilityGrant>,
+    attenuation_valid: bool,
+    revocation_valid: bool,
 }
 
 pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result<IoValue> {
@@ -16,6 +34,7 @@ pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result
     validate_ref(input.executor_receipt_ref, "plugin hostcall executor ref")?;
     validate_ref(input.effect_receipt_ref, "plugin hostcall effect ref")?;
     validate_refs(input.authority_refs, "plugin hostcall authority ref")?;
+    validate_capability_grants(input.capability_grants)?;
     validate_refs(input.resource_refs, "plugin hostcall resource ref")?;
     validate_optional_ref(input.input_schema_ref, "plugin hostcall input schema ref")?;
     validate_optional_ref(input.output_schema_ref, "plugin hostcall output schema ref")?;
@@ -35,7 +54,9 @@ pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result
         record("executor", vec![string(input.executor_receipt_ref)]),
         record("effect", vec![string(input.effect_receipt_ref)]),
         record("authority", vec![refs_sequence(input.authority_refs)]),
+        record("capability-grants", vec![refs_sequence(&admission.capability_grant_refs)]),
         record("resource", vec![refs_sequence(input.resource_refs)]),
+        record("evaluation-turn", vec![u64_value(input.evaluation_turn)]),
         record("diagnostics", vec![strings_sequence(&admission.diagnostics)]),
         checks_value(&[
             ("declared-hostcall", status(admission.is_declared_hostcall)),
@@ -43,6 +64,10 @@ pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result
             ("executor-boundary", PLUGIN_DECISION_PASS),
             ("effect-handle-boundary", PLUGIN_DECISION_PASS),
             ("authority-present", status(admission.has_authority)),
+            ("typed-capability-grant-present", status(admission.has_typed_capability_grant)),
+            ("capability-grant-match", status(admission.has_matching_capability_grant)),
+            ("capability-attenuation-valid", status(admission.attenuation_valid)),
+            ("capability-revocation-valid", status(admission.revocation_valid)),
             ("resource-bound", status(admission.has_resources)),
             ("descriptor-specific-requirements", status(admission.has_descriptor_requirements)),
             (
@@ -63,9 +88,19 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
         input.operation,
         input.hostcall_ref,
     );
+    let grant_match = extension_descriptor
+        .as_ref()
+        .map(|bound| matching_capability_grant(manifest, bound, input))
+        .transpose()?
+        .unwrap_or(GrantMatchResult {
+            grant: None,
+            attenuation_valid: true,
+            revocation_valid: true,
+        });
     let descriptor_requirements = descriptor_requirements_pass(
-        &manifest.effect_manifest_refs,
-        extension_descriptor,
+        manifest,
+        extension_descriptor.as_ref(),
+        &grant_match,
         input,
     );
     let is_declared_hostcall = primitive_declared || extension_descriptor.is_some();
@@ -73,6 +108,10 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
     let has_authority = !input.authority_refs.is_empty();
     let has_resources = !input.resource_refs.is_empty();
     let has_ambient_request = is_ambient_operation(input.operation);
+    let has_matching_capability_grant = extension_descriptor.is_none() || grant_match.grant.is_some();
+    let has_typed_capability_grant = extension_descriptor.is_none() || !input.capability_grants.is_empty();
+    let attenuation_valid = extension_descriptor.is_none() || grant_match.attenuation_valid;
+    let revocation_valid = extension_descriptor.is_none() || grant_match.revocation_valid;
     let has_descriptor_requirements = if extension_descriptor.is_some() {
         descriptor_requirements
     } else {
@@ -113,6 +152,38 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
             "plugin hostcall diagnostics",
         )?;
     }
+    if extension_descriptor.is_some() && input.capability_grants.is_empty() {
+        diagnostics.push_limited(
+            format!("plugin hostcall {} missing typed capability grant", input.operation),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin hostcall diagnostics",
+        )?;
+    }
+    if let Some(bound) = extension_descriptor.as_ref()
+        && !has_matching_capability_grant
+        && !input.capability_grants.is_empty()
+    {
+        collect_capability_grant_mismatch_diagnostics(manifest, bound, input, &mut diagnostics)?;
+        diagnostics.push_limited(
+            format!("plugin hostcall {} has no matching capability grant", input.operation),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin hostcall diagnostics",
+        )?;
+    }
+    if extension_descriptor.is_some() && !attenuation_valid {
+        diagnostics.push_limited(
+            format!("plugin hostcall {} capability grant attenuation is invalid", input.operation),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin hostcall diagnostics",
+        )?;
+    }
+    if extension_descriptor.is_some() && !revocation_valid {
+        diagnostics.push_limited(
+            format!("plugin hostcall {} capability grant is revoked", input.operation),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin hostcall diagnostics",
+        )?;
+    }
     if !has_descriptor_requirements {
         diagnostics.push_limited(
             format!("plugin hostcall {} missing descriptor-specific requirements", input.operation),
@@ -125,9 +196,14 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
         is_declared_hostcall,
         operation_ref_bound,
         has_authority,
+        has_typed_capability_grant,
+        has_matching_capability_grant,
+        attenuation_valid,
+        revocation_valid,
         has_resources,
         has_descriptor_requirements,
         has_ambient_request,
+        capability_grant_refs: capability_grant_refs(input.capability_grants),
     })
 }
 
@@ -136,26 +212,214 @@ fn matching_bound_descriptor<'a>(
     contracts: &'a [PluginExtensionContract],
     operation: &str,
     descriptor_ref: &str,
-) -> Option<&'a PluginHostcallDescriptor> {
+) -> Option<BoundHostcallDescriptor<'a>> {
     contracts
         .iter()
         .filter(|contract| manifest.extension_contract_refs.contains(&contract.contract_ref))
-        .flat_map(|contract| contract.hostcall_descriptors.iter())
-        .find(|descriptor| descriptor.operation == operation && descriptor.descriptor_ref == descriptor_ref)
+        .find_map(|contract| {
+            contract
+                .hostcall_descriptors
+                .iter()
+                .find(|descriptor| descriptor.operation == operation && descriptor.descriptor_ref == descriptor_ref)
+                .map(|descriptor| BoundHostcallDescriptor {
+                    contract_ref: contract.contract_ref.as_str(),
+                    descriptor,
+                })
+        })
 }
 
 fn descriptor_requirements_pass(
-    manifest_effect_refs: &[String],
-    descriptor: Option<&PluginHostcallDescriptor>,
+    manifest: &PluginManifest,
+    descriptor: Option<&BoundHostcallDescriptor<'_>>,
+    grant_match: &GrantMatchResult<'_>,
     input: &HostcallReceiptInput<'_>,
 ) -> bool {
-    descriptor.is_some_and(|descriptor| {
+    descriptor.is_some_and(|bound| {
+        let descriptor = bound.descriptor;
         input.input_schema_ref == Some(descriptor.input_schema_ref.as_str())
             && input.output_schema_ref == Some(descriptor.output_schema_ref.as_str())
             && contains_all(input.authority_refs, &descriptor.authority_refs)
             && contains_all(input.resource_refs, &descriptor.resource_refs)
-            && contains_all(manifest_effect_refs, &descriptor.effect_manifest_refs)
+            && contains_all(&manifest.effect_manifest_refs, &descriptor.effect_manifest_refs)
+            && grant_match.grant.is_some()
+            && grant_match.attenuation_valid
+            && grant_match.revocation_valid
     })
+}
+
+fn matching_capability_grant<'a>(
+    manifest: &PluginManifest,
+    bound: &BoundHostcallDescriptor<'_>,
+    input: &'a HostcallReceiptInput<'_>,
+) -> Result<GrantMatchResult<'a>> {
+    let mut any_attenuation_invalid = false;
+    let mut any_revocation_invalid = false;
+    for grant in input.capability_grants {
+        if !grant_identity_matches(manifest, bound, grant) {
+            continue;
+        }
+        let attenuation_valid = grant_attenuation_matches(grant, input.evaluation_turn, input.resource_refs);
+        let revocation_valid = !grant.revoked;
+        if attenuation_valid && revocation_valid && grant_context_matches(manifest, bound.descriptor, input, grant) {
+            return Ok(GrantMatchResult {
+                grant: Some(grant),
+                attenuation_valid,
+                revocation_valid,
+            });
+        }
+        any_attenuation_invalid |= !attenuation_valid;
+        any_revocation_invalid |= !revocation_valid;
+    }
+    Ok(GrantMatchResult {
+        grant: None,
+        attenuation_valid: !any_attenuation_invalid,
+        revocation_valid: !any_revocation_invalid,
+    })
+}
+
+fn grant_identity_matches(
+    manifest: &PluginManifest,
+    bound: &BoundHostcallDescriptor<'_>,
+    grant: &PluginCapabilityGrant,
+) -> bool {
+    grant.plugin_ref == manifest.plugin_ref
+        && grant.plugin_id == manifest.plugin_id
+        && grant.manifest_ref == manifest.manifest_ref
+        && grant.extension_contract_ref.as_deref() == Some(bound.contract_ref)
+        && grant.hostcall_descriptor_ref == bound.descriptor.descriptor_ref
+        && grant.operation == bound.descriptor.operation
+}
+
+fn grant_context_matches(
+    manifest: &PluginManifest,
+    descriptor: &PluginHostcallDescriptor,
+    input: &HostcallReceiptInput<'_>,
+    grant: &PluginCapabilityGrant,
+) -> bool {
+    grant.input_schema_ref == descriptor.input_schema_ref
+        && grant.output_schema_ref == descriptor.output_schema_ref
+        && input.input_schema_ref == Some(grant.input_schema_ref.as_str())
+        && input.output_schema_ref == Some(grant.output_schema_ref.as_str())
+        && contains_all(&grant.resource_refs, &descriptor.resource_refs)
+        && contains_all(&grant.resource_refs, input.resource_refs)
+        && contains_all(&grant.effect_manifest_refs, &descriptor.effect_manifest_refs)
+        && grant.effect_receipt_refs.iter().any(|reference| reference == input.effect_receipt_ref)
+        && contains_all(&grant.policy_refs, &manifest.policy_refs)
+        && !grant.proof_refs.is_empty()
+}
+
+fn grant_attenuation_matches(grant: &PluginCapabilityGrant, evaluation_turn: u64, resource_refs: &[String]) -> bool {
+    grant.attenuation.current_delegation_depth <= grant.attenuation.max_delegation_depth
+        && grant.attenuation.valid_from_turn <= evaluation_turn
+        && evaluation_turn <= grant.attenuation.valid_until_turn
+        && resource_scope_matches(&grant.resource_scope, resource_refs)
+        && resource_scope_matches(&grant.attenuation.delegated_scope, resource_refs)
+}
+
+fn resource_scope_matches(scope: &str, resource_refs: &[String]) -> bool {
+    scope == "*" || resource_refs.iter().any(|reference| reference == scope)
+}
+
+fn capability_grant_refs(grants: &[PluginCapabilityGrant]) -> Vec<String> {
+    grants.iter().map(|grant| grant.typed_ref.as_str().to_string()).collect()
+}
+
+fn validate_capability_grants(grants: &[PluginCapabilityGrant]) -> Result<()> {
+    ensure_count_at_most(grants.len(), MAX_PLUGIN_REFS, "plugin capability grant refs")?;
+    for grant in grants {
+        validate_ref(grant.typed_ref.as_str(), "plugin capability grant ref")?;
+    }
+    Ok(())
+}
+
+fn collect_capability_grant_mismatch_diagnostics(
+    manifest: &PluginManifest,
+    bound: &BoundHostcallDescriptor<'_>,
+    input: &HostcallReceiptInput<'_>,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<()> {
+    for grant in input.capability_grants {
+        if grant.plugin_ref != manifest.plugin_ref
+            || grant.plugin_id != manifest.plugin_id
+            || grant.manifest_ref != manifest.manifest_ref
+        {
+            diagnostics.push_limited(
+                format!("plugin hostcall {} wrong-manifest capability grant", input.operation),
+                MAX_PLUGIN_DIAGNOSTICS,
+                "plugin hostcall diagnostics",
+            )?;
+            continue;
+        }
+        if grant.extension_contract_ref.as_deref() != Some(bound.contract_ref) {
+            diagnostics.push_limited(
+                format!("plugin hostcall {} wrong-extension capability grant", input.operation),
+                MAX_PLUGIN_DIAGNOSTICS,
+                "plugin hostcall diagnostics",
+            )?;
+            continue;
+        }
+        if grant.operation != bound.descriptor.operation {
+            diagnostics.push_limited(
+                format!("plugin hostcall {} wrong-operation capability grant", input.operation),
+                MAX_PLUGIN_DIAGNOSTICS,
+                "plugin hostcall diagnostics",
+            )?;
+            continue;
+        }
+        if grant.hostcall_descriptor_ref != bound.descriptor.descriptor_ref {
+            diagnostics.push_limited(
+                format!("plugin hostcall {} wrong-descriptor capability grant", input.operation),
+                MAX_PLUGIN_DIAGNOSTICS,
+                "plugin hostcall diagnostics",
+            )?;
+            continue;
+        }
+        if grant.input_schema_ref != bound.descriptor.input_schema_ref
+            || grant.output_schema_ref != bound.descriptor.output_schema_ref
+            || input.input_schema_ref != Some(grant.input_schema_ref.as_str())
+            || input.output_schema_ref != Some(grant.output_schema_ref.as_str())
+        {
+            diagnostics.push_limited(
+                format!("plugin hostcall {} wrong-schema capability grant", input.operation),
+                MAX_PLUGIN_DIAGNOSTICS,
+                "plugin hostcall diagnostics",
+            )?;
+        }
+        if !contains_all(&grant.resource_refs, &bound.descriptor.resource_refs)
+            || !contains_all(&grant.resource_refs, input.resource_refs)
+            || !resource_scope_matches(&grant.resource_scope, input.resource_refs)
+        {
+            diagnostics.push_limited(
+                format!("plugin hostcall {} wrong-resource capability grant", input.operation),
+                MAX_PLUGIN_DIAGNOSTICS,
+                "plugin hostcall diagnostics",
+            )?;
+        }
+        if grant.attenuation.current_delegation_depth > grant.attenuation.max_delegation_depth {
+            diagnostics.push_limited(
+                format!("plugin hostcall {} over-delegated capability grant", input.operation),
+                MAX_PLUGIN_DIAGNOSTICS,
+                "plugin hostcall diagnostics",
+            )?;
+        }
+        if input.evaluation_turn < grant.attenuation.valid_from_turn
+            || input.evaluation_turn > grant.attenuation.valid_until_turn
+        {
+            diagnostics.push_limited(
+                format!("plugin hostcall {} expired capability grant", input.operation),
+                MAX_PLUGIN_DIAGNOSTICS,
+                "plugin hostcall diagnostics",
+            )?;
+        }
+        if grant.revoked {
+            diagnostics.push_limited(
+                format!("plugin hostcall {} revoked capability grant", input.operation),
+                MAX_PLUGIN_DIAGNOSTICS,
+                "plugin hostcall diagnostics",
+            )?;
+        }
+    }
+    Ok(())
 }
 
 pub fn parse_plugin_hostcall_receipt(value: &IoValue) -> Result<PluginHostcallReceipt> {
@@ -164,9 +428,12 @@ pub fn parse_plugin_hostcall_receipt(value: &IoValue) -> Result<PluginHostcallRe
     let checks = parse_checks(&fields[PLUGIN_HOSTCALL_RECEIPT_ARITY - 1])?;
     require_check(&checks, "declared-hostcall", "plugin hostcall receipt")?;
     require_check(&checks, "operation-ref-bound", "plugin hostcall receipt")?;
+    require_check(&checks, "capability-grant-match", "plugin hostcall receipt")?;
     require_check_status(&checks, "effect-handle-boundary", PLUGIN_DECISION_PASS, "plugin hostcall receipt")?;
     let decision = record_decision(&fields[1], "decision")?;
-    let diagnostics = record_string_sequence(&fields[10], "diagnostics")?;
+    let capability_grant_refs = record_ref_sequence(&fields[9], "capability-grants")?;
+    let _evaluation_turn = record_u64(&fields[11], "evaluation-turn")?;
+    let diagnostics = record_string_sequence(&fields[12], "diagnostics")?;
     validate_receipt_coherence(&decision, &checks, &diagnostics, "plugin hostcall receipt")?;
     Ok(PluginHostcallReceipt {
         receipt_ref: canonical_hash(value)?,
@@ -175,6 +442,7 @@ pub fn parse_plugin_hostcall_receipt(value: &IoValue) -> Result<PluginHostcallRe
         manifest_ref: record_ref(&fields[3], "manifest")?,
         operation: record_string(&fields[4], "operation")?,
         hostcall_ref: record_ref(&fields[5], "hostcall")?,
+        capability_grant_refs,
         diagnostics,
         value: value.clone(),
     })
