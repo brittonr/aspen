@@ -12,6 +12,10 @@ const MULTINODE_TOPOLOGY_MEMBERSHIP_GATE_SCHEMA: &str = "molten.testing.multinod
 const MULTINODE_RECONCILIATION_SCHEMA: &str = "molten.testing.multinode.reconciliation-gate.v1";
 const LOCAL_MULTIPROCESS_PLAN_SCHEMA: &str = "molten.testing.multinode.local-multiprocess-plan.v1";
 const LOCAL_MULTIPROCESS_RUN_SCHEMA: &str = "molten.testing.multinode.local-multiprocess-run.v1";
+const LOCAL_MULTIPROCESS_EXECUTABLE_RUN_SCHEMA: &str = "molten.testing.multinode.local-multiprocess-executable-run.v1";
+const THREE_NODE_QUORUM_GATE_SCHEMA: &str = "molten.testing.multinode.three-node-quorum-gate.v1";
+const VM_SCENARIO_GATE_SCHEMA: &str = "molten.testing.multinode.vm-scenario-gate.v1";
+const VM_FAILURE_REPRO_EXPORT_SCHEMA: &str = "molten.testing.multinode.vm-failure-repro-export.v1";
 const GENERATED_DISTRIBUTED_CASE_SCHEMA: &str = "molten.testing.distributed-simulation.generated-case.v1";
 const GENERATED_DISTRIBUTED_REPRO_SCHEMA: &str = "molten.testing.distributed-simulation.generated-repro.v1";
 const MULTINODE_FAILURE_REPRO_PAYLOAD_SCHEMA: &str = "molten.testing.multinode.failure-repro-payload.v1";
@@ -32,6 +36,7 @@ const PROFILE_PAIRWISE_TRANSPORT: &str = "pairwise-transport";
 const PROFILE_CONTROL_QUORUM: &str = "control-quorum";
 const PROFILE_RESTART_REJOIN: &str = "restart-rejoin";
 const PROFILE_SUBSCRIBER_PEER: &str = "subscriber-peer";
+const PROFILE_THREE_NODE_QUORUM: &str = "three-node-quorum";
 const PROFILE_WRONG_TOPOLOGY: &str = "wrong-topology-negative";
 const ROLE_SENDER: &str = "sender";
 const ROLE_RECEIVER: &str = "receiver";
@@ -43,8 +48,9 @@ const MEMBERSHIP_VOTER: &str = "voter";
 const MEMBERSHIP_SUBSCRIBER: &str = "subscriber";
 const MEMBERSHIP_TRANSPORT_ONLY: &str = "transport-only";
 const CLEANUP_POLICY_REQUIRED: &str = "cleanup-required";
+const TICKET_STATUS_CURRENT: &str = "current";
 const MAX_MULTINODE_ITEMS: usize = 512;
-const REQUIRED_DEFAULT_TOPOLOGY_PROFILE_COUNT: usize = 5;
+const REQUIRED_DEFAULT_TOPOLOGY_PROFILE_COUNT: usize = 6;
 
 const _: () = assert!(MAX_MULTINODE_ITEMS > 0);
 const _: () = assert!(REQUIRED_DEFAULT_TOPOLOGY_PROFILE_COUNT > 0);
@@ -223,6 +229,104 @@ pub struct LocalMultiprocessRunReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalMultiprocessExecutableRunInput {
+    pub plan: LocalMultiprocessPlanInput,
+    pub startup_refs: Vec<String>,
+    pub workflow_refs: Vec<String>,
+    pub shutdown_refs: Vec<String>,
+    pub cleanup_refs: Vec<String>,
+    pub ticket_status: String,
+    pub child_timed_out: bool,
+    pub orphaned_processes: Vec<String>,
+    pub cleanup_succeeded: bool,
+    pub diagnostics: Vec<String>,
+    pub caveats: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalMultiprocessExecutableRunReceipt {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub plan_ref: String,
+    pub run_ref: String,
+    pub executable_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreeNodeQuorumEvidenceInput {
+    pub topology_ref: String,
+    pub scenario_fixture_ref: String,
+    pub membership_gate_ref: String,
+    pub reconciliation_gate_ref: String,
+    pub node_summary_refs: Vec<String>,
+    pub quorum_refs: Vec<String>,
+    pub restarting_member: String,
+    pub duplicate_semantic_commit: bool,
+    pub log_only_quorum: bool,
+    pub caveats: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreeNodeQuorumGate {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub gate_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VmScenarioGateInput {
+    pub scenario_metadata_ref: String,
+    pub topology_membership_gate_ref: String,
+    pub reconciliation_gate_ref: String,
+    pub live_transport_gate_ref: Option<String>,
+    pub expected_artifact_kinds: Vec<String>,
+    pub observed_artifact_kinds: Vec<String>,
+    pub unsupported_pass_claim: bool,
+    pub log_only_reconciliation: bool,
+    pub caveats: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VmScenarioGate {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub gate_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VmFailureReproExportInput {
+    pub scenario_fixture_ref: String,
+    pub topology_ref: String,
+    pub scheduler_ref: String,
+    pub seed_ref: String,
+    pub fault_plan_ref: String,
+    pub command_refs: Vec<String>,
+    pub node_summary_refs: Vec<String>,
+    pub child_receipt_refs: Vec<String>,
+    pub validation_refs: Vec<String>,
+    pub diagnostic_log_refs: Vec<String>,
+    pub redaction_policy_ref: String,
+    pub private_attachment_refs: Vec<String>,
+    pub reveal_receipt_refs: Vec<String>,
+    pub unavailable_host_support: bool,
+    pub denied_or_failed_validation: bool,
+    pub caveats: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VmFailureReproExport {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub bundle_ref: String,
+    pub verification_ref: String,
+    pub export_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedDistributedCase {
     pub case_id: String,
     pub invariant_name: String,
@@ -393,6 +497,27 @@ pub fn default_multinode_topology_profiles() -> Vec<MultinodeTopologyProfile> {
             evidence_scope: "non-voting subscriber observation evidence".to_string(),
             required_receipt_kinds: vec!["observe".to_string(), "membership-denial".to_string()],
             caveats: vec!["subscriber evidence cannot satisfy voter membership".to_string()],
+        },
+        MultinodeTopologyProfile {
+            id: PROFILE_THREE_NODE_QUORUM.to_string(),
+            roles: vec![
+                role("node-a", ROLE_VOTER, MEMBERSHIP_VOTER),
+                role("node-b", ROLE_RESTARTING_MEMBER, MEMBERSHIP_VOTER),
+                role("node-c", ROLE_SUBSCRIBER, MEMBERSHIP_SUBSCRIBER),
+            ],
+            allowed_links: vec![
+                link("node-a", "node-b", "raft-control"),
+                link("node-b", "node-c", "observation"),
+                link("node-c", "node-a", "diagnostic-observation"),
+            ],
+            evidence_scope: "three-node quorum, restart/rejoin, and subscriber-negative evidence".to_string(),
+            required_receipt_kinds: vec![
+                "membership".to_string(),
+                "quorum".to_string(),
+                "reconciliation".to_string(),
+                "duplicate-suppression".to_string(),
+            ],
+            caveats: vec!["three-node evidence is topology-scoped and not fleet-scale evidence".to_string()],
         },
         MultinodeTopologyProfile {
             id: PROFILE_WRONG_TOPOLOGY.to_string(),
@@ -586,6 +711,156 @@ pub fn build_local_multiprocess_run_receipt(input: &LocalMultiprocessRunInput) -
         decision,
         diagnostics,
         receipt_ref,
+        value,
+    })
+}
+
+pub fn build_local_multiprocess_executable_run(
+    input: &LocalMultiprocessExecutableRunInput,
+) -> Result<LocalMultiprocessExecutableRunReceipt> {
+    let plan = build_local_multiprocess_plan(&input.plan)?;
+    let mut diagnostics = input.diagnostics.clone();
+    if plan.decision != PASS_DECISION {
+        push_diagnostic(&mut diagnostics, "local-executable-plan-denied".to_string())?;
+        for diagnostic in &plan.diagnostics {
+            push_diagnostic(&mut diagnostics, format!("plan:{diagnostic}"))?;
+        }
+    }
+    collect_required_text_diagnostic("local-executable-ticket-status", &input.ticket_status, &mut diagnostics)?;
+    if input.ticket_status != TICKET_STATUS_CURRENT {
+        push_diagnostic(&mut diagnostics, "local-executable-stale-ticket".to_string())?;
+    }
+    if input.child_timed_out {
+        push_diagnostic(&mut diagnostics, "local-executable-child-timeout".to_string())?;
+    }
+    for orphaned_process in &input.orphaned_processes {
+        collect_required_text_diagnostic("local-executable-orphaned-process", orphaned_process, &mut diagnostics)?;
+        push_diagnostic(&mut diagnostics, format!("local-executable-orphaned-process:{orphaned_process}"))?;
+    }
+    if !input.cleanup_succeeded {
+        push_diagnostic(&mut diagnostics, "local-executable-cleanup-failed".to_string())?;
+    }
+    let run = build_local_multiprocess_run_receipt(&LocalMultiprocessRunInput {
+        plan_ref: plan.plan_ref.clone(),
+        startup_refs: input.startup_refs.clone(),
+        workflow_refs: input.workflow_refs.clone(),
+        shutdown_refs: input.shutdown_refs.clone(),
+        cleanup_refs: input.cleanup_refs.clone(),
+        diagnostics,
+        caveats: input.caveats.clone(),
+    })?;
+    let value = local_multiprocess_executable_run_value(
+        input,
+        &plan.plan_ref,
+        &run.receipt_ref,
+        &run.decision,
+        &run.diagnostics,
+    )?;
+    let executable_ref = canonical_hash(&value)?;
+    Ok(LocalMultiprocessExecutableRunReceipt {
+        decision: run.decision,
+        diagnostics: run.diagnostics,
+        plan_ref: plan.plan_ref,
+        run_ref: run.receipt_ref,
+        executable_ref,
+        value,
+    })
+}
+
+pub fn evaluate_three_node_quorum_evidence(input: &ThreeNodeQuorumEvidenceInput) -> Result<ThreeNodeQuorumGate> {
+    let mut diagnostics = Vec::new();
+    collect_invalid_ref_diagnostics(
+        "three-node quorum root",
+        &[
+            input.topology_ref.clone(),
+            input.scenario_fixture_ref.clone(),
+            input.membership_gate_ref.clone(),
+            input.reconciliation_gate_ref.clone(),
+        ],
+        &mut diagnostics,
+    )?;
+    collect_invalid_ref_diagnostics("three-node node summary", &input.node_summary_refs, &mut diagnostics)?;
+    collect_invalid_ref_diagnostics("three-node quorum", &input.quorum_refs, &mut diagnostics)?;
+    collect_required_text_diagnostic("three-node-restarting-member", &input.restarting_member, &mut diagnostics)?;
+    push_if(&mut diagnostics, input.node_summary_refs.is_empty(), "three-node-missing-node-summaries")?;
+    push_if(&mut diagnostics, input.quorum_refs.is_empty(), "three-node-missing-quorum-refs")?;
+    push_if(&mut diagnostics, input.duplicate_semantic_commit, "three-node-duplicate-semantic-commit")?;
+    push_if(&mut diagnostics, input.log_only_quorum, "three-node-log-only-quorum")?;
+    push_if(&mut diagnostics, input.caveats.is_empty(), "three-node-missing-evidence-caveat")?;
+    let decision = decision_from_diagnostics(&diagnostics).to_string();
+    let value = three_node_quorum_gate_value(input, &decision, &diagnostics)?;
+    let gate_ref = canonical_hash(&value)?;
+    Ok(ThreeNodeQuorumGate {
+        decision,
+        diagnostics,
+        gate_ref,
+        value,
+    })
+}
+
+pub fn evaluate_vm_scenario_gate(input: &VmScenarioGateInput) -> Result<VmScenarioGate> {
+    let mut diagnostics = Vec::new();
+    collect_invalid_ref_diagnostics(
+        "VM scenario gate",
+        &[
+            input.scenario_metadata_ref.clone(),
+            input.topology_membership_gate_ref.clone(),
+            input.reconciliation_gate_ref.clone(),
+        ],
+        &mut diagnostics,
+    )?;
+    collect_invalid_optional_ref_diagnostics(
+        "VM scenario live transport gate",
+        input.live_transport_gate_ref.as_deref(),
+        &mut diagnostics,
+    )?;
+    push_if(&mut diagnostics, input.expected_artifact_kinds.is_empty(), "vm-scenario-missing-expected-artifacts")?;
+    push_if(&mut diagnostics, input.observed_artifact_kinds.is_empty(), "vm-scenario-missing-observed-artifacts")?;
+    if input.expected_artifact_kinds != input.observed_artifact_kinds {
+        push_diagnostic(&mut diagnostics, "vm-scenario-artifact-kind-mismatch".to_string())?;
+    }
+    push_if(&mut diagnostics, input.unsupported_pass_claim, "vm-scenario-unsupported-pass-claim")?;
+    push_if(&mut diagnostics, input.log_only_reconciliation, "vm-scenario-log-only-reconciliation")?;
+    push_if(&mut diagnostics, input.caveats.is_empty(), "vm-scenario-missing-evidence-caveat")?;
+    let decision = decision_from_diagnostics(&diagnostics).to_string();
+    let value = vm_scenario_gate_value(input, &decision, &diagnostics)?;
+    let gate_ref = canonical_hash(&value)?;
+    Ok(VmScenarioGate {
+        decision,
+        diagnostics,
+        gate_ref,
+        value,
+    })
+}
+
+pub fn export_vm_failure_repro(input: &VmFailureReproExportInput) -> Result<VmFailureReproExport> {
+    let bundle_input = vm_failure_repro_bundle_input(input);
+    let bundle = build_multinode_failure_repro_bundle(&bundle_input)?;
+    let verification = verify_multinode_failure_repro_bundle(&bundle_input)?;
+    let mut diagnostics = verification.diagnostics.clone();
+    if !input.unavailable_host_support && !input.denied_or_failed_validation {
+        push_diagnostic(&mut diagnostics, "vm-failure-repro-missing-failure-condition".to_string())?;
+    }
+    if input.caveats.is_empty() {
+        push_diagnostic(&mut diagnostics, "vm-failure-repro-missing-caveat".to_string())?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = decision_from_diagnostics(&diagnostics).to_string();
+    let value = vm_failure_repro_export_value(
+        input,
+        &bundle.bundle_ref,
+        &verification.verification_ref,
+        &decision,
+        &diagnostics,
+    )?;
+    let export_ref = canonical_hash(&value)?;
+    Ok(VmFailureReproExport {
+        decision,
+        diagnostics,
+        bundle_ref: bundle.bundle_ref,
+        verification_ref: verification.verification_ref,
+        export_ref,
         value,
     })
 }
@@ -825,6 +1100,7 @@ fn required_topology_profiles() -> [&'static str; REQUIRED_DEFAULT_TOPOLOGY_PROF
         PROFILE_CONTROL_QUORUM,
         PROFILE_RESTART_REJOIN,
         PROFILE_SUBSCRIBER_PEER,
+        PROFILE_THREE_NODE_QUORUM,
         PROFILE_WRONG_TOPOLOGY,
     ]
 }
@@ -1202,6 +1478,141 @@ fn local_multiprocess_run_value(
             ("process-receipts-bound", status(decision == PASS_DECISION)),
             ("local-evidence-not-vm-evidence", PASS_DECISION),
             ("cleanup-recorded", status(!input.cleanup_refs.is_empty())),
+        ]),
+    ]))
+}
+
+fn local_multiprocess_executable_run_value(
+    input: &LocalMultiprocessExecutableRunInput,
+    plan_ref: &str,
+    run_ref: &str,
+    decision: &str,
+    diagnostics: &[String],
+) -> Result<IoValue> {
+    Ok(record("local-multiprocess-executable-run-v1", vec![
+        string(LOCAL_MULTIPROCESS_EXECUTABLE_RUN_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("plan", vec![string(plan_ref)]),
+        record("run", vec![string(run_ref)]),
+        record("startup", vec![refs_sequence(&input.startup_refs)]),
+        record("workflow", vec![refs_sequence(&input.workflow_refs)]),
+        record("shutdown", vec![refs_sequence(&input.shutdown_refs)]),
+        record("cleanup", vec![refs_sequence(&input.cleanup_refs)]),
+        record("ticket-status", vec![string(&input.ticket_status)]),
+        record("child-timed-out", vec![bool_value(input.child_timed_out)]),
+        record("orphaned-processes", vec![strings_sequence(&input.orphaned_processes)]),
+        record("cleanup-succeeded", vec![bool_value(input.cleanup_succeeded)]),
+        record("diagnostics", vec![strings_sequence(diagnostics)]),
+        record("caveats", vec![strings_sequence(&input.caveats)]),
+        checks_value(&[
+            ("thin-shell-observations-bound", status(decision == PASS_DECISION)),
+            ("stale-ticket-denies", status(input.ticket_status == TICKET_STATUS_CURRENT)),
+            ("orphaned-process-denies", status(input.orphaned_processes.is_empty())),
+            ("local-evidence-not-vm-evidence", PASS_DECISION),
+        ]),
+    ]))
+}
+
+fn three_node_quorum_gate_value(
+    input: &ThreeNodeQuorumEvidenceInput,
+    decision: &str,
+    diagnostics: &[String],
+) -> Result<IoValue> {
+    Ok(record("three-node-quorum-gate-v1", vec![
+        string(THREE_NODE_QUORUM_GATE_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("topology", vec![string(&input.topology_ref)]),
+        record("scenario-fixture", vec![string(&input.scenario_fixture_ref)]),
+        record("membership-gate", vec![string(&input.membership_gate_ref)]),
+        record("reconciliation-gate", vec![string(&input.reconciliation_gate_ref)]),
+        record("node-summaries", vec![refs_sequence(&input.node_summary_refs)]),
+        record("quorum", vec![refs_sequence(&input.quorum_refs)]),
+        record("restarting-member", vec![string(&input.restarting_member)]),
+        record("diagnostics", vec![strings_sequence(diagnostics)]),
+        record("caveats", vec![strings_sequence(&input.caveats)]),
+        checks_value(&[
+            ("quorum-refs-bound", status(!input.quorum_refs.is_empty())),
+            ("duplicate-commit-denies", status(!input.duplicate_semantic_commit)),
+            ("log-only-quorum-denies", status(!input.log_only_quorum)),
+            ("topology-scoped", PASS_DECISION),
+        ]),
+    ]))
+}
+
+fn vm_scenario_gate_value(input: &VmScenarioGateInput, decision: &str, diagnostics: &[String]) -> Result<IoValue> {
+    Ok(record("vm-scenario-gate-v1", vec![
+        string(VM_SCENARIO_GATE_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("scenario-metadata", vec![string(&input.scenario_metadata_ref)]),
+        record("topology-membership-gate", vec![string(&input.topology_membership_gate_ref)]),
+        record("reconciliation-gate", vec![string(&input.reconciliation_gate_ref)]),
+        record("live-transport-gate", vec![optional_ref_value(input.live_transport_gate_ref.as_deref())]),
+        record("expected-artifacts", vec![strings_sequence(&input.expected_artifact_kinds)]),
+        record("observed-artifacts", vec![strings_sequence(&input.observed_artifact_kinds)]),
+        record("diagnostics", vec![strings_sequence(diagnostics)]),
+        record("caveats", vec![strings_sequence(&input.caveats)]),
+        checks_value(&[
+            ("scenario-metadata-bound", status(decision == PASS_DECISION)),
+            ("reconciliation-gate-required", status(!input.log_only_reconciliation)),
+            ("unsupported-pass-denies", status(!input.unsupported_pass_claim)),
+            ("logs-diagnostic-only", PASS_DECISION),
+        ]),
+    ]))
+}
+
+fn vm_failure_repro_bundle_input(input: &VmFailureReproExportInput) -> MultinodeFailureReproBundleInput {
+    let mut receipt_refs = input.child_receipt_refs.clone();
+    receipt_refs.extend(input.validation_refs.clone());
+    MultinodeFailureReproBundleInput {
+        scenario_fixture_ref: input.scenario_fixture_ref.clone(),
+        topology_ref: input.topology_ref.clone(),
+        scheduler_ref: input.scheduler_ref.clone(),
+        seed_ref: input.seed_ref.clone(),
+        fault_plan_ref: input.fault_plan_ref.clone(),
+        command_refs: input.command_refs.clone(),
+        node_summary_refs: input.node_summary_refs.clone(),
+        receipt_refs,
+        diagnostic_refs: input.validation_refs.clone(),
+        log_refs: input.diagnostic_log_refs.clone(),
+        redaction_policy_ref: input.redaction_policy_ref.clone(),
+        replay_status: NON_REPLAYABLE_VM.to_string(),
+        diagnostic_only: true,
+        sealed: true,
+        private_attachment_refs: input.private_attachment_refs.clone(),
+        reveal_receipt_refs: input.reveal_receipt_refs.clone(),
+        claimed_payload_ref: None,
+        caveats: input.caveats.clone(),
+    }
+}
+
+fn vm_failure_repro_export_value(
+    input: &VmFailureReproExportInput,
+    bundle_ref: &str,
+    verification_ref: &str,
+    decision: &str,
+    diagnostics: &[String],
+) -> Result<IoValue> {
+    Ok(record("vm-failure-repro-export-v1", vec![
+        string(VM_FAILURE_REPRO_EXPORT_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("bundle", vec![string(bundle_ref)]),
+        record("verification", vec![string(verification_ref)]),
+        record("topology", vec![string(&input.topology_ref)]),
+        record("node-summaries", vec![refs_sequence(&input.node_summary_refs)]),
+        record("child-receipts", vec![refs_sequence(&input.child_receipt_refs)]),
+        record("validation", vec![refs_sequence(&input.validation_refs)]),
+        record("diagnostic-logs", vec![refs_sequence(&input.diagnostic_log_refs)]),
+        record("unavailable-host-support", vec![bool_value(input.unavailable_host_support)]),
+        record("denied-or-failed-validation", vec![bool_value(input.denied_or_failed_validation)]),
+        record("diagnostics", vec![strings_sequence(diagnostics)]),
+        record("caveats", vec![strings_sequence(&input.caveats)]),
+        checks_value(&[
+            ("diagnostic-only", PASS_DECISION),
+            ("non-replayable-vm-observation", PASS_DECISION),
+            (
+                "failure-condition-bound",
+                status(input.unavailable_host_support || input.denied_or_failed_validation),
+            ),
         ]),
     ]))
 }
@@ -1647,6 +2058,7 @@ mod tests {
     const SIMULATION_MAX_TICKS: u64 = 32;
     const FAULT_START_TICK: u64 = 1;
     const FAULT_DURATION_TICKS: u64 = 2;
+    const THREE_NODE_PROFILE_ROLE_COUNT: usize = 3;
 
     fn local_ref(label: &str) -> String {
         content_ref_from_text(label)
@@ -1887,6 +2299,204 @@ mod tests {
         assert!(plan.diagnostics.iter().any(|item| item.contains("state-root-collision")));
         assert!(plan.diagnostics.iter().any(|item| item.contains("transport-collision")));
         assert!(plan.diagnostics.iter().any(|item| item == "local-plan-missing-cleanup-policy"));
+    }
+
+    fn executable_run_input() -> LocalMultiprocessExecutableRunInput {
+        LocalMultiprocessExecutableRunInput {
+            plan: local_plan_input(),
+            startup_refs: vec![local_ref("startup-a"), local_ref("startup-b")],
+            workflow_refs: vec![local_ref("workflow")],
+            shutdown_refs: vec![local_ref("shutdown-a"), local_ref("shutdown-b")],
+            cleanup_refs: vec![local_ref("cleanup")],
+            ticket_status: TICKET_STATUS_CURRENT.to_string(),
+            child_timed_out: false,
+            orphaned_processes: Vec::new(),
+            cleanup_succeeded: true,
+            diagnostics: Vec::new(),
+            caveats: vec!["local executable runner evidence is not VM evidence".to_string()],
+        }
+    }
+
+    #[test]
+    fn local_multiprocess_executable_runner_binds_shell_observations() {
+        // r[verify molten.testing.multinode.local_multiprocess_executable_runner]
+        let receipt = build_local_multiprocess_executable_run(&executable_run_input()).expect("executable local run");
+        let rendered = crate::preserves_rail::to_text(&receipt.value).expect("render executable run");
+
+        assert_eq!(receipt.decision, PASS_DECISION);
+        assert!(receipt.diagnostics.is_empty());
+        assert!(receipt.plan_ref.starts_with("blake3:"));
+        assert!(receipt.run_ref.starts_with("blake3:"));
+        assert!(rendered.contains("local-multiprocess-executable-run-v1"));
+        assert!(rendered.contains("local-evidence-not-vm-evidence"));
+    }
+
+    #[test]
+    fn local_multiprocess_executable_runner_denies_stale_timeout_orphan_and_missing_cleanup() {
+        // r[verify molten.testing.multinode.local_multiprocess_runner_negatives]
+        let mut input = executable_run_input();
+        input.ticket_status = "stale".to_string();
+        input.child_timed_out = true;
+        input.orphaned_processes = vec!["node-b".to_string()];
+        input.cleanup_succeeded = false;
+        input.workflow_refs = Vec::new();
+        input.cleanup_refs = Vec::new();
+        let receipt = build_local_multiprocess_executable_run(&input).expect("denied executable local run");
+
+        assert_eq!(receipt.decision, DENY_DECISION);
+        assert!(receipt.diagnostics.iter().any(|item| item == "local-executable-stale-ticket"));
+        assert!(receipt.diagnostics.iter().any(|item| item == "local-executable-child-timeout"));
+        assert!(receipt.diagnostics.iter().any(|item| item == "local-executable-orphaned-process:node-b"));
+        assert!(receipt.diagnostics.iter().any(|item| item == "local-executable-cleanup-failed"));
+        assert!(receipt.diagnostics.iter().any(|item| item == "local-run-missing-workflow-receipts"));
+        assert!(receipt.diagnostics.iter().any(|item| item == "local-run-missing-cleanup-receipts"));
+    }
+
+    fn three_node_input() -> ThreeNodeQuorumEvidenceInput {
+        ThreeNodeQuorumEvidenceInput {
+            topology_ref: local_ref("three-node-topology"),
+            scenario_fixture_ref: local_ref("fixture"),
+            membership_gate_ref: local_ref("membership-gate"),
+            reconciliation_gate_ref: local_ref("reconciliation-gate"),
+            node_summary_refs: vec![local_ref("node-a"), local_ref("node-b"), local_ref("node-c")],
+            quorum_refs: vec![local_ref("quorum-majority"), local_ref("duplicate-suppression")],
+            restarting_member: "node-b".to_string(),
+            duplicate_semantic_commit: false,
+            log_only_quorum: false,
+            caveats: vec!["three-node VM evidence is topology-scoped".to_string()],
+        }
+    }
+
+    #[test]
+    fn three_node_quorum_gate_binds_membership_restart_and_reconciliation_refs() {
+        // r[verify molten.testing.multinode.three_node_quorum_topology]
+        let profile = default_multinode_topology_profiles()
+            .into_iter()
+            .find(|profile| profile.id == PROFILE_THREE_NODE_QUORUM)
+            .expect("three-node profile");
+        let gate = evaluate_three_node_quorum_evidence(&three_node_input()).expect("three-node gate");
+        let rendered = crate::preserves_rail::to_text(&gate.value).expect("render three-node gate");
+
+        assert_eq!(profile.roles.len(), THREE_NODE_PROFILE_ROLE_COUNT);
+        assert_eq!(gate.decision, PASS_DECISION);
+        assert!(gate.diagnostics.is_empty());
+        assert!(rendered.contains("three-node-quorum-gate-v1"));
+        assert!(rendered.contains("topology-scoped"));
+    }
+
+    #[test]
+    fn three_node_quorum_gate_denies_missing_quorum_duplicate_and_log_only_claims() {
+        // r[verify molten.testing.multinode.three_node_membership_negatives]
+        let mut input = three_node_input();
+        input.quorum_refs = Vec::new();
+        input.duplicate_semantic_commit = true;
+        input.log_only_quorum = true;
+        let gate = evaluate_three_node_quorum_evidence(&input).expect("three-node gate");
+
+        assert_eq!(gate.decision, DENY_DECISION);
+        assert!(gate.diagnostics.iter().any(|item| item == "three-node-missing-quorum-refs"));
+        assert!(gate.diagnostics.iter().any(|item| item == "three-node-duplicate-semantic-commit"));
+        assert!(gate.diagnostics.iter().any(|item| item == "three-node-log-only-quorum"));
+    }
+
+    fn vm_scenario_gate_input() -> VmScenarioGateInput {
+        VmScenarioGateInput {
+            scenario_metadata_ref: local_ref("scenario-metadata"),
+            topology_membership_gate_ref: local_ref("membership-gate"),
+            reconciliation_gate_ref: local_ref("reconciliation-gate"),
+            live_transport_gate_ref: Some(local_ref("live-transport-gate")),
+            expected_artifact_kinds: vec![
+                "nixos-vm-test-run-v1".to_string(),
+                "multinode-reconciliation-gate-v1".to_string(),
+            ],
+            observed_artifact_kinds: vec![
+                "nixos-vm-test-run-v1".to_string(),
+                "multinode-reconciliation-gate-v1".to_string(),
+            ],
+            unsupported_pass_claim: false,
+            log_only_reconciliation: false,
+            caveats: vec!["VM scenario gate evidence does not grant authority".to_string()],
+        }
+    }
+
+    #[test]
+    fn vm_scenario_gate_binds_metadata_membership_reconciliation_and_live_transport() {
+        // r[verify molten.testing.multinode.vm_scenario_metadata_gate]
+        // r[verify molten.testing.multinode.vm_reconciliation_gate]
+        let gate = evaluate_vm_scenario_gate(&vm_scenario_gate_input()).expect("VM scenario gate");
+        let rendered = crate::preserves_rail::to_text(&gate.value).expect("render VM scenario gate");
+
+        assert_eq!(gate.decision, PASS_DECISION);
+        assert!(gate.diagnostics.is_empty());
+        assert!(rendered.contains("vm-scenario-gate-v1"));
+        assert!(rendered.contains("reconciliation-gate-required"));
+    }
+
+    #[test]
+    fn vm_scenario_gate_denies_wrong_fixture_shape_and_log_only_reconciliation() {
+        // r[verify molten.testing.multinode.vm_scenario_metadata_gate]
+        // r[verify molten.testing.multinode.vm_reconciliation_gate]
+        let mut input = vm_scenario_gate_input();
+        input.observed_artifact_kinds = vec!["log".to_string()];
+        input.unsupported_pass_claim = true;
+        input.log_only_reconciliation = true;
+        input.live_transport_gate_ref = Some("not-a-ref".to_string());
+        let gate = evaluate_vm_scenario_gate(&input).expect("VM scenario gate");
+
+        assert_eq!(gate.decision, DENY_DECISION);
+        assert!(gate.diagnostics.iter().any(|item| item == "vm-scenario-artifact-kind-mismatch"));
+        assert!(gate.diagnostics.iter().any(|item| item == "vm-scenario-unsupported-pass-claim"));
+        assert!(gate.diagnostics.iter().any(|item| item == "vm-scenario-log-only-reconciliation"));
+        assert!(gate.diagnostics.iter().any(|item| item == "invalid-VM scenario live transport gate-ref"));
+    }
+
+    fn vm_failure_export_input() -> VmFailureReproExportInput {
+        VmFailureReproExportInput {
+            scenario_fixture_ref: local_ref("fixture"),
+            topology_ref: local_ref("topology"),
+            scheduler_ref: local_ref("scheduler"),
+            seed_ref: local_ref("seed"),
+            fault_plan_ref: local_ref("fault-plan"),
+            command_refs: vec![local_ref("command")],
+            node_summary_refs: vec![local_ref("node-summary")],
+            child_receipt_refs: vec![local_ref("child")],
+            validation_refs: vec![local_ref("validation")],
+            diagnostic_log_refs: vec![local_ref("vm-log")],
+            redaction_policy_ref: local_ref("redaction-policy"),
+            private_attachment_refs: Vec::new(),
+            reveal_receipt_refs: Vec::new(),
+            unavailable_host_support: true,
+            denied_or_failed_validation: false,
+            caveats: vec!["VM failure bundles are diagnostic-only".to_string()],
+        }
+    }
+
+    #[test]
+    fn vm_failure_repro_export_seals_non_replayable_diagnostic_bundle() {
+        // r[verify molten.testing.multinode.vm_failure_repro_export]
+        let export = export_vm_failure_repro(&vm_failure_export_input()).expect("VM failure repro export");
+        let rendered = crate::preserves_rail::to_text(&export.value).expect("render VM failure export");
+
+        assert_eq!(export.decision, PASS_DECISION);
+        assert!(export.diagnostics.is_empty());
+        assert!(export.bundle_ref.starts_with("blake3:"));
+        assert!(export.verification_ref.starts_with("blake3:"));
+        assert!(rendered.contains("vm-failure-repro-export-v1"));
+        assert!(rendered.contains("non-replayable-vm-observation"));
+    }
+
+    #[test]
+    fn vm_failure_repro_export_denies_private_without_reveal_and_pass_condition_absence() {
+        // r[verify molten.testing.multinode.vm_failure_repro_privacy_gate]
+        let mut input = vm_failure_export_input();
+        input.private_attachment_refs = vec![local_ref("private-log")];
+        input.unavailable_host_support = false;
+        input.denied_or_failed_validation = false;
+        let export = export_vm_failure_repro(&input).expect("VM failure repro export");
+
+        assert_eq!(export.decision, DENY_DECISION);
+        assert!(export.diagnostics.iter().any(|item| item == "failure-repro-private-without-reveal"));
+        assert!(export.diagnostics.iter().any(|item| item == "vm-failure-repro-missing-failure-condition"));
     }
 
     fn distributed_topology() -> crate::distributed_core::DistributedTopology {

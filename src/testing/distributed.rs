@@ -13,6 +13,9 @@ const DISTRIBUTED_RUN_SCHEMA: &str = "molten.testing.distributed-test-run.v1";
 const DISTRIBUTED_CI_MATRIX_SCHEMA: &str = "molten.testing.distributed-ci.matrix.v1";
 const DISTRIBUTED_TEST_METADATA_SCHEMA: &str = "molten.testing.distributed-ci.metadata.v1";
 const DISTRIBUTED_CI_GATE_SCHEMA: &str = "molten.testing.distributed-ci.gate.v1";
+const COMPOSITE_FAULT_CASE_SCHEMA: &str = "molten.testing.distributed-simulation.composite-fault-case.v1";
+const COMPOSITE_FAULT_SUITE_SCHEMA: &str = "molten.testing.distributed-simulation.composite-fault-suite.v1";
+const GENERATED_CASE_PROMOTION_SCHEMA: &str = "molten.testing.distributed-simulation.generated-case-promotion.v1";
 
 const MAX_DISTRIBUTED_PEERS: usize = 128;
 const MAX_DISTRIBUTED_CHANNELS: usize = 512;
@@ -274,6 +277,56 @@ pub struct DistributedCiGate {
     pub traceability_ref: String,
     pub metadata_refs: Vec<String>,
     pub gate_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompositeFaultCase {
+    pub case_id: String,
+    pub invariant_name: String,
+    pub simulation: DistributedSimulationInput,
+    pub expected_decision: String,
+    pub profile_eligibility: Vec<String>,
+    pub cost_class: String,
+    pub caveats: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompositeFaultSuite {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub case_refs: Vec<String>,
+    pub run_refs: Vec<String>,
+    pub suite_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneratedCasePromotionInput {
+    pub case_id: String,
+    pub invariant_name: String,
+    pub seed_ref: String,
+    pub topology_ref: String,
+    pub scheduler_ref: String,
+    pub fault_plan_ref: String,
+    pub command_refs: Vec<String>,
+    pub replay_ref: String,
+    pub diagnostic_refs: Vec<String>,
+    pub profile_eligibility: Vec<String>,
+    pub traceability_refs: Vec<String>,
+    pub retry_attempts: u64,
+    pub variance_refs: Vec<String>,
+    pub cost_class: String,
+    pub release_review_status: String,
+    pub diagnostic_only: bool,
+    pub caveats: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneratedCasePromotion {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub promotion_ref: String,
     pub value: IoValue,
 }
 
@@ -1094,6 +1147,67 @@ pub fn evaluate_distributed_ci_gate(input: &DistributedCiGateInput<'_>) -> Resul
     })
 }
 
+pub fn evaluate_composite_fault_suite(cases: &[CompositeFaultCase]) -> Result<CompositeFaultSuite> {
+    ensure_count_at_most(cases.len(), MAX_DISTRIBUTED_PROFILES, "composite fault cases")?;
+    let mut diagnostics = Vec::new();
+    if cases.is_empty() {
+        diagnostics.push("composite-suite-empty".to_string());
+    }
+    let mut case_refs = Vec::with_capacity(cases.len());
+    let mut run_refs = Vec::with_capacity(cases.len());
+    for case in cases {
+        collect_composite_case_diagnostics(case, &mut diagnostics)?;
+        let case_value = composite_fault_case_value(case)?;
+        case_refs.push(canonical_ref(&case_value)?);
+        let run = run_distributed_simulation(&case.simulation)?;
+        run_refs.push(run.receipt_ref.clone());
+        if run.decision != case.expected_decision {
+            diagnostics.push(format!("composite-case-decision-mismatch:{}", case.case_id));
+        }
+        if case.expected_decision == DENY_DECISION && run.denied_operation_ids.is_empty() {
+            diagnostics.push(format!("composite-case-missing-denial:{}", case.case_id));
+        }
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() {
+        PASS_DECISION
+    } else {
+        DENY_DECISION
+    }
+    .to_string();
+    let value = composite_fault_suite_value(&decision, &case_refs, &run_refs, &diagnostics)?;
+    let suite_ref = canonical_ref(&value)?;
+    Ok(CompositeFaultSuite {
+        decision,
+        diagnostics,
+        case_refs,
+        run_refs,
+        suite_ref,
+        value,
+    })
+}
+
+pub fn evaluate_generated_case_promotion(input: &GeneratedCasePromotionInput) -> Result<GeneratedCasePromotion> {
+    let mut diagnostics = generated_case_promotion_diagnostics(input)?;
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() {
+        PASS_DECISION
+    } else {
+        DENY_DECISION
+    }
+    .to_string();
+    let value = generated_case_promotion_value(input, &decision, &diagnostics)?;
+    let promotion_ref = canonical_ref(&value)?;
+    Ok(GeneratedCasePromotion {
+        decision,
+        diagnostics,
+        promotion_ref,
+        value,
+    })
+}
+
 fn matrix_diagnostics(profiles: &[DistributedCiProfile]) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     let mut ids = OrderedSet::new();
@@ -1374,6 +1488,153 @@ fn distributed_ci_gate_value(
             ("negative-coverage-required", status(!diagnostics.iter().any(|item| item.contains("negative")))),
             ("zero-retry-pass-required", status(!diagnostics.iter().any(|item| item.contains("retry")))),
             ("unavailable-not-pass", status(!diagnostics.iter().any(|item| item.contains("unavailable")))),
+        ]),
+    ]))
+}
+
+fn collect_composite_case_diagnostics(case: &CompositeFaultCase, diagnostics: &mut Vec<String>) -> Result<()> {
+    validate_text("composite case id", &case.case_id)?;
+    validate_text("composite invariant", &case.invariant_name)?;
+    validate_decision(&case.expected_decision)?;
+    validate_cost_class(&case.cost_class)?;
+    validate_strings("composite profile", &case.profile_eligibility, MAX_DISTRIBUTED_TEXT)?;
+    validate_strings("composite caveat", &case.caveats, MAX_DISTRIBUTED_TEXT)?;
+    if case.profile_eligibility.is_empty() {
+        diagnostics.push(format!("composite-case-missing-profile:{}", case.case_id));
+    }
+    if case.caveats.is_empty() {
+        diagnostics.push(format!("composite-case-missing-caveat:{}", case.case_id));
+    }
+    Ok(())
+}
+
+fn composite_fault_case_value(case: &CompositeFaultCase) -> Result<IoValue> {
+    let topology_ref = canonical_ref(&distributed_topology_value(&case.simulation.topology)?)?;
+    let scheduler_ref = canonical_ref(&scheduler_profile_value(&case.simulation.scheduler)?)?;
+    let seed_ref = canonical_ref(&seed_value(&case.simulation.seed)?)?;
+    let fault_plan_ref = canonical_ref(&fault_plan_value(&case.simulation.fault_plan)?)?;
+    let command_ids = case.simulation.commands.iter().map(|command| command.operation_id.clone()).collect::<Vec<_>>();
+    Ok(record("composite-fault-case-v1", vec![
+        string(COMPOSITE_FAULT_CASE_SCHEMA),
+        record("id", vec![string(&case.case_id)]),
+        record("invariant", vec![string(&case.invariant_name)]),
+        record("expected-decision", vec![string(&case.expected_decision)]),
+        record("topology", vec![string(topology_ref)]),
+        record("scheduler", vec![string(scheduler_ref)]),
+        record("seed", vec![string(seed_ref)]),
+        record("fault-plan", vec![string(fault_plan_ref)]),
+        record("commands", vec![sequence(command_ids.iter().map(string).collect())]),
+        record("profiles", vec![sequence(case.profile_eligibility.iter().map(string).collect())]),
+        record("cost-class", vec![string(&case.cost_class)]),
+        record("caveats", vec![sequence(case.caveats.iter().map(string).collect())]),
+        checks_value(&[
+            ("named-case", PASS_DECISION),
+            ("deterministic-inputs-bound", PASS_DECISION),
+            ("retry-success-not-pass-evidence", PASS_DECISION),
+        ]),
+    ]))
+}
+
+fn composite_fault_suite_value(
+    decision: &str,
+    case_refs: &[String],
+    run_refs: &[String],
+    diagnostics: &[String],
+) -> Result<IoValue> {
+    validate_decision(decision)?;
+    validate_ref_slice("composite case", case_refs)?;
+    validate_ref_slice("composite run", run_refs)?;
+    validate_strings("composite diagnostic", diagnostics, MAX_DISTRIBUTED_TEXT)?;
+    Ok(record("composite-fault-suite-v1", vec![
+        string(COMPOSITE_FAULT_SUITE_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("cases", vec![refs_sequence(case_refs)]),
+        record("runs", vec![refs_sequence(run_refs)]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        checks_value(&[
+            ("named-cases-bound", status(!case_refs.is_empty())),
+            ("expected-decisions-honored", status(decision == PASS_DECISION)),
+            ("simulation-evidence-not-vm-evidence", PASS_DECISION),
+        ]),
+    ]))
+}
+
+fn generated_case_promotion_diagnostics(input: &GeneratedCasePromotionInput) -> Result<Vec<String>> {
+    validate_text("promotion case id", &input.case_id)?;
+    validate_text("promotion invariant", &input.invariant_name)?;
+    validate_ref(&input.seed_ref, "promotion seed")?;
+    validate_ref(&input.topology_ref, "promotion topology")?;
+    validate_ref(&input.scheduler_ref, "promotion scheduler")?;
+    validate_ref(&input.fault_plan_ref, "promotion fault plan")?;
+    validate_ref_slice("promotion command", &input.command_refs)?;
+    validate_ref(&input.replay_ref, "promotion replay")?;
+    validate_ref_slice("promotion diagnostic", &input.diagnostic_refs)?;
+    validate_strings("promotion profile", &input.profile_eligibility, MAX_DISTRIBUTED_TEXT)?;
+    validate_ref_slice("promotion traceability", &input.traceability_refs)?;
+    validate_ref_slice("promotion variance", &input.variance_refs)?;
+    validate_cost_class(&input.cost_class)?;
+    validate_release_status(&input.release_review_status)?;
+    validate_strings("promotion caveat", &input.caveats, MAX_DISTRIBUTED_TEXT)?;
+    let mut diagnostics = Vec::new();
+    if input.command_refs.is_empty() {
+        diagnostics.push(format!("promotion-missing-command:{}", input.case_id));
+    }
+    if input.diagnostic_refs.is_empty() {
+        diagnostics.push(format!("promotion-missing-diagnostic:{}", input.case_id));
+    }
+    if input.profile_eligibility.is_empty() {
+        diagnostics.push(format!("promotion-missing-profile:{}", input.case_id));
+    }
+    if input.traceability_refs.is_empty() {
+        diagnostics.push(format!("promotion-missing-traceability:{}", input.case_id));
+    }
+    if input.retry_attempts > 0 {
+        diagnostics.push(format!("promotion-retry-only-success:{}", input.case_id));
+    }
+    if input.variance_refs.is_empty() {
+        diagnostics.push(format!("promotion-undeclared-variance:{}", input.case_id));
+    }
+    if input.caveats.is_empty() {
+        diagnostics.push(format!("promotion-missing-caveat:{}", input.case_id));
+    }
+    if input.diagnostic_only && input.release_review_status == RELEASE_REQUIRED {
+        diagnostics.push(format!("promotion-diagnostic-only-release-claim:{}", input.case_id));
+    }
+    Ok(diagnostics)
+}
+
+fn generated_case_promotion_value(
+    input: &GeneratedCasePromotionInput,
+    decision: &str,
+    diagnostics: &[String],
+) -> Result<IoValue> {
+    validate_decision(decision)?;
+    validate_strings("promotion diagnostic", diagnostics, MAX_DISTRIBUTED_TEXT)?;
+    Ok(record("generated-case-promotion-v1", vec![
+        string(GENERATED_CASE_PROMOTION_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("case", vec![string(&input.case_id)]),
+        record("invariant", vec![string(&input.invariant_name)]),
+        record("seed", vec![string(&input.seed_ref)]),
+        record("topology", vec![string(&input.topology_ref)]),
+        record("scheduler", vec![string(&input.scheduler_ref)]),
+        record("fault-plan", vec![string(&input.fault_plan_ref)]),
+        record("commands", vec![refs_sequence(&input.command_refs)]),
+        record("replay", vec![string(&input.replay_ref)]),
+        record("diagnostics", vec![refs_sequence(&input.diagnostic_refs)]),
+        record("profiles", vec![sequence(input.profile_eligibility.iter().map(string).collect())]),
+        record("traceability", vec![refs_sequence(&input.traceability_refs)]),
+        record("retry-attempts", vec![u64_value(input.retry_attempts)]),
+        record("variance", vec![refs_sequence(&input.variance_refs)]),
+        record("cost-class", vec![string(&input.cost_class)]),
+        record("release-review-status", vec![string(&input.release_review_status)]),
+        record("diagnostic-only", vec![crate::preserves_rail::bool_value(input.diagnostic_only)]),
+        record("diagnostics-text", vec![sequence(diagnostics.iter().map(string).collect())]),
+        record("caveats", vec![sequence(input.caveats.iter().map(string).collect())]),
+        checks_value(&[
+            ("stable-refs-bound", status(decision == PASS_DECISION)),
+            ("traceability-required", status(!input.traceability_refs.is_empty())),
+            ("retry-only-success-denied", status(input.retry_attempts == 0)),
         ]),
     ]))
 }
@@ -1821,6 +2082,207 @@ mod tests {
                 .any(|diagnostic| diagnostic == "partitioned-quorum-denied-before-side-effects")
         );
         assert!(run.diagnostics.iter().any(|diagnostic| diagnostic == "undeclared-ambient-state"));
+    }
+
+    fn composite_case(
+        case_id: &str,
+        invariant_name: &str,
+        faults: Vec<FaultEvent>,
+        commands: Vec<SimulationCommand>,
+        expected_decision: &str,
+    ) -> CompositeFaultCase {
+        CompositeFaultCase {
+            case_id: case_id.to_string(),
+            invariant_name: invariant_name.to_string(),
+            simulation: input_with(
+                FaultPlan {
+                    events: faults,
+                    caveats: vec!["composite deterministic fault plan".to_string()],
+                },
+                commands,
+            ),
+            expected_decision: expected_decision.to_string(),
+            profile_eligibility: vec![PROFILE_PROTOCOL.to_string()],
+            cost_class: COST_FAST.to_string(),
+            caveats: vec!["composite simulation evidence does not satisfy VM or production claims".to_string()],
+        }
+    }
+
+    fn composite_suite_cases() -> Vec<CompositeFaultCase> {
+        let mut partitioned_quorum = command("op-partition-quorum");
+        partitioned_quorum.requires_quorum = true;
+        let mut pressure_quorum = command("op-pressure-quorum");
+        pressure_quorum.requires_quorum = true;
+        vec![
+            composite_case(
+                "duplicate-after-restart",
+                "duplicate commit suppression after restart",
+                vec![
+                    fault(FAULT_RESTART, "op-restart", "restart-window"),
+                    fault(FAULT_DUPLICATE, "op-duplicate", "duplicate-delivery"),
+                ],
+                vec![command("op-restart"), command("op-duplicate")],
+                PASS_DECISION,
+            ),
+            composite_case(
+                "partition-with-stale-evidence",
+                "partitioned quorum denies stale evidence",
+                vec![
+                    fault(FAULT_PARTITION, "op-partition-quorum", "minority-partition"),
+                    fault(FAULT_STALE_EVIDENCE, "op-partition-quorum", "stale-ledger"),
+                ],
+                vec![partitioned_quorum],
+                DENY_DECISION,
+            ),
+            composite_case(
+                "reorder-with-reconcile",
+                "reorder still reconciles ack evidence",
+                vec![fault(FAULT_REORDER, "op-reorder", "ack-reordered")],
+                vec![command("op-reorder")],
+                PASS_DECISION,
+            ),
+            composite_case(
+                "crash-during-dispatch",
+                "crash during dispatch replays deterministically",
+                vec![fault(FAULT_CRASH, "op-crash", "dispatch-crash")],
+                vec![command("op-crash")],
+                PASS_DECISION,
+            ),
+            composite_case(
+                "resource-pressure-during-quorum",
+                "resource pressure denies before quorum side effects",
+                vec![fault(FAULT_RESOURCE_PRESSURE, "op-pressure-quorum", "budget-pressure")],
+                vec![pressure_quorum],
+                DENY_DECISION,
+            ),
+        ]
+    }
+
+    #[test]
+    fn composite_fault_suite_accepts_named_positive_and_negative_regressions() {
+        // r[verify molten.testing.distributed_simulation.composite_fault_regression_suite]
+        let suite = evaluate_composite_fault_suite(&composite_suite_cases()).expect("composite suite");
+        let rendered = crate::preserves_rail::to_text(&suite.value).expect("render composite suite");
+
+        assert_eq!(suite.decision, PASS_DECISION);
+        assert_eq!(suite.case_refs.len(), composite_suite_cases().len());
+        assert_eq!(suite.run_refs.len(), suite.case_refs.len());
+        assert!(suite.diagnostics.is_empty());
+        assert!(rendered.contains("composite-fault-suite-v1"));
+        assert!(rendered.contains("simulation-evidence-not-vm-evidence"));
+    }
+
+    #[test]
+    fn composite_fault_suite_denies_mismatched_expected_decision() {
+        // r[verify molten.testing.distributed_simulation.composite_fault_regression_suite]
+        let mut stale_case = composite_case(
+            "stale-evidence-claimed-pass",
+            "stale evidence cannot pass by retry",
+            vec![fault(FAULT_STALE_EVIDENCE, "op-stale", "stale-ledger")],
+            vec![command("op-stale")],
+            PASS_DECISION,
+        );
+        stale_case.profile_eligibility = Vec::new();
+        let suite = evaluate_composite_fault_suite(&[stale_case]).expect("composite suite");
+
+        assert_eq!(suite.decision, DENY_DECISION);
+        assert!(
+            suite
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "composite-case-decision-mismatch:stale-evidence-claimed-pass")
+        );
+        assert!(
+            suite
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "composite-case-missing-profile:stale-evidence-claimed-pass")
+        );
+    }
+
+    fn promotion_input() -> GeneratedCasePromotionInput {
+        GeneratedCasePromotionInput {
+            case_id: "generated-partition-stale".to_string(),
+            invariant_name: "partitioned stale evidence denies".to_string(),
+            seed_ref: local_ref("seed"),
+            topology_ref: local_ref("topology"),
+            scheduler_ref: local_ref("scheduler"),
+            fault_plan_ref: local_ref("fault-plan"),
+            command_refs: vec![local_ref("command")],
+            replay_ref: local_ref("replay"),
+            diagnostic_refs: vec![local_ref("diagnostic")],
+            profile_eligibility: vec![PROFILE_PROTOCOL.to_string()],
+            traceability_refs: vec![local_ref("traceability")],
+            retry_attempts: 0,
+            variance_refs: vec![local_ref("variance:none")],
+            cost_class: COST_FAST.to_string(),
+            release_review_status: RELEASE_REQUIRED.to_string(),
+            diagnostic_only: false,
+            caveats: vec!["promotion evidence remains simulation scoped".to_string()],
+        }
+    }
+
+    #[test]
+    fn generated_case_promotion_requires_budget_traceability_and_zero_retry() {
+        // r[verify molten.testing.distributed_simulation.generated_case_promotion_budget]
+        let promotion = evaluate_generated_case_promotion(&promotion_input()).expect("promotion");
+        let rendered = crate::preserves_rail::to_text(&promotion.value).expect("render promotion");
+
+        assert_eq!(promotion.decision, PASS_DECISION);
+        assert!(promotion.diagnostics.is_empty());
+        assert!(rendered.contains("generated-case-promotion-v1"));
+        assert!(rendered.contains("traceability-required"));
+    }
+
+    #[test]
+    fn generated_case_promotion_denies_retry_only_and_missing_budget_metadata() {
+        // r[verify molten.testing.distributed_simulation.generated_case_promotion_budget]
+        let mut input = promotion_input();
+        input.command_refs = Vec::new();
+        input.profile_eligibility = Vec::new();
+        input.traceability_refs = Vec::new();
+        input.retry_attempts = 1;
+        input.variance_refs = Vec::new();
+        input.diagnostic_only = true;
+        let promotion = evaluate_generated_case_promotion(&input).expect("promotion");
+
+        assert_eq!(promotion.decision, DENY_DECISION);
+        assert!(
+            promotion
+                .diagnostics
+                .iter()
+                .any(|item| item == "promotion-missing-command:generated-partition-stale")
+        );
+        assert!(
+            promotion
+                .diagnostics
+                .iter()
+                .any(|item| item == "promotion-missing-profile:generated-partition-stale")
+        );
+        assert!(
+            promotion
+                .diagnostics
+                .iter()
+                .any(|item| item == "promotion-missing-traceability:generated-partition-stale")
+        );
+        assert!(
+            promotion
+                .diagnostics
+                .iter()
+                .any(|item| item == "promotion-retry-only-success:generated-partition-stale")
+        );
+        assert!(
+            promotion
+                .diagnostics
+                .iter()
+                .any(|item| item == "promotion-undeclared-variance:generated-partition-stale")
+        );
+        assert!(
+            promotion
+                .diagnostics
+                .iter()
+                .any(|item| item == "promotion-diagnostic-only-release-claim:generated-partition-stale")
+        );
     }
 
     fn traceability_manifest() -> crate::trace_core::TraceabilityManifest {

@@ -7,6 +7,9 @@ const NIXOS_VM_TEST_RUN_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_TEST_RUN_
 const NIXOS_VM_TOPOLOGY_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_TOPOLOGY_SCHEMA;
 const NIXOS_VM_FAULT_DESCRIPTOR_SCHEMA: &str = "molten.testing.nixos-vm.fault-descriptor.v1";
 const NIXOS_VM_FAULT_RECEIPT_SCHEMA: &str = "molten.testing.nixos-vm.fault-receipt.v1";
+const NIXOS_VM_NETWORK_CONTROL_PROBE_SCHEMA: &str = "molten.testing.nixos-vm.network-control-probe.v1";
+const NIXOS_VM_SHARD_RUN_SCHEMA: &str = "molten.testing.nixos-vm.shard-run.v1";
+const NIXOS_VM_MULTINODE_AGGREGATE_SCHEMA: &str = "molten.testing.nixos-vm.multinode-aggregate.v1";
 
 fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
@@ -93,6 +96,58 @@ pub struct NixosVmFaultReceiptInput<'a> {
     pub diagnostics: &'a [String],
     pub log_refs: &'a [String],
     pub caveats: &'a [String],
+}
+
+pub struct NixosVmNetworkControlProbeInput<'a> {
+    pub backend: &'a str,
+    pub target_link: &'a str,
+    pub topology_ref: &'a str,
+    pub host_support: &'a str,
+    pub cleanup_strategy: &'a str,
+    pub diagnostics: &'a [String],
+    pub caveats: &'a [String],
+}
+
+pub struct NixosVmShardRunInput<'a> {
+    pub shard_id: &'a str,
+    pub scenario_fixture_ref: &'a str,
+    pub topology_ref: &'a str,
+    pub package_ref: &'a str,
+    pub node_evidence_refs: &'a [String],
+    pub child_receipt_refs: &'a [String],
+    pub diagnostic_log_refs: &'a [String],
+    pub unavailable: bool,
+    pub claimed_decision: &'a str,
+    pub caveats: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixosVmShardRunReceipt {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub shard_ref: String,
+    pub value: IoValue,
+}
+
+pub struct NixosVmAggregateInput<'a> {
+    pub topology_ref: &'a str,
+    pub package_ref: &'a str,
+    pub manifest_ref: &'a str,
+    pub required_shard_ids: &'a [String],
+    pub shard_refs: &'a [String],
+    pub denied_shard_ids: &'a [String],
+    pub unavailable_as_pass_shard_ids: &'a [String],
+    pub stale_child_refs: &'a [String],
+    pub log_only_child_refs: &'a [String],
+    pub caveats: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixosVmAggregateReceipt {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub aggregate_ref: String,
+    pub value: IoValue,
 }
 
 pub fn topology_value(input: &NixosVmTopologyInput<'_>) -> Result<IoValue> {
@@ -267,6 +322,184 @@ pub fn vm_fault_receipt_value(input: &NixosVmFaultReceiptInput<'_>) -> Result<Io
     ]))
 }
 
+pub fn network_control_probe_value(input: &NixosVmNetworkControlProbeInput<'_>) -> Result<IoValue> {
+    validate_text_field("network-control backend", input.backend)?;
+    validate_text_field("network-control target link", input.target_link)?;
+    validate_content_ref(input.topology_ref)?;
+    validate_host_support(input.host_support)?;
+    validate_text_field("network-control cleanup strategy", input.cleanup_strategy)?;
+    Ok(record("nixos-vm-network-control-probe-v1", vec![
+        string(NIXOS_VM_NETWORK_CONTROL_PROBE_SCHEMA),
+        record("backend", vec![string(input.backend)]),
+        record("target-link", vec![string(input.target_link)]),
+        record("topology", vec![string(input.topology_ref)]),
+        record("host-support", vec![string(input.host_support)]),
+        record("cleanup-strategy", vec![string(input.cleanup_strategy)]),
+        record("diagnostics", vec![sequence(string_values(
+            "network-control diagnostic",
+            input.diagnostics,
+            MAX_VM_TEXT_FIELDS,
+        )?)]),
+        record("caveats", vec![sequence(string_values(
+            "network-control caveat",
+            input.caveats,
+            MAX_VM_TEXT_FIELDS,
+        )?)]),
+        record("checks", vec![sequence(vec![
+            check_value("backend-explicit", "pass"),
+            check_value("cleanup-strategy-explicit", "pass"),
+            check_value("unavailable-is-not-pass-evidence", "pass"),
+        ])]),
+    ]))
+}
+
+pub fn evaluate_vm_shard_run(input: &NixosVmShardRunInput<'_>) -> Result<NixosVmShardRunReceipt> {
+    let mut diagnostics = Vec::new();
+    collect_vm_shard_diagnostics(input, &mut diagnostics)?;
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
+    let value = vm_shard_run_value(input, &decision, &diagnostics)?;
+    let shard_ref = crate::preserves_rail::canonical_hash(&value)?;
+    Ok(NixosVmShardRunReceipt {
+        decision,
+        diagnostics,
+        shard_ref,
+        value,
+    })
+}
+
+pub fn evaluate_vm_aggregate(input: &NixosVmAggregateInput<'_>) -> Result<NixosVmAggregateReceipt> {
+    let mut diagnostics = Vec::new();
+    collect_vm_aggregate_diagnostics(input, &mut diagnostics)?;
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
+    let value = vm_aggregate_value(input, &decision, &diagnostics)?;
+    let aggregate_ref = crate::preserves_rail::canonical_hash(&value)?;
+    Ok(NixosVmAggregateReceipt {
+        decision,
+        diagnostics,
+        aggregate_ref,
+        value,
+    })
+}
+
+fn collect_vm_shard_diagnostics(input: &NixosVmShardRunInput<'_>, diagnostics: &mut Vec<String>) -> Result<()> {
+    validate_text_field("VM shard", input.shard_id)?;
+    validate_content_ref(input.scenario_fixture_ref)?;
+    validate_content_ref(input.topology_ref)?;
+    validate_content_ref(input.package_ref)?;
+    validate_decision(input.claimed_decision)?;
+    validate_ref_slice("VM shard node evidence", input.node_evidence_refs)?;
+    validate_ref_slice("VM shard child receipt", input.child_receipt_refs)?;
+    validate_ref_slice("VM shard diagnostic log", input.diagnostic_log_refs)?;
+    if input.claimed_decision == "pass" && input.unavailable {
+        diagnostics.push(format!("vm-shard-unavailable-as-pass:{}", input.shard_id));
+    }
+    if input.claimed_decision == "pass" && input.child_receipt_refs.is_empty() {
+        diagnostics.push(format!("vm-shard-log-only-pass:{}", input.shard_id));
+    }
+    if input.node_evidence_refs.is_empty() {
+        diagnostics.push(format!("vm-shard-missing-node-evidence:{}", input.shard_id));
+    }
+    if input.diagnostic_log_refs.is_empty() {
+        diagnostics.push(format!("vm-shard-missing-diagnostic-log:{}", input.shard_id));
+    }
+    if input.caveats.is_empty() {
+        diagnostics.push(format!("vm-shard-missing-caveat:{}", input.shard_id));
+    }
+    Ok(())
+}
+
+fn collect_vm_aggregate_diagnostics(input: &NixosVmAggregateInput<'_>, diagnostics: &mut Vec<String>) -> Result<()> {
+    validate_content_ref(input.topology_ref)?;
+    validate_content_ref(input.package_ref)?;
+    validate_content_ref(input.manifest_ref)?;
+    validate_strings("VM aggregate required shard", input.required_shard_ids, MAX_VM_TEXT_FIELDS)?;
+    validate_ref_slice("VM aggregate shard", input.shard_refs)?;
+    validate_strings("VM aggregate denied shard", input.denied_shard_ids, MAX_VM_TEXT_FIELDS)?;
+    validate_strings(
+        "VM aggregate unavailable-as-pass shard",
+        input.unavailable_as_pass_shard_ids,
+        MAX_VM_TEXT_FIELDS,
+    )?;
+    validate_ref_slice("VM aggregate stale child", input.stale_child_refs)?;
+    validate_ref_slice("VM aggregate log-only child", input.log_only_child_refs)?;
+    if input.required_shard_ids.is_empty() {
+        diagnostics.push("vm-aggregate-missing-required-shards".to_string());
+    }
+    if input.shard_refs.len() < input.required_shard_ids.len() {
+        diagnostics.push("vm-aggregate-missing-shard-ref".to_string());
+    }
+    for shard_id in input.denied_shard_ids {
+        diagnostics.push(format!("vm-aggregate-denied-shard:{shard_id}"));
+    }
+    for shard_id in input.unavailable_as_pass_shard_ids {
+        diagnostics.push(format!("vm-aggregate-unavailable-as-pass:{shard_id}"));
+    }
+    for stale_ref in input.stale_child_refs {
+        diagnostics.push(format!("vm-aggregate-stale-child:{stale_ref}"));
+    }
+    for log_only_ref in input.log_only_child_refs {
+        diagnostics.push(format!("vm-aggregate-log-only-child:{log_only_ref}"));
+    }
+    if input.caveats.is_empty() {
+        diagnostics.push("vm-aggregate-missing-caveat".to_string());
+    }
+    Ok(())
+}
+
+fn vm_shard_run_value(input: &NixosVmShardRunInput<'_>, decision: &str, diagnostics: &[String]) -> Result<IoValue> {
+    Ok(record("nixos-vm-shard-run-v1", vec![
+        string(NIXOS_VM_SHARD_RUN_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("claimed-decision", vec![string(input.claimed_decision)]),
+        record("shard", vec![string(input.shard_id)]),
+        record("scenario-fixture", vec![string(input.scenario_fixture_ref)]),
+        record("topology", vec![string(input.topology_ref)]),
+        record("package", vec![string(input.package_ref)]),
+        record("node-evidence", vec![sequence(ref_values(input.node_evidence_refs)?)]),
+        record("children", vec![sequence(ref_values(input.child_receipt_refs)?)]),
+        record("diagnostic-logs", vec![sequence(ref_values(input.diagnostic_log_refs)?)]),
+        record("unavailable", vec![crate::preserves_rail::bool_value(input.unavailable)]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        record("caveats", vec![sequence(string_values(
+            "VM shard caveat",
+            input.caveats,
+            MAX_VM_TEXT_FIELDS,
+        )?)]),
+        record("checks", vec![sequence(vec![
+            check_value("scenario-bound", status(decision == "pass")),
+            check_value("logs-diagnostic-only", "pass"),
+            check_value("unavailable-is-not-pass", status(!input.unavailable || input.claimed_decision != "pass")),
+        ])]),
+    ]))
+}
+
+fn vm_aggregate_value(input: &NixosVmAggregateInput<'_>, decision: &str, diagnostics: &[String]) -> Result<IoValue> {
+    Ok(record("nixos-vm-multinode-aggregate-v1", vec![
+        string(NIXOS_VM_MULTINODE_AGGREGATE_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("topology", vec![string(input.topology_ref)]),
+        record("package", vec![string(input.package_ref)]),
+        record("manifest", vec![string(input.manifest_ref)]),
+        record("required-shards", vec![sequence(input.required_shard_ids.iter().map(string).collect())]),
+        record("shards", vec![sequence(ref_values(input.shard_refs)?)]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        record("caveats", vec![sequence(string_values(
+            "VM aggregate caveat",
+            input.caveats,
+            MAX_VM_TEXT_FIELDS,
+        )?)]),
+        record("checks", vec![sequence(vec![
+            check_value("child-shards-bound", status(!input.shard_refs.is_empty())),
+            check_value("unavailable-not-promoted", status(input.unavailable_as_pass_shard_ids.is_empty())),
+            check_value("logs-diagnostic-only", "pass"),
+        ])]),
+    ]))
+}
+
 fn validate_nodes(nodes: &[String]) -> Result<()> {
     if nodes.is_empty() {
         return Err(MoltenError::invalid_harness("nixos VM topology requires at least one node"));
@@ -369,16 +602,23 @@ fn node_values(nodes: &[String]) -> Result<Vec<IoValue>> {
     Ok(values)
 }
 
-fn string_values(label: &str, values: &[String], maximum: usize) -> Result<Vec<IoValue>> {
+fn validate_strings(label: &str, values: &[String], maximum: usize) -> Result<()> {
     if values.len() > maximum {
         return Err(MoltenError::invalid_harness(format!(
             "nixos VM {label} count {} exceeds bound {maximum}",
             values.len()
         )));
     }
-    let mut output = Vec::with_capacity(values.len());
     for value in values {
         validate_text_field(label, value)?;
+    }
+    Ok(())
+}
+
+fn string_values(label: &str, values: &[String], maximum: usize) -> Result<Vec<IoValue>> {
+    validate_strings(label, values, maximum)?;
+    let mut output = Vec::with_capacity(values.len());
+    for value in values {
         output.push(string(value));
     }
     Ok(output)
@@ -409,6 +649,10 @@ fn optional_text_value(value: Option<&str>) -> IoValue {
 
 fn check_value(name: &'static str, status: &'static str) -> IoValue {
     record("check", vec![string(name), string(status)])
+}
+
+fn status(is_passing: bool) -> &'static str {
+    if is_passing { "pass" } else { "deny" }
 }
 
 #[path = "vm_validation.rs"]
