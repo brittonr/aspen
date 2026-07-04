@@ -1545,3 +1545,45 @@ r[molten.provenance_state_proof.evidence_only_boundary] Molten MUST prove that p
 - WHEN node control evaluates install admission
 - THEN install admission is `deny`
 - AND diagnostics identify the missing non-provenance gates.
+
+### Requirement: Nickel contract exports carry metadata envelopes
+r[molten.evidence.contract_exports.metadata_envelope] Nickel-authored contract and fixture exports that are promoted to evidence MUST carry explicit schema id, schema version, source language, stable export identity, and payload fields before their content refs are bound into receipts.
+
+#### Scenario: Envelope identifies export shape
+- GIVEN a Nickel-authored contract export that will be checked in or bound into a receipt
+- WHEN a reviewer inspects the exported value
+- THEN the value names its schema id, schema version, source language, stable identity, and payload without relying on filename inference
+
+#### Scenario: Missing metadata fails evidence promotion
+- GIVEN a Nickel-authored contract export that omits schema id, schema version, source language, or stable identity metadata
+- WHEN evidence promotion validation runs
+- THEN promotion fails before receipts can treat the export as reviewed contract evidence
+
+### Requirement: Contract export envelopes are evidence shape only
+r[molten.evidence.contract_exports.evidence_only_metadata] Contract export metadata MUST identify evidence shape and reviewed source only, and MUST NOT grant authority, policy permission, source-gate freshness, adapter readiness, resource trust, transport admission, or plugin hostcall authority.
+
+#### Scenario: Metadata does not grant authority
+- GIVEN a contract export with a valid metadata envelope
+- WHEN a subsystem needs runtime authority or freshness evidence
+- THEN it still requires the subsystem-specific receipts and does not treat the envelope metadata as authority
+
+### Requirement: Contract export drift gates compare source, export, schema, and Rust admission
+r[molten.evidence.contract_export_drift.source_export_rust_alignment] Contract export drift gates MUST verify that reviewed Nickel source exports match checked-in generated JSON or Preserves artifacts, that Preserves boundary schema identity and arity remain compatible, and that Rust admission accepts valid exports while rejecting negative exports.
+
+#### Scenario: Checked export matches source and parser
+- GIVEN a reviewed Nickel contract source, its checked-in generated artifact, the relevant Preserves boundary schema, and Rust admission parser coverage
+- WHEN the drift gate runs
+- THEN it confirms the generated artifact matches the source export and the Rust parser admits it as valid evidence
+
+#### Scenario: Stale generated artifact fails
+- GIVEN a Nickel contract source changed without refreshing its checked-in generated JSON or Preserves artifact
+- WHEN the drift gate runs
+- THEN validation fails before the stale artifact can be promoted as current evidence
+
+### Requirement: Contract export drift gates are deterministic and local
+r[molten.evidence.contract_export_drift.local_deterministic_gate] Contract export drift gates MUST run deterministically from source-controlled fixtures without live network access, production credentials, mutable runtime state, or runtime Nickel authority.
+
+#### Scenario: Local drift check runs in CI
+- GIVEN a checkout with contract sources, fixtures, generated artifacts, and Rust tests
+- WHEN the CI or release-review drift gate runs
+- THEN it produces deterministic pass or fail evidence using only source-controlled inputs and local toolchains

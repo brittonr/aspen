@@ -415,6 +415,92 @@
                 touch "$out"
               '';
 
+          contract-export-drift-gate =
+            pkgs.runCommand "molten-contract-export-drift-gate"
+              {
+                nativeBuildInputs = [
+                  pkgs.nickel
+                  pkgs.diffutils
+                ];
+                src = sourceForConfigChecks;
+              }
+              ''
+                set -euo pipefail
+                cp -R $src source
+                chmod -R u+w source
+                cd source
+
+                nickel export cairn-policy/default.ncl > "$TMPDIR/cairn-policy.json"
+                diff -u cairn-policy/generated/cairn-policy.json "$TMPDIR/cairn-policy.json"
+
+                nickel export docs/plugin-extension-contracts/storage.contract-envelope.ncl > "$TMPDIR/storage.contract-envelope.json"
+                diff -u docs/plugin-extension-contracts/generated/storage.contract-envelope.json "$TMPDIR/storage.contract-envelope.json"
+                nickel export docs/plugin-extension-contracts/storage.grant-envelope.ncl > "$TMPDIR/storage.grant-envelope.json"
+                diff -u docs/plugin-extension-contracts/generated/storage.grant-envelope.json "$TMPDIR/storage.grant-envelope.json"
+
+                nickel export docs/production-node-profile.ncl --field profile.resource_limits > "$TMPDIR/resource-limits.json"
+                diff -u docs/production-profile-fixtures/expected-resource-limits.json "$TMPDIR/resource-limits.json"
+
+                failed=0
+                positive_fixture() {
+                  label="$1"
+                  fixture="$2"
+                  if ! nickel export "$fixture" > "$TMPDIR/$label.json" 2> "$TMPDIR/$label.err"; then
+                    echo "positive fixture failed: $fixture" >&2
+                    cat "$TMPDIR/$label.err" >&2
+                    failed=1
+                  fi
+                }
+                negative_fixture() {
+                  label="$1"
+                  fixture="$2"
+                  if nickel export "$fixture" > "$TMPDIR/$label.json" 2> "$TMPDIR/$label.err"; then
+                    echo "negative fixture unexpectedly exported: $fixture" >&2
+                    failed=1
+                  fi
+                }
+
+                positive_fixture production-node-profile docs/production-node-profile.ncl
+                positive_fixture production-profile-valid docs/production-profile-fixtures/valid.ncl
+                for fixture in docs/production-profile-fixtures/negative/*.ncl; do
+                  negative_fixture "production-$(basename "$fixture" .ncl)" "$fixture"
+                done
+                positive_fixture peer-profile-valid docs/peer-profile-fixtures/valid.ncl
+                for fixture in docs/peer-profile-fixtures/negative/*.ncl; do
+                  negative_fixture "peer-$(basename "$fixture" .ncl)" "$fixture"
+                done
+                for fixture in docs/multinode-scenario-fixtures/valid/*.ncl; do
+                  positive_fixture "multinode-valid-$(basename "$fixture" .ncl)" "$fixture"
+                done
+                for fixture in docs/multinode-scenario-fixtures/negative/*.ncl; do
+                  negative_fixture "multinode-negative-$(basename "$fixture" .ncl)" "$fixture"
+                done
+                positive_fixture plugin-storage docs/plugin-extension-contracts/storage.ncl
+                positive_fixture plugin-storage-grant docs/plugin-extension-contracts/storage.grant.ncl
+                positive_fixture plugin-storage-revoked-grant docs/plugin-extension-contracts/storage-revoked.grant.ncl
+                positive_fixture plugin-storage-contract-envelope docs/plugin-extension-contracts/storage.contract-envelope.ncl
+                positive_fixture plugin-storage-grant-envelope docs/plugin-extension-contracts/storage.grant-envelope.ncl
+                for fixture in docs/plugin-extension-contracts/storage-*.ncl docs/plugin-extension-contracts/storage-*.grant.ncl; do
+                  case "$fixture" in
+                    docs/plugin-extension-contracts/storage-revoked.grant.ncl|docs/plugin-extension-contracts/storage.contract-envelope.ncl|docs/plugin-extension-contracts/storage.grant-envelope.ncl) continue ;;
+                  esac
+                  negative_fixture "plugin-$(basename "$fixture" .ncl)" "$fixture"
+                done
+                positive_fixture cairn-policy-default cairn-policy/default.ncl
+                for fixture in cairn-policy/fixtures/*.ncl; do
+                  name=$(basename "$fixture" .ncl)
+                  case "$name" in
+                    valid*) positive_fixture "cairn-$name" "$fixture" ;;
+                    *) negative_fixture "cairn-$name" "$fixture" ;;
+                  esac
+                done
+
+                if [ "$failed" -ne 0 ]; then
+                  exit 1
+                fi
+                touch "$out"
+              '';
+
           kache-nix-rust-wrapper-contract =
             let
               missingCacheDiagnostic = "cache directory is not writable";

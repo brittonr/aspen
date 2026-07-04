@@ -1,22 +1,16 @@
 # Typed Nickel contract for static peer profile exports.
 # Runtime Rust consumes checked exported JSON; it does not evaluate Nickel.
 
+let Prelude = import "nickel-contract-prelude.ncl" in
 let SchemaId = "molten.peer-profile.export.v1" in
 let SchemaVersion = 1 in
 let SourceLanguage = "nickel" in
 let MaxStaticPeerProfiles = 32 in
 
-let is_non_empty_string = fun value =>
-  std.is_string value && std.string.length value > 0 in
-
-let is_blake3_ref = fun value =>
-  std.is_string value && std.string.is_match "^blake3:[0-9a-f]{64}$" value in
-
-let distinct_strings = fun values =>
-  std.array.length values == std.array.length (std.array.sort_dedup std.string.compare values) in
-
-let array_of = fun predicate values =>
-  std.is_array values && std.array.length values > 0 && std.array.all predicate values in
+let is_non_empty_string = Prelude.is_non_empty_string in
+let is_blake3_ref = Prelude.is_blake3_ref in
+let distinct_strings = Prelude.distinct_strings in
+let array_of = Prelude.array_of in
 
 let is_peer_profile = fun profile =>
   std.is_record profile

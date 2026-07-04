@@ -1,0 +1,46 @@
+{
+  "export_identity": "plugin:storage/storage.read",
+  "payload": {
+    "attenuation": {
+      "budget_refs": [
+        "blake3:1212121212121212121212121212121212121212121212121212121212121212"
+      ],
+      "current_delegation_depth": 0,
+      "delegated_scope": "blake3:5555555555555555555555555555555555555555555555555555555555555555",
+      "max_delegation_depth": 2,
+      "valid_from_turn": 0,
+      "valid_until_turn": 16
+    },
+    "effect_manifest_refs": [
+      "blake3:6666666666666666666666666666666666666666666666666666666666666666"
+    ],
+    "effect_receipt_refs": [
+      "blake3:abababababababababababababababababababababababababababababababab"
+    ],
+    "extension_contract_ref": "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "hostcall_descriptor_ref": "blake3:1111111111111111111111111111111111111111111111111111111111111111",
+    "input_schema_ref": "blake3:2222222222222222222222222222222222222222222222222222222222222222",
+    "issuer_ref": "blake3:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    "manifest_ref": "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "operation": "storage.read",
+    "output_schema_ref": "blake3:3333333333333333333333333333333333333333333333333333333333333333",
+    "plugin_id": "plugin:storage",
+    "plugin_ref": "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "policy_refs": [
+      "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "proof_refs": [
+      "blake3:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"
+    ],
+    "replay_class": "idempotent",
+    "resource_refs": [
+      "blake3:5555555555555555555555555555555555555555555555555555555555555555"
+    ],
+    "resource_scope": "blake3:5555555555555555555555555555555555555555555555555555555555555555",
+    "revocation_refs": [],
+    "revoked": false
+  },
+  "schema_id": "molten.plugin-extension.grant.export.v1",
+  "schema_version": 1,
+  "source_language": "nickel"
+}

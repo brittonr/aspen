@@ -1,6 +1,7 @@
 # Shared Nickel contracts and reviewed constants for production node profiles.
 # Runtime Rust consumes checked exported JSON and receipts; it does not evaluate Nickel.
 
+let Prelude = import "nickel-contract-prelude.ncl" in
 let SchemaId = "molten.prod-ops.deployment-profile.v1" in
 let SchemaVersion = 1 in
 let SourceLanguage = "nickel" in
@@ -50,50 +51,21 @@ let ShutdownExpectations = [
   "active-lock-removed-after-pass",
 ] in
 
-let is_non_empty_string = fun value =>
-  std.is_string value && std.string.length value > 0 in
-
-let is_blake3_ref = fun value =>
-  std.is_string value && std.string.is_match "^blake3:[0-9a-f]{64}$" value in
+let is_non_empty_string = Prelude.is_non_empty_string in
+let is_blake3_ref = Prelude.is_blake3_ref in
 
 let is_absolute_state_root = fun value =>
-  std.is_string value
-  && std.string.length value > 1
-  && std.string.is_match "^/[A-Za-z0-9._/-]+$" value
-  && !std.string.is_match "(^|/)\\.\\.(/|$)" value
+  Prelude.is_absolute_path value
   && !std.string.is_match "(^|/)\\.git(/|$)" value in
 
-let is_safe_relative_dir = fun value =>
-  std.is_string value
-  && std.string.length value > 0
-  && std.string.is_match "^[A-Za-z0-9._-]+$" value
-  && value != "."
-  && value != ".."
-  && !std.string.is_match "^\\." value in
-
-let is_positive_integer = fun value =>
-  std.is_number value && std.number.is_integer value && value > 0 in
-
-let is_exact_schema_id = fun value =>
-  std.is_string value && value == SchemaId in
-
-let is_exact_schema_version = fun value =>
-  std.is_number value && std.number.is_integer value && value == SchemaVersion in
-
-let is_exact_source_language = fun value =>
-  std.is_string value && value == SourceLanguage in
-
-let is_one_of = fun allowed value =>
-  std.is_string value && std.array.elem value allowed in
-
-let has_all = fun actual required =>
-  std.array.all (fun item => std.array.elem item actual) required in
-
-let distinct_strings = fun values =>
-  std.array.length values == std.array.length (std.array.sort_dedup std.string.compare values) in
-
-let is_non_empty_array = fun values =>
-  std.is_array values && std.array.length values > 0 in
+let is_safe_relative_dir = Prelude.is_safe_relative_dir in
+let is_positive_integer = Prelude.is_positive_integer in
+let is_exact_schema_id = Prelude.is_exact_string SchemaId in
+let is_exact_schema_version = Prelude.is_exact_integer SchemaVersion in
+let is_exact_source_language = Prelude.is_exact_string SourceLanguage in
+let is_one_of = Prelude.is_one_of in
+let has_all = Prelude.has_all in
+let distinct_strings = Prelude.distinct_strings in
 
 let layout_dirs = fun layout => [
   layout.ledger_dir,
@@ -125,8 +97,7 @@ let is_resource_limits = fun limits =>
   && limits.max_store_bytes >= limits.max_receipt_bytes
   && limits.max_recovery_time_ms >= limits.max_delivery_latency_ms in
 
-let array_of = fun predicate values =>
-  is_non_empty_array values && std.array.all predicate values in
+let array_of = Prelude.array_of in
 
 let is_production_node_profile = fun profile =>
   std.is_record profile
