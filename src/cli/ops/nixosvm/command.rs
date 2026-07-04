@@ -94,6 +94,68 @@ pub(crate) enum Command {
         #[arg(long)]
         out: Option<FilePath>,
     },
+    FaultDescriptor {
+        #[arg(long = "fault-id")]
+        fault_id: String,
+        #[arg(long)]
+        topology: FilePath,
+        #[arg(long = "target-node")]
+        target_node: String,
+        #[arg(long = "target-link")]
+        target_link: Option<String>,
+        #[arg(long = "fault-kind")]
+        fault_kind: String,
+        #[arg(long = "command-profile")]
+        command_profile: String,
+        #[arg(long = "expected-outcome")]
+        expected_outcome: String,
+        #[arg(long = "duration-millis")]
+        duration_millis: u64,
+        #[arg(long)]
+        trigger: String,
+        #[arg(long = "preflight")]
+        preflight: Vec<FilePath>,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
+        #[arg(long)]
+        out: Option<FilePath>,
+    },
+    FaultReceipt {
+        #[arg(long)]
+        descriptor: FilePath,
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long = "host-support", default_value = "supported")]
+        host_support: String,
+        #[arg(long = "pre-fault")]
+        pre_fault: Vec<FilePath>,
+        #[arg(long = "injection")]
+        injection: Vec<FilePath>,
+        #[arg(long = "child")]
+        children: Vec<FilePath>,
+        #[arg(long = "post-fault")]
+        post_fault: Vec<FilePath>,
+        #[arg(long = "replay-status", default_value = "non-replayable-vm-observations")]
+        replay_status: String,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long = "log")]
+        logs: Vec<FilePath>,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
+        #[arg(long)]
+        out: Option<FilePath>,
+    },
+    FaultValidate {
+        #[arg(long)]
+        topology: FilePath,
+        #[arg(long = "descriptor")]
+        descriptors: Vec<FilePath>,
+        #[arg(long = "receipt")]
+        receipts: Vec<FilePath>,
+        #[arg(long)]
+        out: Option<FilePath>,
+    },
     Show {
         artifact: FilePath,
     },

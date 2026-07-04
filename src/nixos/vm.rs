@@ -5,6 +5,8 @@ type Result<T> = crate::error::Result<T>;
 const NIXOS_VM_NODE_EVIDENCE_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_NODE_EVIDENCE_SCHEMA;
 const NIXOS_VM_TEST_RUN_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_TEST_RUN_SCHEMA;
 const NIXOS_VM_TOPOLOGY_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_TOPOLOGY_SCHEMA;
+const NIXOS_VM_FAULT_DESCRIPTOR_SCHEMA: &str = "molten.testing.nixos-vm.fault-descriptor.v1";
+const NIXOS_VM_FAULT_RECEIPT_SCHEMA: &str = "molten.testing.nixos-vm.fault-receipt.v1";
 
 fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
@@ -25,9 +27,11 @@ fn validate_content_ref(value: &str) -> Result<()> {
 const MAX_VM_NODES: usize = 16;
 const MAX_VM_REFS: usize = 256;
 const MAX_VM_TEXT_FIELDS: usize = 128;
+const NIXOS_VM_FAULT_DESCRIPTOR_MIN_DURATION_MILLIS: u64 = 1;
 const _: () = assert!(MAX_VM_NODES <= 100_000);
 const _: () = assert!(MAX_VM_REFS <= 100_000);
 const _: () = assert!(MAX_VM_TEXT_FIELDS <= 100_000);
+const _: () = assert!(NIXOS_VM_FAULT_DESCRIPTOR_MIN_DURATION_MILLIS > 0);
 
 pub struct NixosVmTopologyInput<'a> {
     pub nodes: &'a [String],
@@ -57,6 +61,34 @@ pub struct NixosVmTestRunInput<'a> {
     pub fault_profile: &'a str,
     pub node_evidence_refs: &'a [String],
     pub child_workflow_refs: &'a [String],
+    pub replay_status: &'a str,
+    pub diagnostics: &'a [String],
+    pub log_refs: &'a [String],
+    pub caveats: &'a [String],
+}
+
+pub struct NixosVmFaultDescriptorInput<'a> {
+    pub fault_id: &'a str,
+    pub topology_ref: &'a str,
+    pub target_node: &'a str,
+    pub target_link: Option<&'a str>,
+    pub fault_kind: &'a str,
+    pub command_profile: &'a str,
+    pub expected_outcome: &'a str,
+    pub duration_millis: u64,
+    pub trigger: &'a str,
+    pub preflight_refs: &'a [String],
+    pub caveats: &'a [String],
+}
+
+pub struct NixosVmFaultReceiptInput<'a> {
+    pub decision: &'a str,
+    pub descriptor_ref: &'a str,
+    pub host_support: &'a str,
+    pub pre_fault_refs: &'a [String],
+    pub injection_refs: &'a [String],
+    pub child_refs: &'a [String],
+    pub post_fault_refs: &'a [String],
     pub replay_status: &'a str,
     pub diagnostics: &'a [String],
     pub log_refs: &'a [String],
@@ -157,6 +189,84 @@ pub fn test_run_value(input: &NixosVmTestRunInput<'_>) -> Result<IoValue> {
     ]))
 }
 
+pub fn vm_fault_descriptor_value(input: &NixosVmFaultDescriptorInput<'_>) -> Result<IoValue> {
+    validate_text_field("fault id", input.fault_id)?;
+    validate_content_ref(input.topology_ref)?;
+    validate_text_field("fault target node", input.target_node)?;
+    validate_optional_text("fault target link", input.target_link)?;
+    validate_fault_kind(input.fault_kind)?;
+    validate_text_field("fault command profile", input.command_profile)?;
+    validate_text_field("fault expected outcome", input.expected_outcome)?;
+    if input.duration_millis < NIXOS_VM_FAULT_DESCRIPTOR_MIN_DURATION_MILLIS {
+        return Err(MoltenError::invalid_harness("nixos VM fault duration must be positive"));
+    }
+    validate_text_field("fault trigger", input.trigger)?;
+    validate_ref_slice("fault preflight", input.preflight_refs)?;
+    Ok(record("nixos-vm-fault-descriptor-v1", vec![
+        string(NIXOS_VM_FAULT_DESCRIPTOR_SCHEMA),
+        record("id", vec![string(input.fault_id)]),
+        record("topology", vec![string(input.topology_ref)]),
+        record("target-node", vec![string(input.target_node)]),
+        record("target-link", vec![optional_text_value(input.target_link)]),
+        record("fault-kind", vec![string(input.fault_kind)]),
+        record("command-profile", vec![string(input.command_profile)]),
+        record("expected-outcome", vec![string(input.expected_outcome)]),
+        record("duration-millis", vec![crate::preserves_rail::u64_value(input.duration_millis)]),
+        record("trigger", vec![string(input.trigger)]),
+        record("preflight", vec![sequence(ref_values(input.preflight_refs)?)]),
+        record("caveats", vec![sequence(string_values(
+            "fault caveat",
+            input.caveats,
+            MAX_VM_TEXT_FIELDS,
+        )?)]),
+        record("checks", vec![sequence(vec![
+            check_value("fault-target-explicit", "pass"),
+            check_value("duration-bounded", "pass"),
+            check_value("fault-receipt-evidence-only", "pass"),
+        ])]),
+    ]))
+}
+
+pub fn vm_fault_receipt_value(input: &NixosVmFaultReceiptInput<'_>) -> Result<IoValue> {
+    validate_decision(input.decision)?;
+    validate_content_ref(input.descriptor_ref)?;
+    validate_host_support(input.host_support)?;
+    validate_ref_slice("fault pre", input.pre_fault_refs)?;
+    validate_ref_slice("fault injection", input.injection_refs)?;
+    validate_ref_slice("fault child", input.child_refs)?;
+    validate_ref_slice("fault post", input.post_fault_refs)?;
+    validate_text_field("fault replay status", input.replay_status)?;
+    validate_ref_slice("fault log", input.log_refs)?;
+    Ok(record("nixos-vm-fault-receipt-v1", vec![
+        string(NIXOS_VM_FAULT_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("descriptor", vec![string(input.descriptor_ref)]),
+        record("host-support", vec![string(input.host_support)]),
+        record("pre-fault", vec![sequence(ref_values(input.pre_fault_refs)?)]),
+        record("injection", vec![sequence(ref_values(input.injection_refs)?)]),
+        record("children", vec![sequence(ref_values(input.child_refs)?)]),
+        record("post-fault", vec![sequence(ref_values(input.post_fault_refs)?)]),
+        record("replay-status", vec![string(input.replay_status)]),
+        record("diagnostics", vec![sequence(string_values(
+            "fault diagnostic",
+            input.diagnostics,
+            MAX_VM_TEXT_FIELDS,
+        )?)]),
+        record("logs", vec![sequence(ref_values(input.log_refs)?)]),
+        record("caveats", vec![sequence(string_values(
+            "fault receipt caveat",
+            input.caveats,
+            MAX_VM_TEXT_FIELDS,
+        )?)]),
+        record("checks", vec![sequence(vec![
+            check_value("canonical-fault-descriptor-bound", "pass"),
+            check_value("unsupported-is-not-pass-evidence", "pass"),
+            check_value("logs-diagnostic-only", "pass"),
+            check_value("vm-fault-does-not-grant-authority", "pass"),
+        ])]),
+    ]))
+}
+
 fn validate_nodes(nodes: &[String]) -> Result<()> {
     if nodes.is_empty() {
         return Err(MoltenError::invalid_harness("nixos VM topology requires at least one node"));
@@ -182,6 +292,41 @@ fn validate_text_field(label: &str, value: &str) -> Result<()> {
         return Err(MoltenError::invalid_harness(format!("nixos VM {label} must not be empty")));
     }
     Ok(())
+}
+
+fn validate_optional_text(label: &str, value: Option<&str>) -> Result<()> {
+    if let Some(value) = value {
+        validate_text_field(label, value)?;
+    }
+    Ok(())
+}
+
+fn validate_fault_kind(kind: &str) -> Result<()> {
+    match kind {
+        "network-delay"
+        | "network-drop"
+        | "network-partition"
+        | "network-rejoin"
+        | "asymmetric-latency"
+        | "crash-restart"
+        | "duplicate-send-after-restart"
+        | "receipt-write-readback"
+        | "missing-artifact"
+        | "permission-denied-state-root"
+        | "bounded-disk-pressure"
+        | "unsupported-host-feature"
+        | "tampered-fault-receipt"
+        | "wrong-topology"
+        | "log-only-pass" => Ok(()),
+        other => Err(MoltenError::invalid_harness(format!("unsupported nixos VM fault kind {other}"))),
+    }
+}
+
+fn validate_host_support(status: &str) -> Result<()> {
+    match status {
+        "supported" | "unavailable" | "denied" => Ok(()),
+        other => Err(MoltenError::invalid_harness(format!("unsupported nixos VM host-support status {other}"))),
+    }
 }
 
 fn validate_optional_ref(label: &str, reference: Option<&str>) -> Result<()> {
@@ -250,6 +395,13 @@ fn ref_values(refs: &[String]) -> Result<Vec<IoValue>> {
 
 fn optional_ref_value(reference: Option<&str>) -> IoValue {
     match reference {
+        Some(value) => record("some", vec![string(value)]),
+        None => record("none", Vec::new()),
+    }
+}
+
+fn optional_text_value(value: Option<&str>) -> IoValue {
+    match value {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }

@@ -58,6 +58,43 @@ struct ManifestInput {
     out: Option<FilePath>,
 }
 
+struct FaultDescriptorInput {
+    fault_id: String,
+    topology: FilePath,
+    target_node: String,
+    target_link: Option<String>,
+    fault_kind: String,
+    command_profile: String,
+    expected_outcome: String,
+    duration_millis: u64,
+    trigger: String,
+    preflight: Vec<FilePath>,
+    caveats: Vec<String>,
+    out: Option<FilePath>,
+}
+
+struct FaultReceiptInput {
+    descriptor: FilePath,
+    decision: String,
+    host_support: String,
+    pre_fault: Vec<FilePath>,
+    injection: Vec<FilePath>,
+    children: Vec<FilePath>,
+    post_fault: Vec<FilePath>,
+    replay_status: String,
+    diagnostics: Vec<String>,
+    logs: Vec<FilePath>,
+    caveats: Vec<String>,
+    out: Option<FilePath>,
+}
+
+struct FaultValidateInput {
+    topology: FilePath,
+    descriptors: Vec<FilePath>,
+    receipts: Vec<FilePath>,
+    out: Option<FilePath>,
+}
+
 pub(super) fn run(command: Command) -> Outcome<()> {
     match command {
         Command::Topology {
@@ -155,6 +192,71 @@ pub(super) fn run(command: Command) -> Outcome<()> {
             artifacts,
             logs,
             caveats,
+            out,
+        }),
+        Command::FaultDescriptor {
+            fault_id,
+            topology,
+            target_node,
+            target_link,
+            fault_kind,
+            command_profile,
+            expected_outcome,
+            duration_millis,
+            trigger,
+            preflight,
+            caveats,
+            out,
+        } => run_fault_descriptor(FaultDescriptorInput {
+            fault_id,
+            topology,
+            target_node,
+            target_link,
+            fault_kind,
+            command_profile,
+            expected_outcome,
+            duration_millis,
+            trigger,
+            preflight,
+            caveats,
+            out,
+        }),
+        Command::FaultReceipt {
+            descriptor,
+            decision,
+            host_support,
+            pre_fault,
+            injection,
+            children,
+            post_fault,
+            replay_status,
+            diagnostics,
+            logs,
+            caveats,
+            out,
+        } => run_fault_receipt(FaultReceiptInput {
+            descriptor,
+            decision,
+            host_support,
+            pre_fault,
+            injection,
+            children,
+            post_fault,
+            replay_status,
+            diagnostics,
+            logs,
+            caveats,
+            out,
+        }),
+        Command::FaultValidate {
+            topology,
+            descriptors,
+            receipts,
+            out,
+        } => run_fault_validate(FaultValidateInput {
+            topology,
+            descriptors,
+            receipts,
             out,
         }),
         Command::Show { artifact } => run_show(artifact),
@@ -295,6 +397,90 @@ fn run_manifest(input: ManifestInput) -> Outcome<()> {
         &format!("nixos-vm manifest ref={reference} entries={}", entries.len()),
     );
     Ok(())
+}
+
+fn run_fault_descriptor(input: FaultDescriptorInput) -> Outcome<()> {
+    let topology_ref = super::io::preserves_file_ref(&input.topology)?;
+    let preflight_refs = super::io::preserves_file_refs(&input.preflight)?;
+    let value = molten::nixos_vm::vm_fault_descriptor_value(&molten::nixos_vm::NixosVmFaultDescriptorInput {
+        fault_id: &input.fault_id,
+        topology_ref: &topology_ref,
+        target_node: &input.target_node,
+        target_link: input.target_link.as_deref(),
+        fault_kind: &input.fault_kind,
+        command_profile: &input.command_profile,
+        expected_outcome: &input.expected_outcome,
+        duration_millis: input.duration_millis,
+        trigger: &input.trigger,
+        preflight_refs: &preflight_refs,
+        caveats: &input.caveats,
+    })?;
+    let reference = molten::preserves_rail::canonical_hash(&value)?;
+    let is_written_to_file = super::io::write_optional_preserves(input.out.as_ref(), &value)?;
+    super::io::print_or_log_summary(
+        is_written_to_file,
+        &format!("nixos-vm fault-descriptor ref={reference} fault={}", input.fault_id),
+    );
+    Ok(())
+}
+
+fn run_fault_receipt(input: FaultReceiptInput) -> Outcome<()> {
+    let descriptor_ref = super::io::preserves_file_ref(&input.descriptor)?;
+    let pre_fault_refs = super::io::preserves_file_refs(&input.pre_fault)?;
+    let injection_refs = super::io::preserves_file_refs(&input.injection)?;
+    let child_refs = super::io::preserves_file_refs(&input.children)?;
+    let post_fault_refs = super::io::preserves_file_refs(&input.post_fault)?;
+    let log_refs = super::io::raw_file_refs(&input.logs)?;
+    let value = molten::nixos_vm::vm_fault_receipt_value(&molten::nixos_vm::NixosVmFaultReceiptInput {
+        decision: &input.decision,
+        descriptor_ref: &descriptor_ref,
+        host_support: &input.host_support,
+        pre_fault_refs: &pre_fault_refs,
+        injection_refs: &injection_refs,
+        child_refs: &child_refs,
+        post_fault_refs: &post_fault_refs,
+        replay_status: &input.replay_status,
+        diagnostics: &input.diagnostics,
+        log_refs: &log_refs,
+        caveats: &input.caveats,
+    })?;
+    let reference = molten::preserves_rail::canonical_hash(&value)?;
+    let is_written_to_file = super::io::write_optional_preserves(input.out.as_ref(), &value)?;
+    super::io::print_or_log_summary(
+        is_written_to_file,
+        &format!("nixos-vm fault-receipt ref={reference} decision={}", input.decision),
+    );
+    Ok(())
+}
+
+fn run_fault_validate(input: FaultValidateInput) -> Outcome<()> {
+    let topology = super::io::read_preserves_file(&input.topology)?;
+    let descriptors = read_preserves_files(&input.descriptors)?;
+    let receipts = read_preserves_files(&input.receipts)?;
+    let validation =
+        molten::nixos_vm::validate_nixos_vm_fault_evidence(&molten::nixos_vm::NixosVmFaultEvidenceValidationInput {
+            topology_value: &topology,
+            descriptor_values: &descriptors,
+            receipt_values: &receipts,
+        })?;
+    let is_written_to_file = super::io::write_optional_preserves(input.out.as_ref(), &validation.value)?;
+    super::io::print_or_log_summary(
+        is_written_to_file,
+        &format!(
+            "nixos-vm fault-validation ref={} decision={} diagnostics={}",
+            validation.validation_ref,
+            validation.decision,
+            validation.diagnostics.len()
+        ),
+    );
+    if validation.decision == "pass" {
+        Ok(())
+    } else {
+        Err(molten::error::MoltenError::invalid_harness(format!(
+            "nixos VM fault validation denied: {}",
+            validation.diagnostics.join(",")
+        )))
+    }
 }
 
 fn read_preserves_files(paths: &[FilePath]) -> Outcome<Vec<preserves::IOValue>> {

@@ -9,6 +9,10 @@ type OrderedSet<T> = std::collections::BTreeSet<T>;
 
 const VM_EVIDENCE_VALIDATION_SCHEMA: &str = "molten.testing.nixos-vm.evidence-validation.v1";
 const VM_EVIDENCE_MANIFEST_SCHEMA: &str = "molten.testing.nixos-vm.evidence-manifest.v1";
+const VM_FAULT_DESCRIPTOR_SCHEMA: &str = "molten.testing.nixos-vm.fault-descriptor.v1";
+const VM_FAULT_RECEIPT_SCHEMA: &str = "molten.testing.nixos-vm.fault-receipt.v1";
+const VM_FAULT_VALIDATION_SCHEMA: &str = "molten.testing.nixos-vm.fault-validation.v1";
+const VM_FAULT_MIN_DURATION_MILLIS: u64 = 1;
 const TOPOLOGY_ARITY: usize = 7;
 const TOPOLOGY_SCHEMA_INDEX: usize = 0;
 const TOPOLOGY_NODES_INDEX: usize = 1;
@@ -33,6 +37,28 @@ const TEST_RUN_CHILDREN_INDEX: usize = 6;
 const TEST_RUN_REPLAY_INDEX: usize = 7;
 const TEST_RUN_LOGS_INDEX: usize = 9;
 const TEST_RUN_CAVEATS_INDEX: usize = 10;
+const FAULT_DESCRIPTOR_ARITY: usize = 13;
+const FAULT_DESCRIPTOR_SCHEMA_INDEX: usize = 0;
+const FAULT_DESCRIPTOR_ID_INDEX: usize = 1;
+const FAULT_DESCRIPTOR_TOPOLOGY_INDEX: usize = 2;
+const FAULT_DESCRIPTOR_TARGET_NODE_INDEX: usize = 3;
+const FAULT_DESCRIPTOR_KIND_INDEX: usize = 5;
+const FAULT_DESCRIPTOR_EXPECTED_INDEX: usize = 7;
+const FAULT_DESCRIPTOR_DURATION_INDEX: usize = 8;
+const FAULT_DESCRIPTOR_CAVEATS_INDEX: usize = 11;
+const FAULT_RECEIPT_ARITY: usize = 13;
+const FAULT_RECEIPT_SCHEMA_INDEX: usize = 0;
+const FAULT_RECEIPT_DECISION_INDEX: usize = 1;
+const FAULT_RECEIPT_DESCRIPTOR_INDEX: usize = 2;
+const FAULT_RECEIPT_HOST_SUPPORT_INDEX: usize = 3;
+const FAULT_RECEIPT_PRE_INDEX: usize = 4;
+const FAULT_RECEIPT_INJECTION_INDEX: usize = 5;
+const FAULT_RECEIPT_CHILDREN_INDEX: usize = 6;
+const FAULT_RECEIPT_POST_INDEX: usize = 7;
+const FAULT_RECEIPT_REPLAY_INDEX: usize = 8;
+const FAULT_RECEIPT_DIAGNOSTICS_INDEX: usize = 9;
+const FAULT_RECEIPT_LOGS_INDEX: usize = 10;
+const FAULT_RECEIPT_CAVEATS_INDEX: usize = 11;
 const SOAK_RUN_DECISION_INDEX: usize = 1;
 const SOAK_RUN_TOPOLOGY_INDEX: usize = 3;
 const SOAK_RUN_NODE_EVIDENCE_INDEX: usize = 5;
@@ -60,6 +86,24 @@ pub struct NixosVmEvidenceValidation {
     pub node_evidence_refs: Vec<String>,
     pub test_run_ref: String,
     pub prod_soak_refs: Vec<String>,
+    pub validation_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixosVmFaultEvidenceValidationInput<'a> {
+    pub topology_value: &'a IoValue,
+    pub descriptor_values: &'a [IoValue],
+    pub receipt_values: &'a [IoValue],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixosVmFaultEvidenceValidation {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub topology_ref: String,
+    pub descriptor_refs: Vec<String>,
+    pub receipt_refs: Vec<String>,
     pub validation_ref: String,
     pub value: IoValue,
 }
@@ -111,6 +155,32 @@ struct ParsedProdSoakRun {
     caveats: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedFaultDescriptor {
+    id: String,
+    topology_ref: String,
+    target_node: String,
+    fault_kind: String,
+    expected_outcome: String,
+    duration_millis: u64,
+    caveats: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedFaultReceipt {
+    decision: String,
+    descriptor_ref: String,
+    host_support: String,
+    pre_fault_refs: Vec<String>,
+    injection_refs: Vec<String>,
+    child_refs: Vec<String>,
+    post_fault_refs: Vec<String>,
+    replay_status: String,
+    diagnostics: Vec<String>,
+    log_refs: Vec<String>,
+    caveats: Vec<String>,
+}
+
 pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceValidationInput<'_>) -> Result<NixosVmEvidenceValidation> {
     let topology = parse_topology(input.topology_value)?;
     let topology_ref = crate::preserves_rail::canonical_hash(input.topology_value)?;
@@ -148,6 +218,31 @@ pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceValidationInput<'_>) ->
         node_evidence_refs,
         test_run_ref,
         prod_soak_refs,
+        validation_ref,
+        value,
+    })
+}
+
+pub fn validate_nixos_vm_fault_evidence(
+    input: &NixosVmFaultEvidenceValidationInput<'_>,
+) -> Result<NixosVmFaultEvidenceValidation> {
+    let topology = parse_topology(input.topology_value)?;
+    let topology_ref = crate::preserves_rail::canonical_hash(input.topology_value)?;
+    let descriptors = parse_fault_descriptors(input.descriptor_values)?;
+    let receipts = parse_fault_receipts(input.receipt_values)?;
+    let descriptor_refs = canonical_refs(input.descriptor_values)?;
+    let receipt_refs = canonical_refs(input.receipt_values)?;
+    let diagnostics =
+        fault_validation_diagnostics(&topology, &topology_ref, &descriptors, &descriptor_refs, &receipts)?;
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
+    let value = vm_fault_validation_value(&decision, &topology_ref, &descriptor_refs, &receipt_refs, &diagnostics)?;
+    let validation_ref = crate::preserves_rail::canonical_hash(&value)?;
+    Ok(NixosVmFaultEvidenceValidation {
+        decision,
+        diagnostics,
+        topology_ref,
+        descriptor_refs,
+        receipt_refs,
         validation_ref,
         value,
     })
@@ -288,6 +383,103 @@ fn validate_prod_soak_runs(
     Ok(())
 }
 
+fn fault_validation_diagnostics(
+    topology: &ParsedTopology,
+    topology_ref: &str,
+    descriptors: &[ParsedFaultDescriptor],
+    descriptor_refs: &[String],
+    receipts: &[ParsedFaultReceipt],
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    push_if(&mut diagnostics, descriptors.is_empty(), "vm-fault-missing-descriptors")?;
+    push_if(&mut diagnostics, receipts.is_empty(), "vm-fault-missing-receipts")?;
+    let topology_nodes = topology.nodes.iter().map(String::as_str).collect::<OrderedSet<_>>();
+    let descriptor_ref_set = descriptor_refs.iter().map(String::as_str).collect::<OrderedSet<_>>();
+    for descriptor in descriptors {
+        push_if(&mut diagnostics, descriptor.id.trim().is_empty(), "vm-fault-descriptor-missing-id")?;
+        push_if(&mut diagnostics, descriptor.topology_ref != topology_ref, "vm-fault-descriptor-topology-mismatch")?;
+        push_if(
+            &mut diagnostics,
+            !topology_nodes.contains(descriptor.target_node.as_str()),
+            "vm-fault-descriptor-target-outside-topology",
+        )?;
+        push_if(
+            &mut diagnostics,
+            descriptor.duration_millis < VM_FAULT_MIN_DURATION_MILLIS,
+            "vm-fault-descriptor-unbounded-duration",
+        )?;
+        push_if(&mut diagnostics, descriptor.caveats.is_empty(), "vm-fault-descriptor-missing-caveats")?;
+    }
+    for receipt in receipts {
+        push_if(
+            &mut diagnostics,
+            !descriptor_ref_set.contains(receipt.descriptor_ref.as_str()),
+            "vm-fault-receipt-descriptor-missing",
+        )?;
+        push_if(
+            &mut diagnostics,
+            receipt.decision == "pass" && receipt.host_support != "supported",
+            "vm-fault-unavailable-cannot-pass",
+        )?;
+        push_if(
+            &mut diagnostics,
+            receipt.decision == "pass" && receipt.pre_fault_refs.is_empty(),
+            "vm-fault-pass-missing-pre-ref",
+        )?;
+        push_if(
+            &mut diagnostics,
+            receipt.decision == "pass" && receipt.injection_refs.is_empty(),
+            "vm-fault-pass-missing-injection-ref",
+        )?;
+        push_if(
+            &mut diagnostics,
+            receipt.decision == "pass" && receipt.child_refs.is_empty(),
+            "vm-fault-log-only-pass",
+        )?;
+        push_if(
+            &mut diagnostics,
+            receipt.decision == "pass" && receipt.post_fault_refs.is_empty(),
+            "vm-fault-pass-missing-post-ref",
+        )?;
+        push_if(
+            &mut diagnostics,
+            receipt.decision != "pass" && receipt.diagnostics.is_empty(),
+            "vm-fault-deny-missing-diagnostic",
+        )?;
+        push_if(&mut diagnostics, receipt.log_refs.is_empty(), "vm-fault-missing-log-ref")?;
+        push_if(&mut diagnostics, receipt.replay_status.trim().is_empty(), "vm-fault-missing-replay-status")?;
+        push_if(&mut diagnostics, receipt.caveats.is_empty(), "vm-fault-missing-caveats")?;
+        validate_fault_expected_outcome(receipt, descriptors, descriptor_refs, &mut diagnostics)?;
+    }
+    Ok(diagnostics)
+}
+
+fn validate_fault_expected_outcome(
+    receipt: &ParsedFaultReceipt,
+    descriptors: &[ParsedFaultDescriptor],
+    descriptor_refs: &[String],
+    diagnostics: &mut Vec<String>,
+) -> Result<()> {
+    let Some((descriptor, _)) = descriptors
+        .iter()
+        .zip(descriptor_refs.iter())
+        .find(|(_, descriptor_ref)| descriptor_ref.as_str() == receipt.descriptor_ref)
+    else {
+        return Ok(());
+    };
+    push_if(
+        diagnostics,
+        descriptor.expected_outcome == "unavailable" && receipt.decision == "pass",
+        "vm-fault-unavailable-expected-cannot-pass",
+    )?;
+    push_if(
+        diagnostics,
+        descriptor.fault_kind == "log-only-pass" && receipt.decision == "pass",
+        "vm-fault-log-only-pass",
+    )?;
+    Ok(())
+}
+
 fn parse_topology(value: &IoValue) -> Result<ParsedTopology> {
     let topology = simple_record(value, "nixos-vm-topology-v1", TOPOLOGY_ARITY)?;
     require_schema(&topology[TOPOLOGY_SCHEMA_INDEX], crate::preserves_rail::NIXOS_VM_TOPOLOGY_SCHEMA, "topology")?;
@@ -360,6 +552,110 @@ fn parse_test_run(value: &IoValue) -> Result<ParsedTestRun> {
     })
 }
 
+fn parse_fault_descriptors(values: &[IoValue]) -> Result<Vec<ParsedFaultDescriptor>> {
+    if values.len() > MAX_VM_VALIDATION_ITEMS {
+        return Err(MoltenError::invalid_harness(format!(
+            "VM fault descriptor count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
+            values.len()
+        )));
+    }
+    let mut output = Vec::with_capacity(values.len());
+    for value in values {
+        output.push(parse_fault_descriptor(value)?);
+    }
+    Ok(output)
+}
+
+fn parse_fault_descriptor(value: &IoValue) -> Result<ParsedFaultDescriptor> {
+    let descriptor = simple_record(value, "nixos-vm-fault-descriptor-v1", FAULT_DESCRIPTOR_ARITY)?;
+    require_schema(&descriptor[FAULT_DESCRIPTOR_SCHEMA_INDEX], VM_FAULT_DESCRIPTOR_SCHEMA, "fault descriptor")?;
+    Ok(ParsedFaultDescriptor {
+        id: required_record_string(&descriptor[FAULT_DESCRIPTOR_ID_INDEX], "id", "fault descriptor id")?,
+        topology_ref: required_record_ref(
+            &descriptor[FAULT_DESCRIPTOR_TOPOLOGY_INDEX],
+            "topology",
+            "fault descriptor topology",
+        )?,
+        target_node: required_record_string(
+            &descriptor[FAULT_DESCRIPTOR_TARGET_NODE_INDEX],
+            "target-node",
+            "fault descriptor target node",
+        )?,
+        fault_kind: required_record_string(
+            &descriptor[FAULT_DESCRIPTOR_KIND_INDEX],
+            "fault-kind",
+            "fault descriptor kind",
+        )?,
+        expected_outcome: required_record_string(
+            &descriptor[FAULT_DESCRIPTOR_EXPECTED_INDEX],
+            "expected-outcome",
+            "fault descriptor expected outcome",
+        )?,
+        duration_millis: required_record_u64(
+            &descriptor[FAULT_DESCRIPTOR_DURATION_INDEX],
+            "duration-millis",
+            "fault descriptor duration",
+        )?,
+        caveats: required_string_sequence_record(
+            &descriptor[FAULT_DESCRIPTOR_CAVEATS_INDEX],
+            "caveats",
+            "fault descriptor caveats",
+        )?,
+    })
+}
+
+fn parse_fault_receipts(values: &[IoValue]) -> Result<Vec<ParsedFaultReceipt>> {
+    if values.len() > MAX_VM_VALIDATION_ITEMS {
+        return Err(MoltenError::invalid_harness(format!(
+            "VM fault receipt count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
+            values.len()
+        )));
+    }
+    let mut output = Vec::with_capacity(values.len());
+    for value in values {
+        output.push(parse_fault_receipt(value)?);
+    }
+    Ok(output)
+}
+
+fn parse_fault_receipt(value: &IoValue) -> Result<ParsedFaultReceipt> {
+    let receipt = simple_record(value, "nixos-vm-fault-receipt-v1", FAULT_RECEIPT_ARITY)?;
+    require_schema(&receipt[FAULT_RECEIPT_SCHEMA_INDEX], VM_FAULT_RECEIPT_SCHEMA, "fault receipt")?;
+    Ok(ParsedFaultReceipt {
+        decision: required_record_string(&receipt[FAULT_RECEIPT_DECISION_INDEX], "decision", "fault receipt decision")?,
+        descriptor_ref: required_record_ref(
+            &receipt[FAULT_RECEIPT_DESCRIPTOR_INDEX],
+            "descriptor",
+            "fault descriptor",
+        )?,
+        host_support: required_record_string(
+            &receipt[FAULT_RECEIPT_HOST_SUPPORT_INDEX],
+            "host-support",
+            "fault host support",
+        )?,
+        pre_fault_refs: required_ref_sequence_record(&receipt[FAULT_RECEIPT_PRE_INDEX], "pre-fault", "fault pre refs")?,
+        injection_refs: required_ref_sequence_record(
+            &receipt[FAULT_RECEIPT_INJECTION_INDEX],
+            "injection",
+            "fault injection refs",
+        )?,
+        child_refs: required_ref_sequence_record(&receipt[FAULT_RECEIPT_CHILDREN_INDEX], "children", "fault children")?,
+        post_fault_refs: required_ref_sequence_record(
+            &receipt[FAULT_RECEIPT_POST_INDEX],
+            "post-fault",
+            "fault post refs",
+        )?,
+        replay_status: required_record_string(&receipt[FAULT_RECEIPT_REPLAY_INDEX], "replay-status", "fault replay")?,
+        diagnostics: required_string_sequence_record(
+            &receipt[FAULT_RECEIPT_DIAGNOSTICS_INDEX],
+            "diagnostics",
+            "fault diagnostics",
+        )?,
+        log_refs: required_ref_sequence_record(&receipt[FAULT_RECEIPT_LOGS_INDEX], "logs", "fault logs")?,
+        caveats: required_string_sequence_record(&receipt[FAULT_RECEIPT_CAVEATS_INDEX], "caveats", "fault caveats")?,
+    })
+}
+
 fn parse_prod_soaks(values: &[IoValue]) -> Result<Vec<ParsedProdSoakRun>> {
     if values.len() > MAX_VM_VALIDATION_ITEMS {
         return Err(MoltenError::invalid_harness(format!(
@@ -411,6 +707,36 @@ fn vm_evidence_validation_value(input: ValidationValueInput<'_>) -> Result<IoVal
             check_value("topology-bound", status(input.decision == "pass")),
             check_value("logs-diagnostic-only", "pass"),
             check_value("evidence-does-not-grant-authority", "pass"),
+        ])]),
+    ]))
+}
+
+fn vm_fault_validation_value(
+    decision: &str,
+    topology_ref: &str,
+    descriptor_refs: &[String],
+    receipt_refs: &[String],
+    diagnostics: &[String],
+) -> Result<IoValue> {
+    crate::preserves_rail::validate_content_ref(topology_ref)?;
+    validate_ref_list("fault descriptor", descriptor_refs)?;
+    validate_ref_list("fault receipt", receipt_refs)?;
+    validate_strings("fault validation diagnostic", diagnostics)?;
+    Ok(record("nixos-vm-fault-validation-v1", vec![
+        string(VM_FAULT_VALIDATION_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("topology", vec![string(topology_ref)]),
+        record("descriptors", vec![sequence(descriptor_refs.iter().map(string).collect())]),
+        record("receipts", vec![sequence(receipt_refs.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            check_value("descriptor-topology-bound", status(!diagnostics.iter().any(|item| item.contains("topology")))),
+            check_value(
+                "unsupported-is-not-pass",
+                status(!diagnostics.iter().any(|item| item.contains("unavailable"))),
+            ),
+            check_value("logs-diagnostic-only", "pass"),
+            check_value("canonical-fault-receipts-parsed", "pass"),
         ])]),
     ]))
 }
@@ -510,6 +836,14 @@ fn required_record_ref(value: &Value<IoValue>, label: &str, context: &str) -> Re
 fn required_record_string(value: &Value<IoValue>, label: &str, context: &str) -> Result<String> {
     let record = simple_field_record(value, label, context)?;
     required_string(&record[0], context)
+}
+
+fn required_record_u64(value: &Value<IoValue>, label: &str, context: &str) -> Result<u64> {
+    let record = simple_field_record(value, label, context)?;
+    record[0]
+        .as_u64()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {context}")))?
+        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {context}: {error}")))
 }
 
 fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
@@ -625,6 +959,7 @@ mod tests {
     const NETWORK: &str = "nixos-test-private";
     const STATE_ROOT: &str = "/var/lib/molten";
     const SCENARIO: &str = "phase2-live-control-service-job-restart";
+    const FAULT_DURATION_MILLIS: u64 = 1000;
 
     fn local_ref(label: &str) -> String {
         crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
@@ -771,5 +1106,122 @@ mod tests {
         let error = vm_evidence_manifest_value(&[duplicate.clone(), duplicate], &[])
             .expect_err("duplicate manifest path must fail");
         assert!(error.to_string().contains("duplicate VM evidence manifest path"));
+    }
+
+    fn fault_descriptor(topology_ref: &str, kind: &str, expected: &str, target_node: &str) -> IoValue {
+        crate::nixos_vm::vm_fault_descriptor_value(&crate::nixos_vm::NixosVmFaultDescriptorInput {
+            fault_id: "network-partition-node-a-node-b",
+            topology_ref,
+            target_node,
+            target_link: Some("node_a->node_b"),
+            fault_kind: kind,
+            command_profile: "nixos-test-driver",
+            expected_outcome: expected,
+            duration_millis: FAULT_DURATION_MILLIS,
+            trigger: "during-live-workflow-send",
+            preflight_refs: &[local_ref("preflight")],
+            caveats: &["VM fault evidence is platform evidence only".to_string()],
+        })
+        .expect("fault descriptor")
+    }
+
+    fn fault_receipt(
+        descriptor_ref: &str,
+        decision: &str,
+        host_support: &str,
+        child_refs: &[String],
+        diagnostics: &[String],
+    ) -> IoValue {
+        crate::nixos_vm::vm_fault_receipt_value(&crate::nixos_vm::NixosVmFaultReceiptInput {
+            decision,
+            descriptor_ref,
+            host_support,
+            pre_fault_refs: &[local_ref("pre-state")],
+            injection_refs: &[local_ref("tc-netem-command")],
+            child_refs,
+            post_fault_refs: &[local_ref("post-state")],
+            replay_status: "bounded-vm-fault-observation",
+            diagnostics,
+            log_refs: &[local_ref("fault-log")],
+            caveats: &["fault receipts do not grant authority".to_string()],
+        })
+        .expect("fault receipt")
+    }
+
+    #[test]
+    fn vm_fault_evidence_validates_executable_partition_receipt() {
+        // r[verify molten.testing.nixos_vm_fault_injection.fault_descriptors]
+        // r[verify molten.testing.nixos_vm_fault_injection.network_faults]
+        // r[verify molten.testing.nixos_vm_fault_injection.fault_receipts]
+        let topology = topology();
+        let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
+        let descriptor = fault_descriptor(&topology_ref, "network-partition", "idempotent-recovery", NODE_A);
+        let descriptor_ref = crate::preserves_rail::canonical_hash(&descriptor).expect("descriptor ref");
+        let receipt = fault_receipt(&descriptor_ref, "pass", "supported", &[local_ref("workflow-child")], &[]);
+
+        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceValidationInput {
+            topology_value: &topology,
+            descriptor_values: &[descriptor],
+            receipt_values: &[receipt],
+        })
+        .expect("fault validation");
+
+        assert_eq!(validation.decision, "pass");
+        assert!(validation.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn vm_fault_validation_rejects_unavailable_log_only_and_wrong_topology() {
+        // r[verify molten.testing.nixos_vm_fault_injection.unavailable_boundary]
+        // r[verify molten.testing.nixos_vm_fault_injection.negative_fixtures]
+        let topology = topology();
+        let wrong_topology_ref = local_ref("wrong-topology");
+        let descriptor = fault_descriptor(&wrong_topology_ref, "log-only-pass", "unavailable", NODE_A);
+        let descriptor_ref = crate::preserves_rail::canonical_hash(&descriptor).expect("descriptor ref");
+        let receipt =
+            fault_receipt(&descriptor_ref, "pass", "unavailable", &[], &["host feature unavailable".to_string()]);
+
+        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceValidationInput {
+            topology_value: &topology,
+            descriptor_values: &[descriptor],
+            receipt_values: &[receipt],
+        })
+        .expect("fault validation");
+
+        assert_eq!(validation.decision, "deny");
+        assert!(
+            validation
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "vm-fault-descriptor-topology-mismatch")
+        );
+        assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic == "vm-fault-unavailable-cannot-pass"));
+        assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic == "vm-fault-log-only-pass"));
+    }
+
+    #[test]
+    fn vm_fault_validation_covers_restart_and_storage_denials() {
+        // r[verify molten.testing.nixos_vm_fault_injection.restart_windows]
+        // r[verify molten.testing.nixos_vm_fault_injection.storage_state_faults]
+        let topology = topology();
+        let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
+        let restart = fault_descriptor(&topology_ref, "duplicate-send-after-restart", "idempotent-recovery", NODE_A);
+        let storage =
+            fault_descriptor(&topology_ref, "permission-denied-state-root", "deny-before-side-effects", NODE_B);
+        let restart_ref = crate::preserves_rail::canonical_hash(&restart).expect("restart ref");
+        let storage_ref = crate::preserves_rail::canonical_hash(&storage).expect("storage ref");
+        let restart_receipt = fault_receipt(&restart_ref, "pass", "supported", &[local_ref("duplicate-replay")], &[]);
+        let storage_receipt =
+            fault_receipt(&storage_ref, "deny", "supported", &[], &["permission denied before mutation".to_string()]);
+
+        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceValidationInput {
+            topology_value: &topology,
+            descriptor_values: &[restart, storage],
+            receipt_values: &[restart_receipt, storage_receipt],
+        })
+        .expect("fault validation");
+
+        assert_eq!(validation.decision, "pass");
+        assert!(validation.diagnostics.is_empty());
     }
 }

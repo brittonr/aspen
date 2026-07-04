@@ -547,7 +547,7 @@ Distributed simulation evidence is described in [`docs/distributed-testing.md`](
 
 Requirement traceability is available with `molten test traceability scan --root . --changed-only --coverage 'REQ|positive|tests/path.rs|cargo test name|blake3:...' --coverage 'REQ|negative|tests/path.rs|cargo test name|blake3:...'`. The generated manifest groups covered, exempt, missing-positive, missing-negative, stale-reference, and unsupported entries so release review can see which requirement needs positive or negative evidence.
 
-NixOS VM evidence is validated by canonical receipts and preserved through the `nixos-vm-multinode` check output. Inspect the realized output's `vm-evidence/vm-evidence-manifest.preserves`, `vm-evidence/vm-evidence-validation.preserves`, `topology.preserves`, node evidence receipts, `vm-test-run.preserves`, and `prod-soak-run.preserves`; terminal, QEMU, and systemd logs are diagnostic-only and cannot override a canonical deny receipt.
+NixOS VM evidence is validated by canonical receipts and preserved through the `nixos-vm-multinode` check output. Executable fault evidence is documented in [`docs/nixos-vm-executable-faults.md`](docs/nixos-vm-executable-faults.md). Inspect the realized output's `vm-evidence/vm-evidence-manifest.preserves`, `vm-evidence/vm-evidence-validation.preserves`, `topology.preserves`, node evidence receipts, `vm-test-run.preserves`, and `prod-soak-run.preserves`; terminal, QEMU, and systemd logs are diagnostic-only and cannot override a canonical deny receipt.
 
 ## Development
 

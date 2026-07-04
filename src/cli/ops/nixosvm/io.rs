@@ -76,6 +76,12 @@ pub(super) fn kind(text: &str) -> &'static str {
         "vm-evidence-validation"
     } else if text.contains("nixos-vm-evidence-manifest-v1") {
         "vm-evidence-manifest"
+    } else if text.contains("nixos-vm-fault-descriptor-v1") {
+        "vm-fault-descriptor"
+    } else if text.contains("nixos-vm-fault-receipt-v1") {
+        "vm-fault-receipt"
+    } else if text.contains("nixos-vm-fault-validation-v1") {
+        "vm-fault-validation"
     } else if text.contains("prod-soak-run-v1") {
         "prod-soak-run"
     } else {

@@ -1376,6 +1376,98 @@
                 resource_summary=$(molten test prod-soak show /var/lib/molten/vm-evidence/prod-soak-resource-envelope.preserves)
                 resource_ref=''${resource_summary#* ref=}
                 resource_ref=''${resource_ref%% *}
+                vm_fault_dir=/var/lib/molten/vm-evidence/vm-faults
+                mkdir -p "$vm_fault_dir"
+                fault_duration_millis=1000
+                printf '<vm-fault-injection "network-control-unavailable">\n' > "$vm_fault_dir/network-unavailable.preserves"
+                printf '%s\n' 'network control command unavailable in this VM image' > "$vm_fault_dir/network-unavailable.log"
+                molten test nixos-vm fault-descriptor \
+                  --fault-id network-partition-node-a-node-b \
+                  --topology /var/lib/molten/vm-evidence/topology.preserves \
+                  --target-node node_a \
+                  --target-link node_a-to-node_b \
+                  --fault-kind network-partition \
+                  --command-profile nixos-test-driver-network-control \
+                  --expected-outcome unavailable \
+                  --duration-millis "$fault_duration_millis" \
+                  --trigger network-control-preflight \
+                  --preflight /var/lib/molten/vm-evidence/topology.preserves \
+                  --caveat 'network fault execution is unavailable unless VM image exposes network-control tools' \
+                  --out "$vm_fault_dir/network-partition.descriptor.preserves"
+                molten test nixos-vm fault-receipt \
+                  --descriptor "$vm_fault_dir/network-partition.descriptor.preserves" \
+                  --decision unavailable \
+                  --host-support unavailable \
+                  --pre-fault /var/lib/molten/vm-evidence/topology.preserves \
+                  --injection "$vm_fault_dir/network-unavailable.preserves" \
+                  --post-fault /var/lib/molten/vm-evidence/node-evidence.preserves \
+                  --replay-status unavailable-network-control \
+                  --diagnostic 'network-control support unavailable; no pass evidence minted' \
+                  --log "$vm_fault_dir/network-unavailable.log" \
+                  --caveat 'unavailable VM fault evidence cannot satisfy pass claims' \
+                  --out "$vm_fault_dir/network-partition.receipt.preserves"
+                molten test nixos-vm fault-descriptor \
+                  --fault-id duplicate-send-after-restart \
+                  --topology /var/lib/molten/vm-evidence/topology.preserves \
+                  --target-node node_b \
+                  --fault-kind duplicate-send-after-restart \
+                  --command-profile systemd-restart-window \
+                  --expected-outcome idempotent-recovery \
+                  --duration-millis "$fault_duration_millis" \
+                  --trigger queued-control-restart \
+                  --preflight /var/lib/molten/vm-evidence/node-b-restart-queue.preserves \
+                  --caveat 'restart fault evidence is scoped to this VM topology' \
+                  --out "$vm_fault_dir/restart.descriptor.preserves"
+                molten test nixos-vm fault-receipt \
+                  --descriptor "$vm_fault_dir/restart.descriptor.preserves" \
+                  --decision pass \
+                  --host-support supported \
+                  --pre-fault /var/lib/molten/vm-evidence/node-b-restart-queue.preserves \
+                  --injection /var/lib/molten/vm-evidence/node-b-control-loop.preserves \
+                  --child /var/lib/molten/vm-evidence/node-b-control-loop.preserves \
+                  --post-fault /var/lib/molten/vm-evidence/node-b-heartbeat.preserves \
+                  --replay-status restart-window-observed \
+                  --log /var/lib/molten/vm-evidence/run-loop.txt \
+                  --caveat 'restart evidence demonstrates bounded idempotent recovery only' \
+                  --out "$vm_fault_dir/restart.receipt.preserves"
+                printf '<vm-fault-injection "permission-denied-state-root-denial">\n' > "$vm_fault_dir/storage-denial.preserves"
+                printf '%s\n' 'permission denied before mutation fixture' > "$vm_fault_dir/storage-denial.log"
+                molten test nixos-vm fault-descriptor \
+                  --fault-id permission-denied-state-root \
+                  --topology /var/lib/molten/vm-evidence/topology.preserves \
+                  --target-node node_b \
+                  --fault-kind permission-denied-state-root \
+                  --command-profile filesystem-state-root \
+                  --expected-outcome deny-before-side-effects \
+                  --duration-millis "$fault_duration_millis" \
+                  --trigger state-root-write-preflight \
+                  --preflight /var/lib/molten/vm-evidence/node-b-evidence.preserves \
+                  --caveat 'storage fault evidence is bounded and diagnostic outside canonical receipts' \
+                  --out "$vm_fault_dir/storage.descriptor.preserves"
+                molten test nixos-vm fault-receipt \
+                  --descriptor "$vm_fault_dir/storage.descriptor.preserves" \
+                  --decision deny \
+                  --host-support supported \
+                  --pre-fault /var/lib/molten/vm-evidence/node-b-evidence.preserves \
+                  --injection "$vm_fault_dir/storage-denial.preserves" \
+                  --post-fault /var/lib/molten/vm-evidence/node-b-evidence.preserves \
+                  --replay-status denial-observed-before-mutation \
+                  --diagnostic 'permission denied before mutation' \
+                  --log "$vm_fault_dir/storage-denial.log" \
+                  --caveat 'deny receipt is authoritative; logs are diagnostic only' \
+                  --out "$vm_fault_dir/storage.receipt.preserves"
+                molten test nixos-vm fault-validate \
+                  --topology /var/lib/molten/vm-evidence/topology.preserves \
+                  --descriptor "$vm_fault_dir/network-partition.descriptor.preserves" \
+                  --descriptor "$vm_fault_dir/restart.descriptor.preserves" \
+                  --descriptor "$vm_fault_dir/storage.descriptor.preserves" \
+                  --receipt "$vm_fault_dir/network-partition.receipt.preserves" \
+                  --receipt "$vm_fault_dir/restart.receipt.preserves" \
+                  --receipt "$vm_fault_dir/storage.receipt.preserves" \
+                  --out "$vm_fault_dir/validation.preserves"
+                vm_fault_validation_summary=$(molten test nixos-vm show "$vm_fault_dir/validation.preserves")
+                vm_fault_validation_ref=''${vm_fault_validation_summary#* ref=}
+                vm_fault_validation_ref=''${vm_fault_validation_ref%% *}
                 molten test prod-soak evidence-export \
                   --node node_a \
                   --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
@@ -1432,7 +1524,7 @@
                   --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
                   --node-evidence /var/lib/molten/vm-evidence/node-b-evidence.preserves \
                   --scenario phase2-live-control-service-job-restart \
-                  --fault-profile none \
+                  --fault-profile executable-vm-faults \
                   --child-ref "$protocol_ref" \
                   --child-ref "$reconcile_ref" \
                   --child-ref "$ack_ref" \
@@ -1440,6 +1532,7 @@
                   --child-ref "$job_ref" \
                   --child-ref "$coordination_ref" \
                   --child-ref "$soak_ref" \
+                  --child-ref "$vm_fault_validation_ref" \
                   --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
                   --log /var/lib/molten/vm-evidence/live-control/reconcile.txt \
                   --log /var/lib/molten/vm-evidence/live-control/live-loopback.txt \
@@ -1474,10 +1567,19 @@
                   --artifact /var/lib/molten/vm-evidence/vm-test-run.preserves \
                   --artifact /var/lib/molten/vm-evidence/prod-soak-run.preserves \
                   --artifact /var/lib/molten/vm-evidence/vm-evidence-validation.preserves \
+                  --artifact /var/lib/molten/vm-evidence/vm-faults/network-partition.descriptor.preserves \
+                  --artifact /var/lib/molten/vm-evidence/vm-faults/network-partition.receipt.preserves \
+                  --artifact /var/lib/molten/vm-evidence/vm-faults/restart.descriptor.preserves \
+                  --artifact /var/lib/molten/vm-evidence/vm-faults/restart.receipt.preserves \
+                  --artifact /var/lib/molten/vm-evidence/vm-faults/storage.descriptor.preserves \
+                  --artifact /var/lib/molten/vm-evidence/vm-faults/storage.receipt.preserves \
+                  --artifact /var/lib/molten/vm-evidence/vm-faults/validation.preserves \
                   --log /var/lib/molten/vm-evidence/run.txt \
                   --log /var/lib/molten/vm-evidence/status.txt \
                   --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
                   --log /var/lib/molten/vm-evidence/service-job/job-ref-execute.txt \
+                  --log /var/lib/molten/vm-evidence/vm-faults/network-unavailable.log \
+                  --log /var/lib/molten/vm-evidence/vm-faults/storage-denial.log \
                   --caveat 'VM canonical receipts are authoritative; preserved logs are diagnostic only' \
                   --out /var/lib/molten/vm-evidence/vm-evidence-manifest.preserves
                 grep -q nixos-vm-evidence-validation-v1 /var/lib/molten/vm-evidence/vm-evidence-validation.preserves
