@@ -22,6 +22,27 @@ A `distributed-test-run-v1` receipt binds the source ref, test binary ref, topol
 
 A denial identifies the invariant that failed before side effects, such as missing authority, transport evidence being treated as authority, stale evidence, partitioned quorum, corrupted receipts, or undeclared ambient state.
 
+## Distributed CI risk matrix
+
+Release review uses an explicit risk/cost matrix:
+
+| Profile | Command surface | Evidence scope |
+| --- | --- | --- |
+| `fast` | `cargo nextest run --profile deterministic` | pure core/unit/parser/receipt checks; no platform or transport claims |
+| `protocol` | `cargo test --lib distributed` | deterministic simulation and model invariants |
+| `cli` | `nix build .#checks.x86_64-linux.requirement-traceability-gate` | local CLI receipt and traceability behavior |
+| `vm-smoke` | `nix build .#checks.x86_64-linux.nixos-vm-multinode` | two-node NixOS platform smoke evidence when host support is available |
+| `vm-fault` | `nix build .#checks.x86_64-linux.nixos-vm-multinode` | bounded executable VM fault evidence when host support is available |
+| `soak` | `nix build .#checks.x86_64-linux.dogfood-local-node` | pilot/readiness review only |
+
+Every distributed shard binds metadata for source/tree refs, Nix input refs, test binary/package refs, profile, shard, seed, topology, fault plan, emitted receipts, variance declarations, and diagnostic log refs. Diagnostic logs stay diagnostic-only; canonical receipts and metadata refs are the review surface.
+
+Traceability coverage is required for distributed evidence-bearing requirements. A release or CI gate must include positive evidence and negative evidence, or an explicit exemption. Missing positive coverage, missing negative coverage, stale refs, retry-only success, skipped VM support, or undeclared variance denies the distributed evidence gate.
+
+CI/release pass evidence uses zero retries. Exploratory reruns may produce diagnostic or quarantine evidence, but a pass after retry is not deterministic pass evidence unless a separate review artifact accepts the remediation boundary.
+
+Unsupported VM, network, live transport, or soak support records `unavailable`, `skipped`, or `deny` evidence. Unsupported execution never counts as pass evidence for a claim that requires that profile.
+
 ## Smallest useful check
 
 Use simulation when changing distributed protocol logic, idempotency, replay, authority separation, or restart behavior and you need fast deterministic feedback before VM checks.

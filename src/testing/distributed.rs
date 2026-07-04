@@ -10,6 +10,9 @@ const DISTRIBUTED_FAULT_PLAN_SCHEMA: &str = "molten.testing.distributed-simulati
 const DISTRIBUTED_EVENT_SCHEMA: &str = "molten.testing.distributed-simulation.event.v1";
 const DISTRIBUTED_FINAL_STATE_SCHEMA: &str = "molten.testing.distributed-simulation.final-state.v1";
 const DISTRIBUTED_RUN_SCHEMA: &str = "molten.testing.distributed-test-run.v1";
+const DISTRIBUTED_CI_MATRIX_SCHEMA: &str = "molten.testing.distributed-ci.matrix.v1";
+const DISTRIBUTED_TEST_METADATA_SCHEMA: &str = "molten.testing.distributed-ci.metadata.v1";
+const DISTRIBUTED_CI_GATE_SCHEMA: &str = "molten.testing.distributed-ci.gate.v1";
 
 const MAX_DISTRIBUTED_PEERS: usize = 128;
 const MAX_DISTRIBUTED_CHANNELS: usize = 512;
@@ -18,6 +21,8 @@ const MAX_DISTRIBUTED_FAULTS: usize = 512;
 const MAX_DISTRIBUTED_COMMANDS: usize = 1024;
 const MAX_DISTRIBUTED_REFS: usize = 1024;
 const MAX_DISTRIBUTED_TEXT: usize = 256;
+const MAX_DISTRIBUTED_PROFILES: usize = 32;
+const REQUIRED_DISTRIBUTED_PROFILE_COUNT: usize = 6;
 const DISTRIBUTED_RUN_ARITY: usize = 15;
 const DEFAULT_REPLAY_STATUS: &str = "deterministic-simulation-replayable";
 const PASS_DECISION: &str = "pass";
@@ -40,6 +45,19 @@ const FAULT_STALE_EVIDENCE: &str = "stale-evidence";
 const FAULT_AMBIENT_STATE_DRIFT: &str = "ambient-state-drift";
 const FAULT_CORRUPTED_RECEIPT: &str = "corrupted-receipt";
 const FAULT_UNAUTHORIZED_TRANSPORT: &str = "unauthorized-transport";
+const PROFILE_FAST: &str = "fast";
+const PROFILE_PROTOCOL: &str = "protocol";
+const PROFILE_CLI: &str = "cli";
+const PROFILE_VM_SMOKE: &str = "vm-smoke";
+const PROFILE_VM_FAULT: &str = "vm-fault";
+const PROFILE_SOAK: &str = "soak";
+const RELEASE_REQUIRED: &str = "required";
+const RELEASE_REQUIRED_WHEN_SUPPORTED: &str = "required-when-supported";
+const RELEASE_PILOT_SCOPE: &str = "pilot-scope";
+const COST_FAST: &str = "fast";
+const COST_MEDIUM: &str = "medium";
+const COST_HEAVY: &str = "heavy";
+const METADATA_REQUIRED_FIELDS: usize = 10;
 
 const _: () = assert!(MAX_DISTRIBUTED_PEERS > 0);
 const _: () = assert!(MAX_DISTRIBUTED_CHANNELS >= MAX_DISTRIBUTED_PEERS);
@@ -47,6 +65,8 @@ const _: () = assert!(MAX_DISTRIBUTED_FAULTS > 0);
 const _: () = assert!(MAX_DISTRIBUTED_COMMANDS > 0);
 const _: () = assert!(MAX_DISTRIBUTED_REFS >= MAX_DISTRIBUTED_COMMANDS);
 const _: () = assert!(MAX_DISTRIBUTED_TEXT > 0);
+const _: () = assert!(MAX_DISTRIBUTED_PROFILES >= REQUIRED_DISTRIBUTED_PROFILE_COUNT);
+const _: () = assert!(METADATA_REQUIRED_FIELDS >= REQUIRED_DISTRIBUTED_PROFILE_COUNT);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DistributedPeer {
@@ -169,6 +189,83 @@ pub struct ParsedDistributedTestRun {
     pub event_refs: Vec<String>,
     pub final_state_ref: String,
     pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DistributedCiProfile {
+    pub id: String,
+    pub purpose: String,
+    pub command: String,
+    pub expected_artifact_kinds: Vec<String>,
+    pub evidence_scope: String,
+    pub cost_class: String,
+    pub release_review_status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DistributedCiMatrix {
+    pub decision: String,
+    pub profiles: Vec<DistributedCiProfile>,
+    pub diagnostics: Vec<String>,
+    pub matrix_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DistributedTestMetadataInput {
+    pub source_ref: String,
+    pub nix_input_refs: Vec<String>,
+    pub test_binary_ref: String,
+    pub profile_id: String,
+    pub shard_id: String,
+    pub seed_ref: String,
+    pub topology_ref: String,
+    pub fault_plan_ref: String,
+    pub receipt_refs: Vec<String>,
+    pub variance_refs: Vec<String>,
+    pub diagnostic_log_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DistributedTestMetadata {
+    pub profile_id: String,
+    pub shard_id: String,
+    pub metadata_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DistributedProfileRun {
+    pub profile_id: String,
+    pub decision: String,
+    pub metadata_ref: String,
+    pub traceability_ref: String,
+    pub positive_coverage: bool,
+    pub negative_coverage: bool,
+    pub retry_attempts: u64,
+    pub unavailable: bool,
+    pub unsupported_reason: Option<String>,
+    pub variance_declared: bool,
+    pub required_for_release: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DistributedCiGateInput<'a> {
+    pub matrix: &'a DistributedCiMatrix,
+    pub metadata: &'a [DistributedTestMetadata],
+    pub traceability_manifest: &'a crate::trace_core::TraceabilityManifest,
+    pub runs: &'a [DistributedProfileRun],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DistributedCiGate {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub matrix_ref: String,
+    pub traceability_ref: String,
+    pub metadata_refs: Vec<String>,
+    pub gate_ref: String,
+    pub value: IoValue,
 }
 
 pub fn distributed_topology_value(topology: &DistributedTopology) -> Result<IoValue> {
@@ -851,6 +948,366 @@ fn checks_value(checks: &[(&str, &str)]) -> IoValue {
     crate::preserves_rail::checks_value(checks)
 }
 
+pub fn default_distributed_ci_profiles() -> Vec<DistributedCiProfile> {
+    vec![
+        DistributedCiProfile {
+            id: PROFILE_FAST.to_string(),
+            purpose: "pure core, unit, parser, and receipt validation checks".to_string(),
+            command: "cargo nextest run --profile deterministic".to_string(),
+            expected_artifact_kinds: vec!["libtest".to_string(), "junit".to_string()],
+            evidence_scope: "no platform or transport claims".to_string(),
+            cost_class: COST_FAST.to_string(),
+            release_review_status: RELEASE_REQUIRED.to_string(),
+        },
+        DistributedCiProfile {
+            id: PROFILE_PROTOCOL.to_string(),
+            purpose: "deterministic simulation, model fixtures, and drift checks".to_string(),
+            command: "cargo test --lib distributed".to_string(),
+            expected_artifact_kinds: vec![
+                "distributed-test-run-v1".to_string(),
+                "distributed-fault-plan-v1".to_string(),
+            ],
+            evidence_scope: "simulated distributed invariants".to_string(),
+            cost_class: COST_FAST.to_string(),
+            release_review_status: RELEASE_REQUIRED.to_string(),
+        },
+        DistributedCiProfile {
+            id: PROFILE_CLI.to_string(),
+            purpose: "CLI receipt and traceability workflow checks".to_string(),
+            command: "nix build .#checks.x86_64-linux.requirement-traceability-gate".to_string(),
+            expected_artifact_kinds: vec!["requirement-traceability-gate-v1".to_string()],
+            evidence_scope: "local process and receipt behavior".to_string(),
+            cost_class: COST_MEDIUM.to_string(),
+            release_review_status: RELEASE_REQUIRED.to_string(),
+        },
+        DistributedCiProfile {
+            id: PROFILE_VM_SMOKE.to_string(),
+            purpose: "two-node NixOS platform smoke topology".to_string(),
+            command: "nix build .#checks.x86_64-linux.nixos-vm-multinode".to_string(),
+            expected_artifact_kinds: vec![
+                "nixos-vm-test-run-v1".to_string(),
+                "nixos-vm-evidence-validation-v1".to_string(),
+            ],
+            evidence_scope: "platform integration smoke evidence".to_string(),
+            cost_class: COST_HEAVY.to_string(),
+            release_review_status: RELEASE_REQUIRED_WHEN_SUPPORTED.to_string(),
+        },
+        DistributedCiProfile {
+            id: PROFILE_VM_FAULT.to_string(),
+            purpose: "executable VM network, restart, and state-root fault checks".to_string(),
+            command: "nix build .#checks.x86_64-linux.nixos-vm-multinode".to_string(),
+            expected_artifact_kinds: vec!["nixos-vm-fault-receipt-v1".to_string()],
+            evidence_scope: "bounded executable platform fault evidence".to_string(),
+            cost_class: COST_HEAVY.to_string(),
+            release_review_status: RELEASE_REQUIRED_WHEN_SUPPORTED.to_string(),
+        },
+        DistributedCiProfile {
+            id: PROFILE_SOAK.to_string(),
+            purpose: "dogfood, pilot, and production-shaped evidence review".to_string(),
+            command: "nix build .#checks.x86_64-linux.dogfood-local-node".to_string(),
+            expected_artifact_kinds: vec![
+                "prod-soak-run-v1".to_string(),
+                "operator-release-gate-receipt-v1".to_string(),
+            ],
+            evidence_scope: "constrained pilot/readiness review only".to_string(),
+            cost_class: COST_HEAVY.to_string(),
+            release_review_status: RELEASE_PILOT_SCOPE.to_string(),
+        },
+    ]
+}
+
+pub fn build_distributed_ci_matrix(profiles: Vec<DistributedCiProfile>) -> Result<DistributedCiMatrix> {
+    ensure_count_at_most(profiles.len(), MAX_DISTRIBUTED_PROFILES, "distributed CI profiles")?;
+    let diagnostics = matrix_diagnostics(&profiles)?;
+    let decision = if diagnostics.is_empty() {
+        PASS_DECISION
+    } else {
+        DENY_DECISION
+    }
+    .to_string();
+    let value = distributed_ci_matrix_value(&decision, &profiles, &diagnostics)?;
+    let matrix_ref = canonical_ref(&value)?;
+    Ok(DistributedCiMatrix {
+        decision,
+        profiles,
+        diagnostics,
+        matrix_ref,
+        value,
+    })
+}
+
+pub fn build_distributed_test_metadata(input: &DistributedTestMetadataInput) -> Result<DistributedTestMetadata> {
+    validate_metadata_input(input)?;
+    let value = distributed_test_metadata_value(input)?;
+    let metadata_ref = canonical_ref(&value)?;
+    Ok(DistributedTestMetadata {
+        profile_id: input.profile_id.clone(),
+        shard_id: input.shard_id.clone(),
+        metadata_ref,
+        value,
+    })
+}
+
+pub fn evaluate_distributed_ci_gate(input: &DistributedCiGateInput<'_>) -> Result<DistributedCiGate> {
+    let mut diagnostics = gate_diagnostics(input)?;
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() {
+        PASS_DECISION
+    } else {
+        DENY_DECISION
+    }
+    .to_string();
+    let metadata_refs = input.metadata.iter().map(|metadata| metadata.metadata_ref.clone()).collect::<Vec<_>>();
+    let value = distributed_ci_gate_value(
+        &decision,
+        &input.matrix.matrix_ref,
+        &input.traceability_manifest.manifest_ref,
+        &metadata_refs,
+        &diagnostics,
+    )?;
+    let gate_ref = canonical_ref(&value)?;
+    Ok(DistributedCiGate {
+        decision,
+        diagnostics,
+        matrix_ref: input.matrix.matrix_ref.clone(),
+        traceability_ref: input.traceability_manifest.manifest_ref.clone(),
+        metadata_refs,
+        gate_ref,
+        value,
+    })
+}
+
+fn matrix_diagnostics(profiles: &[DistributedCiProfile]) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    let mut ids = OrderedSet::new();
+    for profile in profiles {
+        validate_profile(profile, &mut diagnostics)?;
+        if !ids.insert(profile.id.as_str()) {
+            diagnostics.push(format!("duplicate-profile:{}", profile.id));
+        }
+    }
+    for required in required_profile_ids() {
+        if !ids.contains(required) {
+            diagnostics.push(format!("missing-profile:{required}"));
+        }
+    }
+    Ok(diagnostics)
+}
+
+fn validate_profile(profile: &DistributedCiProfile, diagnostics: &mut Vec<String>) -> Result<()> {
+    validate_text("distributed profile id", &profile.id)?;
+    validate_text("distributed profile purpose", &profile.purpose)?;
+    validate_text("distributed profile command", &profile.command)?;
+    validate_text("distributed profile evidence scope", &profile.evidence_scope)?;
+    validate_cost_class(&profile.cost_class)?;
+    validate_release_status(&profile.release_review_status)?;
+    if profile.expected_artifact_kinds.is_empty() {
+        diagnostics.push(format!("profile-missing-artifact-kind:{}", profile.id));
+    }
+    validate_strings("distributed profile artifact kind", &profile.expected_artifact_kinds, MAX_DISTRIBUTED_TEXT)
+}
+
+fn validate_cost_class(value: &str) -> Result<()> {
+    match value {
+        COST_FAST | COST_MEDIUM | COST_HEAVY => Ok(()),
+        other => Err(MoltenError::invalid_harness(format!("unsupported distributed profile cost class {other}"))),
+    }
+}
+
+fn validate_release_status(value: &str) -> Result<()> {
+    match value {
+        RELEASE_REQUIRED | RELEASE_REQUIRED_WHEN_SUPPORTED | RELEASE_PILOT_SCOPE => Ok(()),
+        other => Err(MoltenError::invalid_harness(format!("unsupported distributed profile release status {other}"))),
+    }
+}
+
+fn required_profile_ids() -> [&'static str; REQUIRED_DISTRIBUTED_PROFILE_COUNT] {
+    [
+        PROFILE_FAST,
+        PROFILE_PROTOCOL,
+        PROFILE_CLI,
+        PROFILE_VM_SMOKE,
+        PROFILE_VM_FAULT,
+        PROFILE_SOAK,
+    ]
+}
+
+fn distributed_ci_matrix_value(
+    decision: &str,
+    profiles: &[DistributedCiProfile],
+    diagnostics: &[String],
+) -> Result<IoValue> {
+    validate_decision(decision)?;
+    validate_strings("distributed matrix diagnostic", diagnostics, MAX_DISTRIBUTED_TEXT)?;
+    Ok(record("distributed-ci-matrix-v1", vec![
+        string(DISTRIBUTED_CI_MATRIX_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("profiles", vec![sequence(profile_values(profiles)?)]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        checks_value(&[
+            ("profiles-explicit", status(profiles.len() == REQUIRED_DISTRIBUTED_PROFILE_COUNT)),
+            ("artifact-kinds-declared", status(diagnostics.iter().all(|item| !item.contains("artifact-kind")))),
+            ("retry-success-not-pass-evidence", PASS_DECISION),
+            ("unavailable-is-not-pass", PASS_DECISION),
+        ]),
+    ]))
+}
+
+fn profile_values(profiles: &[DistributedCiProfile]) -> Result<Vec<IoValue>> {
+    profiles
+        .iter()
+        .map(|profile| {
+            Ok(record("profile", vec![
+                record("id", vec![string(&profile.id)]),
+                record("purpose", vec![string(&profile.purpose)]),
+                record("command", vec![string(&profile.command)]),
+                record("artifact-kinds", vec![sequence(profile.expected_artifact_kinds.iter().map(string).collect())]),
+                record("evidence-scope", vec![string(&profile.evidence_scope)]),
+                record("cost-class", vec![string(&profile.cost_class)]),
+                record("release-review-status", vec![string(&profile.release_review_status)]),
+            ]))
+        })
+        .collect()
+}
+
+fn validate_metadata_input(input: &DistributedTestMetadataInput) -> Result<()> {
+    validate_ref(&input.source_ref, "distributed metadata source")?;
+    validate_ref_slice("distributed metadata nix input", &input.nix_input_refs)?;
+    validate_ref(&input.test_binary_ref, "distributed metadata test binary")?;
+    validate_text("distributed metadata profile", &input.profile_id)?;
+    validate_text("distributed metadata shard", &input.shard_id)?;
+    validate_ref(&input.seed_ref, "distributed metadata seed")?;
+    validate_ref(&input.topology_ref, "distributed metadata topology")?;
+    validate_ref(&input.fault_plan_ref, "distributed metadata fault plan")?;
+    validate_ref_slice("distributed metadata receipt", &input.receipt_refs)?;
+    validate_ref_slice("distributed metadata variance", &input.variance_refs)?;
+    validate_ref_slice("distributed metadata diagnostic log", &input.diagnostic_log_refs)?;
+    if input.receipt_refs.is_empty() {
+        return Err(MoltenError::invalid_harness("distributed metadata requires receipt refs"));
+    }
+    if input.variance_refs.is_empty() {
+        return Err(MoltenError::invalid_harness("distributed metadata requires variance refs"));
+    }
+    Ok(())
+}
+
+fn distributed_test_metadata_value(input: &DistributedTestMetadataInput) -> Result<IoValue> {
+    Ok(record("distributed-test-metadata-v1", vec![
+        string(DISTRIBUTED_TEST_METADATA_SCHEMA),
+        record("source", vec![string(&input.source_ref)]),
+        record("nix-inputs", vec![refs_sequence(&input.nix_input_refs)]),
+        record("test-binary", vec![string(&input.test_binary_ref)]),
+        record("profile", vec![string(&input.profile_id)]),
+        record("shard", vec![string(&input.shard_id)]),
+        record("seed", vec![string(&input.seed_ref)]),
+        record("topology", vec![string(&input.topology_ref)]),
+        record("fault-plan", vec![string(&input.fault_plan_ref)]),
+        record("receipts", vec![refs_sequence(&input.receipt_refs)]),
+        record("variance", vec![refs_sequence(&input.variance_refs)]),
+        record("diagnostic-logs", vec![refs_sequence(&input.diagnostic_log_refs)]),
+        checks_value(&[
+            ("source-bound", PASS_DECISION),
+            ("profile-and-shard-bound", PASS_DECISION),
+            ("variance-declared", PASS_DECISION),
+            ("logs-diagnostic-only", PASS_DECISION),
+        ]),
+    ]))
+}
+
+fn gate_diagnostics(input: &DistributedCiGateInput<'_>) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if input.matrix.decision != PASS_DECISION {
+        diagnostics.push("distributed-matrix-denied".to_string());
+    }
+    if input.traceability_manifest.decision != PASS_DECISION {
+        diagnostics.push("distributed-traceability-denied".to_string());
+    }
+    let metadata_refs = input.metadata.iter().map(|metadata| metadata.metadata_ref.as_str()).collect::<OrderedSet<_>>();
+    let profile_ids = input.matrix.profiles.iter().map(|profile| profile.id.as_str()).collect::<OrderedSet<_>>();
+    for run in input.runs {
+        validate_profile_run(run)?;
+        if !profile_ids.contains(run.profile_id.as_str()) {
+            diagnostics.push(format!("run-profile-not-in-matrix:{}", run.profile_id));
+        }
+        if !metadata_refs.contains(run.metadata_ref.as_str()) {
+            diagnostics.push(format!("run-metadata-ref-missing:{}", run.profile_id));
+        }
+        if run.traceability_ref != input.traceability_manifest.manifest_ref {
+            diagnostics.push(format!("run-traceability-ref-mismatch:{}", run.profile_id));
+        }
+        if !run.positive_coverage {
+            diagnostics.push(format!("missing-positive-coverage:{}", run.profile_id));
+        }
+        if !run.negative_coverage {
+            diagnostics.push(format!("missing-negative-coverage:{}", run.profile_id));
+        }
+        if run.retry_attempts > 0 && run.decision == PASS_DECISION {
+            diagnostics.push(format!("retry-only-success-denied:{}", run.profile_id));
+        }
+        if run.unavailable && run.decision == PASS_DECISION {
+            diagnostics.push(format!("unavailable-profile-cannot-pass:{}", run.profile_id));
+        }
+        if run.unavailable && run.required_for_release {
+            diagnostics.push(format!("required-profile-unavailable:{}", run.profile_id));
+        }
+        if !run.variance_declared {
+            diagnostics.push(format!("undeclared-variance:{}", run.profile_id));
+        }
+    }
+    for profile in &input.matrix.profiles {
+        if profile.release_review_status == RELEASE_REQUIRED
+            && !input.runs.iter().any(|run| run.profile_id == profile.id)
+        {
+            diagnostics.push(format!("missing-required-profile-run:{}", profile.id));
+        }
+    }
+    Ok(diagnostics)
+}
+
+fn validate_profile_run(run: &DistributedProfileRun) -> Result<()> {
+    validate_text("profile run id", &run.profile_id)?;
+    validate_decision(&run.decision)?;
+    validate_ref(&run.metadata_ref, "profile run metadata")?;
+    validate_ref(&run.traceability_ref, "profile run traceability")?;
+    if let Some(reason) = &run.unsupported_reason {
+        validate_text("profile run unsupported reason", reason)?;
+    }
+    Ok(())
+}
+
+fn distributed_ci_gate_value(
+    decision: &str,
+    matrix_ref: &str,
+    traceability_ref: &str,
+    metadata_refs: &[String],
+    diagnostics: &[String],
+) -> Result<IoValue> {
+    validate_decision(decision)?;
+    validate_ref(matrix_ref, "distributed CI matrix")?;
+    validate_ref(traceability_ref, "distributed traceability")?;
+    validate_ref_slice("distributed metadata", metadata_refs)?;
+    validate_strings("distributed CI gate diagnostic", diagnostics, MAX_DISTRIBUTED_TEXT)?;
+    Ok(record("distributed-ci-gate-v1", vec![
+        string(DISTRIBUTED_CI_GATE_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("matrix", vec![string(matrix_ref)]),
+        record("traceability", vec![string(traceability_ref)]),
+        record("metadata", vec![refs_sequence(metadata_refs)]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        checks_value(&[
+            ("positive-coverage-required", status(!diagnostics.iter().any(|item| item.contains("positive")))),
+            ("negative-coverage-required", status(!diagnostics.iter().any(|item| item.contains("negative")))),
+            ("zero-retry-pass-required", status(!diagnostics.iter().any(|item| item.contains("retry")))),
+            ("unavailable-not-pass", status(!diagnostics.iter().any(|item| item.contains("unavailable")))),
+        ]),
+    ]))
+}
+
+fn status(condition: bool) -> &'static str {
+    if condition { PASS_DECISION } else { "fail" }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1054,5 +1511,152 @@ mod tests {
                 .any(|diagnostic| diagnostic == "partitioned-quorum-denied-before-side-effects")
         );
         assert!(run.diagnostics.iter().any(|diagnostic| diagnostic == "undeclared-ambient-state"));
+    }
+
+    fn traceability_manifest() -> crate::trace_core::TraceabilityManifest {
+        let requirement = crate::trace_core::RequirementInput {
+            id: "molten.testing.distributed_ci.fixture".to_string(),
+            source: "cairn/changes/distributed-test-ci-risk-matrix/specs/testing-harness/spec.md".to_string(),
+            kind: "evidence".to_string(),
+            changed: true,
+        };
+        let positive = verification_evidence("positive");
+        let negative = verification_evidence("negative");
+        crate::trace_core::build_traceability_manifest(&crate::trace_core::TraceabilityInput {
+            requirements: vec![requirement],
+            coverage: vec![crate::trace_core::CoverageInput {
+                requirement_id: "molten.testing.distributed_ci.fixture".to_string(),
+                positive: vec![positive],
+                negative: vec![negative],
+                exemption: None,
+            }],
+            require_receipt_backed: false,
+        })
+        .expect("traceability manifest")
+    }
+
+    fn verification_evidence(kind: &str) -> crate::trace_core::VerificationEvidence {
+        crate::trace_core::VerificationEvidence {
+            target: format!("tests/distributed-{kind}.rs"),
+            command: format!("cargo test distributed_{kind}"),
+            artifact_ref: local_ref(&format!("traceability:{kind}")),
+            artifact_refs: vec![local_ref(&format!("traceability:{kind}"))],
+            target_exists: true,
+            artifact_present: true,
+            source: "compatibility".to_string(),
+            receipt_ref: None,
+            expected_decision: "compatibility".to_string(),
+        }
+    }
+
+    fn metadata(profile_id: &str) -> DistributedTestMetadata {
+        build_distributed_test_metadata(&DistributedTestMetadataInput {
+            source_ref: local_ref("source-tree"),
+            nix_input_refs: vec![local_ref("nix-inputs")],
+            test_binary_ref: local_ref("test-binary"),
+            profile_id: profile_id.to_string(),
+            shard_id: format!("{profile_id}-shard"),
+            seed_ref: local_ref("seed"),
+            topology_ref: local_ref("topology"),
+            fault_plan_ref: local_ref("fault-plan"),
+            receipt_refs: vec![local_ref(&format!("receipt:{profile_id}"))],
+            variance_refs: vec![local_ref("variance:none")],
+            diagnostic_log_refs: vec![local_ref(&format!("log:{profile_id}"))],
+        })
+        .expect("metadata")
+    }
+
+    fn profile_run(profile_id: &str, metadata_ref: String, traceability_ref: String) -> DistributedProfileRun {
+        DistributedProfileRun {
+            profile_id: profile_id.to_string(),
+            decision: PASS_DECISION.to_string(),
+            metadata_ref,
+            traceability_ref,
+            positive_coverage: true,
+            negative_coverage: true,
+            retry_attempts: 0,
+            unavailable: false,
+            unsupported_reason: None,
+            variance_declared: true,
+            required_for_release: false,
+        }
+    }
+
+    #[test]
+    fn distributed_ci_matrix_declares_profiles_and_metadata() {
+        // r[verify molten.testing.distributed_ci.profile_matrix]
+        // r[verify molten.testing.distributed_ci.metadata_binding]
+        let matrix = build_distributed_ci_matrix(default_distributed_ci_profiles()).expect("matrix");
+        let protocol_metadata = metadata(PROFILE_PROTOCOL);
+        let rendered = crate::preserves_rail::to_text(&matrix.value).expect("render matrix");
+
+        assert_eq!(matrix.decision, PASS_DECISION);
+        assert_eq!(matrix.profiles.len(), REQUIRED_DISTRIBUTED_PROFILE_COUNT);
+        assert!(rendered.contains("vm-fault"));
+        assert!(rendered.contains("nix build .#checks.x86_64-linux.nixos-vm-multinode"));
+        assert_eq!(protocol_metadata.profile_id, PROFILE_PROTOCOL);
+        assert!(
+            crate::preserves_rail::to_text(&protocol_metadata.value)
+                .expect("render metadata")
+                .contains("diagnostic-logs")
+        );
+    }
+
+    #[test]
+    fn distributed_ci_gate_requires_traceability_and_zero_retry_pass() {
+        // r[verify molten.testing.distributed_ci.traceability_required_gate]
+        // r[verify molten.testing.distributed_ci.retry_policy]
+        let matrix = build_distributed_ci_matrix(default_distributed_ci_profiles()).expect("matrix");
+        let traceability = traceability_manifest();
+        let metadata = metadata(PROFILE_FAST);
+        let mut run = profile_run(PROFILE_FAST, metadata.metadata_ref.clone(), traceability.manifest_ref.clone());
+        run.retry_attempts = 1;
+        let gate = evaluate_distributed_ci_gate(&DistributedCiGateInput {
+            matrix: &matrix,
+            metadata: &[metadata],
+            traceability_manifest: &traceability,
+            runs: &[run],
+        })
+        .expect("gate");
+
+        assert_eq!(gate.decision, DENY_DECISION);
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "retry-only-success-denied:fast"));
+    }
+
+    #[test]
+    fn distributed_ci_gate_rejects_missing_negative_coverage_and_unavailable_pass() {
+        // r[verify molten.testing.distributed_ci.unavailable_handling]
+        // r[verify molten.testing.distributed_ci.negative_fixtures]
+        let matrix = build_distributed_ci_matrix(default_distributed_ci_profiles()).expect("matrix");
+        let traceability = traceability_manifest();
+        let metadata = metadata(PROFILE_VM_FAULT);
+        let mut run = profile_run(PROFILE_VM_FAULT, metadata.metadata_ref.clone(), traceability.manifest_ref.clone());
+        run.negative_coverage = false;
+        run.unavailable = true;
+        run.required_for_release = true;
+        run.unsupported_reason = Some("no-kvm".to_string());
+        let gate = evaluate_distributed_ci_gate(&DistributedCiGateInput {
+            matrix: &matrix,
+            metadata: &[metadata],
+            traceability_manifest: &traceability,
+            runs: &[run],
+        })
+        .expect("gate");
+
+        assert_eq!(gate.decision, DENY_DECISION);
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "missing-negative-coverage:vm-fault"));
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "unavailable-profile-cannot-pass:vm-fault"));
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "required-profile-unavailable:vm-fault"));
+    }
+
+    #[test]
+    fn distributed_ci_matrix_negative_fixture_rejects_missing_profile() {
+        // r[verify molten.testing.distributed_ci.negative_fixtures]
+        let mut profiles = default_distributed_ci_profiles();
+        profiles.retain(|profile| profile.id != PROFILE_PROTOCOL);
+        let matrix = build_distributed_ci_matrix(profiles).expect("matrix");
+
+        assert_eq!(matrix.decision, DENY_DECISION);
+        assert!(matrix.diagnostics.iter().any(|diagnostic| diagnostic == "missing-profile:protocol"));
     }
 }
