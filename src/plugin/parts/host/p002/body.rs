@@ -1,4 +1,14 @@
 
+struct HostcallAdmission {
+    diagnostics: Vec<String>,
+    is_declared_hostcall: bool,
+    operation_ref_bound: bool,
+    has_authority: bool,
+    has_resources: bool,
+    has_descriptor_requirements: bool,
+    has_ambient_request: bool,
+}
+
 pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result<IoValue> {
     let manifest = parse_plugin_manifest(input.manifest_value)?;
     validate_non_empty(input.operation, "plugin hostcall operation")?;
@@ -7,14 +17,77 @@ pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result
     validate_ref(input.effect_receipt_ref, "plugin hostcall effect ref")?;
     validate_refs(input.authority_refs, "plugin hostcall authority ref")?;
     validate_refs(input.resource_refs, "plugin hostcall resource ref")?;
+    validate_optional_ref(input.input_schema_ref, "plugin hostcall input schema ref")?;
+    validate_optional_ref(input.output_schema_ref, "plugin hostcall output schema ref")?;
+    let admission = hostcall_admission(&manifest, input)?;
+    let decision = if admission.diagnostics.is_empty() {
+        PLUGIN_DECISION_PASS
+    } else {
+        PLUGIN_DECISION_DENY
+    };
+    Ok(record("plugin-hostcall-receipt-v1", vec![
+        string(crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("plugin", vec![string(&manifest.plugin_ref)]),
+        record("manifest", vec![string(&manifest.manifest_ref)]),
+        record("operation", vec![string(input.operation)]),
+        record("hostcall", vec![string(input.hostcall_ref)]),
+        record("executor", vec![string(input.executor_receipt_ref)]),
+        record("effect", vec![string(input.effect_receipt_ref)]),
+        record("authority", vec![refs_sequence(input.authority_refs)]),
+        record("resource", vec![refs_sequence(input.resource_refs)]),
+        record("diagnostics", vec![strings_sequence(&admission.diagnostics)]),
+        checks_value(&[
+            ("declared-hostcall", status(admission.is_declared_hostcall)),
+            ("operation-ref-bound", status(admission.operation_ref_bound)),
+            ("executor-boundary", PLUGIN_DECISION_PASS),
+            ("effect-handle-boundary", PLUGIN_DECISION_PASS),
+            ("authority-present", status(admission.has_authority)),
+            ("resource-bound", status(admission.has_resources)),
+            ("descriptor-specific-requirements", status(admission.has_descriptor_requirements)),
+            (
+                "deny-ambient-side-effect",
+                status(!admission.has_ambient_request || admission.is_declared_hostcall),
+            ),
+        ]),
+    ]))
+}
+
+fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_>) -> Result<HostcallAdmission> {
     let mut diagnostics = Vec::new();
-    let is_declared_hostcall = manifest.hostcall_refs.iter().any(|value| value == input.hostcall_ref);
+    let primitive_ref_matches = primitive_hostcall_ref(input.operation)? == input.hostcall_ref;
+    let primitive_declared = primitive_ref_matches && manifest.hostcall_refs.iter().any(|value| value == input.hostcall_ref);
+    let extension_descriptor = matching_bound_descriptor(
+        manifest,
+        input.extension_contracts,
+        input.operation,
+        input.hostcall_ref,
+    );
+    let descriptor_requirements = descriptor_requirements_pass(
+        &manifest.effect_manifest_refs,
+        extension_descriptor,
+        input,
+    );
+    let is_declared_hostcall = primitive_declared || extension_descriptor.is_some();
+    let operation_ref_bound = primitive_ref_matches || extension_descriptor.is_some();
     let has_authority = !input.authority_refs.is_empty();
     let has_resources = !input.resource_refs.is_empty();
     let has_ambient_request = is_ambient_operation(input.operation);
+    let has_descriptor_requirements = if extension_descriptor.is_some() {
+        descriptor_requirements
+    } else {
+        primitive_declared
+    };
     if !is_declared_hostcall {
         diagnostics.push_limited(
-            format!("plugin hostcall {} is not declared", input.operation),
+            format!("plugin hostcall {} is not declared by active manifest or extension contracts", input.operation),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin hostcall diagnostics",
+        )?;
+    }
+    if !operation_ref_bound {
+        diagnostics.push_limited(
+            format!("plugin hostcall operation/ref binding mismatch for {}", input.operation),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin hostcall diagnostics",
         )?;
@@ -40,42 +113,69 @@ pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result
             "plugin hostcall diagnostics",
         )?;
     }
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    Ok(record("plugin-hostcall-receipt-v1", vec![
-        string(crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("plugin", vec![string(&manifest.plugin_ref)]),
-        record("operation", vec![string(input.operation)]),
-        record("hostcall", vec![string(input.hostcall_ref)]),
-        record("executor", vec![string(input.executor_receipt_ref)]),
-        record("effect", vec![string(input.effect_receipt_ref)]),
-        record("authority", vec![refs_sequence(input.authority_refs)]),
-        record("resource", vec![refs_sequence(input.resource_refs)]),
-        record("diagnostics", vec![strings_sequence(&diagnostics)]),
-        checks_value(&[
-            ("declared-hostcall", status(is_declared_hostcall)),
-            ("executor-boundary", "pass"),
-            ("effect-handle-boundary", "pass"),
-            ("authority-present", status(has_authority)),
-            ("resource-bound", status(has_resources)),
-            ("deny-ambient-side-effect", status(!has_ambient_request || is_declared_hostcall)),
-        ]),
-    ]))
+    if !has_descriptor_requirements {
+        diagnostics.push_limited(
+            format!("plugin hostcall {} missing descriptor-specific requirements", input.operation),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin hostcall diagnostics",
+        )?;
+    }
+    Ok(HostcallAdmission {
+        diagnostics,
+        is_declared_hostcall,
+        operation_ref_bound,
+        has_authority,
+        has_resources,
+        has_descriptor_requirements,
+        has_ambient_request,
+    })
+}
+
+fn matching_bound_descriptor<'a>(
+    manifest: &PluginManifest,
+    contracts: &'a [PluginExtensionContract],
+    operation: &str,
+    descriptor_ref: &str,
+) -> Option<&'a PluginHostcallDescriptor> {
+    contracts
+        .iter()
+        .filter(|contract| manifest.extension_contract_refs.contains(&contract.contract_ref))
+        .flat_map(|contract| contract.hostcall_descriptors.iter())
+        .find(|descriptor| descriptor.operation == operation && descriptor.descriptor_ref == descriptor_ref)
+}
+
+fn descriptor_requirements_pass(
+    manifest_effect_refs: &[String],
+    descriptor: Option<&PluginHostcallDescriptor>,
+    input: &HostcallReceiptInput<'_>,
+) -> bool {
+    descriptor.is_some_and(|descriptor| {
+        input.input_schema_ref == Some(descriptor.input_schema_ref.as_str())
+            && input.output_schema_ref == Some(descriptor.output_schema_ref.as_str())
+            && contains_all(input.authority_refs, &descriptor.authority_refs)
+            && contains_all(input.resource_refs, &descriptor.resource_refs)
+            && contains_all(manifest_effect_refs, &descriptor.effect_manifest_refs)
+    })
 }
 
 pub fn parse_plugin_hostcall_receipt(value: &IoValue) -> Result<PluginHostcallReceipt> {
-    let fields = simple_record(value, "plugin-hostcall-receipt-v1", 11)?;
+    let fields = simple_record(value, "plugin-hostcall-receipt-v1", PLUGIN_HOSTCALL_RECEIPT_ARITY)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA, "plugin hostcall receipt")?;
-    let checks = parse_checks(&fields[10])?;
+    let checks = parse_checks(&fields[PLUGIN_HOSTCALL_RECEIPT_ARITY - 1])?;
     require_check(&checks, "declared-hostcall", "plugin hostcall receipt")?;
-    require_check(&checks, "effect-handle-boundary", "plugin hostcall receipt")?;
+    require_check(&checks, "operation-ref-bound", "plugin hostcall receipt")?;
+    require_check_status(&checks, "effect-handle-boundary", PLUGIN_DECISION_PASS, "plugin hostcall receipt")?;
+    let decision = record_decision(&fields[1], "decision")?;
+    let diagnostics = record_string_sequence(&fields[10], "diagnostics")?;
+    validate_receipt_coherence(&decision, &checks, &diagnostics, "plugin hostcall receipt")?;
     Ok(PluginHostcallReceipt {
         receipt_ref: canonical_hash(value)?,
-        decision: record_string(&fields[1], "decision")?,
+        decision,
         plugin_ref: record_ref(&fields[2], "plugin")?,
-        operation: record_string(&fields[3], "operation")?,
-        hostcall_ref: record_ref(&fields[4], "hostcall")?,
-        diagnostics: record_string_sequence(&fields[9], "diagnostics")?,
+        manifest_ref: record_ref(&fields[3], "manifest")?,
+        operation: record_string(&fields[4], "operation")?,
+        hostcall_ref: record_ref(&fields[5], "hostcall")?,
+        diagnostics,
         value: value.clone(),
     })
 }
@@ -96,9 +196,9 @@ pub fn plugin_health_receipt_value(input: &HealthReceiptInput<'_>) -> Result<IoV
         )?;
     }
     let decision = if is_healthy && diagnostics.is_empty() {
-        "pass"
+        PLUGIN_DECISION_PASS
     } else {
-        "deny"
+        PLUGIN_DECISION_DENY
     };
     Ok(record("plugin-health-receipt-v1", vec![
         string(crate::preserves_rail::PLUGIN_HEALTH_RECEIPT_SCHEMA),
@@ -110,9 +210,9 @@ pub fn plugin_health_receipt_value(input: &HealthReceiptInput<'_>) -> Result<IoV
         record("services", vec![refs_sequence(input.service_refs)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value(&[
-            ("canonical-health", "pass"),
+            ("canonical-health", PLUGIN_DECISION_PASS),
             ("service-supervision-bound", status(!input.service_refs.is_empty())),
-            ("failed-health-isolated", "pass"),
+            ("failed-health-isolated", PLUGIN_DECISION_PASS),
             ("cleanup-required-on-failure", status(is_healthy)),
         ]),
     ]))
@@ -122,13 +222,17 @@ pub fn parse_plugin_health_receipt(value: &IoValue) -> Result<PluginHealthReceip
     let fields = simple_record(value, "plugin-health-receipt-v1", 9)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_HEALTH_RECEIPT_SCHEMA, "plugin health receipt")?;
     let checks = parse_checks(&fields[8])?;
-    require_check(&checks, "canonical-health", "plugin health receipt")?;
-    require_check(&checks, "failed-health-isolated", "plugin health receipt")?;
+    require_check_status(&checks, "canonical-health", PLUGIN_DECISION_PASS, "plugin health receipt")?;
+    require_check_status(&checks, "failed-health-isolated", PLUGIN_DECISION_PASS, "plugin health receipt")?;
+    let decision = record_decision(&fields[1], "decision")?;
+    let diagnostics = record_string_sequence(&fields[7], "diagnostics")?;
+    validate_receipt_coherence(&decision, &checks, &diagnostics, "plugin health receipt")?;
     Ok(PluginHealthReceipt {
         receipt_ref: canonical_hash(value)?,
-        decision: record_string(&fields[1], "decision")?,
+        decision,
         plugin_ref: record_ref(&fields[2], "plugin")?,
-        diagnostics: record_string_sequence(&fields[7], "diagnostics")?,
+        manifest_ref: record_ref(&fields[3], "manifest")?,
+        diagnostics,
         value: value.clone(),
     })
 }
@@ -153,7 +257,7 @@ pub fn plugin_removal_receipt_value(input: &RemovalReceiptInput<'_>) -> Result<I
             "plugin removal diagnostics",
         )?;
     }
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let decision = if diagnostics.is_empty() { PLUGIN_DECISION_PASS } else { PLUGIN_DECISION_DENY };
     Ok(record("plugin-removal-receipt-v1", vec![
         string(crate::preserves_rail::PLUGIN_REMOVAL_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
@@ -166,7 +270,7 @@ pub fn plugin_removal_receipt_value(input: &RemovalReceiptInput<'_>) -> Result<I
         record("catalog", vec![refs_sequence(input.catalog_entry_refs)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value(&[
-            ("canonical-removal", "pass"),
+            ("canonical-removal", PLUGIN_DECISION_PASS),
             ("service-retractions", status(has_service_cleanup)),
             ("assertion-retractions", status(has_assertion_cleanup)),
             ("handle-revocations", status(has_handle_cleanup)),
@@ -180,12 +284,17 @@ pub fn parse_plugin_removal_receipt(value: &IoValue) -> Result<PluginRemovalRece
     let fields = simple_record(value, "plugin-removal-receipt-v1", 11)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_REMOVAL_RECEIPT_SCHEMA, "plugin removal receipt")?;
     let checks = parse_checks(&fields[10])?;
+    require_check_status(&checks, "canonical-removal", PLUGIN_DECISION_PASS, "plugin removal receipt")?;
     require_check(&checks, "complete-cleanup", "plugin removal receipt")?;
+    let decision = record_decision(&fields[1], "decision")?;
+    let diagnostics = record_string_sequence(&fields[9], "diagnostics")?;
+    validate_receipt_coherence(&decision, &checks, &diagnostics, "plugin removal receipt")?;
     Ok(PluginRemovalReceipt {
         receipt_ref: canonical_hash(value)?,
-        decision: record_string(&fields[1], "decision")?,
+        decision,
         plugin_ref: record_ref(&fields[2], "plugin")?,
-        diagnostics: record_string_sequence(&fields[9], "diagnostics")?,
+        manifest_ref: record_ref(&fields[3], "manifest")?,
+        diagnostics,
         value: value.clone(),
     })
 }
@@ -228,7 +337,7 @@ pub fn plugin_upgrade_receipt_value(input: &UpgradeReceiptInput<'_>) -> Result<I
             "plugin upgrade diagnostics",
         )?;
     }
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let decision = if diagnostics.is_empty() { PLUGIN_DECISION_PASS } else { PLUGIN_DECISION_DENY };
     Ok(record("plugin-upgrade-receipt-v1", vec![
         string(crate::preserves_rail::PLUGIN_UPGRADE_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
@@ -238,7 +347,7 @@ pub fn plugin_upgrade_receipt_value(input: &UpgradeReceiptInput<'_>) -> Result<I
         record("cleanup", vec![refs_sequence(input.cleanup_refs)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value(&[
-            ("canonical-upgrade", "pass"),
+            ("canonical-upgrade", PLUGIN_DECISION_PASS),
             ("same-plugin", status(has_same_plugin)),
             ("abi-compatible", status(has_compatible_abi)),
             ("schema-compatible", status(has_compatible_schemas)),
@@ -251,13 +360,16 @@ pub fn parse_plugin_upgrade_receipt(value: &IoValue) -> Result<PluginUpgradeRece
     let fields = simple_record(value, "plugin-upgrade-receipt-v1", 8)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_UPGRADE_RECEIPT_SCHEMA, "plugin upgrade receipt")?;
     let checks = parse_checks(&fields[7])?;
-    require_check(&checks, "canonical-upgrade", "plugin upgrade receipt")?;
+    require_check_status(&checks, "canonical-upgrade", PLUGIN_DECISION_PASS, "plugin upgrade receipt")?;
+    let decision = record_decision(&fields[1], "decision")?;
+    let diagnostics = record_string_sequence(&fields[6], "diagnostics")?;
+    validate_receipt_coherence(&decision, &checks, &diagnostics, "plugin upgrade receipt")?;
     Ok(PluginUpgradeReceipt {
         receipt_ref: canonical_hash(value)?,
-        decision: record_string(&fields[1], "decision")?,
+        decision,
         old_manifest_ref: record_ref(&fields[2], "old-manifest")?,
         new_manifest_ref: record_ref(&fields[3], "new-manifest")?,
-        diagnostics: record_string_sequence(&fields[6], "diagnostics")?,
+        diagnostics,
         value: value.clone(),
     })
 }
@@ -278,7 +390,7 @@ pub fn plugin_host_abi_result_value(input: &HostAbiResultInput<'_>) -> Result<Io
         record("payload", vec![optional_ref_value(input.payload_ref)]),
         record("error", vec![optional_text_value(input.error)]),
         checks_value(&[
-            ("canonical-preserves-result", "pass"),
+            ("canonical-preserves-result", PLUGIN_DECISION_PASS),
             ("error-is-explicit", status(input.status != "error" || input.error.is_some())),
         ]),
     ]))

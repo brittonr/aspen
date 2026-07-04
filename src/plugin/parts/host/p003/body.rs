@@ -24,6 +24,8 @@ pub fn minimal_plugin_fixture(root: &std::path::Path) -> Result<PluginFixtureRun
         health: Some(&health),
         removal: Some(&removal),
         upgrade: Some(&upgrade),
+        negotiation: None,
+        compatibility: None,
         recovery_receipt_ref: None,
     })?;
     let evidence_values = vec![
@@ -138,6 +140,7 @@ fn executor_manifest(registry: &std::path::Path, seed: &SeedRefs, payload: &str)
         policy_refs: std::slice::from_ref(&seed.policy_ref),
         resource_refs: std::slice::from_ref(&seed.resource_ref),
         supply_chain_refs: std::slice::from_ref(&seed.supply_chain_ref),
+        extension_contract_refs: &[],
     })
 }
 
@@ -190,6 +193,9 @@ fn call_step(manifest_value: &IoValue, seed: &SeedRefs) -> Result<PluginHostcall
         effect_receipt_ref: &seed.effect_receipt_ref,
         authority_refs: std::slice::from_ref(&seed.authority_ref),
         resource_refs: std::slice::from_ref(&seed.resource_ref),
+        extension_contracts: &[],
+        input_schema_ref: None,
+        output_schema_ref: None,
     })?;
     parse_plugin_hostcall_receipt(&value)
 }
@@ -237,10 +243,10 @@ fn upgrade_step(old_value: &IoValue, new_value: &IoValue, cleanup_ref: &str) -> 
 }
 
 fn run_decision(decisions: &[&str]) -> String {
-    if decisions.iter().all(|decision| *decision == "pass") {
-        "pass"
+    if decisions.iter().all(|decision| *decision == PLUGIN_DECISION_PASS) {
+        PLUGIN_DECISION_PASS
     } else {
-        "deny"
+        PLUGIN_DECISION_DENY
     }
     .to_string()
 }

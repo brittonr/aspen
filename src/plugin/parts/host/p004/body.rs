@@ -2,8 +2,9 @@
 fn receipt_summary(value: &IoValue) -> Option<String> {
     if let Ok(hostcall) = parse_plugin_hostcall_receipt(value) {
         return Some(format!(
-            "plugin hostcall receipt ref={} operation={} decision={} diagnostics={} (summary is non-normative)",
+            "plugin hostcall receipt ref={} manifest={} operation={} decision={} diagnostics={} (summary is non-normative)",
             hostcall.receipt_ref,
+            hostcall.manifest_ref,
             hostcall.operation,
             hostcall.decision,
             hostcall.diagnostics.len()
@@ -11,16 +12,18 @@ fn receipt_summary(value: &IoValue) -> Option<String> {
     }
     if let Ok(health) = parse_plugin_health_receipt(value) {
         return Some(format!(
-            "plugin health receipt ref={} decision={} diagnostics={} (summary is non-normative)",
+            "plugin health receipt ref={} manifest={} decision={} diagnostics={} (summary is non-normative)",
             health.receipt_ref,
+            health.manifest_ref,
             health.decision,
             health.diagnostics.len()
         ));
     }
     if let Ok(removal) = parse_plugin_removal_receipt(value) {
         return Some(format!(
-            "plugin removal receipt ref={} decision={} diagnostics={} (summary is non-normative)",
+            "plugin removal receipt ref={} manifest={} decision={} diagnostics={} (summary is non-normative)",
             removal.receipt_ref,
+            removal.manifest_ref,
             removal.decision,
             removal.diagnostics.len()
         ));
@@ -82,11 +85,15 @@ fn plugin_fixture_report_value(input: &PluginFixtureReportInput<'_>) -> Result<I
 }
 
 pub fn storage_read_hostcall_ref() -> Result<String> {
-    canonical_hash(&record("plugin-hostcall", vec![string("storage.read")]))
+    primitive_hostcall_ref("storage.read")
 }
 
 pub fn network_open_hostcall_ref() -> Result<String> {
-    canonical_hash(&record("plugin-hostcall", vec![string("network.open")]))
+    primitive_hostcall_ref("network.open")
+}
+
+fn primitive_hostcall_ref(operation: &str) -> Result<String> {
+    canonical_hash(&record("plugin-hostcall", vec![string(operation)]))
 }
 
 fn plugin_ref(label: &str) -> Result<String> {
@@ -122,9 +129,11 @@ pub fn evaluate_plugin_lifecycle_state(input: &PluginLifecycleStateInput<'_>) ->
     let permission_passes = plugin_permission_passes(input.permission, input.manifest, &mut diagnostics)?;
     let activation_passes = plugin_activation_passes(input.activation, input.manifest, &mut diagnostics)?;
     let hostcall_passes = plugin_hostcall_passes(input.hostcall, input.manifest, &mut diagnostics)?;
-    let health_passes = plugin_health_passes(input.health, input.recovery_receipt_ref, &mut diagnostics)?;
+    let health_passes = plugin_health_passes(input.health, input.manifest, input.recovery_receipt_ref, &mut diagnostics)?;
     let removal_passes = plugin_removal_passes(input.removal, input.manifest, &mut diagnostics)?;
     let upgrade_passes = plugin_upgrade_passes(input.upgrade, input.manifest, &mut diagnostics)?;
+    let negotiation_passes = plugin_negotiation_passes(input.negotiation, input.manifest, &mut diagnostics)?;
+    let compatibility_passes = plugin_compatibility_passes(input.compatibility, input.manifest, &mut diagnostics)?;
 
     if requires_permission(input.evaluation_kind) && !permission_passes {
         diagnostics.push_limited(
@@ -147,6 +156,20 @@ pub fn evaluate_plugin_lifecycle_state(input: &PluginLifecycleStateInput<'_>) ->
             "plugin lifecycle diagnostics",
         )?;
     }
+    if requires_negotiation(input.evaluation_kind, input.manifest) && !negotiation_passes {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_NEGOTIATION_MISSING.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+    if requires_extension_compatibility(input.evaluation_kind, input.manifest) && !compatibility_passes {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_COMPATIBILITY_MISSING.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
     if matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::HostcallRequest) && removal_passes {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_AUTHORITY_CLOSED.to_string(),
@@ -163,16 +186,16 @@ pub fn evaluate_plugin_lifecycle_state(input: &PluginLifecycleStateInput<'_>) ->
     }
 
     let decision = if install_passes && diagnostics.is_empty() {
-        "pass"
+        PLUGIN_DECISION_PASS
     } else {
-        "deny"
+        PLUGIN_DECISION_DENY
     };
-    let side_effect_authorized = decision == "pass"
+    let side_effect_authorized = decision == PLUGIN_DECISION_PASS
         && match input.evaluation_kind {
             PluginLifecycleEvaluationKind::CompleteTrace => true,
-            PluginLifecycleEvaluationKind::ActivationRequest => activation_passes,
-            PluginLifecycleEvaluationKind::HostcallRequest => hostcall_passes && !removal_passes,
-            PluginLifecycleEvaluationKind::UpgradeRequest => upgrade_passes && !removal_passes,
+            PluginLifecycleEvaluationKind::ActivationRequest => activation_passes && negotiation_passes,
+            PluginLifecycleEvaluationKind::HostcallRequest => hostcall_passes && negotiation_passes && !removal_passes,
+            PluginLifecycleEvaluationKind::UpgradeRequest => upgrade_passes && compatibility_passes && !removal_passes,
             PluginLifecycleEvaluationKind::RemovalRequest => removal_passes,
         };
     Ok(PluginLifecycleStateDecision {
@@ -196,7 +219,7 @@ fn plugin_install_passes(
         )?;
         return Ok(false);
     };
-    if install.decision != "pass" {
+    if install.decision != PLUGIN_DECISION_PASS {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_INSTALL_FAILED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -225,7 +248,7 @@ fn plugin_permission_passes(
     let Some(permission) = permission else {
         return Ok(false);
     };
-    if permission.decision != "pass" {
+    if permission.decision != PLUGIN_DECISION_PASS {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_PERMISSION_FAILED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -252,7 +275,7 @@ fn plugin_activation_passes(
     let Some(activation) = activation else {
         return Ok(false);
     };
-    if activation.decision != "pass" {
+    if activation.decision != PLUGIN_DECISION_PASS {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_ACTIVATION_FAILED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -281,7 +304,7 @@ fn plugin_hostcall_passes(
     let Some(hostcall) = hostcall else {
         return Ok(false);
     };
-    if hostcall.decision != "pass" {
+    if hostcall.decision != PLUGIN_DECISION_PASS {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_HOSTCALL_FAILED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -289,7 +312,7 @@ fn plugin_hostcall_passes(
         )?;
         return Ok(false);
     }
-    if hostcall.plugin_ref != manifest.plugin_ref {
+    if hostcall.plugin_ref != manifest.plugin_ref || hostcall.manifest_ref != manifest.manifest_ref {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_HOSTCALL_BINDING_MISMATCH.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -297,7 +320,9 @@ fn plugin_hostcall_passes(
         )?;
         return Ok(false);
     }
-    if !manifest.hostcall_refs.iter().any(|reference| reference == &hostcall.hostcall_ref) {
+    let manifest_declares_hostcall = manifest.hostcall_refs.iter().any(|reference| reference == &hostcall.hostcall_ref)
+        || !manifest.extension_contract_refs.is_empty();
+    if !manifest_declares_hostcall {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_HOSTCALL_UNDECLARED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -310,13 +335,22 @@ fn plugin_hostcall_passes(
 
 fn plugin_health_passes(
     health: Option<&PluginHealthReceipt>,
+    manifest: &PluginManifest,
     recovery_receipt_ref: Option<&str>,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<bool> {
     let Some(health) = health else {
         return Ok(true);
     };
-    if health.decision == "pass" || recovery_receipt_ref.is_some() {
+    if health.manifest_ref != manifest.manifest_ref {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_HEALTH_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    if health.decision == PLUGIN_DECISION_PASS || recovery_receipt_ref.is_some() {
         Ok(true)
     } else {
         diagnostics.push_limited(
@@ -336,7 +370,7 @@ fn plugin_removal_passes(
     let Some(removal) = removal else {
         return Ok(false);
     };
-    if removal.decision != "pass" {
+    if removal.decision != PLUGIN_DECISION_PASS {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_REMOVAL_FAILED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -344,7 +378,7 @@ fn plugin_removal_passes(
         )?;
         return Ok(false);
     }
-    if removal.plugin_ref != manifest.plugin_ref {
+    if removal.plugin_ref != manifest.plugin_ref || removal.manifest_ref != manifest.manifest_ref {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_REMOVAL_BINDING_MISMATCH.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -363,7 +397,7 @@ fn plugin_upgrade_passes(
     let Some(upgrade) = upgrade else {
         return Ok(false);
     };
-    if upgrade.decision != "pass" {
+    if upgrade.decision != PLUGIN_DECISION_PASS {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_UPGRADE_FAILED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -374,6 +408,67 @@ fn plugin_upgrade_passes(
     if upgrade.old_manifest_ref != manifest.manifest_ref {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_UPGRADE_BINDING_MISMATCH.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn plugin_negotiation_passes(
+    negotiation: Option<&PluginExtensionNegotiationReceipt>,
+    manifest: &PluginManifest,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<bool> {
+    if manifest.extension_contract_refs.is_empty() {
+        return Ok(true);
+    }
+    let Some(negotiation) = negotiation else {
+        return Ok(false);
+    };
+    if negotiation.decision != PLUGIN_DECISION_PASS {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_NEGOTIATION_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    let binding_matches = negotiation.manifest_ref == manifest.manifest_ref
+        && contains_all(&negotiation.selected_contract_refs, &manifest.extension_contract_refs);
+    if !binding_matches {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_NEGOTIATION_BINDING_MISMATCH.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+    }
+    Ok(binding_matches)
+}
+
+fn plugin_compatibility_passes(
+    compatibility: Option<&PluginExtensionCompatibilityReceipt>,
+    manifest: &PluginManifest,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<bool> {
+    if manifest.extension_contract_refs.is_empty() {
+        return Ok(true);
+    }
+    let Some(compatibility) = compatibility else {
+        return Ok(false);
+    };
+    if compatibility.decision != PLUGIN_DECISION_PASS {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_COMPATIBILITY_FAILED.to_string(),
+            MAX_PLUGIN_DIAGNOSTICS,
+            "plugin lifecycle diagnostics",
+        )?;
+        return Ok(false);
+    }
+    if compatibility.old_manifest_ref != manifest.manifest_ref {
+        diagnostics.push_limited(
+            PLUGIN_LIFECYCLE_COMPATIBILITY_BINDING_MISMATCH.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
@@ -410,6 +505,20 @@ fn requires_healthy_use(evaluation_kind: PluginLifecycleEvaluationKind) -> bool 
             | PluginLifecycleEvaluationKind::HostcallRequest
             | PluginLifecycleEvaluationKind::UpgradeRequest
     )
+}
+
+fn requires_negotiation(evaluation_kind: PluginLifecycleEvaluationKind, manifest: &PluginManifest) -> bool {
+    !manifest.extension_contract_refs.is_empty()
+        && matches!(
+            evaluation_kind,
+            PluginLifecycleEvaluationKind::ActivationRequest
+                | PluginLifecycleEvaluationKind::HostcallRequest
+                | PluginLifecycleEvaluationKind::CompleteTrace
+        )
+}
+
+fn requires_extension_compatibility(evaluation_kind: PluginLifecycleEvaluationKind, manifest: &PluginManifest) -> bool {
+    !manifest.extension_contract_refs.is_empty() && matches!(evaluation_kind, PluginLifecycleEvaluationKind::UpgradeRequest)
 }
 
 fn collect_missing_refs(
@@ -553,7 +662,7 @@ fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()>
 }
 
 fn status(value: bool) -> &'static str {
-    if value { "pass" } else { "fail" }
+    if value { PLUGIN_DECISION_PASS } else { PLUGIN_CHECK_FAIL }
 }
 
 fn refs_sequence(refs: &[String]) -> IoValue {
@@ -586,4 +695,60 @@ fn simple_record<'a>(
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+}
+
+fn simple_record_any<'a>(
+    value: &'a IoValue,
+    label: &str,
+) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
+    value
+        .collect_simple_record(label, None)
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))
+}
+
+fn record_arity(record: &preserves::Record<Value<IoValue>>) -> usize {
+    record._vec().len().saturating_sub(1)
+}
+
+fn record_decision(value: &Value<IoValue>, label: &str) -> Result<String> {
+    let decision = record_string(value, label)?;
+    validate_decision(&decision)?;
+    Ok(decision)
+}
+
+fn validate_decision(value: &str) -> Result<()> {
+    match value {
+        PLUGIN_DECISION_PASS | PLUGIN_DECISION_DENY => Ok(()),
+        _ => Err(MoltenError::invalid_harness(format!("plugin receipt decision {value} must be pass or deny"))),
+    }
+}
+
+fn require_check_status(checks: &[(String, String)], expected: &str, status: &str, context: &str) -> Result<()> {
+    match checks.iter().find(|(name, _)| name == expected) {
+        Some((_, actual)) if actual == status => Ok(()),
+        Some((_, actual)) => Err(MoltenError::invalid_harness(format!(
+            "{context} {expected} check has status {actual}, expected {status}"
+        ))),
+        None => Err(MoltenError::invalid_harness(format!("{context} missing {expected} check"))),
+    }
+}
+
+fn validate_receipt_coherence(
+    decision: &str,
+    checks: &[(String, String)],
+    diagnostics: &[String],
+    context: &str,
+) -> Result<()> {
+    let has_failed_check = checks.iter().any(|(_, status)| status == PLUGIN_CHECK_FAIL);
+    if decision == PLUGIN_DECISION_PASS && has_failed_check {
+        return Err(MoltenError::invalid_harness(format!(
+            "{context} pass decision carries failed required checks"
+        )));
+    }
+    if decision == PLUGIN_DECISION_DENY && !has_failed_check && diagnostics.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "{context} deny decision requires failed checks or diagnostics"
+        )));
+    }
+    Ok(())
 }

@@ -11,6 +11,16 @@ const MAX_PLUGIN_CALLBACKS: usize = 16;
 const MAX_PLUGIN_REFS: usize = 4096;
 const MAX_PLUGIN_DIAGNOSTICS: usize = 256;
 const MAX_PLUGIN_CHECKS: usize = 64;
+const MAX_PLUGIN_HOSTCALL_DESCRIPTORS: usize = 128;
+const PLUGIN_MANIFEST_BASE_ARITY: usize = 12;
+const PLUGIN_MANIFEST_EXTENSION_ARITY: usize = 13;
+const PLUGIN_HOSTCALL_RECEIPT_ARITY: usize = 12;
+const PLUGIN_EXTENSION_CONTRACT_ARITY: usize = 11;
+const PLUGIN_HOSTCALL_DESCRIPTOR_ARITY: usize = 9;
+const PLUGIN_CONFORMANCE_ARITY: usize = 3;
+const PLUGIN_NEGOTIATION_RECEIPT_ARITY: usize = 9;
+const PLUGIN_COMPATIBILITY_RECEIPT_ARITY: usize = 11;
+const PLUGIN_SEMVER_PARTS: usize = 3;
 const PLUGIN_LIFECYCLE_INSTALL_MISSING: &str = "plugin lifecycle install receipt missing";
 const PLUGIN_LIFECYCLE_INSTALL_FAILED: &str = "plugin lifecycle install receipt did not pass";
 const PLUGIN_LIFECYCLE_PERMISSION_MISSING: &str = "plugin lifecycle permission receipt missing";
@@ -28,11 +38,24 @@ const PLUGIN_LIFECYCLE_UPGRADE_BINDING_MISMATCH: &str = "plugin lifecycle upgrad
 const PLUGIN_LIFECYCLE_REMOVAL_FAILED: &str = "plugin lifecycle removal cleanup incomplete";
 const PLUGIN_LIFECYCLE_REMOVAL_BINDING_MISMATCH: &str = "plugin lifecycle removal binding mismatch";
 const PLUGIN_LIFECYCLE_AUTHORITY_CLOSED: &str = "plugin lifecycle authority closed by removal";
+const PLUGIN_LIFECYCLE_NEGOTIATION_MISSING: &str = "plugin lifecycle extension negotiation receipt missing";
+const PLUGIN_LIFECYCLE_NEGOTIATION_FAILED: &str = "plugin lifecycle extension negotiation receipt did not pass";
+const PLUGIN_LIFECYCLE_NEGOTIATION_BINDING_MISMATCH: &str = "plugin lifecycle extension negotiation manifest binding mismatch";
+const PLUGIN_LIFECYCLE_COMPATIBILITY_MISSING: &str = "plugin lifecycle extension compatibility receipt missing";
+const PLUGIN_LIFECYCLE_COMPATIBILITY_FAILED: &str = "plugin lifecycle extension compatibility receipt did not pass";
+const PLUGIN_LIFECYCLE_COMPATIBILITY_BINDING_MISMATCH: &str = "plugin lifecycle extension compatibility manifest binding mismatch";
 const PLUGIN_LIFECYCLE_ACTIVATION_OPERATION: &str = "start";
+const PLUGIN_DECISION_PASS: &str = "pass";
+const PLUGIN_DECISION_DENY: &str = "deny";
+const PLUGIN_CHECK_FAIL: &str = "fail";
+const PLUGIN_PROFILE_PRODUCTION: &str = "production";
+const PLUGIN_PROFILE_DEVELOPMENT: &str = "development";
 const _: () = assert!(MAX_PLUGIN_CALLBACKS > 0);
 const _: () = assert!(MAX_PLUGIN_REFS > MAX_PLUGIN_CALLBACKS);
 const _: () = assert!(MAX_PLUGIN_DIAGNOSTICS > 0);
 const _: () = assert!(MAX_PLUGIN_CHECKS > 0);
+const _: () = assert!(MAX_PLUGIN_HOSTCALL_DESCRIPTORS > 0);
+const _: () = assert!(PLUGIN_MANIFEST_EXTENSION_ARITY > PLUGIN_MANIFEST_BASE_ARITY);
 
 fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
@@ -66,6 +89,7 @@ pub struct PluginManifestInput<'a> {
     pub policy_refs: &'a [String],
     pub resource_refs: &'a [String],
     pub supply_chain_refs: &'a [String],
+    pub extension_contract_refs: &'a [String],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +123,9 @@ pub struct HostcallReceiptInput<'a> {
     pub effect_receipt_ref: &'a str,
     pub authority_refs: &'a [String],
     pub resource_refs: &'a [String],
+    pub extension_contracts: &'a [PluginExtensionContract],
+    pub input_schema_ref: Option<&'a str>,
+    pub output_schema_ref: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,6 +177,8 @@ pub struct PluginLifecycleStateInput<'a> {
     pub health: Option<&'a PluginHealthReceipt>,
     pub removal: Option<&'a PluginRemovalReceipt>,
     pub upgrade: Option<&'a PluginUpgradeReceipt>,
+    pub negotiation: Option<&'a PluginExtensionNegotiationReceipt>,
+    pub compatibility: Option<&'a PluginExtensionCompatibilityReceipt>,
     pub recovery_receipt_ref: Option<&'a str>,
 }
 
@@ -174,6 +203,7 @@ pub struct PluginManifest {
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub supply_chain_refs: Vec<String>,
+    pub extension_contract_refs: Vec<String>,
     pub checks: Vec<(String, String)>,
     pub value: IoValue,
 }
@@ -216,6 +246,7 @@ pub struct PluginHostcallReceipt {
     pub operation: String,
     pub decision: String,
     pub plugin_ref: String,
+    pub manifest_ref: String,
     pub hostcall_ref: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
@@ -226,6 +257,7 @@ pub struct PluginHealthReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub plugin_ref: String,
+    pub manifest_ref: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
 }
@@ -235,12 +267,127 @@ pub struct PluginRemovalReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub plugin_ref: String,
+    pub manifest_ref: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PluginUpgradeReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub old_manifest_ref: String,
+    pub new_manifest_ref: String,
+    pub diagnostics: Vec<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PluginHostcallDescriptorInput<'a> {
+    pub operation: &'a str,
+    pub descriptor_ref: &'a str,
+    pub input_schema_ref: &'a str,
+    pub output_schema_ref: &'a str,
+    pub authority_refs: &'a [String],
+    pub resource_refs: &'a [String],
+    pub effect_manifest_refs: &'a [String],
+    pub replay_class: &'a str,
+    pub error_class_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PluginExtensionConformanceInput<'a> {
+    pub positive_suite_ref: &'a str,
+    pub negative_suite_ref: &'a str,
+    pub property_suite_ref: &'a str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PluginExtensionContractInput<'a> {
+    pub extension_id: &'a str,
+    pub version: &'a str,
+    pub compatible_host_abi: &'a str,
+    pub lifecycle_callbacks: &'a [String],
+    pub hostcall_descriptors: &'a [PluginHostcallDescriptorInput<'a>],
+    pub conformance: PluginExtensionConformanceInput<'a>,
+    pub policy_refs: &'a [String],
+    pub supply_chain_refs: &'a [String],
+    pub production_profile: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginHostcallDescriptor {
+    pub operation: String,
+    pub descriptor_ref: String,
+    pub input_schema_ref: String,
+    pub output_schema_ref: String,
+    pub authority_refs: Vec<String>,
+    pub resource_refs: Vec<String>,
+    pub effect_manifest_refs: Vec<String>,
+    pub replay_class: String,
+    pub error_class_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginExtensionConformance {
+    pub positive_suite_ref: String,
+    pub negative_suite_ref: String,
+    pub property_suite_ref: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginExtensionContract {
+    pub contract_ref: String,
+    pub extension_id: String,
+    pub version: String,
+    pub compatible_host_abi: String,
+    pub lifecycle_callbacks: Vec<String>,
+    pub hostcall_descriptors: Vec<PluginHostcallDescriptor>,
+    pub conformance: PluginExtensionConformance,
+    pub policy_refs: Vec<String>,
+    pub supply_chain_refs: Vec<String>,
+    pub production_profile: bool,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PluginExtensionNegotiationInput<'a> {
+    pub manifest: &'a PluginManifest,
+    pub required_contract_refs: &'a [String],
+    pub optional_contract_refs: &'a [String],
+    pub host_supported_contract_refs: &'a [String],
+    pub host_feature_snapshot_ref: &'a str,
+    pub extension_contracts: &'a [PluginExtensionContract],
+    pub production_profile: bool,
+    pub allow_optional_omission: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginExtensionNegotiationReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub manifest_ref: String,
+    pub required_contract_refs: Vec<String>,
+    pub optional_contract_refs: Vec<String>,
+    pub selected_contract_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PluginExtensionCompatibilityInput<'a> {
+    pub old_manifest: &'a PluginManifest,
+    pub new_manifest: &'a PluginManifest,
+    pub old_contracts: &'a [PluginExtensionContract],
+    pub new_contracts: &'a [PluginExtensionContract],
+    pub migration_refs: &'a [String],
+    pub rollback_ref: &'a str,
+    pub cleanup_refs: &'a [String],
+    pub production_profile: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginExtensionCompatibilityReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub old_manifest_ref: String,
@@ -284,6 +431,7 @@ pub fn plugin_manifest_value(input: &PluginManifestInput<'_>) -> Result<IoValue>
     require_non_empty_refs(input.policy_refs, "plugin policy refs")?;
     require_non_empty_refs(input.resource_refs, "plugin resource refs")?;
     require_non_empty_refs(input.supply_chain_refs, "plugin supply-chain refs")?;
+    validate_refs(input.extension_contract_refs, "plugin extension contract refs")?;
     Ok(record("plugin-manifest-v1", vec![
         string(crate::preserves_rail::PLUGIN_MANIFEST_SCHEMA),
         record("plugin-id", vec![string(input.plugin_id)]),
@@ -296,16 +444,18 @@ pub fn plugin_manifest_value(input: &PluginManifestInput<'_>) -> Result<IoValue>
         record("policy", vec![refs_sequence(input.policy_refs)]),
         record("resource", vec![refs_sequence(input.resource_refs)]),
         record("supply-chain", vec![refs_sequence(input.supply_chain_refs)]),
+        record("extension-contracts", vec![refs_sequence(input.extension_contract_refs)]),
         checks_value(&[
-            ("artifact-backed", "pass"),
-            ("host-abi-version", "pass"),
-            ("declared-lifecycle", "pass"),
-            ("declared-effects", "pass"),
-            ("declared-hostcalls", "pass"),
-            ("explicit-policy", "pass"),
-            ("explicit-resource", "pass"),
-            ("supply-chain-bound", "pass"),
-            ("no-ambient-authority", "pass"),
+            ("artifact-backed", PLUGIN_DECISION_PASS),
+            ("host-abi-version", PLUGIN_DECISION_PASS),
+            ("declared-lifecycle", PLUGIN_DECISION_PASS),
+            ("declared-effects", PLUGIN_DECISION_PASS),
+            ("declared-hostcalls", PLUGIN_DECISION_PASS),
+            ("extension-contracts-bound", PLUGIN_DECISION_PASS),
+            ("explicit-policy", PLUGIN_DECISION_PASS),
+            ("explicit-resource", PLUGIN_DECISION_PASS),
+            ("supply-chain-bound", PLUGIN_DECISION_PASS),
+            ("no-ambient-authority", PLUGIN_DECISION_PASS),
         ]),
     ]))
 }

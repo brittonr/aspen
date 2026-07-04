@@ -190,3 +190,84 @@ r[molten.plugin_lifecycle_state_proof.cleanup_closes_authority] Molten MUST prov
 - WHEN a hostcall is requested for the removed plugin
 - THEN hostcall decision is `deny`
 - AND no plugin callback is invoked.
+
+### Requirement: Hostcall operation refs are canonical
+r[molten.plugin_contract_hardening.hostcall_ref_binding] Plugin hostcall receipts MUST bind the requested operation to the canonical hostcall ref or declared hostcall descriptor ref for that operation before the receipt can pass.
+
+#### Scenario: Mismatched hostcall ref denies
+- GIVEN a plugin manifest that declares the `storage.read` hostcall ref
+- WHEN a hostcall request carries operation `network.open` with the `storage.read` hostcall ref
+- THEN Molten emits a plugin hostcall receipt with decision `deny`
+- AND no executor, effect, or network side effect is treated as admitted.
+
+### Requirement: Plugin receipts bind active manifest identity
+r[molten.plugin_contract_hardening.manifest_receipt_binding] Plugin install, permission, lifecycle, hostcall, health, removal, upgrade, negotiation, and compatibility receipts MUST parse and expose the manifest refs they bind, and lifecycle evaluation MUST reject receipts whose manifest refs do not match the active manifest state for the evaluated operation.
+
+#### Scenario: Stale manifest receipt denies
+- GIVEN an active plugin manifest and a same-plugin receipt produced for an older manifest ref
+- WHEN lifecycle evaluation considers the stale receipt for activation, hostcall, health, removal, or upgrade
+- THEN the lifecycle decision is `deny`
+- AND diagnostics identify the manifest binding mismatch.
+
+### Requirement: Receipt decisions and checks are coherent
+r[molten.plugin_contract_hardening.receipt_check_coherence] Plugin receipt parsers MUST verify required check names, required check statuses, and decision/check consistency. A passing receipt MUST NOT contain failed required gates, and a denied receipt MUST identify at least one failed required gate or diagnostic before it can be accepted as denial evidence.
+
+#### Scenario: Forged pass receipt is rejected
+- GIVEN a plugin hostcall receipt with decision `pass` and a required `declared-hostcall` check marked `fail`
+- WHEN Molten parses the receipt
+- THEN parsing fails as invalid harness evidence
+- AND lifecycle evaluation cannot treat the receipt as hostcall authority.
+
+### Requirement: Extension contracts are canonical artifacts
+r[molten.plugin_extension_contracts.contract_artifact] Molten MUST represent plugin extension surfaces with canonical `plugin-extension-contract-v1` artifacts that bind extension id, version, compatible host ABI, lifecycle callback changes, hostcall descriptors, input/output schema refs, authority requirements, resource requirements, effect manifest refs, replay/idempotency class, error class refs, conformance refs, policy refs, and supply-chain evidence refs.
+
+#### Scenario: Manifest binds extension contract
+- GIVEN a plugin manifest that uses an extension-provided hostcall
+- WHEN Molten parses the manifest
+- THEN the manifest binds the extension contract ref that declares the hostcall descriptor
+- AND activation still requires separate authority, resource, effect, policy, and supply-chain evidence.
+
+### Requirement: Hostcall admission uses per-hostcall contract requirements
+r[molten.plugin_extension_contracts.per_hostcall_requirements] Plugin hostcall admission MUST evaluate the specific hostcall descriptor from the bound extension contract and MUST require matching input schema refs, output schema refs when applicable, authority refs, resource refs, effect manifest or effect receipt refs, and executor evidence before the receipt can pass.
+
+#### Scenario: Generic authority is insufficient
+- GIVEN a plugin extension contract whose `storage.read` descriptor requires a storage-read authority scope and storage resource ref
+- WHEN a hostcall request supplies an unrelated authority ref and unrelated resource ref
+- THEN Molten emits a plugin hostcall receipt with decision `deny`
+- AND diagnostics identify the missing descriptor-specific requirements.
+
+### Requirement: Extension contracts are Nickel-authored and canonically exported
+r[molten.plugin_extension_contracts.nickel_authoring] Human-authored plugin extension contracts MUST use typed Nickel contracts by default and MUST export checked-in canonical evidence refs consumed by Rust validation. Runtime plugin admission MUST NOT execute Nickel or treat Nickel source presence as authority.
+
+#### Scenario: Invalid authored contract fails before runtime admission
+- GIVEN a Nickel-authored extension contract missing a required hostcall schema ref
+- WHEN contract export or validation runs
+- THEN the contract fails validation before a plugin manifest can bind it
+- AND no runtime admission path treats the invalid Nickel source as trusted authority.
+
+### Requirement: Extension negotiation is explicit and fail-closed
+r[molten.plugin_extension_contracts.negotiation] Plugin activation MUST compare required and optional plugin extension contract refs against a host-supported extension or feature snapshot, emit a canonical negotiation receipt, and deny activation when any required extension is missing, incompatible, downgraded unsafely, or admitted only by implicit fallback.
+
+#### Scenario: Missing required extension denies activation
+- GIVEN a plugin manifest requiring a storage extension contract version that the host does not support
+- WHEN plugin activation negotiation runs
+- THEN Molten emits a negotiation receipt with decision `deny`
+- AND no lifecycle callback or hostcall from that extension is admitted.
+
+### Requirement: Extension compatibility gates upgrades
+r[molten.plugin_extension_contracts.compatibility_receipts] Plugin upgrades MUST emit an extension compatibility receipt that compares old and new extension contract refs, host ABI compatibility, retained required extension ids, compatible versions, retained or migrated hostcall descriptors, schema compatibility, authority/resource/effect requirement compatibility, migration refs, rollback refs, cleanup refs, and conformance refs before replacing an active manifest.
+
+#### Scenario: Removed required hostcall denies upgrade
+- GIVEN an active plugin manifest whose extension contract requires a declared hostcall descriptor
+- WHEN a replacement manifest drops that descriptor without a compatible migration and cleanup receipt
+- THEN Molten emits an extension compatibility receipt with decision `deny`
+- AND the active manifest remains unchanged.
+
+### Requirement: Extension conformance evidence is bound
+r[molten.plugin_extension_contracts.conformance_evidence] Production-admitted plugin extension contracts MUST bind positive, negative, and bounded property conformance suite refs, and plugin activation or upgrade MUST deny when required conformance evidence is missing, stale, or failed for the selected contract refs.
+
+#### Scenario: Missing conformance evidence denies production admission
+- GIVEN a plugin extension contract selected for a production activation profile
+- WHEN the contract lacks required negative or property conformance evidence refs
+- THEN Molten emits an activation or negotiation denial receipt
+- AND diagnostics identify the missing conformance evidence.

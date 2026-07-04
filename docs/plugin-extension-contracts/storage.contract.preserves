@@ -1,0 +1,31 @@
+<plugin-extension-contract-v1 "molten.plugin.extension-contract.v1"
+  <extension-id "plugin-extension:storage">
+  <version "1.0.0">
+  <host-abi "molten.plugin.host-abi.v1">
+  <lifecycle ["start" "health"]>
+  <hostcalls [
+    <hostcall-descriptor
+      <operation "storage.read">
+      <descriptor "blake3:1111111111111111111111111111111111111111111111111111111111111111">
+      <input-schema "blake3:2222222222222222222222222222222222222222222222222222222222222222">
+      <output-schema "blake3:3333333333333333333333333333333333333333333333333333333333333333">
+      <authority ["blake3:4444444444444444444444444444444444444444444444444444444444444444"]>
+      <resource ["blake3:5555555555555555555555555555555555555555555555555555555555555555"]>
+      <effects ["blake3:6666666666666666666666666666666666666666666666666666666666666666"]>
+      <replay "idempotent">
+      <errors ["blake3:7777777777777777777777777777777777777777777777777777777777777777"]>>
+  ]>
+  <conformance
+    <positive "blake3:8888888888888888888888888888888888888888888888888888888888888888">
+    <negative "blake3:9999999999999999999999999999999999999999999999999999999999999999">
+    <property "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">>
+  <policy ["blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]>
+  <supply-chain ["blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"]>
+  <profile "production">
+  <checks [
+    <check "canonical-contract" "pass">
+    <check "compatible-host-abi" "pass">
+    <check "descriptor-refs-bound" "pass">
+    <check "conformance-bound" "pass">
+    <check "no-ambient-authority" "pass">
+  ]>>
