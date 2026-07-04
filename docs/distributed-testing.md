@@ -16,7 +16,27 @@ Fault plans cover delay, drop, duplicate, reorder, partition, rejoin, crash, res
 
 Simulation receipts are regression and review evidence only. They do not grant authority, policy, provenance, resource, source-gate, retention, transport, destructive-operation, deployment, or production-readiness trust.
 
-Named direct fixtures cover benign `delay`, `drop`, `reorder`, `rejoin`, `crash`, `restart`, and `duplicate` suppression paths, plus deny-before-side-effects coverage for `stale-evidence`, `corrupted-receipt`, `resource-pressure`, `unauthorized-transport`, `ambient-state-drift`, and `partition` quorum faults. The focused command is `cargo test --lib distributed`.
+Named direct fixtures cover benign `delay`, `drop`, `reorder`, `rejoin`, `crash`, `restart`, and `duplicate` suppression paths, plus deny-before-side-effects coverage for `stale-evidence`, `corrupted-receipt`, `resource-pressure`, `unauthorized-transport`, `ambient-state-drift`, and `partition` quorum faults. Generated-case fixtures bind seed, topology, scheduler, command sequence, fault plan, invariant name, run ref, replay ref, event refs, final-state ref, and diagnostics in `generated-distributed-repro-v1`; these artifacts are diagnostic-only unless a separate pass/deny gate accepts the claim. The focused command is `cargo test --lib distributed`.
+
+## Declarative multinode scenario fixtures
+
+Multinode scenarios are declared with typed Nickel fixtures under `docs/multinode-scenario-fixtures/` and the shared contract in `docs/multinode-scenario-contracts.ncl`. The contract requires explicit topology/profile ids, command surface, artifact kinds, topology/seed/fault-plan refs, receipt refs, variance refs, diagnostic-log refs, unavailable policy, and evidence-only caveats before execution.
+
+Rust validation derives `multinode-scenario-metadata-v1` from explicit fixture values only. Missing topology, missing command surface, stale or malformed refs, undeclared variance, unsupported pass claims, and mismatched artifact kinds deny before pass metadata is accepted.
+
+## Topology profiles and reconciliation
+
+The topology-profile matrix names pairwise transport, control quorum, restart/rejoin, subscriber peer, and wrong-topology negative profiles. Each profile binds role membership, allowed links, required receipt kinds, and evidence scope. A subscriber cannot satisfy voter membership, and transport-only evidence cannot satisfy authority, policy, quorum, or membership evidence.
+
+`multinode-reconciliation-gate-v1` compares per-node summaries against the declared topology, scenario fixture, required receipts, equality classes, and allowed variance refs. Queue, ledger, dispatch, ack, protocol, chunk, or receipt-index refs must match unless a visible variance ref permits the difference. Missing node evidence, stale refs, wrong topology, duplicate semantic commits, divergent queues, and log-only reconciliation deny.
+
+## Local multiprocess harness
+
+The local multiprocess harness model has a pure planner that validates node identities, state-root handles, transport handles, command-plan refs, expected receipt refs, and cleanup policy. The shell may spawn processes and collect artifacts, but the plan denies state-root collisions, transport collisions, stale tickets, missing receipts, or missing cleanup before accepting local pass evidence. Local multiprocess receipts are local integration evidence only; they do not replace NixOS VM, WAN/live, authority, policy, provenance, resource, source-gate, retention, deployment, or production-readiness evidence.
+
+## Failure repro bundles
+
+Sealed multinode failure repro bundles bind scenario fixture refs, topology refs, scheduler refs, seed refs, fault-plan refs, command refs, node-summary refs, receipt refs, diagnostics, log refs, redaction policy refs, replay status, private attachment refs, reveal receipts, and evidence-only caveats. Simulation bundles may replay deterministically; local multiprocess and VM bundles can verify as non-replayable diagnostic evidence. Tampered, unsealed, stale, private-without-reveal, missing-redaction, or diagnostic-only bundles fail closed before private content is materialized or before any pass claim is accepted.
 
 ## What reviewers inspect
 
@@ -49,4 +69,4 @@ Unsupported VM, network, live transport, or soak support records `unavailable`, 
 
 Use simulation when changing distributed protocol logic, idempotency, replay, authority separation, or restart behavior and you need fast deterministic feedback before VM checks.
 
-Use NixOS VM checks when the claim depends on platform integration, systemd, filesystem state roots, QEMU networking, or service restart behavior. Use live soak/pilot evidence only for scoped operator-readiness review.
+Use NixOS VM checks when the claim depends on platform integration, systemd, filesystem state roots, QEMU networking, service restart behavior, or true cross-node live transport. Live transport VM evidence must bind send, receive, ingress, queue, dispatch, reconcile, ack, and protocol-gate receipts before artifact export; logs cannot replace a receive receipt. Use live soak/pilot evidence only for scoped operator-readiness review.

@@ -217,6 +217,10 @@ compat_module!(deterministic_drift, drift_core);
 pub mod distributed_core;
 compat_module!(distributed_testing, distributed_core);
 #[doc(hidden)]
+#[path = "testing/multinode.rs"]
+pub mod multinode_core;
+compat_module!(multinode_testing, multinode_core);
+#[doc(hidden)]
 #[path = "testing/proof_trace.rs"]
 pub mod proof_trace_core;
 compat_module!(state_machine_proof, proof_trace_core);

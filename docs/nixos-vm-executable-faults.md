@@ -19,6 +19,8 @@ Executable VM fault checks exercise bounded platform faults inside the NixOS tes
 
 `molten test nixos-vm fault-validate` parses descriptors and receipts against the topology. It denies log-only pass claims, wrong topology, missing injection or child refs, unavailable pass claims, unsupported host pass claims, and missing diagnostic evidence for denial receipts.
 
+The pure support-matrix model emits `nixos-vm-fault-support-matrix-v1` with each fault kind, required capability, target, command profile, expected outcome, host-support status, preflight refs, injection refs, child workflow refs, post-fault refs, diagnostics, and caveats. Reviewers should read this compact table before treating a VM fault check as executable evidence.
+
 ## Host support and unavailable handling
 
 Host support is explicit: `supported`, `unavailable`, or `denied`. Missing KVM, QEMU, test-driver, network-control, filesystem, or privilege support must produce `unavailable` or `deny` evidence. Unsupported execution must never be converted into pass evidence.
@@ -29,4 +31,6 @@ Supported descriptor kinds include network delay/drop/partition/rejoin, asymmetr
 
 ## Operator inspection
 
-Inspect the realized VM check output for descriptor, receipt, validation, topology, node evidence, and test-run artifacts. Logs are diagnostic-only and cannot override canonical deny receipts.
+Inspect the realized VM check output for descriptor, receipt, validation, support-matrix, topology, node evidence, and test-run artifacts. Logs are diagnostic-only and cannot override canonical deny receipts.
+
+For true cross-node live transport, inspect `nixos-vm-live-transport-gate-v1`: it must bind sender, receiver, expected peer, topic, operation id, ticket, peer admission, authority, send, receive, ingress, queue, dispatch, reconcile, ack, and protocol-gate refs. Test-driver artifact copying is review/export plumbing only after the live exchange completes; it cannot replace the receive receipt.

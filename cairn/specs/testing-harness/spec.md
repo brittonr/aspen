@@ -1891,3 +1891,232 @@ r[molten.testing.distributed_ci.profile_wiring_evidence] Molten SHOULD test dist
 - WHEN the distributed CI gate evaluates the run
 - THEN the gate denies before accepting release pass evidence
 - AND diagnostics identify the profile wiring error that must be fixed or explicitly exempted.
+
+### Requirement: Distributed simulation uses generated fault interleaving properties
+r[molten.testing.distributed_simulation.generated_fault_interleavings] Molten SHOULD use bounded generated properties to exercise combinations of topology, scheduler profile, command sequence, evidence refs, and fault-plan interleavings at the pure distributed simulation boundary.
+
+#### Scenario: Generated benign interleavings remain deterministic
+- GIVEN a generated topology, scheduler profile, deterministic seed, command sequence, and benign fault-plan interleaving within supported bounds
+- WHEN the simulator runs the generated case more than once
+- THEN run receipt refs, event refs, final-state refs, committed operation ids, and diagnostics remain stable
+- AND duplicate, restart, crash, delay, drop, reorder, and rejoin behavior preserves the declared invariants.
+
+#### Scenario: Generated denial interleavings fail before side effects
+- GIVEN a generated command sequence with missing authority, unauthorized transport, stale evidence, corrupted receipt, resource pressure, ambient drift, or partitioned quorum inputs
+- WHEN the simulator evaluates the generated case
+- THEN affected commands deny before side effects
+- AND denied operation ids and diagnostics are recorded in canonical evidence.
+
+### Requirement: Generated failures preserve replayable seeds
+r[molten.testing.distributed_simulation.generated_repro_seed] Molten MUST preserve enough generated-case data to replay or inspect a failing distributed simulation property without relying on ambient randomness, clocks, host paths, or process state.
+
+#### Scenario: Failing generated case emits repro artifact
+- GIVEN a generated distributed simulation property failure
+- WHEN the test harness records the failure
+- THEN the repro artifact binds seed, topology, scheduler profile, fault plan, commands, invariant name, diagnostics, and receipt refs
+- AND the artifact is diagnostic-only unless a later gate validates it as pass or deny evidence.
+
+#### Scenario: Replayed seed reproduces the same canonical refs
+- GIVEN a generated-case repro artifact and the same simulator version
+- WHEN the harness replays the stored seed and explicit inputs
+- THEN the replay produces the same relevant topology, fault-plan, event, final-state, and run receipt refs or reports a schema/version mismatch.
+
+### Requirement: NixOS VM evidence includes true cross-node live transport
+r[molten.testing.nixos_vm.cross_node_live_transport] Molten SHOULD include a NixOS VM scenario where a sender node delivers a control request to a receiver node through the admitted live transport path before any test-driver artifact export is used for evidence collection.
+
+#### Scenario: Sender reaches receiver through live transport
+- GIVEN a VM topology with admitted sender and receiver nodes, a receiver live listener, a bound ticket, peer admission evidence, and authority evidence
+- WHEN the sender submits a control request through the live transport path
+- THEN the VM evidence binds send, receive, ingress, queue, dispatch, reconcile, ack, and protocol-gate receipts
+- AND artifact copying is used only after the live exchange for evidence export and review.
+
+#### Scenario: Live transport scope is explicit
+- GIVEN a passing cross-node live transport VM run
+- WHEN the run receipt is inspected
+- THEN it states that the evidence is scoped to the NixOS VM topology
+- AND it does not grant authority, policy, provenance, resource, source-gate, retention, deployment, or production-readiness trust by itself.
+
+### Requirement: Live transport VM gate rejects stale or log-only evidence
+r[molten.testing.nixos_vm.live_transport_negative_gate] Molten MUST reject cross-node live transport VM pass claims when the expected peer, expected node, ticket, receive receipt, protocol gate, or receipt chain is missing, stale, mismatched, or represented only by logs.
+
+#### Scenario: Wrong peer or stale ticket denies
+- GIVEN a cross-node live transport bundle with a wrong expected peer or stale ticket ref
+- WHEN the VM transport gate evaluates the bundle
+- THEN the gate emits deny evidence before accepting pass evidence
+- AND diagnostics identify the stale or mismatched binding.
+
+#### Scenario: Logs cannot replace receive receipt
+- GIVEN diagnostic logs showing apparent live delivery but no canonical receive transport receipt
+- WHEN the VM transport gate evaluates the run
+- THEN the gate denies the pass claim because logs are diagnostic-only.
+
+### Requirement: Multinode failure repro bundles are sealed evidence artifacts
+r[molten.testing.multinode.failure_repro_bundle] Molten SHOULD export sealed multinode failure repro bundles that bind scenario fixture refs, topology refs, scheduler refs, seed refs, fault-plan refs, command refs, node evidence refs, receipt refs, diagnostics, log refs, redaction policy refs, replay status, and evidence-only caveats.
+
+#### Scenario: Simulation failure bundle replays deterministically
+- GIVEN a deterministic distributed simulation failure bundle with stored topology, scheduler, seed, fault plan, commands, and expected invariant
+- WHEN the repro verifier replays the stored inputs
+- THEN the replay produces the same relevant receipt refs or reports an explicit schema or version mismatch
+- AND the bundle remains diagnostic evidence unless a separate gate validates a pass or deny claim.
+
+#### Scenario: VM failure bundle verifies without pretending to replay
+- GIVEN a VM failure bundle with platform observations and canonical receipts
+- WHEN the repro verifier validates the seal and receipt bindings
+- THEN the bundle can verify as non-replayable VM diagnostic evidence
+- AND it must not claim deterministic replay if the inputs depend on live platform behavior.
+
+### Requirement: Multinode repro bundles preserve privacy and fail closed
+r[molten.testing.multinode.failure_repro_privacy_and_replay] Molten MUST reject tampered, unsealed, stale, private-without-reveal, missing-redaction, or diagnostic-only multinode repro bundles before materializing private content or accepting pass evidence.
+
+#### Scenario: Tampered bundle fails verification
+- GIVEN a sealed multinode repro bundle whose topology, fixture, receipt, or redaction manifest has been changed after sealing
+- WHEN verify or unpack runs
+- THEN verification fails closed before materializing bundle contents.
+
+#### Scenario: Diagnostic bundle cannot satisfy pass gate
+- GIVEN a verified failure repro bundle marked diagnostic-only
+- WHEN a pass evidence gate evaluates the bundle
+- THEN the gate rejects it as pass evidence even if logs appear successful.
+
+### Requirement: Executable VM fault support matrix is explicit
+r[molten.testing.nixos_vm.executable_fault_support_matrix] Molten SHOULD produce an executable VM fault support matrix that declares each fault kind, required capability, target node or link, command profile, expected outcome, host-support status, preflight refs, injection refs, child workflow refs, post-fault refs, diagnostics, diagnostic log refs, and caveats.
+
+#### Scenario: Supported fault binds executable evidence
+- GIVEN a VM fault descriptor whose required host or VM capability is available
+- WHEN the VM injects the fault and validates the result
+- THEN the receipt binds supported host status, pre-fault refs, injection refs, required child workflow refs, post-fault refs, diagnostics, and caveats
+- AND the support matrix identifies the fault as executable evidence for the tested topology.
+
+#### Scenario: Unsupported fault records unavailable evidence
+- GIVEN a VM fault descriptor whose required host or VM capability is unavailable
+- WHEN the VM fault check runs
+- THEN the receipt records unavailable host support and diagnostic evidence
+- AND unavailable execution does not satisfy pass evidence for that fault claim.
+
+### Requirement: Executable VM fault validation rejects invalid claims
+r[molten.testing.nixos_vm.executable_fault_validation_negatives] Molten MUST reject VM fault receipts that claim pass evidence without supported host status, required injection refs, required child workflow refs, matching topology, and canonical diagnostic evidence for denial or unavailable outcomes.
+
+#### Scenario: Unsupported pass claim is rejected
+- GIVEN a VM fault receipt that marks host support unavailable but claims a pass decision
+- WHEN `fault-validate` evaluates the receipt
+- THEN validation denies the receipt as an unsupported pass claim.
+
+#### Scenario: Log-only pass claim is rejected
+- GIVEN a VM fault descriptor and diagnostic log without the required canonical injection and child workflow refs
+- WHEN `fault-validate` evaluates the evidence
+- THEN validation denies before accepting the log as pass evidence.
+
+### Requirement: Cross-node reconciliation gate binds distributed state refs
+r[molten.testing.multinode.cross_node_reconciliation_gate] Molten SHOULD provide a cross-node reconciliation gate that compares explicit per-node evidence summaries against declared topology, scenario fixture, required receipt refs, expected equality classes, and allowed variance refs.
+
+#### Scenario: Converged nodes pass reconciliation
+- GIVEN a multinode run with per-node evidence summaries, matching topology refs, required workflow receipts, and declared equality classes
+- WHEN the reconciliation gate evaluates the run
+- THEN the gate emits a pass receipt binding node summaries, compared refs, allowed variance refs, diagnostics, and evidence-only caveats
+- AND matching refs prove only the declared reconciliation scope.
+
+#### Scenario: Declared variance is visible
+- GIVEN a multinode run where selected per-node refs are allowed to differ
+- WHEN the reconciliation gate evaluates those refs
+- THEN the pass receipt binds the variance declaration that permits the difference
+- AND undeclared differences remain denial conditions.
+
+### Requirement: Reconciliation denies stale, missing, divergent, or log-only evidence
+r[molten.testing.multinode.reconciliation_deny_drift] Molten MUST reject reconciliation pass claims when required node evidence is missing, stale, wrong-topology, duplicated, divergent without variance, or represented only by logs.
+
+#### Scenario: Divergent queue ref denies
+- GIVEN two node summaries that should share an expected queue or dispatch outcome but report different refs without declared variance
+- WHEN the reconciliation gate evaluates the summaries
+- THEN the gate denies before emitting pass evidence
+- AND diagnostics identify the divergent ref class.
+
+#### Scenario: Duplicate semantic commit denies
+- GIVEN a multinode run where duplicate delivery produced more than one semantic commit for the same operation id
+- WHEN reconciliation evaluates committed operation evidence
+- THEN the gate denies the pass claim and identifies duplicate commit drift.
+
+### Requirement: Local multiprocess multinode harness exercises real node processes
+r[molten.testing.multinode.local_multiprocess_harness] Molten SHOULD provide a local multiprocess multinode harness that runs isolated `molten node` processes from an explicit scenario fixture and records canonical startup, workflow, shutdown, and run receipts.
+
+#### Scenario: Cross-process control workflow records local integration evidence
+- GIVEN a local multiprocess scenario fixture with separate node identities, isolated state roots, admitted local transport handles, and a valid control command
+- WHEN the harness starts the node processes and runs the workflow
+- THEN the run receipt binds the fixture ref, process-plan ref, startup refs, workflow receipt refs, shutdown refs, diagnostics, and evidence-only caveats
+- AND the receipt states that local multiprocess evidence does not replace VM or production live evidence.
+
+#### Scenario: Process planning stays deterministic
+- GIVEN equivalent explicit process plans with the same node identities, state-root handles, command plan, and expected receipts
+- WHEN the pure planner canonicalizes them
+- THEN both plans produce the same plan ref without reading ports, process ids, clocks, or environment variables.
+
+### Requirement: Local multiprocess harness isolates state and cleans up failures
+r[molten.testing.multinode.process_isolation_cleanup] Molten MUST reject state-root collisions, transport-handle collisions, missing receipt bindings, stale tickets, and orphaned process or state evidence before accepting local multiprocess pass evidence.
+
+#### Scenario: Collision fails before process start
+- GIVEN a local multiprocess scenario where two nodes share a state-root handle or transport handle that must be isolated
+- WHEN the harness validates the process plan
+- THEN validation denies before starting the affected process
+- AND diagnostics identify the colliding handle.
+
+#### Scenario: Crash cleanup is recorded
+- GIVEN a local multiprocess run where a child process crashes or is stopped during the workflow
+- WHEN cleanup runs
+- THEN the harness records cleanup or denial evidence
+- AND no pass receipt is accepted unless required shutdown and cleanup receipts are present.
+
+### Requirement: Multinode topology profile matrix is explicit
+r[molten.testing.multinode.topology_profile_matrix] Molten SHOULD declare a multinode topology profile matrix that names the topology id, node roles, member set, allowed links, evidence scope, and required receipt classes for each distributed scenario family.
+
+#### Scenario: Topology profile is bound into run evidence
+- GIVEN a multinode scenario using a pairwise transport, control quorum, restart/rejoin, or subscriber topology profile
+- WHEN metadata or run receipts are generated
+- THEN the receipts bind the topology profile id and topology ref
+- AND the evidence scope remains distinct from the execution cost profile.
+
+#### Scenario: Review distinguishes topology claims
+- GIVEN two runs with the same command surface but different topology profiles
+- WHEN reviewers inspect the canonical metadata
+- THEN each run identifies the role shape it covered
+- AND neither run can satisfy claims outside its declared topology profile.
+
+### Requirement: Role and membership negative fixtures deny confusion
+r[molten.testing.multinode.role_membership_negatives] Molten MUST reject multinode evidence that treats undeclared nodes, undeclared links, subscriber peers, transport-only peers, or missing quorum evidence as admitted control-plane membership or authority evidence.
+
+#### Scenario: Subscriber is not promoted to voter
+- GIVEN a topology profile that declares a subscriber peer outside the Raft voting member set
+- WHEN a command attempts to use subscriber evidence as voter membership evidence
+- THEN the gate denies before accepting the command as control-plane pass evidence
+- AND diagnostics name the role or membership mismatch.
+
+#### Scenario: Wrong topology cannot satisfy pass evidence
+- GIVEN a receipt from a topology profile whose nodes or links differ from the scenario fixture under review
+- WHEN the multinode gate evaluates the receipt
+- THEN the gate rejects the receipt as stale or wrong-topology evidence.
+
+### Requirement: Multinode scenario fixtures are declarative and typed
+r[molten.testing.multinode.declarative_scenario_fixtures] Molten SHOULD define typed, repository-owned multinode scenario fixtures that declare topology, profile, command surface, expected artifact kinds, deterministic seed, fault-plan refs, variance declarations, unavailable policy, and evidence-only caveats before execution.
+
+#### Scenario: Valid fixture derives canonical metadata
+- GIVEN a typed multinode scenario fixture with declared topology, profile, command surface, expected artifacts, receipt refs, variance refs, and caveats
+- WHEN the testing harness validates the fixture and derives distributed CI metadata
+- THEN the derived metadata binds the fixture values without reading ambient runtime state
+- AND the fixture ref and metadata ref are stable for equivalent fixture content.
+
+#### Scenario: Fixture authoring remains typed
+- GIVEN a multinode scenario fixture authored in Nickel
+- WHEN the fixture is exported for use by Rust validation or a NixOS VM check
+- THEN the export must satisfy the repository-owned fixture contract before any pass evidence can be accepted.
+
+### Requirement: Multinode scenario fixture validation fails closed
+r[molten.testing.multinode.scenario_fixture_validation] Molten MUST reject multinode scenario fixtures that omit required topology, profile, receipt, variance, unavailable-policy, or artifact-kind bindings, or that claim unsupported execution as pass evidence.
+
+#### Scenario: Missing or mismatched fixture fields deny
+- GIVEN a fixture with a missing topology, missing command surface, stale receipt ref, undeclared variance, unsupported pass claim, or mismatched artifact kind
+- WHEN the fixture validator evaluates it
+- THEN validation denies before generating pass metadata
+- AND diagnostics identify the invalid fixture binding.
+
+#### Scenario: Diagnostic logs do not repair invalid fixtures
+- GIVEN an invalid multinode scenario fixture and diagnostic logs that appear to show success
+- WHEN the evidence gate evaluates the fixture
+- THEN the gate rejects the fixture because canonical fixture and receipt bindings, not logs, determine pass evidence.
