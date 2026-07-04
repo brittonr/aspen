@@ -6,8 +6,11 @@ type MoltenError = crate::error::MoltenError;
 type OrderedMap<Key, Value> = std::collections::BTreeMap<Key, Value>;
 type OrderedSet<Value> = std::collections::BTreeSet<Value>;
 type PendingTurn = super::PendingTurn;
+type AdmissionRequest = super::AdmissionRequest;
+type CapabilityContext = super::CapabilityContext;
 type PredicateDecision = super::PredicateDecision;
 type Result<T> = crate::error::Result<T>;
+type RuntimePattern = super::RuntimePattern;
 type Assertion = super::RuntimeAssertion;
 type Effect = super::RuntimeEffect;
 type Event = super::RuntimeEvent;
@@ -99,9 +102,25 @@ pub struct LocalDelivery {
     pub boundary: EnvelopeBoundary,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct LocalSubscription {
+    pattern_ref: String,
+    pattern: RuntimePattern,
+}
+
+impl LocalSubscription {
+    fn new(pattern: RuntimePattern) -> Result<Self> {
+        pattern.validate()?;
+        Ok(Self {
+            pattern_ref: pattern.pattern_ref()?,
+            pattern,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalAdapter {
-    subscriptions: OrderedMap<String, OrderedSet<String>>,
+    subscriptions: OrderedMap<String, OrderedSet<LocalSubscription>>,
 }
 
 impl LocalAdapter {
@@ -114,19 +133,43 @@ impl LocalAdapter {
     }
 
     pub fn observe_subject(&mut self, actor: ActorId, subject: &Value) {
-        self.subscriptions.entry(actor.into_string()).or_default().insert(subject.value_ref().to_string());
+        if let Ok(subscription) = LocalSubscription::new(RuntimePattern::exact(subject.clone())) {
+            self.subscriptions.entry(actor.into_string()).or_default().insert(subscription);
+        }
+    }
+
+    pub fn observe_pattern(&mut self, actor: ActorId, pattern: RuntimePattern) -> Result<()> {
+        let subscription = LocalSubscription::new(pattern)?;
+        self.subscriptions.entry(actor.into_string()).or_default().insert(subscription);
+        Ok(())
+    }
+
+    pub fn observe_pattern_value(&mut self, actor: ActorId, pattern: &Value) -> Result<()> {
+        self.observe_pattern(actor, RuntimePattern::from_observe_value(pattern)?)
     }
 
     pub fn route_envelope(&self, envelope: &Envelope) -> Result<Vec<LocalDelivery>> {
         let subject_ref = envelope.subject.value_ref();
         let boundary = envelope.boundary()?;
         let mut deliveries = Vec::with_capacity(self.subscriptions.len());
-        for (actor, subjects) in &self.subscriptions {
-            if subjects.contains(subject_ref) {
-                deliveries.push(LocalDelivery {
-                    actor: ActorId::parse(actor.clone())?,
-                    boundary: boundary.clone(),
-                });
+        for (actor, subscriptions) in &self.subscriptions {
+            for subscription in subscriptions {
+                // r[impl molten.preserves_boundary_codegen.pattern_routing]
+                if subscription.pattern.matches_value(&envelope.subject)?.0 {
+                    tracing::event!(
+                        tracing::Level::DEBUG,
+                        adapter = "local-dataspace",
+                        actor = actor.as_str(),
+                        pattern_ref = subscription.pattern_ref.as_str(),
+                        subject_ref = subject_ref,
+                        "runtime adapter pattern matched"
+                    );
+                    deliveries.push(LocalDelivery {
+                        actor: ActorId::parse(actor.clone())?,
+                        boundary: boundary.clone(),
+                    });
+                    break;
+                }
             }
         }
         tracing::event!(
@@ -142,8 +185,16 @@ impl LocalAdapter {
 }
 
 mod state;
+mod syndicate;
 pub use state::RuntimeRecordedEffectTransition;
 pub use state::recorded_effect_response_transition;
+pub use syndicate::SyndicateFlowControlReceipt;
+pub use syndicate::SyndicateParityReceipt;
+pub use syndicate::SyndicateReferenceHarness;
+pub use syndicate::SyndicateReferenceRun;
+pub use syndicate::SyndicateResourceBudget;
+pub use syndicate::SyndicateTraceEvidence;
+pub use syndicate::run_syndicate_reference_harness;
 
 #[cfg(test)]
 mod tests;

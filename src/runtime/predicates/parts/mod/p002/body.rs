@@ -185,11 +185,12 @@ pub fn evaluate_turn_transition(
 }
 
 pub fn evaluate_pattern_match(pattern: &RuntimePattern, value: &RuntimeValue) -> Result<PatternMatchResult> {
-    let (is_match, bindings) = match pattern {
-        RuntimePattern::Exact(expected) => (expected == value, Vec::new()),
-        RuntimePattern::Wildcard { binding } => (true, vec![(binding.clone(), value.value_ref().to_string())]),
+    // r[impl molten.preserves_boundary_codegen.pattern_ast]
+    let (is_match, bindings, diagnostics) = match pattern.matches_value(value) {
+        Ok((is_match, bindings)) => (is_match, bindings, Vec::new()),
+        Err(error) => (false, Vec::new(), vec![error.to_string()]),
     };
-    let decision = if is_match {
+    let decision = if is_match && diagnostics.is_empty() {
         PredicateDecision::Pass
     } else {
         PredicateDecision::Deny
@@ -208,9 +209,9 @@ pub fn evaluate_pattern_match(pattern: &RuntimePattern, value: &RuntimeValue) ->
         predicate: PRESERVES_PATTERN_PREDICATE,
         input_value,
         decision,
-        state_refs: vec![value.value_ref().to_string()],
+        state_refs: vec![pattern.pattern_ref()?, value.value_ref().to_string()],
         checks,
-        diagnostics: Vec::new(),
+        diagnostics,
     })?;
 
     Ok(PatternMatchResult {
@@ -225,8 +226,10 @@ pub fn evaluate_observe_initial_delivery(
     observer: &RuntimeObserver,
 ) -> Result<ObserveDeliveryResult> {
     let mut delivered_assertion_refs = Vec::with_capacity(snapshot.assertions.len());
+    let pattern = RuntimePattern::from_observe_value(&observer.pattern)?;
     for assertion in &snapshot.assertions {
-        if assertion.value == observer.pattern {
+        // r[impl molten.preserves_boundary_codegen.pattern_routing]
+        if pattern.matches_value(&assertion.value)?.0 {
             delivered_assertion_refs.push(assertion.assertion_ref()?);
         }
     }

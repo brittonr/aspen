@@ -16,6 +16,7 @@ impl AdmissionPolicy {
         Self { deny_rules }
     }
 
+    // r[impl molten.preserves_boundary_codegen.no_schema_authority]
     pub fn decide_with_capabilities(
         &self,
         capabilities: &CapabilityContext,
@@ -261,6 +262,25 @@ impl AdmissionDecision {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shape_valid_pattern_evidence_does_not_grant_authority() {
+        // r[verify molten.preserves_boundary_codegen.no_schema_authority]
+        let value = crate::runtime::RuntimeValue::string("service.privileged").expect("runtime test value");
+        let pattern = crate::runtime::RuntimePattern::exact(value.clone());
+        pattern.validate().expect("shape-valid pattern");
+        let request = super::AdmissionRequest::from_step(&crate::runtime::RuntimeStep::Assert {
+            actor: "producer".into(),
+            value,
+        });
+        let policy = super::AdmissionPolicy::allow_all();
+        let empty_capabilities = super::CapabilityContext::from_grants(Vec::new());
+
+        let decision = policy.decide_with_capabilities(&empty_capabilities, &request);
+
+        assert!(matches!(decision, super::AdmissionDecision::Deny { .. }));
+        assert_eq!(decision.reason(), "missing capability grant");
+    }
+
     #[test]
     fn deny_rule_matches_specific_actor_action_and_value() {
         let policy = super::AdmissionPolicy::from_deny_rules(vec![super::AdmissionDenyRule {

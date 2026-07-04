@@ -6,7 +6,7 @@ Includes Rust dependencies for Steel Scheme (`steel-core`), iroh (`iroh`, `iroh-
 
 ## Architecture direction
 
-See [`docs/architecture.md`](docs/architecture.md) for the fuller architecture.
+See [`docs/architecture.md`](docs/architecture.md) for the fuller architecture. See [`docs/syndicate-reference-harness.md`](docs/syndicate-reference-harness.md) for the Syndicate reference-semantics boundary.
 
 Molten is a policy-gated distributed runtime built around a canonical Preserves envelope spine:
 

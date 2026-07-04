@@ -31,6 +31,12 @@ fn deterministic_random_step(rng_state: u64, upper: u64) -> (u64, u64) {
     (next_state, value)
 }
 
+fn observe_value_matches(pattern_value: &Value, candidate: &Value) -> bool {
+    RuntimePattern::from_observe_value(pattern_value)
+        .and_then(|pattern| pattern.matches_value(candidate).map(|(is_match, _bindings)| is_match))
+        .unwrap_or(false)
+}
+
 // r[impl molten.runtime_state_machine_proof.turn_commit_delta]
 pub fn recorded_effect_response_transition(
     before: &RuntimeSnapshot,
@@ -260,7 +266,10 @@ impl RuntimeState {
                     actor: actor.clone(),
                     pattern: pattern.clone(),
                 });
-                for assertion in self.assertions.iter().filter(|assertion| assertion.value == *pattern) {
+                for assertion in
+                    self.assertions.iter().filter(|assertion| observe_value_matches(pattern, &assertion.value))
+                {
+                    // r[impl molten.preserves_boundary_codegen.pattern_routing]
                     turn.events.push(Event::AssertionObserved {
                         observer: actor.clone(),
                         owner: assertion.actor.clone(),
@@ -278,7 +287,9 @@ impl RuntimeState {
                     actor: actor.clone(),
                     value: value.clone(),
                 });
-                for observer in self.observers.iter().filter(|observer| observer.pattern == *value) {
+                for observer in self.observers.iter().filter(|observer| observe_value_matches(&observer.pattern, value))
+                {
+                    // r[impl molten.preserves_boundary_codegen.pattern_routing]
                     turn.events.push(Event::AssertionObserved {
                         observer: observer.actor.clone(),
                         owner: actor.clone(),
@@ -296,7 +307,9 @@ impl RuntimeState {
                     actor: actor.clone(),
                     value: value.clone(),
                 });
-                for observer in self.observers.iter().filter(|observer| observer.pattern == *value) {
+                for observer in self.observers.iter().filter(|observer| observe_value_matches(&observer.pattern, value))
+                {
+                    // r[impl molten.preserves_boundary_codegen.pattern_routing]
                     turn.events.push(Event::AssertionRetractionObserved {
                         observer: observer.actor.clone(),
                         owner: actor.clone(),

@@ -547,6 +547,17 @@ pub struct BoundarySchemaValidation {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundaryCodecReport {
+    pub family: String,
+    pub schema_ref: ContentRef,
+    pub input_bytes_ref: ContentRef,
+    pub decoded_value_ref: ContentRef,
+    pub typed_value_ref: ContentRef,
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+}
+
 const SCHEMA_FIELD: BoundaryFieldSpec = BoundaryFieldSpec {
     label: "schema-id",
     kind: BoundaryFieldKind::SchemaId,
@@ -736,6 +747,56 @@ pub fn boundary_schema_diagnostic_value(validation: &BoundarySchemaValidation) -
         record("decision", vec![string(&validation.decision)]),
         record("diagnostics", vec![sequence(validation.diagnostics.iter().map(string).collect())]),
     ])
+}
+
+// r[impl molten.preserves_boundary_codegen.typed_codecs]
+// r[impl molten.preserves_boundary_codegen.strict_decode]
+// r[impl molten.preserves_boundary_codegen.schema_ref_evidence]
+pub fn validate_boundary_bytes(bytes: &[u8], spec: &BoundarySchemaSpec) -> Result<BoundaryCodecReport> {
+    let decoded = strict_canonical_decode(bytes)?;
+    let schema_ref = boundary_schema_ref(spec)?;
+    let input_bytes_ref = ContentRef::parse(content_ref_from_bytes(bytes))?;
+    let typed_value_ref = boundary_typed_value_ref(spec, decoded.value_ref.as_str())?;
+    match validate_boundary_schema(&decoded.value, spec) {
+        Ok(validation) => Ok(BoundaryCodecReport {
+            family: validation.family,
+            schema_ref: validation.schema_ref,
+            input_bytes_ref,
+            decoded_value_ref: validation.value_ref,
+            typed_value_ref,
+            decision: "pass".to_string(),
+            diagnostics: Vec::new(),
+        }),
+        Err(error) => Ok(BoundaryCodecReport {
+            family: spec.family.to_string(),
+            schema_ref,
+            input_bytes_ref,
+            decoded_value_ref: decoded.value_ref,
+            typed_value_ref,
+            decision: "deny".to_string(),
+            diagnostics: vec![error.to_string()],
+        }),
+    }
+}
+
+pub fn boundary_codec_report_value(report: &BoundaryCodecReport) -> IoValue {
+    record("preserves-boundary-codec-report-v1", vec![
+        record("family", vec![string(&report.family)]),
+        record("schema-ref", vec![string(report.schema_ref.as_str())]),
+        record("input-bytes-ref", vec![string(report.input_bytes_ref.as_str())]),
+        record("decoded-value-ref", vec![string(report.decoded_value_ref.as_str())]),
+        record("typed-value-ref", vec![string(report.typed_value_ref.as_str())]),
+        record("decision", vec![string(&report.decision)]),
+        record("diagnostics", vec![sequence(report.diagnostics.iter().map(string).collect())]),
+    ])
+}
+
+fn boundary_typed_value_ref(spec: &BoundarySchemaSpec, decoded_value_ref: &str) -> Result<ContentRef> {
+    canonical_content_ref(&record("preserves-boundary-typed-codec-v1", vec![
+        record("family", vec![string(spec.family)]),
+        record("schema-ref", vec![string(boundary_schema_ref(spec)?.as_str())]),
+        record("decoded-value-ref", vec![string(decoded_value_ref)]),
+    ]))
 }
 
 fn validate_boundary_field(
@@ -1614,6 +1675,44 @@ mod tests {
             assert!(diagnostic_text.contains(spec.family));
             assert!(diagnostic_text.contains("schema-ref"));
         }
+    }
+
+    #[test]
+    fn boundary_codec_report_binds_strict_decode_schema_and_typed_refs() {
+        // r[verify molten.preserves_boundary_codegen.typed_codecs]
+        // r[verify molten.preserves_boundary_codegen.strict_decode]
+        // r[verify molten.preserves_boundary_codegen.schema_ref_evidence]
+        // r[verify molten.preserves_boundary_codegen.fixture_corpus]
+        let spec = &super::NODE_CONTROL_INGRESS_BOUNDARY_SCHEMA;
+        let value = boundary_schema_fixture(spec);
+        let bytes = super::canonical_bytes(&value).expect("canonical boundary fixture bytes");
+        let report = super::validate_boundary_bytes(&bytes, spec).expect("boundary codec report");
+        assert_eq!(report.decision, "pass");
+        assert_eq!(report.schema_ref, super::boundary_schema_ref(spec).expect("schema ref"));
+        assert_eq!(report.input_bytes_ref.as_str(), super::content_ref_from_bytes(&bytes));
+        assert_eq!(report.decoded_value_ref.as_str(), super::canonical_hash(&value).expect("value ref"));
+        assert!(report.typed_value_ref.as_str().starts_with("blake3:"));
+        let rendered = super::to_text(&super::boundary_codec_report_value(&report)).expect("report text");
+        assert!(rendered.contains("typed-value-ref"));
+        assert!(rendered.contains(spec.family));
+    }
+
+    #[test]
+    fn boundary_codec_report_denies_malformed_canonical_records_before_side_effects() {
+        // r[verify molten.preserves_boundary_codegen.fixture_corpus]
+        let spec = &super::PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_SCHEMA;
+        let malformed = boundary_fixture_with_field(spec, SCHEMA_FIELD_INDEX, super::string("unsupported.schema.v0"));
+        let bytes = super::canonical_bytes(&malformed).expect("canonical malformed fixture bytes");
+        let report = super::validate_boundary_bytes(&bytes, spec).expect("canonical malformed report");
+        assert_eq!(report.decision, "deny");
+        assert!(report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("unsupported schema")));
+
+        let mut non_canonical = bytes.clone();
+        non_canonical.push(TRAILING_SENTINEL_BYTE);
+        assert!(super::validate_boundary_bytes(&non_canonical, spec).is_err());
     }
 
     #[test]
