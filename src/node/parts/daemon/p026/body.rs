@@ -29,6 +29,10 @@ fn live_receive_diagnostics(
 }
 
 pub fn parse_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressEnvelope> {
+    crate::preserves_rail::validate_boundary_schema(
+        value,
+        &crate::preserves_rail::NODE_CONTROL_INGRESS_BOUNDARY_SCHEMA,
+    )?;
     let fields = value
         .collect_simple_record("node-control-ingress-envelope-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-envelope-v1 ...>"))?;

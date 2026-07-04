@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "evidence-chain-segment-bundle">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "chain-segment-bundle-v1">
+  <schema-id "molten.evidence.chain-segment-bundle.v1">
+  <arity 8>>

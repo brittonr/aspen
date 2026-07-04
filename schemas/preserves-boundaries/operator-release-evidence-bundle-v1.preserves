@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "operator-release-evidence-bundle">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "release-evidence-bundle-v1">
+  <schema-id "molten.operator.release-evidence-bundle.v1">
+  <arity 8>>

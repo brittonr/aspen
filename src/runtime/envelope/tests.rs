@@ -38,6 +38,21 @@ fn envelope_dto_round_trips_fields() {
 }
 
 #[test]
+fn envelope_dto_rejects_invalid_blob_ref_during_deserialize() {
+    let json = r#"{
+        "version": 1,
+        "sender": "actor:alice",
+        "subject_preserves": "\"molten.runtime.local.subject\"",
+        "body_preserves": "\"hello\"",
+        "blob_refs": ["BLAKE3:not-canonical"],
+        "capabilities": ["send:molten.runtime.local.subject"],
+        "evidence_refs": []
+    }"#;
+    let error = serde_json::from_str::<EnvelopeDto>(json).expect_err("invalid blob ref must deny");
+    assert!(error.to_string().contains("content ref must start with blake3:"));
+}
+
+#[test]
 fn equivalent_envelopes_hash_identically_after_dto_boundary() {
     let envelope = fixture_envelope();
     let dto = envelope.to_dto().expect("dto");

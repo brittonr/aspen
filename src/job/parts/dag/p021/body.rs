@@ -208,21 +208,11 @@ fn import_worker_artifacts(
 }
 
 fn reject_worker_ambient_tokens(value: &IoValue) -> Result<()> {
-    let text = crate::preserves_rail::to_text(value)?;
-    let banned = [
-        "<raw-closure",
-        "<closure",
-        "<host-path",
-        "<source-path",
-        "<source-registry",
-        "<process-command",
-        "<command",
-        "<env",
-        "<environment",
-        "<source-text",
-    ];
-    if let Some(token) = banned.iter().find(|token| text.contains(**token)) {
-        Err(MoltenError::invalid_harness(format!("job worker request contains mobile/ambient token {token}")))
+    if let Some(marker) = crate::preserves_rail::find_ambient_job_token(value)? {
+        Err(MoltenError::invalid_harness(format!(
+            "job worker request contains mobile/ambient token {}",
+            marker.token
+        )))
     } else {
         Ok(())
     }

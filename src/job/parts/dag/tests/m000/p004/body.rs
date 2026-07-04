@@ -306,6 +306,20 @@
         assert!(parse_job_dag_value(&dag).expect_err("parse rejects").to_string().contains("mobile/ambient"));
     }
 
+    #[test]
+    fn rendered_ambient_looking_string_is_not_a_structural_token() {
+        let node = test_node_value(
+            "string-only",
+            "map",
+            &["in".to_string()],
+            &["out".to_string()],
+            crate::preserves_rail::string("<host-path \"diagnostic-looking\">")
+        )
+        .expect("rendered-looking string is inert");
+        let text = crate::preserves_rail::to_text(&node).expect("node text");
+        assert!(text.contains("host-path"));
+    }
+
     #[hegel::test(test_cases = 10)]
     fn hegel_dag_hash_and_memo_key_are_stable(tc: hegel::TestCase) {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));

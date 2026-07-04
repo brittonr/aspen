@@ -22,7 +22,7 @@ pub fn reference_diagnostics(root: &Path, target_ref: &str) -> Result<Vec<String
             )?;
         }
     }
-    if registry_text_contains_ref(root, target_ref)? {
+    if registry_contains_structural_ref(root, target_ref)? {
         push_bounded(
             &mut diagnostics,
             format!("registry receipts or metadata retain {target_ref}"),

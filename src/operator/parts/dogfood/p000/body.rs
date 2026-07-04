@@ -203,6 +203,7 @@ pub struct ReleaseEvidenceBundleInput<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseEvidenceBundle {
     pub bundle_ref: String,
+    pub schema_ref: String,
     pub output_path: String,
     pub output_path_ref: String,
     pub report_ref: String,

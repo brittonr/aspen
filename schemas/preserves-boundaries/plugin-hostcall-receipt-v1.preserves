@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "plugin-hostcall-receipt">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "plugin-hostcall-receipt-v1">
+  <schema-id "molten.plugin.hostcall-receipt.v1">
+  <arity 14>>

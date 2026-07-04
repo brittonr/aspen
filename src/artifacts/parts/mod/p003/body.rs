@@ -122,9 +122,9 @@ fn sorted_unique(refs: &[String]) -> Vec<String> {
     refs.iter().cloned().collect::<std::collections::BTreeSet<_>>().into_iter().collect()
 }
 
-fn registry_text_contains_ref(root: &Path, target_ref: &str) -> Result<bool> {
+fn registry_contains_structural_ref(root: &Path, target_ref: &str) -> Result<bool> {
     for receipt in receipt_values(root)? {
-        if crate::preserves_rail::to_text(&receipt)?.contains(target_ref) {
+        if crate::preserves_rail::contains_structural_content_ref(&receipt, target_ref)? {
             return Ok(true);
         }
     }

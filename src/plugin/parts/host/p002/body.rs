@@ -423,6 +423,10 @@ fn collect_capability_grant_mismatch_diagnostics(
 }
 
 pub fn parse_plugin_hostcall_receipt(value: &IoValue) -> Result<PluginHostcallReceipt> {
+    crate::preserves_rail::validate_boundary_schema(
+        value,
+        &crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_SCHEMA,
+    )?;
     let fields = simple_record(value, "plugin-hostcall-receipt-v1", PLUGIN_HOSTCALL_RECEIPT_ARITY)?;
     require_schema(&fields[0], crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA, "plugin hostcall receipt")?;
     let checks = parse_checks(&fields[PLUGIN_HOSTCALL_RECEIPT_ARITY - 1])?;

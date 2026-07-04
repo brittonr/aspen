@@ -136,6 +136,7 @@
         .expect("release bundle");
         let parsed_bundle = parse_release_evidence_bundle(&bundle).expect("parse release bundle");
         assert_eq!(crate::ledger::artifact_kind(&bundle), "release-evidence-bundle");
+        assert!(parsed_bundle.schema_ref.starts_with("blake3:"));
         assert_eq!(parsed_bundle.report_ref, parsed.report_ref);
         assert_eq!(parsed_bundle.replay_verify_ref, parsed.replay_verify_ref);
         assert_eq!(parsed_bundle.replay_index_ref, parsed.replay_index_ref);

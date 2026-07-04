@@ -2,6 +2,8 @@ type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 
+pub use crate::preserves_rail::ContentRef;
+
 fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
 }
@@ -52,27 +54,6 @@ impl ActorId {
     pub fn parse(value: impl Into<String>) -> Result<Self> {
         let value = value.into();
         validate_nonempty_token("actor id", &value, MAX_ACTOR_ID_BYTES)?;
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn into_string(self) -> String {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-pub struct ContentRef(String);
-
-impl ContentRef {
-    pub fn parse(value: impl Into<String>) -> Result<Self> {
-        let value = value.into();
-        validate_content_ref(&value)?;
         Ok(Self(value))
     }
 

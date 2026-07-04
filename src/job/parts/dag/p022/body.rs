@@ -8,19 +8,11 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 }
 
 fn reject_mobile_closure_config(config: &IoValue) -> Result<()> {
-    let text = crate::preserves_rail::to_text(config)?;
-    let banned = [
-        "<closure",
-        "<raw-closure",
-        "<host-path",
-        "<process-command",
-        "<command",
-        "<env",
-        "<environment",
-        "<source-text",
-    ];
-    if let Some(token) = banned.iter().find(|token| text.contains(**token)) {
-        Err(MoltenError::invalid_harness(format!("job stage config contains mobile/ambient token {token}")))
+    if let Some(marker) = crate::preserves_rail::find_ambient_job_token(config)? {
+        Err(MoltenError::invalid_harness(format!(
+            "job stage config contains mobile/ambient token {}",
+            marker.token
+        )))
     } else {
         Ok(())
     }

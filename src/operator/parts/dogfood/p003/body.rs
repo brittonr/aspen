@@ -154,6 +154,10 @@ pub fn release_evidence_bundle_value(input: &ReleaseEvidenceBundleInput<'_>) -> 
 }
 
 pub fn parse_release_evidence_bundle(value: &IoValue) -> Result<ReleaseEvidenceBundle> {
+    let schema_validation = crate::preserves_rail::validate_boundary_schema(
+        value,
+        &crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_BOUNDARY_SCHEMA,
+    )?;
     let fields = value
         .collect_simple_record("release-evidence-bundle-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-evidence-bundle-v1 ...>"))?;
@@ -181,6 +185,7 @@ pub fn parse_release_evidence_bundle(value: &IoValue) -> Result<ReleaseEvidenceB
     require_check(&checks, "no-text-oracle", "release evidence bundle")?;
     Ok(ReleaseEvidenceBundle {
         bundle_ref: crate::preserves_rail::canonical_hash(value)?,
+        schema_ref: schema_validation.schema_ref.into_string(),
         output_path: required_string(&output_fields[0], "release evidence output path")?,
         output_path_ref: required_ref(&output_fields[1], "release evidence output path ref")?,
         report_ref: required_ref(&dogfood_fields[0], "release evidence report ref")?,

@@ -196,7 +196,7 @@ fn append_registry_receipt_views(
     items: &mut impl crate::bounded::VecSink<IoValue>,
 ) -> Result<()> {
     for receipt in crate::artifacts::list_receipts(registry_root)? {
-        if receipt.subject_ref != subject_ref && !to_text(&receipt.value)?.contains(subject_ref) {
+        if receipt.subject_ref != subject_ref && !crate::preserves_rail::contains_structural_content_ref(&receipt.value, subject_ref)? {
             continue;
         }
         let text = to_text(&receipt.value)?;
@@ -228,8 +228,11 @@ fn append_ledger_receipt_views(
         if !kind.contains("receipt") {
             continue;
         }
+        if !crate::preserves_rail::contains_structural_content_ref(&value, subject_ref)? {
+            continue;
+        }
         let text = to_text(&value)?;
-        if !text.contains(subject_ref) || contains_hidden_ref(&text, visibility) {
+        if contains_hidden_ref(&text, visibility) {
             continue;
         }
         push_bounded(

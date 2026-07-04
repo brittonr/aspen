@@ -128,7 +128,7 @@ pub fn cleanup_admission_with_registry(
             continue;
         }
         let value = crate::ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
-        if to_text(&value)?.contains(artifact_ref) {
+        if crate::preserves_rail::contains_structural_content_ref(&value, artifact_ref)? {
             push_bounded(
                 &mut diagnostics,
                 format!("ledger artifact {} retains {}", entry.artifact_ref, artifact_ref),

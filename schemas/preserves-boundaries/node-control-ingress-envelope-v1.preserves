@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "node-control-ingress-envelope">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "node-control-ingress-envelope-v1">
+  <schema-id "molten.node.control-ingress-envelope.v1">
+  <arity 15>>

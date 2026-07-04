@@ -182,6 +182,10 @@ fn conformance_value(input: &PluginExtensionConformanceInput<'_>) -> Result<IoVa
 }
 
 pub fn parse_plugin_extension_contract(value: &IoValue) -> Result<PluginExtensionContract> {
+    crate::preserves_rail::validate_boundary_schema(
+        value,
+        &crate::preserves_rail::PLUGIN_EXTENSION_CONTRACT_BOUNDARY_SCHEMA,
+    )?;
     let fields = simple_record(value, "plugin-extension-contract-v1", PLUGIN_EXTENSION_CONTRACT_ARITY)?;
     require_schema(
         &fields[0],

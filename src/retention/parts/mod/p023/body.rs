@@ -214,6 +214,7 @@ fn record_optional_ref_with_status(value: &Value<IoValue>, label: &str) -> Resul
 }
 
 pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
+    crate::preserves_rail::validate_boundary_schema(value, &crate::preserves_rail::RETENTION_RECEIPT_BOUNDARY_SCHEMA)?;
     let fields = value
         .collect_simple_record("retention-receipt-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-receipt-v1 ...>"))?;

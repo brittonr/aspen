@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "plugin-extension-contract">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "plugin-extension-contract-v1">
+  <schema-id "molten.plugin.extension-contract.v1">
+  <arity 11>>

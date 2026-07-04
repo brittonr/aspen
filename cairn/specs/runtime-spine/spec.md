@@ -3033,3 +3033,174 @@ r[molten.eventual_surface.positive_negative_tests] Molten SHOULD include positiv
 - WHEN the eventual surface validator evaluates authority state
 - THEN validation denies authority
 - AND diagnostics say propagation evidence is not an authority grant.
+
+### Requirement: Content refs have one canonical internal type
+r[molten.preserves_content_ref.shared_newtype] Molten SHOULD use a shared validated content-ref newtype for canonical `blake3:<lowercase-hex>` Preserves content refs across migrated runtime and storage DTOs.
+
+#### Scenario: Valid ref remains wire-compatible
+- GIVEN a valid canonical content ref string
+- WHEN the ref is parsed into the shared type and rendered back to Preserves or JSON
+- THEN the rendered value is identical to the original string
+- AND the typed value can be compared and ordered deterministically.
+
+### Requirement: Invalid content refs cannot be represented
+r[molten.preserves_content_ref.invalid_denials] Molten MUST reject invalid content refs before constructing the shared content-ref type.
+
+#### Scenario: Uppercase ref denies
+- GIVEN a content ref string containing uppercase hex characters
+- WHEN a boundary parser constructs the shared content-ref type
+- THEN parsing fails
+- AND no downstream DTO receives a typed content ref.
+
+### Requirement: Runtime envelopes use the shared content-ref type
+r[molten.preserves_content_ref.runtime_envelope] Molten MUST use the shared content-ref type for runtime envelope blob refs while preserving existing Preserves and JSON wire formats.
+
+#### Scenario: Envelope hash remains stable
+- GIVEN an existing valid runtime envelope fixture
+- WHEN its blob refs are represented with the shared content-ref type
+- THEN its canonical Preserves hash remains unchanged
+- AND invalid blob refs still deny before envelope admission.
+
+### Requirement: DTO ref migrations preserve public formats
+r[molten.preserves_content_ref.dto_migration] Molten SHOULD migrate parsed DTO fields that represent canonical content refs from raw strings to the shared content-ref type without changing CLI syntax or Preserves record layout.
+
+#### Scenario: Typed DTO rejects bad ref early
+- GIVEN a parsed storage, artifact, job, eval-cache, catalog, or schema DTO with a malformed ref field
+- WHEN the DTO parser runs
+- THEN parsing fails before semantic admission
+- AND public error diagnostics identify the ref field.
+
+### Requirement: Canonical Preserves byte decoding is strict
+r[molten.preserves_canonical_bytes.strict_decode] Molten MUST reject packed Preserves byte streams at canonical byte boundaries unless parsing and re-encoding produce byte-identical canonical bytes.
+
+#### Scenario: Canonical bytes pass strict decode
+- GIVEN packed Preserves bytes produced by Molten canonical encoding
+- WHEN a ledger, transport, storage, or executor boundary decodes those bytes
+- THEN strict decode succeeds
+- AND the decoded value ref matches the canonical ref of the original value.
+
+### Requirement: Non-canonical Preserves bytes deny before side effects
+r[molten.preserves_canonical_bytes.noncanonical_denial] Molten MUST fail closed when parseable packed Preserves bytes are not byte-identical to their canonical re-encoding.
+
+#### Scenario: Alternate packed encoding is rejected
+- GIVEN packed Preserves bytes that parse to a value but do not match that value's canonical encoding
+- WHEN the bytes enter a trust boundary
+- THEN the boundary decision is `deny` or returns a structured invalid-input error
+- AND no import, enqueue, execution, dispatch, or persistence side effect is admitted.
+
+### Requirement: Trust boundaries use strict canonical decoding
+r[molten.preserves_canonical_bytes.trust_boundaries] Molten MUST use strict canonical decoding for externally supplied packed Preserves bytes in ledger, chunk store, typed storage, remote transport, node ingress, Iroh exchange, and Wasm executor paths.
+
+#### Scenario: Boundary records strict decode evidence
+- GIVEN invalid external packed Preserves bytes
+- WHEN a boundary rejects the bytes
+- THEN diagnostics identify the boundary and strict canonical decode failure
+- AND rendered logs remain non-normative compared with the canonical denial evidence.
+
+### Requirement: Preserves safety checks inspect structure, not rendered text
+r[molten.preserves_value_inspection.structural_scan] Molten MUST base semantic safety checks over Preserves structure rather than over pretty-printed text output.
+
+#### Scenario: Rendered-looking string is not a structural marker
+- GIVEN a Preserves string containing characters that look like a rendered sensitive record
+- WHEN a structure-only marker check evaluates the value
+- THEN the check does not treat that string as a sensitive record
+- AND diagnostic rendering remains non-normative.
+
+### Requirement: Sensitive marker detection is structural
+r[molten.preserves_value_inspection.marker_detection] Molten MUST detect secret, confidential, credential, private, and encrypted-ref markers by structural record or symbol identity at safety boundaries.
+
+#### Scenario: Nested sensitive marker denies
+- GIVEN a service record containing a nested structural secret marker
+- WHEN the service safety check inspects the record
+- THEN the check detects the marker
+- AND the boundary emits the configured deny or redaction decision.
+
+### Requirement: Ambient job tokens are denied structurally
+r[molten.preserves_value_inspection.ambient_token_denial] Molten MUST deny mobile-code, host-path, process-command, environment, source-text, and similar ambient tokens by structural identity before worker admission.
+
+#### Scenario: Worker request contains host path record
+- GIVEN a worker request containing a structural host-path token
+- WHEN job worker admission validates the request
+- THEN admission is `deny`
+- AND no worker execution starts.
+
+### Requirement: Ref-retention checks traverse Preserves values structurally
+r[molten.preserves_value_inspection.ref_retention] Molten MUST locate retained content refs through structural traversal when cleanup, upgrade, or retention logic proves a ref is no longer referenced.
+
+#### Scenario: Cleanup finds nested retained ref
+- GIVEN a ledger artifact with a nested structural content ref to the cleanup target
+- WHEN upgrade cleanup checks retained references
+- THEN cleanup is `deny`
+- AND diagnostics identify the retaining artifact and structural path.
+
+### Requirement: Preserves rail common parser/builders are shared
+r[molten.preserves_rail_toolkit.parser_builders] Molten SHOULD centralize common Preserves parser and builder helpers for simple records, required strings, content refs, optional refs, ref sequences, and schema fields.
+
+#### Scenario: Shared helper preserves canonical value
+- GIVEN a record family migrated from local helpers to shared helpers
+- WHEN the same logical input is rendered before and after migration
+- THEN the canonical Preserves value ref is unchanged
+- AND invalid input still fails closed.
+
+### Requirement: Check-set parsing is consistent
+r[molten.preserves_rail_toolkit.check_sets] Molten MUST parse and build common `<checks [...]>` fields consistently across migrated record families.
+
+#### Scenario: Missing required check denies
+- GIVEN a migrated parser receives a record missing a required check
+- WHEN check-set validation runs
+- THEN parsing is `deny` or returns a structured invalid-input error
+- AND diagnostics name the missing check and record family.
+
+### Requirement: Shared helpers reject malformed shapes
+r[molten.preserves_rail_toolkit.negative_shapes] Molten MUST provide negative coverage for wrong labels, wrong arity, wrong field type, invalid refs, missing checks, and unsupported check shapes in the shared helper layer.
+
+#### Scenario: Invalid ref is rejected by shared helper
+- GIVEN a record field expected to contain a canonical content ref
+- WHEN the field contains a non-canonical ref string
+- THEN the shared helper rejects the record
+- AND no caller treats the value as admitted.
+
+### Requirement: Helper migrations preserve hashes
+r[molten.preserves_rail_toolkit.hash_stability] Molten MUST prove that helper-only migrations do not change canonical hashes for representative public receipt and artifact fixtures.
+
+#### Scenario: Receipt hash remains stable
+- GIVEN a representative public receipt fixture
+- WHEN its builder migrates from local helpers to shared helpers
+- THEN the receipt canonical hash remains unchanged
+- AND only diagnostics for invalid inputs may become more specific.
+
+### Requirement: Preserves schema adapter is pure and deterministic
+r[molten.preserves_schema_boundaries.schema_adapter] Molten MUST provide a deterministic schema validation adapter for Preserves values that performs no filesystem, network, clock, process, or ambient policy access in core validation.
+
+#### Scenario: Same value and schema produce same result
+- GIVEN the same Preserves value and schema artifact
+- WHEN schema validation runs repeatedly
+- THEN the validation decision and diagnostics are identical
+- AND the value is not mutated by validation.
+
+### Requirement: Boundary schemas are versioned artifacts
+r[molten.preserves_schema_boundaries.schema_artifacts] Molten MUST treat schemas for external Preserves boundary records as versioned artifacts with canonical refs available to receipts or diagnostics.
+
+#### Scenario: Receipt names schema ref
+- GIVEN a boundary record accepted after schema validation
+- WHEN Molten emits validation or admission evidence
+- THEN the evidence names the schema family and schema artifact ref
+- AND rendered logs cannot replace the schema-bound evidence.
+
+### Requirement: High-risk Preserves records validate before semantic admission
+r[molten.preserves_schema_boundaries.high_risk_records] Molten MUST run schema validation before semantic admission for node-control ingress, plugin hostcalls, evidence-chain bundles, retention receipts, and release evidence bundles.
+
+#### Scenario: Malformed high-risk record denies
+- GIVEN a high-risk boundary record with a missing required field
+- WHEN the boundary evaluates the record
+- THEN schema validation is `deny`
+- AND no authority, provenance, policy, resource, transport, ledger, or execution side effect is admitted.
+
+### Requirement: Schema denials are negatively covered
+r[molten.preserves_schema_boundaries.schema_denials] Molten MUST include negative tests for wrong record labels, missing fields, wrong field types, malformed checks, unsupported versions, and extra critical fields for every schema-backed boundary family.
+
+#### Scenario: Wrong field type denies
+- GIVEN a schema-backed boundary fixture whose content ref field is a sequence instead of a canonical ref string
+- WHEN schema validation runs
+- THEN validation is `deny`
+- AND diagnostics identify the field and expected class.

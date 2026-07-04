@@ -23,8 +23,9 @@ fn evidence_summary(value: &IoValue) -> Option<String> {
     }
     if let Ok(bundle) = parse_release_evidence_bundle(value) {
         return Some(format!(
-            "operator release evidence bundle ref={} output={} report={} release_gate={} nix_verify={} members={} (summary is non-normative)",
+            "operator release evidence bundle ref={} schema={} output={} report={} release_gate={} nix_verify={} members={} (summary is non-normative)",
             bundle.bundle_ref,
+            bundle.schema_ref,
             bundle.output_path,
             bundle.report_ref,
             bundle.release_gate_ref,

@@ -122,7 +122,8 @@ const BLAKE3_HEX_LEN: usize = 64;
 pub struct ContentRef(String);
 
 impl ContentRef {
-    pub fn parse(value: &str) -> Result<Self> {
+    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
+        let value = value.as_ref();
         validate_content_ref(value)?;
         Ok(Self(value.to_string()))
     }
@@ -133,6 +134,61 @@ impl ContentRef {
 
     pub fn into_string(self) -> String {
         self.0
+    }
+}
+
+impl AsRef<str> for ContentRef {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl std::fmt::Display for ContentRef {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ContentRef {
+    type Err = MoltenError;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl TryFrom<&str> for ContentRef {
+    type Error = MoltenError;
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        Self::parse(value)
+    }
+}
+
+impl TryFrom<String> for ContentRef {
+    type Error = MoltenError;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        Self::parse(value)
+    }
+}
+
+impl serde::Serialize for ContentRef {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ContentRef {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Self::parse(value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -189,8 +245,49 @@ pub fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     preserves::write_iovalue_packed(value, false).map_err(|error| MoltenError::Preserves(error.to_string()))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StrictCanonicalDecode {
+    pub value: IoValue,
+    pub canonical_bytes: Vec<u8>,
+    pub value_ref: ContentRef,
+}
+
+pub fn strict_canonical_decode(bytes: &[u8]) -> Result<StrictCanonicalDecode> {
+    let value = preserves::read_iovalue_packed(bytes, false).map_err(|error| MoltenError::Preserves(error.to_string()))?;
+    let canonical = canonical_bytes(&value)?;
+    if canonical.as_slice() != bytes {
+        return Err(MoltenError::invalid_harness(
+            "strict canonical Preserves decode failed: input bytes differ from canonical re-encoding",
+        ));
+    }
+    let value_ref = ContentRef::parse(content_ref_from_bytes(&canonical))?;
+    Ok(StrictCanonicalDecode {
+        value,
+        canonical_bytes: canonical,
+        value_ref,
+    })
+}
+
+pub fn strict_canonical_decode_with_ref(
+    bytes: &[u8],
+    expected_ref: &str,
+    boundary: &str,
+) -> Result<StrictCanonicalDecode> {
+    let expected = ContentRef::parse(expected_ref).map_err(|error| {
+        MoltenError::invalid_harness(format!("{boundary} expected content ref is invalid: {error}"))
+    })?;
+    let decoded = strict_canonical_decode(bytes)?;
+    if decoded.value_ref != expected {
+        return Err(MoltenError::invalid_harness(format!(
+            "{boundary} strict canonical decode ref mismatch: expected {}, got {}",
+            expected, decoded.value_ref
+        )));
+    }
+    Ok(decoded)
+}
+
 pub fn parse_canonical_bytes(bytes: &[u8]) -> Result<IoValue> {
-    preserves::read_iovalue_packed(bytes, false).map_err(|error| MoltenError::Preserves(error.to_string()))
+    Ok(strict_canonical_decode(bytes)?.value)
 }
 
 pub fn canonical_hash(value: &IoValue) -> Result<String> {
@@ -238,8 +335,1048 @@ pub fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     IoValue::from(value.clone())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedCheck {
+    pub name: String,
+    pub status: String,
+}
+
+pub fn simple_record_fields<'a>(
+    value: &'a IoValue,
+    label: &str,
+    arity: usize,
+) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
+    value
+        .collect_simple_record(label, Some(arity))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+}
+
+pub fn required_string_field(value: &Value<IoValue>, field: &str) -> Result<String> {
+    value
+        .as_string()
+        .map(|value| value.to_string())
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+}
+
+pub fn required_content_ref(value: &Value<IoValue>, field: &str) -> Result<ContentRef> {
+    let reference = required_string_field(value, field)?;
+    ContentRef::parse(&reference).map_err(|error| {
+        MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}"))
+    })
+}
+
+pub fn required_content_ref_string(value: &Value<IoValue>, field: &str) -> Result<String> {
+    Ok(required_content_ref(value, field)?.into_string())
+}
+
+pub fn optional_content_ref(value: &Value<IoValue>, field: &str) -> Result<Option<ContentRef>> {
+    if value.collect_simple_record("none", Some(0)).is_some() {
+        return Ok(None);
+    }
+    if let Some(some) = value.collect_simple_record("some", Some(1)) {
+        return required_content_ref(&some[0], field).map(Some);
+    }
+    required_content_ref(value, field).map(Some)
+}
+
+pub fn optional_content_ref_string(value: &Value<IoValue>, field: &str) -> Result<Option<String>> {
+    Ok(optional_content_ref(value, field)?.map(ContentRef::into_string))
+}
+
+pub fn required_sequence_field<'a>(
+    value: &'a Value<IoValue>,
+    field: &str,
+) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
+    value
+        .collect_sequence()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+}
+
+pub fn record_string_field(value: &Value<IoValue>, record_name: &str, field: &str) -> Result<String> {
+    let value = value_to_iovalue(value);
+    let record = simple_record_fields(&value, record_name, 1)?;
+    required_string_field(&record[0], field)
+}
+
+pub fn record_content_ref(value: &Value<IoValue>, record_name: &str, field: &str) -> Result<ContentRef> {
+    let value = value_to_iovalue(value);
+    let record = simple_record_fields(&value, record_name, 1)?;
+    required_content_ref(&record[0], field)
+}
+
+pub fn record_content_ref_string(value: &Value<IoValue>, record_name: &str, field: &str) -> Result<String> {
+    Ok(record_content_ref(value, record_name, field)?.into_string())
+}
+
+pub fn record_content_ref_sequence(
+    value: &Value<IoValue>,
+    record_name: &str,
+    field: &str,
+    maximum: usize,
+) -> Result<Vec<ContentRef>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record_fields(&value, record_name, 1)?;
+    let values = required_sequence_field(&record[0], field)?;
+    ensure_toolkit_count_at_most(values.len(), maximum, field)?;
+    let mut refs = Vec::with_capacity(values.len());
+    for item in values.iter() {
+        refs.push(required_content_ref(item, field)?);
+    }
+    Ok(refs)
+}
+
+pub fn record_content_ref_strings(
+    value: &Value<IoValue>,
+    record_name: &str,
+    field: &str,
+    maximum: usize,
+) -> Result<Vec<String>> {
+    Ok(record_content_ref_sequence(value, record_name, field, maximum)?
+        .into_iter()
+        .map(ContentRef::into_string)
+        .collect())
+}
+
+pub fn optional_ref_value(value: Option<&str>) -> IoValue {
+    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+}
+
+pub fn refs_sequence(refs: &[String]) -> IoValue {
+    sequence(refs.iter().map(string).collect())
+}
+
+pub fn checks_value(checks: &[(&str, &str)]) -> IoValue {
+    record("checks", vec![sequence(
+        checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
+    )])
+}
+
+pub fn parse_checks_record(
+    value: &Value<IoValue>,
+    maximum: usize,
+    context: &str,
+) -> Result<Vec<ParsedCheck>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record_fields(&value, "checks", 1)?;
+    let values = required_sequence_field(&record[0], "checks")?;
+    ensure_toolkit_count_at_most(values.len(), maximum, "checks")?;
+    let mut checks = Vec::with_capacity(values.len());
+    let mut seen = std::collections::BTreeSet::new();
+    for item in values.iter() {
+        let item = value_to_iovalue(item);
+        let check = simple_record_fields(&item, "check", 2)?;
+        let name = required_string_field(&check[0], "check name")?;
+        let status = required_string_field(&check[1], "check status")?;
+        if !matches!(status.as_str(), "pass" | "fail" | "deny") {
+            return Err(MoltenError::invalid_harness(format!("unsupported {context} check status {status}")));
+        }
+        if !seen.insert(name.clone()) {
+            return Err(MoltenError::invalid_harness(format!("duplicate {context} check {name}")));
+        }
+        checks.push(ParsedCheck { name, status });
+    }
+    Ok(checks)
+}
+
+pub fn require_checks_present(checks: &[ParsedCheck], expected: &[&str], context: &str) -> Result<()> {
+    for expected in expected {
+        if !checks.iter().any(|check| check.name == *expected) {
+            return Err(MoltenError::invalid_harness(format!("missing {context} check {expected}")));
+        }
+    }
+    Ok(())
+}
+
+fn ensure_toolkit_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
+    if count <= maximum {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundaryFieldKind {
+    SchemaId,
+    AnyRecord,
+    AnySequenceRecord,
+    ChainRecord,
+    ChecksRecord,
+    ConformanceRecord,
+    FileRefsRecord,
+    HostcallDescriptorsRecord,
+    ObjectRecord,
+    OptionalRefRecord,
+    RefAndStringRecord,
+    RefRecord,
+    RefSequenceRecord,
+    StringAndRefRecord,
+    StringRecord,
+    StringSequenceRecord,
+    TwoRefsRecord,
+    U64Record,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BoundaryFieldSpec {
+    pub label: &'static str,
+    pub kind: BoundaryFieldKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BoundarySchemaSpec {
+    pub family: &'static str,
+    pub version: &'static str,
+    pub record_label: &'static str,
+    pub schema_id: &'static str,
+    pub fields: &'static [BoundaryFieldSpec],
+}
+
+impl BoundarySchemaSpec {
+    pub fn arity(&self) -> usize {
+        self.fields.len()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundarySchemaValidation {
+    pub family: String,
+    pub schema_ref: ContentRef,
+    pub value_ref: ContentRef,
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+}
+
+const SCHEMA_FIELD: BoundaryFieldSpec = BoundaryFieldSpec {
+    label: "schema-id",
+    kind: BoundaryFieldKind::SchemaId,
+};
+
+const NODE_CONTROL_INGRESS_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
+    SCHEMA_FIELD,
+    BoundaryFieldSpec { label: "transport", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "topic", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "from-peer", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "to-node", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "sequence", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "operation", kind: BoundaryFieldKind::RefRecord },
+    BoundaryFieldSpec { label: "request-ref", kind: BoundaryFieldKind::RefRecord },
+    BoundaryFieldSpec { label: "request", kind: BoundaryFieldKind::AnyRecord },
+    BoundaryFieldSpec { label: "peer-bootstrap", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "authority", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "policy", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "resource", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "evidence", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "checks", kind: BoundaryFieldKind::ChecksRecord },
+];
+
+const PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
+    SCHEMA_FIELD,
+    BoundaryFieldSpec { label: "decision", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "plugin", kind: BoundaryFieldKind::RefRecord },
+    BoundaryFieldSpec { label: "manifest", kind: BoundaryFieldKind::RefRecord },
+    BoundaryFieldSpec { label: "operation", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "hostcall", kind: BoundaryFieldKind::RefRecord },
+    BoundaryFieldSpec { label: "executor", kind: BoundaryFieldKind::RefRecord },
+    BoundaryFieldSpec { label: "effect", kind: BoundaryFieldKind::RefRecord },
+    BoundaryFieldSpec { label: "authority", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "capability-grants", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "resource", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "evaluation-turn", kind: BoundaryFieldKind::U64Record },
+    BoundaryFieldSpec { label: "diagnostics", kind: BoundaryFieldKind::StringSequenceRecord },
+    BoundaryFieldSpec { label: "checks", kind: BoundaryFieldKind::ChecksRecord },
+];
+
+const PLUGIN_EXTENSION_CONTRACT_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
+    SCHEMA_FIELD,
+    BoundaryFieldSpec { label: "extension-id", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "version", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "host-abi", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "lifecycle", kind: BoundaryFieldKind::StringSequenceRecord },
+    BoundaryFieldSpec { label: "hostcalls", kind: BoundaryFieldKind::HostcallDescriptorsRecord },
+    BoundaryFieldSpec { label: "conformance", kind: BoundaryFieldKind::ConformanceRecord },
+    BoundaryFieldSpec { label: "policy", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "supply-chain", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "profile", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "checks", kind: BoundaryFieldKind::ChecksRecord },
+];
+
+const RETENTION_RECEIPT_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
+    SCHEMA_FIELD,
+    BoundaryFieldSpec { label: "decision", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "action", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "object", kind: BoundaryFieldKind::ObjectRecord },
+    BoundaryFieldSpec { label: "class", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "requester", kind: BoundaryFieldKind::RefRecord },
+    BoundaryFieldSpec { label: "index", kind: BoundaryFieldKind::RefRecord },
+    BoundaryFieldSpec { label: "pins", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "retained", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "remote", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "tombstone", kind: BoundaryFieldKind::OptionalRefRecord },
+    BoundaryFieldSpec { label: "diagnostics", kind: BoundaryFieldKind::StringSequenceRecord },
+    BoundaryFieldSpec { label: "policy", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "checks", kind: BoundaryFieldKind::ChecksRecord },
+];
+
+const EVIDENCE_CHAIN_SEGMENT_BUNDLE_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
+    SCHEMA_FIELD,
+    BoundaryFieldSpec { label: "chain", kind: BoundaryFieldKind::ChainRecord },
+    BoundaryFieldSpec { label: "anchor", kind: BoundaryFieldKind::OptionalRefRecord },
+    BoundaryFieldSpec { label: "head", kind: BoundaryFieldKind::OptionalRefRecord },
+    BoundaryFieldSpec { label: "artifacts", kind: BoundaryFieldKind::AnySequenceRecord },
+    BoundaryFieldSpec { label: "verify-receipts", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "checkpoints", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "checks", kind: BoundaryFieldKind::ChecksRecord },
+];
+
+const OPERATOR_RELEASE_EVIDENCE_BUNDLE_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
+    SCHEMA_FIELD,
+    BoundaryFieldSpec { label: "output-path", kind: BoundaryFieldKind::StringAndRefRecord },
+    BoundaryFieldSpec { label: "members", kind: BoundaryFieldKind::FileRefsRecord },
+    BoundaryFieldSpec { label: "dogfood", kind: BoundaryFieldKind::TwoRefsRecord },
+    BoundaryFieldSpec { label: "replay", kind: BoundaryFieldKind::TwoRefsRecord },
+    BoundaryFieldSpec { label: "nix", kind: BoundaryFieldKind::TwoRefsRecord },
+    BoundaryFieldSpec { label: "nextest", kind: BoundaryFieldKind::RefAndStringRecord },
+    BoundaryFieldSpec { label: "checks", kind: BoundaryFieldKind::ChecksRecord },
+];
+
+pub const NODE_CONTROL_INGRESS_BOUNDARY_SCHEMA: BoundarySchemaSpec = BoundarySchemaSpec {
+    family: "node-control-ingress-envelope",
+    version: "v1",
+    record_label: "node-control-ingress-envelope-v1",
+    schema_id: NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA,
+    fields: NODE_CONTROL_INGRESS_BOUNDARY_FIELDS,
+};
+
+pub const PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_SCHEMA: BoundarySchemaSpec = BoundarySchemaSpec {
+    family: "plugin-hostcall-receipt",
+    version: "v1",
+    record_label: "plugin-hostcall-receipt-v1",
+    schema_id: PLUGIN_HOSTCALL_RECEIPT_SCHEMA,
+    fields: PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_FIELDS,
+};
+
+pub const PLUGIN_EXTENSION_CONTRACT_BOUNDARY_SCHEMA: BoundarySchemaSpec = BoundarySchemaSpec {
+    family: "plugin-extension-contract",
+    version: "v1",
+    record_label: "plugin-extension-contract-v1",
+    schema_id: PLUGIN_EXTENSION_CONTRACT_SCHEMA,
+    fields: PLUGIN_EXTENSION_CONTRACT_BOUNDARY_FIELDS,
+};
+
+pub const RETENTION_RECEIPT_BOUNDARY_SCHEMA: BoundarySchemaSpec = BoundarySchemaSpec {
+    family: "retention-receipt",
+    version: "v1",
+    record_label: "retention-receipt-v1",
+    schema_id: RETENTION_RECEIPT_SCHEMA,
+    fields: RETENTION_RECEIPT_BOUNDARY_FIELDS,
+};
+
+pub const EVIDENCE_CHAIN_SEGMENT_BUNDLE_BOUNDARY_SCHEMA: BoundarySchemaSpec = BoundarySchemaSpec {
+    family: "evidence-chain-segment-bundle",
+    version: "v1",
+    record_label: "chain-segment-bundle-v1",
+    schema_id: EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA,
+    fields: EVIDENCE_CHAIN_SEGMENT_BUNDLE_BOUNDARY_FIELDS,
+};
+
+pub const OPERATOR_RELEASE_EVIDENCE_BUNDLE_BOUNDARY_SCHEMA: BoundarySchemaSpec = BoundarySchemaSpec {
+    family: "operator-release-evidence-bundle",
+    version: "v1",
+    record_label: "release-evidence-bundle-v1",
+    schema_id: OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA,
+    fields: OPERATOR_RELEASE_EVIDENCE_BUNDLE_BOUNDARY_FIELDS,
+};
+
+pub fn boundary_schema_artifact_value(spec: &BoundarySchemaSpec) -> Result<IoValue> {
+    let arity = u64::try_from(spec.arity()).map_err(|error| {
+        MoltenError::invalid_harness(format!("boundary schema arity cannot convert to u64: {error}"))
+    })?;
+    Ok(record("preserves-boundary-schema-artifact-v1", vec![
+        record("family", vec![string(spec.family)]),
+        record("version", vec![string(spec.version)]),
+        record("preserves-schema-version", vec![string(preserves_schema::PRESERVES_SCHEMA_SPEC_VERSION)]),
+        record("record-label", vec![string(spec.record_label)]),
+        record("schema-id", vec![string(spec.schema_id)]),
+        record("arity", vec![u64_value(arity)]),
+    ]))
+}
+
+pub fn boundary_schema_ref(spec: &BoundarySchemaSpec) -> Result<ContentRef> {
+    canonical_content_ref(&boundary_schema_artifact_value(spec)?)
+}
+
+pub fn validate_boundary_schema(value: &IoValue, spec: &BoundarySchemaSpec) -> Result<BoundarySchemaValidation> {
+    let schema_ref = boundary_schema_ref(spec)?;
+    let value_ref = canonical_content_ref(value)?;
+    let arity = spec.arity();
+    let fields = value.collect_simple_record(spec.record_label, Some(arity)).ok_or_else(|| {
+        MoltenError::invalid_harness(format!(
+            "{} schema validation deny: expected <{} ...> with arity {} using schema {}",
+            spec.family, spec.record_label, arity, schema_ref
+        ))
+    })?;
+    for (index, field_spec) in spec.fields.iter().enumerate() {
+        validate_boundary_field(&fields[index], field_spec, spec, &schema_ref)?;
+    }
+    Ok(BoundarySchemaValidation {
+        family: spec.family.to_string(),
+        schema_ref,
+        value_ref,
+        decision: "pass".to_string(),
+        diagnostics: Vec::new(),
+    })
+}
+
+pub fn boundary_schema_diagnostic_value(validation: &BoundarySchemaValidation) -> IoValue {
+    record("preserves-boundary-schema-validation-v1", vec![
+        record("family", vec![string(&validation.family)]),
+        record("schema-ref", vec![string(validation.schema_ref.as_str())]),
+        record("value-ref", vec![string(validation.value_ref.as_str())]),
+        record("decision", vec![string(&validation.decision)]),
+        record("diagnostics", vec![sequence(validation.diagnostics.iter().map(string).collect())]),
+    ])
+}
+
+fn validate_boundary_field(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    match field_spec.kind {
+        BoundaryFieldKind::SchemaId => validate_boundary_schema_id(value, spec, schema_ref),
+        BoundaryFieldKind::AnyRecord => {
+            boundary_record(value, field_spec.label, FIELD_ARITY_ONE, spec, schema_ref)?;
+            Ok(())
+        }
+        BoundaryFieldKind::AnySequenceRecord => validate_any_sequence_record(value, field_spec.label, spec, schema_ref),
+        BoundaryFieldKind::ChainRecord => validate_chain_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::ChecksRecord => validate_checks_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::ConformanceRecord => validate_conformance_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::FileRefsRecord => validate_file_refs_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::HostcallDescriptorsRecord => validate_hostcall_descriptors_boundary_record(
+            value,
+            field_spec,
+            spec,
+            schema_ref,
+        ),
+        BoundaryFieldKind::ObjectRecord => validate_object_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::OptionalRefRecord => validate_optional_ref_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::RefAndStringRecord => validate_ref_and_string_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::RefRecord => validate_ref_record(value, field_spec.label, spec, schema_ref),
+        BoundaryFieldKind::RefSequenceRecord => validate_ref_sequence_record(value, field_spec.label, spec, schema_ref),
+        BoundaryFieldKind::StringAndRefRecord => validate_string_and_ref_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::StringRecord => validate_string_record(value, field_spec.label, spec, schema_ref),
+        BoundaryFieldKind::StringSequenceRecord => validate_string_sequence_record(value, field_spec.label, spec, schema_ref),
+        BoundaryFieldKind::TwoRefsRecord => validate_two_refs_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::U64Record => validate_u64_record(value, field_spec.label, spec, schema_ref),
+    }
+}
+
+const FIELD_ARITY_ZERO: usize = 0;
+const FIELD_ARITY_ONE: usize = 1;
+const FIELD_ARITY_TWO: usize = 2;
+const FIELD_ARITY_THREE: usize = 3;
+
+fn boundary_record<'a>(
+    value: &'a Value<IoValue>,
+    label: &str,
+    arity: usize,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
+    value.collect_simple_record(label, Some(arity)).ok_or_else(|| {
+        MoltenError::invalid_harness(format!(
+            "{} schema validation deny: field {label} must be <{label} ...> with arity {arity} using schema {}",
+            spec.family, schema_ref
+        ))
+    })
+}
+
+fn validate_boundary_schema_id(
+    value: &Value<IoValue>,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let actual_schema = value.as_string().ok_or_else(|| {
+        MoltenError::invalid_harness(format!(
+            "{} schema validation deny: schema field must be a string for schema {}",
+            spec.family, schema_ref
+        ))
+    })?;
+    if actual_schema.as_ref() == spec.schema_id {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "{} schema validation deny: unsupported schema {} expected {} using schema {}",
+            spec.family,
+            actual_schema.as_ref(),
+            spec.schema_id,
+            schema_ref
+        )))
+    }
+}
+
+fn validate_string_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    ensure_string(&record[0], label, spec, schema_ref)
+}
+
+fn validate_u64_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    record[0]
+        .as_u64()
+        .ok_or_else(|| boundary_field_error(spec, label, "u64", schema_ref))?
+        .map(|_| ())
+        .map_err(|error| MoltenError::invalid_harness(format!(
+            "{} schema validation deny: field {label} u64 out of range using schema {}: {error}",
+            spec.family, schema_ref
+        )))
+}
+
+fn validate_ref_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    ensure_content_ref(&record[0], label, spec, schema_ref)
+}
+
+fn validate_ref_sequence_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let sequence = ensure_sequence(&record[0], label, spec, schema_ref)?;
+    for item in sequence.iter() {
+        ensure_content_ref(item, label, spec, schema_ref)?;
+    }
+    Ok(())
+}
+
+fn validate_string_sequence_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let sequence = ensure_sequence(&record[0], label, spec, schema_ref)?;
+    for item in sequence.iter() {
+        ensure_string(item, label, spec, schema_ref)?;
+    }
+    Ok(())
+}
+
+fn validate_any_sequence_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    ensure_sequence(&record[0], label, spec, schema_ref).map(|_| ())
+}
+
+fn validate_optional_ref_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, field_spec.label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let optional = value_to_iovalue(&record[0]);
+    if optional.collect_simple_record("none", Some(FIELD_ARITY_ZERO)).is_some() {
+        return Ok(());
+    }
+    if let Some(some) = optional.collect_simple_record("some", Some(FIELD_ARITY_ONE)) {
+        return ensure_content_ref(&some[0], field_spec.label, spec, schema_ref);
+    }
+    ensure_content_ref(&record[0], field_spec.label, spec, schema_ref)
+}
+
+fn validate_checks_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, field_spec.label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let checks = ensure_sequence(&record[0], field_spec.label, spec, schema_ref)?;
+    for item in checks.iter() {
+        let item = value_to_iovalue(item);
+        let check = item.collect_simple_record("check", Some(FIELD_ARITY_TWO)).ok_or_else(|| {
+            boundary_field_error(spec, field_spec.label, "<check string string>", schema_ref)
+        })?;
+        ensure_string(&check[0], "check name", spec, schema_ref)?;
+        ensure_string(&check[1], "check status", spec, schema_ref)?;
+    }
+    Ok(())
+}
+
+fn validate_chain_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let value = value_to_iovalue(value);
+    let chain = value.collect_simple_record(field_spec.label, Some(FIELD_ARITY_THREE)).ok_or_else(|| {
+        boundary_field_error(spec, field_spec.label, "chain record", schema_ref)
+    })?;
+    validate_string_record(&chain[0], "scope", spec, schema_ref)?;
+    validate_string_record(&chain[1], "id", spec, schema_ref)?;
+    validate_string_record(&chain[2], "epoch", spec, schema_ref)
+}
+
+fn validate_object_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, field_spec.label, FIELD_ARITY_TWO, spec, schema_ref)?;
+    ensure_content_ref(&record[0], field_spec.label, spec, schema_ref)?;
+    ensure_string(&record[1], field_spec.label, spec, schema_ref)
+}
+
+fn validate_string_and_ref_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, field_spec.label, FIELD_ARITY_TWO, spec, schema_ref)?;
+    ensure_string(&record[0], field_spec.label, spec, schema_ref)?;
+    ensure_content_ref(&record[1], field_spec.label, spec, schema_ref)
+}
+
+fn validate_ref_and_string_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, field_spec.label, FIELD_ARITY_TWO, spec, schema_ref)?;
+    ensure_content_ref(&record[0], field_spec.label, spec, schema_ref)?;
+    ensure_string(&record[1], field_spec.label, spec, schema_ref)
+}
+
+fn validate_two_refs_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, field_spec.label, FIELD_ARITY_TWO, spec, schema_ref)?;
+    ensure_content_ref(&record[0], field_spec.label, spec, schema_ref)?;
+    ensure_content_ref(&record[1], field_spec.label, spec, schema_ref)
+}
+
+fn validate_file_refs_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, field_spec.label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let files = ensure_sequence(&record[0], field_spec.label, spec, schema_ref)?;
+    for file in files.iter() {
+        let file = value_to_iovalue(file);
+        let fields = file.collect_simple_record("file", Some(FIELD_ARITY_TWO)).ok_or_else(|| {
+            boundary_field_error(spec, field_spec.label, "<file string ref>", schema_ref)
+        })?;
+        ensure_string(&fields[0], "file name", spec, schema_ref)?;
+        ensure_content_ref(&fields[1], "file ref", spec, schema_ref)?;
+    }
+    Ok(())
+}
+
+fn validate_conformance_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let value = value_to_iovalue(value);
+    let fields = value.collect_simple_record(field_spec.label, Some(FIELD_ARITY_THREE)).ok_or_else(|| {
+        boundary_field_error(spec, field_spec.label, "conformance record", schema_ref)
+    })?;
+    validate_ref_record(&fields[0], "positive", spec, schema_ref)?;
+    validate_ref_record(&fields[1], "negative", spec, schema_ref)?;
+    validate_ref_record(&fields[2], "property", spec, schema_ref)
+}
+
+fn validate_hostcall_descriptors_boundary_record(
+    value: &Value<IoValue>,
+    field_spec: &BoundaryFieldSpec,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, field_spec.label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let descriptors = ensure_sequence(&record[0], field_spec.label, spec, schema_ref)?;
+    for descriptor in descriptors.iter() {
+        validate_hostcall_descriptor_boundary_record(descriptor, spec, schema_ref)?;
+    }
+    Ok(())
+}
+
+fn validate_hostcall_descriptor_boundary_record(
+    value: &Value<IoValue>,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let value = value_to_iovalue(value);
+    let fields = value.collect_simple_record("hostcall-descriptor", Some(HOSTCALL_DESCRIPTOR_ARITY)).ok_or_else(|| {
+        boundary_field_error(spec, "hostcall-descriptor", "hostcall descriptor", schema_ref)
+    })?;
+    validate_string_record(&fields[HOSTCALL_DESCRIPTOR_OPERATION_INDEX], "operation", spec, schema_ref)?;
+    validate_ref_record(&fields[HOSTCALL_DESCRIPTOR_DESCRIPTOR_INDEX], "descriptor", spec, schema_ref)?;
+    validate_ref_record(&fields[HOSTCALL_DESCRIPTOR_INPUT_SCHEMA_INDEX], "input-schema", spec, schema_ref)?;
+    validate_ref_record(&fields[HOSTCALL_DESCRIPTOR_OUTPUT_SCHEMA_INDEX], "output-schema", spec, schema_ref)?;
+    validate_ref_sequence_record(&fields[HOSTCALL_DESCRIPTOR_AUTHORITY_INDEX], "authority", spec, schema_ref)?;
+    validate_ref_sequence_record(&fields[HOSTCALL_DESCRIPTOR_RESOURCE_INDEX], "resource", spec, schema_ref)?;
+    validate_ref_sequence_record(&fields[HOSTCALL_DESCRIPTOR_EFFECTS_INDEX], "effects", spec, schema_ref)?;
+    validate_string_record(&fields[HOSTCALL_DESCRIPTOR_REPLAY_INDEX], "replay", spec, schema_ref)?;
+    validate_ref_sequence_record(&fields[HOSTCALL_DESCRIPTOR_ERRORS_INDEX], "errors", spec, schema_ref)
+}
+
+const HOSTCALL_DESCRIPTOR_ARITY: usize = 9;
+const HOSTCALL_DESCRIPTOR_OPERATION_INDEX: usize = 0;
+const HOSTCALL_DESCRIPTOR_DESCRIPTOR_INDEX: usize = 1;
+const HOSTCALL_DESCRIPTOR_INPUT_SCHEMA_INDEX: usize = 2;
+const HOSTCALL_DESCRIPTOR_OUTPUT_SCHEMA_INDEX: usize = 3;
+const HOSTCALL_DESCRIPTOR_AUTHORITY_INDEX: usize = 4;
+const HOSTCALL_DESCRIPTOR_RESOURCE_INDEX: usize = 5;
+const HOSTCALL_DESCRIPTOR_EFFECTS_INDEX: usize = 6;
+const HOSTCALL_DESCRIPTOR_REPLAY_INDEX: usize = 7;
+const HOSTCALL_DESCRIPTOR_ERRORS_INDEX: usize = 8;
+
+fn ensure_string(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    value.as_string().map(|_| ()).ok_or_else(|| boundary_field_error(spec, label, "string", schema_ref))
+}
+
+fn ensure_content_ref(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let reference = value
+        .as_string()
+        .ok_or_else(|| boundary_field_error(spec, label, "canonical content ref string", schema_ref))?;
+    ContentRef::parse(reference.as_ref()).map(|_| ()).map_err(|error| {
+        MoltenError::invalid_harness(format!(
+            "{} schema validation deny: field {label} expected canonical content ref string using schema {}: {error}",
+            spec.family, schema_ref
+        ))
+    })
+}
+
+fn ensure_sequence<'a>(
+    value: &'a Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
+    value.collect_sequence().ok_or_else(|| boundary_field_error(spec, label, "sequence", schema_ref))
+}
+
+fn boundary_field_error(
+    spec: &BoundarySchemaSpec,
+    label: &str,
+    expected: &str,
+    schema_ref: &ContentRef,
+) -> MoltenError {
+    MoltenError::invalid_harness(format!(
+        "{} schema validation deny: field {label} expected {expected} using schema {}",
+        spec.family, schema_ref
+    ))
+}
+
+pub const DEFAULT_STRUCTURAL_SCAN_MAX_NODES: usize = 8_192;
+pub const DEFAULT_STRUCTURAL_SCAN_MAX_DEPTH: usize = 128;
+pub const SENSITIVE_STRUCTURAL_MARKERS: &[&str] = &["secret", "confidential", "credential", "private", "encrypted-ref"];
+pub const AMBIENT_JOB_TOKENS: &[&str] = &[
+    "mobile-code",
+    "raw-closure",
+    "closure",
+    "host-path",
+    "source-path",
+    "source-registry",
+    "process-command",
+    "command",
+    "env",
+    "environment",
+    "source-text",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StructuralTokenKind {
+    RecordLabel,
+    Symbol,
+    String,
+    ByteString,
+    ContentRef,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructuralMatch {
+    pub kind: StructuralTokenKind,
+    pub token: String,
+    pub path: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StructuralInspectionScope {
+    pub record_labels: bool,
+    pub symbols: bool,
+    pub strings: bool,
+    pub byte_strings: bool,
+    pub content_refs: bool,
+}
+
+impl StructuralInspectionScope {
+    pub const fn structural_markers() -> Self {
+        Self {
+            record_labels: true,
+            symbols: true,
+            strings: false,
+            byte_strings: false,
+            content_refs: false,
+        }
+    }
+
+    pub const fn content_refs() -> Self {
+        Self {
+            record_labels: false,
+            symbols: false,
+            strings: false,
+            byte_strings: false,
+            content_refs: true,
+        }
+    }
+
+    pub const fn all() -> Self {
+        Self {
+            record_labels: true,
+            symbols: true,
+            strings: true,
+            byte_strings: true,
+            content_refs: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StructuralInspectionLimits {
+    pub max_nodes: usize,
+    pub max_depth: usize,
+}
+
+impl Default for StructuralInspectionLimits {
+    fn default() -> Self {
+        Self {
+            max_nodes: DEFAULT_STRUCTURAL_SCAN_MAX_NODES,
+            max_depth: DEFAULT_STRUCTURAL_SCAN_MAX_DEPTH,
+        }
+    }
+}
+
+struct StructuralScanState {
+    visited_nodes: usize,
+    limits: StructuralInspectionLimits,
+}
+
+pub fn find_structural_match<F>(
+    value: &IoValue,
+    scope: StructuralInspectionScope,
+    predicate: F,
+) -> Result<Option<StructuralMatch>>
+where
+    F: FnMut(StructuralTokenKind, &str) -> bool,
+{
+    find_structural_match_with_limits(value, scope, StructuralInspectionLimits::default(), predicate)
+}
+
+pub fn find_structural_match_with_limits<F>(
+    value: &IoValue,
+    scope: StructuralInspectionScope,
+    limits: StructuralInspectionLimits,
+    mut predicate: F,
+) -> Result<Option<StructuralMatch>>
+where
+    F: FnMut(StructuralTokenKind, &str) -> bool,
+{
+    let mut state = StructuralScanState {
+        visited_nodes: 0,
+        limits,
+    };
+    let mut path = vec!["$".to_string()];
+    visit_structural_value(value, scope, &mut predicate, &mut state, &mut path)
+}
+
+pub fn find_named_structural_marker(value: &IoValue, markers: &[&str]) -> Result<Option<StructuralMatch>> {
+    find_structural_match(value, StructuralInspectionScope::structural_markers(), |kind, token| {
+        matches!(kind, StructuralTokenKind::RecordLabel | StructuralTokenKind::Symbol)
+            && markers.iter().any(|marker| token == *marker)
+    })
+}
+
+pub fn find_sensitive_structural_marker(value: &IoValue) -> Result<Option<StructuralMatch>> {
+    find_named_structural_marker(value, SENSITIVE_STRUCTURAL_MARKERS)
+}
+
+pub fn find_ambient_job_token(value: &IoValue) -> Result<Option<StructuralMatch>> {
+    find_named_structural_marker(value, AMBIENT_JOB_TOKENS)
+}
+
+pub fn find_structural_content_ref(value: &IoValue, target_ref: &str) -> Result<Option<StructuralMatch>> {
+    let target = ContentRef::parse(target_ref)?;
+    find_structural_match(value, StructuralInspectionScope::content_refs(), |kind, token| {
+        kind == StructuralTokenKind::ContentRef && token == target.as_str()
+    })
+}
+
+pub fn contains_structural_content_ref(value: &IoValue, target_ref: &str) -> Result<bool> {
+    Ok(find_structural_content_ref(value, target_ref)?.is_some())
+}
+
+fn visit_structural_value<F>(
+    value: &IoValue,
+    scope: StructuralInspectionScope,
+    predicate: &mut F,
+    state: &mut StructuralScanState,
+    path: &mut Vec<String>,
+) -> Result<Option<StructuralMatch>>
+where
+    F: FnMut(StructuralTokenKind, &str) -> bool,
+{
+    state.visited_nodes = state
+        .visited_nodes
+        .checked_add(1)
+        .ok_or_else(|| MoltenError::invalid_harness("structural Preserves scan node count overflow"))?;
+    if state.visited_nodes > state.limits.max_nodes {
+        return Err(MoltenError::invalid_harness(format!(
+            "structural Preserves scan exceeded {} nodes",
+            state.limits.max_nodes
+        )));
+    }
+    if path.len() > state.limits.max_depth {
+        return Err(MoltenError::invalid_harness(format!(
+            "structural Preserves scan exceeded depth {}",
+            state.limits.max_depth
+        )));
+    }
+
+    if value.is_record() {
+        let label = value.label();
+        if let Some(name) = label.as_symbol() {
+            if scope.record_labels && predicate(StructuralTokenKind::RecordLabel, name.as_ref()) {
+                return Ok(Some(structural_match(StructuralTokenKind::RecordLabel, name.as_ref(), path)));
+            }
+        }
+        path.push("label".to_string());
+        if let Some(found) = visit_structural_value(&value_to_iovalue(&label), scope, predicate, state, path)? {
+            return Ok(Some(found));
+        }
+        path.pop();
+        for (index, child) in value.iter().enumerate() {
+            path.push(format!("field[{index}]"));
+            if let Some(found) = visit_structural_value(&value_to_iovalue(&child), scope, predicate, state, path)? {
+                return Ok(Some(found));
+            }
+            path.pop();
+        }
+        return Ok(None);
+    }
+
+    if let Some(symbol) = value.as_symbol() {
+        if scope.symbols && predicate(StructuralTokenKind::Symbol, symbol.as_ref()) {
+            return Ok(Some(structural_match(StructuralTokenKind::Symbol, symbol.as_ref(), path)));
+        }
+    }
+    if let Some(text) = value.as_string() {
+        if scope.strings && predicate(StructuralTokenKind::String, text.as_ref()) {
+            return Ok(Some(structural_match(StructuralTokenKind::String, text.as_ref(), path)));
+        }
+        if scope.content_refs && ContentRef::parse(text.as_ref()).is_ok()
+            && predicate(StructuralTokenKind::ContentRef, text.as_ref())
+        {
+            return Ok(Some(structural_match(StructuralTokenKind::ContentRef, text.as_ref(), path)));
+        }
+    }
+    if let Some(bytes) = value.as_bytestring() {
+        if scope.byte_strings {
+            let token = content_ref_from_bytes(bytes.as_ref());
+            if predicate(StructuralTokenKind::ByteString, &token) {
+                return Ok(Some(structural_match(StructuralTokenKind::ByteString, &token, path)));
+            }
+        }
+    }
+
+    if value.is_sequence() || value.is_set() {
+        for (index, child) in value.iter().enumerate() {
+            path.push(format!("item[{index}]"));
+            if let Some(found) = visit_structural_value(&value_to_iovalue(&child), scope, predicate, state, path)? {
+                return Ok(Some(found));
+            }
+            path.pop();
+        }
+        return Ok(None);
+    }
+
+    if value.is_dictionary() {
+        for (index, (key, child)) in value.entries().enumerate() {
+            path.push(format!("entry[{index}].key"));
+            if let Some(found) = visit_structural_value(&value_to_iovalue(&key), scope, predicate, state, path)? {
+                return Ok(Some(found));
+            }
+            path.pop();
+            path.push(format!("entry[{index}].value"));
+            if let Some(found) = visit_structural_value(&value_to_iovalue(&child), scope, predicate, state, path)? {
+                return Ok(Some(found));
+            }
+            path.pop();
+        }
+    }
+
+    Ok(None)
+}
+
+fn structural_match(kind: StructuralTokenKind, token: &str, path: &[String]) -> StructuralMatch {
+    StructuralMatch {
+        kind,
+        token: token.to_string(),
+        path: path.to_vec(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    const ANNOTATED_ONE_PACKED: &[u8] = b"\x85\xb0\x01\x02\xb0\x01\x01";
+    const TRAILING_SENTINEL_BYTE: u8 = 0;
+    const TAMPER_MASK: u8 = 1;
 
     #[test]
     fn preserves_text_roundtrip_keeps_hash() {
@@ -248,6 +1385,384 @@ mod tests {
         let rendered = super::to_text(&value).expect("render preserves text");
         let reparsed = super::parse_text(&rendered).expect("parse rendered text");
         assert_eq!(hash, super::canonical_hash(&reparsed).expect("hash reparsed value"));
+    }
+
+    #[test]
+    fn strict_canonical_decode_accepts_molten_canonical_bytes() {
+        let value = super::parse_text("<strict-decode-fixture [#t 42]>").expect("parse fixture");
+        let bytes = super::canonical_bytes(&value).expect("canonical bytes");
+        let decoded = super::strict_canonical_decode(&bytes).expect("strict decode");
+        assert_eq!(decoded.value, value);
+        assert_eq!(decoded.canonical_bytes, bytes);
+        assert_eq!(decoded.value_ref.as_str(), super::canonical_hash(&decoded.value).expect("decoded hash"));
+    }
+
+    #[test]
+    fn strict_canonical_decode_rejects_annotated_trailing_truncated_and_tampered_bytes() {
+        let annotated_error = super::strict_canonical_decode(ANNOTATED_ONE_PACKED)
+            .expect_err("annotations are parseable but not canonical without annotations");
+        assert!(annotated_error.to_string().contains("strict canonical Preserves decode failed"));
+
+        let value = super::parse_text("<strict-decode-fixture \"payload\">").expect("parse fixture");
+        let mut trailing = super::canonical_bytes(&value).expect("canonical bytes");
+        trailing.push(TRAILING_SENTINEL_BYTE);
+        assert!(super::strict_canonical_decode(&trailing).is_err());
+
+        let mut truncated = super::canonical_bytes(&value).expect("canonical bytes");
+        truncated.pop();
+        assert!(super::strict_canonical_decode(&truncated).is_err());
+
+        let original = super::canonical_bytes(&value).expect("canonical bytes");
+        let original_ref = super::content_ref_from_bytes(&original);
+        let mut tampered = original.clone();
+        let first = tampered.first_mut().expect("non-empty canonical bytes");
+        *first ^= TAMPER_MASK;
+        assert!(super::strict_canonical_decode_with_ref(&tampered, &original_ref, "tampered-fixture").is_err());
+    }
+
+    fn boundary_schema_specs() -> Vec<&'static super::BoundarySchemaSpec> {
+        vec![
+            &super::NODE_CONTROL_INGRESS_BOUNDARY_SCHEMA,
+            &super::PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_SCHEMA,
+            &super::PLUGIN_EXTENSION_CONTRACT_BOUNDARY_SCHEMA,
+            &super::RETENTION_RECEIPT_BOUNDARY_SCHEMA,
+            &super::EVIDENCE_CHAIN_SEGMENT_BUNDLE_BOUNDARY_SCHEMA,
+            &super::OPERATOR_RELEASE_EVIDENCE_BUNDLE_BOUNDARY_SCHEMA,
+        ]
+    }
+
+    fn boundary_test_ref(label: &str) -> String {
+        super::content_ref_from_bytes(format!("boundary-schema-test-{label}").as_bytes())
+    }
+
+    fn boundary_schema_fixture(spec: &super::BoundarySchemaSpec) -> preserves::IOValue {
+        super::record(
+            spec.record_label,
+            spec.fields
+                .iter()
+                .map(|field| boundary_field_fixture(spec, field))
+                .collect(),
+        )
+    }
+
+    fn boundary_field_fixture(
+        spec: &super::BoundarySchemaSpec,
+        field: &super::BoundaryFieldSpec,
+    ) -> preserves::IOValue {
+        match field.kind {
+            super::BoundaryFieldKind::SchemaId => super::string(spec.schema_id),
+            super::BoundaryFieldKind::AnyRecord => {
+                super::record(field.label, vec![super::record("payload", vec![super::string("value")])])
+            }
+            super::BoundaryFieldKind::AnySequenceRecord => super::record(field.label, vec![super::sequence(vec![
+                super::record("artifact", vec![super::string(boundary_test_ref(field.label))]),
+            ])]),
+            super::BoundaryFieldKind::ChainRecord => super::record("chain", vec![
+                super::record("scope", vec![super::string("test-scope")]),
+                super::record("id", vec![super::string("test-id")]),
+                super::record("epoch", vec![super::string("test-epoch")]),
+            ]),
+            super::BoundaryFieldKind::ChecksRecord => super::checks_value(&[("schema-bound", "pass")]),
+            super::BoundaryFieldKind::ConformanceRecord => super::record(field.label, vec![
+                super::record("positive", vec![super::string(boundary_test_ref("positive"))]),
+                super::record("negative", vec![super::string(boundary_test_ref("negative"))]),
+                super::record("property", vec![super::string(boundary_test_ref("property"))]),
+            ]),
+            super::BoundaryFieldKind::FileRefsRecord => super::record(field.label, vec![super::sequence(vec![
+                super::record("file", vec![
+                    super::string("member.txt"),
+                    super::string(boundary_test_ref("member")),
+                ]),
+            ])]),
+            super::BoundaryFieldKind::HostcallDescriptorsRecord => super::record(field.label, vec![super::sequence(vec![
+                super::record("hostcall-descriptor", vec![
+                    super::record("operation", vec![super::string("storage.read")]),
+                    super::record("descriptor", vec![super::string(boundary_test_ref("descriptor"))]),
+                    super::record("input-schema", vec![super::string(boundary_test_ref("input-schema"))]),
+                    super::record("output-schema", vec![super::string(boundary_test_ref("output-schema"))]),
+                    super::record("authority", vec![super::sequence(vec![super::string(boundary_test_ref("authority"))])]),
+                    super::record("resource", vec![super::sequence(vec![super::string(boundary_test_ref("resource"))])]),
+                    super::record("effects", vec![super::sequence(vec![super::string(boundary_test_ref("effects"))])]),
+                    super::record("replay", vec![super::string("deterministic")]),
+                    super::record("errors", vec![super::sequence(vec![super::string(boundary_test_ref("errors"))])]),
+                ]),
+            ])]),
+            super::BoundaryFieldKind::ObjectRecord => super::record(field.label, vec![
+                super::string(boundary_test_ref("object")),
+                super::string("artifact"),
+            ]),
+            super::BoundaryFieldKind::OptionalRefRecord => super::record(field.label, vec![super::record(
+                "some",
+                vec![super::string(boundary_test_ref(field.label))],
+            )]),
+            super::BoundaryFieldKind::RefAndStringRecord => super::record(field.label, vec![
+                super::string(boundary_test_ref(field.label)),
+                super::string(format!("{}-path", field.label)),
+            ]),
+            super::BoundaryFieldKind::RefRecord => {
+                super::record(field.label, vec![super::string(boundary_test_ref(field.label))])
+            }
+            super::BoundaryFieldKind::RefSequenceRecord => super::record(field.label, vec![super::sequence(vec![
+                super::string(boundary_test_ref(field.label)),
+            ])]),
+            super::BoundaryFieldKind::StringAndRefRecord => super::record(field.label, vec![
+                super::string(format!("{}-value", field.label)),
+                super::string(boundary_test_ref(field.label)),
+            ]),
+            super::BoundaryFieldKind::StringRecord => {
+                super::record(field.label, vec![super::string(format!("{}-value", field.label))])
+            }
+            super::BoundaryFieldKind::StringSequenceRecord => super::record(field.label, vec![super::sequence(vec![
+                super::string(format!("{}-item", field.label)),
+            ])]),
+            super::BoundaryFieldKind::TwoRefsRecord => super::record(field.label, vec![
+                super::string(boundary_test_ref(&format!("{}-a", field.label))),
+                super::string(boundary_test_ref(&format!("{}-b", field.label))),
+            ]),
+            super::BoundaryFieldKind::U64Record => super::record(field.label, vec![super::u64_value(1)]),
+        }
+    }
+
+    fn boundary_fixture_fields(
+        value: &preserves::IOValue,
+        spec: &super::BoundarySchemaSpec,
+    ) -> Vec<preserves::IOValue> {
+        let record = value
+            .collect_simple_record(spec.record_label, Some(spec.arity()))
+            .expect("boundary fixture record");
+        let mut fields = Vec::with_capacity(spec.arity());
+        for index in 0..spec.arity() {
+            fields.push(super::value_to_iovalue(&record[index]));
+        }
+        fields
+    }
+
+    fn boundary_fixture_with_field(
+        spec: &super::BoundarySchemaSpec,
+        field_index: usize,
+        replacement: preserves::IOValue,
+    ) -> preserves::IOValue {
+        let fixture = boundary_schema_fixture(spec);
+        let mut fields = boundary_fixture_fields(&fixture, spec);
+        fields[field_index] = replacement;
+        super::record(spec.record_label, fields)
+    }
+
+    fn boundary_field_index(
+        spec: &super::BoundarySchemaSpec,
+        predicate: impl Fn(&super::BoundaryFieldSpec) -> bool,
+    ) -> usize {
+        spec.fields.iter().position(predicate).expect("matching boundary field")
+    }
+
+    fn malformed_ref_field(field: &super::BoundaryFieldSpec) -> preserves::IOValue {
+        match field.kind {
+            super::BoundaryFieldKind::RefRecord => super::record(field.label, vec![super::sequence(Vec::new())]),
+            super::BoundaryFieldKind::RefSequenceRecord => {
+                super::record(field.label, vec![super::sequence(vec![super::sequence(Vec::new())])])
+            }
+            super::BoundaryFieldKind::OptionalRefRecord => {
+                super::record(field.label, vec![super::record("some", vec![super::sequence(Vec::new())])])
+            }
+            super::BoundaryFieldKind::StringAndRefRecord => super::record(field.label, vec![
+                super::string("name"),
+                super::sequence(Vec::new()),
+            ]),
+            super::BoundaryFieldKind::RefAndStringRecord => super::record(field.label, vec![
+                super::sequence(Vec::new()),
+                super::string("name"),
+            ]),
+            super::BoundaryFieldKind::TwoRefsRecord => super::record(field.label, vec![
+                super::sequence(Vec::new()),
+                super::string(boundary_test_ref(field.label)),
+            ]),
+            super::BoundaryFieldKind::FileRefsRecord => super::record(field.label, vec![super::sequence(vec![
+                super::record("file", vec![super::string("member.txt"), super::sequence(Vec::new())]),
+            ])]),
+            super::BoundaryFieldKind::ObjectRecord => super::record(field.label, vec![
+                super::sequence(Vec::new()),
+                super::string("artifact"),
+            ]),
+            _ => super::sequence(Vec::new()),
+        }
+    }
+
+    fn is_ref_bearing_field(field: &super::BoundaryFieldSpec) -> bool {
+        matches!(
+            field.kind,
+            super::BoundaryFieldKind::FileRefsRecord
+                | super::BoundaryFieldKind::ObjectRecord
+                | super::BoundaryFieldKind::OptionalRefRecord
+                | super::BoundaryFieldKind::RefAndStringRecord
+                | super::BoundaryFieldKind::RefRecord
+                | super::BoundaryFieldKind::RefSequenceRecord
+                | super::BoundaryFieldKind::StringAndRefRecord
+                | super::BoundaryFieldKind::TwoRefsRecord
+        )
+    }
+
+    #[test]
+    fn boundary_schema_adapter_accepts_valid_versioned_records_for_all_adopted_families() {
+        for spec in boundary_schema_specs() {
+            let value = boundary_schema_fixture(spec);
+            let validation = super::validate_boundary_schema(&value, spec).expect("schema validation");
+            assert_eq!(validation.decision, "pass");
+            assert!(validation.schema_ref.as_str().starts_with("blake3:"));
+            assert_eq!(validation.value_ref.as_str(), super::canonical_hash(&value).expect("value ref"));
+            let diagnostic = super::boundary_schema_diagnostic_value(&validation);
+            let diagnostic_text = super::to_text(&diagnostic).expect("diagnostic text");
+            assert!(diagnostic_text.contains(spec.family));
+            assert!(diagnostic_text.contains("schema-ref"));
+        }
+    }
+
+    #[test]
+    fn boundary_schema_adapter_denies_malformed_records_for_all_adopted_families() {
+        for spec in boundary_schema_specs() {
+            let fixture = boundary_schema_fixture(spec);
+            let fields = boundary_fixture_fields(&fixture, spec);
+            let wrong_label = super::record("wrong-label", fields.clone());
+            assert!(super::validate_boundary_schema(&wrong_label, spec).is_err());
+
+            let mut missing_fields = fields.clone();
+            missing_fields.pop();
+            let missing = super::record(spec.record_label, missing_fields);
+            assert!(super::validate_boundary_schema(&missing, spec).is_err());
+
+            let wrong_schema_type = boundary_fixture_with_field(spec, SCHEMA_FIELD_INDEX, super::u64_value(1));
+            assert!(super::validate_boundary_schema(&wrong_schema_type, spec).is_err());
+
+            let wrong_version = boundary_fixture_with_field(
+                spec,
+                SCHEMA_FIELD_INDEX,
+                super::string("unsupported.schema.v0"),
+            );
+            assert!(super::validate_boundary_schema(&wrong_version, spec).is_err());
+
+            let mut extra_fields = fields.clone();
+            extra_fields.push(super::record("extra-critical", vec![super::string("deny")]));
+            let extra = super::record(spec.record_label, extra_fields);
+            assert!(super::validate_boundary_schema(&extra, spec).is_err());
+
+            let checks_index = boundary_field_index(spec, |field| {
+                matches!(field.kind, super::BoundaryFieldKind::ChecksRecord)
+            });
+            let malformed_checks = boundary_fixture_with_field(spec, checks_index, super::record(
+                "checks",
+                vec![super::sequence(vec![super::record("check", vec![super::string("missing-status")])])],
+            ));
+            assert!(super::validate_boundary_schema(&malformed_checks, spec).is_err());
+
+            let ref_index = boundary_field_index(spec, is_ref_bearing_field);
+            let malformed_ref = boundary_fixture_with_field(spec, ref_index, malformed_ref_field(&spec.fields[ref_index]));
+            assert!(super::validate_boundary_schema(&malformed_ref, spec).is_err());
+        }
+    }
+
+    const SCHEMA_FIELD_INDEX: usize = 0;
+
+    #[test]
+    fn structural_scan_detects_nested_markers_without_scanning_rendered_strings() {
+        let nested = super::record("outer", vec![
+            super::sequence(vec![super::record("secret", vec![super::string("payload")])]),
+            super::string("<credential \"looks rendered but is inert\">"),
+        ]);
+        let marker = super::find_sensitive_structural_marker(&nested)
+            .expect("scan nested")
+            .expect("sensitive marker");
+        assert_eq!(marker.kind, super::StructuralTokenKind::RecordLabel);
+        assert_eq!(marker.token, "secret");
+
+        let inert = super::record("outer", vec![super::string("<secret \"looks rendered but is inert\">")]);
+        assert!(
+            super::find_sensitive_structural_marker(&inert)
+                .expect("scan inert")
+                .is_none(),
+            "rendered-looking strings are diagnostics, not structural markers"
+        );
+    }
+
+    #[test]
+    fn structural_scan_finds_nested_content_refs() {
+        let target = super::content_ref_from_bytes(b"structural-content-ref-target");
+        let value = super::record("outer", vec![
+            super::sequence(vec![super::record("metadata", vec![super::string(&target)])]),
+            super::string("blake3:not-a-valid-ref"),
+        ]);
+        let found = super::find_structural_content_ref(&value, &target)
+            .expect("scan content ref")
+            .expect("content ref match");
+        assert_eq!(found.kind, super::StructuralTokenKind::ContentRef);
+        assert_eq!(found.token, target);
+    }
+
+    #[test]
+    fn structural_scan_reports_bounds() {
+        let value = super::record("outer", vec![super::record("inner", Vec::new())]);
+        let error = super::find_structural_match_with_limits(
+            &value,
+            super::StructuralInspectionScope::all(),
+            super::StructuralInspectionLimits {
+                max_nodes: 1,
+                max_depth: super::DEFAULT_STRUCTURAL_SCAN_MAX_DEPTH,
+            },
+            |_, _| false,
+        )
+        .expect_err("bounded scan should fail");
+        assert!(error.to_string().contains("structural Preserves scan exceeded"));
+    }
+
+    #[test]
+    fn parser_toolkit_builds_and_parses_common_ref_shapes() {
+        const MAX_REFS: usize = 4;
+        let first = super::content_ref_from_bytes(b"toolkit-first-ref");
+        let second = super::content_ref_from_bytes(b"toolkit-second-ref");
+        let record = super::record("refs", vec![super::refs_sequence(&[first.clone(), second.clone()])]);
+        let refs = super::record_content_ref_strings(&preserves::Value::from(record), "refs", "toolkit refs", MAX_REFS)
+            .expect("parse refs");
+        assert_eq!(refs, vec![first, second]);
+
+        let some = super::optional_ref_value(refs.first().map(String::as_str));
+        assert_eq!(
+            super::optional_content_ref_string(&preserves::Value::from(some), "optional ref")
+                .expect("optional ref"),
+            refs.first().cloned()
+        );
+    }
+
+    #[test]
+    fn parser_toolkit_rejects_malformed_shapes_and_checks() {
+        const MAX_REFS: usize = 4;
+        let wrong_label = super::record("wrong", Vec::new());
+        assert!(super::simple_record_fields(&wrong_label, "expected", 0).is_err());
+
+        let wrong_arity = super::record("expected", vec![super::string("extra")]);
+        assert!(super::simple_record_fields(&wrong_arity, "expected", 0).is_err());
+
+        let wrong_type = preserves::Value::from(super::u64_value(1));
+        assert!(super::required_string_field(&wrong_type, "string field").is_err());
+
+        let invalid_ref_record = super::record("refs", vec![super::sequence(vec![super::string("blake3:not-valid")])]);
+        assert!(
+            super::record_content_ref_strings(
+                &preserves::Value::from(invalid_ref_record),
+                "refs",
+                "toolkit refs",
+                MAX_REFS,
+            )
+            .is_err()
+        );
+
+        let checks = super::checks_value(&[("shape", "pass")]);
+        let parsed = super::parse_checks_record(&preserves::Value::from(checks), MAX_REFS, "toolkit")
+            .expect("parse checks");
+        assert!(super::require_checks_present(&parsed, &["missing"], "toolkit").is_err());
+
+        let duplicate = super::checks_value(&[("shape", "pass"), ("shape", "pass")]);
+        assert!(super::parse_checks_record(&preserves::Value::from(duplicate), MAX_REFS, "toolkit").is_err());
+
+        let unsupported = super::checks_value(&[("shape", "unknown")]);
+        assert!(super::parse_checks_record(&preserves::Value::from(unsupported), MAX_REFS, "toolkit").is_err());
     }
 
     #[test]
@@ -276,6 +1791,19 @@ mod tests {
         ] {
             assert!(super::validate_content_ref(invalid).is_err(), "invalid ref accepted: {invalid}");
         }
+    }
+
+    #[test]
+    fn content_ref_serde_preserves_wire_string_and_rejects_invalid_input() {
+        let valid = "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let parsed = super::ContentRef::parse(valid).expect("valid content ref");
+        let rendered = serde_json::to_string(&parsed).expect("serialized ref");
+        assert_eq!(rendered, format!("\"{valid}\""));
+        let decoded: super::ContentRef = serde_json::from_str(&rendered).expect("decoded ref");
+        assert_eq!(decoded, parsed);
+        assert_eq!(decoded.to_string(), valid);
+        assert!(serde_json::from_str::<super::ContentRef>("\"blake3:not-hex\"").is_err());
+        assert!(serde_json::from_str::<super::ContentRef>("\"/tmp/not-a-ref\"").is_err());
     }
 
     #[test]

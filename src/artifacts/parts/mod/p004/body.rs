@@ -1,10 +1,10 @@
 
 fn refs_sequence(refs: &[String]) -> IoValue {
-    sequence(refs.iter().map(string).collect())
+    crate::preserves_rail::refs_sequence(refs)
 }
 
 fn optional_ref_value(value: Option<&str>) -> IoValue {
-    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+    crate::preserves_rail::optional_ref_value(value)
 }
 
 fn optional_string_value(value: Option<&str>) -> IoValue {
@@ -12,13 +12,7 @@ fn optional_string_value(value: Option<&str>) -> IoValue {
 }
 
 fn parse_optional_ref_value(value: &RailValue) -> Result<Option<String>> {
-    if value.collect_simple_record("none", Some(0)).is_some() {
-        return Ok(None);
-    }
-    if let Some(some) = value.collect_simple_record("some", Some(1)) {
-        return required_ref(&some[0], "optional ref").map(Some);
-    }
-    required_ref(value, "optional ref").map(Some)
+    crate::preserves_rail::optional_content_ref_string(value, "optional ref")
 }
 
 fn parse_optional_string_value(value: &RailValue) -> Result<Option<String>> {
@@ -38,9 +32,7 @@ fn record_string(value: &RailValue, label: &str) -> Result<String> {
 }
 
 fn record_ref(value: &RailValue, label: &str) -> Result<String> {
-    let value = value_to_iovalue(value);
-    let record = simple_record(&value, label, 1)?;
-    required_ref(&record[0], label)
+    crate::preserves_rail::record_content_ref_string(value, label, label)
 }
 
 fn record_optional_ref(value: &RailValue, label: &str) -> Result<Option<String>> {
@@ -56,9 +48,7 @@ fn record_optional_string(value: &RailValue, label: &str) -> Result<Option<Strin
 }
 
 fn record_ref_sequence(value: &RailValue, label: &str) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
-    let record = simple_record(&value, label, 1)?;
-    parse_ref_sequence_value(&record[0], label)
+    crate::preserves_rail::record_content_ref_strings(value, label, label, MAX_ARTIFACT_REF_LIST)
 }
 
 fn parse_ref_sequence_value(value: &RailValue, label: &str) -> Result<Vec<String>> {
@@ -76,28 +66,22 @@ fn checks_value(names: &[&str]) -> IoValue {
 }
 
 fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
-    record("checks", vec![sequence(
-        checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
-    )])
+    crate::preserves_rail::checks_value(checks)
 }
 
 fn parse_checks(value: &RailValue) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
-    let checks = simple_record(&value, "checks", 1)?;
-    let items = required_sequence(&checks[0], "checks")?;
-    ensure_count_at_most(items.len(), MAX_ARTIFACT_CHECKS, "artifact checks")?;
-    let mut parsed = Vec::with_capacity(items.len());
-    for item in items.iter() {
-        let item = value_to_iovalue(item);
-        let check = simple_record(&item, "check", 2)?;
-        let name = required_string(&check[0], "check name")?;
-        let status = required_string(&check[1], "check status")?;
-        if status != "pass" && status != "fail" {
-            return Err(MoltenError::invalid_harness(format!("artifact registry check {name} has status {status}")));
+    let parsed = crate::preserves_rail::parse_checks_record(value, MAX_ARTIFACT_CHECKS, "artifact registry")?;
+    let mut names = Vec::with_capacity(parsed.len());
+    for check in parsed {
+        if check.status != "pass" && check.status != "fail" {
+            return Err(MoltenError::invalid_harness(format!(
+                "artifact registry check {} has status {}",
+                check.name, check.status
+            )));
         }
-        push_bounded(&mut parsed, name, MAX_ARTIFACT_CHECKS, "artifact checks")?;
+        push_bounded(&mut names, check.name, MAX_ARTIFACT_CHECKS, "artifact checks")?;
     }
-    Ok(parsed)
+    Ok(names)
 }
 
 fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()> {
@@ -122,29 +106,20 @@ fn simple_record<'a>(
     label: &str,
     arity: usize,
 ) -> Result<std::borrow::Cow<'a, preserves::Record<RailValue>>> {
-    value
-        .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+    crate::preserves_rail::simple_record_fields(value, label, arity)
 }
 
 #[allow(clippy::owned_cow)]
 fn required_sequence<'a>(value: &'a RailValue, field: &str) -> Result<std::borrow::Cow<'a, Vec<RailValue>>> {
-    value
-        .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+    crate::preserves_rail::required_sequence_field(value, field)
 }
 
 fn required_string(value: &RailValue, field: &str) -> Result<String> {
-    value
-        .as_string()
-        .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+    crate::preserves_rail::required_string_field(value, field)
 }
 
 fn required_ref(value: &RailValue, field: &str) -> Result<String> {
-    let value = required_string(value, field)?;
-    validate_ref(&value, field)?;
-    Ok(value)
+    crate::preserves_rail::required_content_ref_string(value, field)
 }
 
 fn required_u64(value: &RailValue, field: &str) -> Result<u64> {

@@ -183,6 +183,10 @@ fn parse_chain_segment_bundle(
     value: &IoValue,
     fork_policy: crate::evidence_chain::ChainForkPolicy,
 ) -> Result<ChainSegmentBundle> {
+    crate::preserves_rail::validate_boundary_schema(
+        value,
+        &crate::preserves_rail::EVIDENCE_CHAIN_SEGMENT_BUNDLE_BOUNDARY_SCHEMA,
+    )?;
     let bundle = value
         .collect_simple_record("chain-segment-bundle-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-segment-bundle-v1 ...>"))?;

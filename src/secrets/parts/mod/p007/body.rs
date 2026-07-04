@@ -103,6 +103,15 @@ mod tests {
     }
 
     #[test]
+    fn redaction_reason_uses_structural_markers_not_rendered_strings() {
+        let structural = record("wrapper", vec![record("credential", vec![string("token")])]);
+        assert_eq!(first_redaction_reason(&structural).expect("structural reason"), "credential");
+
+        let inert = record("wrapper", vec![string("<credential \"diagnostic-looking\">")]);
+        assert_eq!(first_redaction_reason(&inert).expect("inert reason"), "secret");
+    }
+
+    #[test]
     fn reveal_and_decrypt_require_authority_not_ciphertext_possession() {
         let run = run_secrets_fixture().expect("fixture");
         assert_eq!(run.reveal_denied.decision, "deny");

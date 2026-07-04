@@ -58,15 +58,13 @@ fn secret_cleanup_checks(decision: &str) -> [(&'static str, &'static str); 4] {
 }
 
 fn first_redaction_reason(value: &IoValue) -> Result<String> {
-    let text = to_text(value)?;
-    if text.contains("<credential") {
-        Ok("credential".to_string())
-    } else if text.contains("<private") {
-        Ok("private".to_string())
-    } else if text.contains("<encrypted-ref") {
-        Ok("encrypted-ref".to_string())
-    } else {
-        Ok("secret".to_string())
+    let Some(marker) = crate::preserves_rail::find_sensitive_structural_marker(value)? else {
+        return Ok("secret".to_string());
+    };
+    match marker.token.as_str() {
+        "credential" | "private" | "encrypted-ref" => Ok(marker.token),
+        "secret" | "confidential" => Ok("secret".to_string()),
+        _ => Ok("secret".to_string()),
     }
 }
 
