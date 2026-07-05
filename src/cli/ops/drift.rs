@@ -115,7 +115,7 @@ struct CompareSummaryInput {
 fn run_compare(workflow: String, left: FilePath, right: FilePath, out: Option<FilePath>) -> Outcome<()> {
     let left_value = read_preserves_file(&left)?;
     let right_value = read_preserves_file(&right)?;
-    let comparison = molten::deterministic_drift::compare_drift(&molten::deterministic_drift::DriftComparisonInput {
+    let comparison = molten::deterministic_drift::compare(&molten::deterministic_drift::ComparisonInput {
         left: molten::deterministic_drift::artifact_summary(&workflow, &left_value)?,
         right: molten::deterministic_drift::artifact_summary(&workflow, &right_value)?,
         allowed_variances: Vec::new(),
@@ -124,7 +124,7 @@ fn run_compare(workflow: String, left: FilePath, right: FilePath, out: Option<Fi
 }
 
 fn run_compare_summary(input: CompareSummaryInput) -> Outcome<()> {
-    let comparison = molten::deterministic_drift::compare_drift(&molten::deterministic_drift::DriftComparisonInput {
+    let comparison = molten::deterministic_drift::compare(&molten::deterministic_drift::ComparisonInput {
         left: molten::deterministic_drift::EvidenceSummary {
             workflow: input.workflow.clone(),
             fields: parse_fields(input.left_refs, input.left_fields)?,
@@ -148,7 +148,7 @@ fn run_rerun(input: RerunInput) -> Outcome<()> {
     run_compare(input.workflow, left_artifact, right_artifact, input.out)
 }
 
-fn finish_comparison(comparison: molten::deterministic_drift::DriftComparison, out: Option<FilePath>) -> Outcome<()> {
+fn finish_comparison(comparison: molten::deterministic_drift::Comparison, out: Option<FilePath>) -> Outcome<()> {
     write_optional_preserves(out.as_ref(), &comparison.value)?;
     println!(
         "deterministic-drift ref={} decision={} diagnostics={}",

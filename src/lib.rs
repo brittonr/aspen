@@ -221,7 +221,7 @@ compat_module!(distributed_testing, distributed_core);
 pub mod multinode_core;
 compat_module!(multinode_testing, multinode_core);
 #[doc(hidden)]
-#[path = "testing/proof_trace.rs"]
+#[path = "testing/prooftrace.rs"]
 pub mod proof_trace_core;
 compat_module!(state_machine_proof, proof_trace_core);
 #[doc(hidden)]

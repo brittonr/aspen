@@ -188,13 +188,13 @@ mod state;
 mod syndicate;
 pub use state::RuntimeRecordedEffectTransition;
 pub use state::recorded_effect_response_transition;
-pub use syndicate::SyndicateFlowControlReceipt;
-pub use syndicate::SyndicateParityReceipt;
-pub use syndicate::SyndicateReferenceHarness;
-pub use syndicate::SyndicateReferenceRun;
-pub use syndicate::SyndicateResourceBudget;
-pub use syndicate::SyndicateTraceEvidence;
-pub use syndicate::run_syndicate_reference_harness;
+pub use syndicate::FlowControlReceipt;
+pub use syndicate::ParityReceipt;
+pub use syndicate::ReferenceHarness;
+pub use syndicate::ReferenceRun;
+pub use syndicate::ResourceBudget;
+pub use syndicate::TraceEvidence;
+pub use syndicate::run_reference_harness;
 
 #[cfg(test)]
 mod tests;

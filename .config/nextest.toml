@@ -1,28 +1,40 @@
+nextest-version = { required = "0.9.136", recommended = "0.9.136" }
+
+[store]
+dir = "target/nextest"
+
 [profile.default]
 fail-fast = false
+retries = 0
+flaky-result = "fail"
 status-level = "fail"
 final-status-level = "slow"
-slow-timeout = { period = "30s", terminate-after = 2 }
+failure-output = "immediate-final"
+success-output = "never"
+slow-timeout = { period = "30s", terminate-after = 2, grace-period = "10s" }
+leak-timeout = { period = "1s", result = "fail" }
+global-timeout = "30m"
 
 [profile.ci]
-fail-fast = false
-retries = 0
+inherits = "default"
 test-threads = 4
-status-level = "fail"
-final-status-level = "slow"
-slow-timeout = { period = "60s", terminate-after = 3 }
-junit = { path = "target/nextest/junit.xml" }
+global-timeout = "45m"
+slow-timeout = { period = "60s", terminate-after = 3, grace-period = "10s" }
+junit = { path = "junit.xml", report-name = "molten-ci", store-failure-output = true, store-success-output = false }
 
 [profile.deterministic]
-fail-fast = false
-retries = 0
-status-level = "fail"
-final-status-level = "slow"
-slow-timeout = { period = "10s", terminate-after = 1 }
+inherits = "default"
+test-threads = 4
+global-timeout = "20m"
+slow-timeout = { period = "10s", terminate-after = 1, grace-period = "5s" }
+junit = { path = "junit.xml", report-name = "molten-deterministic", store-failure-output = true, store-success-output = false }
 
 [profile.exploratory]
-fail-fast = false
+inherits = "default"
 retries = 1
-status-level = "fail"
-final-status-level = "slow"
-slow-timeout = { period = "60s", terminate-after = 2 }
+flaky-result = "pass"
+status-level = "retry"
+final-status-level = "flaky"
+global-timeout = "45m"
+slow-timeout = { period = "60s", terminate-after = 2, grace-period = "10s" }
+junit = { path = "junit.xml", report-name = "molten-exploratory", store-failure-output = true, store-success-output = false }

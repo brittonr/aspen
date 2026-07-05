@@ -2,11 +2,6 @@ use ::syndicate::bag::BTreeBag;
 use ::syndicate::syndicate_package_version;
 
 use super::*;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
 
 const DEFAULT_SYNDICATE_HARNESS_SEED: u64 = 1;
 const DEFAULT_MAX_FANOUT: usize = 8;
@@ -17,13 +12,47 @@ const SYNDICATE_DIAGNOSTIC_ONLY: &str = "diagnostic-only";
 const SYNDICATE_DECISION_PASS: &str = "pass";
 const SYNDICATE_DECISION_DENY: &str = "deny";
 const SYNDICATE_REFERENCE_SURFACE: &str = "syndicate-reference-harness-v1";
+const MAX_SYNDICATE_EVENTS: usize = 1024;
+const MAX_SYNDICATE_DIAGNOSTICS: usize = 256;
+
+trait BoundedPush<T> {
+    fn push_bounded(&mut self, value: T) -> Result<()>;
+}
+
+impl BoundedPush<Event> for Vec<Event> {
+    fn push_bounded(&mut self, event: Event) -> Result<()> {
+        let next = self
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("syndicate event count overflow"))?;
+        if next > MAX_SYNDICATE_EVENTS {
+            return Err(crate::error::MoltenError::invalid_harness("syndicate events exceeded bound"));
+        }
+        self.push(event);
+        Ok(())
+    }
+}
+
+impl BoundedPush<String> for Vec<String> {
+    fn push_bounded(&mut self, diagnostic: String) -> Result<()> {
+        let next = self
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("syndicate diagnostic count overflow"))?;
+        if next > MAX_SYNDICATE_DIAGNOSTICS {
+            return Err(crate::error::MoltenError::invalid_harness("syndicate diagnostics exceeded bound"));
+        }
+        self.push(diagnostic);
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SyndicateResourceBudget {
+pub struct ResourceBudget {
     pub max_fanout: usize,
 }
 
-impl Default for SyndicateResourceBudget {
+impl Default for ResourceBudget {
     fn default() -> Self {
         Self {
             max_fanout: DEFAULT_MAX_FANOUT,
@@ -32,7 +61,7 @@ impl Default for SyndicateResourceBudget {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyndicateParityReceipt {
+pub struct ParityReceipt {
     pub decision: String,
     pub molten_event_refs: Vec<String>,
     pub syndicate_event_refs: Vec<String>,
@@ -42,7 +71,7 @@ pub struct SyndicateParityReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyndicateTraceEvidence {
+pub struct TraceEvidence {
     pub replayability_status: String,
     pub event_refs: Vec<String>,
     pub diagnostics: Vec<String>,
@@ -51,7 +80,7 @@ pub struct SyndicateTraceEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyndicateFlowControlReceipt {
+pub struct FlowControlReceipt {
     pub decision: String,
     pub step_ref: String,
     pub fanout: usize,
@@ -63,28 +92,28 @@ pub struct SyndicateFlowControlReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyndicateReferenceRun {
+pub struct ReferenceRun {
     pub molten_events: Vec<Event>,
     pub syndicate_events: Vec<Event>,
-    pub parity: SyndicateParityReceipt,
-    pub trace: SyndicateTraceEvidence,
-    pub flow_control: Vec<SyndicateFlowControlReceipt>,
+    pub parity: ParityReceipt,
+    pub trace: TraceEvidence,
+    pub flow_control: Vec<FlowControlReceipt>,
 }
 
 #[derive(Debug)]
-pub struct SyndicateReferenceHarness {
+pub struct ReferenceHarness {
     assertions: BTreeBag<Assertion>,
     observers: OrderedSet<Observer>,
     messages: OrderedSet<Message>,
 }
 
-impl Default for SyndicateReferenceHarness {
+impl Default for ReferenceHarness {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SyndicateReferenceHarness {
+impl ReferenceHarness {
     pub fn new() -> Self {
         Self {
             assertions: BTreeBag::new(),
@@ -115,35 +144,37 @@ impl SyndicateReferenceHarness {
         }
     }
 
-    pub fn preview_fanout(&self, step: &Step) -> Result<usize> {
-        match step {
-            Step::Observe { pattern, .. } => self.matching_assertion_count(pattern),
-            Step::Assert { value, .. } | Step::Retract { value, .. } => self.matching_observer_count(value),
-            Step::Send { .. } | Step::Clock { .. } | Step::Random { .. } => Ok(usize::default()),
-        }
+    pub fn preview_fanout(&self, step: &Step) -> Result<u64> {
+        let count = match step {
+            Step::Observe { pattern, .. } => self.matching_assertion_count(pattern)?,
+            Step::Assert { value, .. } | Step::Retract { value, .. } => self.matching_observer_count(value)?,
+            Step::Send { .. } | Step::Clock { .. } | Step::Random { .. } => usize::default(),
+        };
+        u64::try_from(count).map_err(|_| crate::error::MoltenError::invalid_harness("syndicate fanout count overflow"))
     }
 
     // r[impl molten.syndicate_dataspace.facet_cleanup]
     pub fn cleanup_actor_scope(&mut self, actor: &str) -> Result<RuntimeScopeCleanup> {
         let mut assertion_refs = Vec::with_capacity(self.assertions.len());
-        let mut removed_assertions = Vec::new();
-        for assertion in self.assertions.keys().filter(|assertion| assertion.actor == actor) {
-            assertion_refs.push(assertion.assertion_ref()?);
-            removed_assertions.push(assertion.clone());
+        let actor_assertions: Vec<_> =
+            self.assertions.keys().filter(|assertion| assertion.actor == actor).collect::<Vec<_>>();
+        for assertion in &actor_assertions {
+            assertion_refs.push_bounded(assertion.assertion_ref()?)?;
         }
+        let removed_assertions: Vec<_> = actor_assertions.into_iter().cloned().collect();
         for assertion in removed_assertions {
             self.assertions.change_clamped(assertion, SYNDICATE_BAG_RETRACT_DELTA);
         }
 
         let mut observer_refs = Vec::with_capacity(self.observers.len());
         for observer in self.observers.iter().filter(|observer| observer.actor == actor) {
-            observer_refs.push(observer.observer_ref()?);
+            observer_refs.push_bounded(observer.observer_ref()?)?;
         }
         self.observers.retain(|observer| observer.actor != actor);
 
         let mut message_refs = Vec::with_capacity(self.messages.len());
         for message in self.messages.iter().filter(|message| message.from == actor || message.to == actor) {
-            message_refs.push(message.message_ref()?);
+            message_refs.push_bounded(message.message_ref()?)?;
         }
         self.messages.retain(|message| message.from != actor && message.to != actor);
 
@@ -253,13 +284,13 @@ impl SyndicateReferenceHarness {
 // r[impl molten.syndicate_dataspace.cap_attenuation]
 // r[impl molten.syndicate_dataspace.flow_control_receipts]
 // r[impl molten.syndicate_dataspace.trace_evidence]
-pub fn run_syndicate_reference_harness(
+pub fn run_reference_harness(
     steps: &[Step],
     capabilities: &CapabilityContext,
-    budget: SyndicateResourceBudget,
-) -> Result<SyndicateReferenceRun> {
+    budget: ResourceBudget,
+) -> Result<ReferenceRun> {
     let mut molten_state = RuntimeState::new(DEFAULT_SYNDICATE_HARNESS_SEED);
-    let mut syndicate_state = SyndicateReferenceHarness::new();
+    let mut syndicate_state = ReferenceHarness::new();
     let mut molten_events = Vec::new();
     let mut syndicate_events = Vec::new();
     let mut flow_control = Vec::with_capacity(steps.len());
@@ -270,29 +301,37 @@ pub fn run_syndicate_reference_harness(
         if !authorization.authorized {
             let rollback =
                 denied_event(step, "missing Molten capability admission; Syndicate cap evidence is diagnostic-only");
-            molten_events.push(rollback.clone());
-            syndicate_events.push(rollback);
+            molten_events.push_bounded(rollback.clone())?;
+            syndicate_events.push_bounded(rollback)?;
             continue;
         }
 
         let fanout = syndicate_state.preview_fanout(step)?;
-        let flow = flow_control_receipt(step, fanout, budget)?;
-        let flow_passed = flow.decision == SYNDICATE_DECISION_PASS;
+        let fanout_usize = usize::try_from(fanout)
+            .map_err(|_| crate::error::MoltenError::invalid_harness("syndicate fanout count overflow"))?;
+        let flow = flow_control_receipt(step, fanout_usize, budget)?;
+        let is_flow_passed = flow.decision == SYNDICATE_DECISION_PASS;
         flow_control.push(flow);
-        if !flow_passed {
+        if !is_flow_passed {
             let rollback = denied_event(step, "Syndicate account fanout exceeds Molten resource budget");
-            molten_events.push(rollback.clone());
-            syndicate_events.push(rollback);
+            molten_events.push_bounded(rollback.clone())?;
+            syndicate_events.push_bounded(rollback)?;
             continue;
         }
 
-        molten_events.extend(molten_state.apply_step(step));
-        syndicate_events.extend(syndicate_state.apply_step(step)?);
+        let molten_new = molten_state.apply_step(step);
+        for event in molten_new {
+            molten_events.push_bounded(event)?;
+        }
+        let syndicate_new = syndicate_state.apply_step(step)?;
+        for event in syndicate_new {
+            syndicate_events.push_bounded(event)?;
+        }
     }
 
     let parity = parity_receipt(&molten_events, &syndicate_events)?;
     let trace = trace_evidence(&syndicate_events)?;
-    Ok(SyndicateReferenceRun {
+    Ok(ReferenceRun {
         molten_events,
         syndicate_events,
         parity,
@@ -308,35 +347,47 @@ fn denied_event(step: &Step, reason: &str) -> Event {
     }
 }
 
-fn flow_control_receipt(
-    step: &Step,
-    fanout: usize,
-    budget: SyndicateResourceBudget,
-) -> Result<SyndicateFlowControlReceipt> {
+fn flow_control_receipt(step: &Step, fanout: usize, budget: ResourceBudget) -> Result<FlowControlReceipt> {
     let step_ref = step.step_ref()?;
-    let account_value = record("syndicate-account-observation-v1", vec![
-        record("surface", vec![string(SYNDICATE_REFERENCE_SURFACE)]),
-        record("syndicate-version", vec![string(syndicate_package_version())]),
-        record("step-ref", vec![string(&step_ref)]),
-        record("fanout", vec![u64_value(usize_to_u64(fanout, "fanout")?)]),
-        record("max-fanout", vec![u64_value(usize_to_u64(budget.max_fanout, "max fanout")?)]),
+    let account_value = crate::preserves_rail::record("syndicate-account-observation-v1", vec![
+        crate::preserves_rail::record("surface", vec![crate::preserves_rail::string(SYNDICATE_REFERENCE_SURFACE)]),
+        crate::preserves_rail::record("syndicate-version", vec![crate::preserves_rail::string(
+            syndicate_package_version(),
+        )]),
+        crate::preserves_rail::record("step-ref", vec![crate::preserves_rail::string(&step_ref)]),
+        crate::preserves_rail::record("fanout", vec![crate::preserves_rail::u64_value(usize_to_u64(
+            fanout, "fanout",
+        )?)]),
+        crate::preserves_rail::record("max-fanout", vec![crate::preserves_rail::u64_value(usize_to_u64(
+            budget.max_fanout,
+            "max fanout",
+        )?)]),
     ]);
-    let account_observation_ref = canonical_hash(&account_value)?;
+    let account_observation_ref = crate::preserves_rail::canonical_hash(&account_value)?;
     let (decision, diagnostics) = if fanout <= budget.max_fanout {
         (SYNDICATE_DECISION_PASS.to_string(), Vec::new())
     } else {
         (SYNDICATE_DECISION_DENY.to_string(), vec!["syndicate-account-fanout-budget-exceeded".to_string()])
     };
-    let value = record("syndicate-flow-control-receipt-v1", vec![
-        record("step-ref", vec![string(&step_ref)]),
-        record("account-observation-ref", vec![string(&account_observation_ref)]),
-        record("fanout", vec![u64_value(usize_to_u64(fanout, "fanout")?)]),
-        record("max-fanout", vec![u64_value(usize_to_u64(budget.max_fanout, "max fanout")?)]),
-        record("decision", vec![string(&decision)]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+    let value = crate::preserves_rail::record("syndicate-flow-control-receipt-v1", vec![
+        crate::preserves_rail::record("step-ref", vec![crate::preserves_rail::string(&step_ref)]),
+        crate::preserves_rail::record("account-observation-ref", vec![crate::preserves_rail::string(
+            &account_observation_ref,
+        )]),
+        crate::preserves_rail::record("fanout", vec![crate::preserves_rail::u64_value(usize_to_u64(
+            fanout, "fanout",
+        )?)]),
+        crate::preserves_rail::record("max-fanout", vec![crate::preserves_rail::u64_value(usize_to_u64(
+            budget.max_fanout,
+            "max fanout",
+        )?)]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(&decision)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
     ]);
-    let receipt_ref = canonical_hash(&value)?;
-    Ok(SyndicateFlowControlReceipt {
+    let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
+    Ok(FlowControlReceipt {
         decision,
         step_ref,
         fanout,
@@ -348,25 +399,29 @@ fn flow_control_receipt(
     })
 }
 
-fn parity_receipt(molten_events: &[Event], syndicate_events: &[Event]) -> Result<SyndicateParityReceipt> {
+fn parity_receipt(molten_events: &[Event], syndicate_events: &[Event]) -> Result<ParityReceipt> {
     let molten_event_refs = event_refs(molten_events)?;
     let syndicate_event_refs = event_refs(syndicate_events)?;
-    let diagnostics = parity_diagnostics(&molten_event_refs, &syndicate_event_refs);
+    let diagnostics = parity_diagnostics(&molten_event_refs, &syndicate_event_refs)?;
     let decision = if diagnostics.is_empty() {
         SYNDICATE_DECISION_PASS.to_string()
     } else {
         SYNDICATE_DECISION_DENY.to_string()
     };
-    let value = record("syndicate-parity-receipt-v1", vec![
-        record("surface", vec![string(SYNDICATE_REFERENCE_SURFACE)]),
-        record("syndicate-version", vec![string(syndicate_package_version())]),
-        record("molten-events", vec![refs_value(&molten_event_refs)]),
-        record("syndicate-events", vec![refs_value(&syndicate_event_refs)]),
-        record("decision", vec![string(&decision)]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+    let value = crate::preserves_rail::record("syndicate-parity-receipt-v1", vec![
+        crate::preserves_rail::record("surface", vec![crate::preserves_rail::string(SYNDICATE_REFERENCE_SURFACE)]),
+        crate::preserves_rail::record("syndicate-version", vec![crate::preserves_rail::string(
+            syndicate_package_version(),
+        )]),
+        crate::preserves_rail::record("molten-events", vec![refs_value(&molten_event_refs)]),
+        crate::preserves_rail::record("syndicate-events", vec![refs_value(&syndicate_event_refs)]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(&decision)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
     ]);
-    let receipt_ref = canonical_hash(&value)?;
-    Ok(SyndicateParityReceipt {
+    let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
+    Ok(ParityReceipt {
         decision,
         molten_event_refs,
         syndicate_event_refs,
@@ -376,7 +431,7 @@ fn parity_receipt(molten_events: &[Event], syndicate_events: &[Event]) -> Result
     })
 }
 
-fn trace_evidence(events: &[Event]) -> Result<SyndicateTraceEvidence> {
+fn trace_evidence(events: &[Event]) -> Result<TraceEvidence> {
     let event_refs = event_refs(events)?;
     let (replayability_status, diagnostics) = if event_refs.is_empty() {
         (SYNDICATE_DIAGNOSTIC_ONLY.to_string(), vec![
@@ -385,15 +440,19 @@ fn trace_evidence(events: &[Event]) -> Result<SyndicateTraceEvidence> {
     } else {
         (SYNDICATE_REPLAY_RECORDED.to_string(), Vec::new())
     };
-    let value = record("syndicate-trace-evidence-v1", vec![
-        record("surface", vec![string(SYNDICATE_REFERENCE_SURFACE)]),
-        record("syndicate-version", vec![string(syndicate_package_version())]),
-        record("event-refs", vec![refs_value(&event_refs)]),
-        record("replayability", vec![string(&replayability_status)]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+    let value = crate::preserves_rail::record("syndicate-trace-evidence-v1", vec![
+        crate::preserves_rail::record("surface", vec![crate::preserves_rail::string(SYNDICATE_REFERENCE_SURFACE)]),
+        crate::preserves_rail::record("syndicate-version", vec![crate::preserves_rail::string(
+            syndicate_package_version(),
+        )]),
+        crate::preserves_rail::record("event-refs", vec![refs_value(&event_refs)]),
+        crate::preserves_rail::record("replayability", vec![crate::preserves_rail::string(&replayability_status)]),
+        crate::preserves_rail::record("diagnostics", vec![crate::preserves_rail::sequence(
+            diagnostics.iter().map(crate::preserves_rail::string).collect(),
+        )]),
     ]);
-    let trace_ref = canonical_hash(&value)?;
-    Ok(SyndicateTraceEvidence {
+    let trace_ref = crate::preserves_rail::canonical_hash(&value)?;
+    Ok(TraceEvidence {
         replayability_status,
         event_refs,
         diagnostics,
@@ -410,24 +469,24 @@ fn event_refs(events: &[Event]) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-fn parity_diagnostics(left: &[String], right: &[String]) -> Vec<String> {
+fn parity_diagnostics(left: &[String], right: &[String]) -> Result<Vec<String>> {
     if left == right {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let mut diagnostics = Vec::new();
     let shared = left.len().min(right.len());
     for index in usize::default()..shared {
         if left[index] != right[index] {
-            diagnostics.push(format!("first-divergent-event-ref-index-{index}"));
-            return diagnostics;
+            diagnostics.push_bounded(format!("first-divergent-event-ref-index-{index}"))?;
+            return Ok(diagnostics);
         }
     }
-    diagnostics.push("event-ref-count-mismatch".to_string());
-    diagnostics
+    diagnostics.push_bounded("event-ref-count-mismatch".to_string())?;
+    Ok(diagnostics)
 }
 
 fn refs_value(refs: &[String]) -> IoValue {
-    sequence(refs.iter().map(string).collect())
+    crate::preserves_rail::sequence(refs.iter().map(crate::preserves_rail::string).collect())
 }
 
 fn usize_to_u64(value: usize, label: &str) -> Result<u64> {

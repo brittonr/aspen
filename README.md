@@ -567,6 +567,8 @@ cargo nextest run --profile deterministic
 cargo nextest run --profile exploratory
 ```
 
+The profiles fail flaky tests in CI/deterministic mode, bound hangs with explicit global/slow/leak timeouts, and write JUnit evidence under `target/nextest/<profile>/junit.xml` for release readback.
+
 Nix exposes the CI command and runs nextest through flake checks:
 
 ```sh

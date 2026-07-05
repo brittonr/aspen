@@ -694,9 +694,12 @@
                   --no-tests fail
                 mkdir -p "$out"
                 cp cargo-metadata.json binaries-metadata.json "$out"/
-                if [ -f target/nextest/junit.xml ]; then
-                  cp target/nextest/junit.xml "$out"/
+                if [ ! -s target/nextest/ci/junit.xml ]; then
+                  echo "missing CI JUnit evidence at target/nextest/ci/junit.xml" >&2
+                  find target/nextest -maxdepth 4 -type f | sort >&2 || true
+                  exit 1
                 fi
+                cp target/nextest/ci/junit.xml "$out"/
               '';
 
           dogfood-local-node =
@@ -1690,6 +1693,7 @@
                 src = sourceForConfigChecks;
               }
               ''
+                set -euo pipefail
                 cp -R $src source
                 chmod -R u+w source
                 cd source
@@ -1698,8 +1702,10 @@
                 cargo nextest show-config version --user-config-file none --profile deterministic > deterministic.txt
                 cargo nextest show-config version --user-config-file none --profile exploratory > exploratory.txt
                 mkdir -p $out
-                cp default.txt ci.txt deterministic.txt exploratory.txt $out/
+                cp default.txt ci.txt deterministic.txt exploratory.txt .config/nextest.toml $out/
                 printf 'cargo nextest run --profile ci\n' > $out/ci-command.txt
+                printf 'target/nextest/ci/junit.xml\n' > $out/ci-junit-path.txt
+                printf 'target/nextest/deterministic/junit.xml\n' > $out/deterministic-junit-path.txt
               '';
 
           fmt =

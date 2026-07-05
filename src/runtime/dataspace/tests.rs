@@ -133,9 +133,8 @@ fn syndicate_reference_harness_matches_molten_observe_lifecycle() {
         },
     ];
 
-    let run =
-        run_syndicate_reference_harness(&steps, &CapabilityContext::allow_all(), SyndicateResourceBudget::default())
-            .expect("syndicate reference run");
+    let run = run_reference_harness(&steps, &CapabilityContext::allow_all(), ResourceBudget::default())
+        .expect("syndicate reference run");
 
     assert_eq!(run.parity.decision, "pass");
     assert_eq!(run.trace.replayability_status, "recorded");
@@ -153,12 +152,8 @@ fn syndicate_reference_harness_denies_missing_molten_authority() {
         value: privileged,
     }];
 
-    let run = run_syndicate_reference_harness(
-        &steps,
-        &CapabilityContext::from_grants(Vec::new()),
-        SyndicateResourceBudget::default(),
-    )
-    .expect("syndicate missing authority run");
+    let run = run_reference_harness(&steps, &CapabilityContext::from_grants(Vec::new()), ResourceBudget::default())
+        .expect("syndicate missing authority run");
 
     assert_eq!(run.parity.decision, "pass");
     assert!(
@@ -187,7 +182,7 @@ fn syndicate_flow_control_throttles_fanout_deterministically() {
         },
     ];
 
-    let run = run_syndicate_reference_harness(&steps, &CapabilityContext::allow_all(), SyndicateResourceBudget {
+    let run = run_reference_harness(&steps, &CapabilityContext::allow_all(), ResourceBudget {
         max_fanout: THROTTLE_MAX_FANOUT,
     })
     .expect("syndicate throttled run");
@@ -209,7 +204,7 @@ fn syndicate_flow_control_throttles_fanout_deterministically() {
 fn syndicate_cleanup_retracts_owned_assertions_and_observers() {
     // r[verify molten.syndicate_dataspace.facet_cleanup]
     let ready = Value::string("service.ready").expect("ready value");
-    let mut harness = SyndicateReferenceHarness::new();
+    let mut harness = ReferenceHarness::new();
     harness
         .apply_step(&Step::Assert {
             actor: "owner-a".into(),
@@ -233,7 +228,7 @@ fn syndicate_cleanup_retracts_owned_assertions_and_observers() {
 #[test]
 fn syndicate_empty_trace_remains_diagnostic_only() {
     // r[verify molten.syndicate_dataspace.trace_evidence]
-    let run = run_syndicate_reference_harness(&[], &CapabilityContext::allow_all(), SyndicateResourceBudget::default())
+    let run = run_reference_harness(&[], &CapabilityContext::allow_all(), ResourceBudget::default())
         .expect("empty syndicate run");
 
     assert_eq!(run.parity.decision, "pass");
