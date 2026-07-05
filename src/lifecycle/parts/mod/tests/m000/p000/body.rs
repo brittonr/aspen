@@ -1,3 +1,5 @@
+    use super::*;
+
     fn content_ref_from_bytes(bytes: &[u8]) -> String {
         crate::preserves_rail::content_ref_from_bytes(bytes)
     }
@@ -443,4 +445,85 @@
                 .expect("render assertion")
                 .contains("lifecycle-service-assertion-v1")
         );
+    }
+
+    #[test]
+    fn readiness_probe_updates_status() {
+        let probe = LifecycleProbe {
+            kind: ProbeKind::Readiness,
+            success: true,
+            observed_generation: 1,
+            probe_evidence_ref: content_ref_from_bytes(b"probe-ev"),
+            status_condition_ref: Some(content_ref_from_bytes(b"status-ref")),
+            policy_refs: vec![],
+        };
+        let result = evaluate_readiness(&probe, 1).expect("readiness");
+        assert_eq!(result, "ready");
+    }
+
+    #[test]
+    fn restart_with_budget_and_probe_passes() {
+        let input = RestartDecisionInput {
+            entity_ref: content_ref_from_bytes(b"entity"),
+            entity_kind: "service".to_string(),
+            current_generation: 1,
+            probe_results: vec![LifecycleProbe {
+                kind: ProbeKind::Liveness,
+                success: false,
+                observed_generation: 1,
+                probe_evidence_ref: content_ref_from_bytes(b"liveness"),
+                status_condition_ref: None,
+                policy_refs: vec![],
+            }],
+            prior_restart_attempts: 0,
+            backoff_profile: Some(BackoffProfile {
+                name: "default".to_string(),
+                initial_delay_ms: 100,
+                max_delay_ms: 10000,
+                multiplier: 2.0,
+                max_attempts: 5,
+            }),
+            authority_refs: vec![content_ref_from_bytes(b"auth")],
+            resource_budget_refs: vec![],
+        };
+        let decision = evaluate_restart_decision(&input).expect("restart");
+        assert_eq!(decision.decision, "pass");
+    }
+
+    #[test]
+    fn restart_budget_exhausted_denies() {
+        let input = RestartDecisionInput {
+            entity_ref: content_ref_from_bytes(b"entity"),
+            entity_kind: "service".to_string(),
+            current_generation: 1,
+            probe_results: vec![],
+            prior_restart_attempts: 5,
+            backoff_profile: Some(BackoffProfile {
+                name: "default".to_string(),
+                initial_delay_ms: 100,
+                max_delay_ms: 10000,
+                multiplier: 2.0,
+                max_attempts: 5,
+            }),
+            authority_refs: vec![content_ref_from_bytes(b"auth")],
+            resource_budget_refs: vec![],
+        };
+        let decision = evaluate_restart_decision(&input).expect("restart");
+        assert_eq!(decision.decision, "deny");
+    }
+
+    #[test]
+    fn restart_without_profile_denies() {
+        let input = RestartDecisionInput {
+            entity_ref: content_ref_from_bytes(b"entity"),
+            entity_kind: "service".to_string(),
+            current_generation: 1,
+            probe_results: vec![],
+            prior_restart_attempts: 0,
+            backoff_profile: None,
+            authority_refs: vec![content_ref_from_bytes(b"auth")],
+            resource_budget_refs: vec![],
+        };
+        let decision = evaluate_restart_decision(&input).expect("restart");
+        assert_eq!(decision.decision, "deny");
     }

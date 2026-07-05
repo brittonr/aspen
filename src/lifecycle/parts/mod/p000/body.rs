@@ -37,6 +37,22 @@ fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }
 
+fn require_ref(reference: &str, field: &str) -> Result<()> {
+    if reference.is_empty() {
+        return Err(MoltenError::invalid_harness(format!("{field} must not be empty")));
+    }
+    validate_content_ref(reference).map_err(|_| {
+        MoltenError::invalid_harness(format!("{field} must be a valid content ref, got {reference}"))
+    })
+}
+
+fn validate_non_empty(value: &str, field: &str) -> Result<()> {
+    if value.is_empty() {
+        return Err(MoltenError::invalid_harness(format!("{field} must not be empty")));
+    }
+    Ok(())
+}
+
 const MAX_REFS: usize = 1024;
 const MAX_DIAGNOSTICS: usize = 32;
 const SERVICE_READINESS_BASE_REF_COUNT: usize = 2;

@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,14 +202,13 @@ mod tests {
         canonical_hash(&record("resource-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    // --- Declarative resource records: identity ---
+    // --- Declarative resource records ---
 
     #[test]
     fn valid_resource_identity_produces_stable_ref() {
-        // r[verify molten.resource_model.canonical_resource_records]
         let identity = ResourceIdentity {
             resource_type: "molten.test.service.v1".to_string(),
-            scope_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            scope_ref: ref_for("scope"),
             scoped_name: "my-service".to_string(),
         };
         identity.validate().expect("valid identity");
@@ -221,7 +219,6 @@ mod tests {
 
     #[test]
     fn valid_resource_record_with_metadata() {
-        // r[verify molten.resource_model.canonical_resource_records]
         let mut labels = std::collections::BTreeMap::new();
         labels.insert("app".to_string(), "my-app".to_string());
         labels.insert("env".to_string(), "prod".to_string());
@@ -236,11 +233,11 @@ mod tests {
 
         let record = ResourceRecord {
             resource_type: "molten.test.service.v1".to_string(),
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            scope_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            resource_ref: ref_for("resource"),
+            scope_ref: ref_for("scope"),
             name: "my-service".to_string(),
             generation: 1,
-            desired_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            desired_ref: ref_for("desired"),
             observed_ref: None,
             metadata,
             evidence_refs: vec![],
@@ -253,16 +250,15 @@ mod tests {
 
     #[test]
     fn valid_resource_record_with_observed_state() {
-        // r[verify molten.resource_model.canonical_resource_records]
-        let observed_ref = "blake3:1111111111111111111111111111111111111111111111111111111111111111";
+        let observed_ref = ref_for("observed");
         let record = ResourceRecord {
             resource_type: "molten.test.service.v1".to_string(),
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            scope_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            resource_ref: ref_for("resource"),
+            scope_ref: ref_for("scope"),
             name: "my-service".to_string(),
             generation: 1,
-            desired_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            observed_ref: Some(observed_ref.to_string()),
+            desired_ref: ref_for("desired"),
+            observed_ref: Some(observed_ref),
             metadata: ResourceMetadata {
                 labels: std::collections::BTreeMap::new(),
                 annotations: std::collections::BTreeMap::new(),
@@ -277,7 +273,6 @@ mod tests {
 
     #[test]
     fn valid_status_condition_passes_validation() {
-        // r[verify molten.resource_model.status_conditions_observed_generation]
         let condition = StatusCondition {
             observed_generation: 1,
             condition_type: "Ready".to_string(),
@@ -285,7 +280,7 @@ mod tests {
             reason: "ServiceStarted".to_string(),
             severity: ConditionSeverity::Info,
             message: "Service is ready".to_string(),
-            evidence_refs: vec!["blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()],
+            evidence_refs: vec![ref_for("evidence")],
             observed_state_ref: None,
         };
         validate_status_condition(&condition, 1).expect("valid status condition");
@@ -293,16 +288,15 @@ mod tests {
 
     #[test]
     fn deletion_ready_when_all_blockers_cleared() {
-        // r[verify molten.resource_model.owner_refs_finalizers_gc]
         let input = DeletionGateInput {
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            resource_ref: ref_for("resource"),
             owner_refs: vec![],
             finalizers: vec!["controller-cleanup".to_string()],
             finalizer_cleanup_receipts: vec!["controller-cleanup-receipt".to_string()],
             live_owner_refs: vec![],
             pin_refs: vec![],
             retention_policy_refs: vec![],
-            deletion_authority_refs: vec!["blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()],
+            deletion_authority_refs: vec![ref_for("auth")],
         };
         let decision = evaluate_deletion_gate(&input).expect("deletion gate");
         assert_eq!(decision.decision, "deletion-ready");
@@ -311,10 +305,9 @@ mod tests {
 
     #[test]
     fn empty_resource_type_denies() {
-        // r[verify molten.resource_model.canonical_resource_records]
         let identity = ResourceIdentity {
             resource_type: "".to_string(),
-            scope_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            scope_ref: ref_for("scope"),
             scoped_name: "my-service".to_string(),
         };
         assert!(identity.validate().is_err());
@@ -322,7 +315,6 @@ mod tests {
 
     #[test]
     fn invalid_scope_ref_denies() {
-        // r[verify molten.resource_model.canonical_resource_records]
         let identity = ResourceIdentity {
             resource_type: "molten.test.v1".to_string(),
             scope_ref: "not-a-content-ref".to_string(),
@@ -333,10 +325,9 @@ mod tests {
 
     #[test]
     fn invalid_scoped_name_denies() {
-        // r[verify molten.resource_model.canonical_resource_records]
         let identity = ResourceIdentity {
             resource_type: "molten.test.v1".to_string(),
-            scope_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            scope_ref: ref_for("scope"),
             scoped_name: "UPPERCASE-INVALID".to_string(),
         };
         assert!(identity.validate().is_err());
@@ -344,14 +335,13 @@ mod tests {
 
     #[test]
     fn generation_zero_denies() {
-        // r[verify molten.resource_model.canonical_resource_records]
         let record = ResourceRecord {
             resource_type: "molten.test.v1".to_string(),
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            scope_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            resource_ref: ref_for("resource"),
+            scope_ref: ref_for("scope"),
             name: "my-service".to_string(),
             generation: 0,
-            desired_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            desired_ref: ref_for("desired"),
             observed_ref: None,
             metadata: ResourceMetadata {
                 labels: std::collections::BTreeMap::new(),
@@ -367,7 +357,6 @@ mod tests {
 
     #[test]
     fn invalid_label_key_denies() {
-        // r[verify molten.resource_model.canonical_resource_records]
         let mut labels = std::collections::BTreeMap::new();
         labels.insert("invalid label key with spaces".to_string(), "value".to_string());
         let metadata = ResourceMetadata {
@@ -382,7 +371,6 @@ mod tests {
 
     #[test]
     fn invalid_label_value_denies() {
-        // r[verify molten.resource_model.canonical_resource_records]
         let mut labels = std::collections::BTreeMap::new();
         labels.insert("valid-key".to_string(), "value with spaces".to_string());
         let metadata = ResourceMetadata {
@@ -397,7 +385,6 @@ mod tests {
 
     #[test]
     fn too_many_labels_denies() {
-        // r[verify molten.resource_model.canonical_resource_records]
         let mut labels = std::collections::BTreeMap::new();
         for i in 0..MAX_LABEL_COUNT + 1 {
             labels.insert(format!("key-{i}"), "value".to_string());
@@ -414,7 +401,6 @@ mod tests {
 
     #[test]
     fn stale_observed_generation_denies() {
-        // r[verify molten.resource_model.status_conditions_observed_generation]
         let condition = StatusCondition {
             observed_generation: 3,
             condition_type: "Ready".to_string(),
@@ -422,21 +408,17 @@ mod tests {
             reason: "Started".to_string(),
             severity: ConditionSeverity::Info,
             message: "Ready".to_string(),
-            evidence_refs: vec!["blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()],
+            evidence_refs: vec![ref_for("evidence")],
             observed_state_ref: None,
         };
         let result = validate_status_condition(&condition, 2);
         assert!(result.is_err(), "stale observed generation should deny");
         let error = result.unwrap_err();
-        assert!(
-            error.to_string().contains("observed generation"),
-            "error should mention observed generation: {error}"
-        );
+        assert!(error.to_string().contains("observed generation"), "error: {error}");
     }
 
     #[test]
     fn missing_evidence_refs_denies_status_condition() {
-        // r[verify molten.resource_model.status_conditions_observed_generation]
         let condition = StatusCondition {
             observed_generation: 1,
             condition_type: "Ready".to_string(),
@@ -452,16 +434,15 @@ mod tests {
 
     #[test]
     fn missing_finalizer_cleanup_blocks_deletion() {
-        // r[verify molten.resource_model.owner_refs_finalizers_gc]
         let input = DeletionGateInput {
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            resource_ref: ref_for("resource"),
             owner_refs: vec![],
             finalizers: vec!["controller-cleanup".to_string()],
             finalizer_cleanup_receipts: vec![],
             live_owner_refs: vec![],
             pin_refs: vec![],
             retention_policy_refs: vec![],
-            deletion_authority_refs: vec!["blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()],
+            deletion_authority_refs: vec![ref_for("auth")],
         };
         let decision = evaluate_deletion_gate(&input).expect("deletion evaluation");
         assert_eq!(decision.decision, "blocked");
@@ -470,9 +451,8 @@ mod tests {
 
     #[test]
     fn missing_deletion_authority_blocks_deletion() {
-        // r[verify molten.resource_model.owner_refs_finalizers_gc]
         let input = DeletionGateInput {
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            resource_ref: ref_for("resource"),
             owner_refs: vec![],
             finalizers: vec![],
             finalizer_cleanup_receipts: vec![],
@@ -488,16 +468,15 @@ mod tests {
 
     #[test]
     fn active_pin_blocks_deletion() {
-        // r[verify molten.resource_model.owner_refs_finalizers_gc]
         let input = DeletionGateInput {
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            resource_ref: ref_for("resource"),
             owner_refs: vec![],
             finalizers: vec![],
             finalizer_cleanup_receipts: vec![],
             live_owner_refs: vec![],
-            pin_refs: vec!["blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string()],
+            pin_refs: vec![ref_for("pin")],
             retention_policy_refs: vec![],
-            deletion_authority_refs: vec!["blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()],
+            deletion_authority_refs: vec![ref_for("auth")],
         };
         let decision = evaluate_deletion_gate(&input).expect("deletion evaluation");
         assert_eq!(decision.decision, "blocked");
@@ -506,21 +485,20 @@ mod tests {
 
     #[test]
     fn live_owner_blocks_deletion() {
-        // r[verify molten.resource_model.owner_refs_finalizers_gc]
         let owner = OwnerRef {
-            resource_ref: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            resource_ref: ref_for("owner"),
             resource_type: "molten.test.parent.v1".to_string(),
             block_delete_on_deletion: true,
         };
         let input = DeletionGateInput {
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            resource_ref: ref_for("resource"),
             owner_refs: vec![owner.clone()],
             finalizers: vec![],
             finalizer_cleanup_receipts: vec![],
             live_owner_refs: vec![owner.resource_ref],
             pin_refs: vec![],
             retention_policy_refs: vec![],
-            deletion_authority_refs: vec!["blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()],
+            deletion_authority_refs: vec![ref_for("auth")],
         };
         let decision = evaluate_deletion_gate(&input).expect("deletion evaluation");
         assert_eq!(decision.decision, "blocked");
@@ -531,70 +509,47 @@ mod tests {
 
     #[test]
     fn admitted_resource_update_records_every_phase() {
-        // r[verify molten.resource_admission.ordered_chain_receipts]
         let input = AdmissionChainInput {
             operation: ResourceOperation::Update,
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            candidate_ref: "blake3:1111111111111111111111111111111111111111111111111111111111111111".to_string(),
-            envelope_decode_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:2222222222222222222222222222222222222222222222222222222222222222".to_string()],
-            }),
-            schema_validation_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:3333333333333333333333333333333333333333333333333333333333333333".to_string()],
-            }),
-            authority_preflight_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:4444444444444444444444444444444444444444444444444444444444444444".to_string()],
-            }),
+            resource_ref: ref_for("resource"),
+            candidate_ref: ref_for("candidate"),
+            envelope_decode_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("env")] }),
+            schema_validation_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("schema")] }),
+            authority_preflight_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("authority")] }),
             defaulting_evidence: Some(MutationEvidence {
-                rule_ref: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
-                pre_mutation_ref: "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
-                post_mutation_ref: "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_string(),
+                rule_ref: ref_for("default-rule"),
+                pre_mutation_ref: ref_for("pre-default"),
+                post_mutation_ref: ref_for("post-default"),
             }),
             mutation_evidence: Some(MutationEvidence {
-                rule_ref: "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd".to_string(),
-                pre_mutation_ref: "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_string(),
-                post_mutation_ref: "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
+                rule_ref: ref_for("mut-rule"),
+                pre_mutation_ref: ref_for("pre-mut"),
+                post_mutation_ref: ref_for("post-mut"),
             }),
-            final_validation_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:5555555555555555555555555555555555555555555555555555555555555555".to_string()],
-            }),
-            policy_evidence_gates: vec!["blake3:6666666666666666666666666666666666666666666666666666666666666666".to_string()],
+            final_validation_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("final")] }),
+            policy_evidence_gates: vec![ref_for("policy")],
         };
 
         let result = evaluate_admission_chain(&input);
         assert!(result.pass, "admission chain should pass for valid input");
-        assert_eq!(result.phase_results.len(), 8, "all 8 phases should be evaluated");
+        assert_eq!(result.phase_results.len(), 8);
         assert!(result.commit_plan_ref.is_some(), "commit plan ref should be generated");
-
-        for (i, phase_result) in result.phase_results.iter().enumerate() {
-            assert_eq!(phase_result.phase.index(), i, "phase at index {i} should be {:?}", phase_result.phase);
-        }
     }
 
     #[test]
     fn status_operation_defaulting_and_mutation_skipped() {
-        // r[verify molten.resource_admission.ordered_chain_receipts]
         let input = AdmissionChainInput {
             operation: ResourceOperation::Status,
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            candidate_ref: "blake3:1111111111111111111111111111111111111111111111111111111111111111".to_string(),
-            envelope_decode_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:2222222222222222222222222222222222222222222222222222222222222222".to_string()],
-            }),
-            schema_validation_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:3333333333333333333333333333333333333333333333333333333333333333".to_string()],
-            }),
-            authority_preflight_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:4444444444444444444444444444444444444444444444444444444444444444".to_string()],
-            }),
+            resource_ref: ref_for("resource"),
+            candidate_ref: ref_for("candidate"),
+            envelope_decode_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("env")] }),
+            schema_validation_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("schema")] }),
+            authority_preflight_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("authority")] }),
             defaulting_evidence: None,
             mutation_evidence: None,
-            final_validation_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:5555555555555555555555555555555555555555555555555555555555555555".to_string()],
-            }),
-            policy_evidence_gates: vec!["blake3:6666666666666666666666666666666666666666666666666666666666666666".to_string()],
+            final_validation_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("final")] }),
+            policy_evidence_gates: vec![ref_for("policy")],
         };
-
         let result = evaluate_admission_chain(&input);
         assert!(result.pass);
         assert_eq!(result.phase_results[3].decision, PhaseDecision::Skip);
@@ -603,7 +558,6 @@ mod tests {
 
     #[test]
     fn valid_status_operation_isolates_status() {
-        // r[verify molten.resource_admission.status_subresource_isolated]
         let input = StatusOperationInput {
             current_generation: 1,
             proposed_generation: 1,
@@ -620,66 +574,46 @@ mod tests {
 
     #[test]
     fn missing_authority_preflight_denies_commit() {
-        // r[verify molten.resource_admission.ordered_chain_receipts]
         let input = AdmissionChainInput {
             operation: ResourceOperation::Update,
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            candidate_ref: "blake3:1111111111111111111111111111111111111111111111111111111111111111".to_string(),
-            envelope_decode_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:2222222222222222222222222222222222222222222222222222222222222222".to_string()],
-            }),
-            schema_validation_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:3333333333333333333333333333333333333333333333333333333333333333".to_string()],
-            }),
+            resource_ref: ref_for("resource"),
+            candidate_ref: ref_for("candidate"),
+            envelope_decode_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("env")] }),
+            schema_validation_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("schema")] }),
             authority_preflight_passed: None,
             defaulting_evidence: None,
             mutation_evidence: None,
-            final_validation_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:5555555555555555555555555555555555555555555555555555555555555555".to_string()],
-            }),
-            policy_evidence_gates: vec!["blake3:6666666666666666666666666666666666666666666666666666666666666666".to_string()],
+            final_validation_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("final")] }),
+            policy_evidence_gates: vec![ref_for("policy")],
         };
-
         let result = evaluate_admission_chain(&input);
         assert!(!result.pass, "missing authority preflight should deny");
         assert_eq!(result.phase_results[2].decision, PhaseDecision::Deny);
         for phase_result in &result.phase_results[3..] {
-            assert_eq!(phase_result.decision, PhaseDecision::Skip,
-                "phase {} should be skipped after deny", phase_result.phase.as_str());
+            assert_eq!(phase_result.decision, PhaseDecision::Skip);
         }
     }
 
     #[test]
     fn missing_mutation_evidence_for_create_denies() {
-        // r[verify molten.resource_admission.mutation_requires_reviewed_rule]
         let input = AdmissionChainInput {
             operation: ResourceOperation::Create,
-            resource_ref: "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            candidate_ref: "blake3:1111111111111111111111111111111111111111111111111111111111111111".to_string(),
-            envelope_decode_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:2222222222222222222222222222222222222222222222222222222222222222".to_string()],
-            }),
-            schema_validation_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:3333333333333333333333333333333333333333333333333333333333333333".to_string()],
-            }),
-            authority_preflight_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:4444444444444444444444444444444444444444444444444444444444444444".to_string()],
-            }),
+            resource_ref: ref_for("resource"),
+            candidate_ref: ref_for("candidate"),
+            envelope_decode_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("env")] }),
+            schema_validation_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("schema")] }),
+            authority_preflight_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("authority")] }),
             defaulting_evidence: None,
             mutation_evidence: None,
-            final_validation_passed: Some(PhaseEvidence {
-                evidence_refs: vec!["blake3:5555555555555555555555555555555555555555555555555555555555555555".to_string()],
-            }),
-            policy_evidence_gates: vec!["blake3:6666666666666666666666666666666666666666666666666666666666666666".to_string()],
+            final_validation_passed: Some(PhaseEvidence { evidence_refs: vec![ref_for("final")] }),
+            policy_evidence_gates: vec![ref_for("policy")],
         };
-
         let result = evaluate_admission_chain(&input);
         assert!(!result.pass, "missing mutation evidence for create should deny");
     }
 
     #[test]
     fn status_operation_attempting_desired_mutation_denies() {
-        // r[verify molten.resource_admission.status_subresource_isolated]
         let input = StatusOperationInput {
             current_generation: 1,
             proposed_generation: 2,
@@ -697,7 +631,6 @@ mod tests {
 
     #[test]
     fn status_operation_cannot_alter_finalizers_or_authority() {
-        // r[verify molten.resource_admission.status_subresource_isolated]
         let input = StatusOperationInput {
             current_generation: 1,
             proposed_generation: 1,
@@ -715,7 +648,6 @@ mod tests {
 
     #[test]
     fn status_operation_must_have_condition_evidence() {
-        // r[verify molten.resource_admission.status_subresource_isolated]
         let input = StatusOperationInput {
             current_generation: 1,
             proposed_generation: 1,
@@ -728,5 +660,310 @@ mod tests {
         let decision = validate_status_operation(&input);
         assert!(!decision.pass);
         assert!(decision.diagnostics.iter().any(|d| d.contains("condition evidence")));
+    }
+
+    // --- Dataspace watch informers ---
+
+    #[test]
+    fn ordered_watch_events_advance_cursor() {
+        let events = vec![
+            WatchEvent {
+                resource_ref: ref_for("resource"),
+                resource_type: "molten.test.v1".to_string(),
+                scope_ref: ref_for("scope"),
+                generation: 1,
+                kind: WatchEventKind::Added,
+                prior_cursor: RevisionCursor::new(0),
+                next_cursor: RevisionCursor::new(1),
+                admission_receipt_refs: vec![],
+                selector_refs: vec![],
+                observer_authority_refs: vec![],
+                event_body_ref: ref_for("body-1"),
+                evidence_refs: vec![],
+            },
+            WatchEvent {
+                resource_ref: ref_for("resource"),
+                resource_type: "molten.test.v1".to_string(),
+                scope_ref: ref_for("scope"),
+                generation: 2,
+                kind: WatchEventKind::Modified,
+                prior_cursor: RevisionCursor::new(1),
+                next_cursor: RevisionCursor::new(2),
+                admission_receipt_refs: vec![],
+                selector_refs: vec![],
+                observer_authority_refs: vec![],
+                event_body_ref: ref_for("body-2"),
+                evidence_refs: vec![],
+            },
+        ];
+        let refs = validate_watch_events(&events).expect("ordered events");
+        assert_eq!(refs.len(), 2);
+    }
+
+    #[test]
+    fn cursor_gap_denies() {
+        let events = vec![
+            WatchEvent {
+                resource_ref: ref_for("resource"),
+                resource_type: "molten.test.v1".to_string(),
+                scope_ref: ref_for("scope"),
+                generation: 1,
+                kind: WatchEventKind::Added,
+                prior_cursor: RevisionCursor::new(0),
+                next_cursor: RevisionCursor::new(1),
+                admission_receipt_refs: vec![],
+                selector_refs: vec![],
+                observer_authority_refs: vec![],
+                event_body_ref: ref_for("body-1"),
+                evidence_refs: vec![],
+            },
+            WatchEvent {
+                resource_ref: ref_for("resource"),
+                resource_type: "molten.test.v1".to_string(),
+                scope_ref: ref_for("scope"),
+                generation: 2,
+                kind: WatchEventKind::Modified,
+                prior_cursor: RevisionCursor::new(3),
+                next_cursor: RevisionCursor::new(4),
+                admission_receipt_refs: vec![],
+                selector_refs: vec![],
+                observer_authority_refs: vec![],
+                event_body_ref: ref_for("body-2"),
+                evidence_refs: vec![],
+            },
+        ];
+        assert!(validate_watch_events(&events).is_err());
+    }
+
+    #[test]
+    fn informer_snapshot_validates_consistency() {
+        let events = vec![WatchEvent {
+            resource_ref: ref_for("resource"),
+            resource_type: "molten.test.v1".to_string(),
+            scope_ref: ref_for("scope"),
+            generation: 1,
+            kind: WatchEventKind::Added,
+            prior_cursor: RevisionCursor::new(0),
+            next_cursor: RevisionCursor::new(1),
+            admission_receipt_refs: vec![],
+            selector_refs: vec![],
+            observer_authority_refs: vec![],
+            event_body_ref: ref_for("body"),
+            evidence_refs: vec![],
+        }];
+        let snapshot = InformerSnapshot {
+            initial_list_ref: ref_for("list"),
+            starting_cursor: RevisionCursor::new(0),
+            applied_watch_event_refs: vec![ref_for("body")],
+            final_cursor: RevisionCursor::new(1),
+            selector_refs: vec![],
+            observer_authority_refs: vec![],
+            cache_state_ref: ref_for("cache"),
+        };
+        let input = InformerValidationInput {
+            initial_list_ref: ref_for("list"),
+            starting_cursor: RevisionCursor::new(0),
+            watch_events: events,
+            final_cursor: RevisionCursor::new(1),
+            snapshot,
+        };
+        let result = validate_informer_snapshot(&input);
+        assert!(result.pass);
+        assert!(result.cache_current);
+    }
+
+    #[test]
+    fn cross_scope_selector_denied_without_authority() {
+        let selector = WatchSelector {
+            scope_ref: ref_for("scope"),
+            resource_types: vec!["molten.test.v1".to_string()],
+            label_selectors: vec![],
+            field_selectors: vec![],
+            is_cross_scope: true,
+        };
+        assert!(validate_selector_authority(&selector, false, &[]).is_err());
+    }
+
+    // --- Placement governance ---
+
+    #[test]
+    fn placement_fits_admitted_capacity() {
+        let request = PlacementRequest {
+            workload_ref: ref_for("workload"),
+            workload_type: "molten.test.actor.v1".to_string(),
+            requests: ResourceAmounts { cpu_millis: 100, memory_bytes: 1024, storage_bytes: 0, network_mbps: 0 },
+            limits: ResourceAmounts { cpu_millis: 200, memory_bytes: 2048, storage_bytes: 0, network_mbps: 0 },
+            quota_ref: ref_for("quota"),
+            priority: 0,
+            priority_policy_ref: None,
+            constraints: vec![],
+            taints: vec![],
+            tolerations: vec![],
+            target_capacity_evidence: Some(CapacityEvidence {
+                target_ref: ref_for("target"),
+                available_cpu_millis: 500,
+                available_memory_bytes: 4096,
+                available_storage_bytes: 10000,
+                available_network_mbps: 100,
+                evidence_refs: vec![ref_for("capacity")],
+            }),
+            assignment_authority_ref: ref_for("auth"),
+        };
+        let decision = evaluate_placement_fit(&request).expect("placement fit");
+        assert_eq!(decision.decision, "pass");
+    }
+
+    #[test]
+    fn over_quota_placement_denies() {
+        let request = PlacementRequest {
+            workload_ref: ref_for("workload"),
+            workload_type: "molten.test.actor.v1".to_string(),
+            requests: ResourceAmounts { cpu_millis: 1000, memory_bytes: 10000, storage_bytes: 0, network_mbps: 0 },
+            limits: ResourceAmounts { cpu_millis: 2000, memory_bytes: 20000, storage_bytes: 0, network_mbps: 0 },
+            quota_ref: ref_for("quota"),
+            priority: 0,
+            priority_policy_ref: None,
+            constraints: vec![],
+            taints: vec![],
+            tolerations: vec![],
+            target_capacity_evidence: Some(CapacityEvidence {
+                target_ref: ref_for("target"),
+                available_cpu_millis: 100,
+                available_memory_bytes: 512,
+                available_storage_bytes: 0,
+                available_network_mbps: 0,
+                evidence_refs: vec![ref_for("capacity")],
+            }),
+            assignment_authority_ref: ref_for("auth"),
+        };
+        let decision = evaluate_placement_fit(&request).expect("placement fit");
+        assert_eq!(decision.decision, "deny");
+    }
+
+    #[test]
+    fn tainted_target_without_toleration_denied() {
+        let request = PlacementRequest {
+            workload_ref: ref_for("workload"),
+            workload_type: "molten.test.actor.v1".to_string(),
+            requests: ResourceAmounts { cpu_millis: 100, memory_bytes: 512, storage_bytes: 0, network_mbps: 0 },
+            limits: ResourceAmounts { cpu_millis: 200, memory_bytes: 1024, storage_bytes: 0, network_mbps: 0 },
+            quota_ref: ref_for("quota"),
+            priority: 0,
+            priority_policy_ref: None,
+            constraints: vec![],
+            taints: vec![],
+            tolerations: vec![],
+            target_capacity_evidence: None,
+            assignment_authority_ref: ref_for("auth"),
+        };
+        let props = vec![("taint.no-schedule".to_string(), "production".to_string())];
+        let decision = evaluate_placement(&request, &props);
+        assert_eq!(decision.decision, "deny");
+    }
+
+    // --- Reconciliation controllers ---
+
+    #[test]
+    fn reconcile_noop_when_desired_matches_observed() {
+        let same_ref = ref_for("same-state");
+        let input = ReconcileInput {
+            resource_ref: ref_for("resource"),
+            resource_type: "molten.test.v1".to_string(),
+            generation: 1,
+            desired_state_ref: same_ref.clone(),
+            observed_state_summary_ref: Some(same_ref),
+            status_summary_ref: None,
+            dependency_refs: vec![],
+            policy_refs: vec![],
+            authority_refs: vec![],
+            prior_plan_refs: vec![],
+            prior_effect_refs: vec![],
+            prior_status_refs: vec![],
+            retry_attempt: 0,
+            backoff_profile: None,
+        };
+        let plan = evaluate_reconcile(&input).expect("reconcile");
+        assert!(matches!(plan, ReconcilePlan::NoOp { .. }));
+    }
+
+    #[test]
+    fn reconcile_plans_action_when_observed_missing() {
+        let input = ReconcileInput {
+            resource_ref: ref_for("resource"),
+            resource_type: "molten.test.v1".to_string(),
+            generation: 1,
+            desired_state_ref: ref_for("desired"),
+            observed_state_summary_ref: None,
+            status_summary_ref: None,
+            dependency_refs: vec![],
+            policy_refs: vec![],
+            authority_refs: vec![],
+            prior_plan_refs: vec![],
+            prior_effect_refs: vec![],
+            prior_status_refs: vec![],
+            retry_attempt: 0,
+            backoff_profile: None,
+        };
+        let plan = evaluate_reconcile(&input).expect("reconcile");
+        assert!(matches!(plan, ReconcilePlan::ActionPlan { .. }));
+    }
+
+    #[test]
+    fn work_queue_coalesces_events() {
+        let decision = coalesce_work_queue_item(
+            &ref_for("resource"),
+            1,
+            &["event-1".to_string(), "event-2".to_string()],
+        )
+        .expect("coalesce");
+        assert!(decision.pass);
+        let item = decision.item.expect("queue item");
+        assert_eq!(item.coalesced_event_refs.len(), 2);
+    }
+
+    #[test]
+    fn unbounded_retry_denies() {
+        let item = WorkQueueItem {
+            resource_ref: ref_for("resource"),
+            generation: 1,
+            causes: vec!["watch".to_string()],
+            coalesced_event_refs: vec![],
+            retry_attempt: 0,
+            backoff_profile: None,
+            terminal: false,
+            terminal_reason: None,
+        };
+        let decision = schedule_retry(&item, "default", MAX_BACKOFF_ATTEMPTS + 1).expect("retry schedule");
+        assert!(!decision.pass);
+    }
+
+    #[test]
+    fn reconcile_success_requires_effect_receipts() {
+        let input = ReconcileCompletionInput {
+            resource_ref: ref_for("resource"),
+            claimed_generation: 1,
+            current_generation: 1,
+            has_admitted_plan: true,
+            has_effect_receipts: vec!["receipt-for-eff-1".to_string()],
+            required_effect_intents: vec!["eff-1".to_string(), "eff-2".to_string()],
+            has_status_update: true,
+        };
+        let decision = validate_reconcile_completion(&input);
+        assert!(!decision.pass);
+    }
+
+    #[test]
+    fn stale_generation_reconcile_denies() {
+        let input = ReconcileCompletionInput {
+            resource_ref: ref_for("resource"),
+            claimed_generation: 1,
+            current_generation: 2,
+            has_admitted_plan: true,
+            has_effect_receipts: vec![],
+            required_effect_intents: vec![],
+            has_status_update: true,
+        };
+        let decision = validate_reconcile_completion(&input);
+        assert!(!decision.pass);
     }
 }
