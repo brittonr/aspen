@@ -15,12 +15,19 @@ pub fn parse_control_registry_state(value: &IoValue) -> Result<ControlRegistrySt
     })
 }
 
+// r[impl molten.consensus.leaderless_profile_boundary]
 pub fn new_control_registry_runtime(manifest_value: &IoValue) -> Result<ControlRegistryRuntime> {
     let manifest = parse_raft_group_manifest(manifest_value)?;
     if manifest.state_machine != CONTROL_REGISTRY_STATE_MACHINE {
         return Err(MoltenError::invalid_harness(format!(
             "unsupported raft state machine {}; expected {CONTROL_REGISTRY_STATE_MACHINE}",
             manifest.state_machine
+        )));
+    }
+    if manifest.algorithm_profile != CONSENSUS_PROFILE_RAFT {
+        return Err(MoltenError::invalid_harness(format!(
+            "consensus profile {} is not admitted for production runtime; status {}",
+            manifest.algorithm_profile, manifest.production_status
         )));
     }
     Ok(ControlRegistryRuntime {
@@ -121,7 +128,9 @@ pub fn propose_control_registry_command(
     })
 }
 
+// r[impl molten.consensus.read_consistency_modes]
 pub fn read_control_registry(input: &ControlRegistryReadInput) -> Result<RaftReadReceipt> {
+    validate_read_consistency_mode(&input.read_consistency_mode)?;
     let state = parse_control_registry_state(&input.state)?;
     let mut diagnostics = Vec::new();
     if input.authority_refs.is_empty() {
@@ -130,7 +139,7 @@ pub fn read_control_registry(input: &ControlRegistryReadInput) -> Result<RaftRea
     if input.resource_refs.is_empty() {
         diagnostics.push("missing read resource evidence".to_string());
     }
-    if input.read_index != input.committed_index {
+    if input.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE && input.read_index != input.committed_index {
         diagnostics
             .push(format!("stale read-index {}; expected committed index {}", input.read_index, input.committed_index));
     }
@@ -141,7 +150,7 @@ pub fn read_control_registry(input: &ControlRegistryReadInput) -> Result<RaftRea
         diagnostics.push("control registry entry not found".to_string());
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let predicate = if decision == "pass" {
+    let predicate = if decision == "pass" && input.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE {
         Some(parse_predicate_receipt(&predicate_receipt_value(&PredicateReceiptInput {
             predicate: "trellis-read-index-freshness",
             decision,
@@ -164,6 +173,7 @@ pub fn read_control_registry(input: &ControlRegistryReadInput) -> Result<RaftRea
         namespace: &input.namespace,
         name: &input.name,
         target_ref: target.as_deref(),
+        read_consistency_mode: &input.read_consistency_mode,
         read_index_predicate_ref: predicate.as_ref().map(|value| value.predicate_ref.as_str()),
         authority_refs: &input.authority_refs,
         resource_refs: &input.resource_refs,
@@ -172,6 +182,7 @@ pub fn read_control_registry(input: &ControlRegistryReadInput) -> Result<RaftRea
     Ok(RaftReadReceipt {
         receipt_ref: canonical_hash(&receipt)?,
         decision: decision.to_string(),
+        read_consistency_mode: input.read_consistency_mode.clone(),
         target_ref: target,
         diagnostics,
         value: receipt,

@@ -47,6 +47,9 @@ mod tests {
     const SNAPSHOT_RECORD_FIELD_COUNT: usize = 10;
     const SNAPSHOT_CONTENT_REF_FIELD_INDEX: usize = 5;
     const SNAPSHOT_STATE_FIELD_INDEX: usize = 6;
+    const EXPECTED_READ_CONSISTENCY_MODE_COUNT: usize = 2;
+    const MINORITY_CONNECTED_REPLICAS: usize = 1;
+    const EXPERIMENTAL_CONNECTED_REPLICAS: usize = 3;
 
     fn next_raft_sequence(sequence: &mut u64) -> u64 {
         let current = *sequence;
@@ -125,6 +128,7 @@ mod tests {
             committed_term: runtime.term,
             committed_index: runtime.committed_index,
             read_index: runtime.committed_index,
+            read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
             namespace: "protocol".to_string(),
             name: "proto:request-response".to_string(),
             authority_refs: auth(),
@@ -260,6 +264,7 @@ mod tests {
             committed_term: runtime.term,
             committed_index: runtime.committed_index,
             read_index: runtime.committed_index.saturating_sub(1),
+            read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
             namespace: "protocol".to_string(),
             name: "proto:request-response".to_string(),
             authority_refs: auth(),
@@ -492,6 +497,7 @@ mod tests {
             committed_term: runtime.term,
             committed_index: runtime.committed_index,
             read_index: runtime.committed_index.saturating_sub(RAFT_TEST_SEQUENCE_STEP),
+            read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
             namespace: "receipt-index".to_string(),
             name: "duplicate-scope".to_string(),
             authority_refs: auth(),
@@ -606,5 +612,215 @@ mod tests {
             let envelope = parse_raft_command_envelope(&entry.command).expect("entry command envelope");
             assert!(parse_control_registry_command(&envelope.command).is_ok());
         }
+    }
+
+    #[test]
+    fn consensus_profiles_reads_and_non_claims_are_fail_closed() {
+        // r[verify molten.consensus.algorithm_profile_manifest]
+        // r[verify molten.consensus.leaderless_profile_boundary]
+        // r[verify molten.consensus.read_consistency_modes]
+        // r[verify molten.consensus.non_claim_boundaries]
+        let manifest_value = control_registry_fixture_manifest_value().expect("manifest");
+        let manifest = parse_raft_group_manifest(&manifest_value).expect("parse manifest");
+        assert_eq!(manifest.algorithm_profile, CONSENSUS_PROFILE_RAFT);
+        assert_eq!(manifest.production_status, PRODUCTION_STATUS_ADMITTED);
+        assert_eq!(manifest.read_consistency_support.len(), EXPECTED_READ_CONSISTENCY_MODE_COUNT);
+        assert!(manifest.placement_ref.is_some());
+
+        let runtime = run_control_registry_fixture().expect("runtime");
+        let local_stale = read_control_registry(&ControlRegistryReadInput {
+            state: runtime.state.value.clone(),
+            group_ref: runtime.manifest.manifest_ref.clone(),
+            committed_term: runtime.term,
+            committed_index: runtime.committed_index,
+            read_index: runtime.committed_index.saturating_sub(RAFT_TEST_SEQUENCE_STEP),
+            read_consistency_mode: READ_CONSISTENCY_LOCAL_STALE.to_string(),
+            namespace: "protocol".to_string(),
+            name: "proto:request-response".to_string(),
+            authority_refs: auth(),
+            resource_refs: resources(),
+        })
+        .expect("local stale read");
+        assert_eq!(local_stale.decision, RAFT_DECISION_PASS);
+        assert_eq!(local_stale.read_consistency_mode, READ_CONSISTENCY_LOCAL_STALE);
+        assert!(to_text(&local_stale.value).expect("read text").contains("local-stale-non-authoritative"));
+
+        let leaderless_profile = leaderless_experimental_algorithm_profile_input(
+            vec![test_ref("membership-policy")],
+            Some(test_ref("placement")),
+            vec![test_ref("proof"), test_ref("simulation")],
+        );
+        let leaderless_manifest = raft_group_manifest_value_with_profile(&RaftGroupManifestInput {
+            group_id: DEFAULT_GROUP_ID.to_string(),
+            members: vec![test_ref("member-a"), test_ref("member-b"), test_ref("member-c")],
+            state_machine: CONTROL_REGISTRY_STATE_MACHINE.to_string(),
+            command_schemas: allowed_command_schemas().iter().map(|value| (*value).to_string()).collect(),
+            read_mode: READ_MODE_READ_INDEX.to_string(),
+            snapshot_policy_ref: test_ref("snapshot-policy"),
+            policy_refs: vec![test_ref("policy")],
+            resource_refs: vec![test_ref("resource")],
+        }, &leaderless_profile)
+        .expect("leaderless manifest");
+        let leaderless_runtime = new_control_registry_runtime(&leaderless_manifest).expect_err("leaderless denied");
+        assert!(leaderless_runtime.to_string().contains("not admitted for production runtime"));
+
+        let claim = consensus_claim_boundary_receipt(&ConsensusClaimBoundaryInput {
+            group_ref: manifest.manifest_ref.clone(),
+            claim: "byzantine-tolerance".to_string(),
+            evidence_refs: vec![test_ref("evidence")],
+        })
+        .expect("claim boundary");
+        assert_eq!(claim.decision, RAFT_DECISION_DENY);
+        assert!(claim.diagnostics.join(";").contains("Byzantine"));
+        assert_eq!(crate::ledger::artifact_kind(&claim.value), "consensus-non-claim-receipt");
+    }
+
+    #[test]
+    fn consensus_placement_and_simulation_cover_positive_and_negative_paths() {
+        // r[verify molten.consensus.replica_placement_evidence]
+        // r[verify molten.testing.consensus_fault_matrix]
+        // r[verify molten.testing.leaderless_experimental_fixtures]
+        // r[verify molten.testing.consensus_placement_fixtures]
+        let members = vec![test_ref("member-a"), test_ref("member-b"), test_ref("member-c")];
+        let placement = consensus_placement_report(&ConsensusPlacementInput {
+            group_id: DEFAULT_GROUP_ID.to_string(),
+            candidate_members: members.clone(),
+            admitted_members: members.clone(),
+            fault_domain_refs: vec![test_ref("domain-a"), test_ref("domain-b"), test_ref("domain-c")],
+            fault_domain_policy_ref: test_ref("fault-policy"),
+            membership_refs: vec![test_ref("membership")],
+            placement_policy_refs: vec![test_ref("placement-policy")],
+            majority_reachable: true,
+            latency_diagnostics: vec!["bounded-fixture-latency".to_string()],
+            denied_candidates: Vec::new(),
+            refresh_refs: vec![test_ref("refresh")],
+        })
+        .expect("placement pass");
+        assert_eq!(placement.decision, RAFT_DECISION_PASS);
+        assert_eq!(crate::ledger::artifact_kind(&placement.value), "consensus-placement-report");
+
+        let unsafe_placement = consensus_placement_report(&ConsensusPlacementInput {
+            group_id: DEFAULT_GROUP_ID.to_string(),
+            candidate_members: members.clone(),
+            admitted_members: members.clone(),
+            fault_domain_refs: vec![test_ref("domain-shared")],
+            fault_domain_policy_ref: test_ref("fault-policy"),
+            membership_refs: Vec::new(),
+            placement_policy_refs: vec![test_ref("placement-policy")],
+            majority_reachable: false,
+            latency_diagnostics: Vec::new(),
+            denied_candidates: Vec::new(),
+            refresh_refs: Vec::new(),
+        })
+        .expect("placement deny");
+        assert_eq!(unsafe_placement.decision, RAFT_DECISION_DENY);
+        assert!(unsafe_placement.diagnostics.join(";").contains("majority"));
+
+        let majority = run_consensus_simulation(&ConsensusSimulationInput {
+            scenario: SCENARIO_MAJORITY_PROGRESS.to_string(),
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            topology_ref: test_ref("topology"),
+            membership_refs: members.clone(),
+            fault_plan_ref: test_ref("fault-plan"),
+            operation_ids: vec![test_ref("operation")],
+            connected_replicas: members.len(),
+            proposer_ref: Some(test_ref("member-a")),
+            required_evidence_refs: vec![test_ref("raft-evidence")],
+            placement_ref: Some(placement.report_ref.clone()),
+            local_state_fresh: true,
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+        })
+        .expect("majority simulation");
+        assert_eq!(majority.decision, RAFT_DECISION_PASS);
+        assert!(majority.final_state_ref.is_some());
+        assert_eq!(crate::ledger::artifact_kind(&majority.value), "consensus-simulation-receipt");
+
+        let minority = run_consensus_simulation(&ConsensusSimulationInput {
+            scenario: SCENARIO_MINORITY_DENIAL.to_string(),
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            topology_ref: test_ref("topology"),
+            membership_refs: members.clone(),
+            fault_plan_ref: test_ref("minority-fault"),
+            operation_ids: vec![test_ref("operation")],
+            connected_replicas: MINORITY_CONNECTED_REPLICAS,
+            proposer_ref: Some(test_ref("member-a")),
+            required_evidence_refs: vec![test_ref("raft-evidence")],
+            placement_ref: Some(placement.report_ref.clone()),
+            local_state_fresh: false,
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+        })
+        .expect("minority simulation");
+        assert_eq!(minority.decision, RAFT_DECISION_PASS);
+        assert!(minority.final_state_ref.is_some());
+
+        let stale_linearizable = run_consensus_simulation(&ConsensusSimulationInput {
+            scenario: SCENARIO_STALE_READ_CLASSIFICATION.to_string(),
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            topology_ref: test_ref("topology"),
+            membership_refs: members.clone(),
+            fault_plan_ref: test_ref("stale-read"),
+            operation_ids: Vec::new(),
+            connected_replicas: members.len(),
+            proposer_ref: None,
+            required_evidence_refs: vec![test_ref("raft-evidence")],
+            placement_ref: Some(placement.report_ref.clone()),
+            local_state_fresh: false,
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+        })
+        .expect("stale linearizable");
+        assert_eq!(stale_linearizable.decision, RAFT_DECISION_DENY);
+        assert!(stale_linearizable.diagnostics.join(";").contains("freshness"));
+
+        let local_stale = run_consensus_simulation(&ConsensusSimulationInput {
+            scenario: SCENARIO_STALE_READ_CLASSIFICATION.to_string(),
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            topology_ref: test_ref("topology"),
+            membership_refs: members.clone(),
+            fault_plan_ref: test_ref("stale-read"),
+            operation_ids: Vec::new(),
+            connected_replicas: members.len(),
+            proposer_ref: None,
+            required_evidence_refs: vec![test_ref("raft-evidence")],
+            placement_ref: Some(placement.report_ref.clone()),
+            local_state_fresh: false,
+            requested_read_consistency: READ_CONSISTENCY_LOCAL_STALE.to_string(),
+        })
+        .expect("local stale simulation");
+        assert_eq!(local_stale.decision, RAFT_DECISION_PASS);
+
+        let leaderless = run_consensus_simulation(&ConsensusSimulationInput {
+            scenario: SCENARIO_LEADERLESS_NON_LEADER_PROGRESS.to_string(),
+            algorithm_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
+            topology_ref: test_ref("topology"),
+            membership_refs: members.clone(),
+            fault_plan_ref: test_ref("leaderless-fault"),
+            operation_ids: vec![test_ref("leaderless-operation")],
+            connected_replicas: members.len(),
+            proposer_ref: Some(test_ref("member-b")),
+            required_evidence_refs: vec![test_ref("proof"), test_ref("simulation")],
+            placement_ref: Some(placement.report_ref),
+            local_state_fresh: true,
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+        })
+        .expect("leaderless experimental simulation");
+        assert_eq!(leaderless.decision, RAFT_DECISION_PASS);
+
+        let missing_leaderless_evidence = run_consensus_simulation(&ConsensusSimulationInput {
+            scenario: SCENARIO_LEADERLESS_NON_LEADER_PROGRESS.to_string(),
+            algorithm_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
+            topology_ref: test_ref("topology"),
+            membership_refs: members,
+            fault_plan_ref: test_ref("leaderless-fault"),
+            operation_ids: vec![test_ref("leaderless-operation")],
+            connected_replicas: EXPERIMENTAL_CONNECTED_REPLICAS,
+            proposer_ref: Some(test_ref("member-b")),
+            required_evidence_refs: Vec::new(),
+            placement_ref: None,
+            local_state_fresh: true,
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+        })
+        .expect("leaderless missing evidence");
+        assert_eq!(missing_leaderless_evidence.decision, RAFT_DECISION_DENY);
+        assert!(missing_leaderless_evidence.diagnostics.join(";").contains("missing required evidence"));
     }
 }

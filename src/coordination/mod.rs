@@ -12,4 +12,5 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p003/b
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p005/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p006/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p008/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/coordination/parts/mod/p007/body.rs"));

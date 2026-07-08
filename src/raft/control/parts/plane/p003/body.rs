@@ -118,8 +118,14 @@ pub fn run_control_registry_fixture() -> Result<ControlRegistryRuntime> {
 
 pub fn control_registry_summary(runtime: &ControlRegistryRuntime) -> String {
     format!(
-        "raft-control-registry group={} committed={} entries={} state={}",
+        "raft-control-registry group={} profile={} version={} production={} read_modes={} placement={} caveats={} committed={} entries={} state={}",
         runtime.manifest.group_id,
+        runtime.manifest.algorithm_profile,
+        runtime.manifest.admitted_profile_version,
+        runtime.manifest.production_status,
+        runtime.manifest.read_consistency_support.join(","),
+        runtime.manifest.placement_ref.as_deref().unwrap_or("none"),
+        runtime.manifest.fault_model_caveats.join(","),
         runtime.committed_index,
         runtime.state.entries.len(),
         runtime.state.state_ref

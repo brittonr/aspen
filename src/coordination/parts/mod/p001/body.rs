@@ -3,6 +3,7 @@
 pub struct StatusAssertionInput<'a> {
     pub service: &'a str,
     pub key: &'a str,
+    pub read_consistency_mode: &'a str,
     pub fact: &'a IoValue,
     pub state_ref: &'a str,
     pub receipt_ref: &'a str,
@@ -79,6 +80,7 @@ pub fn parse_coordination_service_manifest(value: &IoValue) -> Result<Coordinati
     })
 }
 
+// r[impl molten.coordination.read_consistency_modes]
 pub fn coordination_request_value(input: &CoordinationRequestInput) -> Result<IoValue> {
     validate_request_input(input)?;
     Ok(record("coordination-request-v1", vec![
@@ -88,6 +90,7 @@ pub fn coordination_request_value(input: &CoordinationRequestInput) -> Result<Io
         record("key", vec![string(&input.key)]),
         record("client-session", vec![string(&input.client_session)]),
         record("operation-id", vec![string(&input.operation_id_ref)]),
+        record("read-consistency", vec![string(&input.read_consistency_mode)]),
         record("payload", vec![optional_value(input.payload.as_ref())]),
         record("authority", vec![strings_sequence(&input.authority_refs)]),
         record("resource", vec![strings_sequence(&input.resource_refs)]),
@@ -95,13 +98,14 @@ pub fn coordination_request_value(input: &CoordinationRequestInput) -> Result<Io
         checks_value(&[
             ("control-plane-command", "pass"),
             ("operation-id-bound", "pass"),
+            ("read-consistency-declared", "pass"),
             ("deny-by-default-authority", "pass"),
         ]),
     ]))
 }
 
 pub fn parse_coordination_request(value: &IoValue) -> Result<CoordinationRequest> {
-    let fields = simple_record(value, "coordination-request-v1", 11)?;
+    let fields = simple_record(value, "coordination-request-v1", 12)?;
     require_schema(&fields[0], COORDINATION_REQUEST_SCHEMA, "coordination request schema")?;
     let input = CoordinationRequestInput {
         service: record_string(&fields[1], "service")?,
@@ -109,13 +113,14 @@ pub fn parse_coordination_request(value: &IoValue) -> Result<CoordinationRequest
         key: record_string(&fields[3], "key")?,
         client_session: record_string(&fields[4], "client-session")?,
         operation_id_ref: record_ref(&fields[5], "operation-id")?,
-        payload: record_optional_value(&fields[6], "payload")?,
-        authority_refs: record_ref_sequence(&fields[7], "authority")?,
-        resource_refs: record_ref_sequence(&fields[8], "resource")?,
-        policy_refs: record_ref_sequence(&fields[9], "policy")?,
+        read_consistency_mode: record_string(&fields[6], "read-consistency")?,
+        payload: record_optional_value(&fields[7], "payload")?,
+        authority_refs: record_ref_sequence(&fields[8], "authority")?,
+        resource_refs: record_ref_sequence(&fields[9], "resource")?,
+        policy_refs: record_ref_sequence(&fields[10], "policy")?,
     };
     validate_request_input(&input)?;
-    require_check(&parse_checks(&fields[10])?, "control-plane-command", "coordination request")?;
+    require_check(&parse_checks(&fields[11])?, "control-plane-command", "coordination request")?;
     Ok(CoordinationRequest {
         request_ref: canonical_hash(value)?,
         service: input.service,
@@ -123,6 +128,7 @@ pub fn parse_coordination_request(value: &IoValue) -> Result<CoordinationRequest
         key: input.key,
         client_session: input.client_session,
         operation_id_ref: input.operation_id_ref,
+        read_consistency_mode: input.read_consistency_mode,
         payload: input.payload,
         authority_refs: input.authority_refs,
         resource_refs: input.resource_refs,

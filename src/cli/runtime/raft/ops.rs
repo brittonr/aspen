@@ -18,6 +18,7 @@ fn run_fixture(out: std::path::PathBuf) -> Outcome<()> {
             committed_term: runtime.term,
             committed_index: runtime.committed_index,
             read_index: runtime.committed_index,
+            read_consistency_mode: molten::raft_control_plane::READ_CONSISTENCY_LINEARIZABLE.to_string(),
             namespace: "protocol".to_string(),
             name: "proto:request-response".to_string(),
             authority_refs: vec![cli_synthetic_ref("raft-read-authority")?],

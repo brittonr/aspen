@@ -73,6 +73,7 @@ fn status_fact_for(
     }
 }
 
+// r[impl molten.coordination.local_stale_boundaries]
 fn collect_admission_diagnostics(
     runtime: &CoordinationRuntime,
     request: &CoordinationRequest,
@@ -109,6 +110,13 @@ fn collect_admission_diagnostics(
     if request.operation != OP_READ && request.operation_id_ref.is_empty() {
         diagnostics.push_limited(
             "coordination mutating request missing operation id".to_string(),
+            MAX_COORDINATION_DIAGNOSTICS,
+            "coordination diagnostics",
+        )?;
+    }
+    if request.operation != OP_READ && request.read_consistency_mode == READ_CONSISTENCY_LOCAL_STALE {
+        diagnostics.push_limited(
+            "local-stale coordination read cannot authorize protected action".to_string(),
             MAX_COORDINATION_DIAGNOSTICS,
             "coordination diagnostics",
         )?;
@@ -241,6 +249,7 @@ fn fixture_request(input: FixtureRequestInput<'_>) -> Result<IoValue> {
         key: input.key.to_string(),
         client_session: input.client_session.to_string(),
         operation_id_ref: operation_id.operation_ref,
+        read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
         payload: input.payload,
         authority_refs: input.refs.authority_refs.to_vec(),
         resource_refs: input.refs.resource_refs.to_vec(),

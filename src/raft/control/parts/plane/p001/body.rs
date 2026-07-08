@@ -101,13 +101,61 @@ struct ReadReceiptValueInput<'a> {
     namespace: &'a str,
     name: &'a str,
     target_ref: Option<&'a str>,
+    read_consistency_mode: &'a str,
     read_index_predicate_ref: Option<&'a str>,
     authority_refs: &'a [String],
     resource_refs: &'a [String],
     diagnostics: &'a [String],
 }
 
+// r[impl molten.consensus.algorithm_profile_manifest]
+pub fn default_raft_algorithm_profile_input(input: &RaftGroupManifestInput) -> Result<ConsensusAlgorithmProfileInput> {
+    Ok(ConsensusAlgorithmProfileInput {
+        algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+        admitted_profile_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
+        read_consistency_support: vec![
+            READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            READ_CONSISTENCY_LOCAL_STALE.to_string(),
+        ],
+        quorum_rule: QUORUM_RULE_MAJORITY_READ_INDEX.to_string(),
+        membership_policy_refs: input.policy_refs.clone(),
+        placement_ref: Some(synthetic_ref("raft-placement")?),
+        fault_model_caveats: default_consensus_caveats(),
+        required_evidence_refs: vec![input.snapshot_policy_ref.clone()],
+    })
+}
+
+// r[impl molten.consensus.leaderless_profile_boundary]
+pub fn leaderless_experimental_algorithm_profile_input(
+    membership_policy_refs: Vec<String>,
+    placement_ref: Option<String>,
+    required_evidence_refs: Vec<String>,
+) -> ConsensusAlgorithmProfileInput {
+    ConsensusAlgorithmProfileInput {
+        algorithm_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
+        admitted_profile_version: CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL.to_string(),
+        read_consistency_support: vec![
+            READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            READ_CONSISTENCY_LOCAL_STALE.to_string(),
+        ],
+        quorum_rule: QUORUM_RULE_LEADERLESS_MAJORITY.to_string(),
+        membership_policy_refs,
+        placement_ref,
+        fault_model_caveats: default_consensus_caveats(),
+        required_evidence_refs,
+    }
+}
+
 pub fn raft_group_manifest_value(input: &RaftGroupManifestInput) -> Result<IoValue> {
+    let profile = default_raft_algorithm_profile_input(input)?;
+    raft_group_manifest_value_with_profile(input, &profile)
+}
+
+// r[impl molten.consensus.algorithm_profile_manifest]
+pub fn raft_group_manifest_value_with_profile(
+    input: &RaftGroupManifestInput,
+    profile: &ConsensusAlgorithmProfileInput,
+) -> Result<IoValue> {
     validate_group_id(&input.group_id)?;
     validate_refs(&input.members, "raft member ref")?;
     validate_non_empty(&input.state_machine, "raft state machine")?;
@@ -117,6 +165,7 @@ pub fn raft_group_manifest_value(input: &RaftGroupManifestInput) -> Result<IoVal
     validate_refs(&input.policy_refs, "raft policy ref")?;
     validate_refs(&input.resource_refs, "raft resource ref")?;
     ensure_count_at_most(input.members.len(), MAX_RAFT_MEMBERS, "raft members")?;
+    validate_consensus_algorithm_profile(profile)?;
     Ok(record("raft-group-manifest-v1", vec![
         string(crate::preserves_rail::RAFT_GROUP_MANIFEST_SCHEMA),
         record("group-id", vec![string(&input.group_id)]),
@@ -127,18 +176,22 @@ pub fn raft_group_manifest_value(input: &RaftGroupManifestInput) -> Result<IoVal
         record("snapshot-policy", vec![string(&input.snapshot_policy_ref)]),
         record("policy", vec![strings_sequence(&input.policy_refs)]),
         record("resource", vec![strings_sequence(&input.resource_refs)]),
-        checks_value(&[
-            ("control-plane-only", "pass"),
-            ("explicit-command-schemas", "pass"),
-            ("read-index-default", "pass"),
-        ]),
+        record("algorithm-profile", vec![string(&profile.algorithm_profile)]),
+        record("profile-version", vec![string(&profile.admitted_profile_version)]),
+        record("read-consistency-support", vec![strings_sequence(&profile.read_consistency_support)]),
+        record("quorum-rule", vec![string(&profile.quorum_rule)]),
+        record("membership-policy", vec![strings_sequence(&profile.membership_policy_refs)]),
+        record("placement", vec![optional_ref_value(profile.placement_ref.as_deref())]),
+        record("fault-model-caveats", vec![strings_sequence(&profile.fault_model_caveats)]),
+        record("required-evidence", vec![strings_sequence(&profile.required_evidence_refs)]),
+        checks_value(&manifest_checks(profile)),
     ]))
 }
 
 pub fn parse_raft_group_manifest(value: &IoValue) -> Result<RaftGroupManifest> {
     let fields = value
-        .collect_simple_record("raft-group-manifest-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-group-manifest-v1 ...>"))?;
+        .collect_simple_record("raft-group-manifest-v1", Some(RAFT_GROUP_MANIFEST_FIELD_COUNT))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-group-manifest-v1 ...> with explicit profile"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_GROUP_MANIFEST_SCHEMA, "raft group manifest schema")?;
     let group_id = record_string(&fields[1], "group-id")?;
     validate_group_id(&group_id)?;
@@ -152,7 +205,26 @@ pub fn parse_raft_group_manifest(value: &IoValue) -> Result<RaftGroupManifest> {
     let snapshot_policy_ref = record_ref(&fields[6], "snapshot-policy")?;
     let policy_refs = parse_ref_sequence(&fields[7], "policy")?;
     let resource_refs = parse_ref_sequence(&fields[8], "resource")?;
-    require_check(&parse_checks(&fields[9])?, "control-plane-only", "raft group manifest")?;
+    let algorithm_profile = record_string(&fields[9], "algorithm-profile")?;
+    let admitted_profile_version = record_string(&fields[10], "profile-version")?;
+    let read_consistency_support = parse_string_sequence(&fields[11], "read-consistency-support")?;
+    let quorum_rule = record_string(&fields[12], "quorum-rule")?;
+    let membership_policy_refs = parse_ref_sequence(&fields[13], "membership-policy")?;
+    let placement_ref = record_optional_ref(&fields[14], "placement")?;
+    let fault_model_caveats = parse_string_sequence(&fields[15], "fault-model-caveats")?;
+    let required_evidence_refs = parse_ref_sequence(&fields[16], "required-evidence")?;
+    let profile = ConsensusAlgorithmProfileInput {
+        algorithm_profile,
+        admitted_profile_version,
+        read_consistency_support,
+        quorum_rule,
+        membership_policy_refs,
+        placement_ref,
+        fault_model_caveats,
+        required_evidence_refs,
+    };
+    validate_consensus_algorithm_profile(&profile)?;
+    require_check(&parse_checks(&fields[17])?, "algorithm-profile-declared", "raft group manifest")?;
     Ok(RaftGroupManifest {
         manifest_ref: canonical_hash(value)?,
         group_id,
@@ -163,6 +235,15 @@ pub fn parse_raft_group_manifest(value: &IoValue) -> Result<RaftGroupManifest> {
         snapshot_policy_ref,
         policy_refs,
         resource_refs,
+        production_status: consensus_production_status(&profile.algorithm_profile).to_string(),
+        algorithm_profile: profile.algorithm_profile,
+        admitted_profile_version: profile.admitted_profile_version,
+        read_consistency_support: profile.read_consistency_support,
+        quorum_rule: profile.quorum_rule,
+        membership_policy_refs: profile.membership_policy_refs,
+        placement_ref: profile.placement_ref,
+        fault_model_caveats: profile.fault_model_caveats,
+        required_evidence_refs: profile.required_evidence_refs,
         value: value.clone(),
     })
 }

@@ -204,6 +204,116 @@ fn validate_read_mode(read_mode: &str) -> Result<()> {
     }
 }
 
+fn validate_read_consistency_mode(read_consistency_mode: &str) -> Result<()> {
+    match read_consistency_mode {
+        READ_CONSISTENCY_LINEARIZABLE | READ_CONSISTENCY_LOCAL_STALE => Ok(()),
+        _ => Err(MoltenError::invalid_harness(format!(
+            "unsupported raft read consistency mode {read_consistency_mode}"
+        ))),
+    }
+}
+
+fn validate_read_consistency_support(values: &[String]) -> Result<()> {
+    ensure_count_at_most(values.len(), MAX_RAFT_COMMANDS, "raft read consistency modes")?;
+    if !values.iter().any(|value| value == READ_CONSISTENCY_LINEARIZABLE) {
+        return Err(MoltenError::invalid_harness("consensus profile must support linearizable reads"));
+    }
+    for value in values {
+        validate_read_consistency_mode(value)?;
+    }
+    Ok(())
+}
+
+fn validate_consensus_algorithm_profile(profile: &ConsensusAlgorithmProfileInput) -> Result<()> {
+    validate_non_empty(&profile.algorithm_profile, "consensus algorithm profile")?;
+    validate_non_empty(&profile.admitted_profile_version, "consensus profile version")?;
+    validate_non_empty(&profile.quorum_rule, "consensus quorum rule")?;
+    validate_read_consistency_support(&profile.read_consistency_support)?;
+    validate_refs(&profile.membership_policy_refs, "consensus membership policy ref")?;
+    validate_refs(&profile.required_evidence_refs, "consensus required evidence ref")?;
+    validate_caveats(&profile.fault_model_caveats)?;
+    let placement = profile
+        .placement_ref
+        .as_deref()
+        .ok_or_else(|| MoltenError::invalid_harness("consensus manifest requires placement ref"))?;
+    require_ref(placement, "consensus placement ref")?;
+    match profile.algorithm_profile.as_str() {
+        CONSENSUS_PROFILE_RAFT => validate_raft_consensus_profile(profile),
+        CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => validate_leaderless_consensus_profile(profile),
+        value => Err(MoltenError::invalid_harness(format!("unsupported consensus algorithm profile {value}"))),
+    }
+}
+
+fn validate_raft_consensus_profile(profile: &ConsensusAlgorithmProfileInput) -> Result<()> {
+    if profile.admitted_profile_version != CONSENSUS_PROFILE_VERSION_RAFT {
+        return Err(MoltenError::invalid_harness("raft consensus profile version mismatch"));
+    }
+    if profile.quorum_rule != QUORUM_RULE_MAJORITY_READ_INDEX {
+        return Err(MoltenError::invalid_harness("raft consensus profile must use majority read-index quorum"));
+    }
+    Ok(())
+}
+
+fn validate_leaderless_consensus_profile(profile: &ConsensusAlgorithmProfileInput) -> Result<()> {
+    if profile.admitted_profile_version != CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL {
+        return Err(MoltenError::invalid_harness("leaderless experimental profile version mismatch"));
+    }
+    if profile.quorum_rule != QUORUM_RULE_LEADERLESS_MAJORITY {
+        return Err(MoltenError::invalid_harness("leaderless experimental profile must use leaderless majority quorum"));
+    }
+    if profile.required_evidence_refs.is_empty() {
+        return Err(MoltenError::invalid_harness(
+            "leaderless experimental profile requires proof policy simulation placement and membership evidence",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_caveats(caveats: &[String]) -> Result<()> {
+    ensure_count_at_most(caveats.len(), MAX_RAFT_REFS, "consensus caveats")?;
+    if caveats.is_empty() {
+        return Err(MoltenError::invalid_harness("consensus profile requires explicit fault-model caveats"));
+    }
+    for caveat in caveats {
+        validate_non_empty(caveat, "consensus caveat")?;
+    }
+    Ok(())
+}
+
+fn default_consensus_caveats() -> Vec<String> {
+    vec![
+        "no-byzantine-tolerance".to_string(),
+        "not-a-general-purpose-database".to_string(),
+        "no-ordinary-actor-traffic".to_string(),
+        "no-lease-reads-without-timing-policy".to_string(),
+    ]
+}
+
+fn manifest_checks(profile: &ConsensusAlgorithmProfileInput) -> Vec<(&'static str, &'static str)> {
+    let profile_check = match profile.algorithm_profile.as_str() {
+        CONSENSUS_PROFILE_RAFT => "pass",
+        CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => "diagnostic",
+        _ => "fail",
+    };
+    vec![
+        ("control-plane-only", "pass"),
+        ("explicit-command-schemas", "pass"),
+        ("read-index-default", "pass"),
+        ("algorithm-profile-declared", "pass"),
+        ("linearizable-read-supported", "pass"),
+        ("placement-ref-bound", "pass"),
+        ("production-profile", profile_check),
+    ]
+}
+
+fn consensus_production_status(profile: &str) -> &'static str {
+    match profile {
+        CONSENSUS_PROFILE_RAFT => PRODUCTION_STATUS_ADMITTED,
+        CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => PRODUCTION_STATUS_EXPERIMENTAL,
+        _ => "unsupported",
+    }
+}
+
 fn validate_non_empty(value: &str, label: &str) -> Result<()> {
     if value.is_empty() {
         Err(MoltenError::invalid_harness(format!("{label} must not be empty")))

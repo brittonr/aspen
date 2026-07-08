@@ -67,6 +67,8 @@ pub const OP_ARRIVE: &str = "arrive";
 pub const OP_REGISTER: &str = "register";
 pub const OP_UNREGISTER: &str = "unregister";
 pub const OP_READ: &str = "read";
+pub const READ_CONSISTENCY_LINEARIZABLE: &str = crate::raft_control_plane::READ_CONSISTENCY_LINEARIZABLE;
+pub const READ_CONSISTENCY_LOCAL_STALE: &str = crate::raft_control_plane::READ_CONSISTENCY_LOCAL_STALE;
 
 const COORDINATION_NAMESPACE_PREFIX: &str = "coordination";
 pub const DEFAULT_COORDINATION_SERVICE_ID: &str = "coordination:local";
@@ -123,6 +125,7 @@ pub struct CoordinationRequestInput {
     pub key: String,
     pub client_session: String,
     pub operation_id_ref: String,
+    pub read_consistency_mode: String,
     pub payload: Option<IoValue>,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -137,6 +140,7 @@ pub struct CoordinationRequest {
     pub key: String,
     pub client_session: String,
     pub operation_id_ref: String,
+    pub read_consistency_mode: String,
     pub payload: Option<IoValue>,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -160,6 +164,7 @@ pub struct CoordinationStatusAssertion {
     pub assertion_ref: String,
     pub service: String,
     pub key: String,
+    pub read_consistency_mode: String,
     pub state_ref: String,
     pub receipt_ref: String,
     pub value: IoValue,
@@ -178,6 +183,7 @@ pub struct CoordinationReceipt {
     pub decision: String,
     pub service: String,
     pub operation: String,
+    pub read_consistency_mode: String,
     pub request_ref: String,
     pub raft_receipt_ref: Option<String>,
     pub token_ref: Option<String>,
@@ -287,6 +293,7 @@ pub struct ReceiptValueInput<'a> {
     pub decision: &'a str,
     pub service: &'a str,
     pub operation: &'a str,
+    pub read_consistency_mode: &'a str,
     pub request_ref: &'a str,
     pub raft_receipt_ref: Option<&'a str>,
     pub token_ref: Option<&'a str>,

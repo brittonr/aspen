@@ -124,6 +124,7 @@ fn validate_request_input(input: &CoordinationRequestInput) -> Result<()> {
     validate_key(&input.key)?;
     validate_session(&input.client_session)?;
     validate_ref(&input.operation_id_ref, "coordination operation id ref")?;
+    validate_read_consistency_mode(&input.read_consistency_mode)?;
     validate_refs(&input.authority_refs, "coordination authority ref")?;
     validate_refs(&input.resource_refs, "coordination resource ref")?;
     validate_refs(&input.policy_refs, "coordination policy ref")?;
@@ -210,6 +211,13 @@ fn validate_decision(value: &str) -> Result<()> {
     match value {
         "pass" | "deny" => Ok(()),
         _ => Err(MoltenError::invalid_harness("coordination decision must be pass or deny")),
+    }
+}
+
+fn validate_read_consistency_mode(value: &str) -> Result<()> {
+    match value {
+        READ_CONSISTENCY_LINEARIZABLE | READ_CONSISTENCY_LOCAL_STALE => Ok(()),
+        _ => Err(MoltenError::invalid_harness(format!("unsupported coordination read consistency mode {value}"))),
     }
 }
 

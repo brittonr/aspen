@@ -11,47 +11,56 @@ pub fn parse_coordination_state_snapshot(value: &IoValue) -> Result<Coordination
     })
 }
 
+// r[impl molten.coordination.read_consistency_modes]
 pub fn coordination_status_assertion_value(input: StatusAssertionInput<'_>) -> Result<IoValue> {
     validate_service(input.service)?;
     validate_key(input.key)?;
+    validate_read_consistency_mode(input.read_consistency_mode)?;
     validate_ref(input.state_ref, "coordination assertion state ref")?;
     validate_ref(input.receipt_ref, "coordination assertion receipt ref")?;
     Ok(record("coordination-status-assertion-v1", vec![
         string(COORDINATION_STATUS_ASSERTION_SCHEMA),
         record("service", vec![string(input.service)]),
         record("key", vec![string(input.key)]),
+        record("read-consistency", vec![string(input.read_consistency_mode)]),
         record("fact", vec![input.fact.clone()]),
         record("state", vec![string(input.state_ref)]),
         record("receipt", vec![string(input.receipt_ref)]),
         checks_value(&[
             ("dataspace-observation-only", "pass"),
-            ("committed-state-bound", "pass"),
+            ("read-consistency-declared", "pass"),
+            ("committed-state-bound", if input.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE { "pass" } else { "diagnostic" }),
         ]),
     ]))
 }
 
 pub fn parse_coordination_status_assertion(value: &IoValue) -> Result<CoordinationStatusAssertion> {
-    let fields = simple_record(value, "coordination-status-assertion-v1", 7)?;
+    let fields = simple_record(value, "coordination-status-assertion-v1", 8)?;
     require_schema(&fields[0], COORDINATION_STATUS_ASSERTION_SCHEMA, "coordination assertion schema")?;
     let service = record_string(&fields[1], "service")?;
     let key = record_string(&fields[2], "key")?;
-    let state_ref = record_ref(&fields[4], "state")?;
-    let receipt_ref = record_ref(&fields[5], "receipt")?;
-    require_check(&parse_checks(&fields[6])?, "dataspace-observation-only", "coordination assertion")?;
+    let read_consistency_mode = record_string(&fields[3], "read-consistency")?;
+    let state_ref = record_ref(&fields[5], "state")?;
+    let receipt_ref = record_ref(&fields[6], "receipt")?;
+    validate_read_consistency_mode(&read_consistency_mode)?;
+    require_check(&parse_checks(&fields[7])?, "dataspace-observation-only", "coordination assertion")?;
     Ok(CoordinationStatusAssertion {
         assertion_ref: canonical_hash(value)?,
         service,
         key,
+        read_consistency_mode,
         state_ref,
         receipt_ref,
         value: value.clone(),
     })
 }
 
+// r[impl molten.coordination.read_consistency_modes]
 pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_service(input.service)?;
     validate_operation(input.service, input.operation)?;
+    validate_read_consistency_mode(input.read_consistency_mode)?;
     validate_ref(input.request_ref, "coordination receipt request ref")?;
     if let Some(value) = input.raft_receipt_ref {
         validate_ref(value, "coordination receipt raft ref")?;
@@ -67,6 +76,7 @@ pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValu
         record("decision", vec![string(input.decision)]),
         record("service", vec![string(input.service)]),
         record("operation", vec![string(input.operation)]),
+        record("read-consistency", vec![string(input.read_consistency_mode)]),
         record("request", vec![string(input.request_ref)]),
         record("raft", vec![optional_ref_value(input.raft_receipt_ref)]),
         record("token", vec![optional_ref_value(input.token_ref)]),
@@ -78,23 +88,26 @@ pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValu
 }
 
 pub fn parse_coordination_receipt(value: &IoValue) -> Result<CoordinationReceipt> {
-    let fields = simple_record(value, "coordination-receipt-v1", 11)?;
+    let fields = simple_record(value, "coordination-receipt-v1", 12)?;
     require_schema(&fields[0], COORDINATION_RECEIPT_SCHEMA, "coordination receipt schema")?;
     let decision = record_string(&fields[1], "decision")?;
     let service = record_string(&fields[2], "service")?;
     let operation = record_string(&fields[3], "operation")?;
-    let request_ref = record_ref(&fields[4], "request")?;
-    let raft_receipt_ref = record_optional_ref(&fields[5], "raft")?;
-    let token_ref = record_optional_ref(&fields[6], "token")?;
-    let state_ref = record_ref(&fields[7], "state")?;
-    let dataspace_assertion_refs = record_ref_sequence(&fields[8], "dataspace")?;
-    let diagnostics = record_string_sequence(&fields[9], "diagnostics")?;
-    require_check(&parse_checks(&fields[10])?, "coordination-request-bound", "coordination receipt")?;
+    let read_consistency_mode = record_string(&fields[4], "read-consistency")?;
+    let request_ref = record_ref(&fields[5], "request")?;
+    let raft_receipt_ref = record_optional_ref(&fields[6], "raft")?;
+    let token_ref = record_optional_ref(&fields[7], "token")?;
+    let state_ref = record_ref(&fields[8], "state")?;
+    let dataspace_assertion_refs = record_ref_sequence(&fields[9], "dataspace")?;
+    let diagnostics = record_string_sequence(&fields[10], "diagnostics")?;
+    validate_read_consistency_mode(&read_consistency_mode)?;
+    require_check(&parse_checks(&fields[11])?, "coordination-request-bound", "coordination receipt")?;
     Ok(CoordinationReceipt {
         receipt_ref: canonical_hash(value)?,
         decision,
         service,
         operation,
+        read_consistency_mode,
         request_ref,
         raft_receipt_ref,
         token_ref,

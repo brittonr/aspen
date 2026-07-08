@@ -54,6 +54,7 @@ fn status_assertion_for(
     let value = coordination_status_assertion_value(StatusAssertionInput {
         service: &request.service,
         key: &request.key,
+        read_consistency_mode: &request.read_consistency_mode,
         fact,
         state_ref,
         receipt_ref,
@@ -87,6 +88,7 @@ fn pass_receipt(input: PassReceiptInput<'_>) -> Result<CoordinationReceipt> {
         decision: "pass",
         service: &request.service,
         operation: &request.operation,
+        read_consistency_mode: &request.read_consistency_mode,
         request_ref: &request.request_ref,
         raft_receipt_ref: Some(proposal_ref),
         token_ref,
@@ -239,6 +241,7 @@ fn deny_result(
         decision: "deny",
         service: &request.service,
         operation: &request.operation,
+        read_consistency_mode: &request.read_consistency_mode,
         request_ref: &request.request_ref,
         raft_receipt_ref: None,
         token_ref: None,

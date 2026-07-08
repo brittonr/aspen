@@ -48,6 +48,16 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
 
 const CONTROL_REGISTRY_STATE_MACHINE: &str = "control-registry-v1";
 const READ_MODE_READ_INDEX: &str = "read-index";
+pub const READ_CONSISTENCY_LINEARIZABLE: &str = "linearizable";
+pub const READ_CONSISTENCY_LOCAL_STALE: &str = "local-stale";
+pub const CONSENSUS_PROFILE_RAFT: &str = "raft";
+pub const CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL: &str = "leaderless-quorum-experimental";
+const CONSENSUS_PROFILE_VERSION_RAFT: &str = "raft-production-v1";
+const CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL: &str = "leaderless-quorum-experimental-v1";
+const QUORUM_RULE_MAJORITY_READ_INDEX: &str = "majority-read-index";
+const QUORUM_RULE_LEADERLESS_MAJORITY: &str = "leaderless-majority";
+const PRODUCTION_STATUS_ADMITTED: &str = "admitted-production";
+const PRODUCTION_STATUS_EXPERIMENTAL: &str = "experimental-denied-production";
 const DEFAULT_GROUP_ID: &str = "raft:control";
 const STORE_FILE: &str = "control-registry.redb";
 
@@ -62,6 +72,7 @@ const MAX_RAFT_COMMANDS: usize = 128;
 const MAX_RAFT_ENTRIES: usize = 4096;
 const MAX_RAFT_DIAGNOSTICS: usize = 256;
 const MAX_RAFT_STORE_SCAN: usize = 100_000;
+const RAFT_GROUP_MANIFEST_FIELD_COUNT: usize = 18;
 
 const _: () = assert!(MAX_RAFT_MEMBERS <= 1024);
 const _: () = assert!(MAX_RAFT_REFS <= 100_000);
@@ -83,6 +94,18 @@ pub struct RaftGroupManifestInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsensusAlgorithmProfileInput {
+    pub algorithm_profile: String,
+    pub admitted_profile_version: String,
+    pub read_consistency_support: Vec<String>,
+    pub quorum_rule: String,
+    pub membership_policy_refs: Vec<String>,
+    pub placement_ref: Option<String>,
+    pub fault_model_caveats: Vec<String>,
+    pub required_evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RaftGroupManifest {
     pub manifest_ref: String,
     pub group_id: String,
@@ -93,6 +116,15 @@ pub struct RaftGroupManifest {
     pub snapshot_policy_ref: String,
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
+    pub algorithm_profile: String,
+    pub admitted_profile_version: String,
+    pub read_consistency_support: Vec<String>,
+    pub quorum_rule: String,
+    pub membership_policy_refs: Vec<String>,
+    pub placement_ref: Option<String>,
+    pub fault_model_caveats: Vec<String>,
+    pub required_evidence_refs: Vec<String>,
+    pub production_status: String,
     pub value: IoValue,
 }
 
@@ -251,6 +283,7 @@ pub struct ControlRegistryReadInput {
     pub committed_term: u64,
     pub committed_index: u64,
     pub read_index: u64,
+    pub read_consistency_mode: String,
     pub namespace: String,
     pub name: String,
     pub authority_refs: Vec<String>,
@@ -261,6 +294,7 @@ pub struct ControlRegistryReadInput {
 pub struct RaftReadReceipt {
     pub receipt_ref: String,
     pub decision: String,
+    pub read_consistency_mode: String,
     pub target_ref: Option<String>,
     pub diagnostics: Vec<String>,
     pub value: IoValue,

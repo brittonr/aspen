@@ -50,10 +50,45 @@ pub(super) fn artifact_summary(value: &preserves::IOValue) -> Outcome<String> {
         "raft-group-manifest" => {
             let manifest = molten::raft_control_plane::parse_raft_group_manifest(value)?;
             Ok(format!(
-                "raft group manifest ref={} group={} members={}",
+                "raft group manifest ref={} group={} profile={} version={} production={} members={} read_modes={} placement={} caveats={}",
                 manifest.manifest_ref,
                 manifest.group_id,
-                manifest.members.len()
+                manifest.algorithm_profile,
+                manifest.admitted_profile_version,
+                manifest.production_status,
+                manifest.members.len(),
+                manifest.read_consistency_support.join(","),
+                manifest.placement_ref.as_deref().unwrap_or("none"),
+                manifest.fault_model_caveats.join(",")
+            ))
+        }
+        "consensus-placement-report" => {
+            let report = molten::raft_control_plane::parse_consensus_placement_report(value)?;
+            Ok(format!(
+                "consensus placement decision={} group={} members={} diagnostics={}",
+                report.decision,
+                report.group_id,
+                report.admitted_members.len(),
+                report.diagnostics.join(";")
+            ))
+        }
+        "consensus-non-claim-receipt" => {
+            let receipt = molten::raft_control_plane::parse_consensus_claim_boundary_receipt(value)?;
+            Ok(format!(
+                "consensus non-claim decision={} claim={} diagnostics={}",
+                receipt.decision,
+                receipt.claim,
+                receipt.diagnostics.join(";")
+            ))
+        }
+        "consensus-simulation-receipt" => {
+            let receipt = molten::raft_control_plane::parse_consensus_simulation_receipt(value)?;
+            Ok(format!(
+                "consensus simulation decision={} scenario={} final_state={} diagnostics={}",
+                receipt.decision,
+                receipt.scenario,
+                receipt.final_state_ref.as_deref().unwrap_or("none"),
+                receipt.diagnostics.join(";")
             ))
         }
         kind => Ok(format!("raft artifact kind={} ref={}", kind, molten::preserves_rail::canonical_hash(value)?)),

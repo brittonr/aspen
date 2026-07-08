@@ -38,12 +38,22 @@ pub fn coordination_summary(value: &IoValue) -> Result<String> {
             report.evidence_refs.len()
         ));
     }
+    if let Ok(batch) = parse_coordination_batch_envelope(value) {
+        return Ok(format!(
+            "coordination batch envelope ref={} requests={} compare_state={} policy_refs={}",
+            batch.batch_ref,
+            batch.request_refs.len(),
+            batch.compare_state_ref.as_deref().unwrap_or("none"),
+            batch.policy_refs.len()
+        ));
+    }
     if let Ok(receipt) = parse_coordination_receipt(value) {
         return Ok(format!(
-            "coordination receipt decision={} service={} operation={} request={} state={} diagnostics={}",
+            "coordination receipt decision={} service={} operation={} read_consistency={} request={} state={} diagnostics={}",
             receipt.decision,
             receipt.service,
             receipt.operation,
+            receipt.read_consistency_mode,
             receipt.request_ref,
             receipt.state_ref,
             receipt.diagnostics.join(";")
@@ -51,8 +61,13 @@ pub fn coordination_summary(value: &IoValue) -> Result<String> {
     }
     if let Ok(request) = parse_coordination_request(value) {
         return Ok(format!(
-            "coordination request service={} operation={} key={} session={} operation_id={}",
-            request.service, request.operation, request.key, request.client_session, request.operation_id_ref
+            "coordination request service={} operation={} read_consistency={} key={} session={} operation_id={}",
+            request.service,
+            request.operation,
+            request.read_consistency_mode,
+            request.key,
+            request.client_session,
+            request.operation_id_ref
         ));
     }
     if let Ok(token) = parse_fencing_token(value) {
@@ -78,8 +93,12 @@ pub fn coordination_summary(value: &IoValue) -> Result<String> {
     }
     if let Ok(assertion) = parse_coordination_status_assertion(value) {
         return Ok(format!(
-            "coordination assertion service={} key={} state={} receipt={}",
-            assertion.service, assertion.key, assertion.state_ref, assertion.receipt_ref
+            "coordination assertion service={} key={} read_consistency={} state={} receipt={}",
+            assertion.service,
+            assertion.key,
+            assertion.read_consistency_mode,
+            assertion.state_ref,
+            assertion.receipt_ref
         ));
     }
     Err(MoltenError::invalid_harness("unsupported coordination artifact"))
@@ -96,6 +115,7 @@ fn apply_coordination_read(
             committed_term: runtime.raft.term,
             committed_index: runtime.raft.committed_index,
             read_index: runtime.raft.committed_index,
+            read_consistency_mode: request.read_consistency_mode.clone(),
             namespace: coordination_namespace(&request.service),
             name: request.key.clone(),
             authority_refs: request.authority_refs.clone(),
@@ -110,6 +130,7 @@ fn apply_coordination_read(
         fact: &fact,
         snapshot_ref: &snapshot.state_ref,
         decision,
+        read_consistency_mode: &request.read_consistency_mode,
         diagnostics: read.diagnostics.clone(),
     })?;
     let assertion = match assertion_value {
@@ -121,6 +142,7 @@ fn apply_coordination_read(
         decision,
         service: &request.service,
         operation: &request.operation,
+        read_consistency_mode: &request.read_consistency_mode,
         request_ref: &request.request_ref,
         raft_receipt_ref: Some(&read.receipt_ref),
         token_ref: None,
@@ -129,7 +151,9 @@ fn apply_coordination_read(
         diagnostics: &diagnostics,
         checks: &[
             ("coordination-request-bound", "pass"),
-            ("read-index-bound", "pass"),
+            ("read-consistency-declared", "pass"),
+            ("read-index-bound", if request.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE { "pass" } else { "diagnostic" }),
+            ("local-stale-non-authoritative", if request.read_consistency_mode == READ_CONSISTENCY_LOCAL_STALE { "pass" } else { "diagnostic" }),
             ("control-plane-command", "pass"),
         ],
     })?;
@@ -151,6 +175,7 @@ struct ReadAssertionInput<'a> {
     fact: &'a IoValue,
     snapshot_ref: &'a str,
     decision: &'a str,
+    read_consistency_mode: &'a str,
     diagnostics: Vec<String>,
 }
 
@@ -161,6 +186,7 @@ fn read_assertion_value(input: ReadAssertionInput<'_>) -> Result<(Option<IoValue
         let value = coordination_status_assertion_value(StatusAssertionInput {
             service: input.service,
             key: input.key,
+            read_consistency_mode: input.read_consistency_mode,
             fact: input.fact,
             state_ref: input.snapshot_ref,
             receipt_ref: &placeholder_receipt_ref,
@@ -186,6 +212,7 @@ fn corrected_read_assertions(
         let corrected = coordination_status_assertion_value(StatusAssertionInput {
             service: &assertion.service,
             key: &assertion.key,
+            read_consistency_mode: &assertion.read_consistency_mode,
             fact,
             state_ref: &assertion.state_ref,
             receipt_ref,
