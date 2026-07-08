@@ -49,17 +49,19 @@ let is_scenario_fixture = fun fixture =>
   && is_non_empty_string fixture.execution_profile_id
   && is_non_empty_string fixture.command_surface
   && array_of is_non_empty_string fixture.expected_artifact_kinds
+  && Prelude.distinct_strings fixture.expected_artifact_kinds
   && is_blake3_ref fixture.topology_ref
   && is_blake3_ref fixture.seed_ref
   && is_blake3_ref fixture.fault_plan_ref
-  && array_of is_blake3_ref fixture.receipt_refs
-  && array_of is_blake3_ref fixture.variance_refs
-  && array_of is_blake3_ref fixture.diagnostic_log_refs
+  && Prelude.non_empty_distinct_blake3_refs fixture.receipt_refs
+  && Prelude.non_empty_distinct_blake3_refs fixture.variance_refs
+  && Prelude.non_empty_distinct_blake3_refs fixture.diagnostic_log_refs
   && is_one_of RequiredUnavailablePolicies fixture.unavailable_policy
   && is_boolean fixture.unsupported_claims_pass
   && fixture.unsupported_claims_pass == false
   && matches_profile_surface fixture
   && array_of is_non_empty_string fixture.caveats
+  && Prelude.distinct_strings fixture.caveats
   && has_all fixture.caveats RequiredEvidenceCaveats in
 
 let is_scenario_fixture_export = fun value =>

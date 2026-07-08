@@ -5,7 +5,8 @@ let AllowedReplayClasses = ["idempotent", "deterministic", "effectful"] in
 let Ref = Prelude.contracts.Blake3Ref in
 let NonEmptyString = Prelude.contracts.NonEmptyString in
 let NonNegativeInteger = Prelude.contracts.NonNegativeInteger in
-let NonEmptyRefArray = std.contract.Sequence [Prelude.contracts.NonEmptyArray, Array Ref] in
+let NonEmptyRefArray = std.contract.Sequence [Prelude.contracts.NonEmptyUniqueBlake3RefArray, Array Ref] in
+let UniqueRefArray = std.contract.Sequence [Prelude.contracts.UniqueBlake3RefArray, Array Ref] in
 let PluginId = Prelude.contract (fun value =>
   std.is_string value && std.string.is_match "^plugin:[A-Za-z0-9_.:-]+$" value
 ) in
@@ -47,7 +48,7 @@ let PluginCapabilityGrant = std.contract.Sequence [{
   issuer_ref | Ref,
   proof_refs | NonEmptyRefArray,
   attenuation | Attenuation,
-  revocation_refs | Array Ref,
+  revocation_refs | UniqueRefArray,
   revoked | Bool,
   replay_class | ReplayClass,
 }, Prelude.contract grant_invariants_hold] in

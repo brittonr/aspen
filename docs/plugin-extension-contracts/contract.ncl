@@ -7,7 +7,6 @@ let AllowedReplayClasses = ["idempotent", "deterministic", "effectful"] in
 
 let Ref = Prelude.contracts.Blake3Ref in
 let NonEmptyString = Prelude.contracts.NonEmptyString in
-let NonEmptyRefArray = std.contract.Sequence [Prelude.contracts.NonEmptyArray, Array Ref] in
 let ExtensionId = Prelude.contract (fun value =>
   std.is_string value && std.string.is_match "^plugin-extension:[A-Za-z0-9_.:-]+$" value
 ) in
@@ -19,6 +18,12 @@ let HostAbi = Prelude.contract (Prelude.is_exact_string HostAbiSchema) in
 let LifecycleCallback = Prelude.contract (Prelude.is_one_of AllowedLifecycleCallbacks) in
 let ReplayClass = Prelude.contract (Prelude.is_one_of AllowedReplayClasses) in
 let Profile = Prelude.contract (Prelude.is_one_of AllowedProfiles) in
+let NonEmptyRefArray = std.contract.Sequence [Prelude.contracts.NonEmptyUniqueBlake3RefArray, Array Ref] in
+let NonEmptyUniqueLifecycleCallbacks = std.contract.Sequence [
+  Prelude.contracts.NonEmptyArray,
+  Array LifecycleCallback,
+  Prelude.contract Prelude.distinct_strings,
+] in
 
 let descriptor_identity = fun descriptor => descriptor.operation ++ ":" ++ descriptor.descriptor_ref in
 let descriptors_are_unique = fun hostcalls =>
@@ -48,7 +53,7 @@ let PluginExtensionContract = std.contract.Sequence [{
   extension_id | ExtensionId,
   version | Version,
   compatible_host_abi | HostAbi,
-  lifecycle_callbacks | std.contract.Sequence [Prelude.contracts.NonEmptyArray, Array LifecycleCallback],
+  lifecycle_callbacks | NonEmptyUniqueLifecycleCallbacks,
   hostcalls | std.contract.Sequence [Prelude.contracts.NonEmptyArray, Array HostcallDescriptor],
   conformance | Conformance,
   policy_refs | NonEmptyRefArray,

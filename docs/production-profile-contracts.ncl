@@ -104,13 +104,19 @@ let is_production_node_profile = fun profile =>
   && is_non_empty_string profile.profile_name
   && is_state_layout profile.state_layout
   && array_of (is_one_of RequiredProductionAdapters) profile.required_adapters
+  && distinct_strings profile.required_adapters
   && has_all profile.required_adapters RequiredProductionAdapters
   && array_of is_blake3_ref profile.source_gate_inputs
+  && Prelude.distinct_blake3_refs profile.source_gate_inputs
   && is_resource_limits profile.resource_limits
   && array_of (is_one_of RedactionSettings) profile.redaction_settings
+  && distinct_strings profile.redaction_settings
   && array_of (is_one_of LiveTransportSettings) profile.live_transport_settings
+  && distinct_strings profile.live_transport_settings
   && array_of (is_one_of StartupExpectations) profile.startup_expectations
-  && array_of (is_one_of ShutdownExpectations) profile.shutdown_expectations in
+  && distinct_strings profile.startup_expectations
+  && array_of (is_one_of ShutdownExpectations) profile.shutdown_expectations
+  && distinct_strings profile.shutdown_expectations in
 
 let is_production_profile_export = fun value =>
   std.is_record value

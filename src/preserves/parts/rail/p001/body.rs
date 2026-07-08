@@ -307,6 +307,182 @@ pub fn canonical_content_ref(value: &IoValue) -> Result<ContentRef> {
     ContentRef::parse(&canonical_hash(value)?)
 }
 
+const DECISION_PASS: &str = "pass";
+const DECISION_DENY: &str = "deny";
+const CHECK_STATUS_FAIL: &str = "fail";
+const CHECK_STATUS_DIAGNOSTIC: &str = "diagnostic";
+const REPLAY_CLASS_IDEMPOTENT: &str = "idempotent";
+const REPLAY_CLASS_DETERMINISTIC: &str = "deterministic";
+const REPLAY_CLASS_EFFECTFUL: &str = "effectful";
+const OPERATION_FIRST_CHAR_LABEL: &str = "operation id first character";
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StableId(String);
+
+impl StableId {
+    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
+        let value = value.as_ref();
+        validate_stable_id(value, "stable id")?;
+        Ok(Self(value.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SchemaId(StableId);
+
+impl SchemaId {
+    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
+        let value = value.as_ref();
+        validate_stable_id(value, "schema id")?;
+        Ok(Self(StableId(value.to_string())))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OperationId(StableId);
+
+impl OperationId {
+    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
+        let value = value.as_ref();
+        validate_stable_id(value, "operation id")?;
+        let first = value
+            .bytes()
+            .next()
+            .ok_or_else(|| MoltenError::invalid_harness("operation id cannot be empty"))?;
+        if !first.is_ascii_lowercase() {
+            return Err(MoltenError::invalid_harness(format!(
+                "{OPERATION_FIRST_CHAR_LABEL} must be lowercase ascii, got {value}"
+            )));
+        }
+        Ok(Self(StableId(value.to_string())))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ProfileId(StableId);
+
+impl ProfileId {
+    pub fn parse(value: impl AsRef<str>) -> Result<Self> {
+        let value = value.as_ref();
+        validate_stable_id(value, "profile id")?;
+        Ok(Self(StableId(value.to_string())))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decision {
+    Pass,
+    Deny,
+}
+
+impl Decision {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            DECISION_PASS => Ok(Self::Pass),
+            DECISION_DENY => Ok(Self::Deny),
+            _ => Err(MoltenError::invalid_harness(format!("unsupported decision {value}"))),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => DECISION_PASS,
+            Self::Deny => DECISION_DENY,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckStatus {
+    Pass,
+    Fail,
+    Deny,
+    Diagnostic,
+}
+
+impl CheckStatus {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            DECISION_PASS => Ok(Self::Pass),
+            CHECK_STATUS_FAIL => Ok(Self::Fail),
+            DECISION_DENY => Ok(Self::Deny),
+            CHECK_STATUS_DIAGNOSTIC => Ok(Self::Diagnostic),
+            _ => Err(MoltenError::invalid_harness(format!("unsupported check status {value}"))),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => DECISION_PASS,
+            Self::Fail => CHECK_STATUS_FAIL,
+            Self::Deny => DECISION_DENY,
+            Self::Diagnostic => CHECK_STATUS_DIAGNOSTIC,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplayClass {
+    Idempotent,
+    Deterministic,
+    Effectful,
+}
+
+impl ReplayClass {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            REPLAY_CLASS_IDEMPOTENT => Ok(Self::Idempotent),
+            REPLAY_CLASS_DETERMINISTIC => Ok(Self::Deterministic),
+            REPLAY_CLASS_EFFECTFUL => Ok(Self::Effectful),
+            _ => Err(MoltenError::invalid_harness(format!("unsupported replay class {value}"))),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Idempotent => REPLAY_CLASS_IDEMPOTENT,
+            Self::Deterministic => REPLAY_CLASS_DETERMINISTIC,
+            Self::Effectful => REPLAY_CLASS_EFFECTFUL,
+        }
+    }
+}
+
+pub fn validate_stable_id(value: &str, label: &str) -> Result<()> {
+    if value.is_empty() {
+        return Err(MoltenError::invalid_harness(format!("{label} cannot be empty")));
+    }
+    if value.bytes().all(is_stable_id_byte) {
+        return Ok(());
+    }
+    Err(MoltenError::invalid_harness(format!(
+        "{label} must contain only ASCII letters, digits, '_', '.', ':', or '-', got {value}"
+    )))
+}
+
+fn is_stable_id_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b':' | b'-')
+}
+
 pub fn symbol(name: &'static str) -> IoValue {
     IoValue::symbol(name)
 }
@@ -503,16 +679,22 @@ pub enum BoundaryFieldKind {
     ChainRecord,
     ChecksRecord,
     ConformanceRecord,
+    DecisionRecord,
     FileRefsRecord,
     HostcallDescriptorsRecord,
+    NonEmptyRefSequenceRecord,
+    NonEmptyStringRecord,
     ObjectRecord,
     OptionalRefRecord,
     RefAndStringRecord,
     RefRecord,
     RefSequenceRecord,
+    StableIdRecord,
     StringAndRefRecord,
     StringRecord,
     StringSequenceRecord,
+    UniqueRefSequenceRecord,
+    UniqueStringSequenceRecord,
     TwoRefsRecord,
     U64Record,
 }
@@ -565,11 +747,11 @@ const SCHEMA_FIELD: BoundaryFieldSpec = BoundaryFieldSpec {
 
 const NODE_CONTROL_INGRESS_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
     SCHEMA_FIELD,
-    BoundaryFieldSpec { label: "transport", kind: BoundaryFieldKind::StringRecord },
-    BoundaryFieldSpec { label: "topic", kind: BoundaryFieldKind::StringRecord },
-    BoundaryFieldSpec { label: "from-peer", kind: BoundaryFieldKind::StringRecord },
-    BoundaryFieldSpec { label: "to-node", kind: BoundaryFieldKind::StringRecord },
-    BoundaryFieldSpec { label: "sequence", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "transport", kind: BoundaryFieldKind::NonEmptyStringRecord },
+    BoundaryFieldSpec { label: "topic", kind: BoundaryFieldKind::StableIdRecord },
+    BoundaryFieldSpec { label: "from-peer", kind: BoundaryFieldKind::StableIdRecord },
+    BoundaryFieldSpec { label: "to-node", kind: BoundaryFieldKind::StableIdRecord },
+    BoundaryFieldSpec { label: "sequence", kind: BoundaryFieldKind::NonEmptyStringRecord },
     BoundaryFieldSpec { label: "operation", kind: BoundaryFieldKind::RefRecord },
     BoundaryFieldSpec { label: "request-ref", kind: BoundaryFieldKind::RefRecord },
     BoundaryFieldSpec { label: "request", kind: BoundaryFieldKind::AnyRecord },
@@ -583,10 +765,10 @@ const NODE_CONTROL_INGRESS_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
 
 const PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
     SCHEMA_FIELD,
-    BoundaryFieldSpec { label: "decision", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "decision", kind: BoundaryFieldKind::DecisionRecord },
     BoundaryFieldSpec { label: "plugin", kind: BoundaryFieldKind::RefRecord },
     BoundaryFieldSpec { label: "manifest", kind: BoundaryFieldKind::RefRecord },
-    BoundaryFieldSpec { label: "operation", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "operation", kind: BoundaryFieldKind::StableIdRecord },
     BoundaryFieldSpec { label: "hostcall", kind: BoundaryFieldKind::RefRecord },
     BoundaryFieldSpec { label: "executor", kind: BoundaryFieldKind::RefRecord },
     BoundaryFieldSpec { label: "effect", kind: BoundaryFieldKind::RefRecord },
@@ -600,29 +782,29 @@ const PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
 
 const PLUGIN_EXTENSION_CONTRACT_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
     SCHEMA_FIELD,
-    BoundaryFieldSpec { label: "extension-id", kind: BoundaryFieldKind::StringRecord },
-    BoundaryFieldSpec { label: "version", kind: BoundaryFieldKind::StringRecord },
-    BoundaryFieldSpec { label: "host-abi", kind: BoundaryFieldKind::StringRecord },
-    BoundaryFieldSpec { label: "lifecycle", kind: BoundaryFieldKind::StringSequenceRecord },
+    BoundaryFieldSpec { label: "extension-id", kind: BoundaryFieldKind::StableIdRecord },
+    BoundaryFieldSpec { label: "version", kind: BoundaryFieldKind::NonEmptyStringRecord },
+    BoundaryFieldSpec { label: "host-abi", kind: BoundaryFieldKind::StableIdRecord },
+    BoundaryFieldSpec { label: "lifecycle", kind: BoundaryFieldKind::UniqueStringSequenceRecord },
     BoundaryFieldSpec { label: "hostcalls", kind: BoundaryFieldKind::HostcallDescriptorsRecord },
     BoundaryFieldSpec { label: "conformance", kind: BoundaryFieldKind::ConformanceRecord },
-    BoundaryFieldSpec { label: "policy", kind: BoundaryFieldKind::RefSequenceRecord },
-    BoundaryFieldSpec { label: "supply-chain", kind: BoundaryFieldKind::RefSequenceRecord },
-    BoundaryFieldSpec { label: "profile", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "policy", kind: BoundaryFieldKind::NonEmptyRefSequenceRecord },
+    BoundaryFieldSpec { label: "supply-chain", kind: BoundaryFieldKind::NonEmptyRefSequenceRecord },
+    BoundaryFieldSpec { label: "profile", kind: BoundaryFieldKind::StableIdRecord },
     BoundaryFieldSpec { label: "checks", kind: BoundaryFieldKind::ChecksRecord },
 ];
 
 const RETENTION_RECEIPT_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
     SCHEMA_FIELD,
-    BoundaryFieldSpec { label: "decision", kind: BoundaryFieldKind::StringRecord },
-    BoundaryFieldSpec { label: "action", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "decision", kind: BoundaryFieldKind::DecisionRecord },
+    BoundaryFieldSpec { label: "action", kind: BoundaryFieldKind::StableIdRecord },
     BoundaryFieldSpec { label: "object", kind: BoundaryFieldKind::ObjectRecord },
-    BoundaryFieldSpec { label: "class", kind: BoundaryFieldKind::StringRecord },
+    BoundaryFieldSpec { label: "class", kind: BoundaryFieldKind::StableIdRecord },
     BoundaryFieldSpec { label: "requester", kind: BoundaryFieldKind::RefRecord },
     BoundaryFieldSpec { label: "index", kind: BoundaryFieldKind::RefRecord },
-    BoundaryFieldSpec { label: "pins", kind: BoundaryFieldKind::RefSequenceRecord },
-    BoundaryFieldSpec { label: "retained", kind: BoundaryFieldKind::RefSequenceRecord },
-    BoundaryFieldSpec { label: "remote", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "pins", kind: BoundaryFieldKind::UniqueRefSequenceRecord },
+    BoundaryFieldSpec { label: "retained", kind: BoundaryFieldKind::UniqueRefSequenceRecord },
+    BoundaryFieldSpec { label: "remote", kind: BoundaryFieldKind::UniqueRefSequenceRecord },
     BoundaryFieldSpec { label: "tombstone", kind: BoundaryFieldKind::OptionalRefRecord },
     BoundaryFieldSpec { label: "diagnostics", kind: BoundaryFieldKind::StringSequenceRecord },
     BoundaryFieldSpec { label: "policy", kind: BoundaryFieldKind::RefSequenceRecord },
@@ -635,8 +817,8 @@ const EVIDENCE_CHAIN_SEGMENT_BUNDLE_BOUNDARY_FIELDS: &[BoundaryFieldSpec] = &[
     BoundaryFieldSpec { label: "anchor", kind: BoundaryFieldKind::OptionalRefRecord },
     BoundaryFieldSpec { label: "head", kind: BoundaryFieldKind::OptionalRefRecord },
     BoundaryFieldSpec { label: "artifacts", kind: BoundaryFieldKind::AnySequenceRecord },
-    BoundaryFieldSpec { label: "verify-receipts", kind: BoundaryFieldKind::RefSequenceRecord },
-    BoundaryFieldSpec { label: "checkpoints", kind: BoundaryFieldKind::RefSequenceRecord },
+    BoundaryFieldSpec { label: "verify-receipts", kind: BoundaryFieldKind::UniqueRefSequenceRecord },
+    BoundaryFieldSpec { label: "checkpoints", kind: BoundaryFieldKind::UniqueRefSequenceRecord },
     BoundaryFieldSpec { label: "checks", kind: BoundaryFieldKind::ChecksRecord },
 ];
 
@@ -710,11 +892,102 @@ pub fn boundary_schema_artifact_value(spec: &BoundarySchemaSpec) -> Result<IoVal
         record("record-label", vec![string(spec.record_label)]),
         record("schema-id", vec![string(spec.schema_id)]),
         record("arity", vec![u64_value(arity)]),
+        record("fields", vec![sequence(
+            spec.fields.iter().map(boundary_field_contract_value).collect(),
+        )]),
     ]))
 }
 
 pub fn boundary_schema_ref(spec: &BoundarySchemaSpec) -> Result<ContentRef> {
     canonical_content_ref(&boundary_schema_artifact_value(spec)?)
+}
+
+pub fn validate_boundary_claimed_schema_ref(spec: &BoundarySchemaSpec, claimed_ref: &str) -> Result<ContentRef> {
+    let expected = boundary_schema_ref(spec)?;
+    let claimed = ContentRef::parse(claimed_ref).map_err(|error| {
+        MoltenError::invalid_harness(format!(
+            "{} schema validation deny: claimed schema ref is invalid using current schema {}: {error}",
+            spec.family, expected
+        ))
+    })?;
+    if claimed == expected {
+        return Ok(expected);
+    }
+    Err(MoltenError::invalid_harness(format!(
+        "{} schema validation deny: stale schema ref {} expected {}",
+        spec.family, claimed, expected
+    )))
+}
+
+fn boundary_field_contract_value(field: &BoundaryFieldSpec) -> IoValue {
+    record("field", vec![
+        record("label", vec![string(field.label)]),
+        record("kind", vec![string(boundary_field_kind_name(field.kind))]),
+        record("constraints", vec![sequence(
+            boundary_field_constraints(field.kind)
+                .iter()
+                .map(|constraint| string(*constraint))
+                .collect(),
+        )]),
+    ])
+}
+
+fn boundary_field_kind_name(kind: BoundaryFieldKind) -> &'static str {
+    match kind {
+        BoundaryFieldKind::SchemaId => "schema-id",
+        BoundaryFieldKind::AnyRecord => "any-record",
+        BoundaryFieldKind::AnySequenceRecord => "any-sequence-record",
+        BoundaryFieldKind::ChainRecord => "chain-record",
+        BoundaryFieldKind::ChecksRecord => "checks-record",
+        BoundaryFieldKind::ConformanceRecord => "conformance-record",
+        BoundaryFieldKind::DecisionRecord => "decision-record",
+        BoundaryFieldKind::FileRefsRecord => "file-refs-record",
+        BoundaryFieldKind::HostcallDescriptorsRecord => "hostcall-descriptors-record",
+        BoundaryFieldKind::NonEmptyRefSequenceRecord => "non-empty-ref-sequence-record",
+        BoundaryFieldKind::NonEmptyStringRecord => "non-empty-string-record",
+        BoundaryFieldKind::ObjectRecord => "object-record",
+        BoundaryFieldKind::OptionalRefRecord => "optional-ref-record",
+        BoundaryFieldKind::RefAndStringRecord => "ref-and-string-record",
+        BoundaryFieldKind::RefRecord => "ref-record",
+        BoundaryFieldKind::RefSequenceRecord => "ref-sequence-record",
+        BoundaryFieldKind::StableIdRecord => "stable-id-record",
+        BoundaryFieldKind::StringAndRefRecord => "string-and-ref-record",
+        BoundaryFieldKind::StringRecord => "string-record",
+        BoundaryFieldKind::StringSequenceRecord => "string-sequence-record",
+        BoundaryFieldKind::UniqueRefSequenceRecord => "unique-ref-sequence-record",
+        BoundaryFieldKind::UniqueStringSequenceRecord => "unique-string-sequence-record",
+        BoundaryFieldKind::TwoRefsRecord => "two-refs-record",
+        BoundaryFieldKind::U64Record => "u64-record",
+    }
+}
+
+fn boundary_field_constraints(kind: BoundaryFieldKind) -> &'static [&'static str] {
+    match kind {
+        BoundaryFieldKind::SchemaId => &["schema-id", "exact-current-schema"],
+        BoundaryFieldKind::AnyRecord => &["record", "arity-one", "embedded-record"],
+        BoundaryFieldKind::AnySequenceRecord => &["record", "arity-one", "sequence"],
+        BoundaryFieldKind::ChainRecord => &["record", "chain-fields"],
+        BoundaryFieldKind::ChecksRecord => &["record", "checks", "unique-check-names", "known-check-status"],
+        BoundaryFieldKind::ConformanceRecord => &["record", "positive-negative-property-refs"],
+        BoundaryFieldKind::DecisionRecord => &["record", "string", "decision-pass-or-deny"],
+        BoundaryFieldKind::FileRefsRecord => &["record", "sequence", "file-ref-items"],
+        BoundaryFieldKind::HostcallDescriptorsRecord => &["record", "sequence", "unique-operation-descriptor", "typed-embedded-record"],
+        BoundaryFieldKind::NonEmptyRefSequenceRecord => &["record", "sequence", "content-ref-items", "non-empty"],
+        BoundaryFieldKind::NonEmptyStringRecord => &["record", "string", "non-empty"],
+        BoundaryFieldKind::ObjectRecord => &["record", "object-ref-and-kind"],
+        BoundaryFieldKind::OptionalRefRecord => &["record", "optional-content-ref"],
+        BoundaryFieldKind::RefAndStringRecord => &["record", "content-ref", "string"],
+        BoundaryFieldKind::RefRecord => &["record", "content-ref"],
+        BoundaryFieldKind::RefSequenceRecord => &["record", "sequence", "content-ref-items"],
+        BoundaryFieldKind::StableIdRecord => &["record", "string", "stable-id"],
+        BoundaryFieldKind::StringAndRefRecord => &["record", "string", "content-ref"],
+        BoundaryFieldKind::StringRecord => &["record", "string"],
+        BoundaryFieldKind::StringSequenceRecord => &["record", "sequence", "string-items"],
+        BoundaryFieldKind::UniqueRefSequenceRecord => &["record", "sequence", "content-ref-items", "unique"],
+        BoundaryFieldKind::UniqueStringSequenceRecord => &["record", "sequence", "string-items", "unique"],
+        BoundaryFieldKind::TwoRefsRecord => &["record", "two-content-refs"],
+        BoundaryFieldKind::U64Record => &["record", "u64"],
+    }
 }
 
 pub fn validate_boundary_schema(value: &IoValue, spec: &BoundarySchemaSpec) -> Result<BoundarySchemaValidation> {
@@ -815,6 +1088,7 @@ fn validate_boundary_field(
         BoundaryFieldKind::ChainRecord => validate_chain_boundary_record(value, field_spec, spec, schema_ref),
         BoundaryFieldKind::ChecksRecord => validate_checks_boundary_record(value, field_spec, spec, schema_ref),
         BoundaryFieldKind::ConformanceRecord => validate_conformance_boundary_record(value, field_spec, spec, schema_ref),
+        BoundaryFieldKind::DecisionRecord => validate_decision_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::FileRefsRecord => validate_file_refs_boundary_record(value, field_spec, spec, schema_ref),
         BoundaryFieldKind::HostcallDescriptorsRecord => validate_hostcall_descriptors_boundary_record(
             value,
@@ -822,14 +1096,23 @@ fn validate_boundary_field(
             spec,
             schema_ref,
         ),
+        BoundaryFieldKind::NonEmptyRefSequenceRecord => {
+            validate_ref_sequence_record_with_contract(value, field_spec.label, spec, schema_ref, true, false)
+        }
+        BoundaryFieldKind::NonEmptyStringRecord => validate_non_empty_string_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::ObjectRecord => validate_object_boundary_record(value, field_spec, spec, schema_ref),
         BoundaryFieldKind::OptionalRefRecord => validate_optional_ref_boundary_record(value, field_spec, spec, schema_ref),
         BoundaryFieldKind::RefAndStringRecord => validate_ref_and_string_boundary_record(value, field_spec, spec, schema_ref),
         BoundaryFieldKind::RefRecord => validate_ref_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::RefSequenceRecord => validate_ref_sequence_record(value, field_spec.label, spec, schema_ref),
+        BoundaryFieldKind::StableIdRecord => validate_stable_id_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::StringAndRefRecord => validate_string_and_ref_boundary_record(value, field_spec, spec, schema_ref),
         BoundaryFieldKind::StringRecord => validate_string_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::StringSequenceRecord => validate_string_sequence_record(value, field_spec.label, spec, schema_ref),
+        BoundaryFieldKind::UniqueRefSequenceRecord => {
+            validate_ref_sequence_record_with_contract(value, field_spec.label, spec, schema_ref, false, true)
+        }
+        BoundaryFieldKind::UniqueStringSequenceRecord => validate_unique_string_sequence_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::TwoRefsRecord => validate_two_refs_boundary_record(value, field_spec, spec, schema_ref),
         BoundaryFieldKind::U64Record => validate_u64_record(value, field_spec.label, spec, schema_ref),
     }
@@ -886,7 +1169,56 @@ fn validate_string_record(
     schema_ref: &ContentRef,
 ) -> Result<()> {
     let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
-    ensure_string(&record[0], label, spec, schema_ref)
+    ensure_string(&record[0], label, spec, schema_ref).map(|_| ())
+}
+
+fn validate_non_empty_string_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let text = ensure_string(&record[0], label, spec, schema_ref)?;
+    if text.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "{} schema validation deny: field {label} requires a non-empty string using schema {}",
+            spec.family, schema_ref
+        )));
+    }
+    Ok(())
+}
+
+fn validate_stable_id_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let text = ensure_string(&record[0], label, spec, schema_ref)?;
+    validate_stable_id(text.as_ref(), label).map_err(|error| {
+        MoltenError::invalid_harness(format!(
+            "{} schema validation deny: field {label} expected stable id using schema {}: {error}",
+            spec.family, schema_ref
+        ))
+    })
+}
+
+fn validate_decision_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let text = ensure_string(&record[0], label, spec, schema_ref)?;
+    Decision::parse(text.as_ref()).map(|_| ()).map_err(|error| {
+        MoltenError::invalid_harness(format!(
+            "{} schema validation deny: field {label} expected decision using schema {}: {error}",
+            spec.family, schema_ref
+        ))
+    })
 }
 
 fn validate_u64_record(
@@ -922,10 +1254,34 @@ fn validate_ref_sequence_record(
     spec: &BoundarySchemaSpec,
     schema_ref: &ContentRef,
 ) -> Result<()> {
+    validate_ref_sequence_record_with_contract(value, label, spec, schema_ref, false, false)
+}
+
+fn validate_ref_sequence_record_with_contract(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+    require_non_empty: bool,
+    require_unique: bool,
+) -> Result<()> {
     let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
     let sequence = ensure_sequence(&record[0], label, spec, schema_ref)?;
+    if require_non_empty && sequence.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "{} schema validation deny: field {label} requires a non-empty ref sequence using schema {}",
+            spec.family, schema_ref
+        )));
+    }
+    let mut seen = std::collections::BTreeSet::new();
     for item in sequence.iter() {
-        ensure_content_ref(item, label, spec, schema_ref)?;
+        let reference = ensure_content_ref_string(item, label, spec, schema_ref)?;
+        if require_unique && !seen.insert(reference.clone()) {
+            return Err(MoltenError::invalid_harness(format!(
+                "{} schema validation deny: field {label} duplicate ref {reference} using schema {}",
+                spec.family, schema_ref
+            )));
+        }
     }
     Ok(())
 }
@@ -940,6 +1296,27 @@ fn validate_string_sequence_record(
     let sequence = ensure_sequence(&record[0], label, spec, schema_ref)?;
     for item in sequence.iter() {
         ensure_string(item, label, spec, schema_ref)?;
+    }
+    Ok(())
+}
+
+fn validate_unique_string_sequence_record(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<()> {
+    let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
+    let sequence = ensure_sequence(&record[0], label, spec, schema_ref)?;
+    let mut seen = std::collections::BTreeSet::new();
+    for item in sequence.iter() {
+        let text = ensure_string(item, label, spec, schema_ref)?;
+        if !seen.insert(text.to_string()) {
+            return Err(MoltenError::invalid_harness(format!(
+                "{} schema validation deny: field {label} duplicate string {text} using schema {}",
+                spec.family, schema_ref
+            )));
+        }
     }
     Ok(())
 }
@@ -979,13 +1356,26 @@ fn validate_checks_boundary_record(
 ) -> Result<()> {
     let record = boundary_record(value, field_spec.label, FIELD_ARITY_ONE, spec, schema_ref)?;
     let checks = ensure_sequence(&record[0], field_spec.label, spec, schema_ref)?;
+    let mut seen = std::collections::BTreeSet::new();
     for item in checks.iter() {
         let item = value_to_iovalue(item);
         let check = item.collect_simple_record("check", Some(FIELD_ARITY_TWO)).ok_or_else(|| {
             boundary_field_error(spec, field_spec.label, "<check string string>", schema_ref)
         })?;
-        ensure_string(&check[0], "check name", spec, schema_ref)?;
-        ensure_string(&check[1], "check status", spec, schema_ref)?;
+        let name = ensure_string(&check[0], "check name", spec, schema_ref)?;
+        let status = ensure_string(&check[1], "check status", spec, schema_ref)?;
+        if !seen.insert(name.to_string()) {
+            return Err(MoltenError::invalid_harness(format!(
+                "{} schema validation deny: duplicate check {name} using schema {}",
+                spec.family, schema_ref
+            )));
+        }
+        CheckStatus::parse(status.as_ref()).map_err(|error| {
+            MoltenError::invalid_harness(format!(
+                "{} schema validation deny: unsupported check status using schema {}: {error}",
+                spec.family, schema_ref
+            ))
+        })?;
     }
     Ok(())
 }
@@ -1013,7 +1403,7 @@ fn validate_object_boundary_record(
 ) -> Result<()> {
     let record = boundary_record(value, field_spec.label, FIELD_ARITY_TWO, spec, schema_ref)?;
     ensure_content_ref(&record[0], field_spec.label, spec, schema_ref)?;
-    ensure_string(&record[1], field_spec.label, spec, schema_ref)
+    ensure_string(&record[1], field_spec.label, spec, schema_ref).map(|_| ())
 }
 
 fn validate_string_and_ref_boundary_record(
@@ -1035,7 +1425,7 @@ fn validate_ref_and_string_boundary_record(
 ) -> Result<()> {
     let record = boundary_record(value, field_spec.label, FIELD_ARITY_TWO, spec, schema_ref)?;
     ensure_content_ref(&record[0], field_spec.label, spec, schema_ref)?;
-    ensure_string(&record[1], field_spec.label, spec, schema_ref)
+    ensure_string(&record[1], field_spec.label, spec, schema_ref).map(|_| ())
 }
 
 fn validate_two_refs_boundary_record(
@@ -1091,8 +1481,15 @@ fn validate_hostcall_descriptors_boundary_record(
 ) -> Result<()> {
     let record = boundary_record(value, field_spec.label, FIELD_ARITY_ONE, spec, schema_ref)?;
     let descriptors = ensure_sequence(&record[0], field_spec.label, spec, schema_ref)?;
+    let mut seen = std::collections::BTreeSet::new();
     for descriptor in descriptors.iter() {
-        validate_hostcall_descriptor_boundary_record(descriptor, spec, schema_ref)?;
+        let identity = validate_hostcall_descriptor_boundary_record(descriptor, spec, schema_ref)?;
+        if !seen.insert(identity.clone()) {
+            return Err(MoltenError::invalid_harness(format!(
+                "{} schema validation deny: duplicate hostcall descriptor {identity} using schema {}",
+                spec.family, schema_ref
+            )));
+        }
     }
     Ok(())
 }
@@ -1101,20 +1498,36 @@ fn validate_hostcall_descriptor_boundary_record(
     value: &Value<IoValue>,
     spec: &BoundarySchemaSpec,
     schema_ref: &ContentRef,
-) -> Result<()> {
+) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value.collect_simple_record("hostcall-descriptor", Some(HOSTCALL_DESCRIPTOR_ARITY)).ok_or_else(|| {
         boundary_field_error(spec, "hostcall-descriptor", "hostcall descriptor", schema_ref)
     })?;
-    validate_string_record(&fields[HOSTCALL_DESCRIPTOR_OPERATION_INDEX], "operation", spec, schema_ref)?;
-    validate_ref_record(&fields[HOSTCALL_DESCRIPTOR_DESCRIPTOR_INDEX], "descriptor", spec, schema_ref)?;
+    let operation_record = boundary_record(&fields[HOSTCALL_DESCRIPTOR_OPERATION_INDEX], "operation", FIELD_ARITY_ONE, spec, schema_ref)?;
+    let operation = ensure_string(&operation_record[0], "operation", spec, schema_ref)?;
+    OperationId::parse(operation.as_ref()).map_err(|error| {
+        MoltenError::invalid_harness(format!(
+            "{} schema validation deny: hostcall operation expected operation id using schema {}: {error}",
+            spec.family, schema_ref
+        ))
+    })?;
+    let descriptor_record = boundary_record(&fields[HOSTCALL_DESCRIPTOR_DESCRIPTOR_INDEX], "descriptor", FIELD_ARITY_ONE, spec, schema_ref)?;
+    let descriptor_ref = ensure_content_ref_string(&descriptor_record[0], "descriptor", spec, schema_ref)?;
     validate_ref_record(&fields[HOSTCALL_DESCRIPTOR_INPUT_SCHEMA_INDEX], "input-schema", spec, schema_ref)?;
     validate_ref_record(&fields[HOSTCALL_DESCRIPTOR_OUTPUT_SCHEMA_INDEX], "output-schema", spec, schema_ref)?;
-    validate_ref_sequence_record(&fields[HOSTCALL_DESCRIPTOR_AUTHORITY_INDEX], "authority", spec, schema_ref)?;
-    validate_ref_sequence_record(&fields[HOSTCALL_DESCRIPTOR_RESOURCE_INDEX], "resource", spec, schema_ref)?;
-    validate_ref_sequence_record(&fields[HOSTCALL_DESCRIPTOR_EFFECTS_INDEX], "effects", spec, schema_ref)?;
-    validate_string_record(&fields[HOSTCALL_DESCRIPTOR_REPLAY_INDEX], "replay", spec, schema_ref)?;
-    validate_ref_sequence_record(&fields[HOSTCALL_DESCRIPTOR_ERRORS_INDEX], "errors", spec, schema_ref)
+    validate_ref_sequence_record_with_contract(&fields[HOSTCALL_DESCRIPTOR_AUTHORITY_INDEX], "authority", spec, schema_ref, true, true)?;
+    validate_ref_sequence_record_with_contract(&fields[HOSTCALL_DESCRIPTOR_RESOURCE_INDEX], "resource", spec, schema_ref, true, true)?;
+    validate_ref_sequence_record_with_contract(&fields[HOSTCALL_DESCRIPTOR_EFFECTS_INDEX], "effects", spec, schema_ref, true, true)?;
+    let replay_record = boundary_record(&fields[HOSTCALL_DESCRIPTOR_REPLAY_INDEX], "replay", FIELD_ARITY_ONE, spec, schema_ref)?;
+    let replay = ensure_string(&replay_record[0], "replay", spec, schema_ref)?;
+    ReplayClass::parse(replay.as_ref()).map_err(|error| {
+        MoltenError::invalid_harness(format!(
+            "{} schema validation deny: hostcall replay class unsupported using schema {}: {error}",
+            spec.family, schema_ref
+        ))
+    })?;
+    validate_ref_sequence_record_with_contract(&fields[HOSTCALL_DESCRIPTOR_ERRORS_INDEX], "errors", spec, schema_ref, true, true)?;
+    Ok(format!("{}:{}", operation.as_ref(), descriptor_ref))
 }
 
 const HOSTCALL_DESCRIPTOR_ARITY: usize = 9;
@@ -1128,13 +1541,13 @@ const HOSTCALL_DESCRIPTOR_EFFECTS_INDEX: usize = 6;
 const HOSTCALL_DESCRIPTOR_REPLAY_INDEX: usize = 7;
 const HOSTCALL_DESCRIPTOR_ERRORS_INDEX: usize = 8;
 
-fn ensure_string(
-    value: &Value<IoValue>,
+fn ensure_string<'a>(
+    value: &'a Value<IoValue>,
     label: &str,
     spec: &BoundarySchemaSpec,
     schema_ref: &ContentRef,
-) -> Result<()> {
-    value.as_string().map(|_| ()).ok_or_else(|| boundary_field_error(spec, label, "string", schema_ref))
+) -> Result<std::borrow::Cow<'a, str>> {
+    value.as_string().ok_or_else(|| boundary_field_error(spec, label, "string", schema_ref))
 }
 
 fn ensure_content_ref(
@@ -1143,10 +1556,19 @@ fn ensure_content_ref(
     spec: &BoundarySchemaSpec,
     schema_ref: &ContentRef,
 ) -> Result<()> {
+    ensure_content_ref_string(value, label, spec, schema_ref).map(|_| ())
+}
+
+fn ensure_content_ref_string(
+    value: &Value<IoValue>,
+    label: &str,
+    spec: &BoundarySchemaSpec,
+    schema_ref: &ContentRef,
+) -> Result<String> {
     let reference = value
         .as_string()
         .ok_or_else(|| boundary_field_error(spec, label, "canonical content ref string", schema_ref))?;
-    ContentRef::parse(reference.as_ref()).map(|_| ()).map_err(|error| {
+    ContentRef::parse(reference.as_ref()).map(|_| reference.to_string()).map_err(|error| {
         MoltenError::invalid_harness(format!(
             "{} schema validation deny: field {label} expected canonical content ref string using schema {}: {error}",
             spec.family, schema_ref
@@ -1529,6 +1951,7 @@ mod tests {
                 super::record("negative", vec![super::string(boundary_test_ref("negative"))]),
                 super::record("property", vec![super::string(boundary_test_ref("property"))]),
             ]),
+            super::BoundaryFieldKind::DecisionRecord => super::record(field.label, vec![super::string("pass")]),
             super::BoundaryFieldKind::FileRefsRecord => super::record(field.label, vec![super::sequence(vec![
                 super::record("file", vec![
                     super::string("member.txt"),
@@ -1548,6 +1971,12 @@ mod tests {
                     super::record("errors", vec![super::sequence(vec![super::string(boundary_test_ref("errors"))])]),
                 ]),
             ])]),
+            super::BoundaryFieldKind::NonEmptyRefSequenceRecord => super::record(field.label, vec![super::sequence(vec![
+                super::string(boundary_test_ref(field.label)),
+            ])]),
+            super::BoundaryFieldKind::NonEmptyStringRecord => {
+                super::record(field.label, vec![super::string(format!("{}-value", field.label))])
+            }
             super::BoundaryFieldKind::ObjectRecord => super::record(field.label, vec![
                 super::string(boundary_test_ref("object")),
                 super::string("artifact"),
@@ -1566,6 +1995,9 @@ mod tests {
             super::BoundaryFieldKind::RefSequenceRecord => super::record(field.label, vec![super::sequence(vec![
                 super::string(boundary_test_ref(field.label)),
             ])]),
+            super::BoundaryFieldKind::StableIdRecord => {
+                super::record(field.label, vec![super::string(format!("{}-value", field.label))])
+            }
             super::BoundaryFieldKind::StringAndRefRecord => super::record(field.label, vec![
                 super::string(format!("{}-value", field.label)),
                 super::string(boundary_test_ref(field.label)),
@@ -1574,6 +2006,12 @@ mod tests {
                 super::record(field.label, vec![super::string(format!("{}-value", field.label))])
             }
             super::BoundaryFieldKind::StringSequenceRecord => super::record(field.label, vec![super::sequence(vec![
+                super::string(format!("{}-item", field.label)),
+            ])]),
+            super::BoundaryFieldKind::UniqueRefSequenceRecord => super::record(field.label, vec![super::sequence(vec![
+                super::string(boundary_test_ref(field.label)),
+            ])]),
+            super::BoundaryFieldKind::UniqueStringSequenceRecord => super::record(field.label, vec![super::sequence(vec![
                 super::string(format!("{}-item", field.label)),
             ])]),
             super::BoundaryFieldKind::TwoRefsRecord => super::record(field.label, vec![
@@ -1619,7 +2057,9 @@ mod tests {
     fn malformed_ref_field(field: &super::BoundaryFieldSpec) -> preserves::IOValue {
         match field.kind {
             super::BoundaryFieldKind::RefRecord => super::record(field.label, vec![super::sequence(Vec::new())]),
-            super::BoundaryFieldKind::RefSequenceRecord => {
+            super::BoundaryFieldKind::RefSequenceRecord
+            | super::BoundaryFieldKind::NonEmptyRefSequenceRecord
+            | super::BoundaryFieldKind::UniqueRefSequenceRecord => {
                 super::record(field.label, vec![super::sequence(vec![super::sequence(Vec::new())])])
             }
             super::BoundaryFieldKind::OptionalRefRecord => {
@@ -1655,9 +2095,11 @@ mod tests {
                 | super::BoundaryFieldKind::ObjectRecord
                 | super::BoundaryFieldKind::OptionalRefRecord
                 | super::BoundaryFieldKind::RefAndStringRecord
+                | super::BoundaryFieldKind::NonEmptyRefSequenceRecord
                 | super::BoundaryFieldKind::RefRecord
                 | super::BoundaryFieldKind::RefSequenceRecord
                 | super::BoundaryFieldKind::StringAndRefRecord
+                | super::BoundaryFieldKind::UniqueRefSequenceRecord
                 | super::BoundaryFieldKind::TwoRefsRecord
         )
     }
@@ -1755,6 +2197,111 @@ mod tests {
             let ref_index = boundary_field_index(spec, is_ref_bearing_field);
             let malformed_ref = boundary_fixture_with_field(spec, ref_index, malformed_ref_field(&spec.fields[ref_index]));
             assert!(super::validate_boundary_schema(&malformed_ref, spec).is_err());
+        }
+    }
+
+    #[test]
+    fn boundary_schema_ref_binds_field_labels_kinds_and_constraints() {
+        const TEST_SCHEMA_FIELD_COUNT: usize = 2;
+        const BASE_FIELDS: [super::BoundaryFieldSpec; TEST_SCHEMA_FIELD_COUNT] = [
+            super::BoundaryFieldSpec { label: "schema-id", kind: super::BoundaryFieldKind::SchemaId },
+            super::BoundaryFieldSpec { label: "payload", kind: super::BoundaryFieldKind::StringRecord },
+        ];
+        const LABEL_DRIFT_FIELDS: [super::BoundaryFieldSpec; TEST_SCHEMA_FIELD_COUNT] = [
+            super::BoundaryFieldSpec { label: "schema-id", kind: super::BoundaryFieldKind::SchemaId },
+            super::BoundaryFieldSpec { label: "payload-renamed", kind: super::BoundaryFieldKind::StringRecord },
+        ];
+        const KIND_DRIFT_FIELDS: [super::BoundaryFieldSpec; TEST_SCHEMA_FIELD_COUNT] = [
+            super::BoundaryFieldSpec { label: "schema-id", kind: super::BoundaryFieldKind::SchemaId },
+            super::BoundaryFieldSpec { label: "payload", kind: super::BoundaryFieldKind::RefRecord },
+        ];
+        const CONSTRAINT_DRIFT_FIELDS: [super::BoundaryFieldSpec; TEST_SCHEMA_FIELD_COUNT] = [
+            super::BoundaryFieldSpec { label: "schema-id", kind: super::BoundaryFieldKind::SchemaId },
+            super::BoundaryFieldSpec { label: "payload", kind: super::BoundaryFieldKind::NonEmptyStringRecord },
+        ];
+        let base = test_schema_spec("contract-ref-base", &BASE_FIELDS);
+        let label_drift = test_schema_spec("contract-ref-base", &LABEL_DRIFT_FIELDS);
+        let kind_drift = test_schema_spec("contract-ref-base", &KIND_DRIFT_FIELDS);
+        let constraint_drift = test_schema_spec("contract-ref-base", &CONSTRAINT_DRIFT_FIELDS);
+        let base_ref = super::boundary_schema_ref(&base).expect("base schema ref");
+        assert_ne!(base_ref, super::boundary_schema_ref(&label_drift).expect("label drift ref"));
+        assert_ne!(base_ref, super::boundary_schema_ref(&kind_drift).expect("kind drift ref"));
+        assert_ne!(base_ref, super::boundary_schema_ref(&constraint_drift).expect("constraint drift ref"));
+        let artifact_text = super::to_text(&super::boundary_schema_artifact_value(&base).expect("artifact"))
+            .expect("artifact text");
+        assert!(artifact_text.contains("fields"));
+        assert!(artifact_text.contains("constraints"));
+    }
+
+    #[test]
+    fn boundary_validation_reports_stale_claimed_schema_ref() {
+        let spec = &super::PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_SCHEMA;
+        let stale = boundary_test_ref("old-schema-ref");
+        let error = super::validate_boundary_claimed_schema_ref(spec, &stale)
+            .expect_err("stale schema ref denies");
+        assert!(error.to_string().contains(spec.family));
+        assert!(error.to_string().contains("stale schema ref"));
+    }
+
+    #[test]
+    fn boundary_field_contracts_reject_invalid_domains_and_duplicates() {
+        let plugin_spec = &super::PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_SCHEMA;
+        let decision_index = boundary_field_index(plugin_spec, |field| field.label == "decision");
+        let bad_decision = boundary_fixture_with_field(
+            plugin_spec,
+            decision_index,
+            super::record("decision", vec![super::string("maybe")]),
+        );
+        assert!(super::validate_boundary_schema(&bad_decision, plugin_spec).is_err());
+
+        let extension_spec = &super::PLUGIN_EXTENSION_CONTRACT_BOUNDARY_SCHEMA;
+        let policy_index = boundary_field_index(extension_spec, |field| field.label == "policy");
+        let empty_policy = boundary_fixture_with_field(
+            extension_spec,
+            policy_index,
+            super::record("policy", vec![super::sequence(Vec::new())]),
+        );
+        assert!(super::validate_boundary_schema(&empty_policy, extension_spec).is_err());
+
+        let retention_spec = &super::RETENTION_RECEIPT_BOUNDARY_SCHEMA;
+        let pins_index = boundary_field_index(retention_spec, |field| field.label == "pins");
+        let duplicated_ref = boundary_test_ref("duplicate-pin");
+        let duplicate_pins = boundary_fixture_with_field(
+            retention_spec,
+            pins_index,
+            super::record("pins", vec![super::sequence(vec![
+                super::string(&duplicated_ref),
+                super::string(&duplicated_ref),
+            ])]),
+        );
+        assert!(super::validate_boundary_schema(&duplicate_pins, retention_spec).is_err());
+
+        let extension_spec = &super::PLUGIN_EXTENSION_CONTRACT_BOUNDARY_SCHEMA;
+        let hostcalls_index = boundary_field_index(extension_spec, |field| field.label == "hostcalls");
+        let hostcalls = boundary_field_fixture(extension_spec, &extension_spec.fields[hostcalls_index]);
+        let hostcall_record = hostcalls
+            .collect_simple_record("hostcalls", Some(1))
+            .expect("hostcalls record");
+        let descriptors = hostcall_record[0].collect_sequence().expect("descriptor sequence");
+        let first = super::value_to_iovalue(&descriptors[0]);
+        let duplicate_hostcalls = boundary_fixture_with_field(
+            extension_spec,
+            hostcalls_index,
+            super::record("hostcalls", vec![super::sequence(vec![first.clone(), first])]),
+        );
+        assert!(super::validate_boundary_schema(&duplicate_hostcalls, extension_spec).is_err());
+    }
+
+    fn test_schema_spec(
+        family: &'static str,
+        fields: &'static [super::BoundaryFieldSpec],
+    ) -> super::BoundarySchemaSpec {
+        super::BoundarySchemaSpec {
+            family,
+            version: "v1",
+            record_label: "test-boundary-v1",
+            schema_id: "molten.test-boundary.v1",
+            fields,
         }
     }
 
@@ -1890,6 +2437,26 @@ mod tests {
         ] {
             assert!(super::validate_content_ref(invalid).is_err(), "invalid ref accepted: {invalid}");
         }
+    }
+
+    #[test]
+    fn typed_domain_newtypes_parse_format_and_reject_invalid_values() {
+        let stable = super::StableId::parse("node:alpha-1").expect("stable id");
+        assert_eq!(stable.as_str(), "node:alpha-1");
+        assert_eq!(stable.clone().into_string(), "node:alpha-1");
+        assert_eq!(super::SchemaId::parse("molten.schema.v1").expect("schema id").as_str(), "molten.schema.v1");
+        assert_eq!(super::OperationId::parse("storage.read").expect("operation id").as_str(), "storage.read");
+        assert_eq!(super::ProfileId::parse("production").expect("profile id").as_str(), "production");
+        assert_eq!(super::Decision::parse("pass").expect("decision").as_str(), "pass");
+        assert_eq!(super::CheckStatus::parse("diagnostic").expect("check status").as_str(), "diagnostic");
+        assert_eq!(super::ReplayClass::parse("deterministic").expect("replay class").as_str(), "deterministic");
+
+        assert!(super::StableId::parse("").is_err());
+        assert!(super::StableId::parse("bad/id").is_err());
+        assert!(super::OperationId::parse("Storage.read").is_err());
+        assert!(super::Decision::parse("maybe").is_err());
+        assert!(super::CheckStatus::parse("unknown").is_err());
+        assert!(super::ReplayClass::parse("nondeterministic").is_err());
     }
 
     #[test]

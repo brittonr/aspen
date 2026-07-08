@@ -281,17 +281,9 @@ fn validate_diagnostics(values: &[String], label: &str) -> Result<()> {
 }
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
-    if count <= maximum {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
-    }
+    crate::bounded::ensure_count_at_most(count, maximum, label)
 }
 
 fn fixture_ref(label: &str) -> String {
     content_ref_from_bytes(label.as_bytes())
-}
-
-trait PushLimited<T> {
-    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> Result<()>;
 }

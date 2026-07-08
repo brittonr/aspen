@@ -1,4 +1,5 @@
-let PluginCapabilityGrant = import "grant.ncl" in
+let BoundGrant = import "bound-grant.ncl" in
+let StorageContract = import "storage.ncl" in
 {
   plugin_ref = "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   plugin_id = "plugin:storage",
@@ -26,4 +27,4 @@ let PluginCapabilityGrant = import "grant.ncl" in
   revocation_refs = [],
   revoked = false,
   replay_class = "idempotent",
-} | PluginCapabilityGrant
+} | BoundGrant.ForContract StorageContract

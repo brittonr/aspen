@@ -5,4 +5,4 @@ let Envelope = import "envelope.ncl" in
   source_language = Envelope.source_language,
   export_identity = "plugin-extension:storage@1.0.0",
   payload = import "storage.ncl",
-} | Envelope.ExportEnvelope
+} | Envelope.ContractEnvelope

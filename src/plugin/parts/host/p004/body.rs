@@ -108,20 +108,6 @@ fn string_vec(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_string()).collect()
 }
 
-trait PushLimited<T> {
-    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> Result<()>;
-}
-
-impl<T, S> PushLimited<T> for S
-where S: VecSink<T>
-{
-    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> Result<()> {
-        ensure_count_at_most(self.item_count().saturating_add(1), maximum, label)?;
-        self.push_item(value);
-        Ok(())
-    }
-}
-
 pub fn evaluate_plugin_lifecycle_state(input: &PluginLifecycleStateInput<'_>) -> Result<PluginLifecycleStateDecision> {
     validate_optional_ref(input.recovery_receipt_ref, "plugin lifecycle recovery receipt ref")?;
     let mut diagnostics = Vec::new();
@@ -527,13 +513,10 @@ fn collect_missing_refs(
     label: &str,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<()> {
+    let mut sink = DiagnosticSink::new(diagnostics, MAX_PLUGIN_DIAGNOSTICS, "plugin permission diagnostics");
     for value in required_refs {
         if !supplied_refs.contains(value) {
-            diagnostics.push_limited(
-                format!("plugin missing current {label} ref {value}"),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin permission diagnostics",
-            )?;
+            sink.push(format!("plugin missing current {label} ref {value}"))?;
         }
     }
     Ok(())
@@ -654,11 +637,7 @@ fn validate_diagnostics(values: &[String]) -> Result<()> {
 }
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
-    if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds {maximum}")))
-    } else {
-        Ok(())
-    }
+    crate::bounded::ensure_count_at_most(count, maximum, label)
 }
 
 fn status(value: bool) -> &'static str {

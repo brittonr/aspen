@@ -178,19 +178,45 @@ pub struct ConsensusEngineConformanceReceipt {
     pub value: IoValue,
 }
 
-pub trait ControlPlaneConsensusEngine {
+pub trait ConsensusEngineReadback {
     fn descriptor(&self) -> Result<ConsensusEngineDescriptor>;
     fn readback_summary(&self) -> Result<String>;
-    fn propose(&self, runtime: &mut ControlRegistryRuntime, envelope_value: &IoValue) -> Result<ControlRegistryProposal>;
+}
+
+pub trait ConsensusEngineProposal {
+    fn propose_transition(
+        &self,
+        runtime: &ControlRegistryRuntime,
+        envelope_value: &IoValue,
+    ) -> Result<ControlRegistryTransition>;
+}
+
+pub trait ConsensusEngineRead {
     fn read(&self, input: &ControlRegistryReadInput) -> Result<RaftReadReceipt>;
+}
+
+pub trait ConsensusEngineSnapshot {
     fn snapshot(&self, input: &RaftSnapshotInput) -> Result<RaftSnapshot>;
+}
+
+pub trait ConsensusEngineRecovery {
     fn recover(&self, input: &RaftRecoveryInput) -> Result<RaftRecoveryReceipt>;
+}
+
+pub trait ControlPlaneConsensusEngine:
+    ConsensusEngineReadback + ConsensusEngineProposal + ConsensusEngineRead + ConsensusEngineSnapshot + ConsensusEngineRecovery
+{
+    fn propose(&self, runtime: &mut ControlRegistryRuntime, envelope_value: &IoValue) -> Result<ControlRegistryProposal> {
+        let transition = self.propose_transition(runtime, envelope_value)?;
+        apply_control_registry_transition(runtime, &transition);
+        Ok(transition.proposal)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RaftControlPlaneEngine;
 
-impl ControlPlaneConsensusEngine for RaftControlPlaneEngine {
+impl ConsensusEngineReadback for RaftControlPlaneEngine {
     fn descriptor(&self) -> Result<ConsensusEngineDescriptor> {
         default_raft_engine_descriptor()
     }
@@ -198,22 +224,42 @@ impl ControlPlaneConsensusEngine for RaftControlPlaneEngine {
     fn readback_summary(&self) -> Result<String> {
         Ok(consensus_engine_readback_summary(&self.descriptor()?))
     }
+}
 
-    fn propose(&self, runtime: &mut ControlRegistryRuntime, envelope_value: &IoValue) -> Result<ControlRegistryProposal> {
-        propose_control_registry_command(runtime, envelope_value)
+impl ConsensusEngineProposal for RaftControlPlaneEngine {
+    fn propose_transition(
+        &self,
+        runtime: &ControlRegistryRuntime,
+        envelope_value: &IoValue,
+    ) -> Result<ControlRegistryTransition> {
+        propose_control_registry_transition_core(runtime, envelope_value)
     }
+}
 
+impl ConsensusEngineRead for RaftControlPlaneEngine {
     fn read(&self, input: &ControlRegistryReadInput) -> Result<RaftReadReceipt> {
         read_control_registry(input)
     }
+}
 
+impl ConsensusEngineSnapshot for RaftControlPlaneEngine {
     fn snapshot(&self, input: &RaftSnapshotInput) -> Result<RaftSnapshot> {
         snapshot_control_registry(input)
     }
+}
 
+impl ConsensusEngineRecovery for RaftControlPlaneEngine {
     fn recover(&self, input: &RaftRecoveryInput) -> Result<RaftRecoveryReceipt> {
         recover_control_registry(input)
     }
+}
+
+impl ControlPlaneConsensusEngine for RaftControlPlaneEngine {}
+
+pub fn unsupported_consensus_capability(engine_profile: &str, capability: &str) -> Result<()> {
+    Err(MoltenError::invalid_harness(format!(
+        "consensus engine {engine_profile} does not support capability {capability}"
+    )))
 }
 
 // r[impl molten.consensus.engine_registry]

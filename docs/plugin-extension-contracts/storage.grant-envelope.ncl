@@ -5,4 +5,4 @@ let Envelope = import "envelope.ncl" in
   source_language = Envelope.source_language,
   export_identity = "plugin:storage/storage.read",
   payload = import "storage.grant.ncl",
-} | Envelope.ExportEnvelope
+} | Envelope.GrantEnvelope

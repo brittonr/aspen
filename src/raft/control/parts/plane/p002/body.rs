@@ -51,13 +51,23 @@ pub fn propose_control_registry_command(
     runtime: &mut ControlRegistryRuntime,
     envelope_value: &IoValue,
 ) -> Result<ControlRegistryProposal> {
+    let transition = propose_control_registry_transition_core(runtime, envelope_value)?;
+    apply_control_registry_transition(runtime, &transition);
+    Ok(transition.proposal)
+}
+
+// r[impl molten.consensus_engine_traits.pure_transition_core]
+pub fn propose_control_registry_transition_core(
+    runtime: &ControlRegistryRuntime,
+    envelope_value: &IoValue,
+) -> Result<ControlRegistryTransition> {
     let envelope = parse_raft_command_envelope(envelope_value)?;
     let (command, diagnostics) = admitted_command(&envelope.command);
     if let Some(duplicate) = duplicate_sequence(runtime, &envelope) {
-        match duplicate {
+        let proposal = match duplicate {
             DuplicateSequence::Replay(existing) => {
                 let commit_receipt = deny_commit_receipt(runtime, &envelope, "duplicate-client-sequence", &[])?;
-                return Ok(ControlRegistryProposal {
+                ControlRegistryProposal {
                     decision: existing.decision.clone(),
                     duplicate: true,
                     envelope,
@@ -65,7 +75,7 @@ pub fn propose_control_registry_command(
                     log_entry: None,
                     commit_receipt,
                     registry_receipt: existing,
-                });
+                }
             }
             DuplicateSequence::Conflict(session) => {
                 let diagnostics = vec![format!(
@@ -74,7 +84,7 @@ pub fn propose_control_registry_command(
                 )];
                 let commit_receipt = deny_commit_receipt(runtime, &envelope, "duplicate-client-sequence", &diagnostics)?;
                 let registry_receipt = deny_duplicate_registry_receipt(runtime, &envelope, command.as_ref(), &diagnostics)?;
-                return Ok(ControlRegistryProposal {
+                ControlRegistryProposal {
                     decision: "deny".to_string(),
                     duplicate: true,
                     envelope,
@@ -82,9 +92,10 @@ pub fn propose_control_registry_command(
                     log_entry: None,
                     commit_receipt,
                     registry_receipt,
-                });
+                }
             }
-        }
+        };
+        return Ok(denied_transition(runtime, proposal));
     }
     let admission = proposal_diagnostics(ProposalDecisionInput {
         runtime,
@@ -95,7 +106,7 @@ pub fn propose_control_registry_command(
     if !admission.is_empty() {
         let commit_receipt = deny_commit_receipt(runtime, &envelope, "proposal-deny", &admission)?;
         let registry_receipt = deny_registry_receipt(runtime, &envelope, command.as_ref(), &admission)?;
-        return Ok(ControlRegistryProposal {
+        let proposal = ControlRegistryProposal {
             decision: "deny".to_string(),
             duplicate: false,
             envelope,
@@ -103,33 +114,67 @@ pub fn propose_control_registry_command(
             log_entry: None,
             commit_receipt,
             registry_receipt,
-        });
+        };
+        return Ok(denied_transition(runtime, proposal));
     }
     let command =
         command.ok_or_else(|| MoltenError::invalid_harness("missing admitted command after admission pass"))?;
     let draft = pass_draft(runtime, &envelope)?;
-    let registry_receipt = apply_admitted_command(runtime, &envelope, &command, &draft.log_entry)?;
-    runtime.committed_index = draft.next_index;
-    runtime.last_log_ref = Some(draft.log_entry.entry_ref.clone());
-    runtime.log_entries.push(draft.log_entry.clone());
-    runtime.commit_receipts.push(draft.commit_receipt.clone());
-    runtime.predicate_receipts.push(draft.append_predicate.clone());
-    runtime.predicate_receipts.push(draft.commit_predicate.clone());
-    runtime.predicate_receipts.push(draft.advancement_predicate.clone());
-    runtime.registry_receipts.push(registry_receipt.clone());
-    Ok(ControlRegistryProposal {
-        decision: "pass".to_string(),
-        duplicate: false,
-        envelope,
-        predicates: vec![
-            draft.append_predicate,
-            draft.commit_predicate,
-            draft.advancement_predicate,
-        ],
-        log_entry: Some(draft.log_entry),
-        commit_receipt: draft.commit_receipt,
-        registry_receipt,
+    let (state_after, registry_receipt) = apply_admitted_command_core(
+        &runtime.state,
+        &envelope,
+        &command,
+        &draft.log_entry,
+    )?;
+    let next_last_log_ref = Some(draft.log_entry.entry_ref.clone());
+    Ok(ControlRegistryTransition {
+        proposal: ControlRegistryProposal {
+            decision: "pass".to_string(),
+            duplicate: false,
+            envelope,
+            predicates: vec![
+                draft.append_predicate,
+                draft.commit_predicate,
+                draft.advancement_predicate,
+            ],
+            log_entry: Some(draft.log_entry),
+            commit_receipt: draft.commit_receipt,
+            registry_receipt,
+        },
+        state_after: Some(state_after),
+        next_committed_index: draft.next_index,
+        next_last_log_ref,
     })
+}
+
+// r[impl molten.consensus_engine_traits.imperative_shell]
+fn apply_control_registry_transition(runtime: &mut ControlRegistryRuntime, transition: &ControlRegistryTransition) {
+    if transition.proposal.decision != "pass" {
+        return;
+    }
+    let Some(state_after) = transition.state_after.clone() else {
+        return;
+    };
+    runtime.state = state_after;
+    runtime.committed_index = transition.next_committed_index;
+    runtime.last_log_ref = transition.next_last_log_ref.clone();
+    if let Some(log_entry) = &transition.proposal.log_entry {
+        runtime.log_entries.push(log_entry.clone());
+    }
+    runtime.commit_receipts.push(transition.proposal.commit_receipt.clone());
+    runtime
+        .predicate_receipts
+        .extend(transition.proposal.predicates.iter().cloned());
+    runtime.registry_receipts.push(transition.proposal.registry_receipt.clone());
+}
+
+fn denied_transition(runtime: &ControlRegistryRuntime, proposal: ControlRegistryProposal) -> ControlRegistryTransition {
+    ControlRegistryTransition {
+        proposal,
+        state_after: None,
+        next_committed_index: runtime.committed_index,
+        next_last_log_ref: runtime.last_log_ref.clone(),
+    }
 }
 
 // r[impl molten.consensus.read_consistency_modes]

@@ -3,7 +3,7 @@ type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 
-use crate::bounded::VecSink;
+use crate::bounded::{DiagnosticSink, PushLimited};
 
 pub const PLUGIN_HOST_ABI_VERSION: &str = "molten.plugin.host-abi.v1";
 

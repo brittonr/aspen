@@ -51,6 +51,12 @@ let exact_integer = fun expected value =>
 let non_empty_array = fun values =>
   std.is_array values && std.array.length values > 0 in
 
+let bounded_array = fun maximum values =>
+  std.is_array values && std.array.length values <= maximum in
+
+let non_empty_bounded_array = fun maximum values =>
+  non_empty_array values && bounded_array maximum values in
+
 let array_matching = fun predicate values =>
   non_empty_array values && std.array.all predicate values in
 
@@ -65,9 +71,23 @@ let contains_all = fun actual required =>
 
 let unique_strings = fun values =>
   std.array.length values == std.array.length (std.array.sort_dedup std.string.compare values) in
+let unique_string_array = fun values =>
+  std.is_array values && std.array.all std.is_string values && unique_strings values in
+let non_empty_unique_string_array = fun values =>
+  non_empty_array values && unique_string_array values in
 
 let unique_by = fun projection values =>
   unique_strings (std.array.map projection values) in
+let non_empty_unique_by = fun projection values =>
+  non_empty_array values && unique_by projection values in
+let bounded_unique_by = fun maximum projection values =>
+  bounded_array maximum values && unique_by projection values in
+let unique_blake3_refs = fun values =>
+  optional_array_matching blake3_ref values && unique_strings values in
+let non_empty_unique_blake3_refs = fun values =>
+  array_matching blake3_ref values && unique_strings values in
+let contains_required_members = fun required values =>
+  std.is_array values && contains_all values required in
 
 let mk_contract = fun predicate => std.contract.from_predicate predicate in
 let MetadataEnvelope = {
@@ -106,12 +126,19 @@ let make_metadata_envelope = fun schema_id schema_version source_language export
   is_exact_string = exact_string,
   is_exact_integer = exact_integer,
   is_non_empty_array = non_empty_array,
+  is_bounded_array = bounded_array,
+  is_non_empty_bounded_array = non_empty_bounded_array,
   array_of = array_matching,
   optional_array_of = optional_array_matching,
   is_one_of = one_of,
   has_all = contains_all,
+  has_required_members = contains_required_members,
   distinct_strings = unique_strings,
   distinct_by = unique_by,
+  non_empty_distinct_by = non_empty_unique_by,
+  bounded_distinct_by = bounded_unique_by,
+  distinct_blake3_refs = unique_blake3_refs,
+  non_empty_distinct_blake3_refs = non_empty_unique_blake3_refs,
   contract = mk_contract,
   metadata_envelope = make_metadata_envelope,
 
@@ -125,6 +152,10 @@ let make_metadata_envelope = fun schema_id schema_version source_language export
     PositiveInteger = mk_contract positive_integer,
     NonNegativeInteger = mk_contract non_negative_integer,
     NonEmptyArray = mk_contract non_empty_array,
+    UniqueStringArray = mk_contract unique_string_array,
+    NonEmptyUniqueStringArray = mk_contract non_empty_unique_string_array,
+    UniqueBlake3RefArray = mk_contract unique_blake3_refs,
+    NonEmptyUniqueBlake3RefArray = mk_contract non_empty_unique_blake3_refs,
     MetadataEnvelope = MetadataEnvelope,
   },
 }

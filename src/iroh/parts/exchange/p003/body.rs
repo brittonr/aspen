@@ -93,22 +93,8 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
-    if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
-    } else {
-        Ok(())
-    }
-}
-
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
-    let count = values
-        .item_count()
-        .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
-    ensure_count_at_most(count, maximum, label)?;
-    values.push_item(value);
-    Ok(())
+    crate::bounded::push_bounded(values, value, maximum, label)
 }
 
 fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {

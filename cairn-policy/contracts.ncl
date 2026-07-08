@@ -8,6 +8,8 @@ let Blake3HexPattern = "^[0-9a-fA-F]{64}$" in
 
 let NonEmptyString = Prelude.contracts.NonEmptyString in
 let NonEmptyArray = Prelude.contracts.NonEmptyArray in
+let NonEmptyUniqueStringArray = Prelude.contracts.NonEmptyUniqueStringArray in
+let UniqueStringArray = Prelude.contracts.UniqueStringArray in
 let SupportedPolicyVersion = Prelude.contract (Prelude.is_exact_integer PolicyVersion) in
 let Blake3Algorithm = Prelude.contract (Prelude.is_exact_string ReceiptHashAlgorithm) in
 let Canonicalization = Prelude.contract (Prelude.is_exact_string ReceiptHashCanonicalization) in
@@ -50,13 +52,14 @@ let policy_references_resolve = fun policy =>
   && all_known (replay_group_ids policy) (surface_replay_groups policy)
   && all_known (receipt_schema_commands policy) (receipt_contract_commands policy) in
 let policy_ids_are_unique = fun policy =>
-  Prelude.distinct_strings (artifact_ids policy)
-  && Prelude.distinct_strings (marker_ids policy)
-  && Prelude.distinct_strings (marker_tokens policy)
-  && Prelude.distinct_strings (replay_case_ids policy)
-  && Prelude.distinct_strings (replay_group_ids policy)
-  && Prelude.distinct_strings (surface_ids policy)
-  && Prelude.distinct_strings (receipt_schema_commands policy)
+  Prelude.non_empty_distinct_by (fun schema => schema.id) policy.schemas
+  && Prelude.distinct_strings (artifact_ids policy)
+  && Prelude.non_empty_distinct_by (fun marker => marker.id) policy.task_marker_policy.markers
+  && Prelude.non_empty_distinct_by (fun marker => marker.token) policy.task_marker_policy.markers
+  && Prelude.non_empty_distinct_by (fun replay_case => replay_case.id) policy.determinism_replay_policy.cases
+  && Prelude.non_empty_distinct_by (fun replay_group => replay_group.id) policy.determinism_replay_policy.groups
+  && Prelude.non_empty_distinct_by (fun surface => surface.id) policy.determinism_surface_inventory
+  && Prelude.non_empty_distinct_by (fun schema => schema.command) policy.receipt_schemas
   && Prelude.distinct_strings (receipt_contract_commands policy) in
 let policy_invariants_hold = fun policy =>
   std.is_record policy
@@ -132,7 +135,7 @@ let SteelProfileMode = std.contract.from_predicate (fun value =>
 
   TaskMarkerPolicy = {
     enabled | Bool,
-    stages | NonEmptyArray | Array Stage,
+    stages | NonEmptyUniqueStringArray | Array Stage,
     strictness | Strictness,
     ignore_archives | Bool,
     markers | NonEmptyArray | Array Marker,
@@ -153,31 +156,31 @@ let SteelProfileMode = std.contract.from_predicate (fun value =>
   },
 
   ReportContract = {
-    verdicts | NonEmptyArray | Array NonEmptyString,
-    sections | NonEmptyArray | Array NonEmptyString,
-    tagged_findings_required_fields | NonEmptyArray | Array NonEmptyString,
+    verdicts | NonEmptyUniqueStringArray | Array NonEmptyString,
+    sections | NonEmptyUniqueStringArray | Array NonEmptyString,
+    tagged_findings_required_fields | NonEmptyUniqueStringArray | Array NonEmptyString,
   },
 
   RegistryLabelPolicy = {
-    channels | NonEmptyArray | Array NonEmptyString,
-    platforms | NonEmptyArray | Array NonEmptyString,
-    compatibility_classes | NonEmptyArray | Array NonEmptyString,
+    channels | NonEmptyUniqueStringArray | Array NonEmptyString,
+    platforms | NonEmptyUniqueStringArray | Array NonEmptyString,
+    compatibility_classes | NonEmptyUniqueStringArray | Array NonEmptyString,
     release_format | NonEmptyString,
   },
 
   ChangeMetadataPolicy = {
-    allowed_groups | NonEmptyArray | Array NonEmptyString,
-    group_prefixes | Array NonEmptyString | default = [],
-    statuses | NonEmptyArray | Array NonEmptyString,
+    allowed_groups | NonEmptyUniqueStringArray | Array NonEmptyString,
+    group_prefixes | UniqueStringArray | Array NonEmptyString | default = [],
+    statuses | NonEmptyUniqueStringArray | Array NonEmptyString,
   },
 
   SteelOrchestrationProfile = {
     id | NonEmptyString,
     mode | SteelProfileMode,
-    allowed_host_functions | Array NonEmptyString | default = [],
-    deterministic_budgets | NonEmptyArray | Array NonEmptyString,
-    redaction_classes | NonEmptyArray | Array NonEmptyString,
-    fallback_modes | NonEmptyArray | Array NonEmptyString,
+    allowed_host_functions | UniqueStringArray | Array NonEmptyString | default = [],
+    deterministic_budgets | NonEmptyUniqueStringArray | Array NonEmptyString,
+    redaction_classes | NonEmptyUniqueStringArray | Array NonEmptyString,
+    fallback_modes | NonEmptyUniqueStringArray | Array NonEmptyString,
     receipt_schema_version | NonEmptyString,
   },
 
@@ -189,28 +192,28 @@ let SteelProfileMode = std.contract.from_predicate (fun value =>
   ProbeCommandProfile = {
     id | NonEmptyString,
     commands | NonEmptyArray | Array NonEmptyString,
-    capability_classes | Array NonEmptyString | default = [],
+    capability_classes | UniqueStringArray | Array NonEmptyString | default = [],
   },
 
   ProbePolicy = {
     enabled | Bool,
     inline_gate_execution_enabled | Bool,
     receipt_schema_version | NonEmptyString,
-    coverage_classes | NonEmptyArray | Array NonEmptyString,
+    coverage_classes | NonEmptyUniqueStringArray | Array NonEmptyString,
     command_profiles | NonEmptyArray | Array ProbeCommandProfile,
-    redaction_classes | NonEmptyArray | Array NonEmptyString,
+    redaction_classes | NonEmptyUniqueStringArray | Array NonEmptyString,
   },
 
   ReceiptSchema = {
     command | NonEmptyString,
-    top_level_keys | NonEmptyArray | Array NonEmptyString,
-    action_keys | Array NonEmptyString | default = [],
-    issue_keys | Array NonEmptyString | default = [],
-    case_keys | Array NonEmptyString | default = [],
-    mismatch_keys | Array NonEmptyString | default = [],
-    artifact_keys | Array NonEmptyString | default = [],
-    replay_evidence_keys | Array NonEmptyString | default = [],
-    hash_fields | Array NonEmptyString | default = [],
+    top_level_keys | NonEmptyUniqueStringArray | Array NonEmptyString,
+    action_keys | UniqueStringArray | Array NonEmptyString | default = [],
+    issue_keys | UniqueStringArray | Array NonEmptyString | default = [],
+    case_keys | UniqueStringArray | Array NonEmptyString | default = [],
+    mismatch_keys | UniqueStringArray | Array NonEmptyString | default = [],
+    artifact_keys | UniqueStringArray | Array NonEmptyString | default = [],
+    replay_evidence_keys | UniqueStringArray | Array NonEmptyString | default = [],
+    hash_fields | UniqueStringArray | Array NonEmptyString | default = [],
   },
 
   ReceiptContract = {
@@ -222,25 +225,25 @@ let SteelProfileMode = std.contract.from_predicate (fun value =>
     encoding | NonEmptyString,
     hash_field | NonEmptyString,
     hash_material | NonEmptyString,
-    non_claims | NonEmptyArray | Array NonEmptyString,
+    non_claims | NonEmptyUniqueStringArray | Array NonEmptyString,
   },
 
   ReplayCase = {
     id | NonEmptyString,
     command_kind | NonEmptyString,
-    args | NonEmptyArray | Array NonEmptyString,
+    args | NonEmptyUniqueStringArray | Array NonEmptyString,
     fixture_root | NonEmptyString,
     expected_mutability | NonEmptyString,
-    comparison_modes | NonEmptyArray | Array NonEmptyString,
-    display_only_paths | Array NonEmptyString | default = [],
-    hash_fields | Array NonEmptyString | default = [],
-    normalization_rules | NonEmptyArray | Array NonEmptyString,
+    comparison_modes | NonEmptyUniqueStringArray | Array NonEmptyString,
+    display_only_paths | UniqueStringArray | Array NonEmptyString | default = [],
+    hash_fields | UniqueStringArray | Array NonEmptyString | default = [],
+    normalization_rules | NonEmptyUniqueStringArray | Array NonEmptyString,
   },
 
   ReplayGroup = {
     id | NonEmptyString,
     description | NonEmptyString,
-    cases | NonEmptyArray | Array NonEmptyString,
+    cases | NonEmptyUniqueStringArray | Array NonEmptyString,
   },
 
   EntropyInventoryEntry = {
@@ -273,15 +276,15 @@ let SteelProfileMode = std.contract.from_predicate (fun value =>
     command | NonEmptyString,
     surface_kind | NonEmptyString,
     receipt_command | NonEmptyString,
-    required_replay_cases | NonEmptyArray | Array NonEmptyString,
-    required_replay_groups | NonEmptyArray | Array NonEmptyString,
+    required_replay_cases | NonEmptyUniqueStringArray | Array NonEmptyString,
+    required_replay_groups | NonEmptyUniqueStringArray | Array NonEmptyString,
     determinism_claim | NonEmptyString,
   },
 
   ExemptionMarkerPolicy = std.contract.Sequence [{
-    required_fields | NonEmptyArray | Array NonEmptyString,
-    date_fields | NonEmptyArray | Array NonEmptyString,
-    optional_fields | Array NonEmptyString | default = [],
+    required_fields | NonEmptyUniqueStringArray | Array NonEmptyString,
+    date_fields | NonEmptyUniqueStringArray | Array NonEmptyString,
+    optional_fields | UniqueStringArray | Array NonEmptyString | default = [],
   }, ExemptionMarkerPolicyInvariants],
 
   SyncArchivePolicy = {

@@ -337,10 +337,7 @@ fn require_ref(reference: &str, label: &str) -> Result<()> {
 }
 
 fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()> {
-    if actual <= maximum {
-        return Ok(());
-    }
-    Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+    crate::bounded::ensure_count_at_most(actual, maximum, label)
 }
 
 fn strings_sequence(values: &[String]) -> IoValue {

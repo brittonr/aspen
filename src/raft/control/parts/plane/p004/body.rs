@@ -1,12 +1,12 @@
 
-fn apply_admitted_command(
-    runtime: &mut ControlRegistryRuntime,
+fn apply_admitted_command_core(
+    state_before: &ControlRegistryState,
     envelope: &RaftCommandEnvelope,
     command: &ControlRegistryCommand,
     log_entry: &RaftLogEntry,
-) -> Result<ControlRegistryReceipt> {
-    let before_ref = runtime.state.state_ref.clone();
-    let mut maps = state_maps(&runtime.state)?;
+) -> Result<(ControlRegistryState, ControlRegistryReceipt)> {
+    let before_ref = state_before.state_ref.clone();
+    let mut maps = state_maps(state_before)?;
     match command.operation.as_str() {
         "remove" => {
             maps.entries.remove(&ControlRegistryKey {
@@ -39,7 +39,7 @@ fn apply_admitted_command(
             result_command_ref: envelope.envelope_ref.clone(),
         },
     );
-    runtime.state = parse_control_registry_state(&control_registry_state_value(
+    let state_after = parse_control_registry_state(&control_registry_state_value(
         entries_from_map(&maps.entries),
         sessions_from_map(&maps.sessions),
     )?)?;
@@ -49,7 +49,7 @@ fn apply_admitted_command(
         command_ref: &envelope.envelope_ref,
         log_entry_ref: Some(&log_entry.entry_ref),
         state_before_ref: &before_ref,
-        state_after_ref: Some(&runtime.state.state_ref),
+        state_after_ref: Some(&state_after.state_ref),
         client_session: &envelope.client_session,
         sequence: envelope.sequence,
         duplicate: false,
@@ -58,7 +58,8 @@ fn apply_admitted_command(
         resource_refs: &envelope.resource_refs,
         diagnostics: &[],
     })?;
-    parse_registry_receipt(&receipt_value)
+    let receipt = parse_registry_receipt(&receipt_value)?;
+    Ok((state_after, receipt))
 }
 
 fn deny_commit_receipt(

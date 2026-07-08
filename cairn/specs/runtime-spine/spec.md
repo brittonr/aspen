@@ -3410,3 +3410,125 @@ r[molten.syndicate_dataspace.no_wire_compat] Molten MUST document that Syndicate
 - WHEN it explains the adopted runtime pattern
 - THEN it names Molten envelopes, Preserves refs, policy gates, authority gates, resource gates, and receipts as normative
 - AND it does not claim Syndicate wire, relay, sturdyref, or authority compatibility.
+
+### Requirement: Boundary schema refs bind full field contracts
+r[molten.boundary_schema_contract_identity.full_contract_ref] Molten MUST derive Preserves boundary schema refs from the full reviewed field contract, including family, version, record label, schema id, ordered field labels, field kinds, and declared constraints.
+
+#### Scenario: Same arity but different field kind changes ref
+- GIVEN two boundary schema specs with the same family, version, record label, schema id, and arity
+- AND one spec changes a field from a string domain to a content-ref domain
+- WHEN Molten derives the schema refs
+- THEN the refs differ
+- AND the changed spec cannot silently satisfy stale evidence from the previous contract.
+
+### Requirement: Boundary schema validation reports stale schema identity
+r[molten.boundary_schema_contract_identity.stale_schema_denial] Molten MUST fail closed when a boundary record or receipt claims a schema ref that does not match the current reviewed boundary field contract for that family and version.
+
+#### Scenario: Stale schema ref denies before semantic admission
+- GIVEN a schema-backed boundary record with a claimed schema ref from an older same-arity contract
+- WHEN boundary validation runs
+- THEN validation is `deny`
+- AND diagnostics identify the boundary family and stale schema ref
+- AND no authority, policy, resource, provenance, transport, ledger, or execution side effect is admitted.
+
+### Requirement: Boundary receipts bind strengthened schema refs
+r[molten.boundary_schema_contract_identity.receipt_binding] Schema validation receipts or diagnostics SHOULD name the strengthened schema ref so reviewers can distinguish record-shape evidence from semantic admission evidence.
+
+#### Scenario: Validation report names contract ref
+- GIVEN a boundary record passes schema validation
+- WHEN Molten emits validation diagnostics or receipt evidence
+- THEN the evidence names the boundary family, value ref, and strengthened schema ref
+- AND rendered logs cannot replace that canonical evidence.
+
+### Requirement: Boundary schema ref migrations are recorded
+r[molten.boundary_schema_contract_identity.compatibility_note] Expected schema-ref changes from strengthened boundary contracts SHOULD be recorded in tests, fixtures, or release-evidence notes so reviewers can distinguish intentional contract migration from accidental drift.
+
+#### Scenario: Intentional schema ref change is reviewable
+- GIVEN a boundary schema ref changes because field labels, kinds, or constraints are now part of the contract identity
+- WHEN reviewers inspect the migration evidence
+- THEN the tests or notes explain that the ref changed due to strengthened schema identity
+- AND no semantic authority is inferred from that compatibility note.
+
+### Requirement: Boundary fields declare narrow contracts
+r[molten.preserves_boundary_field_contracts.field_contracts] Molten MUST support boundary field contracts that express non-empty strings, stable ids, exact strings, allowed string vocabularies, bounded sequences, non-empty ref sequences, unique ref sequences, and typed embedded records where those domains are part of the reviewed boundary shape.
+
+#### Scenario: Invalid boundary vocabulary denies
+- GIVEN a schema-backed boundary field declared as an allowed decision vocabulary
+- WHEN the field contains an unsupported string
+- THEN boundary validation is `deny`
+- AND semantic admission for that record is not attempted.
+
+### Requirement: High-risk boundaries avoid over-broad field classes
+r[molten.preserves_boundary_field_contracts.high_risk_tightening] High-risk external Preserves boundaries SHOULD use the narrowest reviewed boundary field contract instead of `StringRecord`, `RefSequenceRecord`, `AnyRecord`, or `AnySequenceRecord` when the field's domain is known.
+
+#### Scenario: Required authoring ref set is empty
+- GIVEN a high-risk authoring boundary record whose reviewed contract requires non-empty policy or supply-chain refs
+- WHEN that required ref field is an empty sequence
+- THEN boundary validation denies before authority, policy, provenance, resource, transport, replay, ledger, or execution side effects.
+
+### Requirement: Shape contracts do not grant semantic trust
+r[molten.preserves_boundary_field_contracts.semantic_boundary] Passing boundary field contracts MUST remain shape evidence only and MUST NOT grant authority, provenance, policy, resource, transport, replay, retention, deletion, or execution trust.
+
+#### Scenario: Shape-valid record still lacks authority
+- GIVEN a boundary record that is shape-valid but lacks the subsystem's required authority evidence
+- WHEN semantic admission evaluates it
+- THEN the subsystem denies as required by its authority gate
+- AND the shape validation report cannot override that denial.
+
+### Requirement: Boundary contract denials are negatively covered
+r[molten.preserves_boundary_field_contracts.field_contract_denials] Molten MUST include positive and negative tests for every reusable boundary field contract before using it at a new trust boundary.
+
+#### Scenario: Duplicate unique ref fixture denies
+- GIVEN a boundary field declared as a unique content-ref sequence
+- WHEN a fixture repeats the same ref
+- THEN validation denies with diagnostics naming the duplicate-ref invariant.
+
+### Requirement: Core evidence domains use typed representations
+r[molten.typed_domains.content_refs] Molten SHOULD represent canonical content refs, schema refs, receipt refs, artifact refs, and evidence refs with typed content-ref domains in pure Rust cores instead of raw strings when the value must be a BLAKE3 Preserves content ref.
+
+#### Scenario: Malformed ref fails at parse boundary
+- GIVEN an external boundary value containing `sha256:not-a-blake3-ref` where a content ref is required
+- WHEN Molten parses the value into a typed DTO
+- THEN parsing fails before the DTO reaches the pure core
+- AND no canonical pass evidence is built from the malformed ref.
+
+### Requirement: Decisions and check statuses are typed domains
+r[molten.typed_domains.decisions] Molten SHOULD represent common decision and check-status vocabularies as typed domains or enums in pure cores rather than open strings.
+
+#### Scenario: Unsupported decision is rejected
+- GIVEN a receipt parser reads decision `maybe`
+- WHEN the parser constructs the typed decision domain
+- THEN construction fails
+- AND the receipt cannot satisfy later evidence admission.
+
+### Requirement: Stable identifiers use reviewed constructors
+r[molten.typed_domains.identifiers] Molten SHOULD represent stable ids, schema ids, operation ids, replay classes, profile ids, and plugin ids with reviewed constructors that enforce their domain predicates before pure core evaluation.
+
+#### Scenario: Empty operation id cannot enter core
+- GIVEN a hostcall input with an empty operation id
+- WHEN the input is parsed into the typed operation domain
+- THEN parsing fails before hostcall admission logic runs.
+
+### Requirement: Representative DTO migrations use typed domains
+r[molten.typed_domains.migrated_dtos] Representative plugin, capability, chunk, evidence, and consensus DTO migrations SHOULD parse high-risk raw strings into typed domains before pure core evaluation when the domain predicate is known.
+
+#### Scenario: Boundary parser converts before core admission
+- GIVEN a migrated boundary parser receives a valid operation id, schema id, decision, or replay class
+- WHEN it constructs the DTO for the pure core
+- THEN the DTO stores the reviewed typed domain or validates with the same typed constructor before core admission.
+
+### Requirement: Typed migrations preserve canonical external forms
+r[molten.typed_domains.hash_stability] Migrating raw-string DTO fields to typed domains MUST preserve canonical Preserves and JSON external forms unless a change explicitly records a schema migration.
+
+#### Scenario: Typed DTO emits same canonical bytes
+- GIVEN a migrated record built from valid typed domains
+- WHEN Molten renders it to canonical Preserves bytes
+- THEN its canonical ref matches the pre-migration fixture or the migration note explains the intentional ref change.
+
+### Requirement: Invalid domain values are negatively covered
+r[molten.typed_domains.negative_domains] Every newly introduced typed domain SHOULD include positive parse/format tests and negative malformed-value tests.
+
+#### Scenario: Unsupported replay class test fails closed
+- GIVEN a replay class outside the admitted vocabulary
+- WHEN the typed replay-class parser runs
+- THEN it returns an error with a domain-specific diagnostic.

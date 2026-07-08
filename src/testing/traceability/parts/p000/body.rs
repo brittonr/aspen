@@ -6,7 +6,7 @@ type Value<T> = preserves::Value<T>;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 
-use crate::bounded::VecSink;
+use crate::bounded::PushLimited;
 
 const TRACEABILITY_MANIFEST_SCHEMA: &str = "molten.testing.requirement-traceability.manifest.v1";
 const TRACEABILITY_GATE_SCHEMA: &str = "molten.testing.requirement-traceability.gate.v1";

@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 
-use crate::bounded::VecSink;
+use crate::bounded::PushLimited;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type Record<T> = preserves::Record<T>;

@@ -1,14 +1,4 @@
 
-impl<T, S> PushLimited<T> for S
-where S: crate::bounded::VecSink<T>
-{
-    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> Result<()> {
-        ensure_count_at_most(self.item_count().saturating_add(1), maximum, label)?;
-        self.push_item(value);
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     type TestCase = hegel::TestCase;

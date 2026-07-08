@@ -256,6 +256,65 @@ mod tests {
     }
 
     #[test]
+    fn pure_transition_core_denies_invalid_command_without_mutating_runtime() {
+        const TEST_SEQUENCE: u64 = 1;
+        let manifest = control_registry_fixture_manifest_value().expect("manifest");
+        let runtime = new_control_registry_runtime(&manifest).expect("runtime");
+        let prior_state_ref = runtime.state.state_ref.clone();
+        let prior_committed_index = runtime.committed_index;
+        let actor_message = parse_text("<actor-message-v1 \"hello\">").expect("actor message");
+        let envelope = raft_command_envelope_value(&RaftCommandEnvelopeInput {
+            group_ref: runtime.manifest.manifest_ref.clone(),
+            client_session: "client:pure-bad".to_string(),
+            sequence: TEST_SEQUENCE,
+            command: actor_message,
+            authority_refs: auth(),
+            policy_refs: runtime.manifest.policy_refs.clone(),
+            resource_refs: runtime.manifest.resource_refs.clone(),
+            evidence_refs: vec![test_ref("evidence")],
+        })
+        .expect("bad envelope");
+        let transition = propose_control_registry_transition_core(&runtime, &envelope).expect("pure deny transition");
+        assert_eq!(transition.proposal.decision, "deny");
+        assert!(transition.state_after.is_none());
+        assert_eq!(runtime.state.state_ref, prior_state_ref);
+        assert_eq!(runtime.committed_index, prior_committed_index);
+        assert!(runtime.log_entries.is_empty());
+    }
+
+    #[test]
+    fn consensus_capability_traits_and_unsupported_denials_are_explicit() {
+        const TEST_SEQUENCE: u64 = 1;
+        let manifest = control_registry_fixture_manifest_value().expect("manifest");
+        let runtime = new_control_registry_runtime(&manifest).expect("runtime");
+        let command = control_registry_command_value(&ControlRegistryCommandInput {
+            operation: "set-policy-version".to_string(),
+            namespace: "policy".to_string(),
+            name: "runtime".to_string(),
+            target_ref: Some(test_ref("policy")),
+        })
+        .expect("command");
+        let envelope = raft_command_envelope_value(&RaftCommandEnvelopeInput {
+            group_ref: runtime.manifest.manifest_ref.clone(),
+            client_session: "client:trait".to_string(),
+            sequence: TEST_SEQUENCE,
+            command,
+            authority_refs: auth(),
+            policy_refs: runtime.manifest.policy_refs.clone(),
+            resource_refs: runtime.manifest.resource_refs.clone(),
+            evidence_refs: vec![test_ref("evidence")],
+        })
+        .expect("envelope");
+        let engine = RaftControlPlaneEngine;
+        let transition = engine.propose_transition(&runtime, &envelope).expect("trait transition");
+        assert_eq!(transition.proposal.decision, "pass");
+        assert!(transition.state_after.is_some());
+        let error = unsupported_consensus_capability("read-only-test-engine", ENGINE_CAPABILITY_RECOVERY)
+            .expect_err("unsupported recovery denies");
+        assert!(error.to_string().contains("does not support capability"));
+    }
+
+    #[test]
     fn stale_read_bad_snapshot_log_gap_and_redb_store_are_detected() {
         let runtime = run_control_registry_fixture().expect("runtime");
         let stale = read_control_registry(&ControlRegistryReadInput {

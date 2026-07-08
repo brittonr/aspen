@@ -129,18 +129,12 @@ fn validate_name(value: &str, label: &str) -> Result<()> {
 }
 
 fn ensure_count_at_most(count: usize, limit: usize, label: &str) -> Result<()> {
-    if count > limit {
-        Err(MoltenError::invalid_harness(format!("{label} exceeds limit {limit}")))
-    } else {
-        Ok(())
-    }
+    crate::bounded::ensure_count_at_most(count, limit, label)
 }
 
 fn push_bounded<T, S>(values: &mut S, value: T, limit: usize, label: &str) -> Result<()>
 where S: VecSink<T> {
-    ensure_count_at_most(values.item_count() + 1, limit, label)?;
-    values.push_item(value);
-    Ok(())
+    crate::bounded::push_bounded(values, value, limit, label)
 }
 
 fn extend_bounded<T, S, I>(values: &mut S, items: I, limit: usize, label: &str) -> Result<()>
@@ -148,8 +142,10 @@ where
     S: VecSink<T>,
     I: IntoIterator<Item = T>,
 {
+    let items = items.into_iter().collect::<Vec<_>>();
+    crate::bounded::checked_count_sum(values.item_count(), items.len(), limit, label)?;
     for item in items {
-        push_bounded(values, item, limit, label)?;
+        values.push_item(item);
     }
     Ok(())
 }

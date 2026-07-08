@@ -1,24 +1,14 @@
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
-    if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
-    } else {
-        Ok(())
-    }
+    crate::bounded::ensure_count_at_most(count, maximum, label)
 }
 
 fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> Result<usize> {
-    let total = left
-        .checked_add(right)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
-    ensure_count_at_most(total, maximum, label)?;
-    Ok(total)
+    crate::bounded::checked_count_sum(left, right, maximum, label)
 }
 
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
-    checked_count_sum(values.item_count(), 1, maximum, label)?;
-    values.push_item(value);
-    Ok(())
+    crate::bounded::push_bounded(values, value, maximum, label)
 }
 
 fn extend_bytes_bounded(

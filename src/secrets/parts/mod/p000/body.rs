@@ -7,6 +7,8 @@ type Record<T> = preserves::Record<T>;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 
+use crate::bounded::PushLimited;
+
 const CONFIDENTIAL_LABEL_SCHEMA: &str = crate::preserves_rail::CONFIDENTIAL_LABEL_SCHEMA;
 const ENCRYPTED_REF_SCHEMA: &str = crate::preserves_rail::ENCRYPTED_REF_SCHEMA;
 const PRIVATE_BUNDLE_PROFILE_SCHEMA: &str = crate::preserves_rail::PRIVATE_BUNDLE_PROFILE_SCHEMA;

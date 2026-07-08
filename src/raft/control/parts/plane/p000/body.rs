@@ -264,6 +264,14 @@ pub struct ControlRegistryProposal {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ControlRegistryTransition {
+    pub proposal: ControlRegistryProposal,
+    pub state_after: Option<ControlRegistryState>,
+    pub next_committed_index: u64,
+    pub next_last_log_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlRegistryRuntime {
     pub manifest: RaftGroupManifest,
     pub term: u64,

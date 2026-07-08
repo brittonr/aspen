@@ -162,3 +162,103 @@ r[molten.project.contract_diagnostics.no_validation_weakening] Refactoring contr
 - GIVEN a contract module is refactored into field-level contracts and named predicates
 - WHEN the positive and negative fixture suite runs
 - THEN valid fixtures still export and malformed fixtures still fail for the expected invariant classes
+
+### Requirement: Nickel array contracts express uniqueness and bounds
+r[molten.nickel_array_invariants.shared_array_helpers] Repository-owned Nickel contract modules SHOULD use shared helper contracts for array uniqueness, non-empty arrays, maximum lengths, required members, and unique BLAKE3 ref lists when those invariants are part of the reviewed domain.
+
+#### Scenario: Duplicate reviewed ref fails export
+- GIVEN a Nickel fixture whose field is declared as a unique evidence-ref array
+- WHEN the fixture repeats the same BLAKE3 ref
+- THEN Nickel export fails before generated JSON can be refreshed.
+
+### Requirement: Array helper diagnostics identify the invariant
+r[molten.nickel_array_invariants.helper_diagnostics] Repository-owned Nickel contracts SHOULD apply named helper predicates or targeted fixtures so duplicate, missing-member, non-empty, and bound failures identify the intended array invariant under test.
+
+#### Scenario: Duplicate descriptor fixture identifies uniqueness
+- GIVEN a negative fixture with duplicate plugin descriptor identities
+- WHEN Nickel export evaluates the contract
+- THEN the failure is associated with the descriptor uniqueness invariant
+- AND generated evidence is not refreshed.
+
+### Requirement: Production, peer, and multinode arrays reject ambiguity
+r[molten.nickel_array_invariants.production_peer_multinode] Production profile, peer profile, and multinode scenario contracts MUST reject duplicate or contradictory array values where duplicates would make adapter membership, peer identity, artifact kinds, receipt refs, variance refs, or caveats ambiguous.
+
+#### Scenario: Duplicate peer ref denies
+- GIVEN a peer profile export with two profiles using the same peer ref
+- WHEN Nickel evaluates the fixture
+- THEN export fails with a duplicate-identity invariant.
+
+### Requirement: Plugin contract arrays reject duplicate reviewed identities
+r[molten.nickel_array_invariants.plugin_arrays] Plugin extension contracts and plugin capability grants MUST reject duplicate lifecycle callbacks, duplicate hostcall descriptor identities, duplicate required refs, and oversized evidence arrays where those fields are reviewed as sets.
+
+#### Scenario: Duplicate lifecycle callback denies
+- GIVEN a plugin extension contract fixture with the same lifecycle callback listed twice
+- WHEN Nickel evaluates the fixture
+- THEN export fails before the plugin contract can be converted to generated evidence.
+
+### Requirement: Cairn policy arrays reject duplicate reviewed ids
+r[molten.nickel_array_invariants.policy_arrays] Cairn policy contracts SHOULD use shared array helpers where schema ids, marker ids, marker tokens, replay ids, surface ids, receipt schema commands, or other reviewed policy tokens must be unique.
+
+#### Scenario: Duplicate marker token fails export
+- GIVEN a Cairn policy fixture with duplicate task marker tokens
+- WHEN Nickel export evaluates the policy contract
+- THEN export fails before generated policy JSON can be refreshed.
+
+### Requirement: Array invariant failures have negative fixtures
+r[molten.nickel_array_invariants.negative_arrays] Every newly tightened Nickel array invariant SHOULD have a negative fixture that demonstrates the intended duplicate, oversize, missing-member, or contradictory-list failure.
+
+#### Scenario: Oversized array fixture fails
+- GIVEN a contract field with a configured maximum array length
+- WHEN a negative fixture exceeds that length
+- THEN the fixture fails export and identifies the array invariant under test.
+
+### Requirement: Nickel array tightening remains authoring-time only
+r[molten.nickel_array_invariants.runtime_boundary] Nickel array invariant contracts MUST remain authoring-time fixture validation and MUST NOT replace runtime Preserves parsing, authority gates, policy gates, resource gates, provenance gates, retention gates, or execution gates.
+
+#### Scenario: Valid export still requires runtime admission
+- GIVEN a Nickel fixture exports successfully after array invariant validation
+- WHEN runtime admission consumes the generated evidence
+- THEN runtime still requires the subsystem's canonical receipt and semantic gates.
+
+### Requirement: Shared bounded helpers use checked arithmetic
+r[molten.shared_bounded_sinks.checked_counts] Repository-owned bounded collection helpers MUST calculate counts with checked arithmetic before mutating a collection and MUST fail closed when the next count would overflow or exceed the configured limit.
+
+#### Scenario: One-past-limit push does not mutate
+- GIVEN a bounded vector with item count equal to its configured limit
+- WHEN a caller attempts to push one more item through the shared helper
+- THEN the helper returns an error
+- AND the vector contents remain unchanged.
+
+### Requirement: Diagnostic sinks share bounded behavior
+r[molten.shared_bounded_sinks.diagnostic_sink] New diagnostic accumulation code SHOULD use the shared bounded diagnostic sink behavior unless a subsystem documents a stricter local invariant.
+
+#### Scenario: Diagnostic overflow denies consistently
+- GIVEN a diagnostic sink at its configured maximum
+- WHEN a subsystem attempts to add another diagnostic
+- THEN the sink fails closed with deterministic diagnostics
+- AND the subsystem does not silently drop or append the diagnostic.
+
+### Requirement: Equivalent bounded helpers migrate to shared utilities
+r[molten.shared_bounded_sinks.migration] Duplicated bounded push, extend, count, and diagnostic helpers SHOULD migrate to shared utilities when behavior is equivalent and local invariants do not require a stricter subsystem helper.
+
+#### Scenario: Equivalent helper calls shared core
+- GIVEN a subsystem helper that previously checked count limits before pushing into a vector
+- WHEN the behavior is equivalent to the shared bounded helper
+- THEN the subsystem delegates to the shared core
+- AND preserves fail-closed no-mutation behavior.
+
+### Requirement: Bounded helper migrations preserve evidence shape
+r[molten.shared_bounded_sinks.hash_stability] Refactoring duplicated bounded helpers into shared utilities MUST preserve canonical receipt values when the only change is helper mechanics.
+
+#### Scenario: Migrated receipt hash remains stable
+- GIVEN a representative receipt fixture built before helper migration
+- WHEN the same semantic input is built after migration
+- THEN the canonical receipt ref is unchanged or the change records an explicit evidence migration note.
+
+### Requirement: Bound-denial behavior is negatively covered
+r[molten.shared_bounded_sinks.negative_bounds] Shared bounded helpers MUST include negative tests for one-past-limit, arithmetic overflow, extend overflow, and no-mutation-on-error cases.
+
+#### Scenario: Extend overflow leaves destination unchanged
+- GIVEN a destination collection and an incoming slice whose combined count exceeds the maximum
+- WHEN bounded extend runs
+- THEN it denies before appending any incoming item.

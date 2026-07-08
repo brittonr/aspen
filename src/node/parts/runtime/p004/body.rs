@@ -38,20 +38,11 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 }
 
 fn ensure_count_at_most(actual: usize, maximum: usize, field: &str) -> Result<()> {
-    if actual <= maximum {
-        return Ok(());
-    }
-    Err(MoltenError::invalid_harness(format!("{field} count {actual} exceeds bound {maximum}")))
+    crate::bounded::ensure_count_at_most(actual, maximum, field)
 }
 
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, field: &str) -> Result<()> {
-    let total = values
-        .item_count()
-        .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{field} count overflow")))?;
-    ensure_count_at_most(total, maximum, field)?;
-    values.push_item(value);
-    Ok(())
+    crate::bounded::push_bounded(values, value, maximum, field)
 }
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {

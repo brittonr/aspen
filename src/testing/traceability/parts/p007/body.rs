@@ -1,9 +1,5 @@
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
-    if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
-    } else {
-        Ok(())
-    }
+    crate::bounded::ensure_count_at_most(count, maximum, label)
 }
 
 fn checked_add_count(left: usize, right: usize, label: &str) -> Result<usize> {
@@ -43,21 +39,6 @@ fn deny_path_diagnostic_bound(case_count: usize, required_count: usize) -> Resul
     let case_diagnostics =
         checked_mul_count(case_count, MAX_DENY_DIRECT_DIAGNOSTICS_PER_CASE, "deny path diagnostics")?;
     checked_add_count(case_diagnostics, required_count, "deny path diagnostics")
-}
-
-trait PushLimited<T> {
-    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> Result<()>;
-}
-
-impl<T, S> PushLimited<T> for S
-where S: VecSink<T>
-{
-    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> Result<()> {
-        let next = checked_add_count(self.item_count(), 1, label)?;
-        ensure_count_at_most(next, maximum, label)?;
-        self.push_item(value);
-        Ok(())
-    }
 }
 
 fn render_group_line(label: &str, ids: &[String]) -> String {

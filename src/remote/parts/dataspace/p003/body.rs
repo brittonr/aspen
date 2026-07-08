@@ -202,10 +202,7 @@ fn validate_content_refs_available(root: &Path, refs: &[String]) -> Result<()> {
 }
 
 fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()> {
-    if actual <= maximum {
-        return Ok(());
-    }
-    Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+    crate::bounded::ensure_count_at_most(actual, maximum, label)
 }
 
 fn extend_bounded<T>(
@@ -213,16 +210,11 @@ fn extend_bounded<T>(
     incoming: Vec<T>,
     maximum: usize,
     label: &str,
-) -> Result<()> {
-    let total = values
-        .item_count()
-        .checked_add(incoming.len())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
-    ensure_count_at_most(total, maximum, label)?;
-    for value in incoming {
-        values.push_item(value);
-    }
-    Ok(())
+) -> Result<()>
+where
+    T: Clone,
+{
+    crate::bounded::extend_bounded(values, &incoming, maximum, label)
 }
 
 fn validate_refs(refs: &[String], label: &str) -> Result<()> {
