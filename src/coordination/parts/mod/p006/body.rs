@@ -121,6 +121,12 @@ fn collect_admission_diagnostics(
             "coordination diagnostics",
         )?;
     }
+    let engine_gate = active_engine_epoch_gate(runtime, &request.operation)?;
+    if engine_gate.decision != "pass" {
+        for diagnostic in engine_gate.diagnostics {
+            diagnostics.push_limited(diagnostic, MAX_COORDINATION_DIAGNOSTICS, "coordination diagnostics")?;
+        }
+    }
     Ok(())
 }
 
@@ -149,6 +155,12 @@ fn evidence_values_for(input: EvidenceValuesInput<'_>) -> Vec<IoValue> {
     }
     if let Some(read) = input.read {
         values.push(read.value.clone());
+        if let Ok(normalized) = crate::raft_control_plane::normalized_raft_read_receipt_value(
+            read,
+            crate::raft_control_plane::INITIAL_CONSENSUS_ENGINE_EPOCH,
+        ) {
+            values.push(normalized);
+        }
     }
     values.extend(input.assertions.iter().map(|assertion| assertion.value.clone()));
     values
@@ -206,6 +218,46 @@ fn payload_endpoint(request: &CoordinationRequest) -> Result<(String, String)> {
 
 fn coordination_namespace(service: &str) -> String {
     format!("{COORDINATION_NAMESPACE_PREFIX}:{service}")
+}
+
+fn active_engine_epoch(_runtime: &CoordinationRuntime) -> u64 {
+    crate::raft_control_plane::INITIAL_CONSENSUS_ENGINE_EPOCH
+}
+
+// r[impl molten.coordination.engine_agnostic_evidence]
+fn active_engine_epoch_gate(
+    runtime: &CoordinationRuntime,
+    operation: &str,
+) -> Result<crate::raft_control_plane::ConsensusEngineEpochGateReceipt> {
+    crate::raft_control_plane::consensus_engine_epoch_gate(&crate::raft_control_plane::ConsensusEngineEpochGateInput {
+        operation: operation.to_string(),
+        active_profile: runtime.raft.manifest.algorithm_profile.clone(),
+        active_engine_epoch: active_engine_epoch(runtime),
+        presented_profile: runtime.raft.manifest.algorithm_profile.clone(),
+        presented_engine_epoch: active_engine_epoch(runtime),
+        activation_receipt_ref: Some(runtime.raft.manifest.manifest_ref.clone()),
+    })
+}
+
+// r[impl molten.coordination.engine_switchover_gates]
+pub fn coordination_engine_epoch_admission(
+    input: &crate::raft_control_plane::ConsensusEngineEpochGateInput,
+) -> Result<crate::raft_control_plane::ConsensusEngineEpochGateReceipt> {
+    crate::raft_control_plane::consensus_engine_epoch_gate(input)
+}
+
+fn engine_status_fact(
+    manifest: &crate::raft_control_plane::RaftGroupManifest,
+    engine_epoch: u64,
+    fact: &IoValue,
+) -> IoValue {
+    record("engine-currentness", vec![
+        record("profile", vec![string(&manifest.algorithm_profile)]),
+        record("version", vec![string(&manifest.admitted_profile_version)]),
+        record("engine-epoch", vec![u64_value(engine_epoch)]),
+        record("currentness", vec![string(&manifest.manifest_ref)]),
+        record("fact", vec![fact.clone()]),
+    ])
 }
 
 struct CoordinationRefSlices<'a> {

@@ -117,11 +117,17 @@ pub fn run_control_registry_fixture() -> Result<ControlRegistryRuntime> {
 }
 
 pub fn control_registry_summary(runtime: &ControlRegistryRuntime) -> String {
+    let engine = resolve_control_registry_engine(&runtime.manifest)
+        .ok()
+        .and_then(|admission| admission.descriptor)
+        .map(|descriptor| descriptor.implementation_id)
+        .unwrap_or_else(|| "unresolved".to_string());
     format!(
-        "raft-control-registry group={} profile={} version={} production={} read_modes={} placement={} caveats={} committed={} entries={} state={}",
+        "raft-control-registry group={} profile={} version={} engine={} production={} read_modes={} placement={} caveats={} committed={} entries={} state={}",
         runtime.manifest.group_id,
         runtime.manifest.algorithm_profile,
         runtime.manifest.admitted_profile_version,
+        engine,
         runtime.manifest.production_status,
         runtime.manifest.read_consistency_support.join(","),
         runtime.manifest.placement_ref.as_deref().unwrap_or("none"),

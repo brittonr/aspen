@@ -35,14 +35,17 @@ fn propose_change(input: ChangeInput<'_>) -> Result<Proposal> {
 fn fact_for(
     prepared: &PreparedMutation,
     manifest: &CoordinationServiceManifest,
+    engine_manifest: &crate::raft_control_plane::RaftGroupManifest,
+    engine_epoch: u64,
     request: &CoordinationRequest,
     token: Option<&FencingToken>,
 ) -> Result<IoValue> {
-    if let Some(token) = token {
-        status_fact_for_token(&prepared.state, manifest, &request.service, &request.key, token)
+    let base = if let Some(token) = token {
+        status_fact_for_token(&prepared.state, manifest, &request.service, &request.key, token)?
     } else {
-        Ok(prepared.status_fact.clone())
-    }
+        prepared.status_fact.clone()
+    };
+    Ok(engine_status_fact(engine_manifest, engine_epoch, &base))
 }
 
 fn status_assertion_for(
@@ -70,6 +73,8 @@ fn pass_checks(prepared: &PreparedMutation) -> Vec<(&'static str, &'static str)>
         ("idempotency-bound", "pass"),
         ("authority-policy-resource", "pass"),
         ("dataspace-reflection-after-commit", "pass"),
+        ("normalized-consensus-evidence", "pass"),
+        ("active-engine-epoch-bound", "pass"),
     ];
     checks.extend(prepared.checks.iter().copied());
     checks
@@ -103,7 +108,14 @@ fn pass_receipt(input: PassReceiptInput<'_>) -> Result<CoordinationReceipt> {
 fn success_parts(input: PartsInput<'_>) -> Result<SuccessParts> {
     let token = materialize_token(input.prepared.token.clone(), input.proposal_ref)?;
     let token_ref = token.as_ref().map(|item| item.token_ref.clone());
-    let fact = fact_for(input.prepared, input.manifest, input.request, token.as_ref())?;
+    let fact = fact_for(
+        input.prepared,
+        input.manifest,
+        input.engine_manifest,
+        input.engine_epoch,
+        input.request,
+        token.as_ref(),
+    )?;
     let placeholder_receipt_ref = fixture_ref("coordination-mutation-placeholder");
     let assertion = status_assertion_for(input.request, &fact, &input.snapshot.state_ref, &placeholder_receipt_ref)?;
     let assertion_refs = vec![assertion.assertion_ref.clone()];
@@ -124,7 +136,7 @@ fn success_parts(input: PartsInput<'_>) -> Result<SuccessParts> {
     })
 }
 
-fn success_values(input: ValuesInput<'_>) -> Vec<IoValue> {
+fn success_values(input: ValuesInput<'_>) -> Result<Vec<IoValue>> {
     let ValuesInput {
         proposal,
         request,
@@ -141,6 +153,10 @@ fn success_values(input: ValuesInput<'_>) -> Vec<IoValue> {
     if let Some(log_entry) = &proposal.log_entry {
         evidence_values.push(log_entry.value.clone());
     }
+    evidence_values.push(crate::raft_control_plane::normalized_raft_commit_receipt_value(
+        &proposal.commit_receipt,
+        crate::raft_control_plane::INITIAL_CONSENSUS_ENGINE_EPOCH,
+    )?);
     evidence_values.extend(proposal.predicates.iter().map(|value| value.value.clone()));
     evidence_values.extend(evidence_values_for(EvidenceValuesInput {
         request,
@@ -150,7 +166,7 @@ fn success_values(input: ValuesInput<'_>) -> Vec<IoValue> {
         assertions: std::slice::from_ref(assertion),
         read: None,
     }));
-    evidence_values
+    Ok(evidence_values)
 }
 
 fn record_success(input: SuccessInput<'_>) -> Result<CoordinationApplyResult> {
@@ -169,6 +185,8 @@ fn record_success(input: SuccessInput<'_>) -> Result<CoordinationApplyResult> {
         prepared: &prepared,
         request: &request,
         manifest: &runtime.manifest,
+        engine_manifest: &runtime.raft.manifest,
+        engine_epoch: active_engine_epoch(runtime),
         snapshot: &snapshot,
         proposal_ref: &proposal.commit_receipt.receipt_ref,
     })?;
@@ -180,7 +198,7 @@ fn record_success(input: SuccessInput<'_>) -> Result<CoordinationApplyResult> {
         token: parts.token.as_ref(),
         snapshot: &snapshot,
         assertion: &parts.assertion,
-    });
+    })?;
     if let Some(token) = &parts.token {
         runtime.tokens.push(token.clone());
     }

@@ -16,6 +16,7 @@ pub fn parse_control_registry_state(value: &IoValue) -> Result<ControlRegistrySt
 }
 
 // r[impl molten.consensus.leaderless_profile_boundary]
+// r[impl molten.consensus.runtime_engine_selection]
 pub fn new_control_registry_runtime(manifest_value: &IoValue) -> Result<ControlRegistryRuntime> {
     let manifest = parse_raft_group_manifest(manifest_value)?;
     if manifest.state_machine != CONTROL_REGISTRY_STATE_MACHINE {
@@ -24,10 +25,13 @@ pub fn new_control_registry_runtime(manifest_value: &IoValue) -> Result<ControlR
             manifest.state_machine
         )));
     }
-    if manifest.algorithm_profile != CONSENSUS_PROFILE_RAFT {
+    let admission = resolve_control_registry_engine(&manifest)?;
+    if admission.decision != ENGINE_DECISION_PASS {
         return Err(MoltenError::invalid_harness(format!(
-            "consensus profile {} is not admitted for production runtime; status {}",
-            manifest.algorithm_profile, manifest.production_status
+            "consensus profile {} is not admitted for production runtime; status {}; diagnostics {}",
+            manifest.algorithm_profile,
+            manifest.production_status,
+            admission.diagnostics.join("; ")
         )));
     }
     Ok(ControlRegistryRuntime {

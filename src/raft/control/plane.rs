@@ -6,4 +6,5 @@ include!("parts/plane/p004/body.rs");
 include!("parts/plane/p005/body.rs");
 include!("parts/plane/p006/body.rs");
 include!("parts/plane/p008/body.rs");
+include!("parts/plane/p009/body.rs");
 include!("parts/plane/p007/body.rs");

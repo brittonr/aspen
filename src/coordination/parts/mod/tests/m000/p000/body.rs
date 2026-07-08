@@ -212,6 +212,39 @@
         assert_eq!(read.assertions.len(), 1);
         let assertion_text = to_text(&read.assertions[0].value).expect("assertion text");
         assert!(assertion_text.contains(&endpoint));
+        assert!(assertion_text.contains("engine-currentness"));
+        assert!(assertion_text.contains("engine-epoch"));
+        assert!(to_text(&read.receipt.value).expect("receipt text").contains("normalized-consensus-evidence"));
+    }
+
+    #[test]
+    fn coordination_engine_epoch_gate_denies_stale_or_inactive_consensus_evidence() {
+        // r[verify molten.coordination.engine_agnostic_evidence]
+        // r[verify molten.coordination.engine_switchover_gates]
+        let stale = coordination_engine_epoch_admission(&crate::raft_control_plane::ConsensusEngineEpochGateInput {
+            operation: OP_RELEASE.to_string(),
+            active_profile: crate::raft_control_plane::CONSENSUS_PROFILE_RAFT.to_string(),
+            active_engine_epoch: crate::raft_control_plane::INITIAL_CONSENSUS_ENGINE_EPOCH.saturating_add(1),
+            presented_profile: crate::raft_control_plane::CONSENSUS_PROFILE_RAFT.to_string(),
+            presented_engine_epoch: crate::raft_control_plane::INITIAL_CONSENSUS_ENGINE_EPOCH,
+            activation_receipt_ref: Some(fixture_ref("activation")),
+        })
+        .expect("stale epoch gate");
+        assert_eq!(stale.decision, "deny");
+        assert!(stale.diagnostics.join(";").contains("stale engine epoch"));
+
+        let inactive = coordination_engine_epoch_admission(&crate::raft_control_plane::ConsensusEngineEpochGateInput {
+            operation: OP_READ.to_string(),
+            active_profile: crate::raft_control_plane::CONSENSUS_PROFILE_RAFT.to_string(),
+            active_engine_epoch: crate::raft_control_plane::INITIAL_CONSENSUS_ENGINE_EPOCH,
+            presented_profile: crate::raft_control_plane::CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
+            presented_engine_epoch: crate::raft_control_plane::INITIAL_CONSENSUS_ENGINE_EPOCH.saturating_add(1),
+            activation_receipt_ref: None,
+        })
+        .expect("inactive epoch gate");
+        assert_eq!(inactive.decision, "deny");
+        assert!(inactive.diagnostics.join(";").contains("inactive consensus engine profile"));
+        assert!(inactive.diagnostics.join(";").contains("not activated"));
     }
 
     #[test]

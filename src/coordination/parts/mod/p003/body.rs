@@ -124,6 +124,7 @@ fn apply_coordination_read(
     let snapshot = snapshot_from_state(&runtime.state)?;
     let decision = if read.decision == "pass" { "pass" } else { "deny" };
     let fact = status_fact_for(&runtime.state, &runtime.manifest, &request.service, &request.key)?;
+    let fact = engine_status_fact(&runtime.raft.manifest, active_engine_epoch(runtime), &fact);
     let (assertion_value, diagnostics) = read_assertion_value(ReadAssertionInput {
         service: &request.service,
         key: &request.key,
@@ -155,6 +156,8 @@ fn apply_coordination_read(
             ("read-index-bound", if request.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE { "pass" } else { "diagnostic" }),
             ("local-stale-non-authoritative", if request.read_consistency_mode == READ_CONSISTENCY_LOCAL_STALE { "pass" } else { "diagnostic" }),
             ("control-plane-command", "pass"),
+            ("normalized-consensus-evidence", "pass"),
+            ("active-engine-epoch-bound", "pass"),
         ],
     })?;
     let receipt = parse_coordination_receipt(&receipt_value)?;
@@ -276,6 +279,8 @@ struct PartsInput<'a> {
     prepared: &'a PreparedMutation,
     request: &'a CoordinationRequest,
     manifest: &'a CoordinationServiceManifest,
+    engine_manifest: &'a crate::raft_control_plane::RaftGroupManifest,
+    engine_epoch: u64,
     snapshot: &'a CoordinationStateSnapshot,
     proposal_ref: &'a str,
 }

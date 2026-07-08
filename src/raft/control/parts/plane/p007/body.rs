@@ -823,4 +823,224 @@ mod tests {
         assert_eq!(missing_leaderless_evidence.decision, RAFT_DECISION_DENY);
         assert!(missing_leaderless_evidence.diagnostics.join(";").contains("missing required evidence"));
     }
+
+    #[test]
+    fn engine_registry_admission_and_runtime_selection_are_fail_closed() {
+        // r[verify molten.consensus.engine_registry]
+        // r[verify molten.consensus.engine_admission_policy]
+        // r[verify molten.consensus.runtime_engine_selection]
+        let registry = default_consensus_engine_registry().expect("engine registry");
+        assert_eq!(registry.entries.len(), DEFAULT_CONSENSUS_ENGINE_REGISTRY_LEN);
+        assert_eq!(crate::ledger::artifact_kind(&registry.value), "consensus-engine-registry");
+
+        let required = vec![ENGINE_CAPABILITY_PROPOSAL.to_string(), ENGINE_CAPABILITY_LINEARIZABLE_READ.to_string()];
+        let raft_admission = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            profile_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
+            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            required_capabilities: required.clone(),
+        })
+        .expect("raft admission");
+        assert_eq!(raft_admission.decision, ENGINE_DECISION_PASS);
+        assert!(raft_admission.descriptor.is_some());
+        assert_eq!(crate::ledger::artifact_kind(&raft_admission.value), "consensus-engine-admission-receipt");
+        let descriptor = raft_admission.descriptor.as_ref().expect("descriptor");
+        assert!(consensus_engine_readback_summary(descriptor).contains("in-process-raft"));
+
+        let manifest = control_registry_fixture_manifest_value().expect("manifest");
+        let runtime = new_control_registry_runtime(&manifest).expect("runtime selected through registry");
+        assert!(control_registry_summary(&runtime).contains("engine=in-process-raft-control-registry-v1"));
+
+        let unknown = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
+            algorithm_profile: "unknown-profile".to_string(),
+            profile_version: "unknown-v1".to_string(),
+            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            required_capabilities: required.clone(),
+        })
+        .expect("unknown admission");
+        assert_eq!(unknown.decision, ENGINE_DECISION_DENY);
+        assert!(unknown.diagnostics.join(";").contains("unsupported consensus engine profile"));
+
+        let disabled = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
+            algorithm_profile: "disabled-fixture-engine".to_string(),
+            profile_version: "disabled-fixture-v1".to_string(),
+            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            required_capabilities: required.clone(),
+        })
+        .expect("disabled admission");
+        assert_eq!(disabled.decision, ENGINE_DECISION_DENY);
+        assert!(disabled.diagnostics.join(";").contains("disabled"));
+
+        let leaderless = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
+            algorithm_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
+            profile_version: CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL.to_string(),
+            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            required_capabilities: required,
+        })
+        .expect("leaderless admission");
+        assert_eq!(leaderless.decision, ENGINE_DECISION_DENY);
+        assert!(leaderless.diagnostics.join(";").contains("not admitted for production"));
+
+        let mismatch = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            profile_version: "wrong-version".to_string(),
+            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            required_capabilities: vec![ENGINE_CAPABILITY_PROPOSAL.to_string()],
+        })
+        .expect("version mismatch");
+        assert_eq!(mismatch.decision, ENGINE_DECISION_DENY);
+        assert!(mismatch.diagnostics.join(";").contains("version mismatch"));
+    }
+
+    #[test]
+    fn normalized_receipts_switchover_and_epoch_gates_cover_safe_and_unsafe_paths() {
+        // r[verify molten.consensus.engine_interface]
+        // r[verify molten.consensus.engine_switchover_receipts]
+        // r[verify molten.consensus.engine_switchover_fencing]
+        let mut runtime = new_control_registry_runtime(&control_registry_fixture_manifest_value().expect("manifest"))
+            .expect("runtime");
+        let command = command_for_receipt_index("normalized", "normalized-target");
+        let envelope = envelope_for(&runtime, "client:normalized", RAFT_TEST_INITIAL_SEQUENCE, command);
+        let proposal = propose_control_registry_command(&mut runtime, &envelope).expect("proposal");
+        let normalized_commit = parse_consensus_engine_receipt(
+            &normalized_raft_commit_receipt_value(&proposal.commit_receipt, INITIAL_CONSENSUS_ENGINE_EPOCH)
+                .expect("normalized commit"),
+        )
+        .expect("parse normalized commit");
+        assert_eq!(normalized_commit.decision, ENGINE_DECISION_PASS);
+        assert_eq!(normalized_commit.receipt_kind, NORMALIZED_RECEIPT_KIND_COMMIT);
+        assert_eq!(crate::ledger::artifact_kind(&normalized_commit.value), "consensus-engine-receipt");
+
+        let read = read_control_registry(&ControlRegistryReadInput {
+            state: runtime.state.value.clone(),
+            group_ref: runtime.manifest.manifest_ref.clone(),
+            committed_term: runtime.term,
+            committed_index: runtime.committed_index,
+            read_index: runtime.committed_index,
+            read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            namespace: "receipt-index".to_string(),
+            name: "normalized".to_string(),
+            authority_refs: auth(),
+            resource_refs: resources(),
+        })
+        .expect("read");
+        let normalized_read = parse_consensus_engine_receipt(
+            &normalized_raft_read_receipt_value(&read, INITIAL_CONSENSUS_ENGINE_EPOCH).expect("normalized read"),
+        )
+        .expect("parse normalized read");
+        assert_eq!(normalized_read.receipt_kind, NORMALIZED_RECEIPT_KIND_READ);
+        assert_eq!(normalized_read.engine_epoch, INITIAL_CONSENSUS_ENGINE_EPOCH);
+
+        let next_epoch = INITIAL_CONSENSUS_ENGINE_EPOCH.saturating_add(NEXT_CONSENSUS_ENGINE_EPOCH_STEP);
+        let switchover = consensus_engine_switchover_receipt(&ConsensusEngineSwitchoverInput {
+            source_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
+            source_version: CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL.to_string(),
+            target_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            target_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
+            active_engine_epoch: INITIAL_CONSENSUS_ENGINE_EPOCH,
+            target_engine_epoch: next_epoch,
+            source_state_ref: runtime.state.state_ref.clone(),
+            target_bootstrap_state_ref: runtime.state.state_ref.clone(),
+            membership_refs: vec![test_ref("membership")],
+            placement_refs: vec![test_ref("placement")],
+            replay_conformance_refs: vec![normalized_commit.receipt_ref.clone()],
+            currentness_evidence_refs: vec![normalized_read.receipt_ref.clone()],
+            operator_approval_refs: vec![test_ref("operator-approval")],
+            rollback_posture: "rollback-supported".to_string(),
+        })
+        .expect("switchover");
+        assert_eq!(switchover.decision, ENGINE_DECISION_PASS);
+        assert_eq!(crate::ledger::artifact_kind(&switchover.value), "consensus-engine-switchover-receipt");
+
+        let unsafe_switchover = consensus_engine_switchover_receipt(&ConsensusEngineSwitchoverInput {
+            source_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            source_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
+            target_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
+            target_version: CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL.to_string(),
+            active_engine_epoch: INITIAL_CONSENSUS_ENGINE_EPOCH,
+            target_engine_epoch: INITIAL_CONSENSUS_ENGINE_EPOCH,
+            source_state_ref: runtime.state.state_ref.clone(),
+            target_bootstrap_state_ref: runtime.state.state_ref.clone(),
+            membership_refs: Vec::new(),
+            placement_refs: Vec::new(),
+            replay_conformance_refs: Vec::new(),
+            currentness_evidence_refs: Vec::new(),
+            operator_approval_refs: Vec::new(),
+            rollback_posture: "unsafe".to_string(),
+        })
+        .expect("unsafe switchover");
+        assert_eq!(unsafe_switchover.decision, ENGINE_DECISION_DENY);
+        assert!(unsafe_switchover.diagnostics.join(";").contains("target engine admission denied"));
+
+        let stale_writer = consensus_engine_epoch_gate(&ConsensusEngineEpochGateInput {
+            operation: "write".to_string(),
+            active_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            active_engine_epoch: next_epoch,
+            presented_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            presented_engine_epoch: INITIAL_CONSENSUS_ENGINE_EPOCH,
+            activation_receipt_ref: Some(switchover.receipt_ref.clone()),
+        })
+        .expect("stale writer gate");
+        assert_eq!(stale_writer.decision, ENGINE_DECISION_DENY);
+        assert!(stale_writer.diagnostics.join(";").contains("stale engine epoch"));
+
+        let target_read_before_activation = consensus_engine_epoch_gate(&ConsensusEngineEpochGateInput {
+            operation: "linearizable-read".to_string(),
+            active_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            active_engine_epoch: INITIAL_CONSENSUS_ENGINE_EPOCH,
+            presented_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
+            presented_engine_epoch: next_epoch,
+            activation_receipt_ref: None,
+        })
+        .expect("target read gate");
+        assert_eq!(target_read_before_activation.decision, ENGINE_DECISION_DENY);
+        assert!(target_read_before_activation.diagnostics.join(";").contains("not activated"));
+    }
+
+    #[test]
+    fn consensus_engine_conformance_fixtures_cover_positive_and_negative_paths() {
+        // r[verify molten.testing.consensus_engine_conformance]
+        // r[verify molten.testing.consensus_registry_negative_fixtures]
+        // r[verify molten.testing.consensus_switchover_fixtures]
+        let runtime = run_control_registry_fixture().expect("runtime");
+        let normalized_ref = canonical_hash(
+            &normalized_raft_commit_receipt_value(
+                &runtime.commit_receipts[0],
+                INITIAL_CONSENSUS_ENGINE_EPOCH,
+            )
+            .expect("normalized"),
+        )
+        .expect("normalized ref");
+        let pass = consensus_engine_conformance_receipt(&ConsensusEngineConformanceInput {
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            profile_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
+            fixture_id: "raft-control-registry-fixture".to_string(),
+            passed_cases: required_conformance_cases().iter().map(|value| (*value).to_string()).collect(),
+            expected_state_ref: runtime.state.state_ref.clone(),
+            actual_state_ref: runtime.state.state_ref.clone(),
+            normalized_receipt_refs: vec![normalized_ref],
+        })
+        .expect("conformance pass");
+        assert_eq!(pass.decision, ENGINE_DECISION_PASS);
+        assert_eq!(crate::ledger::artifact_kind(&pass.value), "consensus-engine-conformance-receipt");
+
+        let negative = consensus_engine_conformance_receipt(&ConsensusEngineConformanceInput {
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            profile_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
+            fixture_id: "raft-negative-fixture".to_string(),
+            passed_cases: vec![CONFORMANCE_CASE_PROPOSAL.to_string()],
+            expected_state_ref: runtime.state.state_ref.clone(),
+            actual_state_ref: test_ref("wrong-state"),
+            normalized_receipt_refs: Vec::new(),
+        })
+        .expect("conformance deny");
+        assert_eq!(negative.decision, ENGINE_DECISION_DENY);
+        assert!(negative.diagnostics.join(";").contains("missing consensus engine conformance case"));
+        assert!(negative.diagnostics.join(";").contains("replay state mismatch"));
+    }
 }
