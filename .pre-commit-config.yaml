@@ -37,7 +37,7 @@ repos:
 
       - id: cairn-validate
         name: cairn validate
-        entry: nix run path:/home/brittonr/git/cairn#cairn -- validate --root . --policy /home/brittonr/git/cairn/cairn-policy/generated/cairn-policy.json
+        entry: nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json
         language: system
         pass_filenames: false
         stages:
