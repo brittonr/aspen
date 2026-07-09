@@ -1,5 +1,7 @@
 # Peer Bootstrap Negotiation Delta: Explicit Peer Session Transition Relation
 
+## ADDED Requirements
+
 ### Requirement: Peer session transition relation is closed
 r[molten.peer_session.transition_relation_closed] Molten MUST define a reviewed finite peer-session transition relation over prior state, requested event, target state, and explicit guard facts, and MUST deny any peer-session transition not present in that relation before advancing session state.
 

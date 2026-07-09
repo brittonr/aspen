@@ -41,25 +41,17 @@ pub(crate) enum Command {
 
 pub(crate) fn run(command: Command) -> Outcome<()> {
     match command {
-        Command::InviteCreate { peer, out } => {
-            write_transition(peer, molten::peer_bootstrap::PeerSessionStateKind::Invited, out)
-        }
-        Command::InviteAccept { peer, out } => {
-            write_transition(peer, molten::peer_bootstrap::PeerSessionStateKind::Admitted, out)
-        }
-        Command::Connect { peer, out } => {
-            write_transition(peer, molten::peer_bootstrap::PeerSessionStateKind::Connected, out)
-        }
+        Command::InviteCreate { peer, out } => write_transition(peer, molten::peer_bootstrap::StateKind::Invited, out),
+        Command::InviteAccept { peer, out } => write_transition(peer, molten::peer_bootstrap::StateKind::Admitted, out),
+        Command::Connect { peer, out } => write_transition(peer, molten::peer_bootstrap::StateKind::Connected, out),
         Command::Status { peer } => {
-            let session = base_session(&peer, molten::peer_bootstrap::PeerSessionStateKind::Discovered)?;
+            let session = base_record(&peer, molten::peer_bootstrap::StateKind::Discovered)?;
             println!("peer status peer={} state={} session={}", peer, session.state.as_str(), session.session_ref);
             Ok(())
         }
-        Command::Revoke { peer, out } => {
-            write_transition(peer, molten::peer_bootstrap::PeerSessionStateKind::Revoked, out)
-        }
+        Command::Revoke { peer, out } => write_transition(peer, molten::peer_bootstrap::StateKind::Revoked, out),
         Command::Diagnose { peer } => {
-            let denial = molten::peer_bootstrap::peer_session_as_authority_denial(&synthetic_ref(&peer)?, "diagnose")?;
+            let denial = molten::peer_bootstrap::record_as_authority_denial(&synthetic_ref(&peer)?, "diagnose")?;
             println!(
                 "peer diagnose peer={} decision={} diagnostics={}",
                 peer,
@@ -71,17 +63,20 @@ pub(crate) fn run(command: Command) -> Outcome<()> {
     }
 }
 
-fn write_transition(peer: String, target: molten::peer_bootstrap::PeerSessionStateKind, out: FilePath) -> Outcome<()> {
+fn write_transition(peer: String, target: molten::peer_bootstrap::StateKind, out: FilePath) -> Outcome<()> {
     let authority_ref = synthetic_ref("authority")?;
     let bootstrap_ref = synthetic_ref("bootstrap")?;
-    let prior = base_session(&peer, prior_state(target))?;
-    let receipt = molten::peer_bootstrap::apply_peer_transition(&molten::peer_bootstrap::PeerTransitionInput {
+    let prior = base_record(&peer, prior_state(target))?;
+    let receipt = molten::peer_bootstrap::apply_transition(&molten::peer_bootstrap::TransitionInput {
         prior,
+        event: event_for_target(target),
         target,
         observed_topic: "node-control".to_string(),
         at_tick: CLI_TICK,
         required_bootstrap_ref: Some(bootstrap_ref),
-        required_authority_ref: Some(authority_ref),
+        required_authority_ref: Some(authority_ref.clone()),
+        required_recovery_ref: None,
+        revocation_ref: revocation_for_target(target, authority_ref),
     })?;
     std::fs::write(&out, molten::preserves_rail::to_text(&receipt.value)?)?;
     println!(
@@ -95,29 +90,38 @@ fn write_transition(peer: String, target: molten::peer_bootstrap::PeerSessionSta
     Ok(())
 }
 
-fn prior_state(target: molten::peer_bootstrap::PeerSessionStateKind) -> molten::peer_bootstrap::PeerSessionStateKind {
+fn event_for_target(target: molten::peer_bootstrap::StateKind) -> molten::peer_bootstrap::EventKind {
     match target {
-        molten::peer_bootstrap::PeerSessionStateKind::Invited => {
-            molten::peer_bootstrap::PeerSessionStateKind::Discovered
-        }
-        molten::peer_bootstrap::PeerSessionStateKind::Admitted => {
-            molten::peer_bootstrap::PeerSessionStateKind::Negotiated
-        }
-        molten::peer_bootstrap::PeerSessionStateKind::Connected => {
-            molten::peer_bootstrap::PeerSessionStateKind::Admitted
-        }
-        molten::peer_bootstrap::PeerSessionStateKind::Revoked => {
-            molten::peer_bootstrap::PeerSessionStateKind::Connected
-        }
+        molten::peer_bootstrap::StateKind::Invited => molten::peer_bootstrap::EventKind::Invite,
+        molten::peer_bootstrap::StateKind::Admitted => molten::peer_bootstrap::EventKind::Admit,
+        molten::peer_bootstrap::StateKind::Connected => molten::peer_bootstrap::EventKind::Connect,
+        molten::peer_bootstrap::StateKind::Revoked => molten::peer_bootstrap::EventKind::Revoke,
+        molten::peer_bootstrap::StateKind::Expired => molten::peer_bootstrap::EventKind::Expire,
+        molten::peer_bootstrap::StateKind::Quarantined => molten::peer_bootstrap::EventKind::Quarantine,
+        _ => molten::peer_bootstrap::EventKind::Recover,
+    }
+}
+
+fn revocation_for_target(target: molten::peer_bootstrap::StateKind, authority_ref: String) -> Option<String> {
+    if target == molten::peer_bootstrap::StateKind::Revoked {
+        Some(authority_ref)
+    } else {
+        None
+    }
+}
+
+fn prior_state(target: molten::peer_bootstrap::StateKind) -> molten::peer_bootstrap::StateKind {
+    match target {
+        molten::peer_bootstrap::StateKind::Invited => molten::peer_bootstrap::StateKind::Discovered,
+        molten::peer_bootstrap::StateKind::Admitted => molten::peer_bootstrap::StateKind::Negotiated,
+        molten::peer_bootstrap::StateKind::Connected => molten::peer_bootstrap::StateKind::Admitted,
+        molten::peer_bootstrap::StateKind::Revoked => molten::peer_bootstrap::StateKind::Connected,
         other => other,
     }
 }
 
-fn base_session(
-    peer: &str,
-    state: molten::peer_bootstrap::PeerSessionStateKind,
-) -> Outcome<molten::peer_bootstrap::PeerSession> {
-    Ok(molten::peer_bootstrap::PeerSession {
+fn base_record(peer: &str, state: molten::peer_bootstrap::StateKind) -> Outcome<molten::peer_bootstrap::Record> {
+    Ok(molten::peer_bootstrap::Record {
         peer_ref: synthetic_ref(peer)?,
         session_ref: synthetic_ref(&format!("session:{peer}"))?,
         topic: "node-control".to_string(),
