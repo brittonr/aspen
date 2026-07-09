@@ -747,3 +747,4 @@ nix flake check
 - [`n0-computer/iroh-metrics`](https://github.com/n0-computer/iroh-metrics) — reference patterns for bounded counters, gauges, histograms, and OpenMetrics export.
 - [`n0-computer/iroh-services`](https://github.com/n0-computer/iroh-services) — reference patterns for optional external metrics/diagnostics service integration and remote diagnostics capabilities.
 - [`n0-computer/n0-watcher`](https://github.com/n0-computer/n0-watcher) — reference patterns for latest-state watchers without unbounded intermediate-value buffering.
+- [`rkyv`](https://github.com/rkyv/rkyv) — reference zero-copy Rust archive format for optional derived local cache materializations; Preserves remains Molten's canonical evidence and storage boundary.
