@@ -4,12 +4,18 @@ pub(super) fn parse(command: super::Command) -> molten::error::Result<()> {
         out,
         dependency_refs,
         dependency_closure_hash,
+        artifact_refs,
+        schema_refs,
         handler_profile_ref,
         policy_refs,
         capability_refs,
+        resource_refs,
+        effect_manifest_refs,
         revocation_refs,
         seed_ref,
+        logical_time,
         expected_refs,
+        resolution_refs,
     } = command
     else {
         return dispatch_mismatch("parse");
@@ -18,12 +24,18 @@ pub(super) fn parse(command: super::Command) -> molten::error::Result<()> {
     let transcript = molten::transcripts::parse_markdown(&source, &molten::transcripts::TranscriptParseInput {
         dependency_refs,
         dependency_closure_hash,
+        artifact_refs,
+        schema_refs,
         handler_profile_ref,
         policy_refs,
         capability_refs,
+        resource_refs,
+        effect_manifest_refs,
         revocation_refs,
         seed_ref,
+        logical_time,
         expected_refs,
+        resolution_refs,
     })?;
     super::io::write_file(&out, &molten::preserves_rail::to_text(&transcript.value)?)?;
     println!(

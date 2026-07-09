@@ -86,11 +86,12 @@ fn push_stanza_from_fence(input: StanzaFenceInput<'_>) -> Result<()> {
     for token in tokens {
         modifiers.push(parse_modifier_token(token)?);
     }
+    let declared_refs = declared_refs_from_modifiers(&modifiers)?;
     push_stanza(PushStanzaInput {
         kind,
         modifiers,
         content: input.content,
-        declared_refs: Vec::new(),
+        declared_refs,
         stanzas: input.stanzas,
     })
 }
@@ -128,6 +129,9 @@ fn run_stanza(
     if stanza.has_modifier("skip") {
         return stanza_outcome(stanza, DECISION_SKIP, None, vec!["stanza skipped by modifier".to_string()]);
     }
+    if let Some(diagnostic) = stanza_binding_denial(transcript, stanza)? {
+        return stanza_outcome(stanza, DECISION_DENY, None, vec![diagnostic]);
+    }
     match execute_stanza(state, transcript, stanza) {
         Ok(output) => {
             if stanza.has_modifier("error") {
@@ -155,7 +159,7 @@ fn run_stanza(
 
 fn execute_stanza(
     state: &mut RunnerState,
-    _transcript: &TranscriptArtifact,
+    transcript: &TranscriptArtifact,
     stanza: &TranscriptStanza,
 ) -> Result<Option<IoValue>> {
     match stanza.kind.as_str() {
@@ -173,13 +177,20 @@ fn execute_stanza(
             }
             Ok(Some(value))
         }
-        KIND_MOLTEN_CLI => execute_molten_cli(state, &stanza.content),
+        KIND_MOLTEN_CLI => {
+            let admission = stanza_admission_refs(transcript, stanza)?;
+            execute_molten_cli(state, &stanza.content, &admission)
+        }
         KIND_EXPECT => execute_expectation(state, &stanza.content),
         other => Err(MoltenError::invalid_harness(format!("unsupported transcript stanza kind {other}"))),
     }
 }
 
-fn execute_molten_cli(state: &mut RunnerState, content: &str) -> Result<Option<IoValue>> {
+fn execute_molten_cli(
+    state: &mut RunnerState,
+    content: &str,
+    admission: &StanzaAdmissionRefs,
+) -> Result<Option<IoValue>> {
     let args = content.split_whitespace().collect::<Vec<_>>();
     if args.is_empty() {
         return Err(MoltenError::invalid_harness("empty molten-cli stanza"));
@@ -188,11 +199,14 @@ fn execute_molten_cli(state: &mut RunnerState, content: &str) -> Result<Option<I
         return Err(MoltenError::invalid_harness("molten-cli stanzas must start with `test`"));
     }
     match args.get(1).copied() {
-        Some("artifact") => execute_artifact_cli(state, &args[2..]),
+        Some("artifact") => execute_artifact_cli(state, &args[2..], admission),
         Some("schema") => execute_schema_cli(state, &args[2..]),
         Some("storage") => execute_storage_cli(state, &args[2..]),
         Some("cache") => execute_cache_cli(state, &args[2..]),
         Some("report") => execute_report_cli(state),
+        Some("nondeterministic") => Err(MoltenError::invalid_harness(
+            "nondeterministic transcript output is denied unless canonicalized by an admitted handler",
+        )),
         Some(other) => {
             Err(MoltenError::invalid_harness(format!("unsupported transcript molten-cli test command {other}")))
         }
@@ -200,7 +214,11 @@ fn execute_molten_cli(state: &mut RunnerState, content: &str) -> Result<Option<I
     }
 }
 
-fn execute_artifact_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<IoValue>> {
+fn execute_artifact_cli(
+    state: &mut RunnerState,
+    args: &[&str],
+    admission: &StanzaAdmissionRefs,
+) -> Result<Option<IoValue>> {
     match args.first().copied() {
         Some("install") => {
             let kind = option_value(args, "--kind").unwrap_or("artifact");
@@ -211,13 +229,13 @@ fn execute_artifact_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option
                 crate::artifacts::install_artifact(&state.registry, &crate::artifacts::ArtifactInstallInput {
                     kind: kind.to_string(),
                     payload,
-                    schema_refs: vec![local_ref("transcript-artifact-schema", kind)?],
+                    schema_refs: ref_binding_or_default(&admission.schema_refs, "transcript-artifact-schema", kind)?,
                     dependency_refs: Vec::new(),
-                    effect_manifest_ref: None,
-                    policy_refs: vec![local_ref("transcript-artifact-policy", kind)?],
-                    evidence_refs: vec![local_ref("transcript-artifact-evidence", kind)?],
+                    effect_manifest_ref: optional_first_ref(&admission.effect_manifest_refs),
+                    policy_refs: ref_binding_or_default(&admission.policy_refs, "transcript-artifact-policy", kind)?,
+                    evidence_refs: install_evidence_refs(admission, kind)?,
                     installer_ref: local_ref("transcript-runner", kind)?,
-                    capability_refs: vec![local_ref("transcript-artifact-capability", kind)?],
+                    capability_refs: ref_binding_or_default(&admission.capability_refs, "transcript-artifact-capability", kind)?,
                 })?;
             state.last_artifact_ref = Some(install.artifact_ref.clone());
             Ok(Some(install.artifact.value))

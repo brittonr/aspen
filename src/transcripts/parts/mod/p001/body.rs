@@ -1,7 +1,7 @@
 
 pub fn parse_transcript_stanza(value: &IoValue) -> Result<TranscriptStanza> {
     let fields = value
-        .collect_simple_record("transcript-stanza-v1", Some(7))
+        .collect_simple_record("transcript-stanza-v1", Some(TRANSCRIPT_STANZA_FIELD_COUNT))
         .ok_or_else(|| MoltenError::invalid_harness("expected <transcript-stanza-v1 ...>"))?;
     require_schema(&fields[0], TRANSCRIPT_STANZA_SCHEMA, "transcript stanza")?;
     let input = value_to_iovalue(&fields[4]);
@@ -46,6 +46,7 @@ pub fn run_transcript(transcript: &TranscriptArtifact, input: &TranscriptRunInpu
         let outcome = run_stanza(&mut state, transcript, stanza)?;
         state.last_decision = Some(outcome.decision.clone());
         state.last_kind = Some(outcome.kind.clone());
+        state.last_diagnostics = outcome.diagnostics.clone();
         state.last_output = outcome.output.clone();
         outcomes.push(outcome);
     }
@@ -55,7 +56,7 @@ pub fn run_transcript(transcript: &TranscriptArtifact, input: &TranscriptRunInpu
     let receipt = run_receipt_value(&RunReceiptValueInput {
         operation: "run",
         decision: &decision,
-        transcript_ref: &transcript.transcript_ref,
+        transcript,
         mode: input.mode.as_str(),
         outcomes: &outcomes,
         output: state.last_output.as_ref(),
@@ -89,7 +90,7 @@ fn denied_run(transcript: &TranscriptArtifact, input: &TranscriptRunInput) -> Re
     let receipt = run_receipt_value(&RunReceiptValueInput {
         operation: "deny",
         decision: DECISION_DENY,
-        transcript_ref: &transcript.transcript_ref,
+        transcript,
         mode: input.mode.as_str(),
         outcomes: std::slice::from_ref(&outcome),
         output: None,
@@ -165,11 +166,17 @@ fn store_run(
 
 pub fn parse_transcript_run_receipt(value: &IoValue) -> Result<TranscriptRunReceipt> {
     let fields = value
-        .collect_simple_record("transcript-run-receipt-v1", Some(11))
+        .collect_simple_record("transcript-run-receipt-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <transcript-run-receipt-v1 ...>"))?;
+    let field_count = fields.fields_iter().count();
+    if field_count != TRANSCRIPT_RUN_RECEIPT_FIELD_COUNT && field_count != TRANSCRIPT_RUN_RECEIPT_LEGACY_FIELD_COUNT {
+        return Err(MoltenError::invalid_harness(format!(
+            "transcript run receipt field count {field_count} is unsupported"
+        )));
+    }
     require_schema(&fields[0], TRANSCRIPT_RUN_RECEIPT_SCHEMA, "transcript run receipt")?;
     let outcomes = record_ref_sequence(&fields[5], "outcomes")?;
-    let checks = parse_checks(&fields[10])?;
+    let checks = parse_checks(&fields[field_count - 1])?;
     if checks.is_empty() {
         return Err(MoltenError::invalid_harness("transcript run receipt missing checks"));
     }
@@ -214,15 +221,13 @@ pub fn render_transcript(transcript: &TranscriptArtifact, run: Option<&Transcrip
 }
 
 pub fn transcript_cache_key(transcript: &TranscriptArtifact) -> Result<crate::eval_cache::KeyInput> {
-    let handler_profile_ref = transcript
-        .handler_profile_ref
-        .clone()
-        .unwrap_or(canonical_hash(&record("transcript-default-handler-profile", vec![string("deterministic-local")]))?);
+    let handler_profile_ref = effective_handler_profile_ref(transcript)?;
     let tool_ref = canonical_hash(&record("transcript-runner-tool", vec![string("molten-local-transcript-runner")]))?;
+    let cache_dependency_refs = transcript_cache_dependency_refs(transcript)?;
     let mut key = crate::eval_cache::transcript_run_key_placeholder(&crate::eval_cache::TranscriptRunKeyInput {
         transcript_ref: &transcript.transcript_ref,
         closure_hash: &transcript.dependency_closure_hash,
-        dependency_refs: &transcript.dependency_refs,
+        dependency_refs: &cache_dependency_refs,
         handler_profile_ref: &handler_profile_ref,
         harness_ref: &tool_ref,
         harness_version: RUNNER_TOOL_VERSION,
@@ -232,6 +237,9 @@ pub fn transcript_cache_key(transcript: &TranscriptArtifact) -> Result<crate::ev
     key.revocation_refs = transcript.revocation_refs.clone();
     if let Some(seed_ref) = transcript.seed_ref.as_ref() {
         key.assumption_refs.push(seed_ref.clone());
+    }
+    if let Some(logical_time_ref) = transcript_logical_time_ref(transcript.logical_time)? {
+        key.assumption_refs.push(logical_time_ref);
     }
     key.assumption_refs.extend(transcript.expected_refs.iter().cloned());
     Ok(key)
@@ -262,6 +270,7 @@ impl RunnerState {
             last_output: None,
             last_decision: None,
             last_kind: None,
+            last_diagnostics: Vec::new(),
             last_artifact_ref: None,
         })
     }

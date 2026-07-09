@@ -3,6 +3,10 @@ fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
+fn optional_u64_value(value: Option<u64>) -> IoValue {
+    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![u64_value(value)]))
+}
+
 fn parse_optional_ref_value(value: &PreservesValue<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
@@ -21,6 +25,16 @@ fn parse_optional_string_value(value: &PreservesValue<IoValue>) -> Result<Option
         return required_string(&fields[0], "optional string").map(Some);
     }
     required_string(value, "optional string").map(Some)
+}
+
+fn parse_optional_u64_value(value: &PreservesValue<IoValue>) -> Result<Option<u64>> {
+    if value.collect_simple_record("none", Some(0)).is_some() {
+        return Ok(None);
+    }
+    if let Some(fields) = value.collect_simple_record("some", Some(1)) {
+        return required_u64(&fields[0], "optional u64").map(Some);
+    }
+    required_u64(value, "optional u64").map(Some)
 }
 
 fn record_string(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
@@ -45,6 +59,12 @@ fn record_optional_ref(value: &PreservesValue<IoValue>, label: &str) -> Result<O
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
+}
+
+fn record_optional_u64(value: &PreservesValue<IoValue>, label: &str) -> Result<Option<u64>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    parse_optional_u64_value(&record[0])
 }
 
 fn record_ref_sequence(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<String>> {
@@ -213,6 +233,110 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
         validate_ref(value_ref, field)?;
     }
     Ok(())
+}
+
+fn transcript_dependency_binding_refs(input: &TranscriptParseInput, stanzas: &[TranscriptStanza]) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
+    extend_transcript_parse_refs(input, &mut refs)?;
+    for stanza in stanzas {
+        extend_cloned_refs(&mut refs, &stanza.declared_refs, "transcript stanza declared ref")?;
+    }
+    Ok(sorted_unique(&refs))
+}
+
+fn transcript_all_binding_refs(transcript: &TranscriptArtifact) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
+    extend_cloned_refs(&mut refs, &transcript.dependency_refs, "transcript dependency ref")?;
+    extend_cloned_refs(&mut refs, &transcript.artifact_refs, "transcript artifact ref")?;
+    extend_cloned_refs(&mut refs, &transcript.schema_refs, "transcript schema ref")?;
+    extend_cloned_refs(&mut refs, &transcript.policy_refs, "transcript policy ref")?;
+    extend_cloned_refs(&mut refs, &transcript.capability_refs, "transcript capability ref")?;
+    extend_cloned_refs(&mut refs, &transcript.resource_refs, "transcript resource ref")?;
+    extend_cloned_refs(&mut refs, &transcript.effect_manifest_refs, "transcript effect manifest ref")?;
+    extend_cloned_refs(&mut refs, &transcript.revocation_refs, "transcript revocation ref")?;
+    extend_cloned_refs(&mut refs, &transcript.expected_refs, "transcript expected ref")?;
+    extend_cloned_refs(&mut refs, &transcript.resolution_refs, "transcript resolution ref")?;
+    for stanza in &transcript.stanzas {
+        extend_cloned_refs(&mut refs, &stanza.declared_refs, "transcript stanza declared ref")?;
+    }
+    push_ref(
+        &mut refs,
+        effective_handler_profile_ref(transcript)?,
+        "transcript handler profile ref",
+    )?;
+    if let Some(seed) = transcript.seed_ref.as_ref() {
+        push_ref(&mut refs, seed.clone(), "transcript seed ref")?;
+    }
+    if let Some(logical_time_ref) = transcript_logical_time_ref(transcript.logical_time)? {
+        push_ref(&mut refs, logical_time_ref, "transcript logical time ref")?;
+    }
+    Ok(sorted_unique(&refs))
+}
+
+fn transcript_cache_dependency_refs(transcript: &TranscriptArtifact) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
+    extend_cloned_refs(&mut refs, &transcript.dependency_refs, "transcript dependency ref")?;
+    extend_cloned_refs(&mut refs, &transcript.artifact_refs, "transcript artifact ref")?;
+    extend_cloned_refs(&mut refs, &transcript.schema_refs, "transcript schema ref")?;
+    extend_cloned_refs(&mut refs, &transcript.resource_refs, "transcript resource ref")?;
+    extend_cloned_refs(&mut refs, &transcript.effect_manifest_refs, "transcript effect manifest ref")?;
+    extend_cloned_refs(&mut refs, &transcript.resolution_refs, "transcript resolution ref")?;
+    for stanza in &transcript.stanzas {
+        extend_cloned_refs(&mut refs, &stanza.declared_refs, "transcript stanza declared ref")?;
+    }
+    Ok(sorted_unique(&refs))
+}
+
+fn extend_transcript_parse_refs(input: &TranscriptParseInput, refs: &mut Vec<String>) -> Result<()> {
+    extend_cloned_refs(refs, &input.dependency_refs, "transcript dependency ref")?;
+    extend_cloned_refs(refs, &input.artifact_refs, "transcript artifact ref")?;
+    extend_cloned_refs(refs, &input.schema_refs, "transcript schema ref")?;
+    extend_cloned_refs(refs, &input.policy_refs, "transcript policy ref")?;
+    extend_cloned_refs(refs, &input.capability_refs, "transcript capability ref")?;
+    extend_cloned_refs(refs, &input.resource_refs, "transcript resource ref")?;
+    extend_cloned_refs(refs, &input.effect_manifest_refs, "transcript effect manifest ref")?;
+    extend_cloned_refs(refs, &input.revocation_refs, "transcript revocation ref")?;
+    extend_cloned_refs(refs, &input.expected_refs, "transcript expected ref")?;
+    extend_cloned_refs(refs, &input.resolution_refs, "transcript resolution ref")?;
+    if let Some(handler) = input.handler_profile_ref.as_ref() {
+        push_ref(refs, handler.clone(), "transcript handler profile ref")?;
+    }
+    if let Some(seed) = input.seed_ref.as_ref() {
+        push_ref(refs, seed.clone(), "transcript seed ref")?;
+    }
+    if let Some(logical_time_ref) = transcript_logical_time_ref(input.logical_time)? {
+        push_ref(refs, logical_time_ref, "transcript logical time ref")?;
+    }
+    Ok(())
+}
+
+fn extend_cloned_refs(refs: &mut Vec<String>, values: &[String], field: &str) -> Result<()> {
+    for value in values {
+        push_ref(refs, value.clone(), field)?;
+    }
+    Ok(())
+}
+
+fn push_ref(refs: &mut Vec<String>, value_ref: String, field: &str) -> Result<()> {
+    validate_ref(&value_ref, field)?;
+    push_bounded(refs, value_ref, MAX_TRANSCRIPT_SEQUENCE_ITEMS, field)
+}
+
+fn transcript_logical_time_ref(logical_time: Option<u64>) -> Result<Option<String>> {
+    logical_time
+        .map(|value| canonical_hash(&record("transcript-logical-time-v1", vec![u64_value(value)])))
+        .transpose()
+}
+
+fn effective_handler_profile_ref(transcript: &TranscriptArtifact) -> Result<String> {
+    match transcript.handler_profile_ref.as_ref() {
+        Some(handler_profile_ref) => Ok(handler_profile_ref.clone()),
+        None => default_handler_profile_ref(),
+    }
+}
+
+fn default_handler_profile_ref() -> Result<String> {
+    canonical_hash(&record("transcript-default-handler-profile", vec![string("deterministic-local")]))
 }
 
 fn validate_decision(decision: &str) -> Result<()> {

@@ -7,16 +7,7 @@ pub(super) fn read_transcript_input(
     {
         return Ok(transcript);
     }
-    molten::transcripts::parse_markdown(&text, &molten::transcripts::TranscriptParseInput {
-        dependency_refs: Vec::new(),
-        dependency_closure_hash: None,
-        handler_profile_ref: None,
-        policy_refs: Vec::new(),
-        capability_refs: Vec::new(),
-        revocation_refs: Vec::new(),
-        seed_ref: None,
-        expected_refs: Vec::new(),
-    })
+    molten::transcripts::parse_markdown(&text, &molten::transcripts::TranscriptParseInput::default())
 }
 
 pub(super) fn read_preserves_file(path: &std::path::Path) -> molten::error::Result<preserves::IOValue> {

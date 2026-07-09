@@ -24,12 +24,18 @@ fn parse_transcript_fixture(dir: &Path) -> TranscriptFixture {
         out: transcript_out.clone(),
         dependency_refs: Vec::new(),
         dependency_closure_hash: None,
+        artifact_refs: Vec::new(),
+        schema_refs: Vec::new(),
         handler_profile_ref: None,
         policy_refs: Vec::new(),
         capability_refs: Vec::new(),
+        resource_refs: Vec::new(),
+        effect_manifest_refs: Vec::new(),
         revocation_refs: Vec::new(),
         seed_ref: None,
+        logical_time: None,
         expected_refs: Vec::new(),
+        resolution_refs: Vec::new(),
     })
     .expect("transcript parse");
     TranscriptFixture {
