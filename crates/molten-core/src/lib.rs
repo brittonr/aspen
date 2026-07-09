@@ -52,5 +52,11 @@ pub mod prelude {
     pub use crate::stack::StackEvidenceMember;
     pub use crate::stack::StackEvidenceRole;
     pub use crate::stack::StackEvidenceSummary;
+    pub use crate::stack::ValenceStackAdapterIssue;
+    pub use crate::stack::ValenceStackAdapterReport;
+    pub use crate::stack::ValenceStackAdapterReportRow;
+    pub use crate::stack::ValenceStackAdapterRow;
+    pub use crate::stack::default_valence_stack_adapter_rows;
     pub use crate::stack::validate_stack_evidence_envelope;
+    pub use crate::stack::validate_valence_stack_adapter;
 }

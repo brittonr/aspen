@@ -508,6 +508,42 @@ r[molten.octet_gates.reference_boundary] Molten MUST treat Octet checks and Vale
 - WHEN an operator inspects the evidence
 - THEN the report identifies the function object ref, source caveats, fingerprint metadata, and the fact that it does not prove behavioral correctness.
 
+### Requirement: Valence stack evidence adapter contract
+r[molten.evidence.valence_stack_adapter.contract] Molten MUST define a stack evidence adapter contract that maps local stack evidence members to Valence role/schema vocabulary while preserving Molten runtime and release-gate ownership.
+
+#### Scenario: Complete stack envelope maps to Valence vocabulary
+r[molten.evidence.valence_stack_adapter.fixtures.positive]
+- GIVEN a stack evidence envelope contains Basalt, UCAN, Trellis, Octet, Valence, Cairn, and Mantle members with valid artifact refs, verification roles, supported schemas, and evidence-only non-claims
+- WHEN the Molten-to-Valence adapter validates the envelope
+- THEN validation MUST pass and report the corresponding Valence role/schema rows.
+
+### Requirement: Invalid stack evidence fails closed
+r[molten.evidence.valence_stack_adapter.validation] Molten MUST fail closed when stack evidence role, ref, schema, verification-role, non-claim, or Valence vocabulary compatibility is missing or inconsistent.
+
+#### Scenario: Missing or malformed member fails
+r[molten.evidence.valence_stack_adapter.fixtures.negative]
+- GIVEN a stack evidence envelope has a missing role, duplicate role, malformed BLAKE3 ref, unsupported schema, missing verification role, missing evidence-only non-claim, overbroad authority claim, or Valence vocabulary mismatch
+- WHEN adapter validation runs
+- THEN validation MUST fail with deterministic diagnostics naming the invalid member and rule.
+
+### Requirement: Adapter is pure core
+r[molten.evidence.valence_stack_adapter.pure_core] The stack evidence adapter MUST be implemented as pure deterministic core logic over in-memory inputs.
+
+#### Scenario: Shell owns side effects
+r[molten.evidence.valence_stack_adapter.pure_core.shell]
+- GIVEN a future CLI or harness loads Valence role policy or stack evidence artifacts from files
+- WHEN validation is invoked
+- THEN file reads, process execution, network access, clock access, and output rendering MUST remain outside the adapter core.
+
+### Requirement: Stack adapter remains evidence-only
+r[molten.evidence.valence_stack_adapter.docs] A passing stack evidence adapter report MUST NOT grant runtime authority, release authority, transport trust, storage trust, UCAN authority, or permission to bypass subsystem gates.
+
+#### Scenario: Boundary is visible
+r[molten.evidence.valence_stack_adapter.final_validation]
+- GIVEN a stack evidence adapter report passes
+- WHEN an operator reads the supported claim
+- THEN the report MUST state that it proves only stack evidence role/schema/ref compatibility and evidence-only non-claim conformance.
+
 ### Requirement: Critical source-surface markers
 r[molten.octet_gates.source_surface_markers] Molten MUST identify critical source surfaces for Octet/Valence gating by marker attributes, module paths, object-corpus source paths, remediation-plan critical-surface inventory, or Octet config. Initial surfaces include core transitions, adapter boundaries, test capabilities, secret/capability-bearing types, harness report/oracle validators, redaction/export paths, protocol transition gates, and golden update tools.
 
@@ -1612,7 +1648,6 @@ r[molten.evidence.contract_export_drift.local_deterministic_gate] Contract expor
 - WHEN the CI or release-review drift gate runs
 - THEN it produces deterministic pass or fail evidence using only source-controlled inputs and local toolchains
 
-
 ### Requirement: Evidence, policy, runtime, and adapters have explicit ownership
 r[molten.modularity.layer_boundaries.ownership] Evidence, policy, runtime, and adapter modules SHOULD have documented ownership boundaries before code is extracted across crate boundaries.
 
@@ -1660,7 +1695,6 @@ r[molten.modularity.layer_boundaries.tests] Layer-boundary refactors SHOULD incl
 - WHEN reviewers inspect test evidence
 - THEN the tests cover at least one admitted flow and at least one denial where evidence, policy, runtime, or adapter responsibilities could otherwise be confused
 
-
 ### Requirement: Retention responsibilities are semantically separated
 r[molten.retention.modularity.boundaries] Retention implementation SHOULD separate destructive admission, GC planning, plan application, audit, store persistence, bundle export, live remote-clearance transport, and receipt construction into reviewable boundaries.
 
@@ -1697,7 +1731,6 @@ r[molten.retention.modularity.tests] Retention boundary refactors SHOULD include
 - GIVEN a negative retention fixture
 - WHEN the pure planner evaluates it
 - THEN it denies before destructive side effects and returns an empty destructive-effect plan
-
 
 ### Requirement: Stack evidence envelope
 r[molten.evidence.stack_adapters.envelope] Molten MUST define a canonical stack evidence envelope for upstream Basalt, UCAN, Trellis, Octet, Valence, Cairn, and Mantle inputs used by runtime admission or release evidence decisions.

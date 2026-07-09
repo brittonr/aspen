@@ -33,7 +33,7 @@ pub fn validate_domain_artifact(input: &DomainArtifactInput<'_>) -> Result<Domai
     if input.domain.is_empty() {
         return Err(CodecIssue::EmptyDomain);
     }
-    if !input.supported_labels.iter().any(|label| *label == input.label) {
+    if !input.supported_labels.contains(&input.label) {
         return Err(CodecIssue::UnsupportedLabel(input.label.to_string()));
     }
     if input.schema != input.expected_schema {

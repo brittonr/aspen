@@ -73,7 +73,7 @@ fn validate_measurement(
     if !valid_blake3_ref(measurement.blake3_ref) {
         issues.push(PreservesBoundaryIssue::StaleBlake3Ref(measurement.artifact_family.to_string()));
     }
-    if !row.allowed_consumers.iter().any(|consumer| *consumer == measurement.consumer) {
+    if !row.allowed_consumers.contains(&measurement.consumer) {
         issues.push(PreservesBoundaryIssue::UnsupportedConsumer {
             family: measurement.artifact_family.to_string(),
             consumer: measurement.consumer.to_string(),
