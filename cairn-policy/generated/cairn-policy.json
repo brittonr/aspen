@@ -932,6 +932,12 @@
     }
   },
   "name": "cairn-default",
+  "policy_schema_compatibility": {
+    "field_set_digest": "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9a0e2bb909b42",
+    "producer": "cairn policy export",
+    "refresh_command": "nix run path:$CAIRN_SOURCE#cairn -- policy export --output cairn-policy/generated/cairn-policy.json",
+    "schema_version": "cairn.policy-schema.v1"
+  },
   "probe_policy": {
     "command_profiles": [
       {
@@ -2371,6 +2377,28 @@
       "FAIL"
     ]
   },
+  "runtime_evidence_policy": {
+    "aggregation_profiles": [
+      "smoke",
+      "release",
+      "dogfood"
+    ],
+    "allowed_capture_origins": [
+      "boundary_captured",
+      "ingested_telemetry",
+      "wrapper_asserted",
+      "unknown"
+    ],
+    "allowed_hash_algorithms": [
+      "BLAKE3"
+    ],
+    "forbidden_summary_fragments": [
+      "SECRET=",
+      "token=",
+      "/home/"
+    ],
+    "max_summary_bytes": 256
+  },
   "schemas": [
     {
       "artifacts": [
@@ -2406,6 +2434,16 @@
       "id": "spec-driven"
     }
   ],
+  "stack_provenance_gate": {
+    "accepted_valence_policy_hashes": [
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "allowed_claim_scopes": [
+      "stack_provenance.v1.lifecycle_policy_conformance"
+    ],
+    "mode": "optional",
+    "required_boundary": "Molten consumes stack provenance as evidence-only lifecycle and release metadata; it does not prove source-code correctness, upstream verifier soundness, runtime authority, deployment trust, or behavioral correctness by itself"
+  },
   "steel_orchestration_policy": {
     "enabled": false,
     "profiles": [
@@ -2458,6 +2496,60 @@
       "tasks"
     ],
     "strictness": "strict"
+  },
+  "traceability_policy": {
+    "default_profile": "cairn-default",
+    "profiles": [
+      {
+        "evidence_sources": [
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "src",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "tests",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "ncl"
+            ],
+            "root": "docs",
+            "source_kind": "nickel_source"
+          },
+          {
+            "extensions": [
+              "rs",
+              "sh"
+            ],
+            "root": "scripts",
+            "source_kind": "tool_source"
+          }
+        ],
+        "id": "cairn-default",
+        "marker_verbs": [
+          "impl",
+          "verify",
+          "depends",
+          "related"
+        ],
+        "requirement_sources": [
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs",
+            "source_kind": "accepted_specs"
+          }
+        ]
+      }
+    ]
   },
   "version": 1
 }

@@ -98,6 +98,15 @@ pub fn parse_manifest_value(value: &IoValue, expected_manifest_ref: Option<&str>
     validate_content_ref_field(&root_ref, "chunk manifest root-ref")?;
     validate_content_ref_sequence(&evidence_refs, "chunk manifest evidence-ref")?;
     let manifest_ref = canonical_hash(value)?;
+    molten_core::codec::validate_domain_artifact(&molten_core::codec::DomainArtifactInput {
+        domain: "chunk-store",
+        label: "chunk-manifest-v1",
+        schema: CHUNK_MANIFEST_SCHEMA,
+        artifact_ref: &manifest_ref,
+        expected_schema: CHUNK_MANIFEST_SCHEMA,
+        supported_labels: &["chunk-manifest-v1"],
+    })
+    .map_err(|issue| MoltenError::invalid_harness(format!("chunk manifest codec facade rejected artifact: {issue}")))?;
     if let Some(expected) = expected_manifest_ref
         && manifest_ref != expected
     {

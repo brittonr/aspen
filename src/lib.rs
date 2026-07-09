@@ -245,6 +245,16 @@ compat_module!(upgrades, migrations);
 #[path = "test/support.rs"]
 pub(crate) mod test_support;
 
+pub mod core_api {
+    pub use molten_core::*;
+}
+
+pub mod prelude {
+    pub use crate::MoltenError;
+    pub use crate::Result;
+    pub use crate::core_api::prelude::*;
+}
+
 pub use failures::MoltenError;
 pub use failures::Result;
 
@@ -254,8 +264,36 @@ pub fn greeting() -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use super::prelude::*;
+
     #[test]
     fn greeting_mentions_project_name() {
         assert!(super::greeting().contains("molten"));
+    }
+
+    #[test]
+    fn prelude_exposes_core_boundary_planner() {
+        let admitted = AdmissionInputs {
+            has_authority: true,
+            evidence_fresh: true,
+            resource_allowed: true,
+            adapter_supported: true,
+        };
+        let plan = plan_adapter_effects(admitted, &[EffectKind::ReceiptWrite]);
+        assert_eq!(plan.decision, BoundaryDecision::Admit);
+        assert_eq!(plan.effects, vec![EffectKind::ReceiptWrite]);
+    }
+
+    #[test]
+    fn prelude_boundary_planner_denies_missing_authority_without_effects() {
+        let denied = AdmissionInputs {
+            has_authority: false,
+            evidence_fresh: true,
+            resource_allowed: true,
+            adapter_supported: true,
+        };
+        let plan = plan_adapter_effects(denied, &[EffectKind::StoreWrite]);
+        assert_eq!(plan.decision, BoundaryDecision::Deny);
+        assert!(plan.effects.is_empty());
     }
 }

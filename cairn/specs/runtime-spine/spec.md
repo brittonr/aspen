@@ -3532,3 +3532,143 @@ r[molten.typed_domains.negative_domains] Every newly introduced typed domain SHO
 - GIVEN a replay class outside the admitted vocabulary
 - WHEN the typed replay-class parser runs
 - THEN it returns an error with a domain-specific diagnostic.
+
+
+### Requirement: Effecting subsystems expose explicit ports or plans
+r[molten.modularity.adapter_ports.explicit_ports] Runtime subsystems that need storage, transport, execution, policy, clock, seed, or effect-log interaction SHOULD express those interactions through explicit ports, deterministic plan records, or input/output structs rather than direct hidden calls from pure decision logic.
+
+#### Scenario: Planner returns adapter plan
+- GIVEN a runtime workflow that may write storage, publish transport data, execute code, or record effect evidence
+- WHEN the pure planner evaluates valid admitted inputs
+- THEN it returns a structured decision and planned adapter operations without performing the side effect itself
+
+#### Scenario: Hidden side effect is rejected
+- GIVEN a module identified as pure planning or admission logic
+- WHEN reviewers inspect the implementation
+- THEN direct filesystem mutation, network publication, executor invocation, clock reads, environment reads, or process execution are absent or moved behind the shell boundary
+
+### Requirement: Admission precedes adapter effects
+r[molten.modularity.adapter_ports.admission_before_effects] Adapter shells MUST execute mutation, transport, execution, or persistence effects only after the pure planner or admission gate returns a pass decision for the requested operation.
+
+#### Scenario: Passing plan executes in shell
+- GIVEN a planner returns a pass decision with planned adapter operations
+- WHEN the shell executes the plan
+- THEN effects are performed through the declared adapter boundary and canonical outcome evidence is recorded
+
+#### Scenario: Denied plan does not mutate
+- GIVEN missing authority, stale evidence, malformed input, resource denial, or unsupported adapter capability
+- WHEN the planner evaluates the request
+- THEN it returns a deny or unavailable decision with no mutation, transport publication, executor invocation, or destructive operation in the planned operations
+
+### Requirement: Adapter outcomes are evidence-bearing
+r[molten.modularity.adapter_ports.effect_receipts] Adapter shells SHOULD record canonical evidence for performed, denied, unavailable, replayed, or failed adapter outcomes when the outcome affects deterministic replay, admission review, or release evidence.
+
+#### Scenario: Performed effect has receipt
+- GIVEN an admitted adapter operation is performed
+- WHEN the operation completes
+- THEN the shell records evidence binding the plan, adapter profile, operation identity, relevant refs, and outcome
+
+#### Scenario: Failed adapter does not grant trust
+- GIVEN an adapter operation fails because a service, transport, store, executor, or environment is unavailable
+- WHEN the shell records the outcome
+- THEN the evidence marks the operation unavailable or failed and does not convert availability into authority, policy, provenance, resource, or replay trust
+
+### Requirement: Adapter port changes carry positive and negative tests
+r[molten.modularity.adapter_ports.tests] Adapter port refactors SHOULD include positive plan/execution tests and negative denial tests for the extracted boundary.
+
+#### Scenario: Positive and negative port tests exist
+- GIVEN a port boundary is introduced or changed
+- WHEN reviewers inspect the test evidence
+- THEN admitted inputs and denied inputs are both covered, including proof that denied inputs do not produce planned side effects
+
+
+### Requirement: Domains own narrow canonical artifact façades
+r[molten.modularity.codec_facades.domain_owned] Domains that emit or consume canonical Preserves artifacts SHOULD expose narrow domain-owned constructors and parsers instead of requiring callers to assemble raw record labels and field sequences through a broad codec helper.
+
+#### Scenario: Caller uses domain façade
+- GIVEN a domain receipt, manifest, admission, or envelope artifact is constructed by repository-owned code
+- WHEN the construction site is reviewed after façade migration
+- THEN the caller uses a domain-owned function or type that names the artifact kind and input contract
+- AND low-level Preserves record assembly is hidden behind that façade unless the code is inside the codec layer itself
+
+#### Scenario: Raw assembly remains contained
+- GIVEN a call site still assembles a raw Preserves record directly
+- WHEN reviewers inspect the call site
+- THEN the code is either inside a codec/façade implementation or records an explicit migration exemption
+
+### Requirement: Codec façade migration preserves canonical identity
+r[molten.modularity.codec_facades.identity_preserving] Introducing a domain codec façade MUST preserve canonical Preserves bytes, BLAKE3 refs, schema labels, and parser decisions for existing artifact versions unless a separate versioned schema change owns the break.
+
+#### Scenario: Existing valid artifact keeps ref
+- GIVEN a representative valid artifact fixture for a migrated domain
+- WHEN the artifact is reconstructed through the new façade
+- THEN its canonical bytes and BLAKE3 ref match the pre-migration artifact
+
+#### Scenario: Identity drift fails review
+- GIVEN a façade migration changes canonical bytes for an existing artifact version
+- WHEN focused identity tests run
+- THEN the test fails unless the change is explicitly modeled as a new schema version with updated evidence
+
+### Requirement: Constructors and parsers stay symmetric
+r[molten.modularity.codec_facades.parser_symmetry] Domain codec façades SHOULD pair constructors with parsers or validators that reject malformed, stale, unsupported, or wrong-kind artifacts before downstream side effects.
+
+#### Scenario: Valid constructed artifact parses
+- GIVEN a valid artifact constructed by a domain façade
+- WHEN the paired parser consumes it
+- THEN parsing succeeds and returns typed domain data
+
+#### Scenario: Malformed artifact is rejected
+- GIVEN an artifact with a wrong label, missing required field, malformed content ref, unsupported version, or contradictory field
+- WHEN the paired parser consumes it
+- THEN parsing fails before authority, transport, storage, execution, or retention side effects occur
+
+### Requirement: Codec dependency direction remains inward
+r[molten.modularity.codec_facades.dependency_direction] Shared codec helpers MUST NOT depend on high-level runtime, node, retention, job, plugin, CLI, or adapter domains.
+
+#### Scenario: High-level import is blocked
+- GIVEN a shared codec helper imports a high-level domain module
+- WHEN dependency-boundary validation runs
+- THEN validation fails or records the violation before release evidence is promoted
+
+
+### Requirement: Preserves boundary profile
+r[molten.runtime_spine.preserves_boundary_profile.contract] Molten MUST define a Preserves boundary profile that records artifact family, schema label, canonical-byte requirement, BLAKE3 identity field, adapter owner, core DTO boundary, allowed consumers, and non-claims.
+
+#### Scenario: Canonical boundary artifact passes
+r[molten.runtime_spine.preserves_boundary_profile.fixtures.positive]
+- GIVEN a node control envelope, ticket, workflow bundle, receipt, or evidence envelope has canonical Preserves bytes, a supported schema label, BLAKE3 identity, adapter owner, and required non-claims
+- WHEN boundary profile validation runs
+- THEN validation MUST pass and preserve the artifact family and schema label.
+
+#### Scenario: Invalid boundary artifact fails
+r[molten.runtime_spine.preserves_boundary_profile.fixtures.negative]
+- GIVEN a boundary artifact has non-canonical bytes, missing schema label, stale BLAKE3 ref, unsupported consumer, or missing non-claims
+- WHEN boundary profile validation runs
+- THEN validation MUST fail with deterministic diagnostics.
+
+### Requirement: Adapter-only core boundary
+r[molten.runtime_spine.preserves_boundary_profile.validation] Molten runtime cores SHOULD consume typed DTOs produced by adapter modules rather than raw Preserves values for profile-managed surfaces.
+
+#### Scenario: Raw Preserves core coupling is rejected
+r[molten.runtime_spine.preserves_boundary_profile.validation.core_coupling]
+- GIVEN a profile-managed boundary surface is marked adapter-only
+- WHEN validation detects a new core module dependency on raw Preserves values for that surface
+- THEN validation MUST fail with a raw-preserves-core-coupling diagnostic.
+
+### Requirement: Boundary docs
+r[molten.runtime_spine.preserves_boundary_profile.docs] Documentation MUST state that the Preserves profile proves canonical boundary identity only.
+
+#### Scenario: Non-claim is visible
+r[molten.runtime_spine.preserves_boundary_profile.docs.non_claims]
+- GIVEN a profile report passes
+- WHEN the supported claim is rendered
+- THEN it MUST state that the profile does not prove transport liveness, actor authority correctness, replay completeness, or Valence Evidence IR acceptance.
+
+### Requirement: Final validation
+r[molten.runtime_spine.preserves_boundary_profile.final_validation] The change MUST include positive and negative fixtures plus focused validation evidence before archive.
+
+#### Scenario: Fixture suite covers boundary health
+r[molten.runtime_spine.preserves_boundary_profile.final_validation.fixtures]
+- GIVEN valid and invalid Preserves boundary fixtures
+- WHEN focused validation runs
+- THEN valid fixtures MUST pass and invalid fixtures MUST fail closed.

@@ -13,7 +13,7 @@ let UniqueStringArray = Prelude.contracts.UniqueStringArray in
 let SupportedPolicyVersion = Prelude.contract (Prelude.is_exact_integer PolicyVersion) in
 let Blake3Algorithm = Prelude.contract (Prelude.is_exact_string ReceiptHashAlgorithm) in
 let Canonicalization = Prelude.contract (Prelude.is_exact_string ReceiptHashCanonicalization) in
-let Blake3Hex = Prelude.contract (fun value =>
+let Blake3HexContract = Prelude.contract (fun value =>
   std.is_string value && std.string.is_match Blake3HexPattern value
 ) in
 
@@ -113,6 +113,28 @@ let Promoted = std.contract.from_predicate (fun value =>
 let SteelProfileMode = std.contract.from_predicate (fun value =>
   std.is_string value && (value == "disabled" || value == "comparison" || value == "opt_in" || value == "selected_default" || value == "broad_default")
 ) in
+let SafeRelativePath = std.contract.from_predicate (fun value =>
+  std.is_string value && std.string.length value > 0 && std.string.is_match "^[A-Za-z0-9][A-Za-z0-9._/-]*$" value
+) in
+let TraceabilityRequirementSourceKind = std.contract.from_predicate (fun value =>
+  std.is_string value && (value == "accepted_specs" || value == "requirements_doc")
+) in
+let TraceabilityEvidenceSourceKind = std.contract.from_predicate (fun value =>
+  std.is_string value && (value == "rust_source" || value == "nickel_source" || value == "tool_source")
+) in
+let TraceabilityMarkerVerb = std.contract.from_predicate (fun value =>
+  std.is_string value && (value == "impl" || value == "verify" || value == "depends" || value == "related")
+) in
+let TraceabilityExtension = std.contract.from_predicate (fun value =>
+  std.is_string value && std.string.length value > 0 && std.string.is_match "^[A-Za-z0-9_-]+$" value
+) in
+let StackProvenanceGateMode = std.contract.from_predicate (fun value =>
+  std.is_string value && (value == "disabled" || value == "optional" || value == "required")
+) in
+let RuntimeCaptureOrigin = std.contract.from_predicate (fun value =>
+  std.is_string value && (value == "boundary_captured" || value == "ingested_telemetry" || value == "wrapper_asserted" || value == "unknown")
+) in
+let PositiveNumber = Prelude.contracts.PositiveInteger in
 
 {
   Artifact = {
@@ -187,6 +209,45 @@ let SteelProfileMode = std.contract.from_predicate (fun value =>
   SteelOrchestrationPolicy = {
     enabled | Bool,
     profiles | Array SteelOrchestrationProfile | default = [],
+  },
+
+  TraceabilityRequirementSource = {
+    root | SafeRelativePath,
+    source_kind | TraceabilityRequirementSourceKind,
+    extensions | NonEmptyUniqueStringArray | Array TraceabilityExtension,
+  },
+
+  TraceabilityEvidenceSource = {
+    root | SafeRelativePath,
+    source_kind | TraceabilityEvidenceSourceKind,
+    extensions | NonEmptyUniqueStringArray | Array TraceabilityExtension,
+  },
+
+  TraceabilityProfile = {
+    id | NonEmptyString,
+    requirement_sources | NonEmptyArray | Array TraceabilityRequirementSource,
+    evidence_sources | NonEmptyArray | Array TraceabilityEvidenceSource,
+    marker_verbs | NonEmptyUniqueStringArray | Array TraceabilityMarkerVerb,
+  },
+
+  TraceabilityPolicy = {
+    default_profile | NonEmptyString,
+    profiles | NonEmptyArray | Array TraceabilityProfile,
+  },
+
+  StackProvenancePolicy = {
+    mode | StackProvenanceGateMode,
+    allowed_claim_scopes | NonEmptyUniqueStringArray | Array NonEmptyString,
+    accepted_valence_policy_hashes | UniqueStringArray | Array Blake3HexContract | default = [],
+    required_boundary | NonEmptyString,
+  },
+
+  RuntimeEvidencePolicy = {
+    allowed_capture_origins | NonEmptyUniqueStringArray | Array RuntimeCaptureOrigin,
+    allowed_hash_algorithms | NonEmptyUniqueStringArray | Array Blake3Algorithm,
+    max_summary_bytes | PositiveNumber,
+    forbidden_summary_fragments | UniqueStringArray | Array NonEmptyString | default = [],
+    aggregation_profiles | UniqueStringArray | Array NonEmptyString | default = [],
   },
 
   ProbeCommandProfile = {
@@ -326,9 +387,17 @@ let SteelProfileMode = std.contract.from_predicate (fun value =>
     preserves_receipt_source_map | PreservesReceiptSourceMap | default = {},
   },
 
+  PolicySchemaCompatibility = {
+    schema_version | NonEmptyString,
+    producer | NonEmptyString,
+    field_set_digest | Blake3HexContract,
+    refresh_command | NonEmptyString,
+  },
+
   Policy = std.contract.Sequence [{
     name | NonEmptyString,
     version | SupportedPolicyVersion,
+    policy_schema_compatibility | PolicySchemaCompatibility,
     schemas | NonEmptyArray | Array ArtifactSchema,
     lifecycle_stages | NonEmptyArray | Array Stage,
     task_marker_policy | TaskMarkerPolicy,
@@ -338,6 +407,9 @@ let SteelProfileMode = std.contract.from_predicate (fun value =>
     registry_label_policy | RegistryLabelPolicy,
     change_metadata_policy | ChangeMetadataPolicy,
     steel_orchestration_policy | SteelOrchestrationPolicy,
+    traceability_policy | TraceabilityPolicy,
+    stack_provenance_gate | StackProvenancePolicy,
+    runtime_evidence_policy | RuntimeEvidencePolicy,
     structured_lifecycle | StructuredLifecycle | default = {},
     probe_policy | ProbePolicy,
     receipt_schemas | NonEmptyArray | Array ReceiptSchema,
@@ -351,5 +423,5 @@ let SteelProfileMode = std.contract.from_predicate (fun value =>
     exemptions | Array Exemption,
   }, PolicyInvariants],
 
-  Blake3Hex = Blake3Hex,
+  Blake3Hex = Blake3HexContract,
 }

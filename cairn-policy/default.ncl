@@ -1,7 +1,17 @@
 let Contracts = import "contracts.ncl" in
+let PolicySchemaVersion = "cairn.policy-schema.v1" in
+let PolicyFieldSetDigest = "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9a0e2bb909b42" in
+let RuntimeEvidenceMaxSummaryBytes = 256 in
 {
   name = "cairn-default",
   version = 1,
+
+  policy_schema_compatibility = {
+    schema_version = PolicySchemaVersion,
+    producer = "cairn policy export",
+    field_set_digest = PolicyFieldSetDigest,
+    refresh_command = "nix run path:$CAIRN_SOURCE#cairn -- policy export --output cairn-policy/generated/cairn-policy.json",
+  },
 
   schemas = [{
     id = "spec-driven",
@@ -78,6 +88,38 @@ let Contracts = import "contracts.ncl" in
       fallback_modes = ["rust-nickel-canonical"],
       receipt_schema_version = "cairn.steel-orchestration-receipt.v1",
     }],
+  },
+
+  traceability_policy = {
+    default_profile = "cairn-default",
+    profiles = [{
+      id = "cairn-default",
+      requirement_sources = [
+        { root = "cairn/specs", source_kind = "accepted_specs", extensions = ["md"] },
+      ],
+      evidence_sources = [
+        { root = "src", source_kind = "rust_source", extensions = ["rs"] },
+        { root = "tests", source_kind = "rust_source", extensions = ["rs"] },
+        { root = "docs", source_kind = "nickel_source", extensions = ["ncl"] },
+        { root = "scripts", source_kind = "tool_source", extensions = ["rs", "sh"] },
+      ],
+      marker_verbs = ["impl", "verify", "depends", "related"],
+    }],
+  },
+
+  stack_provenance_gate = {
+    mode = "optional",
+    allowed_claim_scopes = ["stack_provenance.v1.lifecycle_policy_conformance"],
+    accepted_valence_policy_hashes = ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+    required_boundary = "Molten consumes stack provenance as evidence-only lifecycle and release metadata; it does not prove source-code correctness, upstream verifier soundness, runtime authority, deployment trust, or behavioral correctness by itself",
+  },
+
+  runtime_evidence_policy = {
+    allowed_capture_origins = ["boundary_captured", "ingested_telemetry", "wrapper_asserted", "unknown"],
+    allowed_hash_algorithms = ["BLAKE3"],
+    max_summary_bytes = RuntimeEvidenceMaxSummaryBytes,
+    forbidden_summary_fragments = ["SECRET=", "token=", "/home/"],
+    aggregation_profiles = ["smoke", "release", "dogfood"],
   },
 
   structured_lifecycle = {

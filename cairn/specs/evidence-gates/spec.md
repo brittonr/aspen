@@ -1611,3 +1611,153 @@ r[molten.evidence.contract_export_drift.local_deterministic_gate] Contract expor
 - GIVEN a checkout with contract sources, fixtures, generated artifacts, and Rust tests
 - WHEN the CI or release-review drift gate runs
 - THEN it produces deterministic pass or fail evidence using only source-controlled inputs and local toolchains
+
+
+### Requirement: Evidence, policy, runtime, and adapters have explicit ownership
+r[molten.modularity.layer_boundaries.ownership] Evidence, policy, runtime, and adapter modules SHOULD have documented ownership boundaries before code is extracted across crate boundaries.
+
+#### Scenario: Workflow ownership is reviewable
+- GIVEN a workflow selected for modularity cleanup
+- WHEN reviewers inspect its source organization or design notes
+- THEN evidence construction, policy admission, runtime planning, and adapter effects are each assigned to an owning layer
+
+#### Scenario: Ambiguous ownership blocks extraction
+- GIVEN a workflow mixes evidence construction, policy decisions, runtime state transitions, and adapter IO in one implementation surface
+- WHEN crate extraction is proposed
+- THEN the extraction is blocked or staged until ownership is clarified
+
+### Requirement: Evidence does not grant policy authority
+r[molten.modularity.layer_boundaries.evidence_policy_split] Evidence construction and verification MUST remain separate from policy authority decisions; evidence-only receipts MUST NOT by themselves grant authority, resource rights, provenance trust, transport trust, retention authority, or execution permission.
+
+#### Scenario: Policy consumes evidence summary
+- GIVEN verified evidence inputs and explicit policy, authority, resource, or provenance refs
+- WHEN policy admission evaluates a request
+- THEN it may use evidence summaries as inputs while producing its own pass or deny decision
+
+#### Scenario: Evidence-only input is denied as authority
+- GIVEN a request presents only an evidence receipt without the required authority, policy, resource, provenance, retention, or execution admission input
+- WHEN policy admission evaluates the request
+- THEN the request is denied before side effects occur
+
+### Requirement: Runtime planning stays separate from adapter effects
+r[molten.modularity.layer_boundaries.runtime_adapter_split] Runtime modules SHOULD consume admitted policy/evidence results and return deterministic state transitions or planned effects; adapter modules perform IO only after the runtime plan is admitted.
+
+#### Scenario: Runtime returns planned effect
+- GIVEN admitted policy and evidence inputs for a runtime operation
+- WHEN the runtime core evaluates the operation
+- THEN it returns deterministic state transitions, traces, receipts, or planned effects without directly performing adapter IO
+
+#### Scenario: Adapter availability is not trust
+- GIVEN an adapter is reachable, a transport identity is observed, or a store contains an artifact
+- WHEN runtime or policy admission evaluates a trust-boundary action
+- THEN availability or presence alone does not grant authority, policy, resource, provenance, retention, execution, or replay trust
+
+### Requirement: Layer boundary changes include denial tests
+r[molten.modularity.layer_boundaries.tests] Layer-boundary refactors SHOULD include positive tests for admitted flow and negative tests for evidence-only authority, stale policy inputs, adapter availability-as-trust, and denied side effects.
+
+#### Scenario: Boundary test matrix is reviewable
+- GIVEN a workflow boundary is refactored
+- WHEN reviewers inspect test evidence
+- THEN the tests cover at least one admitted flow and at least one denial where evidence, policy, runtime, or adapter responsibilities could otherwise be confused
+
+
+### Requirement: Retention responsibilities are semantically separated
+r[molten.retention.modularity.boundaries] Retention implementation SHOULD separate destructive admission, GC planning, plan application, audit, store persistence, bundle export, live remote-clearance transport, and receipt construction into reviewable boundaries.
+
+#### Scenario: Retention module ownership is clear
+- GIVEN retention code is reorganized
+- WHEN reviewers inspect the module layout
+- THEN each module has an identifiable responsibility such as admission, plan, apply, audit, store, bundle, live, or receipts
+
+### Requirement: Destructive retention side effects require explicit admitted plans
+r[molten.retention.modularity.destructive_plan] Retention shells MUST NOT delete, tombstone, redact, compact, unpin, or import remote-clearance evidence as authoritative unless a pure retention decision returns an admitted plan for the exact object, action, class, and evidence scope.
+
+#### Scenario: Admitted destructive plan permits shell mutation
+- GIVEN authority, policy, supporting evidence, reference-index, and remote-clearance inputs satisfy retention admission
+- WHEN the pure retention planner evaluates the request
+- THEN it returns an admitted plan that the shell may execute while recording canonical evidence
+
+#### Scenario: Missing retention evidence denies mutation
+- GIVEN authority, policy, supporting evidence, reference-index, remote-clearance, or class/action scope is missing or stale
+- WHEN the pure retention planner evaluates the request
+- THEN it returns a deny result with no destructive operation in the planned effects
+
+### Requirement: Retention store IO stays in shell boundary
+r[molten.retention.modularity.store_shell] Retention filesystem traversal, evidence-store writes, bundle directory writes, and live transport IO MUST be owned by shell or adapter modules rather than pure retention admission cores.
+
+#### Scenario: Store shell loads evidence before core
+- GIVEN retention evidence lives in a local store
+- WHEN a retention command runs
+- THEN the shell loads typed evidence summaries and passes them to the pure retention core
+
+### Requirement: Retention modularity has positive and negative tests
+r[molten.retention.modularity.tests] Retention boundary refactors SHOULD include positive tests for admitted plans and negative tests for missing authority, stale plan, plan drift, incomplete reference index, missing remote clearance, or overbroad evidence.
+
+#### Scenario: Denied retention case has no planned side effect
+- GIVEN a negative retention fixture
+- WHEN the pure planner evaluates it
+- THEN it denies before destructive side effects and returns an empty destructive-effect plan
+
+
+### Requirement: Stack evidence envelope
+r[molten.evidence.stack_adapters.envelope] Molten MUST define a canonical stack evidence envelope for upstream Basalt, UCAN, Trellis, Octet, Valence, Cairn, and Mantle inputs used by runtime admission or release evidence decisions.
+
+#### Scenario: Complete stack envelope passes
+r[molten.evidence.stack_adapters.envelope.positive]
+- GIVEN an envelope member names a supported role, schema, BLAKE3 identity, producer identity, verification role, and required non-claim boundary
+- WHEN the envelope contract validates the member
+- THEN validation MUST pass and preserve the member role for runtime admission.
+
+#### Scenario: Missing or stale envelope member fails
+r[molten.evidence.stack_adapters.envelope.negative]
+- GIVEN an envelope member omits a required role, declares an unsupported schema, uses a stale digest, or weakens non-claims
+- WHEN the envelope contract validates the member
+- THEN validation MUST fail with deterministic diagnostics.
+
+### Requirement: Stack adapter ports
+r[molten.evidence.stack_adapters.ports] Molten MUST route upstream-specific parsing, filesystem reads, command execution, and receipt verification through shell adapter ports before pure runtime cores consume stack facts.
+
+#### Scenario: Pure core receives parsed facts only
+r[molten.evidence.stack_adapters.ports.core]
+- GIVEN a runtime admission decision depends on Basalt, UCAN, Trellis, Octet, Valence, Cairn, or Mantle evidence
+- WHEN the pure runtime core evaluates the decision
+- THEN it MUST receive parsed facts, refs, and verification roles rather than performing upstream I/O or command execution.
+
+#### Scenario: Adapter shell owns upstream I/O
+r[molten.evidence.stack_adapters.ports.shell]
+- GIVEN an upstream evidence file, command, or repository-specific DTO must be consumed
+- WHEN Molten imports that evidence
+- THEN an adapter shell MUST verify or parse the upstream artifact and emit a Molten stack evidence envelope member.
+
+### Requirement: Dependency-boundary diagnostic
+r[molten.evidence.stack_adapters.dependency_boundary] Molten SHOULD provide a diagnostic that identifies stack-owned crates used outside approved adapter modules.
+
+#### Scenario: Approved adapter use is accepted
+r[molten.evidence.stack_adapters.dependency_boundary.approved]
+- GIVEN stack-owned crates are referenced only from approved adapter modules
+- WHEN the dependency-boundary diagnostic runs
+- THEN it SHOULD report the usage as accepted.
+
+#### Scenario: Direct internal dependency leak is reported
+r[molten.evidence.stack_adapters.dependency_boundary.leak]
+- GIVEN a runtime core module directly imports an upstream stack crate that is not approved for that module
+- WHEN the dependency-boundary diagnostic runs
+- THEN it SHOULD report the module, crate, and required adapter boundary.
+
+### Requirement: Stack evidence non-claims
+r[molten.evidence.stack_adapters.non_claims] Molten stack evidence envelopes MUST state that upstream evidence refs do not grant authority, prove runtime correctness, or prove upstream verifier soundness by themselves.
+
+#### Scenario: Overbroad claim is rejected
+r[molten.evidence.stack_adapters.non_claims.reject_overclaim]
+- GIVEN an envelope member claims universal runtime correctness, upstream verifier soundness, or release eligibility without the required supporting role
+- WHEN the envelope contract validates the member
+- THEN validation MUST fail closed with an overclaim diagnostic.
+
+### Requirement: Validation evidence
+r[molten.evidence.stack_adapters.validation] The change MUST include positive and negative envelope fixtures plus focused runtime or contract checks before archive.
+
+#### Scenario: Fixture matrix covers stack envelope behavior
+r[molten.evidence.stack_adapters.validation.fixtures]
+- GIVEN complete, missing-role, stale-ref, unsupported-schema, and overclaim fixtures
+- WHEN focused validation runs
+- THEN complete fixtures MUST pass, negative fixtures MUST fail closed, and the receipt MUST bind fixture and policy identities.

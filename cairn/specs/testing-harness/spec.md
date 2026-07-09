@@ -2485,3 +2485,89 @@ r[molten.testing.consensus_switchover_fixtures] Molten SHOULD include determinis
 - WHEN a delayed source-engine write receipt from the prior epoch is replayed
 - THEN the fixture denies mutation authority for that receipt
 - AND diagnostics identify the superseded engine epoch.
+
+
+### Requirement: Modularity rules are reviewed policy
+r[molten.modularity.boundary_gates.policy] Repository dependency-boundary rules SHOULD be declared in reviewed source-controlled policy that names each rule, owning layer, allowed or denied dependency patterns, diagnostic guidance, and exemption class.
+
+#### Scenario: Valid boundary policy loads
+- GIVEN a reviewed dependency-boundary policy with unique rule ids and valid path patterns
+- WHEN the boundary validator loads the policy
+- THEN validation succeeds and preserves the reviewed rules deterministically
+
+#### Scenario: Malformed boundary policy fails
+- GIVEN duplicate rule ids, unknown layers, invalid path patterns, or contradictory allow/deny entries
+- WHEN the boundary validator loads the policy
+- THEN validation fails before generated policy or release evidence is refreshed
+
+### Requirement: Boundary validator reports actionable diagnostics
+r[molten.modularity.boundary_gates.validator] The dependency-boundary validator MUST report deterministic diagnostics that identify the rule id, source file, forbidden target or pattern, and remediation or exemption guidance for each violation.
+
+#### Scenario: Forbidden dependency is reported
+- GIVEN a source file imports a dependency forbidden by its layer rule
+- WHEN the boundary validator scans the repository
+- THEN it reports the violating file, the forbidden target, the rule id, and the expected remediation or exemption class
+
+#### Scenario: Clean source passes
+- GIVEN source files whose imports satisfy the reviewed boundary policy
+- WHEN the boundary validator scans the repository
+- THEN it reports a pass decision with no violation diagnostics
+
+### Requirement: Boundary gate has positive and negative fixtures
+r[molten.modularity.boundary_gates.fixtures] Boundary-gate validation SHOULD include positive fixtures for allowed imports and negative fixtures for representative forbidden dependencies and malformed policy inputs.
+
+#### Scenario: Positive fixture passes
+- GIVEN a fixture representing allowed core, codec, runtime, adapter, and CLI import relationships
+- WHEN boundary validation runs on the fixture
+- THEN the fixture passes without diagnostics
+
+#### Scenario: Negative fixture fails for expected rule
+- GIVEN a fixture representing core-to-adapter, runtime-to-CLI, codec-to-domain, or unclassified-public-export violation
+- WHEN boundary validation runs on the fixture
+- THEN it fails with the expected rule id and does not pass because of unrelated parser or policy errors
+
+### Requirement: Boundary gate is runnable as focused validation
+r[molten.modularity.boundary_gates.integration] The dependency-boundary gate SHOULD be runnable as a focused validation command or documented check and MAY later be wired into Nix, Octet, Cairn release-readiness, or CI evidence rails.
+
+#### Scenario: Developer runs focused boundary check
+- GIVEN a checkout with boundary policy and validator fixtures
+- WHEN a developer runs the documented focused boundary command
+- THEN the command checks the configured source scope and emits pass or violation diagnostics suitable for release review
+
+
+### Requirement: Harness responsibilities are layered
+r[molten.testing.modularity.harness_layers] Harness implementation SHOULD separate schema models, pure gate decisions, fixture builders, canonical receipt construction, and IO or CLI shells.
+
+#### Scenario: Harness module ownership is clear
+- GIVEN harness schema or gate code is reorganized
+- WHEN reviewers inspect the module layout
+- THEN each module has an identifiable responsibility such as schema, decision, fixtures, receipts, or shell
+
+### Requirement: Gate decisions are pure
+r[molten.testing.modularity.pure_gate_decisions] Harness gate decisions SHOULD be deterministic functions over typed suite, report, policy, and evidence inputs, without filesystem reads, CLI rendering, process execution, or adapter IO.
+
+#### Scenario: Valid report passes in memory
+- GIVEN a valid suite/report input represented in memory
+- WHEN the gate decision core evaluates it
+- THEN it returns a pass decision and structured receipt input without reading files or running commands
+
+#### Scenario: Malformed report denies in memory
+- GIVEN a malformed, stale, unsupported, or contradictory suite/report input represented in memory
+- WHEN the gate decision core evaluates it
+- THEN it returns a deny or diagnostic result without writing evidence or invoking the CLI shell
+
+### Requirement: Runtime code consumes harness evidence, not harness orchestration
+r[molten.testing.modularity.runtime_boundary] Runtime modules MUST NOT depend on harness runners or release-test orchestration to make normal runtime decisions; they MAY consume canonical gate receipts or evidence summaries as explicit inputs.
+
+#### Scenario: Runtime consumes receipt summary
+- GIVEN runtime admission depends on prior harness evidence
+- WHEN the runtime core evaluates admission
+- THEN it consumes a canonical receipt or typed evidence summary rather than invoking harness suite execution
+
+### Requirement: Harness modularity has positive and negative fixtures
+r[molten.testing.modularity.fixtures] Harness schema or gate refactors SHOULD include positive fixtures for valid inputs and negative fixtures for malformed, stale, unsupported, or contradictory inputs.
+
+#### Scenario: Fixture matrix covers gate behavior
+- GIVEN a harness gate boundary is extracted
+- WHEN focused validation runs
+- THEN valid fixtures pass and negative fixtures fail for the expected invariant class
