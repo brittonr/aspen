@@ -1,7 +1,0 @@
-## Tasks
-
-- [ ] [serial] r[molten.catalog.share_like_linked_views] Add linked read-only catalog views over artifacts, names, dependencies, dependents, schemas, effects, transcripts, docs, receipts, upgrade sessions, and release snapshots.
-- [ ] [serial] r[molten.catalog.mcp_readonly_tools] Add MCP-style read-only tools for artifact search/show, dependency/dependent queries, receipt lookup, transcript lookup, impact queries, evidence explanation, and release snapshot inspection.
-- [ ] [parallel] r[molten.catalog.redaction_authorization] Bind authorization and redaction decisions into catalog query receipts for private contents, sensitive policy outcomes, secret refs, capabilities, retention-sensitive records, and denied evidence details.
-- [ ] [parallel] r[molten.catalog.no_catalog_mutation_authority] Deny catalog/MCP mutation attempts under the read-only profile and require explicit subsystem gates for install, alias update, policy change, storage mutation, retention, release, or execution actions.
-- [ ] [serial] r[molten.catalog.unison_discovery_validation] Add positive and negative fixtures for linked views, read-only queries, redaction, private content denial, mutation attempts, stale indexes, and Unison API compatibility denial.

@@ -98,6 +98,52 @@
     }
 
     #[test]
+    fn impact_query_tool_links_refs_redacts_hidden_and_denies_unison_compat_mutation() {
+        // r[verify molten.catalog.unison_discovery_validation]
+        let registry = temp_dir("catalog-mcp-impact");
+        let base = install_fixture(&registry, "schema", parse_text("<schema \"impact\">").expect("schema"), &[], &[]);
+        let doc = install_fixture(
+            &registry,
+            "doc",
+            parse_text("<doc \"impact-doc\">").expect("doc"),
+            std::slice::from_ref(&base.artifact_ref),
+            &[],
+        );
+        let impact_request = mcp_request_value("impact_query", vec![
+            record("reference", vec![string(&base.artifact_ref)]),
+            record("transitive", vec![crate::preserves_rail::bool_value(true)]),
+        ])
+        .expect("impact request");
+        let impact_call = call(&registry, None, &impact_request).expect("impact call");
+        assert_eq!(impact_call.decision, "pass");
+        let impact_text = to_text(&impact_call.response_value).expect("impact response");
+        assert!(impact_text.contains("impact-query"));
+        assert!(impact_text.contains(&doc.artifact_ref));
+        assert!(parse_mcp_receipt(&impact_call.receipt_value)
+            .expect("impact MCP receipt")
+            .catalog_receipt_ref
+            .is_some());
+
+        let hidden_request = mcp_request_value("impact_query", vec![
+            record("reference", vec![string(&base.artifact_ref)]),
+            record("hidden-ref", vec![string(&doc.artifact_ref)]),
+        ])
+        .expect("hidden impact request");
+        let hidden_call = call(&registry, None, &hidden_request).expect("hidden impact call");
+        let hidden_text = to_text(&hidden_call.response_value).expect("hidden impact response");
+        assert!(!hidden_text.contains(&doc.artifact_ref));
+        assert!(hidden_text.contains("redacted"));
+
+        let unison_mutation = mcp_request_value("ucm.update_alias", vec![record("name", vec![string("docs/main")])])
+            .expect("ucm mutation request");
+        let denied = call(&registry, None, &unison_mutation).expect("ucm mutation denied");
+        assert_eq!(denied.decision, "deny");
+        let denied_text = to_text(&denied.receipt_value).expect("denied receipt");
+        assert!(denied_text.contains("mutating-tools-denied"));
+        assert!(denied_text.contains("read-only-tool"));
+    }
+
+    #[test]
     fn provenance_named_tools_search_trust_state_and_decision() {
         let root = temp_dir("catalog-mcp-provenance");
         let registry = root.join("registry");

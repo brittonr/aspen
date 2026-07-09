@@ -187,7 +187,6 @@ pub fn impact_query(root: &Path, input: &ArtifactImpactQueryInput) -> Result<Art
     let mut refs = vec![input.subject_ref.clone(), index_ref.clone(), query_ref.clone()];
     extend_cloned_bounded(&mut refs, &direct, MAX_ARTIFACT_REF_LIST, "artifact impact query refs")?;
     extend_cloned_bounded(&mut refs, &transitive, MAX_ARTIFACT_REF_LIST, "artifact impact query refs")?;
-    extend_cloned_bounded(&mut refs, &redacted, MAX_ARTIFACT_REF_LIST, "artifact impact query refs")?;
     let receipt_value = artifact_receipt_value(&ArtifactReceiptValueInput {
         operation: "impact-query",
         decision: "pass",

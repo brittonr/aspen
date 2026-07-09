@@ -21,6 +21,11 @@ fn dependents_result(registry_root: &Path, ledger_root: Option<&Path>, request: 
     crate::catalog::dependents(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
 }
 
+fn impact_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
+    let graph_input = graph_input(request)?;
+    crate::catalog::impact(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
+}
+
 fn receipts_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let graph_input = graph_input(request)?;
     crate::catalog::receipts(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
@@ -65,6 +70,14 @@ fn upgrade_search_result(registry_root: &Path, ledger_root: Option<&Path>, reque
     let mut filters = filters_from_args(&request.args)?;
     if filters.is_empty() {
         push_bounded(&mut filters, Filter::UpgradeStatus("planned".to_string()), MAX_FILTERS, "catalog MCP filters")?;
+    }
+    search_result(registry_root, ledger_root, request, filters)
+}
+
+fn transcript_search_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
+    let mut filters = filters_from_args(&request.args)?;
+    if filters.is_empty() {
+        push_bounded(&mut filters, Filter::TranscriptStatus("pass".to_string()), MAX_FILTERS, "catalog MCP filters")?;
     }
     search_result(registry_root, ledger_root, request, filters)
 }

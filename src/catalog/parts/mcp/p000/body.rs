@@ -22,7 +22,13 @@ pub const READ_ONLY_TOOLS: &[&str] = &[
     "list_dependencies",
     "list_dependents",
     "view_receipts",
+    "show_receipt",
+    "search_receipts",
     "view_transcript",
+    "search_transcripts",
+    "impact_query",
+    "explain_evidence",
+    "show_release_snapshot",
     "list_upgrade_sessions",
     "list_provenance",
     "search_provenance",
@@ -120,6 +126,8 @@ pub fn call(registry_root: &Path, ledger_root: Option<&Path>, request_value: &Io
     call_with_chunk_store(registry_root, ledger_root, None, request_value)
 }
 
+// r[impl molten.catalog.mcp_readonly_tools]
+// r[impl molten.catalog.no_catalog_mutation_authority]
 pub fn call_with_chunk_store(
     registry_root: &Path,
     ledger_root: Option<&Path>,
@@ -257,7 +265,10 @@ fn dispatch_read_only(
         "catalog.search" | "search_artifacts" => artifact_search_result(registry_root, ledger_root, request),
         "catalog.deps" | "list_dependencies" => deps_result(registry_root, ledger_root, request),
         "catalog.dependents" | "list_dependents" => dependents_result(registry_root, ledger_root, request),
-        "view_receipts" => receipts_result(registry_root, ledger_root, request),
+        "impact_query" => impact_result(registry_root, ledger_root, request),
+        "view_receipts" | "show_receipt" | "search_receipts" => receipts_result(registry_root, ledger_root, request),
+        "search_transcripts" => transcript_search_result(registry_root, ledger_root, request),
+        "explain_evidence" | "show_release_snapshot" => artifact_search_result(registry_root, ledger_root, request),
         "catalog.short_id" | "short_id_resolve" => short_id_result(registry_root, ledger_root, request),
         _ => Err(MoltenError::invalid_harness(format!(
             "catalog MCP tool {} is not in the read-only dispatch allow-list",
