@@ -15,6 +15,7 @@ fn summarize_index_inputs(receipts: &[ParsedReplayVerify], rollups: &[ParsedRepl
     let mut summary = empty_index_summary(receipts.len(), rollups.len());
     for parsed in receipts {
         summary.receipt_refs.insert(parsed.receipt_ref.clone());
+        summary.identity_refs.extend(parsed.identity_refs.iter().cloned());
         *summary.divergence_counts.entry(parsed.divergence.clone()).or_insert(0) += 1;
         if parsed.decision == "pass" {
             summary.pass_count += 1;
@@ -30,6 +31,7 @@ fn summarize_index_inputs(receipts: &[ParsedReplayVerify], rollups: &[ParsedRepl
     for parsed in rollups {
         summary.rollup_refs.insert(parsed.rollup_ref.clone());
         summary.receipt_refs.extend(parsed.receipt_refs.iter().cloned());
+        summary.identity_refs.extend(parsed.identity_refs.iter().cloned());
         summary.first_divergence_refs.extend(parsed.first_divergence_refs.iter().cloned());
         merge_divergence_counts(&mut summary.divergence_counts, &parsed.divergence_counts);
         summary.pass_count += parsed.pass_count;
@@ -44,6 +46,7 @@ fn empty_index_summary(raw_count: usize, rollup_count: usize) -> IndexSummary {
     IndexSummary {
         receipt_refs: OrderedSet::new(),
         rollup_refs: OrderedSet::new(),
+        identity_refs: OrderedSet::new(),
         first_divergence_refs: OrderedSet::new(),
         report_refs: OrderedSet::new(),
         final_state_refs: OrderedSet::new(),
@@ -75,6 +78,7 @@ fn index_value(decision: &str, diagnostics: &[String], summary: &IndexSummary) -
         record("rollup-count", vec![u64_value(summary.rollup_count)]),
         record("receipt-refs", vec![refs_value(&summary.receipt_refs)]),
         record("rollup-refs", vec![refs_value(&summary.rollup_refs)]),
+        record("identity-refs", vec![refs_value(&summary.identity_refs)]),
         record("divergence-counts", vec![divergence_counts_value(&summary.divergence_counts)]),
         record("first-divergence-refs", vec![refs_value(&summary.first_divergence_refs)]),
         record("report-refs", vec![refs_value(&summary.report_refs)]),
@@ -245,8 +249,12 @@ fn parse_replay_verify_receipt(value: &IoValue, receipt_ref: &str) -> Result<Par
         let first_divergence_ref = record_string_value(&fields[11], "first-divergence-ref")?;
         validate_replay_decision(&decision)?;
         validate_divergence_ref(&first_divergence_ref)?;
+        let expected_identity_ref = record_string_value(&fields[2], "expected-identity-ref")?;
+        let actual_identity_ref = record_string_value(&fields[3], "actual-identity-ref")?;
         let expected_final_state_ref = record_string_value(&fields[8], "expected-final-state-ref")?;
         let actual_final_state_ref = record_string_value(&fields[9], "actual-final-state-ref")?;
+        validate_content_ref(&expected_identity_ref)?;
+        validate_content_ref(&actual_identity_ref)?;
         validate_content_ref(&expected_final_state_ref)?;
         validate_content_ref(&actual_final_state_ref)?;
         return Ok(ParsedReplayVerify {
@@ -254,6 +262,7 @@ fn parse_replay_verify_receipt(value: &IoValue, receipt_ref: &str) -> Result<Par
             decision,
             divergence,
             first_divergence_ref: (first_divergence_ref != "none").then_some(first_divergence_ref),
+            identity_refs: vec![expected_identity_ref, actual_identity_ref],
             report_refs: Vec::new(),
             final_state_refs: vec![expected_final_state_ref, actual_final_state_ref],
         });
@@ -274,6 +283,7 @@ fn parse_replay_verify_receipt(value: &IoValue, receipt_ref: &str) -> Result<Par
             decision,
             divergence,
             first_divergence_ref: None,
+            identity_refs: Vec::new(),
             report_refs: vec![expected_report_ref, actual_report_ref],
             final_state_refs: vec![final_state_ref],
         });

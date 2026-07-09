@@ -21,12 +21,14 @@ pub fn rollup_replay_receipts(inputs: &[ReplayRollupInput]) -> Result<ReplayRoll
         }
     }
     let mut receipt_refs = OrderedSet::new();
+    let mut identity_refs = OrderedSet::new();
     let mut first_divergence_refs = OrderedSet::new();
     let mut divergence_counts = OrderedMap::<String, u64>::new();
     let mut pass_count = 0_u64;
     let mut deny_count = 0_u64;
     for parsed in &parsed_receipts {
         receipt_refs.insert(parsed.receipt_ref.clone());
+        identity_refs.extend(parsed.identity_refs.iter().cloned());
         *divergence_counts.entry(parsed.divergence.clone()).or_insert(0) += 1;
         if parsed.decision == "pass" {
             pass_count += 1;
@@ -46,6 +48,7 @@ pub fn rollup_replay_receipts(inputs: &[ReplayRollupInput]) -> Result<ReplayRoll
         record("pass-count", vec![u64_value(pass_count)]),
         record("deny-count", vec![u64_value(deny_count)]),
         record("receipt-refs", vec![refs_value(&receipt_refs)]),
+        record("identity-refs", vec![refs_value(&identity_refs)]),
         record("divergence-counts", vec![divergence_counts_value(&divergence_counts)]),
         record("first-divergence-refs", vec![refs_value(&first_divergence_refs)]),
         record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
@@ -96,6 +99,7 @@ struct ParsedInputs {
 struct IndexSummary {
     receipt_refs: OrderedSet<String>,
     rollup_refs: OrderedSet<String>,
+    identity_refs: OrderedSet<String>,
     first_divergence_refs: OrderedSet<String>,
     report_refs: OrderedSet<String>,
     final_state_refs: OrderedSet<String>,

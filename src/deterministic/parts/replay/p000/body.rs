@@ -285,25 +285,3 @@ pub struct DeterministicIntegrationReceipt {
     pub receipt_ref: String,
     pub decision: String,
 }
-
-#[derive(Clone, Debug)]
-struct ParsedReplayVerify {
-    receipt_ref: String,
-    decision: String,
-    divergence: String,
-    first_divergence_ref: Option<String>,
-    report_refs: Vec<String>,
-    final_state_refs: Vec<String>,
-}
-
-#[derive(Clone, Debug)]
-struct ParsedReplayRollup {
-    rollup_ref: String,
-    decision: String,
-    total_count: u64,
-    pass_count: u64,
-    deny_count: u64,
-    receipt_refs: Vec<String>,
-    divergence_counts: OrderedMap<String, u64>,
-    first_divergence_refs: Vec<String>,
-}

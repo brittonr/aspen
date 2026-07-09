@@ -168,37 +168,8 @@ fn direct_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
             format!("transcript-mode:{}", receipt.mode),
         ]));
     }
-    if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(7)) {
-        return deterministic_replay_verify_gate_classifications(&fields).map(Some);
-    }
-    if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(13)) {
-        return deterministic_replay_verify_fixture_classifications(&fields).map(Some);
-    }
-    if let Some(fields) = value.collect_simple_record("deterministic-first-divergence-v1", Some(9)) {
-        require_schema(
-            &fields[0],
-            crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA,
-            "deterministic first divergence",
-        )?;
-        let kind = record_string(&fields[1], "kind")?;
-        let actor_id = record_string(&fields[3], "actor-id")?;
-        let handler_profile_ref = record_string(&fields[5], "handler-profile-ref")?;
-        let expected_ref = record_string(&fields[6], "expected-ref")?;
-        let actual_ref = record_string(&fields[7], "actual-ref")?;
-        return Ok(Some(vec![
-            "deterministic-replay:first-divergence".to_string(),
-            format!("replay-divergence:{kind}"),
-            format!("replay-actor:{actor_id}"),
-            format!("replay-handler-profile:{handler_profile_ref}"),
-            format!("replay-expected-ref:{expected_ref}"),
-            format!("replay-actual-ref:{actual_ref}"),
-        ]));
-    }
-    if let Some(fields) = value.collect_simple_record("deterministic-replay-rollup-v1", Some(10)) {
-        return deterministic_replay_rollup_classifications(&fields).map(Some);
-    }
-    if let Some(fields) = value.collect_simple_record("deterministic-replay-index-v1", Some(15)) {
-        return deterministic_replay_index_classifications(&fields).map(Some);
+    if let Some(classifications) = replay_direct_labels(value)? {
+        return Ok(Some(classifications));
     }
     Ok(None)
 }
