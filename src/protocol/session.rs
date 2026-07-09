@@ -7,3 +7,4 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p005/b
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p006/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p007/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p008/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p009/body.rs"));
