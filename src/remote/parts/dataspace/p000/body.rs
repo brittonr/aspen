@@ -78,6 +78,12 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
 pub const LOCAL_GOSSIP_TRANSPORT: &str = "iroh-local-gossip";
 pub const LIVE_GOSSIP_TRANSPORT: &str = "iroh-gossip";
 
+pub type CapabilityDataspaceRoot = crate::local_store::DataspaceStoreRoot;
+
+pub fn open_capability_dataspace_root(root: &Path) -> Result<CapabilityDataspaceRoot> {
+    crate::local_store::DataspaceStoreRoot::open(root)
+}
+
 const MAX_REPLAY_EVENTS: usize = 4_096;
 const _: () = assert!(MAX_REPLAY_EVENTS > 0);
 

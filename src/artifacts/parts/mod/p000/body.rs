@@ -72,6 +72,12 @@ const INDEX_POLICY: TableDef<&str, &str> = TableDef::new("artifact_registry_poli
 const INDEX_EVIDENCE: TableDef<&str, &str> = TableDef::new("artifact_registry_evidence_v1");
 const INDEX_RECEIPTS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_receipts_v1");
 
+pub type CapabilityArtifactRoot = crate::local_store::ArtifactStoreRoot;
+
+pub fn open_capability_artifact_root(root: &Path) -> Result<CapabilityArtifactRoot> {
+    crate::local_store::ArtifactStoreRoot::open(root)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArtifactPayloadRef {
     Inline { value_ref: String, length: u64 },

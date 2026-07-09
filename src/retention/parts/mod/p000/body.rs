@@ -98,6 +98,12 @@ const MAX_RETENTION_REFS: usize = 4096;
 const MAX_RETENTION_DIAGNOSTICS: usize = 128;
 const MAX_RETENTION_TEXT_LEN: usize = 1024;
 const RETENTION_GC_LIFECYCLE_DIAGNOSTIC_CAPACITY: usize = 16;
+
+pub type CapabilityRetentionRoot = crate::local_store::RetentionStoreRoot;
+
+pub fn open_capability_retention_root(root: &Path) -> Result<CapabilityRetentionRoot> {
+    crate::local_store::RetentionStoreRoot::open(root)
+}
 const APPLY_DIAGNOSTICS: &str = "retention GC apply diagnostics";
 const MAX_REF_FILE_NAME: usize = 128;
 const _: () = assert!(MAX_RETENTION_REFS <= 100_000);

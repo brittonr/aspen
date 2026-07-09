@@ -138,6 +138,12 @@ const INDEX_PINS: TableDefinition<&str, &str> = TableDefinition::new("chunk_stor
 const INDEX_PARTIAL_FETCHES: TableDefinition<&str, &[u8]> = TableDefinition::new("chunk_store_partial_fetches_v1");
 const INDEX_RECEIPTS: TableDefinition<&str, &[u8]> = TableDefinition::new("chunk_store_receipts_v1");
 
+pub type CapabilityChunkRoot = crate::local_store::ChunkStoreRoot;
+
+pub fn open_capability_chunk_root(root: &Path) -> Result<CapabilityChunkRoot> {
+    crate::local_store::ChunkStoreRoot::open(root)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChunkTransforms {
     pub compression: String,

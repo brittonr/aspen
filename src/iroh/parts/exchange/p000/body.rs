@@ -73,6 +73,12 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
 const MAX_CHAIN_BUNDLE_ARTIFACTS: usize = 100_000;
 const MAX_CHAIN_BUNDLE_CHECKPOINTS: usize = 10_000;
 
+pub type CapabilityExchangeRoot = crate::local_store::ExchangeStoreRoot;
+
+pub fn open_capability_exchange_root(root: &Path) -> Result<CapabilityExchangeRoot> {
+    crate::local_store::ExchangeStoreRoot::open(root)
+}
+
 const _: () = assert!(MAX_CHAIN_BUNDLE_ARTIFACTS <= 1_000_000);
 const _: () = assert!(MAX_CHAIN_BUNDLE_CHECKPOINTS <= 100_000);
 
