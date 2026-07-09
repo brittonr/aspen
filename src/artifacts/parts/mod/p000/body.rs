@@ -179,6 +179,38 @@ pub struct ArtifactIdentityReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactDependencyEdge {
+    pub edge_ref: String,
+    pub source_ref: String,
+    pub target_ref: String,
+    pub target_kind: String,
+    pub relation: String,
+    pub required: bool,
+    pub scope: String,
+    pub evidence_refs: Vec<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactImpactQueryInput {
+    pub subject_ref: String,
+    pub relation_filters: Vec<String>,
+    pub include_transitive: bool,
+    pub hidden_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactImpactQueryReceipt {
+    pub query_ref: String,
+    pub decision: String,
+    pub direct_dependents: Vec<String>,
+    pub transitive_dependents: Vec<String>,
+    pub redacted_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub receipt_value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactClosure {
     pub roots: Vec<String>,
     pub closure_refs: Vec<String>,

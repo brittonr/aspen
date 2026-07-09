@@ -268,6 +268,10 @@ fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
+fn bool_value(value: bool) -> IoValue {
+    crate::preserves_rail::bool_value(value)
+}
+
 fn value_to_iovalue(value: &RailValue) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }

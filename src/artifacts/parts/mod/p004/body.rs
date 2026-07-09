@@ -235,6 +235,20 @@ fn extend_cloned_bounded<T: Clone>(
     Ok(())
 }
 
+fn extend_bounded<T>(
+    values: &mut impl crate::bounded::VecSink<T>,
+    incoming: Vec<T>,
+    maximum: usize,
+    label: &str,
+) -> Result<()> {
+    let final_count = checked_count_sum(values.item_count(), incoming.len(), maximum, label)?;
+    values.reserve_items(final_count.saturating_sub(values.item_count()));
+    for item in incoming {
+        values.push_item(item);
+    }
+    Ok(())
+}
+
 fn index_error(error: impl std::fmt::Display) -> MoltenError {
     MoltenError::invalid_harness(format!("artifact registry redb index error: {error}"))
 }

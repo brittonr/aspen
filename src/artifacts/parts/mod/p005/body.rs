@@ -256,6 +256,96 @@ mod tests {
     }
 
     #[test]
+    fn dependency_edges_index_digest_and_impact_query_receipts_are_deterministic() {
+        // r[verify molten.artifacts.dependency_index_validation]
+        let root = temp_dir("artifact-dependency-edges");
+        let base = install_artifact(&root, &test_input("schema", "edge-base", &[])).expect("base");
+        let schema_ref = test_ref("edge-schema");
+        let effect_ref = test_ref("edge-effect");
+        let policy_ref = test_ref("edge-policy");
+        let evidence_ref = test_ref("edge-evidence");
+        let dependent = install_artifact(&root, &ArtifactInstallInput {
+            kind: "doc".to_string(),
+            payload: record("payload", vec![string("edge-dependent")]),
+            schema_refs: vec![schema_ref.clone()],
+            dependency_refs: vec![base.artifact_ref.clone()],
+            effect_manifest_ref: Some(effect_ref.clone()),
+            policy_refs: vec![policy_ref.clone()],
+            evidence_refs: vec![evidence_ref.clone()],
+            installer_ref: test_ref("edge-installer"),
+            capability_refs: vec![test_ref("edge-capability")],
+        })
+        .expect("dependent");
+        let edges = list_dependency_edges(&root).expect("edges");
+        let digest = dependency_index_digest(&edges).expect("digest");
+        let repeated_digest = dependency_index_digest(&list_dependency_edges(&root).expect("repeated edges"))
+            .expect("repeated digest");
+        assert_eq!(digest, repeated_digest);
+        assert!(edges.iter().any(|edge| edge.source_ref == dependent.artifact_ref
+            && edge.target_ref == base.artifact_ref
+            && edge.target_kind == "artifact"));
+        assert!(edges.iter().any(|edge| edge.target_ref == schema_ref && edge.target_kind == "schema"));
+        assert!(edges.iter().any(|edge| edge.target_ref == effect_ref && edge.target_kind == "effect"));
+        assert!(edges.iter().any(|edge| edge.target_ref == policy_ref && edge.target_kind == "policy"));
+        assert!(edges.iter().any(|edge| edge.target_ref == evidence_ref && edge.target_kind == "evidence"));
+
+        let query = impact_query(&root, &ArtifactImpactQueryInput {
+            subject_ref: base.artifact_ref.clone(),
+            relation_filters: vec!["imports".to_string()],
+            include_transitive: true,
+            hidden_refs: Vec::new(),
+        })
+        .expect("impact query");
+        assert_eq!(query.decision, "pass");
+        assert!(query.direct_dependents.contains(&dependent.artifact_ref));
+        assert!(query.transitive_dependents.contains(&dependent.artifact_ref));
+        assert!(query.receipt_value.collect_simple_record("artifact-receipt-v1", Some(8)).is_some());
+
+        let redacted = impact_query(&root, &ArtifactImpactQueryInput {
+            subject_ref: base.artifact_ref,
+            relation_filters: vec!["imports".to_string()],
+            include_transitive: false,
+            hidden_refs: vec![dependent.artifact_ref.clone()],
+        })
+        .expect("redacted impact query");
+        assert!(!redacted.direct_dependents.contains(&dependent.artifact_ref));
+        assert_eq!(redacted.redacted_refs, vec![dependent.artifact_ref]);
+        assert!(redacted.diagnostics.iter().any(|diagnostic| diagnostic.contains("redacted")));
+    }
+
+    #[test]
+    fn dependency_edge_normalization_deduplicates_and_cycle_traversal_terminates() {
+        // r[verify molten.artifacts.dependency_index_validation]
+        let left = test_ref("cycle-left");
+        let right = test_ref("cycle-right");
+        let evidence = vec![test_ref("cycle-evidence")];
+        let left_to_right = dependency_edge(&left, &right, "artifact", "imports", true, "cycle", &evidence)
+            .expect("left edge");
+        let right_to_left = dependency_edge(&right, &left, "artifact", "imports", true, "cycle", &evidence)
+            .expect("right edge");
+        let normalized = normalize_dependency_edges(&[
+            left_to_right.clone(),
+            left_to_right.clone(),
+            right_to_left.clone(),
+        ])
+        .expect("normalize");
+        assert_eq!(normalized.edges.len(), 2);
+        assert_eq!(normalized.duplicate_refs, vec![left_to_right.edge_ref.clone()]);
+        let dependents = transitive_dependents_from_edges(&normalized.edges, &left, &["imports".to_string()])
+            .expect("cycle traversal");
+        assert!(dependents.contains(&left));
+        assert!(dependents.contains(&right));
+        let digest = dependency_index_digest(&normalized.edges).expect("digest");
+        let duplicate_digest = dependency_index_digest(&[
+            right_to_left,
+            left_to_right.clone(),
+            left_to_right,
+        ])
+        .expect("duplicate digest");
+        assert_eq!(digest, duplicate_digest);
+    }
+
+    #[test]
     fn large_payloads_use_chunk_refs_and_cleanup_diagnostics_see_pointers() {
         let root = temp_dir("artifact-large");
         let large = IoValue::new("x".repeat(INLINE_PAYLOAD_LIMIT + 512));
