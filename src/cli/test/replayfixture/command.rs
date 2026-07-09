@@ -32,6 +32,17 @@ pub(crate) enum Top {
         #[arg(long)]
         out: FilePath,
     },
+    Compare {
+        expected: FilePath,
+        actual: FilePath,
+        #[arg(long)]
+        receipt_out: Option<FilePath>,
+    },
+    Explain {
+        receipt: FilePath,
+        #[arg(long)]
+        out: Option<FilePath>,
+    },
     Show {
         report: FilePath,
     },

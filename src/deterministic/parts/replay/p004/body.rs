@@ -208,4 +208,5 @@ mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/tests/m000/p002/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/tests/m000/p003/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/tests/m000/p004/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/tests/m000/p005/body.rs"));
 }

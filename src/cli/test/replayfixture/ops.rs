@@ -5,6 +5,12 @@ pub(super) fn run(command: super::command::Top) -> molten::error::Result<()> {
         super::command::Top::Tamper { fixture, kind, out } => tamper(fixture, &kind, out),
         super::command::Top::Rollup { receipts, out } => rollup(receipts, out),
         super::command::Top::Index { receipts, rollups, out } => index(receipts, rollups, out),
+        super::command::Top::Compare {
+            expected,
+            actual,
+            receipt_out,
+        } => compare(expected, actual, receipt_out),
+        super::command::Top::Explain { receipt, out } => explain(receipt, out),
         super::command::Top::Show { report } => show(report),
     }
 }
@@ -108,6 +114,43 @@ fn index(
         index.deny_count,
         index.raw_receipt_count,
         index.rollup_count
+    );
+    Ok(())
+}
+
+fn compare(
+    expected: std::path::PathBuf,
+    actual: std::path::PathBuf,
+    receipt_out: Option<std::path::PathBuf>,
+) -> molten::error::Result<()> {
+    let expected_value = super::io::read_preserves_file(&expected)?;
+    let actual_value = super::io::read_preserves_file(&actual)?;
+    let receipt = molten::deterministic_replay::compare_replay_fixture_values(expected_value, actual_value)?;
+    let is_written_to_file = super::io::write_optional_preserves(receipt_out.as_ref(), &receipt.value)?;
+    super::io::print_or_log_summary(
+        is_written_to_file,
+        &format!(
+            "deterministic replay compare ref={} decision={} first_divergence={}",
+            receipt.receipt_ref,
+            receipt.decision,
+            receipt.first_divergence_ref.as_deref().unwrap_or("none")
+        ),
+    );
+    Ok(())
+}
+
+fn explain(receipt: std::path::PathBuf, out: Option<std::path::PathBuf>) -> molten::error::Result<()> {
+    let receipt_value = super::io::read_preserves_file(&receipt)?;
+    let explain = molten::deterministic_replay::explain_replay_comparison_value(receipt_value)?;
+    let is_written_to_file = super::io::write_optional_preserves(out.as_ref(), &explain.value)?;
+    super::io::print_or_log_summary(
+        is_written_to_file,
+        &format!(
+            "deterministic replay explain ref={} decision={} first_divergence={}",
+            explain.receipt_ref,
+            explain.decision,
+            explain.first_divergence_ref.as_deref().unwrap_or("none")
+        ),
     );
     Ok(())
 }
