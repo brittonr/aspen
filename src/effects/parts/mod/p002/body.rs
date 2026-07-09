@@ -48,12 +48,9 @@ pub fn admit_effect_request(
     if request.handler_profile != handler_profile.profile {
         diagnostics.push("request handler profile does not match admitted profile".to_string());
     }
-    if !manifest
-        .declared_effects
-        .iter()
-        .any(|effect| effect.effect_id == request.effect_id && effect.operation == request.operation)
-    {
-        diagnostics.push("effect id or operation is not declared by artifact manifest".to_string());
+    match declared_effect_for_request(&manifest, &request) {
+        Some(effect) => diagnostics.extend(missing_capability_diagnostics(effect, &request)),
+        None => diagnostics.push("effect id or operation is not declared by artifact manifest".to_string()),
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = effect_binding_receipt_value(&EffectBindingReceiptInput {

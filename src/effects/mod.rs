@@ -4,3 +4,4 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/effects/parts/mod/p002/body.r
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/effects/parts/mod/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/effects/parts/mod/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/effects/parts/mod/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/effects/parts/mod/p006/body.rs"));

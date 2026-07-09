@@ -15,11 +15,18 @@ fn require_scope_match(scope: &EffectScope, request: &EffectHandleRequest<'_>, l
     Ok(())
 }
 
+const DECLARED_EFFECT_LEGACY_FIELD_COUNT: usize = 4;
+const DECLARED_EFFECT_FIELD_COUNT: usize = 6;
+const DECLARED_EFFECT_LEGACY_EVIDENCE_INDEX: usize = 3;
+const DECLARED_EFFECT_EVIDENCE_INDEX: usize = 5;
+
 fn declared_effect_value(effect: &DeclaredEffect) -> IoValue {
     record("declared-effect", vec![
         record("effect-id", vec![string(&effect.effect_id)]),
         record("operation", vec![string(&effect.operation)]),
         record("schemas", vec![string(&effect.input_schema_ref), string(&effect.output_schema_ref)]),
+        record("resource-class", vec![string(&effect.resource_class)]),
+        refs_record("capability", &effect.capability_refs),
         refs_record("evidence", &effect.evidence_refs),
     ])
 }
@@ -111,19 +118,44 @@ fn parse_declared_effects(value: &Value<IoValue>) -> Result<Vec<DeclaredEffect>>
     let mut effects = Vec::with_capacity(sequence.len());
     for entry in sequence.iter() {
         let entry = value_to_iovalue(entry);
-        let fields = simple_record(&entry, "declared-effect", 4)?;
+        let (fields, extended_shape) = declared_effect_fields(&entry)?;
         let schemas = value_to_iovalue(&fields[2]);
         let schemas = simple_record(&schemas, "schemas", 2)?;
+        let (resource_class, capability_refs, evidence_index) = if extended_shape {
+            (
+                required_record_string(&fields[3], "resource-class", "declared effect resource class")?,
+                parse_ref_sequence_record(&fields[4], "capability")?,
+                DECLARED_EFFECT_EVIDENCE_INDEX,
+            )
+        } else {
+            (
+                EFFECT_RESOURCE_CLASS_DEFAULT.to_string(),
+                Vec::new(),
+                DECLARED_EFFECT_LEGACY_EVIDENCE_INDEX,
+            )
+        };
         effects.push(DeclaredEffect {
             effect_id: required_record_string(&fields[0], "effect-id", "declared effect id")?,
             operation: required_record_string(&fields[1], "operation", "declared effect operation")?,
             input_schema_ref: required_ref(&schemas[0], "declared effect input schema ref")?,
             output_schema_ref: required_ref(&schemas[1], "declared effect output schema ref")?,
-            evidence_refs: parse_ref_sequence_record(&fields[3], "evidence")?,
+            resource_class,
+            capability_refs,
+            evidence_refs: parse_ref_sequence_record(&fields[evidence_index], "evidence")?,
         });
     }
     validate_declared_effects(&effects)?;
     Ok(effects)
+}
+
+fn declared_effect_fields(value: &IoValue) -> Result<(std::borrow::Cow<'_, Record<Value<IoValue>>>, bool)> {
+    if let Some(fields) = value.collect_simple_record("declared-effect", Some(DECLARED_EFFECT_FIELD_COUNT)) {
+        return Ok((fields, true));
+    }
+    value
+        .collect_simple_record("declared-effect", Some(DECLARED_EFFECT_LEGACY_FIELD_COUNT))
+        .map(|fields| (fields, false))
+        .ok_or_else(|| MoltenError::invalid_harness("expected declared effect record"))
 }
 
 fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
@@ -162,6 +194,8 @@ fn validate_declared_effects(effects: &[DeclaredEffect]) -> Result<()> {
         validate_operation(&effect.operation)?;
         require_ref(&effect.input_schema_ref, "declared effect input schema ref")?;
         require_ref(&effect.output_schema_ref, "declared effect output schema ref")?;
+        validate_resource_class(&effect.resource_class)?;
+        validate_refs(&effect.capability_refs, "declared effect capability ref")?;
         validate_refs(&effect.evidence_refs, "declared effect evidence ref")?;
         let key = (effect.effect_id.as_str(), effect.operation.as_str());
         if !seen.insert(key) {
@@ -202,14 +236,26 @@ fn validate_effect_id(effect_id: &str) -> Result<()> {
 
 fn validate_operation(operation: &str) -> Result<()> {
     validate_non_empty(operation, "effect operation")?;
-    if !operation.chars().all(|character| {
-        character.is_ascii_lowercase() || character.is_ascii_digit() || matches!(character, '-' | '_' | ':' | '/' | '.')
-    }) {
+    if !operation.chars().all(is_effect_token_character) {
         return Err(MoltenError::invalid_harness(format!(
             "effect operation {operation} must use lowercase ascii, digits, or effect separators"
         )));
     }
     Ok(())
+}
+
+fn validate_resource_class(resource_class: &str) -> Result<()> {
+    validate_non_empty(resource_class, "effect resource class")?;
+    if !resource_class.chars().all(is_effect_token_character) {
+        return Err(MoltenError::invalid_harness(format!(
+            "effect resource class {resource_class} must use lowercase ascii, digits, or effect separators"
+        )));
+    }
+    Ok(())
+}
+
+fn is_effect_token_character(character: char) -> bool {
+    character.is_ascii_lowercase() || character.is_ascii_digit() || matches!(character, '-' | '_' | ':' | '/' | '.')
 }
 
 fn validate_executor_kind(executor_kind: &str) -> Result<()> {
@@ -226,7 +272,8 @@ fn validate_handler_profile(profile: &str) -> Result<()> {
         | HANDLER_PROFILE_MOCK
         | HANDLER_PROFILE_CHAOS
         | HANDLER_PROFILE_PROFILING
-        | HANDLER_PROFILE_DRY_RUN => Ok(()),
+        | HANDLER_PROFILE_DRY_RUN
+        | HANDLER_PROFILE_REPLAY => Ok(()),
         _ => Err(MoltenError::invalid_harness(format!("unsupported effect handler profile {profile}"))),
     }
 }

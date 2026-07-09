@@ -19,6 +19,8 @@
             operation: operation.to_string(),
             input_schema_ref: fake_ref("input-schema"),
             output_schema_ref: fake_ref("output-schema"),
+            resource_class: "hostcall".to_string(),
+            capability_refs: vec![fake_ref("capability")],
             evidence_refs: vec![fake_ref("effect-evidence")],
         }
     }

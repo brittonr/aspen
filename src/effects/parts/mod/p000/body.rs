@@ -61,6 +61,14 @@ pub const HANDLER_PROFILE_MOCK: &str = "mock";
 pub const HANDLER_PROFILE_CHAOS: &str = "chaos";
 pub const HANDLER_PROFILE_PROFILING: &str = "profiling";
 pub const HANDLER_PROFILE_DRY_RUN: &str = "dry-run";
+pub const HANDLER_PROFILE_REPLAY: &str = "replay";
+
+pub const EFFECT_RESOURCE_CLASS_DEFAULT: &str = "default";
+pub const EFFECT_DETERMINISM_DETERMINISTIC: &str = "deterministic";
+pub const EFFECT_DETERMINISM_NONDETERMINISTIC: &str = "nondeterministic";
+pub const EFFECT_REPLAY_CLASS_RECORDED: &str = "recorded";
+pub const EFFECT_REPLAY_CLASS_RECORD_REQUIRED: &str = "record-required";
+pub const EFFECT_REPLAY_CLASS_COMPATIBLE: &str = "compatible";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeclaredEffect {
@@ -68,6 +76,8 @@ pub struct DeclaredEffect {
     pub operation: String,
     pub input_schema_ref: String,
     pub output_schema_ref: String,
+    pub resource_class: String,
+    pub capability_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
 

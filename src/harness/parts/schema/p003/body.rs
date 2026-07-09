@@ -75,6 +75,8 @@ fn call_effect_manifest(base: &CallBase, context: HostcallEvidenceContext<'_>) -
                 operation: hostcall.clone(),
                 input_schema_ref: context.step_ref.to_string(),
                 output_schema_ref: context.step_ref.to_string(),
+                resource_class: "hostcall".to_string(),
+                capability_refs: vec![context.capability_ref.to_string()],
                 evidence_refs: vec![base.preflight_ref.clone()],
             })
             .collect(),
