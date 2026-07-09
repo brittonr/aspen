@@ -4,3 +4,6 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/p0
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/p006/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/p007/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/deterministic/parts/replay/p008/body.rs"));
