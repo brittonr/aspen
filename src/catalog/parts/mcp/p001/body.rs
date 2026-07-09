@@ -82,6 +82,23 @@ fn transcript_search_result(registry_root: &Path, ledger_root: Option<&Path>, re
     search_result(registry_root, ledger_root, request, filters)
 }
 
+fn release_snapshot_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
+    if optional_arg_string(&request.args, "reference").is_some() {
+        return view_result(registry_root, ledger_root, request);
+    }
+    let mut filters = filters_from_args(&request.args)?;
+    push_bounded(
+        &mut filters,
+        Filter::ArtifactKind(crate::artifacts::RELEASE_SNAPSHOT_ARTIFACT_KIND.to_string()),
+        MAX_FILTERS,
+        "catalog MCP filters",
+    )?;
+    push_optional_text_filter(&mut filters, &request.args, "namespace", "release-snapshot-namespace")?;
+    push_optional_text_filter(&mut filters, &request.args, "snapshot-id", "release-snapshot-id")?;
+    push_optional_text_filter(&mut filters, &request.args, "caveat", "release-snapshot-caveat")?;
+    search_result(registry_root, ledger_root, request, filters)
+}
+
 fn provenance_search_result(registry_root: &Path, ledger_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let mut filters = filters_from_args(&request.args)?;
     push_bounded(&mut filters, Filter::Text("provenance:".to_string()), MAX_FILTERS, "catalog MCP filters")?;

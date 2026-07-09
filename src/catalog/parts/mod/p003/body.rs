@@ -130,6 +130,7 @@ type ClassificationProbe = fn(&IoValue) -> Result<Option<Vec<String>>>;
 
 const CLASSIFICATION_PROBES: &[ClassificationProbe] = &[
     direct_labels,
+    artifact_release_snapshot_labels,
     release_labels,
     retention_core_labels,
     retention_plan_apply_labels,
@@ -200,6 +201,52 @@ fn direct_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
         return deterministic_replay_index_classifications(&fields).map(Some);
     }
     Ok(None)
+}
+
+fn artifact_release_snapshot_labels(value: &IoValue) -> Result<Option<Vec<String>>> {
+    let Ok(snapshot) = crate::artifacts::parse_release_snapshot_value(value) else {
+        return Ok(None);
+    };
+    let mut classifications = vec![
+        "release-snapshot:artifact".to_string(),
+        format!("release-snapshot-namespace:{}", snapshot.namespace_scope),
+        format!("release-snapshot-id:{}", snapshot.snapshot_id),
+        format!("release-snapshot-artifacts:{}", snapshot.artifact_refs.len()),
+        format!("release-snapshot-signatures:{}", snapshot.signature_refs.len()),
+    ];
+    for caveat in snapshot.caveats {
+        push_bounded(
+            &mut classifications,
+            format!("release-snapshot-caveat:{caveat}"),
+            MAX_CATALOG_REFS,
+            "catalog classifications",
+        )?;
+    }
+    for non_claim in snapshot.non_claims {
+        push_bounded(
+            &mut classifications,
+            format!("release-snapshot-non-claim:{non_claim}"),
+            MAX_CATALOG_REFS,
+            "catalog classifications",
+        )?;
+    }
+    if let Some(redaction_profile_ref) = snapshot.redaction_profile_ref {
+        push_bounded(
+            &mut classifications,
+            format!("release-snapshot-redaction-profile:{redaction_profile_ref}"),
+            MAX_CATALOG_REFS,
+            "catalog classifications",
+        )?;
+    }
+    for stale_ref in snapshot.stale_evidence_refs {
+        push_bounded(
+            &mut classifications,
+            format!("release-snapshot-stale-evidence:{stale_ref}"),
+            MAX_CATALOG_REFS,
+            "catalog classifications",
+        )?;
+    }
+    Ok(Some(classifications))
 }
 
 fn release_labels(value: &IoValue) -> Result<Option<Vec<String>>> {

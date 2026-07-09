@@ -17,7 +17,9 @@ const MAX_ARTIFACT_POINTERS: usize = 100_000;
 const MAX_ARTIFACT_RECEIPTS: usize = 100_000;
 const MAX_ARTIFACT_DIAGNOSTICS: usize = 256;
 const MAX_ARTIFACT_CHECKS: usize = 64;
+const RELEASE_SNAPSHOT_RECORD_ARITY: usize = 16;
 pub const ARTIFACT_IDENTITY_HASH_ALGORITHM: &str = "blake3";
+pub const RELEASE_SNAPSHOT_ARTIFACT_KIND: &str = "release-snapshot";
 const RAW_SOURCE_CANONICALIZER: &str = "raw-source-text";
 const RENDERED_LOG_CANONICALIZER: &str = "rendered-log";
 const PRESERVES_VALUE_CANONICALIZER: &str = "preserves-canonical-value-v1";
@@ -35,6 +37,7 @@ const SUPPORTED_ARTIFACT_KINDS: &[&str] = &[
     "plugin-executor",
     "preserves-schema",
     "receipt",
+    RELEASE_SNAPSHOT_ARTIFACT_KIND,
     "schema",
     "schema-identity",
     "stage",
@@ -54,6 +57,7 @@ const _: () = assert!(MAX_ARTIFACT_POINTERS <= 1_000_000);
 const _: () = assert!(MAX_ARTIFACT_RECEIPTS <= 1_000_000);
 const _: () = assert!(MAX_ARTIFACT_DIAGNOSTICS <= 10_000);
 const _: () = assert!(MAX_ARTIFACT_CHECKS <= 1_000);
+const _: () = assert!(RELEASE_SNAPSHOT_RECORD_ARITY <= MAX_ARTIFACT_CHECKS);
 
 const INDEX_FILE: &str = "artifact-registry.redb";
 const INDEX_ARTIFACTS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_artifacts_v1");
@@ -208,6 +212,153 @@ pub struct ArtifactImpactQueryReceipt {
     pub redacted_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub receipt_value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseSnapshotDraftInput {
+    pub namespace_scope: String,
+    pub snapshot_id: String,
+    pub artifact_refs: Vec<String>,
+    pub artifact_set_ref: Option<String>,
+    pub doc_refs: Vec<String>,
+    pub transcript_refs: Vec<String>,
+    pub expected_receipt_refs: Vec<String>,
+    pub policy_refs: Vec<String>,
+    pub provenance_refs: Vec<String>,
+    pub source_gate_refs: Vec<String>,
+    pub resource_refs: Vec<String>,
+    pub compatibility_refs: Vec<String>,
+    pub migration_refs: Vec<String>,
+    pub upgrade_session_refs: Vec<String>,
+    pub rollback_refs: Vec<String>,
+    pub cutover_refs: Vec<String>,
+    pub caveats: Vec<String>,
+    pub non_claims: Vec<String>,
+    pub redaction_profile_ref: Option<String>,
+    pub signature_refs: Vec<String>,
+    pub stale_evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseSnapshotValueInput {
+    pub namespace_scope: String,
+    pub snapshot_id: String,
+    pub artifact_refs: Vec<String>,
+    pub artifact_set_ref: Option<String>,
+    pub dependency_closure_digest: String,
+    pub dependency_index_ref: String,
+    pub doc_refs: Vec<String>,
+    pub transcript_refs: Vec<String>,
+    pub expected_receipt_refs: Vec<String>,
+    pub policy_refs: Vec<String>,
+    pub provenance_refs: Vec<String>,
+    pub source_gate_refs: Vec<String>,
+    pub resource_refs: Vec<String>,
+    pub compatibility_refs: Vec<String>,
+    pub migration_refs: Vec<String>,
+    pub upgrade_session_refs: Vec<String>,
+    pub rollback_refs: Vec<String>,
+    pub cutover_refs: Vec<String>,
+    pub caveats: Vec<String>,
+    pub non_claims: Vec<String>,
+    pub redaction_profile_ref: Option<String>,
+    pub signature_subject_ref: String,
+    pub signature_refs: Vec<String>,
+    pub stale_evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseSnapshot {
+    pub snapshot_ref: String,
+    pub namespace_scope: String,
+    pub snapshot_id: String,
+    pub artifact_refs: Vec<String>,
+    pub artifact_set_ref: Option<String>,
+    pub dependency_closure_digest: String,
+    pub dependency_index_ref: String,
+    pub doc_refs: Vec<String>,
+    pub transcript_refs: Vec<String>,
+    pub expected_receipt_refs: Vec<String>,
+    pub policy_refs: Vec<String>,
+    pub provenance_refs: Vec<String>,
+    pub source_gate_refs: Vec<String>,
+    pub resource_refs: Vec<String>,
+    pub compatibility_refs: Vec<String>,
+    pub migration_refs: Vec<String>,
+    pub upgrade_session_refs: Vec<String>,
+    pub rollback_refs: Vec<String>,
+    pub cutover_refs: Vec<String>,
+    pub caveats: Vec<String>,
+    pub non_claims: Vec<String>,
+    pub redaction_profile_ref: Option<String>,
+    pub signature_subject_ref: String,
+    pub signature_refs: Vec<String>,
+    pub stale_evidence_refs: Vec<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseSnapshotInstallInput {
+    pub snapshot: ReleaseSnapshotDraftInput,
+    pub installer_ref: String,
+    pub capability_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseSnapshotInstall {
+    pub artifact_ref: String,
+    pub snapshot: ReleaseSnapshot,
+    pub install: ArtifactInstall,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseSnapshotVerifyInput {
+    pub snapshot_ref: String,
+    pub required_caveats: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseSnapshotVerifyReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub snapshot_ref: String,
+    pub diagnostics: Vec<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseChannelUpdateInput {
+    pub channel: String,
+    pub snapshot_ref: String,
+    pub policy_refs: Vec<String>,
+    pub capability_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseChannelUpdate {
+    pub pointer: ArtifactNamePointer,
+    pub receipt_ref: String,
+    pub receipt_value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseChannelAdmissionInput {
+    pub channel_pointer_ref: String,
+    pub release_evidence_refs: Vec<String>,
+    pub policy_refs: Vec<String>,
+    pub provenance_refs: Vec<String>,
+    pub source_gate_refs: Vec<String>,
+    pub authority_refs: Vec<String>,
+    pub resource_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseChannelAdmissionReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

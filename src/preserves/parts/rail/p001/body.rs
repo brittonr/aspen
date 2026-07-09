@@ -38,6 +38,7 @@ pub const ARTIFACT_RECEIPT_SCHEMA: &str = "molten.artifacts.receipt.v1";
 pub const ARTIFACT_IDENTITY_RECEIPT_SCHEMA: &str = "molten.artifacts.identity-receipt.v1";
 pub const ARTIFACT_DEPENDENCY_EDGE_SCHEMA: &str = "molten.artifacts.dependency-edge.v1";
 pub const ARTIFACT_CLOSURE_SCHEMA: &str = "molten.artifacts.closure.v1";
+pub const ARTIFACT_RELEASE_SNAPSHOT_SCHEMA: &str = "molten.artifacts.release-snapshot.v1";
 pub const SCHEMA_IDENTITY_SCHEMA: &str = "molten.schema.identity.v1";
 pub const SCHEMA_ALIAS_SCHEMA: &str = "molten.schema.alias.v1";
 pub const SCHEMA_COMPATIBILITY_SCHEMA: &str = "molten.schema.compatibility.v1";

@@ -268,7 +268,8 @@ fn dispatch_read_only(
         "impact_query" => impact_result(registry_root, ledger_root, request),
         "view_receipts" | "show_receipt" | "search_receipts" => receipts_result(registry_root, ledger_root, request),
         "search_transcripts" => transcript_search_result(registry_root, ledger_root, request),
-        "explain_evidence" | "show_release_snapshot" => artifact_search_result(registry_root, ledger_root, request),
+        "show_release_snapshot" => release_snapshot_result(registry_root, ledger_root, request),
+        "explain_evidence" => artifact_search_result(registry_root, ledger_root, request),
         "catalog.short_id" | "short_id_resolve" => short_id_result(registry_root, ledger_root, request),
         _ => Err(MoltenError::invalid_harness(format!(
             "catalog MCP tool {} is not in the read-only dispatch allow-list",

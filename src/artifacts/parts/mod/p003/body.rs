@@ -73,6 +73,267 @@ fn closure_value(roots: &[String], closure_refs: &[String], missing_refs: &[Stri
     ]))
 }
 
+struct ReleaseSnapshotSubjectInput<'a> {
+    namespace_scope: &'a str,
+    snapshot_id: &'a str,
+    artifact_refs: &'a [String],
+    artifact_set_ref: Option<&'a str>,
+    dependency_closure_digest: &'a str,
+    dependency_index_ref: &'a str,
+    doc_refs: &'a [String],
+    transcript_refs: &'a [String],
+    expected_receipt_refs: &'a [String],
+    policy_refs: &'a [String],
+    provenance_refs: &'a [String],
+    source_gate_refs: &'a [String],
+    resource_refs: &'a [String],
+    compatibility_refs: &'a [String],
+    migration_refs: &'a [String],
+    upgrade_session_refs: &'a [String],
+    rollback_refs: &'a [String],
+    cutover_refs: &'a [String],
+    caveats: &'a [String],
+    non_claims: &'a [String],
+    redaction_profile_ref: Option<&'a str>,
+    stale_evidence_refs: &'a [String],
+}
+
+struct ReleaseSnapshotVerifyCore {
+    diagnostics: Vec<String>,
+    snapshot_artifact_kind: bool,
+    exact_member_closure: bool,
+    dependency_index_digest: bool,
+    signature_subject_bound: bool,
+    caveats_rendered: bool,
+    fresh_evidence: bool,
+    redaction_profile_bound: bool,
+    non_authority_boundary: bool,
+    required_evidence_bound: bool,
+}
+
+fn release_snapshot_subject_ref(input: &ReleaseSnapshotSubjectInput<'_>) -> Result<String> {
+    validate_release_snapshot_subject_input(input)?;
+    canonical_hash(&record("artifact-release-snapshot-subject-v1", vec![
+        record("namespace", vec![string(input.namespace_scope)]),
+        record("snapshot", vec![string(input.snapshot_id)]),
+        refs_record("artifacts", &sorted_unique(input.artifact_refs)),
+        record("artifact-set", vec![optional_ref_value(input.artifact_set_ref)]),
+        record("dependency", vec![
+            record("closure-digest", vec![string(input.dependency_closure_digest)]),
+            record("index", vec![string(input.dependency_index_ref)]),
+        ]),
+        record("documentation", vec![
+            refs_record("docs", &sorted_unique(input.doc_refs)),
+            refs_record("transcripts", &sorted_unique(input.transcript_refs)),
+            refs_record("expected-receipts", &sorted_unique(input.expected_receipt_refs)),
+        ]),
+        record("evidence", vec![
+            refs_record("policy", &sorted_unique(input.policy_refs)),
+            refs_record("provenance", &sorted_unique(input.provenance_refs)),
+            refs_record("source-gates", &sorted_unique(input.source_gate_refs)),
+            refs_record("resources", &sorted_unique(input.resource_refs)),
+        ]),
+        record("compatibility", vec![
+            refs_record("compatibility", &sorted_unique(input.compatibility_refs)),
+            refs_record("migrations", &sorted_unique(input.migration_refs)),
+        ]),
+        record("lifecycle", vec![
+            refs_record("upgrade-sessions", &sorted_unique(input.upgrade_session_refs)),
+            refs_record("rollback", &sorted_unique(input.rollback_refs)),
+            refs_record("cutover", &sorted_unique(input.cutover_refs)),
+        ]),
+        record("caveats", vec![strings_sequence(&sorted_unique(input.caveats))]),
+        record("non-claims", vec![strings_sequence(&sorted_unique(input.non_claims))]),
+        record("redaction", vec![optional_ref_value(input.redaction_profile_ref)]),
+        refs_record("stale-evidence", &sorted_unique(input.stale_evidence_refs)),
+    ]))
+}
+
+fn release_snapshot_subject_input_from_snapshot(snapshot: &ReleaseSnapshot) -> ReleaseSnapshotSubjectInput<'_> {
+    ReleaseSnapshotSubjectInput {
+        namespace_scope: &snapshot.namespace_scope,
+        snapshot_id: &snapshot.snapshot_id,
+        artifact_refs: &snapshot.artifact_refs,
+        artifact_set_ref: snapshot.artifact_set_ref.as_deref(),
+        dependency_closure_digest: &snapshot.dependency_closure_digest,
+        dependency_index_ref: &snapshot.dependency_index_ref,
+        doc_refs: &snapshot.doc_refs,
+        transcript_refs: &snapshot.transcript_refs,
+        expected_receipt_refs: &snapshot.expected_receipt_refs,
+        policy_refs: &snapshot.policy_refs,
+        provenance_refs: &snapshot.provenance_refs,
+        source_gate_refs: &snapshot.source_gate_refs,
+        resource_refs: &snapshot.resource_refs,
+        compatibility_refs: &snapshot.compatibility_refs,
+        migration_refs: &snapshot.migration_refs,
+        upgrade_session_refs: &snapshot.upgrade_session_refs,
+        rollback_refs: &snapshot.rollback_refs,
+        cutover_refs: &snapshot.cutover_refs,
+        caveats: &snapshot.caveats,
+        non_claims: &snapshot.non_claims,
+        redaction_profile_ref: snapshot.redaction_profile_ref.as_deref(),
+        stale_evidence_refs: &snapshot.stale_evidence_refs,
+    }
+}
+
+fn release_snapshot_verify_core(
+    root: &Path,
+    artifact: &ArtifactRecord,
+    snapshot: &ReleaseSnapshot,
+    required_caveats: &[String],
+) -> Result<ReleaseSnapshotVerifyCore> {
+    let mut diagnostics = Vec::new();
+    let snapshot_artifact_kind = artifact.kind == RELEASE_SNAPSHOT_ARTIFACT_KIND;
+    if !snapshot_artifact_kind {
+        push_bounded(
+            &mut diagnostics,
+            format!("release snapshot artifact kind was {}, expected {RELEASE_SNAPSHOT_ARTIFACT_KIND}", artifact.kind),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "release snapshot diagnostics",
+        )?;
+    }
+
+    let expected_members = sorted_unique(&snapshot.artifact_refs);
+    let artifact_dependencies = sorted_unique(&artifact.dependency_refs);
+    let mut exact_member_closure = artifact_dependencies == expected_members;
+    if !exact_member_closure {
+        push_bounded(
+            &mut diagnostics,
+            "release snapshot registry dependencies do not match exact artifact members".to_string(),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "release snapshot diagnostics",
+        )?;
+    }
+    for member_ref in &expected_members {
+        if let Err(error) = read_artifact(root, member_ref) {
+            exact_member_closure = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("tampered or missing snapshot member {member_ref}: {error}"),
+                MAX_ARTIFACT_DIAGNOSTICS,
+                "release snapshot diagnostics",
+            )?;
+        }
+    }
+    let (closure_refs, missing_refs) = compute_closure_refs(root, &expected_members)?;
+    if !missing_refs.is_empty() {
+        exact_member_closure = false;
+        for missing_ref in &missing_refs {
+            push_bounded(
+                &mut diagnostics,
+                format!("missing closure member {missing_ref}"),
+                MAX_ARTIFACT_DIAGNOSTICS,
+                "release snapshot diagnostics",
+            )?;
+        }
+    }
+    for missing_member in set_difference(&closure_refs, &expected_members)? {
+        exact_member_closure = false;
+        push_bounded(
+            &mut diagnostics,
+            format!("snapshot omitted closure member {missing_member}"),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "release snapshot diagnostics",
+        )?;
+    }
+    for unexpected_member in set_difference(&expected_members, &closure_refs)? {
+        exact_member_closure = false;
+        push_bounded(
+            &mut diagnostics,
+            format!("snapshot listed unexpected closure member {unexpected_member}"),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "release snapshot diagnostics",
+        )?;
+    }
+    let closure_digest = canonical_hash(&closure_value(&expected_members, &closure_refs, &missing_refs)?)?;
+    if closure_digest != snapshot.dependency_closure_digest {
+        exact_member_closure = false;
+        push_bounded(
+            &mut diagnostics,
+            format!(
+                "dependency closure digest mismatch: got {closure_digest}, expected {}",
+                snapshot.dependency_closure_digest
+            ),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "release snapshot diagnostics",
+        )?;
+    }
+
+    let (dependency_index_digest, index_ref) = match release_snapshot_dependency_index_digest(root, &expected_members) {
+        Ok(index_ref) => (index_ref == snapshot.dependency_index_ref, Some(index_ref)),
+        Err(error) => {
+            push_bounded(
+                &mut diagnostics,
+                format!("dependency index digest could not be recomputed: {error}"),
+                MAX_ARTIFACT_DIAGNOSTICS,
+                "release snapshot diagnostics",
+            )?;
+            (false, None)
+        }
+    };
+    if let Some(index_ref) = index_ref
+        && index_ref != snapshot.dependency_index_ref
+    {
+        push_bounded(
+            &mut diagnostics,
+            format!("dependency index digest mismatch: got {index_ref}, expected {}", snapshot.dependency_index_ref),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "release snapshot diagnostics",
+        )?;
+    }
+
+    let recomputed_subject = release_snapshot_subject_ref(&release_snapshot_subject_input_from_snapshot(snapshot))?;
+    let signature_subject_bound = recomputed_subject == snapshot.signature_subject_ref && !snapshot.signature_refs.is_empty();
+    if recomputed_subject != snapshot.signature_subject_ref {
+        push_bounded(
+            &mut diagnostics,
+            format!(
+                "signature subject mismatch: got {recomputed_subject}, expected {}",
+                snapshot.signature_subject_ref
+            ),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "release snapshot diagnostics",
+        )?;
+    }
+    if snapshot.signature_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "release snapshot requires at least one signature ref".to_string(),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "release snapshot diagnostics",
+        )?;
+    }
+
+    let caveats_rendered = release_snapshot_caveats_rendered(snapshot, required_caveats, &mut diagnostics)?;
+    let fresh_evidence = release_snapshot_fresh_evidence(snapshot, &mut diagnostics)?;
+    let redaction_profile_bound = release_snapshot_redaction_bound(snapshot, &mut diagnostics)?;
+    let required_evidence_bound = release_snapshot_required_evidence_bound(snapshot, &mut diagnostics)?;
+    let non_authority_boundary = snapshot
+        .non_claims
+        .iter()
+        .any(|claim| claim.contains("authority") || claim.contains("deployment") || claim.contains("execution"));
+    if !non_authority_boundary {
+        push_bounded(
+            &mut diagnostics,
+            "release snapshot must surface non-claims for authority, deployment, or execution".to_string(),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "release snapshot diagnostics",
+        )?;
+    }
+    Ok(ReleaseSnapshotVerifyCore {
+        diagnostics,
+        snapshot_artifact_kind,
+        exact_member_closure,
+        dependency_index_digest,
+        signature_subject_bound,
+        caveats_rendered,
+        fresh_evidence,
+        redaction_profile_bound,
+        non_authority_boundary,
+        required_evidence_bound,
+    })
+}
+
 fn payload_value(payload: &ArtifactPayloadRef) -> Result<IoValue> {
     Ok(record("payload", vec![match payload {
         ArtifactPayloadRef::Inline { value_ref, length } => {

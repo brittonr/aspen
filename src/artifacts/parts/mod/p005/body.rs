@@ -346,6 +346,177 @@ mod tests {
     }
 
     #[test]
+    fn release_snapshots_verify_channels_are_non_authority_and_catalog_surfaces_caveats() {
+        // r[verify molten.release_snapshots.namespace_snapshot_artifacts]
+        // r[verify molten.release_snapshots.closure_integrity]
+        // r[verify molten.release_snapshots.channel_view_non_authority]
+        // r[verify molten.release_snapshots.evidence_caveats]
+        let root = temp_dir("release-snapshot-pass");
+        let base = install_artifact(&root, &test_input("schema", "release-base", &[])).expect("base artifact");
+        let app = install_artifact(
+            &root,
+            &test_input("steel", "release-app", std::slice::from_ref(&base.artifact_ref)),
+        )
+        .expect("app artifact");
+        let draft = release_snapshot_draft("internal/pilot", "snapshot-2026-07-09", &[base.artifact_ref, app.artifact_ref]);
+        let installed = install_release_snapshot(&root, &ReleaseSnapshotInstallInput {
+            snapshot: draft.clone(),
+            installer_ref: test_ref("release-installer"),
+            capability_refs: vec![test_ref("release-install-capability")],
+        })
+        .expect("install release snapshot");
+        let verified = verify_release_snapshot(&root, &ReleaseSnapshotVerifyInput {
+            snapshot_ref: installed.artifact_ref.clone(),
+            required_caveats: vec!["pilot-scope".to_string()],
+        })
+        .expect("verify release snapshot");
+        assert_eq!(verified.decision, "pass");
+        let hidden_caveat = verify_release_snapshot(&root, &ReleaseSnapshotVerifyInput {
+            snapshot_ref: installed.artifact_ref.clone(),
+            required_caveats: vec!["missing-promotion-caveat".to_string()],
+        })
+        .expect("verify hidden caveat denial");
+        assert_eq!(hidden_caveat.decision, "deny");
+        assert!(hidden_caveat
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("required caveat not rendered")));
+
+        let channel = set_release_channel(&root, &ReleaseChannelUpdateInput {
+            channel: "release/stable".to_string(),
+            snapshot_ref: installed.artifact_ref.clone(),
+            policy_refs: vec![test_ref("release-channel-policy")],
+            capability_refs: vec![test_ref("release-channel-capability")],
+            evidence_refs: vec![verified.receipt_ref.clone()],
+        })
+        .expect("channel update");
+        let unauthorized = set_release_channel(&root, &ReleaseChannelUpdateInput {
+            channel: "release/stable".to_string(),
+            snapshot_ref: installed.artifact_ref.clone(),
+            policy_refs: vec![test_ref("release-channel-policy")],
+            capability_refs: Vec::new(),
+            evidence_refs: vec![verified.receipt_ref.clone()],
+        })
+        .expect_err("channel update without capability denies");
+        assert!(unauthorized.to_string().contains("capability refs"));
+
+        let channel_only = release_channel_admission_receipt(&ReleaseChannelAdmissionInput {
+            channel_pointer_ref: channel.pointer.pointer_ref.clone(),
+            release_evidence_refs: Vec::new(),
+            policy_refs: Vec::new(),
+            provenance_refs: Vec::new(),
+            source_gate_refs: Vec::new(),
+            authority_refs: Vec::new(),
+            resource_refs: Vec::new(),
+        })
+        .expect("channel-only admission receipt");
+        assert_eq!(channel_only.decision, "deny");
+        assert!(channel_only
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("non-authority")));
+        let admitted = release_channel_admission_receipt(&ReleaseChannelAdmissionInput {
+            channel_pointer_ref: channel.pointer.pointer_ref,
+            release_evidence_refs: vec![verified.receipt_ref],
+            policy_refs: vec![test_ref("admission-policy")],
+            provenance_refs: vec![test_ref("admission-provenance")],
+            source_gate_refs: vec![test_ref("admission-source-gate")],
+            authority_refs: vec![test_ref("admission-authority")],
+            resource_refs: vec![test_ref("admission-resource")],
+        })
+        .expect("fully evidenced admission receipt");
+        assert_eq!(admitted.decision, "pass");
+
+        let catalog = crate::catalog::search(&root, None, &crate::catalog::SearchInput {
+            root_refs: Vec::new(),
+            include_dependencies: true,
+            include_dependents: true,
+            filters: vec![crate::catalog::Filter::Text("release-snapshot-caveat:pilot-scope".to_string())],
+            visibility: crate::catalog::VisibilityInput::default(),
+        })
+        .expect("catalog release snapshot caveat search");
+        assert_eq!(catalog.items.len(), 1);
+    }
+
+    #[test]
+    fn release_snapshot_verification_denies_missing_tampered_and_stale_evidence() {
+        // r[verify molten.release_snapshots.validation]
+        let root = temp_dir("release-snapshot-deny");
+        let base = install_artifact(&root, &test_input("schema", "deny-base", &[])).expect("base artifact");
+        let app = install_artifact(
+            &root,
+            &test_input("steel", "deny-app", std::slice::from_ref(&base.artifact_ref)),
+        )
+        .expect("app artifact");
+        let draft = release_snapshot_draft("internal/pilot", "snapshot-deny", &[base.artifact_ref.clone(), app.artifact_ref.clone()]);
+        let mut bad_input = release_snapshot_value_input(&root, &draft).expect("valid snapshot input");
+        bad_input.artifact_refs = vec![app.artifact_ref.clone()];
+        bad_input.stale_evidence_refs = vec![test_ref("stale-evidence")];
+        let bad_payload = release_snapshot_value(&bad_input).expect("bad snapshot payload");
+        let bad_install = install_artifact(&root, &ArtifactInstallInput {
+            kind: RELEASE_SNAPSHOT_ARTIFACT_KIND.to_string(),
+            payload: bad_payload,
+            schema_refs: Vec::new(),
+            dependency_refs: bad_input.artifact_refs.clone(),
+            effect_manifest_ref: None,
+            policy_refs: bad_input.policy_refs.clone(),
+            evidence_refs: release_snapshot_install_evidence_refs(&bad_input).expect("bad evidence refs"),
+            installer_ref: test_ref("bad-release-installer"),
+            capability_refs: vec![test_ref("bad-release-capability")],
+        })
+        .expect("install malformed snapshot");
+        let denied = verify_release_snapshot(&root, &ReleaseSnapshotVerifyInput {
+            snapshot_ref: bad_install.artifact_ref,
+            required_caveats: vec!["pilot-scope".to_string()],
+        })
+        .expect("verify malformed snapshot");
+        assert_eq!(denied.decision, "deny");
+        assert!(denied
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("snapshot omitted closure member")));
+        assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale evidence")));
+
+        let tampered_root = temp_dir("release-snapshot-tampered");
+        let tampered_base = install_artifact(&tampered_root, &test_input("schema", "tamper-base", &[]))
+            .expect("tampered base artifact");
+        let tampered_app = install_artifact(
+            &tampered_root,
+            &test_input("steel", "tamper-app", std::slice::from_ref(&tampered_base.artifact_ref)),
+        )
+        .expect("tampered app artifact");
+        let tampered_draft = release_snapshot_draft(
+            "internal/pilot",
+            "snapshot-tampered",
+            &[tampered_base.artifact_ref.clone(), tampered_app.artifact_ref.clone()],
+        );
+        let tampered_snapshot = install_release_snapshot(&tampered_root, &ReleaseSnapshotInstallInput {
+            snapshot: tampered_draft,
+            installer_ref: test_ref("tamper-installer"),
+            capability_refs: vec![test_ref("tamper-capability")],
+        })
+        .expect("install tampered fixture snapshot");
+        let db = ensure_index_tables(&tampered_root).expect("artifact db");
+        let write_txn = db.begin_write().expect("write txn");
+        {
+            let mut artifacts = write_txn.open_table(INDEX_ARTIFACTS).expect("artifacts table");
+            let app_bytes = canonical_bytes(&tampered_app.artifact.value).expect("app bytes");
+            artifacts
+                .insert(tampered_base.artifact_ref.as_str(), app_bytes.as_slice())
+                .expect("tamper member bytes");
+        }
+        write_txn.commit().expect("commit tampered member");
+        drop(db);
+        let tampered = verify_release_snapshot(&tampered_root, &ReleaseSnapshotVerifyInput {
+            snapshot_ref: tampered_snapshot.artifact_ref,
+            required_caveats: vec!["pilot-scope".to_string()],
+        })
+        .expect("tampered member denial receipt");
+        assert_eq!(tampered.decision, "deny");
+        assert!(tampered.diagnostics.iter().any(|diagnostic| diagnostic.contains("tampered")));
+    }
+
+    #[test]
     fn large_payloads_use_chunk_refs_and_cleanup_diagnostics_see_pointers() {
         let root = temp_dir("artifact-large");
         let large = IoValue::new("x".repeat(INLINE_PAYLOAD_LIMIT + 512));
@@ -422,6 +593,32 @@ mod tests {
             evidence_refs: vec![test_ref(&format!("evidence-{label}"))],
             installer_ref: test_ref(&format!("installer-{label}")),
             capability_refs: vec![test_ref(&format!("capability-{label}"))],
+        }
+    }
+
+    fn release_snapshot_draft(namespace_scope: &str, snapshot_id: &str, artifact_refs: &[String]) -> ReleaseSnapshotDraftInput {
+        ReleaseSnapshotDraftInput {
+            namespace_scope: namespace_scope.to_string(),
+            snapshot_id: snapshot_id.to_string(),
+            artifact_refs: artifact_refs.to_vec(),
+            artifact_set_ref: Some(test_ref(&format!("artifact-set-{snapshot_id}"))),
+            doc_refs: vec![test_ref(&format!("doc-{snapshot_id}"))],
+            transcript_refs: vec![test_ref(&format!("transcript-{snapshot_id}"))],
+            expected_receipt_refs: vec![test_ref(&format!("receipt-{snapshot_id}"))],
+            policy_refs: vec![test_ref(&format!("policy-{snapshot_id}"))],
+            provenance_refs: vec![test_ref(&format!("provenance-{snapshot_id}"))],
+            source_gate_refs: vec![test_ref(&format!("source-gate-{snapshot_id}"))],
+            resource_refs: vec![test_ref(&format!("resource-{snapshot_id}"))],
+            compatibility_refs: vec![test_ref(&format!("compatibility-{snapshot_id}"))],
+            migration_refs: vec![test_ref(&format!("migration-{snapshot_id}"))],
+            upgrade_session_refs: vec![test_ref(&format!("upgrade-{snapshot_id}"))],
+            rollback_refs: vec![test_ref(&format!("rollback-{snapshot_id}"))],
+            cutover_refs: vec![test_ref(&format!("cutover-{snapshot_id}"))],
+            caveats: vec!["pilot-scope".to_string(), "redaction: internal-only".to_string()],
+            non_claims: vec!["channel names do not grant authority, deployment, or execution".to_string()],
+            redaction_profile_ref: Some(test_ref(&format!("redaction-{snapshot_id}"))),
+            signature_refs: vec![test_ref(&format!("signature-{snapshot_id}"))],
+            stale_evidence_refs: Vec::new(),
         }
     }
 
