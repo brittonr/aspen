@@ -21,3 +21,8 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p019/body.rs"))
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p020/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p021/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p022/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p023/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p024/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p025/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p026/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/p027/body.rs"));

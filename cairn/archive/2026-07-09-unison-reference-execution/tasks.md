@@ -1,0 +1,7 @@
+## Tasks
+
+- [x] [serial] r[molten.remote_execution.ref_request_envelope] Define canonical remote execution request envelopes that bind root artifact ref, closure descriptor, entrypoint id, canonical arguments, effect manifest ref, handler profile request, capabilities, policy/provenance/source-gate/resource evidence, and reply route.
+- [x] [serial] r[molten.remote_execution.receiver_closure_admission] Implement receiver-driven missing-set planning, dependency fetch verification, closure completeness checks, and local install/admission receipts.
+- [x] [parallel] r[molten.remote_execution.handler_profile_capability_binding] Bind presented capabilities, effect manifests, handler profiles, resource policy, and provenance/source-gate evidence into execution admission and result receipts.
+- [x] [parallel] r[molten.remote_execution.no_mobile_closure_boundary] Deny arbitrary mobile closures, live heap captures, sender-pushed extras, incomplete closures, and transport-only authority before execution.
+- [x] [serial] r[molten.remote_execution.validation] Add positive and negative fixtures for verified closure execution, missing dependencies, wrong hashes, sender-pushed extras, mobile closure payloads, missing capabilities, and local policy denial.
