@@ -55,7 +55,21 @@ molten test traceability scan --root . --changed-only \
   --readback-out target/proof/proof-readback.txt
 ```
 
-The pure core derives coverage from validated receipt fields rather than rendered logs. The Nix/release gate surface can call the same scan command and fail closed on missing positive, missing negative, stale receipt refs, duplicate receipt refs, or compatibility-only coverage when receipt-backed coverage is required.
+The pure core derives coverage from validated receipt fields rather than rendered logs. The Nix/release gate surface can call the same scan command and fail closed on missing positive, missing negative, stale receipt refs, duplicate receipt refs, or compatibility-only coverage when receipt-backed coverage is required. `tests/evidence-matrix.ncl` is the checked-in Nickel matrix source for durable review; its exported entries feed the same requirement ids, positive/negative coverage split, artifact refs, receipt refs, evidence scope, and diagnostic-only exemptions.
+
+## Testing hardening receipts
+
+`molten::testing_hardening` provides pure in-memory builders for the current testing-harness hardening rails:
+
+- `boundary-coverage-gate-v1` records required and observed positive/negative runtime boundary classes, explicit exemptions, missing classes, and stale evidence refs.
+- `ci-test-run-receipt-v1` binds source marker, nextest profile, command surface, nextest config, Cargo metadata, binaries metadata, JUnit ref, counts, decision, diagnostics, and caveats; JUnit alone is only a rendered view.
+- `tamper-negative-matrix-v1` lists positive controls plus generated negative mutations such as stale refs, wrong kinds, duplicate members, noncanonical values, diagnostic-only pass misuse, and unsupported schema versions.
+- `hegel-counterexample-fixture-v1` binds property id, generator profile, seed, shrink path, shrunk input ref, replay identity, traces, receipts, diagnostics, and confidentiality handling before promotion.
+- `replay-smoke-gate-v1` compares fresh run, replay, and fresh-rerun canonical refs, while live-only, exploratory, unavailable, or diagnostic-only suites remain visibly excluded from deterministic pass evidence.
+- `nextest-profile-matrix-v1` records semantic profile ids, command surfaces, expected artifacts, retry policy, cost class, evidence scope, platform availability, and release caveats.
+- `cli-receipt-first-gate-v1` records whether evidence-bearing CLI tests asserted canonical artifacts or receipts before relying on stdout, stderr, JUnit, markdown, JSON, or terminal summaries.
+
+Focused checks: `cargo test hardening --lib`, `cargo test --test cliharness ci_run_receipt`, `nickel export tests/evidence-matrix.ncl`, and `nix build .#checks.x86_64-linux.nextest-config`.
 
 ## Aggregate proof obligations
 

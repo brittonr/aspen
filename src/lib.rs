@@ -229,6 +229,10 @@ compat_module!(state_machine_proof, proof_trace_core);
 pub mod trace_core;
 compat_module!(requirement_traceability, trace_core);
 #[doc(hidden)]
+#[path = "testing/hardening.rs"]
+pub mod hardening_core;
+compat_module!(testing_hardening, hardening_core);
+#[doc(hidden)]
 #[path = "transcripts/mod.rs"]
 pub mod narratives;
 compat_module!(transcripts, narratives);

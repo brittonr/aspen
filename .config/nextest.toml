@@ -38,3 +38,29 @@ final-status-level = "flaky"
 global-timeout = "45m"
 slow-timeout = { period = "60s", terminate-after = 2, grace-period = "10s" }
 junit = { path = "junit.xml", report-name = "molten-exploratory", store-failure-output = true, store-success-output = false }
+
+[profile.fast-core]
+inherits = "deterministic"
+junit = { path = "junit.xml", report-name = "molten-fast-core", store-failure-output = true, store-success-output = false }
+
+[profile.harness]
+inherits = "deterministic"
+junit = { path = "junit.xml", report-name = "molten-harness", store-failure-output = true, store-success-output = false }
+
+[profile.cli]
+inherits = "ci"
+junit = { path = "junit.xml", report-name = "molten-cli", store-failure-output = true, store-success-output = false }
+
+[profile.distributed-simulation]
+inherits = "deterministic"
+junit = { path = "junit.xml", report-name = "molten-distributed-simulation", store-failure-output = true, store-success-output = false }
+
+[profile.vm-platform]
+inherits = "ci"
+global-timeout = "60m"
+junit = { path = "junit.xml", report-name = "molten-vm-platform", store-failure-output = true, store-success-output = false }
+
+[profile.dogfood-soak]
+inherits = "ci"
+global-timeout = "60m"
+junit = { path = "junit.xml", report-name = "molten-dogfood-soak", store-failure-output = true, store-success-output = false }

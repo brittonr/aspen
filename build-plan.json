@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/aspen",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/aspen",
   "roots": [
-    "path+file:///home/brittonr/git/aspen#molten@0.1.0",
-    "path+file:///home/brittonr/git/aspen#molten@0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/aspen#molten@0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0"
   },
-  "cargoLockHash": "b091ee18c66d5208cda144e75e366a9d1d5de6de034871cbde9c9640faae02d4",
-  "inputsHash": "ed67e0c0899d5abd6cca6b30d777894248c48865bd8b0b227c21c7fc1f2174e1",
+  "cargoLockHash": "0770a1d875c2a8eb4cb97f71772eef617a5ea7e39f59d7cbb07bd4b976fda6cb",
+  "inputsHash": "4432e9ce1531ad3bd5073be735f0111213a30d987e15c5b71f9f2735b7396532",
   "crates": {
     "git+https://github.com/hegeldev/hegel-rust#hegeltest-macros@0.14.12": {
       "crateName": "hegeltest-macros",
@@ -404,7 +404,7 @@
       "description": "Trellis: composable verified-logic building blocks, machine-checked with Verus",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/aspen#molten@0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -446,6 +446,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#iroh-gossip@0.101.0",
           "externCrateName": "iroh_gossip"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+          "externCrateName": "molten_core"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#n0-future@0.3.2",
@@ -558,6 +562,29 @@
       ],
       "links": null,
       "description": "Molten Rust project",
+      "license": "MIT OR Apache-2.0"
+    },
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0": {
+      "crateName": "molten-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "crates/molten-core"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
       "license": "MIT OR Apache-2.0"
     },
     "registry+https://github.com/rust-lang/crates.io-index#addr2line@0.26.1": {

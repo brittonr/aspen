@@ -603,6 +603,7 @@
                   rustToolchain
                   pkgs.cargo-nextest
                   pkgs.perl
+                  moltenPkg
                 ];
                 src = sourceForConfigChecks;
                 testBinaries = moltenTestBinaries;
@@ -700,6 +701,16 @@
                   exit 1
                 fi
                 cp target/nextest/ci/junit.xml "$out"/
+                molten test traceability ci-run-receipt \
+                  --source-marker "$src" \
+                  --profile-id ci \
+                  --command-surface 'cargo nextest run --profile ci --user-config-file none --cargo-metadata cargo-metadata.json --binaries-metadata binaries-metadata.json --no-tests fail' \
+                  --nextest-config .config/nextest.toml \
+                  --cargo-metadata cargo-metadata.json \
+                  --binaries-metadata binaries-metadata.json \
+                  --junit target/nextest/ci/junit.xml \
+                  --caveat 'JUnit is a rendered view over canonical CI receipt metadata' \
+                  --out "$out/ci-test-run-receipt.preserves"
               '';
 
           dogfood-local-node =
@@ -1701,11 +1712,24 @@
                 cargo nextest show-config version --user-config-file none --profile ci > ci.txt
                 cargo nextest show-config version --user-config-file none --profile deterministic > deterministic.txt
                 cargo nextest show-config version --user-config-file none --profile exploratory > exploratory.txt
+                cargo nextest show-config version --user-config-file none --profile fast-core > fast-core.txt
+                cargo nextest show-config version --user-config-file none --profile harness > harness.txt
+                cargo nextest show-config version --user-config-file none --profile cli > cli.txt
+                cargo nextest show-config version --user-config-file none --profile distributed-simulation > distributed-simulation.txt
+                cargo nextest show-config version --user-config-file none --profile vm-platform > vm-platform.txt
+                cargo nextest show-config version --user-config-file none --profile dogfood-soak > dogfood-soak.txt
                 mkdir -p $out
-                cp default.txt ci.txt deterministic.txt exploratory.txt .config/nextest.toml $out/
+                cp default.txt ci.txt deterministic.txt exploratory.txt fast-core.txt harness.txt cli.txt distributed-simulation.txt vm-platform.txt dogfood-soak.txt .config/nextest.toml $out/
                 printf 'cargo nextest run --profile ci\n' > $out/ci-command.txt
+                printf 'cargo nextest run --profile fast-core\n' > $out/fast-core-command.txt
+                printf 'cargo nextest run --profile harness\n' > $out/harness-command.txt
+                printf 'cargo nextest run --profile cli\n' > $out/cli-command.txt
+                printf 'cargo nextest run --profile distributed-simulation\n' > $out/distributed-simulation-command.txt
+                printf 'cargo nextest run --profile vm-platform\n' > $out/vm-platform-command.txt
+                printf 'cargo nextest run --profile dogfood-soak\n' > $out/dogfood-soak-command.txt
                 printf 'target/nextest/ci/junit.xml\n' > $out/ci-junit-path.txt
                 printf 'target/nextest/deterministic/junit.xml\n' > $out/deterministic-junit-path.txt
+                printf 'target/nextest/harness/junit.xml\n' > $out/harness-junit-path.txt
               '';
 
           fmt =

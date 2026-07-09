@@ -50,12 +50,12 @@ Release review uses an explicit risk/cost matrix:
 
 | Profile | Command surface | Evidence scope |
 | --- | --- | --- |
-| `fast` | `cargo nextest run --profile deterministic` | pure core/unit/parser/receipt checks; no platform or transport claims |
-| `protocol` | `cargo test --lib distributed` | deterministic simulation and model invariants |
-| `cli` | `nix build .#checks.x86_64-linux.requirement-traceability-gate` | local CLI receipt and traceability behavior |
-| `vm-smoke` | `nix build .#checks.x86_64-linux.nixos-vm-multinode` | two-node NixOS platform smoke evidence when host support is available |
-| `vm-fault` | `nix build .#checks.x86_64-linux.nixos-vm-multinode` | bounded executable VM fault evidence when host support is available |
-| `soak` | `nix build .#checks.x86_64-linux.dogfood-local-node` | pilot/readiness review only |
+| `fast-core` | `cargo nextest run --profile fast-core` | pure core/unit/parser/receipt checks; no platform or transport claims |
+| `harness` | `cargo nextest run --profile harness` | report, replay, gate, repro, redaction, and failure artifact behavior |
+| `cli` | `cargo nextest run --profile cli` | command integration and receipt writing; stdout/stderr are views only |
+| `distributed-simulation` | `cargo nextest run --profile distributed-simulation` or `cargo test --lib distributed` | deterministic simulation and model invariants |
+| `vm-platform` | `nix build .#checks.x86_64-linux.nixos-vm-multinode` | two-node NixOS platform and executable VM fault evidence when host support is available |
+| `dogfood-soak` | `nix build .#checks.x86_64-linux.dogfood-local-node` | pilot/readiness review only |
 
 Every distributed shard binds metadata for source/tree refs, Nix input refs, test binary/package refs, profile, shard, seed, topology, fault plan, emitted receipts, variance declarations, and diagnostic log refs. Diagnostic logs stay diagnostic-only; canonical receipts and metadata refs are the review surface.
 

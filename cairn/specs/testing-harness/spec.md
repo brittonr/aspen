@@ -2486,7 +2486,6 @@ r[molten.testing.consensus_switchover_fixtures] Molten SHOULD include determinis
 - THEN the fixture denies mutation authority for that receipt
 - AND diagnostics identify the superseded engine epoch.
 
-
 ### Requirement: Modularity rules are reviewed policy
 r[molten.modularity.boundary_gates.policy] Repository dependency-boundary rules SHOULD be declared in reviewed source-controlled policy that names each rule, owning layer, allowed or denied dependency patterns, diagnostic guidance, and exemption class.
 
@@ -2534,7 +2533,6 @@ r[molten.modularity.boundary_gates.integration] The dependency-boundary gate SHO
 - WHEN a developer runs the documented focused boundary command
 - THEN the command checks the configured source scope and emits pass or violation diagnostics suitable for release review
 
-
 ### Requirement: Harness responsibilities are layered
 r[molten.testing.modularity.harness_layers] Harness implementation SHOULD separate schema models, pure gate decisions, fixture builders, canonical receipt construction, and IO or CLI shells.
 
@@ -2571,3 +2569,219 @@ r[molten.testing.modularity.fixtures] Harness schema or gate refactors SHOULD in
 - GIVEN a harness gate boundary is extracted
 - WHEN focused validation runs
 - THEN valid fixtures pass and negative fixtures fail for the expected invariant class
+
+### Requirement: Boundary coverage is gateable
+r[molten.testing.boundary_coverage.gate] Molten SHOULD provide a boundary coverage gate that evaluates harness reports or traceability receipts for exercised runtime boundary classes and emits canonical pass, deny, or exempt diagnostics.
+
+#### Scenario: Unexercised policy denial is reported
+- GIVEN a suite that exercises policy pass paths but no policy denial path
+- WHEN the boundary coverage gate evaluates the report for a requirement that needs denial coverage
+- THEN the gate denies or reports a missing policy-denial boundary diagnostic
+
+### Requirement: Positive and negative boundary classes are tracked
+r[molten.testing.boundary_coverage.positive_negative] Evidence-bearing requirements SHOULD declare or derive both positive and negative boundary coverage expectations unless an explicit exemption applies.
+
+#### Scenario: Capability coverage includes grant and deny
+- GIVEN a requirement covering capability admission
+- WHEN boundary coverage is summarized
+- THEN the summary identifies both admitted capability behavior and denied capability behavior or an explicit exemption
+
+### Requirement: Boundary coverage exemptions are explicit
+r[molten.testing.boundary_coverage.exemptions] Boundary coverage exemptions MUST carry reason class, evidence path or receipt ref, scope, and diagnostic-only caveats, and MUST NOT silently satisfy behavioral pass evidence.
+
+#### Scenario: VM-unavailable exemption remains visible
+- GIVEN a boundary class that requires VM support unavailable on the current host
+- WHEN the boundary coverage gate evaluates the profile
+- THEN it records an unavailable or exempt diagnostic without converting the missing VM boundary into pass evidence
+
+### Requirement: CI test runs emit canonical receipts
+r[molten.testing.ci_run_receipt.canonical_receipt] Molten SHOULD emit a canonical CI test-run receipt for nextest-backed CI checks that binds source ref, profile id, command surface, nextest config ref, Cargo metadata ref, binaries metadata ref, rendered JUnit ref, counts, decision, diagnostics, and caveats.
+
+#### Scenario: CI receipt binds nextest artifacts
+- GIVEN a successful nextest-backed CI check
+- WHEN the CI test-run receipt is emitted
+- THEN the receipt binds the source ref, profile id, Cargo metadata ref, binaries metadata ref, nextest config ref, JUnit ref, counts, and pass decision
+
+### Requirement: Nix nextest output includes receipt binding
+r[molten.testing.ci_run_receipt.nix_nextest_binding] Nix nextest checks SHOULD preserve the canonical CI test-run receipt beside existing metadata and rendered JUnit outputs.
+
+#### Scenario: Nix output has canonical readback
+- GIVEN the Nix nextest check succeeds
+- WHEN a reviewer inspects the output path
+- THEN the output contains the canonical CI receipt and the metadata or JUnit refs named by that receipt
+
+### Requirement: JUnit remains a rendered view
+r[molten.testing.ci_run_receipt.junit_view_only] JUnit output MUST be treated as a rendered view over test execution evidence and MUST NOT satisfy CI pass evidence without the required canonical metadata or receipt binding.
+
+#### Scenario: JUnit-only output is insufficient
+- GIVEN a JUnit file with passing test cases but missing Cargo metadata or CI receipt binding
+- WHEN CI evidence is evaluated for release readback
+- THEN the evidence is denied or marked incomplete rather than accepted as pass evidence
+
+### Requirement: Missing CI metadata denies
+r[molten.testing.ci_run_receipt.deny_on_missing_metadata] CI receipt validation MUST fail closed when required metadata, profile identity, rendered output refs, counts, or decision fields are missing, stale, or mismatched.
+
+#### Scenario: Stale binaries metadata is rejected
+- GIVEN a CI receipt whose binaries metadata ref no longer matches the preserved binaries metadata file
+- WHEN the receipt is validated
+- THEN validation denies with a binaries-metadata binding diagnostic
+
+### Requirement: Generated tamper cases
+r[molten.testing.tamper_matrix.generated_cases] Molten SHOULD provide a reusable generated or table-driven tamper matrix for evidence artifacts whose parsers or gates accept pass evidence.
+
+#### Scenario: Matrix generates stale-ref case
+- GIVEN a valid harness gate receipt fixture
+- WHEN the tamper matrix generates a stale subject-ref case
+- THEN the resulting fixture preserves the original control metadata and identifies the expected stale-ref denial class
+
+### Requirement: Tampered evidence fails closed
+r[molten.testing.tamper_matrix.fail_closed] Parsers and gates exercised by the tamper matrix MUST reject mutated evidence before emitting pass evidence and MUST preserve canonical diagnostics for the denial class.
+
+#### Scenario: Tampered embedded receipt is denied
+- GIVEN a valid sealed repro bundle whose embedded gate receipt is changed by the tamper matrix
+- WHEN the bundle gate evaluates the mutated bundle
+- THEN the gate denies before accepting pass evidence and records a receipt or seal diagnostic
+
+### Requirement: Tamper matrix coverage is traceable
+r[molten.testing.tamper_matrix.coverage] Tamper matrix coverage SHOULD be recorded in the checked-in evidence matrix or traceability receipts for the requirements it protects.
+
+#### Scenario: Requirement lists tamper coverage
+- GIVEN a requirement that depends on fail-closed bundle validation
+- WHEN the evidence matrix is rendered
+- THEN it lists the positive control fixture and the generated negative tamper cases that cover the requirement
+
+### Requirement: Hegel counterexamples become replay fixtures
+r[molten.testing.hegel_counterexample.replay_fixture] Hegel property failures SHOULD emit canonical counterexample fixtures that bind the property id, generator profile ref, generation seed, shrink path, final shrunk Preserves input, replay identity, trace refs, receipt refs, and diagnostics.
+
+#### Scenario: Shrunk counterexample replays without generator
+- GIVEN a Hegel property failure with a final shrunk input
+- WHEN the harness writes a counterexample fixture
+- THEN another run can replay the fixture from canonical data without invoking the property generator
+
+### Requirement: Counterexample promotion is reviewed
+r[molten.testing.hegel_counterexample.promotion] Promotion from a counterexample fixture to a deterministic regression case or known-deny fixture MUST record review metadata, source property refs, old and new fixture refs, reason class, and resulting status.
+
+#### Scenario: Counterexample becomes regression
+- GIVEN a reviewed Hegel counterexample fixture for a fixed bug
+- WHEN it is promoted to a deterministic regression suite
+- THEN the promotion record binds the source fixture ref, new suite entry ref, review reason, and post-fix pass evidence
+
+### Requirement: Counterexample exports preserve confidentiality
+r[molten.testing.hegel_counterexample.redaction] Counterexample fixture export MUST redact or encrypt sensitive generated inputs and capability-bearing traces before materializing shareable repro evidence.
+
+#### Scenario: Sensitive generated input is redacted
+- GIVEN a property failure whose shrunk Preserves input contains a secret marker
+- WHEN the counterexample fixture is exported without reveal authority
+- THEN the exported fixture uses redaction markers or encrypted refs and records transform evidence
+
+### Requirement: CLI harness assertions are receipt-first
+r[molten.testing.cli_receipt_first.normative_artifacts] Evidence-bearing CLI harness tests MUST assert canonical Preserves artifacts or receipts as the normative result of a command before relying on rendered stdout or stderr.
+
+#### Scenario: Gate check assertion parses receipt
+- GIVEN a CLI test runs `molten test gate check` on a valid report
+- WHEN the command emits a gate receipt
+- THEN the test parses the canonical receipt and asserts decision, artifact kind, report ref, suite ref, and gate checks
+
+### Requirement: Rendered CLI output is diagnostic-only
+r[molten.testing.cli_receipt_first.stdout_diagnostic_only] CLI stdout, stderr, markdown, JSON, JUnit, or terminal summaries SHOULD be tested only as rendered views over canonical artifacts, not as the sole evidence-bearing oracle.
+
+#### Scenario: Summary string does not replace receipt
+- GIVEN a command prints a human summary containing a pass decision
+- WHEN no parseable canonical receipt or report is produced for an evidence-bearing path
+- THEN the CLI harness test does not accept the summary as normative pass evidence
+
+### Requirement: CLI negative cases fail closed with canonical artifacts
+r[molten.testing.cli_receipt_first.negative_fail_closed] CLI harness negative tests MUST verify malformed, stale, missing, diagnostic-only, or unauthorized evidence fails closed and emits a canonical failure or deny artifact when the command supports one.
+
+#### Scenario: Diagnostic-only bundle is rejected by pass gate
+- GIVEN a diagnostic-only repro bundle
+- WHEN a CLI test runs a pass-evidence gate command against it
+- THEN the command denies before emitting pass evidence and the test asserts the canonical failure or deny artifact
+
+### Requirement: Evidence suites have replay smoke coverage
+r[molten.testing.replay_smoke.all_evidence_suites] Evidence-bearing deterministic harness suites SHOULD have replay smoke coverage that runs the suite, replays it from recorded effects when applicable, and reruns it from fresh declared fixtures.
+
+#### Scenario: Deterministic suite smoke passes
+- GIVEN an evidence-bearing deterministic suite with declared fixtures and effect records
+- WHEN replay smoke executes run, replay, and fresh rerun
+- THEN the canonical report refs, final-state refs, effect-log refs, and required trace or receipt refs match the declared replay identity
+
+### Requirement: Fresh reruns compare canonical refs
+r[molten.testing.replay_smoke.fresh_rerun] Replay smoke comparisons MUST use canonical refs and receipts rather than rendered logs, wall-clock timing, temporary paths, or process ids.
+
+#### Scenario: Temporary path variance is ignored only when declared
+- GIVEN a fresh rerun produces a different temporary diagnostic path but the same semantic report and final-state refs
+- WHEN replay smoke compares the runs
+- THEN the semantic refs match and the path variance is ignored only if an explicit variance declaration exists
+
+### Requirement: Non-replayable suites are excluded visibly
+r[molten.testing.replay_smoke.non_replayable_excluded] Suites marked exploratory, live-only, unavailable, or non-replayable MUST be excluded from deterministic pass evidence and SHOULD emit a visible replay-smoke diagnostic.
+
+#### Scenario: Live-only run cannot satisfy deterministic gate
+- GIVEN a live-only diagnostic run without a recorded effect log
+- WHEN replay smoke evaluates it for deterministic evidence
+- THEN the run is excluded with a non-replayable diagnostic even if its rendered status is pass
+
+### Requirement: Semantic test profiles
+r[molten.testing.nextest.semantic_profiles] Molten SHOULD expose semantic test profiles for fast core, harness, CLI, distributed simulation, VM/platform, and dogfood or soak evidence scopes.
+
+#### Scenario: Developer selects smallest useful profile
+- GIVEN a change that affects deterministic harness replay behavior
+- WHEN a developer inspects the semantic profile matrix
+- THEN the matrix identifies the harness-focused command and its expected evidence artifacts before VM or dogfood checks are required
+
+### Requirement: Profile evidence scope is explicit
+r[molten.testing.nextest.risk_scope] Each semantic profile MUST declare its evidence scope, command surface, retry policy, expected artifact kinds, cost class, and release-review caveats.
+
+#### Scenario: Distributed simulation does not claim VM evidence
+- GIVEN a passing distributed simulation profile run
+- WHEN release evidence is summarized
+- THEN the profile scope identifies it as deterministic simulation evidence and does not claim VM, live transport, or dogfood readiness evidence
+
+### Requirement: Profile outputs are preserved by Nix checks
+r[molten.testing.nextest.nix_outputs] Nix-backed profile checks SHOULD preserve deterministic metadata and rendered JUnit outputs for the selected semantic profile.
+
+#### Scenario: Harness profile emits readback artifacts
+- GIVEN the harness semantic profile runs through a Nix check
+- WHEN the check succeeds
+- THEN the output contains profile metadata, rendered JUnit when configured, and canonical refs or receipts needed for readback
+
+### Requirement: Exploratory retries are excluded from deterministic evidence
+r[molten.testing.nextest.exploratory_exclusion] Exploratory profiles MAY allow retries for diagnostics, but retry success MUST NOT satisfy deterministic CI, release, admission, or upgrade evidence gates.
+
+#### Scenario: Retry-only pass remains diagnostic
+- GIVEN an exploratory profile passes only after a retry
+- WHEN deterministic evidence gates evaluate the run
+- THEN the run is excluded as deterministic pass evidence and preserved only as diagnostic evidence
+
+### Requirement: Checked-in test evidence matrix
+r[molten.testing.evidence_matrix.checked_in_manifest] Molten SHOULD maintain a checked-in requirement-to-test evidence matrix for testing-harness requirements, with typed entries for requirement ids, coverage kinds, targets, commands, artifact refs, evidence scope, and caveats.
+
+#### Scenario: Reviewer inspects matrix coverage
+- GIVEN a testing-harness requirement that is implemented or changed
+- WHEN a reviewer inspects the checked-in matrix
+- THEN the matrix identifies the requirement's positive evidence, negative evidence, and any property, CLI, integration, or exemption evidence entries
+
+### Requirement: Changed requirements require positive and negative evidence
+r[molten.testing.evidence_matrix.changed_requirement_gate] The matrix gate MUST fail closed for changed evidence-bearing requirements that lack positive coverage, negative coverage, or an accepted exemption.
+
+#### Scenario: Missing negative coverage denies
+- GIVEN a changed evidence-bearing testing-harness requirement with positive coverage only
+- WHEN the matrix gate evaluates the checked-in matrix
+- THEN the gate denies the matrix with a missing-negative diagnostic for that requirement
+
+### Requirement: Matrix entries are receipt-backed or explicitly scoped
+r[molten.testing.evidence_matrix.receipt_backed_entries] Matrix entries SHOULD bind canonical receipt refs or deterministic commands and MUST reject stale requirement ids, duplicate entries, missing artifact refs, and unsupported coverage kinds.
+
+#### Scenario: Stale requirement id fails closed
+- GIVEN a matrix entry naming a requirement id that is absent from accepted specs and active changes
+- WHEN the matrix gate validates the entry
+- THEN the gate denies the matrix with a stale-reference diagnostic
+
+### Requirement: Matrix exemptions are explicit and diagnostic-only
+r[molten.testing.evidence_matrix.exemptions] Coverage exemptions MUST carry a reason class, evidence path or receipt ref, scope, and review note, and MUST NOT satisfy pass evidence for behavioral requirements unless policy explicitly allows it.
+
+#### Scenario: Documentation-only exemption is visible
+- GIVEN a documentation-only testing-harness requirement with no executable coverage
+- WHEN the matrix includes an exemption for that requirement
+- THEN the matrix records the exemption reason and evidence path without treating it as behavioral pass evidence

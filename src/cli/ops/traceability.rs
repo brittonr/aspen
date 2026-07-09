@@ -3,6 +3,11 @@ type Outcome<T> = molten::error::Result<T>;
 
 const COVERAGE_FIELDS: usize = 5;
 const EXEMPTION_FIELDS: usize = 3;
+const JUNIT_TESTS_ATTRIBUTE: &str = "tests";
+const JUNIT_FAILURES_ATTRIBUTE: &str = "failures";
+const JUNIT_ERRORS_ATTRIBUTE: &str = "errors";
+const JUNIT_SKIPPED_ATTRIBUTE: &str = "skipped";
+const JUNIT_QUOTE: char = '"';
 
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum TraceabilityCommand {
@@ -47,6 +52,28 @@ pub(crate) enum TraceabilityCommand {
         stderr_ref: String,
         #[arg(long = "artifact-ref")]
         artifact_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<FilePath>,
+    },
+    CiRunReceipt {
+        #[arg(long = "source-marker")]
+        source_marker: String,
+        #[arg(long = "profile-id")]
+        profile_id: String,
+        #[arg(long = "command-surface")]
+        command_surface: String,
+        #[arg(long = "nextest-config")]
+        nextest_config: FilePath,
+        #[arg(long = "cargo-metadata")]
+        cargo_metadata: FilePath,
+        #[arg(long = "binaries-metadata")]
+        binaries_metadata: FilePath,
+        #[arg(long)]
+        junit: FilePath,
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
         #[arg(long)]
         out: Option<FilePath>,
     },
@@ -100,6 +127,29 @@ pub(crate) fn run_traceability_command(command: TraceabilityCommand) -> Outcome<
             artifact_refs,
             out,
         }),
+        TraceabilityCommand::CiRunReceipt {
+            source_marker,
+            profile_id,
+            command_surface,
+            nextest_config,
+            cargo_metadata,
+            binaries_metadata,
+            junit,
+            decision,
+            caveats,
+            out,
+        } => run_ci_run_receipt(CiRunReceiptCommandInput {
+            source_marker,
+            profile_id,
+            command_surface,
+            nextest_config,
+            cargo_metadata,
+            binaries_metadata,
+            junit,
+            decision,
+            caveats,
+            out,
+        }),
     }
 }
 
@@ -126,6 +176,19 @@ struct VerificationRunCommandInput {
     stdout_ref: String,
     stderr_ref: String,
     artifact_refs: Vec<String>,
+    out: Option<FilePath>,
+}
+
+struct CiRunReceiptCommandInput {
+    source_marker: String,
+    profile_id: String,
+    command_surface: String,
+    nextest_config: FilePath,
+    cargo_metadata: FilePath,
+    binaries_metadata: FilePath,
+    junit: FilePath,
+    decision: String,
+    caveats: Vec<String>,
     out: Option<FilePath>,
 }
 
@@ -197,11 +260,93 @@ fn run_verification_run(input: VerificationRunCommandInput) -> Outcome<()> {
     Ok(())
 }
 
+fn run_ci_run_receipt(input: CiRunReceiptCommandInput) -> Outcome<()> {
+    let junit_text = std::fs::read_to_string(&input.junit).map_err(molten::error::MoltenError::from)?;
+    let counts = parse_junit_counts(&junit_text)?;
+    let receipt = molten::testing_hardening::build_ci_test_run_receipt(&molten::testing_hardening::CiTestRunInput {
+        source_ref: molten::preserves_rail::content_ref_from_bytes(input.source_marker.as_bytes()),
+        profile_id: input.profile_id,
+        command_surface: input.command_surface,
+        nextest_config_ref: raw_file_ref(&input.nextest_config)?,
+        cargo_metadata_ref: raw_file_ref(&input.cargo_metadata)?,
+        binaries_metadata_ref: raw_file_ref(&input.binaries_metadata)?,
+        junit_ref: raw_file_ref(&input.junit)?,
+        counts,
+        decision: input.decision,
+        diagnostics: Vec::new(),
+        caveats: input.caveats,
+    })?;
+    write_optional_preserves(input.out.as_ref(), &receipt.value)?;
+    eprintln!("ci-test-run receipt={} decision={}", receipt.receipt_ref, receipt.decision);
+    Ok(())
+}
+
 fn collect_spec_sources(root: &std::path::Path) -> Outcome<Vec<molten::requirement_traceability::SpecSource>> {
     let mut sources = Vec::new();
     collect_specs_under(&root.join("cairn/specs"), false, &mut sources)?;
     collect_specs_under(&root.join("cairn/changes"), true, &mut sources)?;
     Ok(sources)
+}
+
+fn raw_file_ref(path: &std::path::Path) -> Outcome<String> {
+    let bytes = std::fs::read(path).map_err(molten::error::MoltenError::from)?;
+    Ok(molten::preserves_rail::content_ref_from_bytes(&bytes))
+}
+
+fn parse_junit_counts(text: &str) -> Outcome<molten::testing_hardening::CiTestCounts> {
+    let total = junit_attribute(text, JUNIT_TESTS_ATTRIBUTE)?;
+    let failures = junit_optional_attribute(text, JUNIT_FAILURES_ATTRIBUTE)?;
+    let errors = junit_optional_attribute(text, JUNIT_ERRORS_ATTRIBUTE)?;
+    let skipped = junit_optional_attribute(text, JUNIT_SKIPPED_ATTRIBUTE)?;
+    let failed = failures
+        .checked_add(errors)
+        .ok_or_else(|| molten::error::MoltenError::invalid_harness("JUnit failure/error count overflow"))?;
+    Ok(molten::testing_hardening::CiTestCounts {
+        total,
+        passed: junit_passed_count(total, failed, skipped)?,
+        failed,
+        skipped,
+    })
+}
+
+fn junit_passed_count(total: u64, failed: u64, skipped: u64) -> Outcome<u64> {
+    total
+        .checked_sub(failed)
+        .and_then(|count| count.checked_sub(skipped))
+        .ok_or_else(|| molten::error::MoltenError::invalid_harness("JUnit passed count underflow"))
+}
+
+fn junit_optional_attribute(text: &str, name: &str) -> Outcome<u64> {
+    match junit_attribute_value(text, name)? {
+        Some(value) => parse_junit_attribute_value(value, name),
+        None => Ok(0),
+    }
+}
+
+fn junit_attribute(text: &str, name: &str) -> Outcome<u64> {
+    let Some(value) = junit_attribute_value(text, name)? else {
+        return Err(molten::error::MoltenError::invalid_harness(format!("JUnit missing {name} attribute")));
+    };
+    parse_junit_attribute_value(value, name)
+}
+
+fn junit_attribute_value<'a>(text: &'a str, name: &str) -> Outcome<Option<&'a str>> {
+    let prefix = format!("{name}=\" ");
+    let compact_prefix = prefix.trim_end();
+    let Some(start_index) = text.find(compact_prefix).map(|index| index + compact_prefix.len()) else {
+        return Ok(None);
+    };
+    let rest = &text[start_index..];
+    let Some(end_index) = rest.find(JUNIT_QUOTE) else {
+        return Err(molten::error::MoltenError::invalid_harness(format!("JUnit unterminated {name} attribute")));
+    };
+    Ok(Some(&rest[..end_index]))
+}
+
+fn parse_junit_attribute_value(value: &str, name: &str) -> Outcome<u64> {
+    value
+        .parse::<u64>()
+        .map_err(|error| molten::error::MoltenError::invalid_harness(format!("JUnit invalid {name} count: {error}")))
 }
 
 fn collect_specs_under(

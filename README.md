@@ -545,7 +545,7 @@ Deterministic drift checks compare canonical evidence refs, not rendered logs. U
 
 Distributed simulation evidence is described in [`docs/distributed-testing.md`](docs/distributed-testing.md). Simulation fault plans provide fast deterministic checks for delay, drop, duplicate, reorder, partition, rejoin, crash, restart, stale evidence, and ambient-state drift before VM or live soak evidence is needed.
 
-Requirement traceability is available with `molten test traceability scan --root . --changed-only --coverage 'REQ|positive|tests/path.rs|cargo test name|blake3:...' --coverage 'REQ|negative|tests/path.rs|cargo test name|blake3:...'`. The generated manifest groups covered, exempt, missing-positive, missing-negative, stale-reference, and unsupported entries so release review can see which requirement needs positive or negative evidence.
+Requirement traceability is available with `molten test traceability scan --root . --changed-only --coverage 'REQ|positive|tests/path.rs|cargo test name|blake3:...' --coverage 'REQ|negative|tests/path.rs|cargo test name|blake3:...'`. The checked-in matrix source is `tests/evidence-matrix.ncl`; the pure matrix gate emits `evidence-matrix-v1` diagnostics for missing positive coverage, missing negative coverage, stale ids, duplicates, missing refs, unsupported scopes, and explicit diagnostic-only exemptions. Boundary coverage, replay-smoke, generated tamper matrix, Hegel counterexample fixture, semantic nextest profile, CLI receipt-first, and canonical CI test-run receipt cores live under `molten::testing_hardening`; their receipts are evidence-only and rendered output remains diagnostic-only.
 
 NixOS VM evidence is validated by canonical receipts and preserved through the `nixos-vm-multinode` check output. Executable fault evidence is documented in [`docs/nixos-vm-executable-faults.md`](docs/nixos-vm-executable-faults.md). Inspect the realized output's `vm-evidence/vm-evidence-manifest.preserves`, `vm-evidence/vm-evidence-validation.preserves`, `topology.preserves`, node evidence receipts, `vm-test-run.preserves`, and `prod-soak-run.preserves`; terminal, QEMU, and systemd logs are diagnostic-only and cannot override a canonical deny receipt.
 
@@ -562,14 +562,20 @@ cargo test # fallback
 Nextest profiles:
 
 ```sh
+cargo nextest run --profile fast-core
+cargo nextest run --profile harness
+cargo nextest run --profile cli
+cargo nextest run --profile distributed-simulation
+cargo nextest run --profile vm-platform
+cargo nextest run --profile dogfood-soak
 cargo nextest run --profile ci
 cargo nextest run --profile deterministic
 cargo nextest run --profile exploratory
 ```
 
-The profiles fail flaky tests in CI/deterministic mode, bound hangs with explicit global/slow/leak timeouts, and write JUnit evidence under `target/nextest/<profile>/junit.xml` for release readback.
+The profiles fail flaky tests in CI/deterministic mode, bound hangs with explicit global/slow/leak timeouts, and write JUnit evidence under `target/nextest/<profile>/junit.xml` for release readback. Semantic profiles describe evidence scope and caveats: `fast-core` covers pure units/parsers/receipts, `harness` covers reports/replay/gates/repro/redaction, `cli` covers command integration and canonical artifact writing, `distributed-simulation` covers deterministic multi-peer/fault fixtures, `vm-platform` covers NixOS VM/platform evidence when available, and `dogfood-soak` covers operator-readiness evidence only. `exploratory` may retry for diagnostics; retry-only success is not deterministic pass evidence.
 
-Nix exposes the CI command and runs nextest through flake checks:
+Nix exposes the CI command and runs nextest through flake checks. The hermetic `nextest` check preserves `cargo-metadata.json`, `binaries-metadata.json`, `junit.xml`, and `ci-test-run-receipt.preserves`; JUnit is a rendered view and cannot replace the canonical CI receipt.
 
 ```sh
 nix run .#nextest-ci
