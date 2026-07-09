@@ -1,5 +1,7 @@
 # Node Runtime Delta: Iroh ALPN Routing Registry
 
+## ADDED Requirements
+
 ### Requirement: Iroh ALPN registry entries are canonical
 r[molten.node_runtime.iroh_alpn_registry_model] Molten MUST define canonical registry entries for Molten-owned Iroh ALPN protocols, binding symbolic name, ALPN bytes or deterministic string encoding, owner namespace, handler profile, supported schema/profile versions, lifecycle state, limit profile refs, required admission evidence, and receipt schema refs.
 

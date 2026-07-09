@@ -22,6 +22,8 @@
             operation: operation.to_string(),
             alpn: "molten/node-control/1".to_string(),
             handler_kind: "node-control".to_string(),
+            owner_namespace: DEFAULT_NODE_CONTROL_OWNER.to_string(),
+            handler_profile: DEFAULT_NODE_CONTROL_HANDLER_PROFILE.to_string(),
             generation,
             prior_generation: None,
             authority_refs: refs(),
@@ -45,6 +47,7 @@
             evaluate_router_operation(&registry, &router_input("install", ROUTER_GENERATION_ONE)).expect("install");
         assert_eq!(install.decision, "pass");
         assert!(install.registry.handlers.contains_key("molten/node-control/1"));
+        assert!(install.registry_entry_ref.is_some());
 
         let mut replace_input = router_input("replace", ROUTER_GENERATION_TWO);
         replace_input.prior_generation = Some(ROUTER_GENERATION_ONE);

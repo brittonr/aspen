@@ -76,6 +76,9 @@ impl<'a> RouterEvaluator<'a> {
     fn collect_admission_diagnostics(&mut self) -> crate::error::Result<bool> {
         let is_alpn_valid = collect_alpn_diagnostic(&self.input.alpn, &mut self.diagnostics).is_ok();
         let is_handler_valid = collect_handler_diagnostic(&self.input.handler_kind, &mut self.diagnostics).is_ok();
+        let is_owner_valid = collect_handler_diagnostic(&self.input.owner_namespace, &mut self.diagnostics).is_ok();
+        let is_profile_valid = collect_handler_diagnostic(&self.input.handler_profile, &mut self.diagnostics).is_ok();
+        self.collect_alpn_registry_diagnostics()?;
         collect_ref_diagnostics(&self.input.authority_refs, "authority", &mut self.diagnostics)?;
         collect_ref_diagnostics(&self.input.policy_refs, "policy", &mut self.diagnostics)?;
         collect_ref_diagnostics(&self.input.resource_refs, "resource", &mut self.diagnostics)?;
@@ -92,7 +95,7 @@ impl<'a> RouterEvaluator<'a> {
                 "router operation requires authority, policy, resource, and evidence refs",
             )?;
         }
-        Ok(is_alpn_valid && is_handler_valid && self.diagnostics.is_empty())
+        Ok(is_alpn_valid && is_handler_valid && is_owner_valid && is_profile_valid && self.diagnostics.is_empty())
     }
 
     fn has_admission(&self) -> bool {
@@ -100,6 +103,25 @@ impl<'a> RouterEvaluator<'a> {
             && !self.input.policy_refs.is_empty()
             && !self.input.resource_refs.is_empty()
             && !self.input.evidence_refs.is_empty()
+    }
+
+    fn collect_alpn_registry_diagnostics(&mut self) -> crate::error::Result<()> {
+        let Some(entry) = lookup_alpn_registry_entry(&self.input.alpn)? else {
+            if self.input.operation != "unsupported-alpn" {
+                push_diagnostic(&mut self.diagnostics, "ALPN is not in reviewed registry")?;
+            }
+            return Ok(());
+        };
+        if entry.owner_namespace != self.input.owner_namespace {
+            push_diagnostic(&mut self.diagnostics, "ALPN owner namespace mismatch")?;
+        }
+        if entry.handler_profile != self.input.handler_profile {
+            push_diagnostic(&mut self.diagnostics, "ALPN handler-profile mismatch")?;
+        }
+        if entry.lifecycle_state != DEFAULT_NODE_CONTROL_LIFECYCLE {
+            push_diagnostic(&mut self.diagnostics, "ALPN lifecycle state is not active")?;
+        }
+        Ok(())
     }
 
     fn dispatch_operation(&mut self) -> crate::error::Result<RouterMutation> {
@@ -243,6 +265,7 @@ pub fn evaluate_router_operation(
     input: &RouterOperationInput,
 ) -> crate::error::Result<RouterDecision> {
     let evaluation = RouterEvaluator::new(registry, input).evaluate()?;
+    let registry_entry_ref = lookup_alpn_registry_entry(&input.alpn)?.map(|entry| entry.entry_ref);
     let decision = if evaluation.diagnostics.is_empty() {
         "pass"
     } else {
@@ -255,6 +278,9 @@ pub fn evaluate_router_operation(
         outcome: &evaluation.mutation.outcome,
         alpn: &input.alpn,
         handler_kind: &input.handler_kind,
+        owner_namespace: &input.owner_namespace,
+        handler_profile: &input.handler_profile,
+        registry_entry_ref: registry_entry_ref.as_deref(),
         generation: evaluation.mutation.generation,
         previous_generation: evaluation.mutation.previous_generation,
         authority_refs: &input.authority_refs,
@@ -273,6 +299,7 @@ pub fn evaluate_router_operation(
         previous_generation: evaluation.mutation.previous_generation,
         diagnostics: evaluation.diagnostics,
         registry: evaluation.mutation.registry,
+        registry_entry_ref,
         receipt_value,
     })
 }

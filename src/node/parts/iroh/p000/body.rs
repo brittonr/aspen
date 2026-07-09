@@ -31,6 +31,10 @@ const MIN_PORT_NUMBER: u64 = 1;
 const MAX_PORT_NUMBER: u64 = 65_535;
 const DEFAULT_ROUTER_DRAIN_POLICY: &str = "bounded-drain";
 const DEFAULT_LIMIT_PROFILE: &str = "iroh-framed-envelope-default-v1";
+const DEFAULT_NODE_CONTROL_OWNER: &str = "node-runtime";
+const DEFAULT_NODE_CONTROL_HANDLER_PROFILE: &str = "node-control-v1";
+const DEFAULT_NODE_CONTROL_SYMBOL: &str = "node-control";
+const DEFAULT_NODE_CONTROL_LIFECYCLE: &str = "active";
 const EVIDENCE_ONLY_CAVEAT: &str = "evidence-only: does not grant authority, policy, resource, provenance, source-gate, retention, transport-correctness, or deterministic replay trust";
 
 const _: () = assert!(MIN_GENERATION > 0);
@@ -47,6 +51,8 @@ const _: () = assert!(MAX_OPENMETRICS_BYTES > 0);
 pub struct ProtocolHandlerDescriptor {
     pub alpn: String,
     pub handler_kind: String,
+    pub owner_namespace: String,
+    pub handler_profile: String,
     pub generation: u64,
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
@@ -65,6 +71,8 @@ pub struct RouterOperationInput {
     pub operation: String,
     pub alpn: String,
     pub handler_kind: String,
+    pub owner_namespace: String,
+    pub handler_profile: String,
     pub generation: u64,
     pub prior_generation: Option<u64>,
     pub authority_refs: Vec<String>,
@@ -84,6 +92,7 @@ pub struct RouterDecision {
     pub previous_generation: Option<u64>,
     pub diagnostics: Vec<String>,
     pub registry: ProtocolRegistry,
+    pub registry_entry_ref: Option<String>,
     pub receipt_value: preserves::IOValue,
 }
 

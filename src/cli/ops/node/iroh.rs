@@ -199,6 +199,8 @@ fn router_input(operation: &str, generation: u64) -> molten::node_iroh::RouterOp
         operation: operation.to_string(),
         alpn: "molten/node-control/1".to_string(),
         handler_kind: "node-control".to_string(),
+        owner_namespace: "node-runtime".to_string(),
+        handler_profile: "node-control-v1".to_string(),
         generation,
         prior_generation: None,
         authority_refs: refs("authority"),

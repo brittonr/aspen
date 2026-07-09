@@ -1,5 +1,7 @@
 # Testing Harness Delta: Iroh ALPN Registry Fixtures
 
+## ADDED Requirements
+
 ### Requirement: ALPN registry fixtures cover valid and invalid routing records
 r[molten.testing.iroh_alpn_registry_negative_fixtures] Molten SHOULD include positive fixtures for valid registry admission, handler install, replacement, and removal, plus negative fixtures for duplicate ALPN bytes, malformed encoding, wrong owner namespace, stale generation, unsupported lifecycle state, handler-profile mismatch, unsupported incoming ALPN, and attempts to use ALPN routing evidence as authority.
 

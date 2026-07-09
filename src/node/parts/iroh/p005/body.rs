@@ -83,4 +83,5 @@ pub fn default_limit_profile_ref() -> String {
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/iroh/tests/m000/p000/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/iroh/tests/m000/p001/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/iroh/tests/m000/p002/body.rs"));
 }
