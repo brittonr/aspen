@@ -19,7 +19,7 @@ Molten is a policy-gated distributed runtime built around a canonical Preserves 
 - Basalt/UCAN, Nickel contracts, reviewed Steel predicates, Trellis predicates, Cairn receipts, and Octet/Valence evidence gate side effects.
 - Iroh bridges envelopes, blobs, and docs across peers; Wasmtime actors run behind deny-by-default hostcalls; Redb stores local durable metadata and indexes.
 
-Cairn roadmap status: active production-readiness changes live under `cairn/changes/` when present; this checkout currently has no active Cairn change packages. Accepted requirements live under `cairn/specs/`, and completed roadmap slices are archived under `cairn/archive/`. The drained/archived roadmap includes:
+Cairn roadmap status: active production-readiness changes live under `cairn/changes/` when present; use `cairn change list --root .` for the current active set. Accepted requirements live under `cairn/specs/`, and completed roadmap slices are archived under `cairn/archive/`. The drained/archived roadmap includes:
 
 - `runtime-spine`
 - `synit-sam-runtime`
@@ -741,6 +741,7 @@ nix flake check
 
 - [`onix-core` kache Nix Rust helpers](/home/brittonr/git/onix-core/lib/kache-nix-rust.nix) — reference implementation for opt-in Nix-owned kache wrappers around sandboxed Rust builds.
 - [`n0-computer/iroh-examples`](https://github.com/n0-computer/iroh-examples) — reference patterns for dynamic Iroh protocol routing, framed bidirectional streams, and read-only blob gateway UX.
+- [`n0-computer/iroh-experiments`](https://github.com/n0-computer/iroh-experiments) — reference patterns for Iroh content discovery, deterministic DAG sync, pkarr latest pointers, HTTP3-over-Iroh readback, and remote byte-source verification experiments.
 - [`n0-computer/irpc`](https://github.com/n0-computer/irpc) — reference patterns for local/remote request-response and streaming service sessions over Iroh-style transports.
 - [`n0-computer/iroh-doctor`](https://github.com/n0-computer/iroh-doctor) — reference patterns for NAT, UDP, relay latency, connect/accept, port-map, and network diagnostic reports.
 - [`n0-computer/net-tools`](https://github.com/n0-computer/net-tools) — reference patterns for route/interface watching and opt-in port mapping via UPnP, PCP, and NAT-PMP.
@@ -748,3 +749,4 @@ nix flake check
 - [`n0-computer/iroh-services`](https://github.com/n0-computer/iroh-services) — reference patterns for optional external metrics/diagnostics service integration and remote diagnostics capabilities.
 - [`n0-computer/n0-watcher`](https://github.com/n0-computer/n0-watcher) — reference patterns for latest-state watchers without unbounded intermediate-value buffering.
 - [`rkyv`](https://github.com/rkyv/rkyv) — reference zero-copy Rust archive format for optional derived local cache materializations; Preserves remains Molten's canonical evidence and storage boundary.
+- [`lsd-ucsc/ChoRus`](https://github.com/lsd-ucsc/ChoRus) — reference Rust choreography ergonomics for typed locations, located values, EPP-as-DI, and runner/projector APIs; Trellis, Preserves, and Molten receipts remain the normative semantics.

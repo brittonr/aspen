@@ -8,4 +8,4 @@
 - [ ] [parallel] r[molten.claim_authority.registry_readback] Classify claim, selector, and admission artifacts in ledger/catalog/MCP readback without making discovery authoritative.
 - [ ] [serial] r[molten.claim_authority.peer_diagnostics] Extend peer/operator diagnostics to report claim authority as a separate gate from bootstrap, session, transport, policy/resource, provenance, and execution.
 - [ ] [serial] r[molten.claim_authority.positive_negative_tests] Add positive fixtures for admitted external claims and negative fixtures for missing proof, wrong holder/session/context, wrong selector, wrong claim kind, revoked issuer/delegation, stale proof, over-broad wildcard, transport-only, registry-only, and local-fixture fallback attempts.
-- [ ] [serial] r[molten.claim_authority.validation] Run focused capability/claim/peer/catalog tests plus Cairn validation before archiving.
+- [ ] [serial] r[molten.claim_authority.positive_negative_tests] r[molten.claim_authority.registry_tests] r[molten.claim_authority.peer_diagnostic_tests] Run focused capability/claim/peer/catalog tests plus Cairn validation before archiving.
