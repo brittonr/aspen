@@ -28,45 +28,73 @@ pub fn key_value(input: &KeyInput) -> Result<IoValue> {
         record("operation", vec![string(&input.operation)]),
         record("version", vec![string(&input.version)]),
         record("input", vec![string(&input.input_ref)]),
+        record("artifacts", vec![refs_sequence(&sorted_unique(&input.artifact_refs))]),
+        record("inputs", vec![refs_sequence(&sorted_unique(&input.input_refs))]),
         record("dependencies", vec![
             string(&input.dependency_closure_hash),
             refs_sequence(&sorted_unique(&input.dependency_refs)),
         ]),
+        record("schemas", vec![refs_sequence(&sorted_unique(&input.schema_refs))]),
         record("handler-profile", vec![optional_ref_value(input.handler_profile_ref.as_deref())]),
         record("policy", vec![refs_sequence(&sorted_unique(&input.policy_refs))]),
+        record("policy-exports", vec![refs_sequence(&sorted_unique(&input.policy_export_refs))]),
         record("capability", vec![refs_sequence(&sorted_unique(&input.capability_refs))]),
         record("revocation", vec![refs_sequence(&sorted_unique(&input.revocation_refs))]),
+        record("resources", vec![refs_sequence(&sorted_unique(&input.resource_refs))]),
+        record("effect-manifests", vec![refs_sequence(&sorted_unique(&input.effect_manifest_refs))]),
+        record("provenance", vec![refs_sequence(&sorted_unique(&input.provenance_refs))]),
+        record("source-gates", vec![refs_sequence(&sorted_unique(&input.source_gate_refs))]),
+        record("evidence", vec![refs_sequence(&sorted_unique(&input.evidence_refs))]),
+        record("retention", vec![refs_sequence(&sorted_unique(&input.retention_refs))]),
+        record("compatibility", vec![refs_sequence(&sorted_unique(&input.compatibility_refs))]),
         record("tool", vec![string(&input.tool_ref), string(&input.tool_version)]),
         record("assumptions", vec![refs_sequence(&sorted_unique(&input.assumption_refs))]),
-        checks_value(&["domain-separated-key", "no-name-key", "determinism-inputs-bound"]),
+        checks_value(&[
+            "domain-separated-key",
+            "no-name-key",
+            "determinism-inputs-bound",
+            "policy-aware-admission-context-bound",
+        ]),
     ]))
 }
 
 pub fn parse_key(value: &IoValue) -> Result<Key> {
     let fields = value
-        .collect_simple_record("eval-cache-key-v1", Some(12))
+        .collect_simple_record("eval-cache-key-v1", Some(23))
         .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-key-v1 ...>"))?;
     require_schema(&fields[0], EVAL_CACHE_KEY_SCHEMA, "eval cache key")?;
-    let deps = value_to_iovalue(&fields[4]);
+    let deps = value_to_iovalue(&fields[6]);
     let dep_fields = simple_record(&deps, "dependencies", 2)?;
-    let tool = value_to_iovalue(&fields[9]);
+    let tool = value_to_iovalue(&fields[20]);
     let tool_fields = simple_record(&tool, "tool", 2)?;
-    let checks = parse_checks(&fields[11])?;
+    let checks = parse_checks(&fields[22])?;
     require_check(&checks, "no-name-key", "eval cache key")?;
+    require_check(&checks, "policy-aware-admission-context-bound", "eval cache key")?;
     Ok(Key {
         key_ref: canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         version: record_string(&fields[2], "version")?,
         input_ref: record_ref(&fields[3], "input")?,
+        artifact_refs: record_ref_sequence(&fields[4], "artifacts")?,
+        input_refs: record_ref_sequence(&fields[5], "inputs")?,
         dependency_closure_hash: required_ref(&dep_fields[0], "dependency closure hash")?,
         dependency_refs: parse_ref_sequence_value(&dep_fields[1], "dependency refs")?,
-        handler_profile_ref: record_optional_ref(&fields[5], "handler-profile")?,
-        policy_refs: record_ref_sequence(&fields[6], "policy")?,
-        capability_refs: record_ref_sequence(&fields[7], "capability")?,
-        revocation_refs: record_ref_sequence(&fields[8], "revocation")?,
+        schema_refs: record_ref_sequence(&fields[7], "schemas")?,
+        handler_profile_ref: record_optional_ref(&fields[8], "handler-profile")?,
+        policy_refs: record_ref_sequence(&fields[9], "policy")?,
+        policy_export_refs: record_ref_sequence(&fields[10], "policy-exports")?,
+        capability_refs: record_ref_sequence(&fields[11], "capability")?,
+        revocation_refs: record_ref_sequence(&fields[12], "revocation")?,
+        resource_refs: record_ref_sequence(&fields[13], "resources")?,
+        effect_manifest_refs: record_ref_sequence(&fields[14], "effect-manifests")?,
+        provenance_refs: record_ref_sequence(&fields[15], "provenance")?,
+        source_gate_refs: record_ref_sequence(&fields[16], "source-gates")?,
+        evidence_refs: record_ref_sequence(&fields[17], "evidence")?,
+        retention_refs: record_ref_sequence(&fields[18], "retention")?,
+        compatibility_refs: record_ref_sequence(&fields[19], "compatibility")?,
         tool_ref: required_ref(&tool_fields[0], "tool ref")?,
         tool_version: required_string(&tool_fields[1], "tool version")?,
-        assumption_refs: record_ref_sequence(&fields[10], "assumptions")?,
+        assumption_refs: record_ref_sequence(&fields[21], "assumptions")?,
         value: value.clone(),
     })
 }
@@ -167,8 +195,18 @@ pub fn put(root: &Path, key_input: &KeyInput, value_input: &ValueInput) -> Resul
 pub fn get(root: &Path, key_ref: &str, input: &GetInput) -> Result<Get> {
     validate_ref(key_ref, "eval cache key ref")?;
     validate_refs(&input.current_policy_refs, "current policy ref")?;
+    validate_refs(&input.current_policy_export_refs, "current policy export ref")?;
     validate_refs(&input.current_capability_refs, "current capability ref")?;
     validate_refs(&input.current_revocation_refs, "current revocation ref")?;
+    validate_refs(&input.current_resource_refs, "current resource ref")?;
+    if let Some(handler_profile_ref) = input.current_handler_profile_ref.as_ref() {
+        validate_ref(handler_profile_ref, "current handler profile ref")?;
+    }
+    validate_refs(&input.current_provenance_refs, "current provenance ref")?;
+    validate_refs(&input.current_source_gate_refs, "current source-gate ref")?;
+    validate_refs(&input.current_retention_refs, "current retention ref")?;
+    validate_refs(&input.current_evidence_refs, "current evidence ref")?;
+    validate_refs(&input.compatibility_refs, "cache compatibility ref")?;
     ensure_dirs(root)?;
     if let Some(reason) = tombstone_reason(root, key_ref)? {
         return Err(denied_tombstone(root, key_ref, &reason)?);
@@ -181,8 +219,16 @@ pub fn get(root: &Path, key_ref: &str, input: &GetInput) -> Result<Get> {
         key: &key,
         value: &value,
         current_policy_refs: &input.current_policy_refs,
+        current_policy_export_refs: &input.current_policy_export_refs,
         current_capability_refs: &input.current_capability_refs,
         current_revocation_refs: &input.current_revocation_refs,
+        current_resource_refs: &input.current_resource_refs,
+        current_handler_profile_ref: input.current_handler_profile_ref.as_deref(),
+        current_provenance_refs: &input.current_provenance_refs,
+        current_source_gate_refs: &input.current_source_gate_refs,
+        current_retention_refs: &input.current_retention_refs,
+        current_evidence_refs: &input.current_evidence_refs,
+        compatibility_refs: &input.compatibility_refs,
         requested_dependency_refs: &[],
         expected_output_ref: None,
         semantic: input.semantic,

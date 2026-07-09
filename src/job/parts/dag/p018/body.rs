@@ -163,13 +163,18 @@ fn stage_cache_key_input(
         input_ref,
         dependency_closure_hash,
         dependency_refs,
+        artifact_refs: node.stage_artifact_ref.iter().cloned().collect(),
+        schema_refs: dag.schema_refs.clone(),
         handler_profile_ref: request.handler_profile_ref.clone(),
         policy_refs: combined_policy_refs(dag, request, Some(node)),
         capability_refs: Vec::new(),
         revocation_refs: Vec::new(),
+        resource_refs: Vec::new(),
+        effect_manifest_refs: node.effect_manifest_refs.clone(),
         tool_ref: job_tool_ref()?,
         tool_version: JOB_TOOL_VERSION.to_string(),
         assumption_refs: sorted_unique(&assumptions),
+        ..crate::eval_cache::KeyInput::default()
     })
 }
 

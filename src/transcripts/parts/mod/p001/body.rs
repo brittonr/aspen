@@ -121,7 +121,10 @@ fn cached_run(transcript: &TranscriptArtifact, input: &TranscriptRunInput) -> Re
             current_policy_refs: transcript.policy_refs.clone(),
             current_capability_refs: transcript.capability_refs.clone(),
             current_revocation_refs: transcript.revocation_refs.clone(),
+            current_resource_refs: transcript.resource_refs.clone(),
+            current_handler_profile_ref: Some(effective_handler_profile_ref(transcript)?),
             semantic: true,
+            ..crate::eval_cache::GetInput::default()
         },
     ) && let Some(output) = cache_get.output.as_ref()
         && let Ok(receipt) = parse_transcript_run_receipt(output)
@@ -232,9 +235,15 @@ pub fn transcript_cache_key(transcript: &TranscriptArtifact) -> Result<crate::ev
         harness_ref: &tool_ref,
         harness_version: RUNNER_TOOL_VERSION,
     })?;
+    key.artifact_refs.extend(transcript.artifact_refs.iter().cloned());
+    key.artifact_refs.sort();
+    key.artifact_refs.dedup();
+    key.schema_refs = transcript.schema_refs.clone();
     key.policy_refs = transcript.policy_refs.clone();
     key.capability_refs = transcript.capability_refs.clone();
     key.revocation_refs = transcript.revocation_refs.clone();
+    key.resource_refs = transcript.resource_refs.clone();
+    key.effect_manifest_refs = transcript.effect_manifest_refs.clone();
     if let Some(seed_ref) = transcript.seed_ref.as_ref() {
         key.assumption_refs.push(seed_ref.clone());
     }

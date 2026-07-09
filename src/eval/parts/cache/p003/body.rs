@@ -226,6 +226,7 @@ pub fn schema_fingerprint_key_input(
         input_ref: normalized_shape_ref.to_string(),
         dependency_closure_hash: canonical_hash(&record("eval-cache-empty-closure", Vec::new()))?,
         dependency_refs: Vec::new(),
+        schema_refs: vec![normalized_shape_ref.to_string()],
         handler_profile_ref: None,
         policy_refs: policy_refs.to_vec(),
         capability_refs: Vec::new(),
@@ -233,6 +234,7 @@ pub fn schema_fingerprint_key_input(
         tool_ref: tool_ref.to_string(),
         tool_version: tool_version.to_string(),
         assumption_refs: Vec::new(),
+        ..KeyInput::default()
     })
 }
 
@@ -261,7 +263,8 @@ pub fn schema_compatibility_key_input(input: &SchemaCompatibilityKeyInput<'_>) -
             optional_ref_value(input.migration_ref),
         ]))?,
         dependency_closure_hash: closure_hash,
-        dependency_refs: dependencies,
+        dependency_refs: dependencies.clone(),
+        schema_refs: dependencies,
         handler_profile_ref: None,
         policy_refs: input.policy_refs.to_vec(),
         capability_refs: Vec::new(),
@@ -269,6 +272,8 @@ pub fn schema_compatibility_key_input(input: &SchemaCompatibilityKeyInput<'_>) -
         tool_ref: input.tool_ref.to_string(),
         tool_version: input.tool_version.to_string(),
         assumption_refs: Vec::new(),
+        compatibility_refs: [input.alias_ref, input.migration_ref].into_iter().flatten().map(str::to_string).collect(),
+        ..KeyInput::default()
     })
 }
 
@@ -284,6 +289,7 @@ pub fn artifact_closure_key_input(input: &ArtifactClosureKeyInput<'_>) -> Result
         ))]))?,
         dependency_closure_hash: input.closure_hash.to_string(),
         dependency_refs: input.dependency_refs.to_vec(),
+        artifact_refs: input.root_refs.to_vec(),
         handler_profile_ref: None,
         policy_refs: input.policy_refs.to_vec(),
         capability_refs: Vec::new(),
@@ -291,5 +297,6 @@ pub fn artifact_closure_key_input(input: &ArtifactClosureKeyInput<'_>) -> Result
         tool_ref: input.tool_ref.to_string(),
         tool_version: input.tool_version.to_string(),
         assumption_refs: Vec::new(),
+        ..KeyInput::default()
     })
 }

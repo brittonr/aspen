@@ -139,7 +139,7 @@ fn fetch_cache_value(dir: &Path, fixture: &CacheFixture) {
     crate::cli_cache::run(crate::cli_cache::Command::Get(crate::cli_cache::command::Get {
         key_ref: fixture.key.key_ref.clone(),
         cache: fixture.cache.clone(),
-        current_policy_refs: Vec::new(),
+        current_policy_refs: vec![fixture.policy_ref.clone()],
         current_capability_refs: Vec::new(),
         current_revocation_refs: Vec::new(),
         semantic_enabled: true,

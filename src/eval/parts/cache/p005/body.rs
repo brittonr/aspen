@@ -3,14 +3,25 @@ fn validate_key_input(input: &KeyInput) -> Result<()> {
     validate_operation(&input.operation)?;
     validate_non_empty(&input.version, "eval cache key version")?;
     validate_ref(&input.input_ref, "eval cache input ref")?;
+    validate_refs(&input.artifact_refs, "eval cache artifact ref")?;
+    validate_refs(&input.input_refs, "eval cache input context ref")?;
     validate_ref(&input.dependency_closure_hash, "eval cache dependency closure hash")?;
     validate_refs(&input.dependency_refs, "eval cache dependency ref")?;
+    validate_refs(&input.schema_refs, "eval cache schema ref")?;
     if let Some(handler_profile_ref) = input.handler_profile_ref.as_ref() {
         validate_ref(handler_profile_ref, "eval cache handler profile ref")?;
     }
     validate_refs(&input.policy_refs, "eval cache policy ref")?;
+    validate_refs(&input.policy_export_refs, "eval cache policy export ref")?;
     validate_refs(&input.capability_refs, "eval cache capability ref")?;
     validate_refs(&input.revocation_refs, "eval cache revocation ref")?;
+    validate_refs(&input.resource_refs, "eval cache resource ref")?;
+    validate_refs(&input.effect_manifest_refs, "eval cache effect manifest ref")?;
+    validate_refs(&input.provenance_refs, "eval cache provenance ref")?;
+    validate_refs(&input.source_gate_refs, "eval cache source-gate ref")?;
+    validate_refs(&input.evidence_refs, "eval cache evidence ref")?;
+    validate_refs(&input.retention_refs, "eval cache retention ref")?;
+    validate_refs(&input.compatibility_refs, "eval cache compatibility ref")?;
     validate_ref(&input.tool_ref, "eval cache tool ref")?;
     validate_non_empty(&input.tool_version, "eval cache tool version")?;
     validate_refs(&input.assumption_refs, "eval cache assumption ref")
@@ -52,13 +63,17 @@ fn validate_value_against_key(key: &Key, input: &ValueInput) -> Result<()> {
             return Err(MoltenError::invalid_harness("deterministic negative cache results require evidence refs"));
         }
         for evidence_ref in &input.evidence_refs {
-            if !key.assumption_refs.contains(evidence_ref)
+            if !key.evidence_refs.contains(evidence_ref)
+                && !key.assumption_refs.contains(evidence_ref)
                 && !key.policy_refs.contains(evidence_ref)
+                && !key.policy_export_refs.contains(evidence_ref)
                 && !key.capability_refs.contains(evidence_ref)
                 && !key.revocation_refs.contains(evidence_ref)
+                && !key.provenance_refs.contains(evidence_ref)
+                && !key.source_gate_refs.contains(evidence_ref)
             {
                 return Err(MoltenError::invalid_harness(
-                    "negative cache result evidence refs must be represented in key assumptions or policy inputs",
+                    "negative cache result evidence refs must be represented in policy-aware key inputs",
                 ));
             }
         }

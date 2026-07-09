@@ -1,0 +1,7 @@
+## Tasks
+
+- [x] [serial] r[molten.eval_cache.policy_aware_keys] Extend normative cache keys to bind artifact refs, dependency closures, input refs, schema refs, policy refs/exports, capability context, revocation epoch, resource refs, effect manifest refs, handler profile refs, provenance/source-gate refs, and evidence refs.
+- [x] [serial] r[molten.eval_cache.admission_freshness] Recheck policy, capability, revocation, resource, handler profile, provenance/source-gate, and retention freshness before cache hits satisfy pass evidence.
+- [x] [parallel] r[molten.eval_cache.profile_compatibility] Require explicit compatibility receipts for safe policy, schema, handler profile, or evidence substitutions in cache-hit decisions.
+- [x] [parallel] r[molten.eval_cache.negative_hit_denial] Deny normative cache hits for stale policy, revoked capability, changed handler profile, changed dependency closure, missing evidence, or diagnostic-only entries.
+- [x] [serial] r[molten.eval_cache.policy_aware_validation] Add positive and negative fixtures for deterministic hits, stale policy, revoked capability, profile mismatch, changed closure, compatibility substitution, and diagnostic-only cache denial.

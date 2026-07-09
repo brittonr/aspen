@@ -21,6 +21,9 @@ pub fn choreography_projection_key_input(input: &ChoreographyProjectionKeyInput<
         tool_ref: input.projector_ref.to_string(),
         tool_version: input.projector_version.to_string(),
         assumption_refs: Vec::new(),
+        artifact_refs: vec![input.protocol_artifact_ref.to_string()],
+        provenance_refs: vec![input.role_ref.to_string()],
+        ..KeyInput::default()
     })
 }
 
@@ -43,6 +46,8 @@ pub fn wasm_inspection_key_placeholder(
         tool_ref: inspector_ref.to_string(),
         tool_version: inspector_version.to_string(),
         assumption_refs: Vec::new(),
+        artifact_refs: vec![module_artifact_ref.to_string()],
+        ..KeyInput::default()
     })
 }
 
@@ -62,6 +67,8 @@ pub fn transcript_run_key_placeholder(input: &TranscriptRunKeyInput<'_>) -> Resu
         tool_ref: input.harness_ref.to_string(),
         tool_version: input.harness_version.to_string(),
         assumption_refs: Vec::new(),
+        artifact_refs: vec![input.transcript_ref.to_string()],
+        ..KeyInput::default()
     })
 }
 
@@ -269,10 +276,21 @@ fn refs_for_key_value(key: &Key, value: &Value) -> Vec<String> {
         key.dependency_closure_hash.clone(),
         key.tool_ref.clone(),
     ];
+    refs.extend(key.artifact_refs.iter().cloned());
+    refs.extend(key.input_refs.iter().cloned());
     refs.extend(key.dependency_refs.iter().cloned());
+    refs.extend(key.schema_refs.iter().cloned());
     refs.extend(key.policy_refs.iter().cloned());
+    refs.extend(key.policy_export_refs.iter().cloned());
     refs.extend(key.capability_refs.iter().cloned());
     refs.extend(key.revocation_refs.iter().cloned());
+    refs.extend(key.resource_refs.iter().cloned());
+    refs.extend(key.effect_manifest_refs.iter().cloned());
+    refs.extend(key.provenance_refs.iter().cloned());
+    refs.extend(key.source_gate_refs.iter().cloned());
+    refs.extend(key.evidence_refs.iter().cloned());
+    refs.extend(key.retention_refs.iter().cloned());
+    refs.extend(key.compatibility_refs.iter().cloned());
     refs.extend(key.assumption_refs.iter().cloned());
     refs.extend(value.dependency_refs.iter().cloned());
     refs.extend(value.policy_refs.iter().cloned());
@@ -291,9 +309,13 @@ pub fn evaluate_cache_hit_validity(input: CacheHitValidityInput<'_>) -> CacheHit
     if input.semantic && input.value.tier == TIER_PRODUCTION_TRACE_ONLY {
         diagnostics.push("trace-only-not-semantic".to_string());
     }
+    if input.value.status == STATUS_TRACE_ONLY {
+        diagnostics.push("diagnostic-only-cache-entry".to_string());
+    }
     if input.value.tier == TIER_POLICY_CURRENT && !policy_current_refs_match_parts(input.key, input) {
         diagnostics.push("policy-current-revalidation".to_string());
     }
+    diagnostics.extend(admission_freshness_diagnostics(input));
     if !input.requested_dependency_refs.is_empty() {
         let requested = sorted_unique(input.requested_dependency_refs);
         let mut cached = input.key.dependency_refs.clone();
@@ -328,7 +350,139 @@ pub fn evaluate_cache_hit_validity(input: CacheHitValidityInput<'_>) -> CacheHit
 }
 
 fn policy_current_refs_match_parts(key: &Key, input: CacheHitValidityInput<'_>) -> bool {
-    sorted_unique(&key.policy_refs) == sorted_unique(input.current_policy_refs)
-        && sorted_unique(&key.capability_refs) == sorted_unique(input.current_capability_refs)
-        && sorted_unique(&key.revocation_refs) == sorted_unique(input.current_revocation_refs)
+    let compatibility_refs = sorted_unique(input.compatibility_refs);
+    refs_match_or_compatible(&key.policy_refs, input.current_policy_refs, &compatibility_refs)
+        && refs_match_or_compatible(&key.policy_export_refs, input.current_policy_export_refs, &compatibility_refs)
+        && refs_match_or_compatible(&key.capability_refs, input.current_capability_refs, &compatibility_refs)
+        && refs_match_or_compatible(&key.revocation_refs, input.current_revocation_refs, &compatibility_refs)
+        && refs_match_or_compatible(&key.resource_refs, input.current_resource_refs, &compatibility_refs)
+        && optional_ref_matches_or_compatible(
+            key.handler_profile_ref.as_deref(),
+            input.current_handler_profile_ref,
+            &compatibility_refs,
+        )
+        && refs_match_or_compatible(&key.provenance_refs, input.current_provenance_refs, &compatibility_refs)
+        && refs_match_or_compatible(&key.source_gate_refs, input.current_source_gate_refs, &compatibility_refs)
+        && refs_match_or_compatible(&key.retention_refs, input.current_retention_refs, &compatibility_refs)
+        && refs_match_or_compatible(&key.evidence_refs, input.current_evidence_refs, &compatibility_refs)
+}
+
+fn admission_freshness_diagnostics(input: CacheHitValidityInput<'_>) -> Vec<String> {
+    let compatibility_refs = sorted_unique(input.compatibility_refs);
+    let mut diagnostics = Vec::new();
+    push_changed_ref_diagnostic(
+        &mut diagnostics,
+        "policy-ref-stale",
+        &input.key.policy_refs,
+        input.current_policy_refs,
+        &compatibility_refs,
+    );
+    push_changed_ref_diagnostic(
+        &mut diagnostics,
+        "policy-export-ref-stale",
+        &input.key.policy_export_refs,
+        input.current_policy_export_refs,
+        &compatibility_refs,
+    );
+    push_changed_ref_diagnostic(
+        &mut diagnostics,
+        "capability-context-stale",
+        &input.key.capability_refs,
+        input.current_capability_refs,
+        &compatibility_refs,
+    );
+    push_changed_ref_diagnostic(
+        &mut diagnostics,
+        "revocation-epoch-changed",
+        &input.key.revocation_refs,
+        input.current_revocation_refs,
+        &compatibility_refs,
+    );
+    push_changed_ref_diagnostic(
+        &mut diagnostics,
+        "resource-context-stale",
+        &input.key.resource_refs,
+        input.current_resource_refs,
+        &compatibility_refs,
+    );
+    push_changed_ref_diagnostic(
+        &mut diagnostics,
+        "provenance-context-stale",
+        &input.key.provenance_refs,
+        input.current_provenance_refs,
+        &compatibility_refs,
+    );
+    push_changed_ref_diagnostic(
+        &mut diagnostics,
+        "source-gate-context-stale",
+        &input.key.source_gate_refs,
+        input.current_source_gate_refs,
+        &compatibility_refs,
+    );
+    push_changed_ref_diagnostic(
+        &mut diagnostics,
+        "retention-context-stale",
+        &input.key.retention_refs,
+        input.current_retention_refs,
+        &compatibility_refs,
+    );
+    push_changed_ref_diagnostic(
+        &mut diagnostics,
+        "evidence-context-stale",
+        &input.key.evidence_refs,
+        input.current_evidence_refs,
+        &compatibility_refs,
+    );
+    if input.key.handler_profile_ref.as_deref() != input.current_handler_profile_ref
+        && !optional_ref_change_is_compatible(
+            input.key.handler_profile_ref.as_deref(),
+            input.current_handler_profile_ref,
+            &compatibility_refs,
+        )
+    {
+        diagnostics.push("handler-profile-changed".to_string());
+    }
+    diagnostics
+}
+
+fn push_changed_ref_diagnostic(
+    diagnostics: &mut Vec<String>,
+    label: &str,
+    cached_refs: &[String],
+    current_refs: &[String],
+    compatibility_refs: &[String],
+) {
+    if refs_match_or_compatible(cached_refs, current_refs, compatibility_refs) {
+        return;
+    }
+    diagnostics.push(label.to_string());
+}
+
+fn refs_match_or_compatible(cached_refs: &[String], current_refs: &[String], compatibility_refs: &[String]) -> bool {
+    sorted_unique(cached_refs) == sorted_unique(current_refs)
+        || all_ref_changes_compatible(cached_refs, current_refs, compatibility_refs)
+}
+
+fn optional_ref_matches_or_compatible(
+    cached_ref: Option<&str>,
+    current_ref: Option<&str>,
+    compatibility_refs: &[String],
+) -> bool {
+    cached_ref == current_ref || optional_ref_change_is_compatible(cached_ref, current_ref, compatibility_refs)
+}
+
+fn all_ref_changes_compatible(cached_refs: &[String], current_refs: &[String], compatibility_refs: &[String]) -> bool {
+    !compatibility_refs.is_empty()
+        && cached_refs.iter().all(|reference| compatibility_refs.contains(reference))
+        && current_refs.iter().all(|reference| compatibility_refs.contains(reference))
+}
+
+fn optional_ref_change_is_compatible(
+    cached_ref: Option<&str>,
+    current_ref: Option<&str>,
+    compatibility_refs: &[String],
+) -> bool {
+    !compatibility_refs.is_empty()
+        && cached_ref.is_some_and(|reference| compatibility_refs.iter().any(|compat| compat == reference))
+        && current_ref.is_some_and(|reference| compatibility_refs.iter().any(|compat| compat == reference))
 }

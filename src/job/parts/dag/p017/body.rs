@@ -3,9 +3,11 @@ fn stage_memo_hit(input: &StageMemo<'_>) -> Result<Option<JobStageRun>> {
     let current_policy_refs = combined_policy_refs(input.dag, input.request, Some(input.node));
     if let Ok(hit) = crate::eval_cache::get(input.cache_root, input.key_ref, &crate::eval_cache::GetInput {
         current_policy_refs,
+        current_handler_profile_ref: input.request.handler_profile_ref.clone(),
         current_capability_refs: Vec::new(),
         current_revocation_refs: Vec::new(),
         semantic: true,
+        ..crate::eval_cache::GetInput::default()
     }) && let Some(output) = hit.output
     {
         let output_values = parse_cached_stage_output(&output)?;

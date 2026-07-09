@@ -42,9 +42,11 @@ pub(super) fn put(args: super::command::Put) -> molten::error::Result<()> {
         policy_refs: policy_refs.clone(),
         capability_refs,
         revocation_refs,
+        evidence_refs: evidence_refs.clone(),
         tool_ref,
         tool_version,
         assumption_refs,
+        ..molten::eval_cache::KeyInput::default()
     };
     let value_input = molten::eval_cache::ValueInput {
         tier,
@@ -137,6 +139,7 @@ pub(super) fn get(args: super::command::Get) -> molten::error::Result<()> {
         current_capability_refs: args.current_capability_refs,
         current_revocation_refs: args.current_revocation_refs,
         semantic: args.semantic_enabled,
+        ..molten::eval_cache::GetInput::default()
     })?;
     if let Some(output) = get.output.as_ref() {
         let text = molten::preserves_rail::to_text(output)?;
