@@ -958,6 +958,14 @@ mod tests {
         assert_eq!(decision.decision, PLUGIN_DECISION_PASS);
         assert!(decision.side_effect_authorized);
         assert!(decision.authority_closed);
+        assert_eq!(decision.prior_state, PluginLifecycleState::ManifestDeclared);
+        assert_eq!(decision.event, PluginLifecycleEvent::CompleteTrace);
+        assert_eq!(decision.next_state, PluginLifecycleState::Upgraded);
+        assert_eq!(decision.side_effect_class, "trace-replay");
+        assert!(decision.guard_refs.contains(&fixture.install.receipt_ref));
+        assert!(to_text(&decision.value)
+            .expect("render FSM decision")
+            .contains("reviewed-transition-table"));
         assert!(decision.diagnostics.is_empty());
     }
 
@@ -981,6 +989,9 @@ mod tests {
         .expect("evaluate lifecycle state");
         assert_eq!(decision.decision, PLUGIN_DECISION_DENY);
         assert!(!decision.side_effect_authorized);
+        assert_eq!(decision.event, PluginLifecycleEvent::Hostcall);
+        assert_eq!(decision.next_state, decision.prior_state);
+        assert_eq!(decision.side_effect_class, PLUGIN_LIFECYCLE_SIDE_EFFECT_NONE);
         assert!(decision
             .diagnostics
             .iter()
@@ -1016,6 +1027,8 @@ mod tests {
         .expect("evaluate lifecycle state");
         assert_eq!(decision.decision, PLUGIN_DECISION_DENY);
         assert!(!decision.side_effect_authorized);
+        assert_eq!(decision.prior_state, PluginLifecycleState::Degraded);
+        assert_eq!(decision.event, PluginLifecycleEvent::Upgrade);
         assert!(decision
             .diagnostics
             .iter()
@@ -1043,6 +1056,8 @@ mod tests {
         assert_eq!(decision.decision, PLUGIN_DECISION_DENY);
         assert!(!decision.side_effect_authorized);
         assert!(decision.authority_closed);
+        assert_eq!(decision.prior_state, PluginLifecycleState::Removed);
+        assert_eq!(decision.event, PluginLifecycleEvent::Hostcall);
         assert!(decision
             .diagnostics
             .iter()
@@ -1081,6 +1096,8 @@ mod tests {
         .expect("evaluate lifecycle state");
         assert_eq!(decision.decision, PLUGIN_DECISION_DENY);
         assert!(!decision.side_effect_authorized);
+        assert_eq!(decision.event, PluginLifecycleEvent::Remove);
+        assert_eq!(decision.next_state, decision.prior_state);
         assert!(decision
             .diagnostics
             .iter()

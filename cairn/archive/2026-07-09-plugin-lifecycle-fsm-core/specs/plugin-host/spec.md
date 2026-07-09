@@ -1,5 +1,7 @@
 # Plugin Host Delta: Explicit Lifecycle FSM Core
 
+## ADDED Requirements
+
 ### Requirement: Plugin lifecycle has a reviewed transition table
 r[molten.plugin_lifecycle_state_proof.transition_table] Molten MUST model plugin lifecycle admission with a reviewed finite transition table over current lifecycle state, lifecycle event, active manifest identity, and explicit guard facts, and MUST deny lifecycle events that are not admitted by that table.
 

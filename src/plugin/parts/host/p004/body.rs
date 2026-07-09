@@ -171,25 +171,18 @@ pub fn evaluate_plugin_lifecycle_state(input: &PluginLifecycleStateInput<'_>) ->
         )?;
     }
 
-    let decision = if install_passes && diagnostics.is_empty() {
-        PLUGIN_DECISION_PASS
-    } else {
-        PLUGIN_DECISION_DENY
-    };
-    let side_effect_authorized = decision == PLUGIN_DECISION_PASS
-        && match input.evaluation_kind {
-            PluginLifecycleEvaluationKind::CompleteTrace => true,
-            PluginLifecycleEvaluationKind::ActivationRequest => activation_passes && negotiation_passes,
-            PluginLifecycleEvaluationKind::HostcallRequest => hostcall_passes && negotiation_passes && !removal_passes,
-            PluginLifecycleEvaluationKind::UpgradeRequest => upgrade_passes && compatibility_passes && !removal_passes,
-            PluginLifecycleEvaluationKind::RemovalRequest => removal_passes,
-        };
-    Ok(PluginLifecycleStateDecision {
-        decision: decision.to_string(),
-        diagnostics,
-        side_effect_authorized,
-        authority_closed: removal_passes,
-    })
+    let guards = plugin_lifecycle_guard_snapshot(input, PluginLifecycleGuardBooleans {
+        install_passes,
+        permission_passes,
+        activation_passes,
+        hostcall_passes,
+        health_passes,
+        removal_passes,
+        upgrade_passes,
+        negotiation_passes,
+        compatibility_passes,
+    });
+    plugin_lifecycle_transition_decision(input.evaluation_kind, &input.manifest.manifest_ref, guards, diagnostics)
 }
 
 fn plugin_install_passes(

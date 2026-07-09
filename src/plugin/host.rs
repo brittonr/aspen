@@ -10,4 +10,7 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p002/body.r
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p007/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p008/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p009/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p006/body.rs"));

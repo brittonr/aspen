@@ -516,6 +516,12 @@ pub struct PluginLifecycleStateDecision {
     pub diagnostics: Vec<String>,
     pub side_effect_authorized: bool,
     pub authority_closed: bool,
+    pub prior_state: PluginLifecycleState,
+    pub event: PluginLifecycleEvent,
+    pub next_state: PluginLifecycleState,
+    pub guard_refs: Vec<String>,
+    pub side_effect_class: String,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
