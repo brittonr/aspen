@@ -146,8 +146,76 @@ pub fn leaderless_experimental_algorithm_profile_input(
     }
 }
 
+// r[impl molten.consensus.cluster_config_selection]
+pub fn validate_cluster_consensus_config(config: &ClusterConsensusConfig) -> Result<()> {
+    validate_algorithm_name(&config.algorithm_profile)?;
+    if let Some(profile_version) = &config.profile_version {
+        validate_non_empty(profile_version, "cluster consensus profile version")?;
+    }
+    if let Some(placement_ref) = &config.placement_ref {
+        require_ref(placement_ref, "cluster consensus placement ref")?;
+    }
+    validate_refs(&config.required_evidence_refs, "cluster consensus required evidence ref")
+}
+
+// r[impl molten.consensus.cluster_config_selection]
+pub fn consensus_algorithm_profile_from_cluster_config(
+    input: &RaftGroupManifestInput,
+    config: &ClusterConsensusConfig,
+) -> Result<ConsensusAlgorithmProfileInput> {
+    validate_cluster_consensus_config(config)?;
+    let profile = match config.algorithm_profile.as_str() {
+        CONSENSUS_PROFILE_RAFT => raft_algorithm_profile_from_cluster_config(input, config)?,
+        CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => leaderless_algorithm_profile_from_cluster_config(input, config),
+        value => return Err(MoltenError::invalid_harness(format!("unsupported consensus algorithm profile {value}"))),
+    };
+    validate_consensus_algorithm_profile(&profile)?;
+    Ok(profile)
+}
+
+fn raft_algorithm_profile_from_cluster_config(
+    input: &RaftGroupManifestInput,
+    config: &ClusterConsensusConfig,
+) -> Result<ConsensusAlgorithmProfileInput> {
+    let mut profile = default_raft_algorithm_profile_input(input)?;
+    if let Some(profile_version) = &config.profile_version {
+        profile.admitted_profile_version = profile_version.clone();
+    }
+    if let Some(placement_ref) = &config.placement_ref {
+        profile.placement_ref = Some(placement_ref.clone());
+    }
+    if !config.required_evidence_refs.is_empty() {
+        profile.required_evidence_refs = config.required_evidence_refs.clone();
+    }
+    Ok(profile)
+}
+
+fn leaderless_algorithm_profile_from_cluster_config(
+    input: &RaftGroupManifestInput,
+    config: &ClusterConsensusConfig,
+) -> ConsensusAlgorithmProfileInput {
+    let mut profile = leaderless_experimental_algorithm_profile_input(
+        input.policy_refs.clone(),
+        config.placement_ref.clone(),
+        config.required_evidence_refs.clone(),
+    );
+    if let Some(profile_version) = &config.profile_version {
+        profile.admitted_profile_version = profile_version.clone();
+    }
+    profile
+}
+
 pub fn raft_group_manifest_value(input: &RaftGroupManifestInput) -> Result<IoValue> {
     let profile = default_raft_algorithm_profile_input(input)?;
+    raft_group_manifest_value_with_profile(input, &profile)
+}
+
+// r[impl molten.consensus.cluster_config_selection]
+pub fn raft_group_manifest_value_with_cluster_config(
+    input: &RaftGroupManifestInput,
+    config: &ClusterConsensusConfig,
+) -> Result<IoValue> {
+    let profile = consensus_algorithm_profile_from_cluster_config(input, config)?;
     raft_group_manifest_value_with_profile(input, &profile)
 }
 

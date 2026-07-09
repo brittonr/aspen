@@ -86,6 +86,19 @@ mod tests {
         .expect("raft command envelope")
     }
 
+    fn cluster_config_manifest_input() -> RaftGroupManifestInput {
+        RaftGroupManifestInput {
+            group_id: DEFAULT_GROUP_ID.to_string(),
+            members: vec![test_ref("member-a"), test_ref("member-b"), test_ref("member-c")],
+            state_machine: CONTROL_REGISTRY_STATE_MACHINE.to_string(),
+            command_schemas: allowed_command_schemas().iter().map(|value| (*value).to_string()).collect(),
+            read_mode: READ_MODE_READ_INDEX.to_string(),
+            snapshot_policy_ref: test_ref("snapshot-policy"),
+            policy_refs: vec![test_ref("policy")],
+            resource_refs: vec![test_ref("resource")],
+        }
+    }
+
     fn assert_matching_pass(
         left: &ControlRegistryRuntime,
         right: &ControlRegistryRuntime,
@@ -671,6 +684,49 @@ mod tests {
             let envelope = parse_raft_command_envelope(&entry.command).expect("entry command envelope");
             assert!(parse_control_registry_command(&envelope.command).is_ok());
         }
+    }
+
+    #[test]
+    fn cluster_consensus_config_selects_manifest_profile_and_denies_unknowns() {
+        // r[verify molten.consensus.cluster_config_selection]
+        let input = cluster_config_manifest_input();
+        let raft_config = ClusterConsensusConfig {
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            profile_version: Some(CONSENSUS_PROFILE_VERSION_RAFT.to_string()),
+            placement_ref: Some(test_ref("cluster-raft-placement")),
+            required_evidence_refs: vec![test_ref("cluster-raft-evidence")],
+        };
+        let raft_manifest_value = raft_group_manifest_value_with_cluster_config(&input, &raft_config)
+            .expect("configured raft manifest");
+        let raft_manifest = parse_raft_group_manifest(&raft_manifest_value).expect("configured raft parse");
+        assert_eq!(raft_manifest.algorithm_profile, CONSENSUS_PROFILE_RAFT);
+        assert_eq!(raft_manifest.admitted_profile_version, CONSENSUS_PROFILE_VERSION_RAFT);
+        assert_eq!(raft_manifest.placement_ref, raft_config.placement_ref);
+        assert_eq!(raft_manifest.required_evidence_refs, raft_config.required_evidence_refs);
+        let runtime = new_control_registry_runtime(&raft_manifest_value).expect("configured raft runtime");
+        assert_eq!(runtime.manifest.algorithm_profile, CONSENSUS_PROFILE_RAFT);
+
+        let leaderless_config = ClusterConsensusConfig {
+            algorithm_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
+            profile_version: Some(CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL.to_string()),
+            placement_ref: Some(test_ref("cluster-leaderless-placement")),
+            required_evidence_refs: vec![test_ref("leaderless-proof"), test_ref("leaderless-simulation")],
+        };
+        let leaderless_manifest_value = raft_group_manifest_value_with_cluster_config(&input, &leaderless_config)
+            .expect("configured leaderless manifest");
+        let leaderless_manifest = parse_raft_group_manifest(&leaderless_manifest_value).expect("leaderless parse");
+        assert_eq!(leaderless_manifest.algorithm_profile, CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL);
+        assert_eq!(leaderless_manifest.production_status, PRODUCTION_STATUS_EXPERIMENTAL);
+        let leaderless_runtime = new_control_registry_runtime(&leaderless_manifest_value).expect_err("leaderless denied");
+        assert!(leaderless_runtime.to_string().contains("not admitted for production runtime"));
+
+        let unknown_config = ClusterConsensusConfig {
+            algorithm_profile: "raftt".to_string(),
+            ..ClusterConsensusConfig::default()
+        };
+        let unknown_error = raft_group_manifest_value_with_cluster_config(&input, &unknown_config)
+            .expect_err("unknown consensus profile denied");
+        assert!(unknown_error.to_string().contains("unsupported consensus algorithm profile raftt"));
     }
 
     #[test]

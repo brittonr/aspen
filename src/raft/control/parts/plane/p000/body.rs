@@ -105,6 +105,33 @@ pub struct ConsensusAlgorithmProfileInput {
     pub required_evidence_refs: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ClusterConsensusConfig {
+    #[serde(default = "default_consensus_algorithm_profile_name")]
+    pub algorithm_profile: String,
+    #[serde(default)]
+    pub profile_version: Option<String>,
+    #[serde(default)]
+    pub placement_ref: Option<String>,
+    #[serde(default)]
+    pub required_evidence_refs: Vec<String>,
+}
+
+impl Default for ClusterConsensusConfig {
+    fn default() -> Self {
+        Self {
+            algorithm_profile: default_consensus_algorithm_profile_name(),
+            profile_version: Some(CONSENSUS_PROFILE_VERSION_RAFT.to_string()),
+            placement_ref: None,
+            required_evidence_refs: Vec::new(),
+        }
+    }
+}
+
+fn default_consensus_algorithm_profile_name() -> String {
+    CONSENSUS_PROFILE_RAFT.to_string()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RaftGroupManifest {
     pub manifest_ref: String,

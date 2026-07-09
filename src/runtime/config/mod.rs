@@ -4,6 +4,8 @@ const MAX_RUNTIME_SUBSCRIPTIONS: usize = 4096;
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeStartupConfig {
     pub source_language: RuntimeConfigSource,
+    #[serde(default)]
+    pub consensus: crate::raft_control_plane::ClusterConsensusConfig,
     pub actors: Vec<RuntimeActorConfig>,
     pub subscriptions: Vec<RuntimeSubscriptionConfig>,
 }
@@ -47,6 +49,7 @@ impl RuntimeStartupConfig {
                 "runtime startup config must come from Nickel export",
             ));
         }
+        crate::raft_control_plane::validate_cluster_consensus_config(&self.consensus)?;
         if self.actors.len() > MAX_RUNTIME_ACTORS {
             return Err(crate::error::MoltenError::invalid_harness(format!(
                 "runtime startup config exceeds {MAX_RUNTIME_ACTORS} actors"
@@ -72,6 +75,8 @@ impl RuntimeStartupConfig {
 
 #[cfg(test)]
 mod tests {
+    const TEST_CONTENT_REF: &str = "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
     #[test]
     fn nickel_export_loads_typed_actor_and_subscription_config() {
         let source = r#"{
@@ -81,9 +86,43 @@ mod tests {
         }"#;
         let config = super::RuntimeStartupConfig::from_nickel_export_json(source).expect("config");
         assert_eq!(config.source_language, super::RuntimeConfigSource::Nickel);
+        assert_eq!(config.consensus.algorithm_profile, crate::raft_control_plane::CONSENSUS_PROFILE_RAFT);
         assert_eq!(config.actors[0].kind, super::RuntimeActorKind::Native);
         assert_eq!(config.actors[0].id.as_str(), "actor:consumer");
         assert_eq!(config.subscriptions[0].subject_preserves, "\"service.ready\"");
+    }
+
+    #[test]
+    fn nickel_export_loads_explicit_consensus_profile_config() {
+        let source = format!(
+            r#"{{
+            "source_language": "nickel",
+            "consensus": {{
+                "algorithm_profile": "raft",
+                "profile_version": "raft-production-v1",
+                "placement_ref": "{TEST_CONTENT_REF}",
+                "required_evidence_refs": ["{TEST_CONTENT_REF}"]
+            }},
+            "actors": [{{ "id": "actor:consumer", "kind": "native" }}],
+            "subscriptions": []
+        }}"#
+        );
+        let config = super::RuntimeStartupConfig::from_nickel_export_json(&source).expect("config");
+        assert_eq!(config.consensus.algorithm_profile, crate::raft_control_plane::CONSENSUS_PROFILE_RAFT);
+        assert_eq!(config.consensus.profile_version.as_deref(), Some("raft-production-v1"));
+        assert_eq!(config.consensus.placement_ref.as_deref(), Some(TEST_CONTENT_REF));
+    }
+
+    #[test]
+    fn nickel_export_rejects_unknown_consensus_profile_config() {
+        let source = r#"{
+            "source_language": "nickel",
+            "consensus": { "algorithm_profile": "raftt" },
+            "actors": [],
+            "subscriptions": []
+        }"#;
+        let error = super::RuntimeStartupConfig::from_nickel_export_json(source).expect_err("bad consensus");
+        assert!(error.to_string().contains("unsupported consensus algorithm profile raftt"));
     }
 
     #[test]
