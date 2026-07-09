@@ -1,5 +1,7 @@
 # Local Evaluation Cache Delta: rkyv Derived Cache Boundary
 
+## ADDED Requirements
+
 ### Requirement: rkyv archives preserve Preserves source of truth
 r[molten.local_eval_cache.rkyv_preserves_source_of_truth] rkyv-backed zero-copy archives MUST be treated as derived local cache materializations of canonical Preserves cache keys, values, traces, or indexes rather than as canonical source artifacts.
 

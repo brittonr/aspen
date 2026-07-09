@@ -1,5 +1,7 @@
 # Unison Typed Storage Delta: Derived Archive Sidecars
 
+## ADDED Requirements
+
 ### Requirement: Typed storage keeps rkyv materializations non-authoritative
 r[molten.storage.derived_archive_sidecars] Typed storage MAY keep rkyv-backed zero-copy materializations only as tagged, rebuildable sidecars for local read acceleration; durable stored values, value refs, schema bindings, receipts, and migration traces MUST remain canonical Preserves values or content refs.
 
