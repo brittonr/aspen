@@ -17,6 +17,35 @@ const MAX_ARTIFACT_POINTERS: usize = 100_000;
 const MAX_ARTIFACT_RECEIPTS: usize = 100_000;
 const MAX_ARTIFACT_DIAGNOSTICS: usize = 256;
 const MAX_ARTIFACT_CHECKS: usize = 64;
+pub const ARTIFACT_IDENTITY_HASH_ALGORITHM: &str = "blake3";
+const RAW_SOURCE_CANONICALIZER: &str = "raw-source-text";
+const RENDERED_LOG_CANONICALIZER: &str = "rendered-log";
+const PRESERVES_VALUE_CANONICALIZER: &str = "preserves-canonical-value-v1";
+const SUPPORTED_ARTIFACT_KINDS: &[&str] = &[
+    "artifact",
+    "authority-context",
+    "doc",
+    "job-dag",
+    "module",
+    "nickel",
+    "node-control-artifact",
+    "octet-evidence",
+    "octet-gate-receipt",
+    "operator-artifact",
+    "plugin-executor",
+    "preserves-schema",
+    "receipt",
+    "schema",
+    "schema-identity",
+    "stage",
+    "steel",
+    "transcript",
+    "transcript-example",
+    "transcript-run-receipt",
+    "trellis",
+    "upgrade-receipt",
+    "wasm",
+];
 
 const _: () = assert!(INLINE_PAYLOAD_LIMIT <= 1_048_576);
 const _: () = assert!(MAX_ARTIFACT_REF_LIST <= 100_000);
@@ -97,6 +126,8 @@ pub struct ArtifactInstall {
     pub artifact_ref: String,
     pub decision: String,
     pub artifact: ArtifactRecord,
+    pub identity_receipt_ref: String,
+    pub identity_receipt_value: IoValue,
     pub missing_dependencies: Vec<String>,
     pub receipt_value: IoValue,
 }
@@ -120,6 +151,30 @@ pub struct ArtifactReceipt {
     pub decision: String,
     pub subject_ref: String,
     pub name: Option<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ArtifactIdentityInput<'a> {
+    pub kind: &'a str,
+    pub identity_domain: &'a str,
+    pub canonical_payload_ref: &'a str,
+    pub canonicalizer: &'a str,
+    pub artifact_ref: Option<&'a str>,
+    pub schema_refs: &'a [String],
+    pub dependency_summary_refs: &'a [String],
+    pub effect_manifest_ref: Option<&'a str>,
+    pub policy_refs: &'a [String],
+    pub provenance_refs: &'a [String],
+    pub hash_algorithm: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactIdentityReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub artifact_ref: Option<String>,
+    pub diagnostics: Vec<String>,
     pub value: IoValue,
 }
 
@@ -152,9 +207,16 @@ pub fn install_artifact(root: &Path, input: &ArtifactInstallInput) -> Result<Art
     ensure_dirs(root)?;
     let payload = prepare_install_payload(root, &input.payload)?;
     let artifact = build_install_artifact(input, &payload.payload_ref)?;
+    let identity_receipt = artifact_identity_receipt(&identity_input_from_artifact(&artifact))?;
+    if identity_receipt.decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "artifact identity denied: {}",
+            identity_receipt.diagnostics.join("; ")
+        )));
+    }
     let missing_dependencies = missing_dependencies(root, &input.dependency_refs)?;
     let decision = install_decision(&missing_dependencies);
-    let refs = install_refs(input, &artifact, payload.chunk_receipt_ref.as_ref())?;
+    let refs = install_refs(input, &artifact, &identity_receipt.receipt_ref, payload.chunk_receipt_ref.as_ref())?;
     let diagnostics = install_diagnostics(&missing_dependencies)?;
     let receipt_value = install_receipt_value(&artifact, decision, &refs, &diagnostics, &missing_dependencies)?;
     commit_install(root, &artifact, &payload.payload_bytes, &receipt_value, missing_dependencies.is_empty())?;
@@ -162,6 +224,8 @@ pub fn install_artifact(root: &Path, input: &ArtifactInstallInput) -> Result<Art
         artifact_ref: artifact.artifact_ref.clone(),
         decision: decision.to_string(),
         artifact,
+        identity_receipt_ref: identity_receipt.receipt_ref,
+        identity_receipt_value: identity_receipt.value,
         missing_dependencies,
         receipt_value,
     })
@@ -225,10 +289,12 @@ fn install_decision(missing_dependencies: &[String]) -> &'static str {
 fn install_refs(
     input: &ArtifactInstallInput,
     artifact: &ArtifactRecord,
+    identity_receipt_ref: &str,
     chunk_receipt_ref: Option<&String>,
 ) -> Result<Vec<String>> {
     let mut refs = Vec::new();
     push_bounded(&mut refs, artifact.artifact_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
+    push_bounded(&mut refs, identity_receipt_ref.to_string(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
     push_bounded(&mut refs, input.installer_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
     extend_cloned_bounded(&mut refs, &input.capability_refs, MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
     extend_cloned_bounded(&mut refs, &input.dependency_refs, MAX_ARTIFACT_REF_LIST, "artifact install refs")?;

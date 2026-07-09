@@ -20,7 +20,11 @@ mod tests {
         };
         let first = install_artifact(&root, &input).expect("install first");
         let duplicate = install_artifact(&root, &input).expect("install duplicate");
+        let identity_receipt = parse_artifact_identity_receipt(&first.identity_receipt_value).expect("identity receipt");
         assert_eq!(first.decision, "pass");
+        assert_eq!(first.identity_receipt_ref, identity_receipt.receipt_ref);
+        assert_eq!(identity_receipt.decision, "pass");
+        assert_eq!(identity_receipt.artifact_ref.as_deref(), Some(first.artifact_ref.as_str()));
         assert_eq!(first.artifact_ref, duplicate.artifact_ref);
         let pointer = set_name_pointer(&root, &SetNamePointerInput {
             pointer_kind: "name",
@@ -51,6 +55,99 @@ mod tests {
         })
         .expect("changed deps");
         assert_ne!(first.artifact_ref, changed_deps.artifact_ref);
+    }
+
+    #[test]
+    fn artifact_identity_receipts_are_stable_and_domain_separated() {
+        // r[verify molten.artifacts.canonical_identity_validation]
+        let payload_ref = test_ref("canonical-payload");
+        let schema_refs = vec![test_ref("schema")];
+        let dependency_summary_refs = vec![test_ref("dependency-summary")];
+        let policy_refs = vec![test_ref("policy")];
+        let provenance_refs = vec![test_ref("provenance")];
+        let schema_domain = domain_for_kind("schema");
+        let schema_input = identity_input(
+            "schema",
+            &schema_domain,
+            &payload_ref,
+            &schema_refs,
+            &dependency_summary_refs,
+            &policy_refs,
+            &provenance_refs,
+        );
+        let first = artifact_identity_receipt(&schema_input).expect("first identity receipt");
+        let repeated = artifact_identity_receipt(&schema_input).expect("repeated identity receipt");
+        let policy_domain = domain_for_kind("policy");
+        let policy_input = ArtifactIdentityInput {
+            kind: "policy",
+            identity_domain: &policy_domain,
+            ..schema_input
+        };
+        let different_domain = artifact_identity_receipt(&policy_input).expect("policy identity receipt");
+
+        assert_eq!(first.decision, "pass");
+        assert_eq!(first.artifact_ref, repeated.artifact_ref);
+        assert_eq!(first.receipt_ref, repeated.receipt_ref);
+        assert_ne!(first.artifact_ref, different_domain.artifact_ref);
+        assert_eq!(parse_artifact_identity_receipt(&first.value).expect("parse").decision, "pass");
+    }
+
+    #[test]
+    fn artifact_identity_receipts_deny_noncanonical_or_unsupported_identity() {
+        // r[verify molten.artifacts.canonical_identity_validation]
+        let payload_ref = test_ref("canonical-payload");
+        let schema_refs = vec![test_ref("schema")];
+        let dependency_summary_refs = Vec::new();
+        let policy_refs = vec![test_ref("policy")];
+        let provenance_refs = vec![test_ref("provenance")];
+        let steel_domain = domain_for_kind("steel");
+        let base = identity_input(
+            "steel",
+            &steel_domain,
+            &payload_ref,
+            &schema_refs,
+            &dependency_summary_refs,
+            &policy_refs,
+            &provenance_refs,
+        );
+        let missing_payload = artifact_identity_receipt(&ArtifactIdentityInput {
+            canonical_payload_ref: "",
+            ..base
+        })
+        .expect("missing payload receipt");
+        let wrong_domain = artifact_identity_receipt(&ArtifactIdentityInput {
+            identity_domain: "molten.artifacts.domain.v1:policy",
+            ..base
+        })
+        .expect("wrong domain receipt");
+        let raw_source = artifact_identity_receipt(&ArtifactIdentityInput {
+            canonicalizer: RAW_SOURCE_CANONICALIZER,
+            ..base
+        })
+        .expect("raw source receipt");
+        let unsupported_hash = artifact_identity_receipt(&ArtifactIdentityInput {
+            hash_algorithm: "sha256",
+            ..base
+        })
+        .expect("unsupported hash receipt");
+        let unknown_domain = domain_for_kind("unknown-kind");
+        let unsupported_kind = artifact_identity_receipt(&ArtifactIdentityInput {
+            kind: "unknown-kind",
+            identity_domain: &unknown_domain,
+            ..base
+        })
+        .expect("unsupported kind receipt");
+
+        assert_eq!(missing_payload.decision, "deny");
+        assert_eq!(wrong_domain.decision, "deny");
+        assert_eq!(raw_source.decision, "deny");
+        assert_eq!(unsupported_hash.decision, "deny");
+        assert_eq!(unsupported_kind.decision, "deny");
+        assert!(missing_payload.artifact_ref.is_none());
+        assert!(unsupported_hash
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("requires blake3")));
     }
 
     #[test]
@@ -235,6 +332,30 @@ mod tests {
             evidence_refs: vec![test_ref(&format!("evidence-{label}"))],
             installer_ref: test_ref(&format!("installer-{label}")),
             capability_refs: vec![test_ref(&format!("capability-{label}"))],
+        }
+    }
+
+    fn identity_input<'a>(
+        kind: &'a str,
+        identity_domain: &'a str,
+        payload_ref: &'a str,
+        schema_refs: &'a [String],
+        dependency_summary_refs: &'a [String],
+        policy_refs: &'a [String],
+        provenance_refs: &'a [String],
+    ) -> ArtifactIdentityInput<'a> {
+        ArtifactIdentityInput {
+            kind,
+            identity_domain,
+            canonical_payload_ref: payload_ref,
+            canonicalizer: PRESERVES_VALUE_CANONICALIZER,
+            artifact_ref: None,
+            schema_refs,
+            dependency_summary_refs,
+            effect_manifest_ref: None,
+            policy_refs,
+            provenance_refs,
+            hash_algorithm: ARTIFACT_IDENTITY_HASH_ALGORITHM,
         }
     }
 

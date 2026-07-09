@@ -51,6 +51,18 @@ fn record_ref_sequence(value: &RailValue, label: &str) -> Result<Vec<String>> {
     crate::preserves_rail::record_content_ref_strings(value, label, label, MAX_ARTIFACT_REF_LIST)
 }
 
+fn record_strings(value: &RailValue, label: &str) -> Result<Vec<String>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    let items = required_sequence(&record[0], label)?;
+    ensure_count_at_most(items.len(), MAX_ARTIFACT_DIAGNOSTICS, label)?;
+    let mut strings = Vec::with_capacity(items.len());
+    for item in items.iter() {
+        push_bounded(&mut strings, required_string(item, label)?, MAX_ARTIFACT_DIAGNOSTICS, label)?;
+    }
+    Ok(strings)
+}
+
 fn parse_ref_sequence_value(value: &RailValue, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     ensure_count_at_most(items.len(), MAX_ARTIFACT_REF_LIST, label)?;

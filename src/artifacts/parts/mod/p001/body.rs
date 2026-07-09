@@ -44,6 +44,42 @@ pub fn artifact_value(input: ArtifactValueInput<'_>) -> Result<IoValue> {
     ]))
 }
 
+// r[impl molten.artifacts.canonical_id_receipts]
+pub fn artifact_identity_receipt(input: &ArtifactIdentityInput<'_>) -> Result<ArtifactIdentityReceipt> {
+    let diagnostics = artifact_identity_diagnostics(input)?;
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let artifact_ref = if diagnostics.is_empty() {
+        Some(input.artifact_ref.map_or_else(|| artifact_identity_ref(input), |artifact_ref| Ok(artifact_ref.to_string()))?)
+    } else {
+        None
+    };
+    let value = artifact_identity_receipt_value(input, decision, artifact_ref.as_deref(), &diagnostics)?;
+    Ok(ArtifactIdentityReceipt {
+        receipt_ref: canonical_hash(&value)?,
+        decision: decision.to_string(),
+        artifact_ref,
+        diagnostics,
+        value,
+    })
+}
+
+pub fn parse_artifact_identity_receipt(value: &IoValue) -> Result<ArtifactIdentityReceipt> {
+    let fields = value
+        .collect_simple_record("artifact-identity-receipt-v1", Some(15))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-identity-receipt-v1 ...>"))?;
+    require_schema(&fields[0], crate::preserves_rail::ARTIFACT_IDENTITY_RECEIPT_SCHEMA, "artifact identity receipt")?;
+    let checks = parse_checks(&fields[14])?;
+    require_check(&checks, "identity-is-not-authority", "artifact identity receipt")?;
+    let diagnostics = record_strings(&fields[13], "diagnostics")?;
+    Ok(ArtifactIdentityReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision: record_string(&fields[1], "decision")?,
+        artifact_ref: record_optional_ref(&fields[6], "artifact-ref")?,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
 pub fn parse_artifact_value(value: &IoValue) -> Result<ArtifactRecord> {
     let fields = value
         .collect_simple_record("artifact-v1", Some(10))
