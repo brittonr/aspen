@@ -1,145 +1,24 @@
+#[path = "ops/write.rs"]
+mod write_cmd;
+
 pub(super) fn put(args: super::command::Put) -> molten::error::Result<()> {
-    let super::command::Put {
-        input,
-        cache,
-        output,
-        operation,
-        version,
-        dependencies,
-        dependency_closure_hash,
-        handler_profile_ref,
-        policy_refs,
-        capability_refs,
-        revocation_refs,
-        tool_ref,
-        tool_version,
-        assumption_refs,
-        tier,
-        status,
-        evidence_refs,
-        diagnostics,
-        key_out,
-        value_out,
-        receipt_out,
-    } = args;
-    let input_value = super::io::read_preserves_file(&input)?;
-    let output_value = output.as_ref().map(|path| super::io::read_preserves_file(path)).transpose()?;
-    let tool_ref = resolve_tool_ref(tool_ref, &operation)?;
-    let assumption_refs = extend_denial_assumptions(assumption_refs, &status, GuardRefs {
-        evidence: &evidence_refs,
-        policy: &policy_refs,
-        capability: &capability_refs,
-        revocation: &revocation_refs,
-    });
-    let closure_hash = resolve_closure_hash(dependency_closure_hash, &operation, &dependencies)?;
-    let key_input = molten::eval_cache::KeyInput {
-        operation: operation.clone(),
-        version,
-        input_ref: molten::preserves_rail::canonical_hash(&input_value)?,
-        dependency_closure_hash: closure_hash,
-        dependency_refs: dependencies,
-        handler_profile_ref,
-        policy_refs: policy_refs.clone(),
-        capability_refs,
-        revocation_refs,
-        evidence_refs: evidence_refs.clone(),
-        tool_ref,
-        tool_version,
-        assumption_refs,
-        ..molten::eval_cache::KeyInput::default()
-    };
-    let value_input = molten::eval_cache::ValueInput {
-        tier,
-        status,
-        output: output_value,
-        dependency_refs: key_input.dependency_refs.clone(),
-        policy_refs,
-        evidence_refs,
-        diagnostics,
-    };
-    let put = molten::eval_cache::put(&cache, &key_input, &value_input)?;
-    emit_put_result(&cache, key_out.as_ref(), value_out.as_ref(), receipt_out.as_ref(), &put)
-}
-
-struct GuardRefs<'a> {
-    evidence: &'a [String],
-    policy: &'a [String],
-    capability: &'a [String],
-    revocation: &'a [String],
-}
-
-fn resolve_tool_ref(tool_ref: Option<String>, operation: &str) -> molten::error::Result<String> {
-    match tool_ref {
-        Some(tool_ref) => Ok(tool_ref),
-        None => super::io::local_ref("tool", operation),
-    }
-}
-
-fn extend_denial_assumptions(mut assumption_refs: Vec<String>, status: &str, refs: GuardRefs<'_>) -> Vec<String> {
-    if !matches!(status, molten::eval_cache::STATUS_DENY | molten::eval_cache::STATUS_ERROR) {
-        return assumption_refs;
-    }
-    for evidence_ref in refs.evidence {
-        if !assumption_refs.contains(evidence_ref)
-            && !refs.policy.contains(evidence_ref)
-            && !refs.capability.contains(evidence_ref)
-            && !refs.revocation.contains(evidence_ref)
-        {
-            assumption_refs.push(evidence_ref.clone());
-        }
-    }
-    assumption_refs
-}
-
-fn resolve_closure_hash(
-    dependency_closure_hash: Option<String>,
-    operation: &str,
-    dependencies: &[String],
-) -> molten::error::Result<String> {
-    match dependency_closure_hash {
-        Some(hash) => Ok(hash),
-        None => {
-            molten::preserves_rail::canonical_hash(&molten::preserves_rail::record("eval-cache-cli-closure", vec![
-                molten::preserves_rail::string(operation),
-                super::io::preserves_sequence_strings(dependencies),
-            ]))
-        }
-    }
-}
-
-fn emit_put_result(
-    cache: &std::path::Path,
-    key_out: Option<&std::path::PathBuf>,
-    value_out: Option<&std::path::PathBuf>,
-    receipt_out: Option<&std::path::PathBuf>,
-    put: &molten::eval_cache::Put,
-) -> molten::error::Result<()> {
-    if let Some(path) = key_out {
-        super::io::write_file(path, &molten::preserves_rail::to_text(&put.key.value)?)?;
-    }
-    if let Some(path) = value_out {
-        super::io::write_file(path, &molten::preserves_rail::to_text(&put.value.value)?)?;
-    }
-    super::io::emit_named_receipt(receipt_out, "eval cache receipt", &put.receipt_value)?;
-    println!(
-        "cache put ok key={} value={} operation={} tier={} status={} cache={}",
-        put.key.key_ref,
-        put.value.value_ref,
-        put.key.operation,
-        put.value.tier,
-        put.value.status,
-        cache.display()
-    );
-    Ok(())
+    write_cmd::put(args)
 }
 
 pub(super) fn get(args: super::command::Get) -> molten::error::Result<()> {
     let get = molten::eval_cache::get(&args.cache, &args.key_ref, &molten::eval_cache::GetInput {
         current_policy_refs: args.current_policy_refs,
+        current_policy_export_refs: Vec::new(),
         current_capability_refs: args.current_capability_refs,
         current_revocation_refs: args.current_revocation_refs,
+        current_resource_refs: Vec::new(),
+        current_handler_profile_ref: None,
+        current_provenance_refs: Vec::new(),
+        current_source_gate_refs: Vec::new(),
+        current_retention_refs: Vec::new(),
+        current_evidence_refs: Vec::new(),
+        compatibility_refs: Vec::new(),
         semantic: args.semantic_enabled,
-        ..molten::eval_cache::GetInput::default()
     })?;
     if let Some(output) = get.output.as_ref() {
         let text = molten::preserves_rail::to_text(output)?;
