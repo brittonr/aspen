@@ -155,6 +155,83 @@ pub struct ArtifactNamePointer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactNameViewInput {
+    pub view_kind: String,
+    pub name: String,
+    pub scope: String,
+    pub target_kind: String,
+    pub target_ref: String,
+    pub issuer_ref: String,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub capability_refs: Vec<String>,
+    pub tombstone_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactNameView {
+    pub view_ref: String,
+    pub view_kind: String,
+    pub name: String,
+    pub scope: String,
+    pub target_kind: String,
+    pub target_ref: String,
+    pub issuer_ref: String,
+    pub previous_view_ref: Option<String>,
+    pub tombstone_ref: Option<String>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactNameViewUpdate {
+    pub view: ArtifactNameView,
+    pub pointer: ArtifactNamePointer,
+    pub receipt_ref: String,
+    pub receipt_value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactNameResolutionInput {
+    pub view_kind: String,
+    pub name: String,
+    pub scope: Option<String>,
+    pub candidate_views: Vec<ArtifactNameView>,
+    pub stale_view_refs: Vec<String>,
+    pub normative_use: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactNameResolution {
+    pub resolution_ref: String,
+    pub decision: String,
+    pub resolved_ref: Option<String>,
+    pub candidate_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub receipt_value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactNameUseInput {
+    pub operation: String,
+    pub name: Option<String>,
+    pub exact_artifact_ref: Option<String>,
+    pub resolution_receipt_ref: Option<String>,
+    pub policy_refs: Vec<String>,
+    pub provenance_refs: Vec<String>,
+    pub capability_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactNameUseReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactReceipt {
     pub receipt_ref: String,
     pub operation: String,

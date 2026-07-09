@@ -34,6 +34,7 @@ pub const TYPED_STORAGE_SCHEMA_ARTIFACT_SCHEMA: &str = "molten.storage.schema-ar
 pub const TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA: &str = "molten.storage.migration-recipe.v1";
 pub const ARTIFACT_SCHEMA: &str = "molten.artifacts.artifact.v1";
 pub const ARTIFACT_NAME_POINTER_SCHEMA: &str = "molten.artifacts.name-pointer.v1";
+pub const ARTIFACT_NAME_VIEW_SCHEMA: &str = "molten.artifacts.name-view.v1";
 pub const ARTIFACT_RECEIPT_SCHEMA: &str = "molten.artifacts.receipt.v1";
 pub const ARTIFACT_IDENTITY_RECEIPT_SCHEMA: &str = "molten.artifacts.identity-receipt.v1";
 pub const ARTIFACT_DEPENDENCY_EDGE_SCHEMA: &str = "molten.artifacts.dependency-edge.v1";

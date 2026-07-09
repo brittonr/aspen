@@ -441,6 +441,219 @@ fn required_u64(value: &RailValue, field: &str) -> Result<u64> {
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
+fn validate_name_view_input(input: &ArtifactNameViewInput) -> Result<()> {
+    validate_pointer_kind(&input.view_kind)?;
+    validate_non_empty(&input.name, "artifact name view name")?;
+    validate_dependency_label(&input.scope, "artifact name view scope")?;
+    validate_name_view_target_kind(&input.target_kind)?;
+    validate_ref(&input.target_ref, "artifact name view target ref")?;
+    validate_ref(&input.issuer_ref, "artifact name view issuer ref")?;
+    validate_refs(&input.policy_refs, "artifact name view policy ref")?;
+    validate_refs(&input.evidence_refs, "artifact name view evidence ref")?;
+    validate_refs(&input.capability_refs, "artifact name view capability ref")?;
+    if let Some(tombstone_ref) = input.tombstone_ref.as_ref() {
+        validate_ref(tombstone_ref, "artifact name view tombstone ref")?;
+    }
+    Ok(())
+}
+
+fn validate_name_view_update_authority(input: &ArtifactNameViewInput) -> Result<()> {
+    validate_name_view_input(input)?;
+    ensure_non_empty(input.capability_refs.len(), "artifact name view capability refs")?;
+    ensure_non_empty(input.policy_refs.len(), "artifact name view policy refs")
+}
+
+fn validate_name_view_target_kind(kind: &str) -> Result<()> {
+    match kind {
+        "artifact-ref" | "artifact-set-ref" => Ok(()),
+        _ => Err(MoltenError::invalid_harness(format!(
+            "unsupported artifact name view target kind {kind}; expected artifact-ref or artifact-set-ref"
+        ))),
+    }
+}
+
+fn validate_name_resolution_input(input: &ArtifactNameResolutionInput) -> Result<()> {
+    validate_pointer_kind(&input.view_kind)?;
+    validate_non_empty(&input.name, "artifact name resolution name")?;
+    if let Some(scope) = input.scope.as_ref() {
+        validate_dependency_label(scope, "artifact name resolution scope")?;
+    }
+    validate_refs(&input.stale_view_refs, "artifact name resolution stale view ref")?;
+    ensure_count_at_most(
+        input.candidate_views.len(),
+        MAX_ARTIFACT_RECORDS,
+        "artifact name resolution candidates",
+    )
+}
+
+fn validate_name_use_input(input: &ArtifactNameUseInput) -> Result<()> {
+    validate_non_empty(&input.operation, "artifact name use operation")?;
+    if let Some(name) = input.name.as_ref() {
+        validate_non_empty(name, "artifact name use name")?;
+    }
+    if let Some(exact_artifact_ref) = input.exact_artifact_ref.as_ref() {
+        validate_ref(exact_artifact_ref, "artifact name use exact artifact ref")?;
+    }
+    if let Some(resolution_receipt_ref) = input.resolution_receipt_ref.as_ref() {
+        validate_ref(resolution_receipt_ref, "artifact name use resolution receipt ref")?;
+    }
+    validate_refs(&input.policy_refs, "artifact name use policy ref")?;
+    validate_refs(&input.provenance_refs, "artifact name use provenance ref")?;
+    validate_refs(&input.capability_refs, "artifact name use capability ref")
+}
+
+fn scoped_name_view_key(scope: &str, name: &str) -> Result<String> {
+    validate_dependency_label(scope, "artifact name view scope")?;
+    validate_non_empty(name, "artifact name view name")?;
+    Ok(format!("{scope}:{name}"))
+}
+
+fn name_view_update_refs(
+    input: &ArtifactNameViewInput,
+    view: &ArtifactNameView,
+    pointer: &ArtifactNamePointer,
+) -> Result<Vec<String>> {
+    let mut refs = vec![view.view_ref.clone(), pointer.pointer_ref.clone(), pointer.receipt_ref.clone(), input.target_ref.clone()];
+    push_bounded(&mut refs, input.issuer_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact name view refs")?;
+    extend_cloned_bounded(&mut refs, &input.policy_refs, MAX_ARTIFACT_REF_LIST, "artifact name view refs")?;
+    extend_cloned_bounded(&mut refs, &input.evidence_refs, MAX_ARTIFACT_REF_LIST, "artifact name view refs")?;
+    extend_cloned_bounded(&mut refs, &input.capability_refs, MAX_ARTIFACT_REF_LIST, "artifact name view refs")?;
+    if let Some(previous_view_ref) = view.previous_view_ref.as_ref() {
+        push_bounded(&mut refs, previous_view_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact name view refs")?;
+    }
+    if let Some(tombstone_ref) = input.tombstone_ref.as_ref() {
+        push_bounded(&mut refs, tombstone_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact name view refs")?;
+    }
+    Ok(sorted_unique(&refs))
+}
+
+fn active_resolution_candidates(input: &ArtifactNameResolutionInput) -> Result<Vec<ArtifactNameView>> {
+    let stale = input.stale_view_refs.iter().cloned().collect::<std::collections::BTreeSet<_>>();
+    let mut candidates = Vec::new();
+    for view in &input.candidate_views {
+        if view.view_kind != input.view_kind || view.name != input.name || view.tombstone_ref.is_some() {
+            continue;
+        }
+        if input.scope.as_ref().is_some_and(|scope| &view.scope != scope) {
+            continue;
+        }
+        if stale.contains(&view.view_ref) {
+            continue;
+        }
+        push_bounded(&mut candidates, view.clone(), MAX_ARTIFACT_RECORDS, "artifact name resolution candidates")?;
+    }
+    candidates.sort_by(|left, right| left.view_ref.cmp(&right.view_ref));
+    Ok(candidates)
+}
+
+fn name_resolution_diagnostics(
+    input: &ArtifactNameResolutionInput,
+    candidates: &[ArtifactNameView],
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    for stale_ref in &input.stale_view_refs {
+        if input.candidate_views.iter().any(|view| &view.view_ref == stale_ref) {
+            push_bounded(
+                &mut diagnostics,
+                format!("deny stale name view {stale_ref}"),
+                MAX_ARTIFACT_DIAGNOSTICS,
+                "artifact name resolution diagnostics",
+            )?;
+        }
+    }
+    match candidates.len() {
+        0 => push_bounded(
+            &mut diagnostics,
+            "deny name resolution has no active exact-ref candidate".to_string(),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "artifact name resolution diagnostics",
+        )?,
+        1 => {
+            let scope = candidates[0].scope.clone();
+            push_bounded(
+                &mut diagnostics,
+                format!("resolved exact artifact ref in scope {scope}; name views are non-authority"),
+                MAX_ARTIFACT_DIAGNOSTICS,
+                "artifact name resolution diagnostics",
+            )?;
+        }
+        _ => {
+            let refs = candidates.iter().map(|view| view.target_ref.clone()).collect::<Vec<_>>().join(",");
+            push_bounded(
+                &mut diagnostics,
+                format!("deny ambiguous name resolution candidates: {refs}"),
+                MAX_ARTIFACT_DIAGNOSTICS,
+                "artifact name resolution diagnostics",
+            )?;
+        }
+    }
+    if input.normative_use {
+        push_bounded(
+            &mut diagnostics,
+            "normative use must pin the resolved exact artifact ref".to_string(),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "artifact name resolution diagnostics",
+        )?;
+    }
+    Ok(diagnostics)
+}
+
+fn name_use_diagnostics(input: &ArtifactNameUseInput) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if input.exact_artifact_ref.is_none() {
+        push_bounded(
+            &mut diagnostics,
+            "name-only use denies until exact artifact ref is pinned".to_string(),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "artifact name use diagnostics",
+        )?;
+    }
+    if input.resolution_receipt_ref.is_none() && input.name.is_some() {
+        push_bounded(
+            &mut diagnostics,
+            "name use must bind an admitted resolution receipt".to_string(),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "artifact name use diagnostics",
+        )?;
+    }
+    if input.policy_refs.is_empty() || input.provenance_refs.is_empty() || input.capability_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "name views do not grant policy, provenance, or capability authority".to_string(),
+            MAX_ARTIFACT_DIAGNOSTICS,
+            "artifact name use diagnostics",
+        )?;
+    }
+    Ok(diagnostics)
+}
+
+fn name_use_refs(input: &ArtifactNameUseInput) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
+    if let Some(exact_artifact_ref) = input.exact_artifact_ref.as_ref() {
+        push_bounded(&mut refs, exact_artifact_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact name use refs")?;
+    }
+    if let Some(resolution_receipt_ref) = input.resolution_receipt_ref.as_ref() {
+        push_bounded(
+            &mut refs,
+            resolution_receipt_ref.clone(),
+            MAX_ARTIFACT_REF_LIST,
+            "artifact name use refs",
+        )?;
+    }
+    extend_cloned_bounded(&mut refs, &input.policy_refs, MAX_ARTIFACT_REF_LIST, "artifact name use refs")?;
+    extend_cloned_bounded(&mut refs, &input.provenance_refs, MAX_ARTIFACT_REF_LIST, "artifact name use refs")?;
+    extend_cloned_bounded(&mut refs, &input.capability_refs, MAX_ARTIFACT_REF_LIST, "artifact name use refs")?;
+    if refs.is_empty() {
+        push_bounded(
+            &mut refs,
+            canonical_hash(&record("artifact-name-use-denial", vec![string(&input.operation)]))?,
+            MAX_ARTIFACT_REF_LIST,
+            "artifact name use refs",
+        )?;
+    }
+    Ok(sorted_unique(&refs))
+}
+
 fn validate_release_snapshot_draft(input: &ReleaseSnapshotDraftInput) -> Result<()> {
     validate_non_empty(&input.namespace_scope, "release snapshot namespace")?;
     validate_non_empty(&input.snapshot_id, "release snapshot id")?;

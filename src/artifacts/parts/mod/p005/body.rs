@@ -233,6 +233,97 @@ mod tests {
     }
 
     #[test]
+    fn name_views_resolve_exact_refs_and_do_not_grant_authority() {
+        // r[verify molten.artifacts.name_view_validation]
+        let root = temp_dir("artifact-name-views");
+        let first = install_artifact(&root, &test_input("steel", "named-first", &[])).expect("first artifact");
+        let second = install_artifact(&root, &test_input("steel", "named-second", &[])).expect("second artifact");
+        let first_input = name_view_input("name", "policy/main", "project", &first.artifact_ref);
+        let first_view = set_name_view(&root, &first_input).expect("first name view");
+        let second_view = set_name_view(&root, &ArtifactNameViewInput {
+            target_ref: second.artifact_ref.clone(),
+            ..first_input.clone()
+        })
+        .expect("second name view");
+        assert_eq!(read_artifact(&root, &first.artifact_ref).expect("first still addressable").artifact_ref, first.artifact_ref);
+        assert_eq!(read_artifact(&root, &second.artifact_ref).expect("second addressable").artifact_ref, second.artifact_ref);
+        assert_ne!(first_view.view.view_ref, second_view.view.view_ref);
+        let unauthorized = set_name_view(&root, &ArtifactNameViewInput {
+            capability_refs: Vec::new(),
+            ..name_view_input("name", "policy/denied", "project", &first.artifact_ref)
+        })
+        .expect_err("unauthorized name view denies");
+        assert!(unauthorized.to_string().contains("capability refs"));
+
+        let peer_view = parse_name_view_value(
+            &name_view_value(&name_view_input("name", "policy/main", "peer", &first.artifact_ref), None)
+                .expect("peer view value"),
+        )
+        .expect("peer view");
+        let project_view = second_view.view.clone();
+        let scoped = resolve_name_view(&ArtifactNameResolutionInput {
+            view_kind: "name".to_string(),
+            name: "policy/main".to_string(),
+            scope: Some("project".to_string()),
+            candidate_views: vec![peer_view.clone(), project_view.clone()],
+            stale_view_refs: Vec::new(),
+            normative_use: true,
+        })
+        .expect("scoped resolution");
+        assert_eq!(scoped.decision, "pass");
+        assert_eq!(scoped.resolved_ref.as_deref(), Some(second.artifact_ref.as_str()));
+        let ambiguous = resolve_name_view(&ArtifactNameResolutionInput {
+            view_kind: "name".to_string(),
+            name: "policy/main".to_string(),
+            scope: None,
+            candidate_views: vec![peer_view.clone(), project_view.clone()],
+            stale_view_refs: Vec::new(),
+            normative_use: true,
+        })
+        .expect("ambiguous resolution receipt");
+        assert_eq!(ambiguous.decision, "deny");
+        assert!(ambiguous.diagnostics.iter().any(|diagnostic| diagnostic.contains("ambiguous")));
+        let stale = resolve_name_view(&ArtifactNameResolutionInput {
+            view_kind: "name".to_string(),
+            name: "policy/main".to_string(),
+            scope: Some("peer".to_string()),
+            candidate_views: vec![peer_view.clone()],
+            stale_view_refs: vec![peer_view.view_ref],
+            normative_use: true,
+        })
+        .expect("stale resolution receipt");
+        assert_eq!(stale.decision, "deny");
+        assert!(stale.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale")));
+
+        let name_only = name_view_use_receipt(&ArtifactNameUseInput {
+            operation: "remote-execution-admission".to_string(),
+            name: Some("trusted/release".to_string()),
+            exact_artifact_ref: None,
+            resolution_receipt_ref: None,
+            policy_refs: Vec::new(),
+            provenance_refs: Vec::new(),
+            capability_refs: Vec::new(),
+        })
+        .expect("name-only use receipt");
+        assert_eq!(name_only.decision, "deny");
+        assert!(name_only
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("name-only use denies")));
+        let admitted = name_view_use_receipt(&ArtifactNameUseInput {
+            operation: "remote-execution-admission".to_string(),
+            name: Some("policy/main".to_string()),
+            exact_artifact_ref: Some(second.artifact_ref),
+            resolution_receipt_ref: Some(scoped.resolution_ref),
+            policy_refs: vec![test_ref("name-use-policy")],
+            provenance_refs: vec![test_ref("name-use-provenance")],
+            capability_refs: vec![test_ref("name-use-capability")],
+        })
+        .expect("admitted exact-ref use receipt");
+        assert_eq!(admitted.decision, "pass");
+    }
+
+    #[test]
     fn dependency_closure_impact_missing_dependencies_and_rebuild_work() {
         let root = temp_dir("artifact-deps");
         let base = install_artifact(&root, &test_input("schema", "base", &[])).expect("base");
@@ -593,6 +684,21 @@ mod tests {
             evidence_refs: vec![test_ref(&format!("evidence-{label}"))],
             installer_ref: test_ref(&format!("installer-{label}")),
             capability_refs: vec![test_ref(&format!("capability-{label}"))],
+        }
+    }
+
+    fn name_view_input(view_kind: &str, name: &str, scope: &str, target_ref: &str) -> ArtifactNameViewInput {
+        ArtifactNameViewInput {
+            view_kind: view_kind.to_string(),
+            name: name.to_string(),
+            scope: scope.to_string(),
+            target_kind: "artifact-ref".to_string(),
+            target_ref: target_ref.to_string(),
+            issuer_ref: test_ref(&format!("issuer-{scope}-{name}")),
+            policy_refs: vec![test_ref(&format!("policy-{scope}-{name}"))],
+            evidence_refs: vec![test_ref(&format!("evidence-{scope}-{name}"))],
+            capability_refs: vec![test_ref(&format!("capability-{scope}-{name}"))],
+            tombstone_ref: None,
         }
     }
 
