@@ -20,6 +20,11 @@
             .expect("get value");
         assert_eq!(get.value, value);
         assert_eq!(get.storage_ref, put.storage_ref);
+        assert_eq!(get.typed_ref.schema_identity_mode, SCHEMA_IDENTITY_MODE_INFERRED_PRESERVES_CLASS);
+        assert_eq!(get.typed_ref.handler_profile, STORAGE_HANDLER_PROFILE_REDB);
+        assert!(get.typed_ref.capability_refs.contains(&Admission::local_fixture("roundtrip").capability_ref));
+        assert!(!get.typed_ref.retention_refs.is_empty());
+        assert!(get.typed_ref.provenance_refs.contains(&producer_ref));
         let verify = verify_ref(&root, &put.storage_ref, Some(&put.schema_ref)).expect("verify ref");
         assert_eq!(verify.storage_ref, put.storage_ref);
         let receipt_refs = list_receipt_refs(&root).expect("receipt refs");
@@ -101,6 +106,13 @@
             evidence_refs: vec![test_ref("migration-evidence")],
         })
         .expect("recipe");
+        let parsed_recipe = parse_migration_recipe_value(&recipe).expect("parse gated recipe");
+        assert_eq!(parsed_recipe.handler_profile, STORAGE_HANDLER_PROFILE_REDB);
+        assert!(!parsed_recipe.effect_manifest_ref.is_empty());
+        assert!(!parsed_recipe.provenance_refs.is_empty());
+        assert!(!parsed_recipe.source_gate_refs.is_empty());
+        assert!(!parsed_recipe.test_evidence_refs.is_empty());
+        assert!(!parsed_recipe.lineage_refs.is_empty());
         let before_error = get_value(&root, "profiles", "alice", Some(&target_schema_ref), &admission)
             .expect_err("target schema rejected before migration");
         assert!(before_error.to_string().contains("schema ref"), "{before_error}");
@@ -110,7 +122,13 @@
         assert_eq!(migrated.new_value_ref, put.value_ref);
         let parsed_receipt = parse_receipt_value(&migrated.receipt_value, None).expect("parse migrate receipt");
         assert!(parsed_receipt.checks.contains(&"migration-trace".to_string()));
+        assert!(parsed_receipt.checks.contains(&"migration-preflight-receipt".to_string()));
+        assert!(parsed_receipt.checks.contains(&"migration-execution-receipt".to_string()));
+        assert!(parsed_receipt.checks.contains(&"migration-output-validation-receipt".to_string()));
+        assert!(parsed_receipt.checks.contains(&"migration-lineage-receipt".to_string()));
         assert!(parsed_receipt.checks.contains(&"original-value-hash".to_string()));
+        let migration_receipt_text = crate::preserves_rail::to_text(&migrated.receipt_value).expect("migration receipt text");
+        assert!(migration_receipt_text.contains("migration-phase-receipts"));
         let loaded =
             get_value(&root, "profiles", "alice", Some(&target_schema_ref), &admission).expect("load migrated target");
         assert_eq!(loaded.value, value);
@@ -186,24 +204,16 @@
             .expect_err("wrong source denied");
         assert!(error.to_string().contains("source schema"), "{error}");
 
-        let unsupported_transformer = record("storage-migration-recipe-v1", vec![
-            string(crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA),
-            record("source-schema-ref", vec![string(&put.schema_ref)]),
-            record("target-schema-ref", vec![string(test_ref("target"))]),
-            record("transformer", vec![string(test_ref("transformer")), string("ambient-script")]),
-            record("mode", vec![string("explicit")]),
-            refs_record("policy", &[test_ref("policy")]),
-            refs_record("evidence", &[test_ref("evidence")]),
-            checks_value(&[
-                "migration-recipe-artifact",
-                "source-schema-binding",
-                "target-schema-binding",
-                "transformer-artifact-binding",
-                "policy-admission-required",
-                "migration-trace-required",
-            ]),
-        ]);
-        let error = parse_migration_recipe_value(&unsupported_transformer).expect_err("unsupported transformer denied");
+        let error = migration_recipe_value(&MigrationRecipeInput {
+            source_schema_ref: put.schema_ref,
+            target_schema_ref: test_ref("target"),
+            transformer_ref: test_ref("transformer"),
+            transformer_kind: "ambient-script".to_string(),
+            mode: "explicit".to_string(),
+            policy_refs: vec![test_ref("policy")],
+            evidence_refs: vec![test_ref("evidence")],
+        })
+        .expect_err("unsupported transformer denied");
         assert!(error.to_string().contains("transformer kind"), "{error}");
     }
 
@@ -257,11 +267,9 @@
         })
         .expect("load through structural compatibility");
         assert_eq!(loaded.value, value);
-        assert!(
-            crate::preserves_rail::to_text(&loaded.receipt_value)
-                .expect("receipt text")
-                .contains("schema-compatibility-value")
-        );
+        let loaded_receipt_text = crate::preserves_rail::to_text(&loaded.receipt_value).expect("receipt text");
+        assert!(loaded_receipt_text.contains("schema-compatibility-value"));
+        assert!(loaded_receipt_text.contains("schema-compatibility-receipt"));
 
         assert_alternate_case(&root, &put, shape, &admission);
     }

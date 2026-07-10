@@ -22,8 +22,13 @@ struct SourceData {
 }
 
 struct EntryRefs {
+    consumer: Vec<String>,
     policy: Vec<String>,
+    capability: Vec<String>,
+    retention: Vec<String>,
+    provenance: Vec<String>,
     evidence: Vec<String>,
+    decoder_artifact: Vec<String>,
 }
 
 struct NextInput<'a> {
@@ -56,6 +61,7 @@ pub fn put_value(root: &Path, input: &PutInput) -> Result<Put> {
     validate_refs(&input.policy_refs, "typed storage policy ref")?;
     validate_refs(&input.evidence_refs, "typed storage evidence ref")?;
     validate_admission(&input.admission)?;
+    validate_no_executable_authority(&input.value, "typed storage value")?;
 
     let inferred_schema_ref = inferred_schema_ref(&input.value)?;
     let schema_ref = accepted_schema(root, input, &inferred_schema_ref)?;
@@ -116,8 +122,14 @@ fn entry_value(input: EntryInput<'_>) -> IoValue {
         value_ref: input.value_ref,
         payload: input.payload,
         producer_ref: &input.input.producer_ref,
+        consumer_refs: &default_consumer_refs(),
+        handler_profile: STORAGE_HANDLER_PROFILE_REDB,
         policy_refs: &input.input.policy_refs,
+        capability_refs: &capability_refs(&input.input.admission),
+        retention_refs: &retention_refs(&input.input.namespace, &input.input.key),
+        provenance_refs: &provenance_refs_for_put(input.input),
         evidence_refs: &input.input.evidence_refs,
+        decoder_artifact_refs: &default_decoder_artifact_refs(),
         revision: input.revision,
         actor_ref: &input.input.admission.actor_ref,
         capability_ref: &input.input.admission.capability_ref,

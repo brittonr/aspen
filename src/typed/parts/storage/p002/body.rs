@@ -87,8 +87,8 @@ fn require_binding(input: &GetValueInnerInput<'_>, typed_ref: &EntryRef) -> Resu
         key: Some(input.key),
         schema_ref: Some(expected_schema_ref),
         value_ref: Some(&typed_ref.value_ref),
-        reason: "expected schema ref does not match stored schema ref".to_string(),
-        checks: vec![("schema-compatibility", "fail"), ("denial-receipt", "pass")],
+        reason: "expected schema ref does not match stored schema ref; unique identity mismatch or missing compatibility/migration receipt".to_string(),
+        checks: vec![("schema-compatibility", "fail"), ("compatibility-receipt", "fail"), ("denial-receipt", "pass")],
         details: Vec::new(),
     });
     store_receipt(input.root, &receipt_value)?;
@@ -107,11 +107,18 @@ fn is_binding_admitted(input: &GetValueInnerInput<'_>, typed_ref: &EntryRef) -> 
     let Some(schema_compatibility_value) = input.schema_compatibility_value else {
         return Ok(false);
     };
-    crate::schema_identity::compatibility_admits_storage(
+    let admits = crate::schema_identity::compatibility_admits_storage(
         schema_compatibility_value,
         expected_schema_ref,
         &typed_ref.schema_ref,
-    )
+    )?;
+    if !admits {
+        return Ok(false);
+    }
+    let receipt_value =
+        crate::schema_identity::compatibility_receipt_value(STORAGE_READ_COMPATIBILITY_OPERATION, schema_compatibility_value)?;
+    let receipt = crate::schema_identity::parse_compatibility_receipt(&receipt_value)?;
+    Ok(receipt.decision == "pass")
 }
 
 fn checked_value(input: &GetValueInnerInput<'_>, typed_ref: &EntryRef) -> Result<IoValue> {
@@ -143,8 +150,12 @@ fn get_details(input: &GetValueInnerInput<'_>, revision: u64) -> Result<Vec<IoVa
         details.push(record("migration-mode", vec![string("lazy-on-read")]));
     }
     if let Some(schema_compatibility_value) = input.schema_compatibility_value {
+        let receipt_value =
+            crate::schema_identity::compatibility_receipt_value(STORAGE_READ_COMPATIBILITY_OPERATION, schema_compatibility_value)?;
         details.push(record("schema-compatibility", vec![string(canonical_hash(schema_compatibility_value)?)]));
+        details.push(record("schema-compatibility-receipt", vec![string(canonical_hash(&receipt_value)?)]));
         details.push(record("schema-compatibility-value", vec![schema_compatibility_value.clone()]));
+        details.push(record("schema-compatibility-receipt-value", vec![receipt_value]));
     }
     Ok(details)
 }

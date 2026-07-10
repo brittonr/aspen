@@ -64,6 +64,32 @@ pub const INLINE_VALUE_LIMIT: usize = 4096;
 const MAX_TYPED_STORAGE_RECEIPTS: usize = 100_000;
 const _: () = assert!(MAX_TYPED_STORAGE_RECEIPTS > 0);
 
+const TYPED_STORAGE_REF_FIELD_COUNT: usize = 19;
+const TYPED_STORAGE_REF_SCHEMA_IDENTITY_FIELD_INDEX: usize = 12;
+const TYPED_STORAGE_REF_CONSUMERS_FIELD_INDEX: usize = 13;
+const TYPED_STORAGE_REF_HANDLER_PROFILE_FIELD_INDEX: usize = 14;
+const TYPED_STORAGE_REF_CAPABILITIES_FIELD_INDEX: usize = 15;
+const TYPED_STORAGE_REF_RETENTION_FIELD_INDEX: usize = 16;
+const TYPED_STORAGE_REF_PROVENANCE_FIELD_INDEX: usize = 17;
+const TYPED_STORAGE_REF_DECODER_ARTIFACTS_FIELD_INDEX: usize = 18;
+const MIGRATION_RECIPE_FIELD_COUNT: usize = 15;
+const TYPED_STORAGE_RECEIPT_FIELD_COUNT: usize = 9;
+const STORAGE_HANDLER_PROFILE_REDB: &str = "typed-storage-redb";
+const SCHEMA_IDENTITY_MODE_INFERRED_PRESERVES_CLASS: &str = "inferred-preserves-value-class";
+const MIGRATION_RECIPE_NAMESPACE: &str = "migration";
+const MIGRATION_OPERATION: &str = "migrate";
+const STORAGE_READ_COMPATIBILITY_OPERATION: &str = "typed-storage-read";
+const MIGRATION_PHASE_PREFLIGHT: &str = "preflight";
+const MIGRATION_PHASE_EXECUTION: &str = "execution";
+const MIGRATION_PHASE_OUTPUT_VALIDATION: &str = "output-validation";
+const MIGRATION_PHASE_LINEAGE: &str = "lineage";
+const FORBIDDEN_EXECUTABLE_AUTHORITY_MARKERS: &[&str] = &[
+    "<serialized-function",
+    "<closure",
+    "<mutable-name",
+    "<raw-decoder-claim",
+];
+
 const INDEX_FILE: &str = "typed-storage.redb";
 const INDEX_RECORDS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("typed_storage_records_v1");
 const INDEX_REFS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("typed_storage_refs_v1");
@@ -158,7 +184,14 @@ pub struct MigrationRecipe {
     pub transformer_ref: String,
     pub transformer_kind: String,
     pub mode: String,
+    pub effect_manifest_ref: String,
+    pub handler_profile: String,
     pub policy_refs: Vec<String>,
+    pub provenance_refs: Vec<String>,
+    pub source_gate_refs: Vec<String>,
+    pub test_evidence_refs: Vec<String>,
+    pub rollback_ref: String,
+    pub lineage_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
     pub value: IoValue,
@@ -190,11 +223,18 @@ pub struct EntryRef {
     pub namespace: String,
     pub key: String,
     pub schema_ref: String,
+    pub schema_identity_mode: String,
     pub value_ref: String,
     pub payload: Payload,
     pub producer_ref: String,
+    pub consumer_refs: Vec<String>,
+    pub handler_profile: String,
     pub policy_refs: Vec<String>,
+    pub capability_refs: Vec<String>,
+    pub retention_refs: Vec<String>,
+    pub provenance_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
+    pub decoder_artifact_refs: Vec<String>,
     pub revision: u64,
     pub actor_ref: String,
     pub capability_ref: String,

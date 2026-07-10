@@ -1,0 +1,12 @@
+## Tasks
+
+- [x] [serial] r[molten.typed_storage.value_type_artifact_bindings] Extend typed storage records to bind value refs, schema identity, producing artifact refs, intended consumer refs, storage handler profile, policy refs, capability refs, retention refs, provenance refs, and evidence refs.
+  - Implemented in `src/typed/parts/storage/`: typed refs now bind schema identity mode, consumers, handler profile, capabilities, retention, provenance, evidence, decoder artifacts, producer, value, and schema refs; roundtrip tests assert the new bindings.
+- [x] [serial] r[molten.typed_storage.migration_recipe_gate] Define migration recipe gates that bind source schema, target schema, executable recipe artifact, effect manifest, handler profile, policy/provenance/source-gate refs, tests, rollback, and lineage evidence.
+  - Implemented extended migration recipe records with effect manifest, handler profile, policy/provenance/source-gate/test-evidence/rollback/lineage bindings and embedded phase receipts for preflight, execution, output validation, and lineage.
+- [x] [parallel] r[molten.typed_storage.compatibility_receipts_required] Require schema compatibility or migration receipts before reading a stored value under a different expected schema or artifact contract.
+  - Mismatched-schema reads now synthesize and parse a schema-compatibility receipt before loading; lazy migration read receipts bind the migration receipt.
+- [x] [parallel] r[molten.typed_storage.no_function_serialization] Deny arbitrary serialized functions, closures, mutable names, or raw decoder claims as storage identity.
+  - Added executable-authority marker denial for values, typed refs, and migration recipes plus decoder-artifact admission checks on typed refs.
+- [x] [serial] r[molten.typed_storage.migration_validation] Add positive and negative fixtures for compatible reads, admitted migrations, missing schema refs, wrong unique identity, stale migration recipes, unadmitted decoders, and function serialization denial.
+  - Added/extended positive and negative typed-storage fixtures; validation evidence: `nix develop -c cargo test --lib cells::tests -- --nocapture` and `nix develop -c cargo test typed_storage -- --nocapture` pass.

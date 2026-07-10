@@ -6,6 +6,13 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
     Ok(())
 }
 
+fn require_non_empty_refs(refs: &[String], field: &str) -> Result<()> {
+    if refs.is_empty() {
+        return Err(MoltenError::invalid_harness(format!("{field} must not be empty")));
+    }
+    validate_refs(refs, field)
+}
+
 fn require_ref(reference: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
@@ -164,6 +171,74 @@ fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+}
+
+fn validate_handler_profile(profile: &str) -> Result<()> {
+    if profile == STORAGE_HANDLER_PROFILE_REDB {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("unsupported typed storage handler profile {profile}")))
+    }
+}
+
+fn validate_schema_identity_mode(mode: &str) -> Result<()> {
+    if mode == SCHEMA_IDENTITY_MODE_INFERRED_PRESERVES_CLASS {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "unsupported typed storage schema identity mode {mode}; mutable names are not storage identity"
+        )))
+    }
+}
+
+fn validate_no_executable_authority(value: &IoValue, context: &str) -> Result<()> {
+    let text = crate::preserves_rail::to_text(value)?;
+    for marker in FORBIDDEN_EXECUTABLE_AUTHORITY_MARKERS {
+        if text.contains(marker) {
+            return Err(MoltenError::invalid_harness(format!(
+                "{context} rejects serialized function, closure, mutable name, or raw decoder authority marker {marker}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn default_consumer_refs() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_decoder_artifact_refs() -> Vec<String> {
+    Vec::new()
+}
+
+fn capability_refs(admission: &Admission) -> Vec<String> {
+    vec![admission.capability_ref.clone()]
+}
+
+fn retention_refs(namespace: &str, key: &str) -> Vec<String> {
+    vec![local_ref("storage-retention", &format!("{namespace}:{key}"))]
+}
+
+fn provenance_refs_for_put(input: &PutInput) -> Vec<String> {
+    sorted_unique_strings(vec![
+        input.producer_ref.clone(),
+        local_ref("storage-provenance", &format!("{}:{}", input.namespace, input.key)),
+    ])
+}
+
+fn default_recipe_refs(kind: &str, label: &str) -> Vec<String> {
+    vec![local_ref(kind, label)]
+}
+
+fn migration_effect_manifest_ref(input: &MigrationRecipeInput) -> Result<String> {
+    let operations = [MIGRATION_OPERATION.to_string()];
+    let manifest = effect_manifest_value(
+        &input.transformer_ref,
+        MIGRATION_RECIPE_NAMESPACE,
+        &input.target_schema_ref,
+        &operations,
+    )?;
+    canonical_hash(&manifest)
 }
 
 fn local_ref(kind: &str, label: &str) -> String {

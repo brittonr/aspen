@@ -128,6 +128,51 @@
     }
 
     #[test]
+    fn storage_admission_denies_missing_schema_unadmitted_decoder_and_function_payloads() {
+        let missing_schema = typed_ref_fixture(
+            record("schema-ref", vec![record("none", Vec::new())]),
+            default_typed_ref_checks(),
+            Vec::new(),
+        );
+        let error = parse_entry_ref_value(&missing_schema).expect_err("missing schema ref denied");
+        assert!(error.to_string().contains("schema-ref"), "{error}");
+
+        let decoder_ref = test_ref("decoder-artifact");
+        let unadmitted_decoder = typed_ref_fixture(
+            record("schema-ref", vec![string(test_ref("schema"))]),
+            &[
+                "typed-durable-ref",
+                "schema-ref-binding",
+                "schema-identity-binding",
+                "value-ref-binding",
+                "producer-artifact-binding",
+                "retention-binding",
+                "provenance-binding",
+                "handle-not-authority",
+            ],
+            vec![decoder_ref],
+        );
+        let error = parse_entry_ref_value(&unadmitted_decoder).expect_err("unadmitted decoder denied");
+        assert!(error.to_string().contains("decoder-artifact-admission"), "{error}");
+
+        let root = temp_dir("typed-storage-function-deny");
+        let function_payload = crate::preserves_rail::parse_text("<decoder <serialized-function \"opaque\">>")
+            .expect("parse function payload");
+        let error = put_value(&root, &PutInput {
+            namespace: "profiles".to_string(),
+            key: "decoder".to_string(),
+            schema_ref: None,
+            value: function_payload,
+            producer_ref: test_ref("producer"),
+            policy_refs: vec![test_ref("policy")],
+            evidence_refs: vec![test_ref("evidence")],
+            admission: Admission::local_fixture("function-deny"),
+        })
+        .expect_err("serialized function denied");
+        assert!(error.to_string().contains("serialized function"), "{error}");
+    }
+
+    #[test]
     fn storage_refs_do_not_mint_authority_from_snapshots() {
         let root = temp_dir("typed-storage-authority");
         let value = crate::preserves_rail::parse_text("<snapshot [\"state\"]>").expect("parse snapshot");
@@ -202,6 +247,54 @@
         let receipt = parse_receipt_value(&migrated.receipt_value, None).expect("migration receipt");
         assert!(receipt.checks.contains(&"migration-trace".to_string()));
         assert!(receipt.checks.contains(&"result-value-hash".to_string()));
+    }
+
+    fn typed_ref_fixture(schema_field: IoValue, checks: &[&str], decoder_artifact_refs: Vec<String>) -> IoValue {
+        record("typed-storage-ref-v1", vec![
+            string(crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA),
+            record("namespace", vec![string("fixture")]),
+            record("key", vec![string("value")]),
+            schema_field,
+            record("value-ref", vec![string(test_ref("value"))]),
+            record("payload", vec![record("inline", vec![u64_value(0)])]),
+            record("producer", vec![string(test_ref("producer"))]),
+            refs_record("policy", &[test_ref("policy")]),
+            refs_record("evidence", &[test_ref("evidence")]),
+            record("revision", vec![u64_value(1)]),
+            record("authority", vec![
+                string(test_ref("actor")),
+                string(test_ref("capability")),
+                string(test_ref("effect-handle")),
+            ]),
+            checks_value(checks),
+            record("schema-identity", vec![string(SCHEMA_IDENTITY_MODE_INFERRED_PRESERVES_CLASS)]),
+            refs_record("consumers", &[]),
+            record("handler-profile", vec![string(STORAGE_HANDLER_PROFILE_REDB)]),
+            refs_record("capabilities", &[test_ref("capability")]),
+            refs_record("retention", &[test_ref("retention")]),
+            refs_record("provenance", &[test_ref("provenance")]),
+            refs_record("decoder-artifacts", &decoder_artifact_refs),
+        ])
+    }
+
+    fn default_typed_ref_checks() -> &'static [&'static str] {
+        &[
+            "typed-durable-ref",
+            "schema-ref-binding",
+            "schema-identity-binding",
+            "value-ref-binding",
+            "producer-artifact-binding",
+            "intended-consumer-binding",
+            "handler-profile-binding",
+            "capability-binding",
+            "retention-binding",
+            "provenance-binding",
+            "evidence-binding",
+            "decoder-artifact-admission",
+            "handle-not-authority",
+            "no-raw-memory-layout",
+            "no-function-serialization",
+        ]
     }
 
     fn test_ref(label: &str) -> String {

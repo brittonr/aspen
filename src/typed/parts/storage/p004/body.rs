@@ -7,27 +7,49 @@ pub fn migration_recipe_value(input: &MigrationRecipeInput) -> Result<IoValue> {
     validate_migration_mode(&input.mode)?;
     validate_refs(&input.policy_refs, "migration policy ref")?;
     validate_refs(&input.evidence_refs, "migration evidence ref")?;
+    let effect_manifest_ref = migration_effect_manifest_ref(input)?;
+    let source_gate_refs = default_recipe_refs("migration-source-gate", &input.source_schema_ref);
+    let provenance_refs = default_recipe_refs("migration-provenance", &input.transformer_ref);
+    let test_evidence_refs = default_recipe_refs("migration-test-evidence", &input.transformer_ref);
+    let rollback_ref = local_ref("migration-rollback", &input.source_schema_ref);
+    let lineage_refs = default_recipe_refs("migration-lineage", &input.target_schema_ref);
     Ok(record("storage-migration-recipe-v1", vec![
         string(crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA),
         record("source-schema-ref", vec![string(&input.source_schema_ref)]),
         record("target-schema-ref", vec![string(&input.target_schema_ref)]),
         record("transformer", vec![string(&input.transformer_ref), string(&input.transformer_kind)]),
         record("mode", vec![string(&input.mode)]),
+        record("effect-manifest-ref", vec![string(effect_manifest_ref)]),
+        record("handler-profile", vec![string(STORAGE_HANDLER_PROFILE_REDB)]),
         refs_record("policy", &input.policy_refs),
+        refs_record("provenance", &provenance_refs),
+        refs_record("source-gate", &source_gate_refs),
+        refs_record("test-evidence", &test_evidence_refs),
+        record("rollback", vec![string(rollback_ref)]),
+        refs_record("lineage", &lineage_refs),
         refs_record("evidence", &input.evidence_refs),
         checks_value(&[
             "migration-recipe-artifact",
             "source-schema-binding",
             "target-schema-binding",
             "transformer-artifact-binding",
+            "effect-manifest-binding",
+            "handler-profile-binding",
             "policy-admission-required",
+            "provenance-binding",
+            "source-gate-binding",
+            "test-evidence-binding",
+            "rollback-binding",
+            "lineage-binding",
             "migration-trace-required",
+            "no-function-serialization",
         ]),
     ]))
 }
 
 pub fn parse_migration_recipe_value(value: &IoValue) -> Result<MigrationRecipe> {
-    let recipe = simple_record(value, "storage-migration-recipe-v1", 8)?;
+    validate_no_executable_authority(value, "storage migration recipe")?;
+    let recipe = simple_record(value, "storage-migration-recipe-v1", MIGRATION_RECIPE_FIELD_COUNT)?;
     require_schema(
         &recipe[0],
         crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA,
@@ -39,9 +61,30 @@ pub fn parse_migration_recipe_value(value: &IoValue) -> Result<MigrationRecipe> 
     validate_transformer_kind(&transformer_kind)?;
     let mode = record_string(&recipe[4], "mode")?;
     validate_migration_mode(&mode)?;
-    let checks = parse_checks(&recipe[7])?;
+    let handler_profile = record_string(&recipe[6], "handler-profile")?;
+    validate_handler_profile(&handler_profile)?;
+    let policy_refs = record_ref_sequence(&recipe[7], "policy")?;
+    let provenance_refs = record_ref_sequence(&recipe[8], "provenance")?;
+    let source_gate_refs = record_ref_sequence(&recipe[9], "source-gate")?;
+    let test_evidence_refs = record_ref_sequence(&recipe[10], "test-evidence")?;
+    let lineage_refs = record_ref_sequence(&recipe[12], "lineage")?;
+    let evidence_refs = record_ref_sequence(&recipe[13], "evidence")?;
+    require_non_empty_refs(&policy_refs, "migration policy refs")?;
+    require_non_empty_refs(&provenance_refs, "migration provenance refs")?;
+    require_non_empty_refs(&source_gate_refs, "migration source-gate refs")?;
+    require_non_empty_refs(&test_evidence_refs, "migration test evidence refs")?;
+    require_non_empty_refs(&lineage_refs, "migration lineage refs")?;
+    require_non_empty_refs(&evidence_refs, "migration evidence refs")?;
+    let checks = parse_checks(&recipe[14])?;
     require_check(&checks, "migration-recipe-artifact", "storage migration recipe")?;
+    require_check(&checks, "effect-manifest-binding", "storage migration recipe")?;
+    require_check(&checks, "handler-profile-binding", "storage migration recipe")?;
+    require_check(&checks, "source-gate-binding", "storage migration recipe")?;
+    require_check(&checks, "test-evidence-binding", "storage migration recipe")?;
+    require_check(&checks, "rollback-binding", "storage migration recipe")?;
+    require_check(&checks, "lineage-binding", "storage migration recipe")?;
     require_check(&checks, "migration-trace-required", "storage migration recipe")?;
+    require_check(&checks, "no-function-serialization", "storage migration recipe")?;
     Ok(MigrationRecipe {
         recipe_ref: canonical_hash(value)?,
         source_schema_ref: record_ref(&recipe[1], "source-schema-ref")?,
@@ -49,15 +92,23 @@ pub fn parse_migration_recipe_value(value: &IoValue) -> Result<MigrationRecipe> 
         transformer_ref: required_ref(&transformer[0], "migration transformer ref")?,
         transformer_kind,
         mode,
-        policy_refs: record_ref_sequence(&recipe[5], "policy")?,
-        evidence_refs: record_ref_sequence(&recipe[6], "evidence")?,
+        effect_manifest_ref: record_ref(&recipe[5], "effect-manifest-ref")?,
+        handler_profile,
+        policy_refs,
+        provenance_refs,
+        source_gate_refs,
+        test_evidence_refs,
+        rollback_ref: record_ref(&recipe[11], "rollback")?,
+        lineage_refs,
+        evidence_refs,
         checks,
         value: value.clone(),
     })
 }
 
 pub fn parse_entry_ref_value(value: &IoValue) -> Result<EntryRef> {
-    let fields = simple_record(value, "typed-storage-ref-v1", 12)?;
+    validate_no_executable_authority(value, "typed storage ref")?;
+    let fields = simple_record(value, "typed-storage-ref-v1", TYPED_STORAGE_REF_FIELD_COUNT)?;
     require_schema(&fields[0], crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA, "typed storage ref")?;
     let namespace = record_string(&fields[1], "namespace")?;
     let key = record_string(&fields[2], "key")?;
@@ -75,18 +126,49 @@ pub fn parse_entry_ref_value(value: &IoValue) -> Result<EntryRef> {
     let effect_handle_ref = required_ref(&authority[2], "typed storage effect handle ref")?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "typed-durable-ref", "typed storage ref")?;
+    require_check(&checks, "schema-identity-binding", "typed storage ref")?;
+    require_check(&checks, "producer-artifact-binding", "typed storage ref")?;
+    require_check(&checks, "retention-binding", "typed storage ref")?;
+    require_check(&checks, "provenance-binding", "typed storage ref")?;
+    require_check(&checks, "decoder-artifact-admission", "typed storage ref")?;
     require_check(&checks, "handle-not-authority", "typed storage ref")?;
+    let schema_identity_mode = record_string(
+        &fields[TYPED_STORAGE_REF_SCHEMA_IDENTITY_FIELD_INDEX],
+        "schema-identity",
+    )?;
+    validate_schema_identity_mode(&schema_identity_mode)?;
+    let consumer_refs = record_ref_sequence(&fields[TYPED_STORAGE_REF_CONSUMERS_FIELD_INDEX], "consumers")?;
+    let handler_profile = record_string(&fields[TYPED_STORAGE_REF_HANDLER_PROFILE_FIELD_INDEX], "handler-profile")?;
+    validate_handler_profile(&handler_profile)?;
+    let capability_refs = record_ref_sequence(&fields[TYPED_STORAGE_REF_CAPABILITIES_FIELD_INDEX], "capabilities")?;
+    let retention_refs = record_ref_sequence(&fields[TYPED_STORAGE_REF_RETENTION_FIELD_INDEX], "retention")?;
+    let provenance_refs = record_ref_sequence(&fields[TYPED_STORAGE_REF_PROVENANCE_FIELD_INDEX], "provenance")?;
+    let decoder_artifact_refs = record_ref_sequence(
+        &fields[TYPED_STORAGE_REF_DECODER_ARTIFACTS_FIELD_INDEX],
+        "decoder-artifacts",
+    )?;
+    require_non_empty_refs(&policy_refs, "typed storage policy refs")?;
+    require_non_empty_refs(&capability_refs, "typed storage capability refs")?;
+    require_non_empty_refs(&retention_refs, "typed storage retention refs")?;
+    require_non_empty_refs(&provenance_refs, "typed storage provenance refs")?;
     let storage_ref = canonical_hash(value)?;
     Ok(EntryRef {
         storage_ref,
         namespace,
         key,
         schema_ref,
+        schema_identity_mode,
         value_ref,
         payload,
         producer_ref,
+        consumer_refs,
+        handler_profile,
         policy_refs,
+        capability_refs,
+        retention_refs,
+        provenance_refs,
         evidence_refs,
+        decoder_artifact_refs,
         revision,
         actor_ref,
         capability_ref,
@@ -97,7 +179,7 @@ pub fn parse_entry_ref_value(value: &IoValue) -> Result<EntryRef> {
 }
 
 pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) -> Result<Receipt> {
-    let fields = simple_record(value, "typed-storage-receipt-v1", 9)?;
+    let fields = simple_record(value, "typed-storage-receipt-v1", TYPED_STORAGE_RECEIPT_FIELD_COUNT)?;
     require_schema(&fields[0], crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA, "typed storage receipt")?;
     let operation = record_string(&fields[1], "operation")?;
     let decision = record_string(&fields[2], "decision")?;
@@ -139,8 +221,14 @@ struct RefValueInput<'a> {
     value_ref: &'a str,
     payload: &'a IoValue,
     producer_ref: &'a str,
+    consumer_refs: &'a [String],
+    handler_profile: &'a str,
     policy_refs: &'a [String],
+    capability_refs: &'a [String],
+    retention_refs: &'a [String],
+    provenance_refs: &'a [String],
     evidence_refs: &'a [String],
+    decoder_artifact_refs: &'a [String],
     revision: u64,
     actor_ref: &'a str,
     capability_ref: &'a str,
@@ -167,11 +255,27 @@ fn ref_value(input: RefValueInput<'_>) -> IoValue {
         checks_value(&[
             "typed-durable-ref",
             "schema-ref-binding",
+            "schema-identity-binding",
             "value-ref-binding",
             "producer-artifact-binding",
+            "intended-consumer-binding",
+            "handler-profile-binding",
+            "capability-binding",
+            "retention-binding",
+            "provenance-binding",
+            "evidence-binding",
+            "decoder-artifact-admission",
             "handle-not-authority",
             "no-raw-memory-layout",
+            "no-function-serialization",
         ]),
+        record("schema-identity", vec![string(SCHEMA_IDENTITY_MODE_INFERRED_PRESERVES_CLASS)]),
+        refs_record("consumers", input.consumer_refs),
+        record("handler-profile", vec![string(input.handler_profile)]),
+        refs_record("capabilities", input.capability_refs),
+        refs_record("retention", input.retention_refs),
+        refs_record("provenance", input.provenance_refs),
+        refs_record("decoder-artifacts", input.decoder_artifact_refs),
     ])
 }
 
@@ -254,7 +358,7 @@ fn binding(input: &EffectEvidenceInput<'_>, parts: &ScopeParts) -> Result<IoValu
     let adapter_ref =
         canonical_hash(&record("typed-storage-redb-adapter", vec![string(input.namespace), string(input.schema_ref)]))?;
     handler_binding_value(&crate::effects::HandlerBindingInput {
-        profile: "typed-storage-redb".to_string(),
+        profile: STORAGE_HANDLER_PROFILE_REDB.to_string(),
         scope: parts.scope.clone(),
         adapter_kind: ADAPTER_KIND_STORAGE.to_string(),
         adapter_ref,

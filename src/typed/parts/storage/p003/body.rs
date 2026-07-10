@@ -20,6 +20,7 @@ pub fn migrate_value(
         recipe: &recipe,
     })?;
     let new_value = apply_migration_transform(&recipe, &source.value)?;
+    validate_no_executable_authority(&new_value, "typed storage migrated value")?;
     let new_value_bytes = canonical_bytes(&new_value)?;
     let new_value_ref = canonical_hash(&new_value)?;
     let (payload, payload_details) = store_payload(root, &new_value_bytes)?;
@@ -152,19 +153,43 @@ fn source_value(input: &SourceInput<'_>, typed_ref: &EntryRef) -> Result<IoValue
 }
 
 fn entry_refs(typed_ref: &EntryRef, recipe: &MigrationRecipe) -> EntryRefs {
+    let consumer = sorted_unique_strings(typed_ref.consumer_refs.clone());
     let mut policy = typed_ref.policy_refs.clone();
     policy.extend(recipe.policy_refs.clone());
-    policy.sort();
-    policy.dedup();
+    let policy = sorted_unique_strings(policy);
+    let mut capability = typed_ref.capability_refs.clone();
+    capability.push(typed_ref.capability_ref.clone());
+    let capability = sorted_unique_strings(capability);
+    let retention = sorted_unique_strings(typed_ref.retention_refs.clone());
+    let mut provenance = typed_ref.provenance_refs.clone();
+    provenance.extend(recipe.provenance_refs.clone());
+    provenance.push(recipe.recipe_ref.clone());
+    let provenance = sorted_unique_strings(provenance);
     let mut evidence = typed_ref.evidence_refs.clone();
     evidence.push(recipe.recipe_ref.clone());
+    evidence.push(recipe.effect_manifest_ref.clone());
+    evidence.push(recipe.rollback_ref.clone());
     evidence.extend(recipe.evidence_refs.clone());
-    evidence.sort();
-    evidence.dedup();
-    EntryRefs { policy, evidence }
+    evidence.extend(recipe.test_evidence_refs.clone());
+    evidence.extend(recipe.source_gate_refs.clone());
+    evidence.extend(recipe.lineage_refs.clone());
+    let evidence = sorted_unique_strings(evidence);
+    let decoder_artifact = sorted_unique_strings(typed_ref.decoder_artifact_refs.clone());
+    EntryRefs {
+        consumer,
+        policy,
+        capability,
+        retention,
+        provenance,
+        evidence,
+        decoder_artifact,
+    }
 }
 
 fn next_value(input: NextInput<'_>) -> IoValue {
+    let mut capability_refs = input.refs.capability.clone();
+    capability_refs.push(input.admission.capability_ref.clone());
+    let capability_refs = sorted_unique_strings(capability_refs);
     ref_value(RefValueInput {
         namespace: input.namespace,
         key: input.key,
@@ -172,8 +197,14 @@ fn next_value(input: NextInput<'_>) -> IoValue {
         value_ref: input.value_ref,
         payload: input.payload,
         producer_ref: &input.recipe.transformer_ref,
+        consumer_refs: &input.refs.consumer,
+        handler_profile: &input.recipe.handler_profile,
         policy_refs: &input.refs.policy,
+        capability_refs: &capability_refs,
+        retention_refs: &input.refs.retention,
+        provenance_refs: &input.refs.provenance,
         evidence_refs: &input.refs.evidence,
+        decoder_artifact_refs: &input.refs.decoder_artifact,
         revision: input.revision,
         actor_ref: &input.admission.actor_ref,
         capability_ref: &input.admission.capability_ref,
@@ -195,6 +226,14 @@ fn step_receipt(input: StepInput<'_>) -> IoValue {
         record("new-value-ref", vec![string(input.value_ref)]),
         record("source-schema-ref", vec![string(&input.recipe.source_schema_ref)]),
         record("target-schema-ref", vec![string(&input.recipe.target_schema_ref)]),
+        record("effect-manifest-ref", vec![string(&input.recipe.effect_manifest_ref)]),
+        record("handler-profile", vec![string(&input.recipe.handler_profile)]),
+        record("source-gate", vec![sequence(input.recipe.source_gate_refs.iter().map(string).collect())]),
+        record("provenance", vec![sequence(input.recipe.provenance_refs.iter().map(string).collect())]),
+        record("test-evidence", vec![sequence(input.recipe.test_evidence_refs.iter().map(string).collect())]),
+        record("rollback", vec![string(&input.recipe.rollback_ref)]),
+        record("lineage", vec![sequence(input.recipe.lineage_refs.iter().map(string).collect())]),
+        record("migration-phase-receipts", vec![sequence(migration_phase_receipts(&input))]),
     ];
     details.extend(input.details);
     receipt_value(ReceiptValueInput {
@@ -214,6 +253,10 @@ fn step_receipt(input: StepInput<'_>) -> IoValue {
             ("target-schema-binding", "pass"),
             ("transformer-binding", "pass"),
             ("migration-trace", "pass"),
+            ("migration-preflight-receipt", "pass"),
+            ("migration-execution-receipt", "pass"),
+            ("migration-output-validation-receipt", "pass"),
+            ("migration-lineage-receipt", "pass"),
             ("original-value-hash", "pass"),
             ("result-value-hash", "pass"),
             ("redb-adapter", "pass"),
@@ -221,6 +264,43 @@ fn step_receipt(input: StepInput<'_>) -> IoValue {
         ],
         details,
     })
+}
+
+fn migration_phase_receipts(input: &StepInput<'_>) -> Vec<IoValue> {
+    [
+        MIGRATION_PHASE_PREFLIGHT,
+        MIGRATION_PHASE_EXECUTION,
+        MIGRATION_PHASE_OUTPUT_VALIDATION,
+        MIGRATION_PHASE_LINEAGE,
+    ]
+    .into_iter()
+    .map(|phase| migration_phase_receipt_value(phase, input))
+    .collect()
+}
+
+fn migration_phase_receipt_value(phase: &str, input: &StepInput<'_>) -> IoValue {
+    record("typed-storage-migration-phase-receipt-v1", vec![
+        record("phase", vec![string(phase)]),
+        record("decision", vec![string("pass")]),
+        record("recipe", vec![string(&input.recipe.recipe_ref)]),
+        record("source", vec![
+            string(&input.source.storage_ref),
+            string(&input.source.schema_ref),
+            string(&input.source.value_ref),
+        ]),
+        record("target", vec![
+            string(input.storage_ref),
+            string(&input.recipe.target_schema_ref),
+            string(input.value_ref),
+        ]),
+        checks_value(&["phase-recorded", "policy-bound", "lineage-bound"]),
+    ])
+}
+
+fn sorted_unique_strings(mut values: Vec<String>) -> Vec<String> {
+    values.sort();
+    values.dedup();
+    values
 }
 
 pub fn list_receipt_refs(root: &Path) -> Result<Vec<String>> {
