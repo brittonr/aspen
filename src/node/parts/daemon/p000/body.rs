@@ -152,6 +152,24 @@ pub struct ControlServeInput<'a> {
     pub supervisor_policy_value: Option<&'a IoValue>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NodeLifecycleFiles {
+    pub has_config: bool,
+    pub has_identity_receipt: bool,
+    pub has_startup: bool,
+    pub has_shutdown: bool,
+    pub has_active_lock: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeLifecycleState {
+    Empty,
+    Initialized,
+    Running,
+    Stopped,
+    Inconsistent,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ControlSupervisorPolicyInput<'a> {
     pub max_restarts: u64,

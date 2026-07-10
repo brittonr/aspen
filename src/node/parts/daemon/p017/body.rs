@@ -228,6 +228,7 @@ fn count_prior_supervised_service_runs(state_root: &Path, supervisor_policy_ref:
 pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.node_id)?;
+    verify_init_state(input.state_root)?;
     ensure_state_layout(input.state_root)?;
     let policy_refs = vec![local_ref("node-policy", input.node_id)?];
     let mut identity_config = crate::node_identity::Config::new(input.node_id, input.state_root.join("identity"));
@@ -273,6 +274,7 @@ pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
 pub fn init_with_profile(input: &ProfileInitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.node_id)?;
+    verify_init_state(input.state_root)?;
     ensure_state_layout(input.state_root)?;
     let policy_refs = vec![local_ref("node-policy", input.node_id)?];
     let mut identity_config = crate::node_identity::Config::new(input.node_id, input.state_root.join("identity"));

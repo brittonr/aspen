@@ -14,6 +14,8 @@ pub(crate) struct ClusterInit {
     state_root: std::path::PathBuf,
     #[arg(long = "node")]
     nodes: Vec<String>,
+    #[arg(long)]
+    force: bool,
 }
 
 #[derive(Debug, clap::Args)]
@@ -33,12 +35,14 @@ pub(crate) fn run(command: ClusterCommand) -> molten::error::Result<()> {
 
 fn init(input: ClusterInit) -> molten::error::Result<()> {
     let plan = molten::cluster::plan_cluster(&input.state_root, &input.nodes)?;
-    write_cluster_manifest(&plan)?;
+    prepare_cluster_init(&plan, input.force)?;
+    let mut initialized_count = 0usize;
     for node in &plan.nodes {
         let init = molten::node_daemon::init_local(&molten::node_daemon::InitInput {
             state_root: &node.state_root,
             node_id: &node.node_id,
         })?;
+        initialized_count += 1;
         println!(
             "cluster node init node={} state_root={} config={} identity_receipt={}",
             node.node_id,
@@ -47,7 +51,8 @@ fn init(input: ClusterInit) -> molten::error::Result<()> {
             init.identity_receipt_ref
         );
     }
-    println!("cluster init nodes={} state_root={}", plan.nodes.len(), plan.state_root.display());
+    write_cluster_manifest(&plan)?;
+    println!("cluster init nodes={} state_root={}", initialized_count, plan.state_root.display());
     Ok(())
 }
 
@@ -113,6 +118,35 @@ fn stop(input: ClusterRoot) -> molten::error::Result<()> {
         );
     }
     println!("cluster stop nodes={} state_root={}", plan.nodes.len(), plan.state_root.display());
+    Ok(())
+}
+
+fn prepare_cluster_init(plan: &molten::cluster::ClusterPlan, force: bool) -> molten::error::Result<()> {
+    if force {
+        for node in &plan.nodes {
+            if node.state_root.exists() {
+                std::fs::remove_dir_all(&node.state_root).map_err(molten::error::MoltenError::from)?;
+            }
+        }
+        return Ok(());
+    }
+    let manifest_path = molten::cluster::cluster_manifest_path(&plan.state_root);
+    if manifest_path.exists() {
+        return Err(molten::error::MoltenError::invalid_harness(format!(
+            "cluster init denied: manifest already exists at {}; pass --force to overwrite the cluster manifest",
+            manifest_path.display()
+        )));
+    }
+    for node in &plan.nodes {
+        let state = molten::node_daemon::inspect_node_lifecycle_state(&node.state_root);
+        if state != molten::node_daemon::NodeLifecycleState::Empty {
+            return Err(molten::error::MoltenError::invalid_harness(format!(
+                "cluster init denied: node {} already has {state:?} lifecycle state at {}; pass --force to reset that node root",
+                node.node_id,
+                node.state_root.display()
+            )));
+        }
+    }
     Ok(())
 }
 

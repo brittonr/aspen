@@ -39,6 +39,51 @@ fn require_schema(value: &preserves::Value<preserves::IOValue>, expected: &str, 
     }
 }
 
+fn verify_init_state(state_root: &Path) -> Result<()> {
+    let state = inspect_node_lifecycle_state(state_root);
+    if state == NodeLifecycleState::Empty {
+        return Ok(());
+    }
+    Err(MoltenError::invalid_harness(format!(
+        "node daemon init denied: state root already has {state:?} lifecycle state; use an explicit reset before reinitializing"
+    )))
+}
+
+pub fn inspect_node_lifecycle_state(state_root: &Path) -> NodeLifecycleState {
+    node_lifecycle_state(&node_lifecycle_files(state_root))
+}
+
+pub fn node_lifecycle_files(state_root: &Path) -> NodeLifecycleFiles {
+    NodeLifecycleFiles {
+        has_config: state_root.join(CONFIG_FILE).exists(),
+        has_identity_receipt: state_root.join(IDENTITY_RECEIPT_FILE).exists(),
+        has_startup: state_root.join(STARTUP_FILE).exists(),
+        has_shutdown: state_root.join(SHUTDOWN_FILE).exists(),
+        has_active_lock: state_root.join(CONTROL_LOCK_FILE).exists(),
+    }
+}
+
+pub fn node_lifecycle_state(files: &NodeLifecycleFiles) -> NodeLifecycleState {
+    if !files.has_config
+        && !files.has_identity_receipt
+        && !files.has_startup
+        && !files.has_shutdown
+        && !files.has_active_lock
+    {
+        return NodeLifecycleState::Empty;
+    }
+    if files.has_config && files.has_identity_receipt && !files.has_startup && !files.has_shutdown && !files.has_active_lock {
+        return NodeLifecycleState::Initialized;
+    }
+    if files.has_config && files.has_identity_receipt && files.has_startup && !files.has_shutdown && files.has_active_lock {
+        return NodeLifecycleState::Running;
+    }
+    if files.has_config && files.has_identity_receipt && files.has_startup && files.has_shutdown && !files.has_active_lock {
+        return NodeLifecycleState::Stopped;
+    }
+    NodeLifecycleState::Inconsistent
+}
+
 fn verify_restart_state(state_root: &Path) -> Result<()> {
     let startup_path = state_root.join(STARTUP_FILE);
     if startup_path.exists() {

@@ -33,6 +33,7 @@ pub fn cluster_manifest_path(state_root: &Path) -> PathBuf {
 }
 
 pub fn plan_cluster(state_root: &Path, node_names: &[String]) -> Result<ClusterPlan> {
+    validate_cluster_state_root(state_root)?;
     if node_names.is_empty() {
         return Err(MoltenError::invalid_harness("cluster requires at least one --node"));
     }
@@ -77,6 +78,16 @@ pub fn parse_cluster_manifest(source: &str) -> Result<Vec<String>> {
         return Err(MoltenError::invalid_harness("cluster manifest has no nodes"));
     }
     Ok(nodes)
+}
+
+fn validate_cluster_state_root(state_root: &Path) -> Result<()> {
+    if state_root.as_os_str().is_empty() {
+        return Err(MoltenError::invalid_harness("cluster requires explicit state root"));
+    }
+    if state_root == Path::new(CURRENT_DIR_COMPONENT) || state_root == Path::new(PARENT_DIR_COMPONENT) {
+        return Err(MoltenError::invalid_harness("cluster state root must not be ambient current or parent directory"));
+    }
+    Ok(())
 }
 
 fn plan_node(state_root: &Path, requested_node: &str) -> Result<ClusterNodePlan> {
@@ -164,6 +175,12 @@ mod tests {
 
         let colon = plan_cluster(&root, &node_names(&["node:a:b"])).expect_err("colon denied");
         assert!(colon.to_string().contains("must not contain ':'"));
+
+        let current_root = plan_cluster(Path::new("."), &node_names(&["node-a"])).expect_err("current root denied");
+        assert!(current_root.to_string().contains("must not be ambient"));
+
+        let parent_root = plan_cluster(Path::new(".."), &node_names(&["node-a"])).expect_err("parent root denied");
+        assert!(parent_root.to_string().contains("must not be ambient"));
     }
 
     #[test]

@@ -58,6 +58,99 @@
     }
 
     #[test]
+    fn init_denies_existing_lifecycle_states() {
+        let initialized_root = temp_dir("node-daemon-reinit-initialized");
+        init_local(&InitInput {
+            state_root: &initialized_root,
+            node_id: "node:initialized",
+        })
+        .expect("init once");
+        let initialized = init_local(&InitInput {
+            state_root: &initialized_root,
+            node_id: "node:initialized",
+        })
+        .expect_err("reinit initialized denied");
+        assert!(initialized.to_string().contains("already has Initialized lifecycle state"));
+
+        let running_root = temp_dir("node-daemon-reinit-running");
+        init_local(&InitInput {
+            state_root: &running_root,
+            node_id: "node:running",
+        })
+        .expect("init running root");
+        run_local(&RunInput { state_root: &running_root }).expect("run root");
+        let running = init_local(&InitInput {
+            state_root: &running_root,
+            node_id: "node:running",
+        })
+        .expect_err("reinit running denied");
+        assert!(running.to_string().contains("already has Running lifecycle state"));
+
+        let stopped_root = temp_dir("node-daemon-reinit-stopped");
+        init_local(&InitInput {
+            state_root: &stopped_root,
+            node_id: "node:stopped",
+        })
+        .expect("init stopped root");
+        run_local(&RunInput { state_root: &stopped_root }).expect("run stopped root");
+        stop_local(&StopInput { state_root: &stopped_root }).expect("stop root");
+        let stopped = init_local(&InitInput {
+            state_root: &stopped_root,
+            node_id: "node:stopped",
+        })
+        .expect_err("reinit stopped denied");
+        assert!(stopped.to_string().contains("already has Stopped lifecycle state"));
+    }
+
+    #[test]
+    fn lifecycle_state_classifier_covers_valid_and_invalid_states() {
+        let empty = NodeLifecycleFiles {
+            has_config: false,
+            has_identity_receipt: false,
+            has_startup: false,
+            has_shutdown: false,
+            has_active_lock: false,
+        };
+        assert_eq!(node_lifecycle_state(&empty), NodeLifecycleState::Empty);
+
+        let initialized = NodeLifecycleFiles {
+            has_config: true,
+            has_identity_receipt: true,
+            has_startup: false,
+            has_shutdown: false,
+            has_active_lock: false,
+        };
+        assert_eq!(node_lifecycle_state(&initialized), NodeLifecycleState::Initialized);
+
+        let running = NodeLifecycleFiles {
+            has_config: true,
+            has_identity_receipt: true,
+            has_startup: true,
+            has_shutdown: false,
+            has_active_lock: true,
+        };
+        assert_eq!(node_lifecycle_state(&running), NodeLifecycleState::Running);
+
+        let stopped = NodeLifecycleFiles {
+            has_config: true,
+            has_identity_receipt: true,
+            has_startup: true,
+            has_shutdown: true,
+            has_active_lock: false,
+        };
+        assert_eq!(node_lifecycle_state(&stopped), NodeLifecycleState::Stopped);
+
+        let stale_lock_without_startup = NodeLifecycleFiles {
+            has_config: true,
+            has_identity_receipt: true,
+            has_startup: false,
+            has_shutdown: false,
+            has_active_lock: true,
+        };
+        assert_eq!(node_lifecycle_state(&stale_lock_without_startup), NodeLifecycleState::Inconsistent);
+    }
+
+    #[test]
     fn ambient_current_directory_state_root_is_denied() {
         let denied = init_local(&InitInput {
             state_root: Path::new("."),

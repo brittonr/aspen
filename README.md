@@ -120,10 +120,11 @@ Cairn roadmap status: active production-readiness changes live under `cairn/chan
 
 ## Node runtime daemon
 
-The cluster convenience wrapper initializes and controls per-node state roots while preserving the same node receipts. For source-tree development, run it through Cargo or an already-built Cargo binary; `nix develop` provides tools but does not install a freshly built `molten` binary by itself.
+The cluster convenience wrapper initializes and controls per-node state roots while preserving the same node receipts. For source-tree development, run it through Cargo or an already-built Cargo binary; `nix develop` provides tools but does not install a freshly built `molten` binary by itself. Re-running `cluster init` over an existing cluster manifest or node lifecycle state fails closed; pass `--force` only when you intentionally want to remove the planned node roots and write fresh lifecycle evidence.
 
 ```sh
 cargo run -- cluster init --state-root target/cluster --node node-a --node node-b
+cargo run -- cluster init --state-root target/cluster --node node-a --node node-b --force
 cargo run -- cluster start --state-root target/cluster
 cargo run -- cluster status --state-root target/cluster
 cargo run -- cluster stop --state-root target/cluster
