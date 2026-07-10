@@ -4,11 +4,6 @@
 // This part adds the canonical resource model DTOs and pure validation functions.
 // Type aliases and common helper functions are inherited from p000.
 
-const RESOURCE_RECORD_SCHEMA: &str = "molten.resource.record.v1";
-const RESOURCE_METADATA_SCHEMA: &str = "molten.resource.metadata.v1";
-const RESOURCE_CONDITION_SCHEMA: &str = "molten.resource.condition.v1";
-const RESOURCE_DELETION_GATE_SCHEMA: &str = "molten.resource.deletion-gate.v1";
-
 const MAX_LABEL_COUNT: usize = 256;
 const MAX_ANNOTATION_COUNT: usize = 1024;
 const MAX_LABEL_KEY_LENGTH: usize = 256;
@@ -297,7 +292,7 @@ pub fn validate_resource_record(resource: &ResourceRecord) -> Result<ResourceRec
 
     validate_metadata(&resource.metadata)?;
 
-    for ref evidence_ref in &resource.evidence_refs {
+    for evidence_ref in &resource.evidence_refs {
         require_ref(evidence_ref, "evidence ref")?;
     }
 
@@ -355,7 +350,7 @@ pub fn validate_metadata(metadata: &ResourceMetadata) -> Result<()> {
             metadata.evidence_refs.len()
         )));
     }
-    for ref evidence_ref in &metadata.evidence_refs {
+    for evidence_ref in &metadata.evidence_refs {
         require_ref(evidence_ref, "metadata evidence ref")?;
     }
 
@@ -378,7 +373,7 @@ pub fn validate_status_condition(
             "status condition must have at least one evidence ref",
         ));
     }
-    for ref evidence_ref in &condition.evidence_refs {
+    for evidence_ref in &condition.evidence_refs {
         require_ref(evidence_ref, "condition evidence ref")?;
     }
     if let Some(ref observed_ref) = condition.observed_state_ref {
@@ -488,7 +483,7 @@ pub fn resource_metadata_to_value(metadata: &ResourceMetadata) -> IoValue {
             ])
         })
         .collect();
-    let finalizers: Vec<IoValue> = metadata.finalizers.iter().map(|f| string(f)).collect();
+    let finalizers: Vec<IoValue> = metadata.finalizers.iter().map(string).collect();
 
     record("resource-metadata-v1", vec![
         record("labels", vec![sequence(labels)]),

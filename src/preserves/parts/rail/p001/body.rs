@@ -1585,8 +1585,14 @@ fn ensure_sequence<'a>(
     label: &str,
     spec: &BoundarySchemaSpec,
     schema_ref: &ContentRef,
-) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
-    value.collect_sequence().ok_or_else(|| boundary_field_error(spec, label, "sequence", schema_ref))
+) -> Result<std::borrow::Cow<'a, [Value<IoValue>]>> {
+    value
+        .collect_sequence()
+        .map(|sequence| match sequence {
+            std::borrow::Cow::Borrowed(values) => std::borrow::Cow::Borrowed(values.as_slice()),
+            std::borrow::Cow::Owned(values) => std::borrow::Cow::Owned(values),
+        })
+        .ok_or_else(|| boundary_field_error(spec, label, "sequence", schema_ref))
 }
 
 fn boundary_field_error(
@@ -1725,8 +1731,7 @@ where
 
 pub fn find_named_structural_marker(value: &IoValue, markers: &[&str]) -> Result<Option<StructuralMatch>> {
     find_structural_match(value, StructuralInspectionScope::structural_markers(), |kind, token| {
-        matches!(kind, StructuralTokenKind::RecordLabel | StructuralTokenKind::Symbol)
-            && markers.iter().any(|marker| token == *marker)
+        matches!(kind, StructuralTokenKind::RecordLabel | StructuralTokenKind::Symbol) && markers.contains(&token)
     })
 }
 
@@ -1778,10 +1783,11 @@ where
 
     if value.is_record() {
         let label = value.label();
-        if let Some(name) = label.as_symbol() {
-            if scope.record_labels && predicate(StructuralTokenKind::RecordLabel, name.as_ref()) {
-                return Ok(Some(structural_match(StructuralTokenKind::RecordLabel, name.as_ref(), path)));
-            }
+        if let Some(name) = label.as_symbol()
+            && scope.record_labels
+            && predicate(StructuralTokenKind::RecordLabel, name.as_ref())
+        {
+            return Ok(Some(structural_match(StructuralTokenKind::RecordLabel, name.as_ref(), path)));
         }
         path.push("label".to_string());
         if let Some(found) = visit_structural_value(&value_to_iovalue(&label), scope, predicate, state, path)? {
@@ -1798,10 +1804,11 @@ where
         return Ok(None);
     }
 
-    if let Some(symbol) = value.as_symbol() {
-        if scope.symbols && predicate(StructuralTokenKind::Symbol, symbol.as_ref()) {
-            return Ok(Some(structural_match(StructuralTokenKind::Symbol, symbol.as_ref(), path)));
-        }
+    if let Some(symbol) = value.as_symbol()
+        && scope.symbols
+        && predicate(StructuralTokenKind::Symbol, symbol.as_ref())
+    {
+        return Ok(Some(structural_match(StructuralTokenKind::Symbol, symbol.as_ref(), path)));
     }
     if let Some(text) = value.as_string() {
         if scope.strings && predicate(StructuralTokenKind::String, text.as_ref()) {
@@ -1813,12 +1820,12 @@ where
             return Ok(Some(structural_match(StructuralTokenKind::ContentRef, text.as_ref(), path)));
         }
     }
-    if let Some(bytes) = value.as_bytestring() {
-        if scope.byte_strings {
-            let token = content_ref_from_bytes(bytes.as_ref());
-            if predicate(StructuralTokenKind::ByteString, &token) {
-                return Ok(Some(structural_match(StructuralTokenKind::ByteString, &token, path)));
-            }
+    if let Some(bytes) = value.as_bytestring()
+        && scope.byte_strings
+    {
+        let token = content_ref_from_bytes(bytes.as_ref());
+        if predicate(StructuralTokenKind::ByteString, &token) {
+            return Ok(Some(structural_match(StructuralTokenKind::ByteString, &token, path)));
         }
     }
 

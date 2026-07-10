@@ -165,9 +165,13 @@ fn parse_release_replay_verify(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
+const REPLAY_INDEX_FIELD_COUNT: usize = 16;
+const REPLAY_INDEX_RECEIPT_REFS_FIELD: usize = 7;
+const REPLAY_INDEX_CHECKS_FIELD: usize = 15;
+
 fn parse_release_replay_index(value: &IoValue) -> Result<String> {
     let fields = value
-        .collect_simple_record("deterministic-replay-index-v1", Some(15))
+        .collect_simple_record("deterministic-replay-index-v1", Some(REPLAY_INDEX_FIELD_COUNT))
         .ok_or_else(|| MoltenError::invalid_harness("expected <deterministic-replay-index-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA, "release replay index")?;
     let decision = record_string(&fields[1], "decision")?;
@@ -176,7 +180,7 @@ fn parse_release_replay_index(value: &IoValue) -> Result<String> {
             "release replay index decision is {decision}; expected pass"
         )));
     }
-    let checks = parse_replay_index_checks(&fields[14])?;
+    let checks = parse_replay_index_checks(&fields[REPLAY_INDEX_CHECKS_FIELD])?;
     require_check(&checks, "evidence-only", "release replay index")?;
     require_check(&checks, "no-authority-grant", "release replay index")?;
     crate::preserves_rail::canonical_hash(value)
@@ -184,9 +188,9 @@ fn parse_release_replay_index(value: &IoValue) -> Result<String> {
 
 fn parse_release_replay_index_receipt_refs(value: &IoValue) -> Result<Vec<String>> {
     let fields = value
-        .collect_simple_record("deterministic-replay-index-v1", Some(15))
+        .collect_simple_record("deterministic-replay-index-v1", Some(REPLAY_INDEX_FIELD_COUNT))
         .ok_or_else(|| MoltenError::invalid_harness("expected <deterministic-replay-index-v1 ...>"))?;
-    record_ref_sequence(&fields[7], "receipt-refs")
+    record_ref_sequence(&fields[REPLAY_INDEX_RECEIPT_REFS_FIELD], "receipt-refs")
 }
 
 fn parse_replay_index_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {

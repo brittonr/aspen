@@ -1,6 +1,7 @@
 type FilePath = std::path::PathBuf;
 
 #[derive(Debug, clap::Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum Top {
     Parse {
         markdown: FilePath,

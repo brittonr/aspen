@@ -12,7 +12,10 @@ const DECISION_PASS: &str = "pass";
 const DECISION_DENY: &str = "deny";
 const MAX_UCAN_RECEIPT_REFS: usize = 1024;
 
-const UCAN_CHECKS: &[(&str, fn(&UcanVerificationChecks) -> bool)] = &[
+type UcanCheckEvaluator = fn(&UcanVerificationChecks) -> bool;
+type UcanCheckSpec = (&'static str, UcanCheckEvaluator);
+
+const UCAN_CHECKS: &[UcanCheckSpec] = &[
     ("signature-valid", |checks| checks.signature_valid),
     ("holder-bound", |checks| checks.holder_matches),
     ("audience-bound", |checks| checks.audience_matches),

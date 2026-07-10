@@ -27,6 +27,7 @@ type ServiceCommand = crate::cli_service::ServiceCommand;
 type UpgradeCommand = crate::cli_upgrade::UpgradeCommand;
 
 const PASS_EVIDENCE_PURPOSE: &str = molten::evidence::PASS_EVIDENCE_PURPOSE;
+const COORDINATION_DUPLICATE_REPLAY_TRANSITION: &str = "duplicate-replay";
 
 mod fs {
     pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {

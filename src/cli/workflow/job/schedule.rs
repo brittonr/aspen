@@ -20,6 +20,15 @@ type Runtime = molten::coordination::CoordinationRuntime;
 type Value = preserves::IOValue;
 type Worker = molten::job_dag::JobWorkerExecution;
 
+const COORDINATION_DUPLICATE_REPLAY_TRANSITION: &str = "duplicate-replay";
+
+fn duplicate_enqueue_replayed(enqueue: &Apply, duplicate: &Apply) -> bool {
+    duplicate.receipt.decision == enqueue.receipt.decision
+        && duplicate.receipt.transition_kind == COORDINATION_DUPLICATE_REPLAY_TRANSITION
+        && duplicate.receipt.prior_receipt_ref.as_deref() == Some(enqueue.receipt.receipt_ref.as_str())
+        && duplicate.receipt.output_refs.iter().any(|output_ref| output_ref == &enqueue.receipt.receipt_ref)
+}
+
 struct LocalInput<'a> {
     request_value: &'a Value,
     target_registry: &'a Path,

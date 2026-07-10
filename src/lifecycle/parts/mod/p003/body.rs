@@ -7,12 +7,8 @@
 //
 // Type aliases and common helpers are inherited from p000.
 
-const LIFECYCLE_PROBE_SCHEMA: &str = "molten.lifecycle.probe.v1";
-const LIFECYCLE_RESTART_DECISION_SCHEMA: &str = "molten.lifecycle.restart-decision.v1";
-
 const MAX_BACKOFF_PROFILES: usize = 32;
 const MAX_RESTART_ATTEMPTS: u64 = 1_000;
-const MAX_PROBE_DURATION_MS: u64 = 300_000;
 const _: () = assert!(MAX_BACKOFF_PROFILES > 0);
 const _: () = assert!(MAX_RESTART_ATTEMPTS > 0);
 
@@ -280,7 +276,7 @@ pub fn backoff_profile_to_value(profile: &BackoffProfile) -> IoValue {
         string(&profile.name),
         u64_value(profile.initial_delay_ms),
         u64_value(profile.max_delay_ms),
-        string(&format!("{:.1}", profile.multiplier)),
+        string(format!("{:.1}", profile.multiplier)),
         u64_value(profile.max_attempts),
     ])
 }

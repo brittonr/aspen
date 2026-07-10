@@ -8,9 +8,6 @@
 // validate_content_ref, require_ref, validate_non_empty, sequence, refs_sequence,
 // optional_ref_value, bool_value, symbol) are inherited from p000.
 
-const RESOURCE_ADMISSION_RECEIPT_SCHEMA: &str = "molten.resource.admission-receipt.v1";
-const RESOURCE_MUTATION_EVIDENCE_SCHEMA: &str = "molten.resource.mutation-evidence.v1";
-
 const MAX_PHASE_DIAGNOSTICS: usize = 32;
 const MAX_PHASE_EVIDENCE_REFS: usize = 128;
 const MAX_MUTATION_RULE_REFS: usize = 64;
@@ -518,7 +515,7 @@ pub fn admission_chain_result_to_value(result: &AdmissionChainResult) -> IoValue
 }
 
 fn diagnostics_sequence(diagnostics: &[String]) -> IoValue {
-    let values: Vec<IoValue> = diagnostics.iter().map(|d| string(d)).collect();
+    let values: Vec<IoValue> = diagnostics.iter().map(string).collect();
     record("diagnostics", vec![sequence(values)])
 }
 

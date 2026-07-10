@@ -7,9 +7,6 @@
 //
 // Type aliases and common helpers are inherited from p000.
 
-const WATCH_EVENT_SCHEMA: &str = "molten.resource.watch-event.v1";
-const INFORMER_SNAPSHOT_SCHEMA: &str = "molten.resource.informer-snapshot.v1";
-
 const MAX_WATCH_EVENTS: usize = 4096;
 const MAX_CURSOR_DELTA: u64 = 1_000_000;
 const MAX_SELECTOR_LABELS: usize = 64;
@@ -61,11 +58,7 @@ impl RevisionCursor {
     }
 
     pub fn distance(self, other: RevisionCursor) -> u64 {
-        if other.cursor >= self.cursor {
-            other.cursor - self.cursor
-        } else {
-            self.cursor - other.cursor
-        }
+        other.cursor.abs_diff(self.cursor)
     }
 }
 

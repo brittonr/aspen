@@ -124,10 +124,10 @@ fn collect_invalid_optional_ref_diagnostics(
     reference: Option<&str>,
     diagnostics: &mut impl DiagnosticSink,
 ) -> Result<()> {
-    if let Some(reference) = reference {
-        if crate::preserves_rail::validate_content_ref(reference).is_err() {
-            push_diagnostic(diagnostics, format!("invalid-{label}-ref"))?;
-        }
+    if let Some(reference) = reference
+        && crate::preserves_rail::validate_content_ref(reference).is_err()
+    {
+        push_diagnostic(diagnostics, format!("invalid-{label}-ref"))?;
     }
     Ok(())
 }

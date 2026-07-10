@@ -84,17 +84,17 @@
                 .expect("scheduled worker output")
                 .contains("3")
         );
-        let enqueue_ref = canonical_hash(
-            &read_preserves_file(&schedule_out.join("coordination").join("enqueue-receipt.preserves"))
-                .expect("enqueue receipt"),
-        )
-        .expect("enqueue ref");
-        let duplicate_enqueue_ref = canonical_hash(
+        let enqueue_value = read_preserves_file(&schedule_out.join("coordination").join("enqueue-receipt.preserves"))
+            .expect("enqueue receipt");
+        let enqueue_ref = canonical_hash(&enqueue_value).expect("enqueue ref");
+        let duplicate_enqueue = molten::coordination::parse_coordination_receipt(
             &read_preserves_file(&schedule_out.join("coordination").join("enqueue-duplicate-receipt.preserves"))
                 .expect("duplicate enqueue receipt"),
         )
-        .expect("duplicate enqueue ref");
-        assert_eq!(enqueue_ref, duplicate_enqueue_ref);
+        .expect("parse duplicate enqueue receipt");
+        assert_eq!(duplicate_enqueue.transition_kind, COORDINATION_DUPLICATE_REPLAY_TRANSITION);
+        assert_eq!(duplicate_enqueue.prior_receipt_ref.as_deref(), Some(enqueue_ref.as_str()));
+        assert!(duplicate_enqueue.output_refs.iter().any(|output_ref| output_ref == &enqueue_ref));
         let schedule_receipt_ref = canonical_hash(&schedule_receipt).expect("schedule receipt ref");
         run_job_command(JobCommand::ReceiptShow(cli_job::command::refs::ReceiptShow {
             receipt_ref: schedule_receipt_ref,

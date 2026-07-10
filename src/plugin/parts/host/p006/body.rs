@@ -395,7 +395,7 @@ mod tests {
         assert_eq!(crate::ledger::artifact_kind(&contract.value), "plugin-extension-contract");
         assert_eq!(contract.extension_id, "plugin-extension:storage");
         assert!(contract.production_profile);
-        let manifest = manifest_with_extension_refs(&[contract.contract_ref.clone()], &test_ref("effect-extension"));
+        let manifest = manifest_with_extension_refs(std::slice::from_ref(&contract.contract_ref), &test_ref("effect-extension"));
         assert!(manifest.extension_contract_refs.contains(&contract.contract_ref));
     }
 
@@ -437,7 +437,7 @@ mod tests {
         let contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
         let descriptor = &contract.hostcall_descriptors[0];
         let manifest_value = manifest_value_with_extension_refs(
-            &[contract.contract_ref.clone()],
+            std::slice::from_ref(&contract.contract_ref),
             &descriptor.effect_manifest_refs[0],
         );
         let generic_deny = plugin_hostcall_receipt_value(&HostcallReceiptInput {
@@ -485,7 +485,7 @@ mod tests {
         let contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
         let descriptor = &contract.hostcall_descriptors[0];
         let manifest_value = manifest_value_with_extension_refs(
-            &[contract.contract_ref.clone()],
+            std::slice::from_ref(&contract.contract_ref),
             &descriptor.effect_manifest_refs[0],
         );
         let matching_grant = matching_capability_grant_fixture(&manifest_value, &contract, descriptor, false);
@@ -731,7 +731,7 @@ mod tests {
     #[test]
     fn extension_negotiation_denies_missing_required_and_allows_optional_omission() {
         let contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
-        let manifest = manifest_with_extension_refs(&[contract.contract_ref.clone()], &test_ref("effect-extension"));
+        let manifest = manifest_with_extension_refs(std::slice::from_ref(&contract.contract_ref), &test_ref("effect-extension"));
         let missing = plugin_extension_negotiation_receipt_value(&PluginExtensionNegotiationInput {
             manifest: &manifest,
             required_contract_refs: std::slice::from_ref(&contract.contract_ref),
@@ -772,7 +772,7 @@ mod tests {
     #[test]
     fn production_negotiation_denies_diagnostic_only_conformance() {
         let contract = storage_extension_contract(PLUGIN_PROFILE_DEVELOPMENT, "1.0.0");
-        let manifest = manifest_with_extension_refs(&[contract.contract_ref.clone()], &test_ref("effect-extension"));
+        let manifest = manifest_with_extension_refs(std::slice::from_ref(&contract.contract_ref), &test_ref("effect-extension"));
         let receipt = plugin_extension_negotiation_receipt_value(&PluginExtensionNegotiationInput {
             manifest: &manifest,
             required_contract_refs: std::slice::from_ref(&contract.contract_ref),
@@ -793,8 +793,8 @@ mod tests {
     fn extension_compatibility_passes_upgrade_and_denies_downgrade_or_removed_hostcall() {
         let old_contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
         let new_contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.1.0");
-        let old_manifest = manifest_with_extension_refs(&[old_contract.contract_ref.clone()], &test_ref("effect-extension"));
-        let new_manifest = manifest_with_extension_refs(&[new_contract.contract_ref.clone()], &test_ref("effect-extension"));
+        let old_manifest = manifest_with_extension_refs(std::slice::from_ref(&old_contract.contract_ref), &test_ref("effect-extension"));
+        let new_manifest = manifest_with_extension_refs(std::slice::from_ref(&new_contract.contract_ref), &test_ref("effect-extension"));
         let pass = plugin_extension_compatibility_receipt_value(&PluginExtensionCompatibilityInput {
             old_manifest: &old_manifest,
             new_manifest: &new_manifest,
@@ -815,7 +815,7 @@ mod tests {
 
         let downgrade_contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "0.9.0");
         let downgrade_manifest = manifest_with_extension_refs(
-            &[downgrade_contract.contract_ref.clone()],
+            std::slice::from_ref(&downgrade_contract.contract_ref),
             &test_ref("effect-extension"),
         );
         let downgrade = plugin_extension_compatibility_receipt_value(&PluginExtensionCompatibilityInput {
@@ -838,7 +838,7 @@ mod tests {
 
         let removed_contract = storage_extension_contract_without_hostcall(PLUGIN_PROFILE_PRODUCTION, "1.1.0");
         let removed_manifest = manifest_with_extension_refs(
-            &[removed_contract.contract_ref.clone()],
+            std::slice::from_ref(&removed_contract.contract_ref),
             &test_ref("effect-extension"),
         );
         let removed = plugin_extension_compatibility_receipt_value(&PluginExtensionCompatibilityInput {
@@ -864,7 +864,7 @@ mod tests {
     fn lifecycle_requires_extension_negotiation_before_activation() {
         let contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
         let manifest_value = manifest_value_with_extension_refs(
-            &[contract.contract_ref.clone()],
+            std::slice::from_ref(&contract.contract_ref),
             &test_ref("effect-extension"),
         );
         let manifest = parse_plugin_manifest(&manifest_value).expect("manifest");

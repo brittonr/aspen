@@ -101,19 +101,19 @@ pub fn resolve_profile_backed_config(input: &ProfileBackedConfigInput) -> Result
         resource_refs: &effective.resource_refs,
         effect_profile_refs: &effective.effect_profile_refs,
     })?;
-    finish_resolution(
-        &input.identity_ref,
-        &input.profile.profile_ref,
-        &input.profile.tier,
-        &input.profile.schema_id,
-        &input.profile.schema_version,
-        &input.profile.source_language,
-        &input.profile.profile_identity,
+    finish_resolution(FinishResolutionInput {
+        identity_ref: &input.identity_ref,
+        profile_ref: &input.profile.profile_ref,
+        tier: &input.profile.tier,
+        schema_id: &input.profile.schema_id,
+        schema_version: &input.profile.schema_version,
+        source_language: &input.profile.source_language,
+        profile_identity: &input.profile.profile_identity,
         accepted_overrides,
         diagnostics,
         config_value,
-        Vec::new(),
-    )
+        caveats: Vec::new(),
+    })
 }
 
 // r[impl molten.node_runtime.local_default_config_caveat]
@@ -135,19 +135,19 @@ pub fn resolve_local_default_config(input: &LocalDefaultConfigInput) -> Result<R
         effect_profile_refs: &input.effect_profile_refs,
     })?;
     let local_fixture_profile_ref = crate::preserves_rail::content_ref_from_bytes(LOCAL_FIXTURE_CAVEAT.as_bytes());
-    finish_resolution(
-        &input.identity_ref,
-        &local_fixture_profile_ref,
-        TIER_DEVELOPMENT,
-        crate::preserves_rail::NODE_CONFIG_SCHEMA,
-        "1",
-        "rust-local-defaults",
-        LOCAL_FIXTURE_CAVEAT,
-        Vec::new(),
-        vec![LOCAL_FIXTURE_CAVEAT.to_string()],
+    finish_resolution(FinishResolutionInput {
+        identity_ref: &input.identity_ref,
+        profile_ref: &local_fixture_profile_ref,
+        tier: TIER_DEVELOPMENT,
+        schema_id: crate::preserves_rail::NODE_CONFIG_SCHEMA,
+        schema_version: "1",
+        source_language: "rust-local-defaults",
+        profile_identity: LOCAL_FIXTURE_CAVEAT,
+        accepted_overrides: Vec::new(),
+        diagnostics: vec![LOCAL_FIXTURE_CAVEAT.to_string()],
         config_value,
-        vec![LOCAL_FIXTURE_CAVEAT.to_string()],
-    )
+        caveats: vec![LOCAL_FIXTURE_CAVEAT.to_string()],
+    })
 }
 
 fn validate_checked_profile(profile: &CheckedNodeProfile) -> Result<()> {
@@ -306,19 +306,34 @@ fn effective_profile(profile: &CheckedNodeProfile, overrides: &NodeProfileOverri
     effective
 }
 
-fn finish_resolution(
-    identity_ref: &str,
-    profile_ref: &str,
-    tier: &str,
-    schema_id: &str,
-    schema_version: &str,
-    source_language: &str,
-    profile_identity: &str,
+struct FinishResolutionInput<'a> {
+    identity_ref: &'a str,
+    profile_ref: &'a str,
+    tier: &'a str,
+    schema_id: &'a str,
+    schema_version: &'a str,
+    source_language: &'a str,
+    profile_identity: &'a str,
     accepted_overrides: Vec<String>,
-    mut diagnostics: Vec<String>,
+    diagnostics: Vec<String>,
     config_value: IoValue,
     caveats: Vec<String>,
-) -> Result<ResolvedNodeConfig> {
+}
+
+fn finish_resolution(input: FinishResolutionInput<'_>) -> Result<ResolvedNodeConfig> {
+    let FinishResolutionInput {
+        identity_ref,
+        profile_ref,
+        tier,
+        schema_id,
+        schema_version,
+        source_language,
+        profile_identity,
+        accepted_overrides,
+        mut diagnostics,
+        config_value,
+        caveats,
+    } = input;
     diagnostics.sort();
     diagnostics.dedup();
     ensure_diagnostic_bound(diagnostics.len())?;
@@ -349,9 +364,7 @@ fn finish_resolution(
         caveats: &caveats,
     })?;
     let resolution_ref = crate::preserves_rail::canonical_hash(&resolution_value)?;
-    let mut profile_metadata_refs = Vec::with_capacity(2);
-    profile_metadata_refs.push(profile_ref.to_string());
-    profile_metadata_refs.push(resolution_ref.clone());
+    let profile_metadata_refs = vec![profile_ref.to_string(), resolution_ref.clone()];
     Ok(ResolvedNodeConfig {
         decision: decision.to_string(),
         diagnostics,

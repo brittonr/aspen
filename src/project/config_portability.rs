@@ -125,13 +125,11 @@ fn lint_source_pins(pins: &[SourcePinRecord], diagnostics: &mut Vec<String>) -> 
             ));
         }
         compared.insert(format!("{}@{}", pin.dependency, pin.cargo_revision));
-        if let Some(previous) = seen.insert(pin.dependency.clone(), pin.cargo_revision.clone()) {
-            if previous != pin.cargo_revision {
-                diagnostics.push(format!(
-                    "conflicting-cargo-source-pin:{}:{}:{}",
-                    pin.dependency, previous, pin.cargo_revision
-                ));
-            }
+        if let Some(previous) = seen.insert(pin.dependency.clone(), pin.cargo_revision.clone())
+            && previous != pin.cargo_revision
+        {
+            diagnostics
+                .push(format!("conflicting-cargo-source-pin:{}:{}:{}", pin.dependency, previous, pin.cargo_revision));
         }
     }
     Ok(compared.into_iter().collect())

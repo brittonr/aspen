@@ -91,9 +91,9 @@ fn receipt_value(
 }
 
 fn duplicate_replayed(input: &FinalizeInput<'_>) -> bool {
-    input.enqueue_duplicate.is_some_and(|duplicate| {
-        input.enqueue.is_some_and(|enqueue| duplicate.receipt.receipt_ref == enqueue.receipt.receipt_ref)
-    })
+    input
+        .enqueue_duplicate
+        .is_some_and(|duplicate| input.enqueue.is_some_and(|enqueue| duplicate_enqueue_replayed(enqueue, duplicate)))
 }
 
 fn write_outputs(

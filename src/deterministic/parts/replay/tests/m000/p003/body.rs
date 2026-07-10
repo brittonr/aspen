@@ -94,7 +94,7 @@
     #[test]
     fn effect_log_validation_denies_extra_missing_and_live_fallback() {
         let entry = effect_entry(FIRST_EFFECT_SEQUENCE, DEFAULT_ARTIFACT_REF, DEFAULT_POLICY_REF);
-        let extra = validation(&[entry.clone()], &[]);
+        let extra = validation(std::slice::from_ref(&entry), &[]);
         assert_eq!(extra.decision, "deny");
         assert!(extra.diagnostics[0].contains("unconsumed"));
 

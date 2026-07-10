@@ -203,7 +203,7 @@ fn enqueue_diagnostics(enqueue: &Apply, duplicate: &Apply) -> Vec<String> {
     let mut diagnostics = Vec::new();
     if enqueue.receipt.decision != "pass" {
         diagnostics.extend(enqueue.receipt.diagnostics.clone());
-    } else if duplicate.receipt.receipt_ref != enqueue.receipt.receipt_ref {
+    } else if !duplicate_enqueue_replayed(enqueue, duplicate) {
         diagnostics.push("coordination duplicate enqueue did not replay prior receipt".to_string());
     }
     diagnostics

@@ -7,12 +7,8 @@
 //
 // Type aliases and common helpers are inherited from p000.
 
-const PLACEMENT_PLAN_SCHEMA: &str = "molten.placement.plan.v1";
-const PLACEMENT_CONSTRAINT_SCHEMA: &str = "molten.placement.constraint.v1";
-
 const MAX_CONSTRAINTS: usize = 64;
 const MAX_TAINT_TOLERATION_PAIRS: usize = 32;
-const MAX_AFFINITY_TERMS: usize = 16;
 const _: () = assert!(MAX_CONSTRAINTS > 0);
 const _: () = assert!(MAX_TAINT_TOLERATION_PAIRS > 0);
 
@@ -199,7 +195,7 @@ pub fn evaluate_placement_fit(request: &PlacementRequest) -> Result<PlacementDec
     };
 
     // Validate capacity evidence refs
-    for ref evidence_ref in &capacity.evidence_refs {
+    for evidence_ref in &capacity.evidence_refs {
         require_ref(evidence_ref, "capacity evidence ref")?;
     }
 

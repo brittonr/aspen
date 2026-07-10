@@ -7,9 +7,6 @@
 //
 // Type aliases and common helpers are inherited from p000.
 
-const RECONCILE_RECEIPT_SCHEMA: &str = "molten.reconciliation.receipt.v1";
-const WORK_QUEUE_ITEM_SCHEMA: &str = "molten.reconciliation.work-queue-item.v1";
-
 const MAX_DEPENDENCIES: usize = 256;
 const MAX_EFFECT_INTENTS: usize = 128;
 const MAX_BACKOFF_ATTEMPTS: u64 = 10_000;

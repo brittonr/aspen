@@ -279,11 +279,11 @@ fn generate_secret(node_id: &str, data_dir: &std::path::Path) -> Result<String> 
 }
 
 fn selected_backend_ref(config: &Config, source_class: &str) -> Result<String> {
-    if source_class == KEY_SOURCE_MANAGED_BACKEND {
-        if let Some(backend_ref) = config.secret_backend_ref.as_deref() {
-            require_ref(backend_ref, "managed secret backend ref")?;
-            return Ok(backend_ref.to_string());
-        }
+    if source_class == KEY_SOURCE_MANAGED_BACKEND
+        && let Some(backend_ref) = config.secret_backend_ref.as_deref()
+    {
+        require_ref(backend_ref, "managed secret backend ref")?;
+        return Ok(backend_ref.to_string());
     }
     backend_ref(&config.data_dir, source_class)
 }

@@ -211,7 +211,7 @@ pub fn build_local_multiprocess_plan(input: &LocalMultiprocessPlanInput) -> Resu
 
 pub fn build_local_multiprocess_run_receipt(input: &LocalMultiprocessRunInput) -> Result<LocalMultiprocessRunReceipt> {
     let mut diagnostics = input.diagnostics.clone();
-    collect_invalid_ref_diagnostics("local run plan", &[input.plan_ref.clone()], &mut diagnostics)?;
+    collect_invalid_ref_diagnostics("local run plan", std::slice::from_ref(&input.plan_ref), &mut diagnostics)?;
     collect_invalid_ref_diagnostics("local run startup", &input.startup_refs, &mut diagnostics)?;
     collect_invalid_ref_diagnostics("local run workflow", &input.workflow_refs, &mut diagnostics)?;
     collect_invalid_ref_diagnostics("local run shutdown", &input.shutdown_refs, &mut diagnostics)?;

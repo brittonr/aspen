@@ -138,13 +138,13 @@ struct BatchPreflight {
 fn batch_preflight(runtime: &CoordinationRuntime, envelope: &CoordinationBatchEnvelope) -> Result<BatchPreflight> {
     let snapshot = snapshot_from_state(&runtime.state)?;
     let mut diagnostics = Vec::new();
-    if let Some(compare_state_ref) = envelope.compare_state_ref.as_deref() {
-        if compare_state_ref != snapshot.state_ref {
-            diagnostics.push(format!(
-                "coordination batch compare-state mismatch: expected {compare_state_ref}, current {}",
-                snapshot.state_ref
-            ));
-        }
+    if let Some(compare_state_ref) = envelope.compare_state_ref.as_deref()
+        && compare_state_ref != snapshot.state_ref
+    {
+        diagnostics.push(format!(
+            "coordination batch compare-state mismatch: expected {compare_state_ref}, current {}",
+            snapshot.state_ref
+        ));
     }
     let mut operation_ids = OrderedSet::new();
     for request_value in &envelope.requests {

@@ -114,7 +114,7 @@ fn collect_node_summary_diagnostics(
     let mut node_commits = OrderedSet::new();
     for commit in &summary.semantic_commits {
         collect_required_text_diagnostic("semantic-commit-operation", &commit.operation_id, diagnostics)?;
-        collect_invalid_ref_diagnostics("semantic commit", &[commit.commit_ref.clone()], diagnostics)?;
+        collect_invalid_ref_diagnostics("semantic commit", std::slice::from_ref(&commit.commit_ref), diagnostics)?;
         if !node_commits.insert(commit.operation_id.as_str()) {
             push_diagnostic(diagnostics, format!("duplicate-node-semantic-commit:{}", commit.operation_id))?;
         }
@@ -202,10 +202,10 @@ fn collect_failure_repro_diagnostics(
         "failure-repro-private-without-reveal",
     )?;
     push_if(diagnostics, input.redaction_policy_ref.trim().is_empty(), "failure-repro-missing-redaction-policy")?;
-    if let Some(claimed) = &input.claimed_payload_ref {
-        if claimed != payload_ref {
-            push_diagnostic(diagnostics, "failure-repro-seal-mismatch".to_string())?;
-        }
+    if let Some(claimed) = &input.claimed_payload_ref
+        && claimed != payload_ref
+    {
+        push_diagnostic(diagnostics, "failure-repro-seal-mismatch".to_string())?;
     }
     Ok(())
 }
