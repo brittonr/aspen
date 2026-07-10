@@ -744,6 +744,7 @@ nix flake check
 ## References
 
 - [`onix-core` kache Nix Rust helpers](../../onix-core/lib/kache-nix-rust.nix) — reference implementation for opt-in Nix-owned kache wrappers around sandboxed Rust builds.
+- [`n0-computer/iroh-experiments`](https://github.com/n0-computer/iroh-experiments) — design reference for hint-only Iroh content discovery, deterministic DAG traversal, optional pkarr pointers, HTTP3-over-Iroh readback, and remote byte-source ideas; Molten keeps Preserves receipts, BLAKE3 identity, and capability/policy/resource gates normative.
 - [`n0-computer/iroh-examples`](https://github.com/n0-computer/iroh-examples) — reference patterns for dynamic Iroh protocol routing, framed bidirectional streams, and read-only blob gateway UX.
 - [`n0-computer/iroh-experiments`](https://github.com/n0-computer/iroh-experiments) — reference patterns for Iroh content discovery, deterministic DAG sync, pkarr latest pointers, HTTP3-over-Iroh readback, and remote byte-source verification experiments.
 - [`n0-computer/irpc`](https://github.com/n0-computer/irpc) — reference patterns for local/remote request-response and streaming service sessions over Iroh-style transports.

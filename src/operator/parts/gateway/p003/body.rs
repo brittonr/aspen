@@ -208,4 +208,70 @@ mod tests {
         .expect("index");
         assert!(!receipt_authorizes_mutation(&decision.receipt_value));
     }
+
+    #[test]
+    fn http3_iroh_adapter_delegates_to_canonical_gateway_receipt() {
+        let (_root, manifest, chunks) = manifest_fixture();
+        let decision = handle_http3_iroh_readback(&Http3IrohReadbackInput {
+            method: HTTP3_METHOD_GET,
+            route: "/artifact/range",
+            session_ref: &fixture_ref("http3-session"),
+            requester_ref: &fixture_ref("operator"),
+            object_ref: &manifest.manifest_ref,
+            requested_range: Some(Range {
+                offset: RANGE_OFFSET,
+                length: RANGE_LENGTH,
+            }),
+            manifest: Some(&manifest),
+            chunk_bytes: chunks,
+            visibility: visibility(),
+        })
+        .expect("http3 adapter pass");
+        assert_eq!(decision.decision, "pass");
+        assert_eq!(decision.status, http3_status_for_decision("pass"));
+        assert!(decision.gateway_receipt_value.is_some());
+        let text = to_text(&decision.receipt_value).expect("adapter text");
+        assert!(text.contains("http-transport-is-not-authority"));
+    }
+
+    #[test]
+    fn http3_iroh_adapter_rejects_mutating_methods_and_hidden_refs() {
+        let (_root, manifest, chunks) = manifest_fixture();
+        let method_deny = handle_http3_iroh_readback(&Http3IrohReadbackInput {
+            method: "DELETE",
+            route: "/artifact/range",
+            session_ref: &fixture_ref("http3-session"),
+            requester_ref: &fixture_ref("operator"),
+            object_ref: &manifest.manifest_ref,
+            requested_range: None,
+            manifest: Some(&manifest),
+            chunk_bytes: chunks.clone(),
+            visibility: visibility(),
+        })
+        .expect("http3 method deny");
+        assert_eq!(method_deny.decision, "deny");
+        assert!(method_deny.bytes.is_empty());
+        assert!(method_deny.diagnostics.iter().any(|diagnostic| diagnostic.contains("read-only")));
+
+        let hidden_deny = handle_http3_iroh_readback(&Http3IrohReadbackInput {
+            method: HTTP3_METHOD_GET,
+            route: "/artifact/range",
+            session_ref: &fixture_ref("http3-session"),
+            requester_ref: &fixture_ref("operator"),
+            object_ref: &manifest.manifest_ref,
+            requested_range: Some(Range {
+                offset: RANGE_OFFSET,
+                length: RANGE_LENGTH,
+            }),
+            manifest: Some(&manifest),
+            chunk_bytes: chunks,
+            visibility: Visibility {
+                hidden_refs: vec![manifest.manifest_ref.clone()],
+                ..visibility()
+            },
+        })
+        .expect("http3 hidden deny");
+        assert_eq!(hidden_deny.decision, "deny");
+        assert!(hidden_deny.bytes.is_empty());
+    }
 }

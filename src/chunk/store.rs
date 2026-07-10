@@ -15,6 +15,7 @@ mod semantic_store {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk/parts/store/p013/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk/parts/store/p014/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk/parts/store/p015/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk/parts/store/p016/body.rs"));
 }
 
 pub use semantic_store::*;

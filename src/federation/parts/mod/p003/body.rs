@@ -241,4 +241,5 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/federation/parts/mod/tests/m000/p000/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/federation/parts/mod/tests/m000/p001/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/federation/parts/mod/tests/m000/p002/body.rs"));
 }
