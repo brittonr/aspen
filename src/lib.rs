@@ -115,6 +115,10 @@ compat_module!(node_runtime, kernel);
 pub mod node_profile_config_core;
 compat_module!(node_profile_config, node_profile_config_core);
 #[doc(hidden)]
+#[path = "node/service_fsm.rs"]
+pub mod node_service_fsm_core;
+compat_module!(node_service_fsm, node_service_fsm_core);
+#[doc(hidden)]
 #[path = "octet/gate.rs"]
 pub mod quality;
 compat_module!(octet_gate, quality);
