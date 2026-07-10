@@ -132,6 +132,44 @@ pub(crate) enum TraceabilityCommand {
         #[arg(long = "summary-out")]
         summary_out: Option<FilePath>,
     },
+    ContextProfile {
+        #[arg(long = "profile-id")]
+        profile_id: String,
+        #[arg(long = "profile-tier", default_value = "local")]
+        profile_tier: String,
+        #[arg(long = "allowed-operation")]
+        allowed_operations: Vec<String>,
+        #[arg(long)]
+        operation: String,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "authority-ref")]
+        authority_refs: Vec<String>,
+        #[arg(long = "resource-ref")]
+        resource_refs: Vec<String>,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long = "retention-ref")]
+        retention_refs: Vec<String>,
+        #[arg(long = "override-authority-ref")]
+        override_authority_refs: Vec<String>,
+        #[arg(long = "override-evidence-ref")]
+        override_evidence_refs: Vec<String>,
+        #[arg(long = "require-policy")]
+        require_policy: bool,
+        #[arg(long = "require-authority")]
+        require_authority: bool,
+        #[arg(long = "require-resource")]
+        require_resource: bool,
+        #[arg(long = "require-evidence")]
+        require_evidence: bool,
+        #[arg(long = "require-retention")]
+        require_retention: bool,
+        #[arg(long)]
+        out: Option<FilePath>,
+        #[arg(long = "summary-out")]
+        summary_out: Option<FilePath>,
+    },
 }
 
 pub(crate) fn run_traceability_command(command: TraceabilityCommand) -> Outcome<()> {
@@ -230,6 +268,45 @@ pub(crate) fn run_traceability_command(command: TraceabilityCommand) -> Outcome<
             out,
             summary_out,
         }),
+        TraceabilityCommand::ContextProfile {
+            profile_id,
+            profile_tier,
+            allowed_operations,
+            operation,
+            policy_refs,
+            authority_refs,
+            resource_refs,
+            evidence_refs,
+            retention_refs,
+            override_authority_refs,
+            override_evidence_refs,
+            require_policy,
+            require_authority,
+            require_resource,
+            require_evidence,
+            require_retention,
+            out,
+            summary_out,
+        } => run_context_profile(ContextProfileCommandInput {
+            profile_id,
+            profile_tier,
+            allowed_operations,
+            operation,
+            policy_refs,
+            authority_refs,
+            resource_refs,
+            evidence_refs,
+            retention_refs,
+            override_authority_refs,
+            override_evidence_refs,
+            require_policy,
+            require_authority,
+            require_resource,
+            require_evidence,
+            require_retention,
+            out,
+            summary_out,
+        }),
     }
 }
 
@@ -288,6 +365,27 @@ struct EffectiveConfigCommandInput {
     profile_refs: Vec<String>,
     fields: Vec<String>,
     release_mode: bool,
+    out: Option<FilePath>,
+    summary_out: Option<FilePath>,
+}
+
+struct ContextProfileCommandInput {
+    profile_id: String,
+    profile_tier: String,
+    allowed_operations: Vec<String>,
+    operation: String,
+    policy_refs: Vec<String>,
+    authority_refs: Vec<String>,
+    resource_refs: Vec<String>,
+    evidence_refs: Vec<String>,
+    retention_refs: Vec<String>,
+    override_authority_refs: Vec<String>,
+    override_evidence_refs: Vec<String>,
+    require_policy: bool,
+    require_authority: bool,
+    require_resource: bool,
+    require_evidence: bool,
+    require_retention: bool,
     out: Option<FilePath>,
     summary_out: Option<FilePath>,
 }
@@ -712,6 +810,63 @@ fn parse_effective_config_fields(
         });
     }
     Ok(output)
+}
+
+fn run_context_profile(input: ContextProfileCommandInput) -> Outcome<()> {
+    let profile = molten::operator_context_profile::ContextProfileInput {
+        profile_id: input.profile_id,
+        profile_tier: input.profile_tier,
+        refs: molten::operator_context_profile::ContextRefSet {
+            policy_refs: input.policy_refs,
+            capability_refs: Vec::new(),
+            authority_refs: input.authority_refs,
+            resource_refs: input.resource_refs,
+            evidence_refs: input.evidence_refs,
+            redaction_refs: Vec::new(),
+            retention_refs: input.retention_refs,
+        },
+        allowed_operations: input.allowed_operations,
+        caveats: vec!["CLI context profile expansion is evidence-only".to_string()],
+    };
+    let requirements = molten::operator_context_profile::OperationRequirements {
+        operation: input.operation,
+        require_policy: input.require_policy,
+        require_authority: input.require_authority,
+        require_resource: input.require_resource,
+        require_evidence: input.require_evidence,
+        require_retention: input.require_retention,
+    };
+    let overrides = molten::operator_context_profile::ContextOverrideInput {
+        policy_refs: Vec::new(),
+        authority_refs: input.override_authority_refs,
+        resource_refs: Vec::new(),
+        evidence_refs: input.override_evidence_refs,
+        retention_refs: Vec::new(),
+    };
+    let expansion = molten::operator_context_profile::expand_context_profile(&profile, &requirements, &overrides)?;
+    write_optional_preserves(input.out.as_ref(), &expansion.value)?;
+    write_optional_text(input.summary_out.as_ref(), &render_context_profile_summary(&expansion))?;
+    eprintln!("context-profile expansion={} decision={}", expansion.expansion_ref, expansion.decision);
+    if expansion.decision == "pass" {
+        Ok(())
+    } else {
+        Err(molten::error::MoltenError::invalid_harness(format!(
+            "context profile expansion denied: {}",
+            expansion.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
+        )))
+    }
+}
+
+fn render_context_profile_summary(expansion: &molten::operator_context_profile::ContextExpansion) -> String {
+    let diagnostics = if expansion.diagnostics.is_empty() {
+        "none".to_string()
+    } else {
+        expansion.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
+    };
+    format!(
+        "context-profile profile={} expansion={} decision={} diagnostics={}\n",
+        expansion.profile_ref, expansion.expansion_ref, expansion.decision, diagnostics
+    )
 }
 
 fn collect_spec_sources(root: &std::path::Path) -> Outcome<Vec<molten::requirement_traceability::SpecSource>> {

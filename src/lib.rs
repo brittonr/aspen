@@ -119,6 +119,10 @@ compat_module!(octet_gate, quality);
 pub mod remediator;
 compat_module!(octet_remediation, remediator);
 #[doc(hidden)]
+#[path = "operator/context_profile.rs"]
+pub mod context_profile_core;
+compat_module!(operator_context_profile, context_profile_core);
+#[doc(hidden)]
 #[path = "operator/dogfood.rs"]
 pub mod pilot;
 compat_module!(operator_dogfood, pilot);

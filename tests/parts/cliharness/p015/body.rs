@@ -235,6 +235,99 @@ fn cli_effective_config_denies_release_fixture_default_and_stale_ref() -> CliRes
 }
 
 #[test]
+fn cli_context_profile_expands_refs_for_command_core() -> CliResult<()> {
+    let dir = temp_dir("cli-context-profile")?;
+    let receipt = dir.join("context-profile.preserves");
+    let summary = dir.join("context-profile.txt");
+    let policy_ref = "blake3:8f5174292fe31f8fc364dc8f49560b21581f2cf01e54ae3fe8820c6d90d62f65";
+    let authority_ref = "blake3:2ded4d8475648207836b950368aa4e1037b11b9aeb6f5b939482ad4d859664f7";
+    let resource_ref = "blake3:e6cfe6b85e63f1eb8bbaf271586411e55885b51611497587164fd2c0adf0aed3";
+    let evidence_ref = "blake3:555b0d27ee2e8a2b36c5886b126f1c118e909de89261cd61a399982aec392c67";
+    let extra_evidence_ref = "blake3:9492775b4c3722f1da4b1d955f04e8358341cebbbe8b8bd48596d1ce2ab1e0a8";
+
+    let output = molten_cmd()
+        .args([
+            "test",
+            "traceability",
+            "context-profile",
+            "--profile-id",
+            "operator:node-control",
+            "--profile-tier",
+            "pilot",
+            "--allowed-operation",
+            "node.install",
+            "--operation",
+            "node.install",
+            "--require-policy",
+            "--require-authority",
+            "--require-resource",
+            "--require-evidence",
+            "--policy-ref",
+            policy_ref,
+            "--authority-ref",
+            authority_ref,
+            "--resource-ref",
+            resource_ref,
+            "--evidence-ref",
+            evidence_ref,
+            "--override-evidence-ref",
+            extra_evidence_ref,
+            "--out",
+        ])
+        .arg(&receipt)
+        .args(["--summary-out"])
+        .arg(&summary)
+        .output()?;
+
+    assert_success(&output, "context profile expansion");
+    assert!(stderr(&output).contains("context-profile expansion=blake3:"));
+    let receipt_text = std::fs::read_to_string(&receipt)?;
+    assert!(receipt_text.contains("context-profile-expansion-v1"));
+    assert!(receipt_text.contains(extra_evidence_ref));
+    assert!(std::fs::read_to_string(&summary)?.contains("decision=pass"));
+    Ok(())
+}
+
+#[test]
+fn cli_context_profile_denies_unsupported_scope_and_conflicting_authority() -> CliResult<()> {
+    let dir = temp_dir("cli-context-profile-negative")?;
+    let receipt = dir.join("context-profile.preserves");
+    let policy_ref = "blake3:8f5174292fe31f8fc364dc8f49560b21581f2cf01e54ae3fe8820c6d90d62f65";
+    let authority_ref = "blake3:2ded4d8475648207836b950368aa4e1037b11b9aeb6f5b939482ad4d859664f7";
+    let other_authority_ref = "blake3:bb8a0de843b8375ddbfea5424f28cfd6c662402ce40c7fdd28268b7fcaa09e96";
+
+    let output = molten_cmd()
+        .args([
+            "test",
+            "traceability",
+            "context-profile",
+            "--profile-id",
+            "operator:catalog-read",
+            "--allowed-operation",
+            "catalog.search",
+            "--operation",
+            "retention.delete",
+            "--require-authority",
+            "--policy-ref",
+            policy_ref,
+            "--authority-ref",
+            authority_ref,
+            "--override-authority-ref",
+            other_authority_ref,
+            "--out",
+        ])
+        .arg(&receipt)
+        .output()?;
+
+    assert_failure(&output, "context profile negative");
+    let stderr_text = stderr(&output);
+    assert!(stderr_text.contains("unsupported-operation-scope:retention.delete"));
+    assert!(stderr_text.contains("conflicting-authority-override"));
+    assert!(std::fs::read_to_string(&receipt)?.contains("conflicting-authority-override"));
+    Ok(())
+}
+
+#[test]
 fn cli_ci_run_receipt_binds_nextest_metadata_and_junit_view() -> CliResult<()> {
     let dir = temp_dir("cli-ci-run-receipt")?;
     let nextest_config = dir.join("nextest.toml");
