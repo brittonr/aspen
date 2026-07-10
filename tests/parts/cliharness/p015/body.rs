@@ -187,6 +187,54 @@ fn cli_config_lint_denies_home_path_floating_toolchain_and_pin_drift() -> CliRes
 }
 
 #[test]
+fn cli_effective_config_writes_canonical_artifact_before_summary() -> CliResult<()> {
+    let dir = temp_dir("cli-effective-config")?;
+    let receipt = dir.join("effective-config.preserves");
+    let summary = dir.join("effective-config.txt");
+    let profile_ref = "blake3:8f5174292fe31f8fc364dc8f49560b21581f2cf01e54ae3fe8820c6d90d62f65";
+    let cli_ref = "blake3:2ded4d8475648207836b950368aa4e1037b11b9aeb6f5b939482ad4d859664f7";
+
+    let output = molten_cmd()
+        .args(["test", "traceability", "effective-config", "--profile-ref", profile_ref])
+        .args(["--field", &format!("node.id|node:local|profile|{profile_ref}|")])
+        .args(["--field", &format!("state.root|target/node|cli-override|{cli_ref}|operator override")])
+        .args(["--out"])
+        .arg(&receipt)
+        .args(["--summary-out"])
+        .arg(&summary)
+        .output()?;
+
+    assert_success(&output, "effective config readback");
+    assert!(stderr(&output).contains("effective-config ref=blake3:"));
+    let receipt_text = std::fs::read_to_string(&receipt)?;
+    assert!(receipt_text.contains("effective-config-readback-v1"));
+    assert!(receipt_text.contains("selected-source-class"));
+    assert!(std::fs::read_to_string(&summary)?.contains("effective-config ref=blake3:"));
+    Ok(())
+}
+
+#[test]
+fn cli_effective_config_denies_release_fixture_default_and_stale_ref() -> CliResult<()> {
+    let dir = temp_dir("cli-effective-config-negative")?;
+    let receipt = dir.join("effective-config.preserves");
+
+    let output = molten_cmd()
+        .args(["test", "traceability", "effective-config", "--release-mode"])
+        .args(["--profile-ref", "not-a-ref"])
+        .args(["--field", "max.events|16|default|none|local fixture"])
+        .args(["--out"])
+        .arg(&receipt)
+        .output()?;
+
+    assert_failure(&output, "effective config negative");
+    let stderr_text = stderr(&output);
+    assert!(stderr_text.contains("fixture-default-in-release:max.events"));
+    assert!(stderr_text.contains("stale-ref:effective config profile:not-a-ref"));
+    assert!(std::fs::read_to_string(&receipt)?.contains("fixture-default-in-release:max.events"));
+    Ok(())
+}
+
+#[test]
 fn cli_ci_run_receipt_binds_nextest_metadata_and_junit_view() -> CliResult<()> {
     let dir = temp_dir("cli-ci-run-receipt")?;
     let nextest_config = dir.join("nextest.toml");

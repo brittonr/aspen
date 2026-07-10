@@ -215,6 +215,10 @@ compat_module!(service_supervision, watchdog);
 pub mod config_portability_core;
 compat_module!(project_config_portability, config_portability_core);
 #[doc(hidden)]
+#[path = "project/effective_config.rs"]
+pub mod effective_config_core;
+compat_module!(project_effective_config, effective_config_core);
+#[doc(hidden)]
 #[path = "testing/drift.rs"]
 pub mod drift_core;
 compat_module!(deterministic_drift, drift_core);

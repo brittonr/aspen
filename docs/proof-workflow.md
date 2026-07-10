@@ -68,8 +68,9 @@ The pure core derives coverage from validated receipt fields rather than rendere
 - `replay-smoke-gate-v1` compares fresh run, replay, and fresh-rerun canonical refs, while live-only, exploratory, unavailable, or diagnostic-only suites remain visibly excluded from deterministic pass evidence.
 - `nextest-profile-matrix-v1` records semantic profile ids, command surfaces, filter expressions, expected artifacts/JUnit paths, retry policy, excluded non-replayable partitions, cost class, evidence scope, platform availability, diagnostics, and release caveats. Deterministic profiles must exclude live-only, VM-only, exploratory, retry-only, and diagnostic-only partitions; VM, dogfood, and exploratory profiles remain platform-scoped or diagnostic evidence only.
 - `cli-receipt-first-gate-v1` records whether evidence-bearing CLI tests asserted canonical artifacts or receipts before relying on stdout, stderr, JUnit, markdown, JSON, or terminal summaries.
+- `effective-config-readback-v1` records normalized effective values, field-local source traces, profile refs, override refs, default caveats, diagnostics, and canonical BLAKE3 identity. It is readback evidence only; install/run/delete/retention/live-send/policy gates still require their subsystem receipts and authority.
 
-Focused checks: `cargo test hardening --lib`, `cargo test config_portability --lib`, `cargo test --test cliharness ci_run_receipt`, `molten test traceability config-lint --root . --out target/config-portability.preserves --summary-out target/config-portability.txt`, `nickel export tests/evidence-matrix.ncl`, and `nix build .#checks.x86_64-linux.nextest-config`.
+Focused checks: `cargo test hardening --lib`, `cargo test config_portability --lib`, `cargo test effective_config --lib`, `cargo test --test cliharness ci_run_receipt`, `cargo test --test cliharness effective_config`, `molten test traceability config-lint --root . --out target/config-portability.preserves --summary-out target/config-portability.txt`, `nickel export tests/evidence-matrix.ncl`, and `nix build .#checks.x86_64-linux.nextest-config`.
 
 ## Aggregate proof obligations
 

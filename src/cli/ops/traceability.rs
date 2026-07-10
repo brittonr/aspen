@@ -31,6 +31,10 @@ const NIX_SOURCE_PREFIX: &str = "ssh://git@github.com/OnixResearch/";
 const SOURCE_REVISION_SEPARATOR: char = '#';
 const GIT_SUFFIX: &str = ".git";
 const TOML_QUOTE: char = '"';
+const EFFECTIVE_CONFIG_FIELD_PARTS: usize = 5;
+const EFFECTIVE_CONFIG_FIELD_SEPARATOR: char = '|';
+const EFFECTIVE_CONFIG_CAVEAT_SEPARATOR: char = ',';
+const EFFECTIVE_CONFIG_NONE_REF: &str = "none";
 
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum TraceabilityCommand {
@@ -111,6 +115,18 @@ pub(crate) enum TraceabilityCommand {
     ConfigLint {
         #[arg(long, default_value = ".")]
         root: FilePath,
+        #[arg(long)]
+        out: Option<FilePath>,
+        #[arg(long = "summary-out")]
+        summary_out: Option<FilePath>,
+    },
+    EffectiveConfig {
+        #[arg(long = "profile-ref")]
+        profile_refs: Vec<String>,
+        #[arg(long = "field")]
+        fields: Vec<String>,
+        #[arg(long = "release-mode")]
+        release_mode: bool,
         #[arg(long)]
         out: Option<FilePath>,
         #[arg(long = "summary-out")]
@@ -201,6 +217,19 @@ pub(crate) fn run_traceability_command(command: TraceabilityCommand) -> Outcome<
         TraceabilityCommand::ConfigLint { root, out, summary_out } => {
             run_config_lint(ConfigLintCommandInput { root, out, summary_out })
         }
+        TraceabilityCommand::EffectiveConfig {
+            profile_refs,
+            fields,
+            release_mode,
+            out,
+            summary_out,
+        } => run_effective_config(EffectiveConfigCommandInput {
+            profile_refs,
+            fields,
+            release_mode,
+            out,
+            summary_out,
+        }),
     }
 }
 
@@ -251,6 +280,14 @@ struct NextestProfileMatrixCommandInput {
 
 struct ConfigLintCommandInput {
     root: FilePath,
+    out: Option<FilePath>,
+    summary_out: Option<FilePath>,
+}
+
+struct EffectiveConfigCommandInput {
+    profile_refs: Vec<String>,
+    fields: Vec<String>,
+    release_mode: bool,
     out: Option<FilePath>,
     summary_out: Option<FilePath>,
 }
@@ -609,6 +646,72 @@ fn render_config_lint_summary(report: &molten::project_config_portability::Confi
         report.compared_source_pins.join(","),
         diagnostics
     )
+}
+
+fn run_effective_config(input: EffectiveConfigCommandInput) -> Outcome<()> {
+    let sources = parse_effective_config_fields(input.fields)?;
+    let readback = molten::project_effective_config::build_effective_config_readback(
+        &molten::project_effective_config::EffectiveConfigInput {
+            profile_refs: input.profile_refs,
+            sources,
+            release_mode: input.release_mode,
+            diagnostics: Vec::new(),
+        },
+    )?;
+    write_optional_preserves(input.out.as_ref(), &readback.value)?;
+    write_optional_text(
+        input.summary_out.as_ref(),
+        &molten::project_effective_config::explain_effective_config(&readback)?,
+    )?;
+    eprintln!("effective-config ref={} decision={}", readback.fingerprint_ref, readback.decision);
+    if readback.decision == "pass" {
+        Ok(())
+    } else {
+        Err(molten::error::MoltenError::invalid_harness(format!(
+            "effective config denied: {}",
+            readback.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
+        )))
+    }
+}
+
+fn parse_effective_config_fields(
+    fields: Vec<String>,
+) -> Outcome<Vec<molten::project_effective_config::ConfigSourceInput>> {
+    let mut output = Vec::with_capacity(fields.len());
+    for field in fields {
+        let parts = field.split(EFFECTIVE_CONFIG_FIELD_SEPARATOR).map(str::to_string).collect::<Vec<_>>();
+        if parts.len() != EFFECTIVE_CONFIG_FIELD_PARTS {
+            return Err(molten::error::MoltenError::invalid_harness(format!(
+                "effective config field must have {EFFECTIVE_CONFIG_FIELD_PARTS} pipe-delimited parts"
+            )));
+        }
+        if parts.iter().take(EFFECTIVE_CONFIG_FIELD_PARTS - 1).any(|part| part.trim().is_empty()) {
+            return Err(molten::error::MoltenError::invalid_harness("effective config field parts must not be empty"));
+        }
+        let caveats = if parts[4].trim().is_empty() {
+            Vec::new()
+        } else {
+            parts[4]
+                .split(EFFECTIVE_CONFIG_CAVEAT_SEPARATOR)
+                .map(str::trim)
+                .filter(|caveat| !caveat.is_empty())
+                .map(str::to_string)
+                .collect()
+        };
+        output.push(molten::project_effective_config::ConfigSourceInput {
+            field: parts[0].clone(),
+            value: parts[1].clone(),
+            source_class: parts[2].clone(),
+            source_ref: if parts[3] == EFFECTIVE_CONFIG_NONE_REF {
+                None
+            } else {
+                Some(parts[3].clone())
+            },
+            admitted_override: parts[2] == "cli-override",
+            caveats,
+        });
+    }
+    Ok(output)
 }
 
 fn collect_spec_sources(root: &std::path::Path) -> Outcome<Vec<molten::requirement_traceability::SpecSource>> {
