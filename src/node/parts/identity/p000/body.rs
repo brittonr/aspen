@@ -1,5 +1,16 @@
 use std::io::Write;
 
+const KEY_SOURCE_EXPLICIT: &str = "explicit-key";
+const KEY_SOURCE_GENERATE: &str = "generate-and-persist";
+const KEY_SOURCE_MANAGED_BACKEND: &str = "managed-secret-backend";
+const KEY_SOURCE_PERSISTED_FILE: &str = "persisted-file";
+const KEY_SOURCE_UNAVAILABLE: &str = "unavailable";
+const IROH_ENDPOINT_PREFIX: &str = "iroh:";
+#[cfg(unix)]
+const OWNER_ONLY_SECRET_FILE_MODE: u32 = 0o600;
+#[cfg(unix)]
+const GROUP_OR_OTHER_SECRET_PERMISSION_BITS: u32 = 0o077;
+
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
 type OpenOptions = std::fs::OpenOptions;
@@ -9,6 +20,10 @@ type Value<T> = preserves::Value<T>;
 mod fs {
     pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         std::fs::create_dir_all(path)
+    }
+
+    pub(super) fn metadata(path: impl AsRef<std::path::Path>) -> std::io::Result<std::fs::Metadata> {
+        std::fs::metadata(path)
     }
 
     pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
@@ -47,8 +62,12 @@ pub struct Config {
     pub display_name: String,
     pub data_dir: std::path::PathBuf,
     pub explicit_key: Option<String>,
+    pub secret_backend_key: Option<String>,
+    pub secret_backend_ref: Option<String>,
+    pub require_secret_backend: bool,
     pub allow_generate: bool,
     pub allow_rotation: bool,
+    pub rotation_receipt_ref: Option<String>,
     pub policy_refs: Vec<String>,
 }
 
@@ -60,8 +79,12 @@ impl Config {
             node_id,
             data_dir: data_dir.into(),
             explicit_key: None,
+            secret_backend_key: None,
+            secret_backend_ref: None,
+            require_secret_backend: false,
             allow_generate: true,
             allow_rotation: false,
+            rotation_receipt_ref: None,
             policy_refs: Vec::new(),
         }
     }
@@ -98,12 +121,190 @@ pub struct BootstrapHandshake {
     pub value: IoValue,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IrohSecretPermissionStatus {
+    NotPresent,
+    Restricted,
+    Unsupported,
+    Unsafe,
+}
+
+impl IrohSecretPermissionStatus {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::NotPresent => "not-present",
+            Self::Restricted => "restricted-owner-only",
+            Self::Unsupported => "unsupported-diagnostic-only",
+            Self::Unsafe => "unsafe-shared",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IrohSecretSourceDecisionKind {
+    LoadExplicit,
+    LoadBackend,
+    LoadFile,
+    GenerateAndPersist,
+    Deny,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IrohSecretSourceFacts {
+    pub explicit_key_present: bool,
+    pub managed_secret_present: bool,
+    pub managed_secret_required: bool,
+    pub persisted_file_present: bool,
+    pub persisted_file_permission: IrohSecretPermissionStatus,
+    pub generation_allowed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IrohSecretSourceDecision {
+    pub kind: IrohSecretSourceDecisionKind,
+    pub key_source_class: &'static str,
+    pub permission_status: IrohSecretPermissionStatus,
+    pub diagnostic: &'static str,
+}
+
+pub fn resolve_iroh_secret_source(facts: &IrohSecretSourceFacts) -> IrohSecretSourceDecision {
+    if facts.explicit_key_present {
+        return IrohSecretSourceDecision {
+            kind: IrohSecretSourceDecisionKind::LoadExplicit,
+            key_source_class: KEY_SOURCE_EXPLICIT,
+            permission_status: IrohSecretPermissionStatus::NotPresent,
+            diagnostic: "explicit endpoint key metadata selected before shell secret effects",
+        };
+    }
+    if facts.managed_secret_present {
+        return IrohSecretSourceDecision {
+            kind: IrohSecretSourceDecisionKind::LoadBackend,
+            key_source_class: KEY_SOURCE_MANAGED_BACKEND,
+            permission_status: IrohSecretPermissionStatus::NotPresent,
+            diagnostic: "managed secret backend metadata selected before file fallback",
+        };
+    }
+    if facts.managed_secret_required {
+        return IrohSecretSourceDecision {
+            kind: IrohSecretSourceDecisionKind::Deny,
+            key_source_class: KEY_SOURCE_MANAGED_BACKEND,
+            permission_status: IrohSecretPermissionStatus::NotPresent,
+            diagnostic: "managed secret backend is required but unavailable",
+        };
+    }
+    if facts.persisted_file_present {
+        return match facts.persisted_file_permission {
+            IrohSecretPermissionStatus::Unsafe => IrohSecretSourceDecision {
+                kind: IrohSecretSourceDecisionKind::Deny,
+                key_source_class: KEY_SOURCE_PERSISTED_FILE,
+                permission_status: IrohSecretPermissionStatus::Unsafe,
+                diagnostic: "persisted endpoint secret permissions are not owner-only",
+            },
+            permission_status => IrohSecretSourceDecision {
+                kind: IrohSecretSourceDecisionKind::LoadFile,
+                key_source_class: KEY_SOURCE_PERSISTED_FILE,
+                permission_status,
+                diagnostic: "persisted endpoint key metadata selected with redacted source diagnostics",
+            },
+        };
+    }
+    if facts.generation_allowed {
+        return IrohSecretSourceDecision {
+            kind: IrohSecretSourceDecisionKind::GenerateAndPersist,
+            key_source_class: KEY_SOURCE_GENERATE,
+            permission_status: IrohSecretPermissionStatus::NotPresent,
+            diagnostic: "first boot generation admitted before persistence side effects",
+        };
+    }
+    IrohSecretSourceDecision {
+        kind: IrohSecretSourceDecisionKind::Deny,
+        key_source_class: KEY_SOURCE_UNAVAILABLE,
+        permission_status: IrohSecretPermissionStatus::NotPresent,
+        diagnostic: "persistent endpoint key unavailable and generation is disabled",
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IrohEndpointObservationDecisionKind {
+    Accept,
+    Rotate,
+    Deny,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IrohEndpointObservationFacts {
+    pub prior_endpoint_id: Option<String>,
+    pub observed_endpoint_id: String,
+    pub rotation_allowed: bool,
+    pub supplied_rotation_receipt_ref: Option<String>,
+    pub expected_rotation_receipt_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IrohEndpointObservationDecision {
+    pub kind: IrohEndpointObservationDecisionKind,
+    pub previous_endpoint_id: Option<String>,
+    pub rotation_receipt_ref: Option<String>,
+    pub diagnostic: &'static str,
+}
+
+pub fn admit_iroh_endpoint_observation(facts: &IrohEndpointObservationFacts) -> IrohEndpointObservationDecision {
+    let Some(prior_endpoint_id) = facts.prior_endpoint_id.clone() else {
+        return IrohEndpointObservationDecision {
+            kind: IrohEndpointObservationDecisionKind::Accept,
+            previous_endpoint_id: None,
+            rotation_receipt_ref: None,
+            diagnostic: "first admitted endpoint identity for node scope",
+        };
+    };
+    if prior_endpoint_id == facts.observed_endpoint_id {
+        return IrohEndpointObservationDecision {
+            kind: IrohEndpointObservationDecisionKind::Accept,
+            previous_endpoint_id: Some(prior_endpoint_id),
+            rotation_receipt_ref: None,
+            diagnostic: "observed endpoint identity matches prior node scope",
+        };
+    }
+    if !facts.rotation_allowed {
+        return IrohEndpointObservationDecision {
+            kind: IrohEndpointObservationDecisionKind::Deny,
+            previous_endpoint_id: Some(prior_endpoint_id),
+            rotation_receipt_ref: None,
+            diagnostic: "endpoint id drift detected; rotation policy is required",
+        };
+    }
+    let Some(supplied_rotation_receipt_ref) = facts.supplied_rotation_receipt_ref.clone() else {
+        return IrohEndpointObservationDecision {
+            kind: IrohEndpointObservationDecisionKind::Deny,
+            previous_endpoint_id: Some(prior_endpoint_id),
+            rotation_receipt_ref: None,
+            diagnostic: "endpoint id drift detected; rotation receipt is required",
+        };
+    };
+    if facts.expected_rotation_receipt_ref.as_deref() == Some(supplied_rotation_receipt_ref.as_str()) {
+        return IrohEndpointObservationDecision {
+            kind: IrohEndpointObservationDecisionKind::Rotate,
+            previous_endpoint_id: Some(prior_endpoint_id),
+            rotation_receipt_ref: Some(supplied_rotation_receipt_ref),
+            diagnostic: "endpoint rotation admitted by matching recovery receipt",
+        };
+    }
+    IrohEndpointObservationDecision {
+        kind: IrohEndpointObservationDecisionKind::Deny,
+        previous_endpoint_id: Some(prior_endpoint_id),
+        rotation_receipt_ref: Some(supplied_rotation_receipt_ref),
+        diagnostic: "endpoint id drift detected; supplied rotation receipt is stale or mismatched",
+    }
+}
+
 struct ResolutionInput<'a> {
     config: &'a Config,
     operation: &'a str,
     secret: &'a str,
     material: &'a EndpointMaterial,
     backend_ref: &'a str,
+    source_metadata_ref: &'a str,
+    permission_status: IrohSecretPermissionStatus,
     endpoint_path: &'a std::path::Path,
     is_first_boot: bool,
 }
@@ -114,8 +315,12 @@ struct ReceiptValueInput<'a> {
     node_id: &'a str,
     identity_ref: Option<&'a str>,
     endpoint_id: Option<&'a str>,
+    previous_endpoint_id: Option<&'a str>,
+    rotation_receipt_ref: Option<&'a str>,
     key_source_class: &'a str,
     backend_ref: &'a str,
+    source_metadata_ref: Option<&'a str>,
+    permission_status: IrohSecretPermissionStatus,
     policy_refs: &'a [String],
     diagnostic: &'a str,
     checks: &'a [&'a str],
@@ -123,70 +328,91 @@ struct ReceiptValueInput<'a> {
 
 pub fn resolve(config: &Config) -> Result<Resolution> {
     validate_config(config)?;
-    let backend_ref = backend_ref(&config.data_dir)?;
     let secret_path = config.data_dir.join(SECRET_FILE);
     let endpoint_path = config.data_dir.join(ENDPOINT_FILE);
-
-    if let Some(explicit_key) = config.explicit_key.as_deref() {
-        let material = derive_endpoint_material(explicit_key)?;
-        return finish_resolution(ResolutionInput {
-            config,
-            operation: "explicit-key",
-            secret: explicit_key,
-            material: &material,
-            backend_ref: &backend_ref,
-            endpoint_path: &endpoint_path,
-            is_first_boot: false,
-        });
-    }
-
-    if secret_path.exists() {
-        let secret = fs::read_to_string(&secret_path).map_err(MoltenError::from)?;
-        let material = derive_endpoint_material(secret.trim())?;
-        return finish_resolution(ResolutionInput {
-            config,
-            operation: "persisted-file",
-            secret: secret.trim(),
-            material: &material,
-            backend_ref: &backend_ref,
-            endpoint_path: &endpoint_path,
-            is_first_boot: false,
-        });
-    }
-
-    if config.allow_generate {
-        fs::create_dir_all(&config.data_dir).map_err(MoltenError::from)?;
-        let secret = generate_secret(&config.node_id, &config.data_dir)?;
-        write_secret_restricted(&secret_path, &secret)?;
-        let material = derive_endpoint_material(&secret)?;
-        return finish_resolution(ResolutionInput {
-            config,
-            operation: "generate-and-persist",
-            secret: &secret,
-            material: &material,
-            backend_ref: &backend_ref,
-            endpoint_path: &endpoint_path,
-            is_first_boot: true,
-        });
-    }
-
-    let receipt_value = receipt_value(&ReceiptValueInput {
-        operation: "deny-if-unavailable",
-        decision: "fail",
-        node_id: &config.node_id,
-        identity_ref: None,
-        endpoint_id: None,
-        key_source_class: "unavailable",
-        backend_ref: &backend_ref,
-        policy_refs: &config.policy_refs,
-        diagnostic: "persistent endpoint key unavailable and generation is disabled",
-        checks: &["resolution-order", "no-secret-material", "deny-if-unavailable"],
+    let permission_status = secret_file_permission_status(&secret_path)?;
+    let source_decision = resolve_iroh_secret_source(&IrohSecretSourceFacts {
+        explicit_key_present: config.explicit_key.is_some(),
+        managed_secret_present: config.secret_backend_key.is_some(),
+        managed_secret_required: config.require_secret_backend,
+        persisted_file_present: secret_path.exists(),
+        persisted_file_permission: permission_status,
+        generation_allowed: config.allow_generate,
     });
-    Ok(Resolution {
-        identity: None,
-        receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
-        receipt_value,
-    })
+    let backend_ref = selected_backend_ref(config, source_decision.key_source_class)?;
+    let source_metadata_ref = source_metadata_ref(&config.data_dir, source_decision.key_source_class, &backend_ref)?;
+    match source_decision.kind {
+        IrohSecretSourceDecisionKind::LoadExplicit => {
+            let explicit_key = config
+                .explicit_key
+                .as_deref()
+                .ok_or_else(|| MoltenError::invalid_harness("explicit endpoint key metadata was selected but missing"))?;
+            let material = derive_endpoint_material(explicit_key)?;
+            finish_resolution(ResolutionInput {
+                config,
+                operation: source_decision.key_source_class,
+                secret: explicit_key,
+                material: &material,
+                backend_ref: &backend_ref,
+                source_metadata_ref: &source_metadata_ref,
+                permission_status: source_decision.permission_status,
+                endpoint_path: &endpoint_path,
+                is_first_boot: false,
+            })
+        }
+        IrohSecretSourceDecisionKind::LoadBackend => {
+            let backend_key = config
+                .secret_backend_key
+                .as_deref()
+                .ok_or_else(|| MoltenError::invalid_harness("managed endpoint secret backend was selected but missing"))?;
+            let material = derive_endpoint_material(backend_key)?;
+            finish_resolution(ResolutionInput {
+                config,
+                operation: source_decision.key_source_class,
+                secret: backend_key,
+                material: &material,
+                backend_ref: &backend_ref,
+                source_metadata_ref: &source_metadata_ref,
+                permission_status: source_decision.permission_status,
+                endpoint_path: &endpoint_path,
+                is_first_boot: false,
+            })
+        }
+        IrohSecretSourceDecisionKind::LoadFile => {
+            let secret = fs::read_to_string(&secret_path).map_err(MoltenError::from)?;
+            let secret = secret.trim().to_string();
+            let material = derive_endpoint_material(&secret)?;
+            finish_resolution(ResolutionInput {
+                config,
+                operation: source_decision.key_source_class,
+                secret: &secret,
+                material: &material,
+                backend_ref: &backend_ref,
+                source_metadata_ref: &source_metadata_ref,
+                permission_status: source_decision.permission_status,
+                endpoint_path: &endpoint_path,
+                is_first_boot: false,
+            })
+        }
+        IrohSecretSourceDecisionKind::GenerateAndPersist => {
+            fs::create_dir_all(&config.data_dir).map_err(MoltenError::from)?;
+            let secret = generate_secret(&config.node_id, &config.data_dir)?;
+            write_secret_restricted(&secret_path, &secret)?;
+            let material = derive_endpoint_material(&secret)?;
+            finish_resolution(ResolutionInput {
+                config,
+                operation: source_decision.key_source_class,
+                secret: &secret,
+                material: &material,
+                backend_ref: &backend_ref,
+                source_metadata_ref: &source_metadata_ref,
+                permission_status: IrohSecretPermissionStatus::Restricted,
+                endpoint_path: &endpoint_path,
+                is_first_boot: true,
+            })
+        }
+        IrohSecretSourceDecisionKind::Deny => source_denial(config, &backend_ref, &source_metadata_ref, &source_decision),
+    }
 }
 
 pub fn identity_value(

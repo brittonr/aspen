@@ -230,15 +230,8 @@ pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
     validate_node_id(input.node_id)?;
     ensure_state_layout(input.state_root)?;
     let policy_refs = vec![local_ref("node-policy", input.node_id)?];
-    let identity_config = crate::node_identity::Config {
-        node_id: input.node_id.to_string(),
-        display_name: input.node_id.to_string(),
-        data_dir: input.state_root.join("identity"),
-        explicit_key: None,
-        allow_generate: true,
-        allow_rotation: false,
-        policy_refs: policy_refs.clone(),
-    };
+    let mut identity_config = crate::node_identity::Config::new(input.node_id, input.state_root.join("identity"));
+    identity_config.policy_refs = policy_refs.clone();
     let identity_resolution = crate::node_identity::resolve(&identity_config)?;
     let identity = identity_resolution
         .identity
@@ -282,15 +275,8 @@ pub fn init_with_profile(input: &ProfileInitInput<'_>) -> Result<Init> {
     validate_node_id(input.node_id)?;
     ensure_state_layout(input.state_root)?;
     let policy_refs = vec![local_ref("node-policy", input.node_id)?];
-    let identity_config = crate::node_identity::Config {
-        node_id: input.node_id.to_string(),
-        display_name: input.node_id.to_string(),
-        data_dir: input.state_root.join("identity"),
-        explicit_key: None,
-        allow_generate: true,
-        allow_rotation: false,
-        policy_refs,
-    };
+    let mut identity_config = crate::node_identity::Config::new(input.node_id, input.state_root.join("identity"));
+    identity_config.policy_refs = policy_refs;
     let identity_resolution = crate::node_identity::resolve(&identity_config)?;
     let identity = identity_resolution
         .identity

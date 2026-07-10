@@ -37,20 +37,79 @@ pub fn startup_evidence_value(identity_ref: &str, receipt_ref: &str) -> Result<I
     ]))
 }
 
+fn source_denial(
+    config: &Config,
+    backend_ref: &str,
+    source_metadata_ref: &str,
+    source_decision: &IrohSecretSourceDecision,
+) -> Result<Resolution> {
+    let checks = source_denial_checks(source_decision.key_source_class);
+    let receipt_value = receipt_value(&ReceiptValueInput {
+        operation: source_denial_operation(source_decision.key_source_class),
+        decision: "fail",
+        node_id: &config.node_id,
+        identity_ref: None,
+        endpoint_id: None,
+        previous_endpoint_id: None,
+        rotation_receipt_ref: None,
+        key_source_class: source_decision.key_source_class,
+        backend_ref,
+        source_metadata_ref: Some(source_metadata_ref),
+        permission_status: source_decision.permission_status,
+        policy_refs: &config.policy_refs,
+        diagnostic: source_decision.diagnostic,
+        checks: &checks,
+    });
+    Ok(Resolution {
+        identity: None,
+        receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
+        receipt_value,
+    })
+}
+
+fn source_denial_operation(key_source_class: &str) -> &'static str {
+    match key_source_class {
+        KEY_SOURCE_MANAGED_BACKEND => "managed-backend-required",
+        KEY_SOURCE_PERSISTED_FILE => "unsafe-persisted-permissions",
+        _ => "deny-if-unavailable",
+    }
+}
+
+fn source_denial_checks(key_source_class: &str) -> Vec<&'static str> {
+    match key_source_class {
+        KEY_SOURCE_MANAGED_BACKEND => vec!["resolution-order", "managed-backend-required", "no-secret-material"],
+        KEY_SOURCE_PERSISTED_FILE => vec!["restricted-secret-file", "unsafe-permission-denied", "no-secret-material"],
+        _ => vec!["resolution-order", "deny-if-unavailable", "no-secret-material"],
+    }
+}
+
 fn finish_resolution(input: ResolutionInput<'_>) -> Result<Resolution> {
     if input.secret.trim().is_empty() {
         return Err(MoltenError::invalid_harness("node endpoint secret must not be empty"));
     }
     let existing_endpoint = fs::read_to_string(input.endpoint_path).ok().map(|value| value.trim().to_string());
-    let is_drift = existing_endpoint.as_deref().is_some_and(|existing| existing != input.material.endpoint_id.as_str());
-    if is_drift && !input.config.allow_rotation {
-        return drift_denial(&input);
+    let expected_rotation_receipt_ref = existing_endpoint
+        .as_deref()
+        .filter(|prior_endpoint_id| *prior_endpoint_id != input.material.endpoint_id.as_str())
+        .map(|prior_endpoint_id| {
+            admitted_rotation_receipt_ref(prior_endpoint_id, &input.material.endpoint_id, &input.config.policy_refs)
+        })
+        .transpose()?;
+    let observation = admit_iroh_endpoint_observation(&IrohEndpointObservationFacts {
+        prior_endpoint_id: existing_endpoint,
+        observed_endpoint_id: input.material.endpoint_id.clone(),
+        rotation_allowed: input.config.allow_rotation,
+        supplied_rotation_receipt_ref: input.config.rotation_receipt_ref.clone(),
+        expected_rotation_receipt_ref,
+    });
+    if observation.kind == IrohEndpointObservationDecisionKind::Deny {
+        return endpoint_observation_denial(&input, &observation);
     }
 
     fs::create_dir_all(&input.config.data_dir).map_err(MoltenError::from)?;
     fs::write(input.endpoint_path, &input.material.endpoint_id).map_err(MoltenError::from)?;
-    let receipt_operation = resolution_operation(&input, is_drift);
-    let pre_receipt_value = pass_receipt(&input, receipt_operation, None);
+    let receipt_operation = resolution_operation(&input, observation.kind);
+    let pre_receipt_value = pass_receipt(&input, &observation, receipt_operation, None);
     let pre_receipt_ref = crate::preserves_rail::canonical_hash(&pre_receipt_value)?;
     let identity_value = identity_value(
         input.config,
@@ -60,7 +119,7 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<Resolution> {
         std::slice::from_ref(&pre_receipt_ref),
     );
     let identity = parse_identity(&identity_value)?;
-    let receipt_value = pass_receipt(&input, receipt_operation, Some(&identity.identity_ref));
+    let receipt_value = pass_receipt(&input, &observation, receipt_operation, Some(&identity.identity_ref));
     Ok(Resolution {
         identity: Some(identity),
         receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
@@ -68,18 +127,26 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<Resolution> {
     })
 }
 
-fn drift_denial(input: &ResolutionInput<'_>) -> Result<Resolution> {
+fn endpoint_observation_denial(
+    input: &ResolutionInput<'_>,
+    observation: &IrohEndpointObservationDecision,
+) -> Result<Resolution> {
+    let checks = endpoint_denial_checks(observation);
     let receipt_value = receipt_value(&ReceiptValueInput {
         operation: "drift-detected",
         decision: "fail",
         node_id: &input.config.node_id,
         identity_ref: None,
         endpoint_id: Some(&input.material.endpoint_id),
+        previous_endpoint_id: observation.previous_endpoint_id.as_deref(),
+        rotation_receipt_ref: observation.rotation_receipt_ref.as_deref(),
         key_source_class: input.operation,
         backend_ref: input.backend_ref,
+        source_metadata_ref: Some(input.source_metadata_ref),
+        permission_status: input.permission_status,
         policy_refs: &input.config.policy_refs,
-        diagnostic: "endpoint id drift detected; rotation policy is required",
-        checks: &["drift-detection", "rotation-denied", "no-secret-material"],
+        diagnostic: observation.diagnostic,
+        checks: &checks,
     });
     Ok(Resolution {
         identity: None,
@@ -88,8 +155,16 @@ fn drift_denial(input: &ResolutionInput<'_>) -> Result<Resolution> {
     })
 }
 
-fn resolution_operation<'a>(input: &ResolutionInput<'a>, is_drift: bool) -> &'a str {
-    if is_drift {
+fn endpoint_denial_checks(observation: &IrohEndpointObservationDecision) -> Vec<&'static str> {
+    if observation.rotation_receipt_ref.is_some() {
+        vec!["drift-detection", "stale-rotation-denied", "no-secret-material"]
+    } else {
+        vec!["drift-detection", "rotation-denied", "no-secret-material"]
+    }
+}
+
+fn resolution_operation<'a>(input: &'a ResolutionInput<'a>, observation_kind: IrohEndpointObservationDecisionKind) -> &'a str {
+    if observation_kind == IrohEndpointObservationDecisionKind::Rotate {
         "rotation"
     } else if input.is_first_boot {
         "first-boot-generate"
@@ -98,8 +173,33 @@ fn resolution_operation<'a>(input: &ResolutionInput<'a>, is_drift: bool) -> &'a 
     }
 }
 
-fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Option<&str>) -> IoValue {
-    const CHECKS: [&str; 6] = [
+fn pass_receipt(
+    input: &ResolutionInput<'_>,
+    observation: &IrohEndpointObservationDecision,
+    operation: &str,
+    identity_ref: Option<&str>,
+) -> IoValue {
+    let checks = pass_checks(observation.kind);
+    receipt_value(&ReceiptValueInput {
+        operation,
+        decision: "pass",
+        node_id: &input.config.node_id,
+        identity_ref,
+        endpoint_id: Some(&input.material.endpoint_id),
+        previous_endpoint_id: observation.previous_endpoint_id.as_deref(),
+        rotation_receipt_ref: observation.rotation_receipt_ref.as_deref(),
+        key_source_class: input.operation,
+        backend_ref: input.backend_ref,
+        source_metadata_ref: Some(input.source_metadata_ref),
+        permission_status: input.permission_status,
+        policy_refs: &input.config.policy_refs,
+        diagnostic: observation.diagnostic,
+        checks: &checks,
+    })
+}
+
+fn pass_checks(observation_kind: IrohEndpointObservationDecisionKind) -> Vec<&'static str> {
+    let mut checks = vec![
         "resolution-order",
         "stable-endpoint-id",
         "restricted-secret-file",
@@ -107,18 +207,10 @@ fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Opti
         "identity-grants-no-authority",
         "config-contract",
     ];
-    receipt_value(&ReceiptValueInput {
-        operation,
-        decision: "pass",
-        node_id: &input.config.node_id,
-        identity_ref,
-        endpoint_id: Some(&input.material.endpoint_id),
-        key_source_class: input.operation,
-        backend_ref: input.backend_ref,
-        policy_refs: &input.config.policy_refs,
-        diagnostic: "node identity resolved without exposing secret material",
-        checks: &CHECKS,
-    })
+    if observation_kind == IrohEndpointObservationDecisionKind::Rotate {
+        checks.push("rotation-receipt-admitted");
+    }
+    checks
 }
 
 fn receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
@@ -129,9 +221,13 @@ fn receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
         record("node", vec![string(input.node_id)]),
         record("identity", vec![optional_ref_value(input.identity_ref)]),
         record("endpoint-id", vec![optional_string_value(input.endpoint_id)]),
+        record("previous-endpoint-id", vec![optional_string_value(input.previous_endpoint_id)]),
+        record("rotation-receipt", vec![optional_ref_value(input.rotation_receipt_ref)]),
         record("key-source", vec![
             record("class", vec![string(input.key_source_class)]),
             record("backend-ref", vec![string(input.backend_ref)]),
+            record("source-metadata-ref", vec![optional_ref_value(input.source_metadata_ref)]),
+            record("permission", vec![string(input.permission_status.as_str())]),
         ]),
         record("policy", vec![crate::preserves_rail::sequence(
             input.policy_refs.iter().map(string).collect(),
@@ -151,8 +247,12 @@ pub struct EndpointMaterial {
 }
 
 fn derive_endpoint_material(secret: &str) -> Result<EndpointMaterial> {
-    if secret.trim().is_empty() {
+    let secret = secret.trim();
+    if secret.is_empty() {
         return Err(MoltenError::invalid_harness("node endpoint secret must not be empty"));
+    }
+    if secret.chars().any(char::is_control) {
+        return Err(MoltenError::invalid_harness("node endpoint secret contains malformed control characters"));
     }
     let secret_ref = crate::preserves_rail::content_ref_from_bytes(secret.as_bytes());
     let mut public_material = b"molten-node-public\0".to_vec();
@@ -160,7 +260,7 @@ fn derive_endpoint_material(secret: &str) -> Result<EndpointMaterial> {
     let public_key = crate::preserves_rail::content_ref_from_bytes(&public_material);
     let mut endpoint_material = b"molten-node-endpoint\0".to_vec();
     endpoint_material.extend_from_slice(public_key.as_bytes());
-    let endpoint_id = format!("iroh:{}", blake3::hash(&endpoint_material).to_hex());
+    let endpoint_id = format!("{IROH_ENDPOINT_PREFIX}{}", blake3::hash(&endpoint_material).to_hex());
     Ok(EndpointMaterial {
         public_key,
         endpoint_id,
@@ -171,15 +271,59 @@ fn derive_endpoint_material(secret: &str) -> Result<EndpointMaterial> {
 fn generate_secret(node_id: &str, data_dir: &std::path::Path) -> Result<String> {
     let seed_ref = crate::preserves_rail::canonical_hash(&record("node-identity-generated-secret-seed", vec![
         record("node-id", vec![string(node_id)]),
-        record("data-dir", vec![string(data_dir.display().to_string())]),
+        record("data-dir-ref", vec![string(crate::preserves_rail::content_ref_from_bytes(
+            data_dir.display().to_string().as_bytes(),
+        ))]),
     ]))?;
     Ok(format!("molten-local-generated:{node_id}:{seed_ref}"))
 }
 
-fn backend_ref(data_dir: &std::path::Path) -> Result<String> {
+fn selected_backend_ref(config: &Config, source_class: &str) -> Result<String> {
+    if source_class == KEY_SOURCE_MANAGED_BACKEND {
+        if let Some(backend_ref) = config.secret_backend_ref.as_deref() {
+            require_ref(backend_ref, "managed secret backend ref")?;
+            return Ok(backend_ref.to_string());
+        }
+    }
+    backend_ref(&config.data_dir, source_class)
+}
+
+fn backend_ref(data_dir: &std::path::Path, source_class: &str) -> Result<String> {
     crate::preserves_rail::canonical_hash(&record("node-identity-backend", vec![
-        record("class", vec![string("filesystem")]),
-        record("data-dir", vec![string(data_dir.display().to_string())]),
+        record("class", vec![string(source_class)]),
+        record("data-dir-ref", vec![string(crate::preserves_rail::content_ref_from_bytes(
+            data_dir.display().to_string().as_bytes(),
+        ))]),
+    ]))
+}
+
+fn source_metadata_ref(data_dir: &std::path::Path, source_class: &str, backend_ref: &str) -> Result<String> {
+    crate::preserves_rail::canonical_hash(&record("node-identity-source-metadata", vec![
+        record("class", vec![string(source_class)]),
+        record("backend-ref", vec![string(backend_ref)]),
+        record("path-class", vec![string("node-state-redacted")]),
+        record("data-dir-ref", vec![string(crate::preserves_rail::content_ref_from_bytes(
+            data_dir.display().to_string().as_bytes(),
+        ))]),
+    ]))
+}
+
+pub fn admitted_rotation_receipt_ref(
+    previous_endpoint_id: &str,
+    next_endpoint_id: &str,
+    policy_refs: &[String],
+) -> Result<String> {
+    validate_endpoint_id(previous_endpoint_id, "previous endpoint id")?;
+    validate_endpoint_id(next_endpoint_id, "next endpoint id")?;
+    validate_refs(policy_refs, "node identity rotation policy ref")?;
+    crate::preserves_rail::canonical_hash(&record("node-identity-rotation-admission-v1", vec![
+        record("previous-endpoint-id", vec![string(previous_endpoint_id)]),
+        record("next-endpoint-id", vec![string(next_endpoint_id)]),
+        record("policy", vec![crate::preserves_rail::sequence(policy_refs.iter().map(string).collect())]),
+        record("checks", vec![crate::preserves_rail::sequence(vec![
+            record("check", vec![string("operator-authority-required"), string("pass")]),
+            record("check", vec![string("peer-refresh-obligation-recorded"), string("pass")]),
+        ])]),
     ]))
 }
 
@@ -192,6 +336,12 @@ fn validate_config(config: &Config) -> Result<()> {
     }
     if config.data_dir.as_os_str().is_empty() {
         return Err(MoltenError::invalid_harness("node data dir must not be empty"));
+    }
+    if let Some(backend_ref) = config.secret_backend_ref.as_deref() {
+        require_ref(backend_ref, "managed secret backend ref")?;
+    }
+    if let Some(rotation_receipt_ref) = config.rotation_receipt_ref.as_deref() {
+        require_ref(rotation_receipt_ref, "node identity rotation receipt ref")?;
     }
     validate_refs(&config.policy_refs, "node identity policy ref")
 }
@@ -207,7 +357,7 @@ fn write_secret_restricted(path: &std::path::Path, secret: &str) -> Result<()> {
             .write(true)
             .create(true)
             .truncate(true)
-            .mode(0o600)
+            .mode(OWNER_ONLY_SECRET_FILE_MODE)
             .open(path)
             .map_err(MoltenError::from)?;
         file.write_all(secret.as_bytes()).map_err(MoltenError::from)?;
@@ -217,6 +367,26 @@ fn write_secret_restricted(path: &std::path::Path, secret: &str) -> Result<()> {
     #[cfg(not(unix))]
     {
         fs::write(path, format!("{secret}\n")).map_err(MoltenError::from)
+    }
+}
+
+fn secret_file_permission_status(path: &std::path::Path) -> Result<IrohSecretPermissionStatus> {
+    if !path.exists() {
+        return Ok(IrohSecretPermissionStatus::NotPresent);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = fs::metadata(path).map_err(MoltenError::from)?;
+        if metadata.permissions().mode() & GROUP_OR_OTHER_SECRET_PERMISSION_BITS == 0 {
+            Ok(IrohSecretPermissionStatus::Restricted)
+        } else {
+            Ok(IrohSecretPermissionStatus::Unsafe)
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        Ok(IrohSecretPermissionStatus::Unsupported)
     }
 }
 
@@ -239,6 +409,13 @@ fn require_ref(reference: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
     })
+}
+
+fn validate_endpoint_id(endpoint_id: &str, field: &str) -> Result<()> {
+    if endpoint_id.starts_with(IROH_ENDPOINT_PREFIX) && endpoint_id.len() > IROH_ENDPOINT_PREFIX.len() {
+        return Ok(());
+    }
+    Err(MoltenError::invalid_harness(format!("expected Iroh endpoint id for {field}, got {endpoint_id}")))
 }
 
 fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
