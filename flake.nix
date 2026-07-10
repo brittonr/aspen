@@ -1791,6 +1791,20 @@
         };
 
         apps = {
+          default = {
+            type = "app";
+            program = "${moltenPkg}/bin/molten";
+            meta = {
+              description = "Run the Molten CLI";
+            };
+          };
+          molten = {
+            type = "app";
+            program = "${moltenPkg}/bin/molten";
+            meta = {
+              description = "Run the Molten CLI";
+            };
+          };
           nextest-ci = {
             type = "app";
             program = "${nextestCi}/bin/molten-nextest-ci";
@@ -1819,9 +1833,6 @@
             unit2nix.packages.${system}.unit2nix
           ];
 
-          shellHook = ''
-            export PATH="''${CARGO_TARGET_DIR:-$PWD/target}/debug:$PWD/target/debug:$PATH"
-          '';
         };
 
         formatter = pkgs.nixpkgs-fmt;

@@ -120,13 +120,26 @@ Cairn roadmap status: active production-readiness changes live under `cairn/chan
 
 ## Node runtime daemon
 
-The cluster convenience wrapper initializes and controls per-node state roots while preserving the same node receipts. Use `cargo run -- cluster ...` unless a built `molten` binary is on your `PATH`:
+The cluster convenience wrapper initializes and controls per-node state roots while preserving the same node receipts. For source-tree development, run it through Cargo or an already-built Cargo binary; `nix develop` provides tools but does not install a freshly built `molten` binary by itself.
 
 ```sh
 cargo run -- cluster init --state-root target/cluster --node node-a --node node-b
 cargo run -- cluster start --state-root target/cluster
 cargo run -- cluster status --state-root target/cluster
 cargo run -- cluster stop --state-root target/cluster
+```
+
+The Nix-built flake app is available when the private sibling inputs are supplied explicitly:
+
+```sh
+nix run \
+  --override-input basalt-src path:../basalt \
+  --override-input cairn-src path:../cairn \
+  --override-input octet-src path:../octet \
+  --override-input ucan-src path:../ucan \
+  --override-input onix-kache-lib path:../../onix-core/lib \
+  --override-input onix-kache-package-src path:../../onix-core/pkgs/kache \
+  .#molten -- cluster status --state-root target/cluster
 ```
 
 The durable local node boundary is exposed at top level under `molten node`:
