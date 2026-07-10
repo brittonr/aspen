@@ -1,0 +1,10 @@
+id: unsafe-block
+language: Rust
+severity: hint
+message: Unsafe blocks are runtime-authority inventory evidence for boundary review.
+metadata:
+  posture: inventory
+  surface: runtime-authority
+  non_claim: structural-candidate-only
+rule:
+  pattern: unsafe { $$$BODY }

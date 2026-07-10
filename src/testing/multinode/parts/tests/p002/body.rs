@@ -57,6 +57,7 @@
     #[test]
     fn failure_repro_bundle_verifies_sealed_simulation_payload() {
         // r[verify molten.testing.multinode.failure_repro_bundle]
+        // r[verify molten.testing.cluster_failure_repro_bundles.bundle_schema]
         let input = repro_input();
         let bundle = build_failure_repro_bundle(&input).expect("bundle");
         let verification = verify_failure_repro_bundle(&input).expect("verification");
@@ -69,6 +70,7 @@
     #[test]
     fn failure_repro_bundle_privacy_and_pass_gate_fail_closed() {
         // r[verify molten.testing.multinode.failure_repro_privacy_and_replay]
+        // r[verify molten.testing.cluster_failure_repro_bundles.privacy_and_nonpass]
         let mut input = repro_input();
         let payload_ref = canonical_hash(&failure_repro_payload_value(&input).expect("payload")).expect("payload ref");
         input.claimed_payload_ref = Some(local_ref("tampered-payload"));
@@ -156,6 +158,7 @@
     #[test]
     fn executable_vm_fault_support_matrix_records_supported_and_unavailable_cases() {
         // r[verify molten.testing.nixos_vm.executable_fault_support_matrix]
+        // r[verify molten.testing.executable_vm_fault_expansion.real_fault_matrix]
         let mut unavailable = supported_fault_case("bounded-disk-pressure");
         unavailable.expected_outcome = UNAVAILABLE.to_string();
         unavailable.host_support = UNAVAILABLE.to_string();
@@ -175,6 +178,7 @@
     #[test]
     fn executable_vm_fault_support_matrix_denies_invalid_claims() {
         // r[verify molten.testing.nixos_vm.executable_fault_validation_negatives]
+        // r[verify molten.testing.executable_vm_fault_expansion.unavailable_policy]
         let mut unsupported_pass = supported_fault_case("unsupported-host-feature");
         unsupported_pass.host_support = UNAVAILABLE.to_string();
         unsupported_pass.injection_refs = Vec::new();

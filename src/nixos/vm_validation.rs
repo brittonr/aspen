@@ -64,9 +64,9 @@ const SOAK_RUN_TOPOLOGY_INDEX: usize = 3;
 const SOAK_RUN_NODE_EVIDENCE_INDEX: usize = 5;
 const SOAK_RUN_REPLAY_INDEX: usize = 15;
 const SOAK_RUN_CAVEATS_INDEX: usize = 18;
-const SHARD_RUN_ARITY: usize = 14;
+const SHARD_RUN_ARITY: usize = 15;
 const SHARD_RUN_DECISION_INDEX: usize = 1;
-const AGGREGATE_ARITY: usize = 10;
+const AGGREGATE_ARITY: usize = 11;
 const AGGREGATE_DECISION_INDEX: usize = 1;
 const MAX_VM_VALIDATION_ITEMS: usize = 512;
 const CHILD_RECEIPT_CLASSES: &[&str] = &[
@@ -1411,6 +1411,7 @@ mod tests {
             scenario_fixture_ref: &local_ref("scenario-fixture"),
             topology_ref,
             package_ref: &local_ref("package"),
+            evidence_scope: crate::nixos_vm::NIXOS_VM_SCOPE_EXECUTABLE_VM,
             node_evidence_refs: node_refs,
             child_receipt_refs: &[local_ref("operation-receipt")],
             diagnostic_log_refs: &[local_ref("shard-log")],

@@ -1,0 +1,14 @@
+id: ambient-filesystem-call
+language: Rust
+severity: hint
+message: Direct std::fs calls are runtime-authority inventory findings; keep them shell-owned and receipt-bound.
+metadata:
+  posture: inventory
+  surface: runtime-authority
+  non_claim: structural-candidate-only
+rule:
+  any:
+    - pattern: std::fs::read_to_string($PATH)
+    - pattern: std::fs::read($PATH)
+    - pattern: std::fs::write($PATH, $DATA)
+    - pattern: std::fs::remove_file($PATH)

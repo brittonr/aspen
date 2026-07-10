@@ -44,6 +44,7 @@
     #[test]
     fn declarative_scenario_fixture_derives_stable_metadata() {
         // r[verify molten.testing.multinode.declarative_scenario_fixtures]
+        // r[verify molten.testing.fixture_driven_cluster_execution.fixture_source_of_truth]
         let fixture = valid_fixture();
         let topology_profiles = default_topology_profiles();
         let first =
@@ -63,6 +64,7 @@
     #[test]
     fn declarative_scenario_fixture_validation_denies_bad_bindings() {
         // r[verify molten.testing.multinode.scenario_fixture_validation]
+        // r[verify molten.testing.fixture_driven_cluster_execution.observation_gate]
         let mut fixture = valid_fixture();
         fixture.command_surface = "cargo test wrong-profile".to_string();
         fixture.receipt_refs = Vec::new();
@@ -215,6 +217,7 @@
     #[test]
     fn local_multiprocess_plan_and_run_bind_isolated_process_evidence() {
         // r[verify molten.testing.multinode.local_multiprocess_harness]
+        // r[verify molten.testing.local_multiprocess_cluster_tier.middle_tier]
         let plan = build_local_multiprocess_plan(&local_plan_input()).expect("local plan");
         let run = build_local_multiprocess_run_receipt(&LocalMultiprocessRunInput {
             plan_ref: plan.plan_ref.clone(),
@@ -235,6 +238,7 @@
     #[test]
     fn local_multiprocess_plan_denies_collisions_and_missing_cleanup() {
         // r[verify molten.testing.multinode.process_isolation_cleanup]
+        // r[verify molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
         let mut input = local_plan_input();
         input.nodes[1].state_root_handle = input.nodes[0].state_root_handle.clone();
         input.nodes[1].transport_handle = input.nodes[0].transport_handle.clone();

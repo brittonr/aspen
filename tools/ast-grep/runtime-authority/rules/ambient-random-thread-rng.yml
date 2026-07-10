@@ -1,0 +1,10 @@
+id: ambient-random-thread-rng
+language: Rust
+severity: hint
+message: Ambient random generation is runtime-authority inventory evidence for replay and receipt review.
+metadata:
+  posture: inventory
+  surface: runtime-authority
+  non_claim: structural-candidate-only
+rule:
+  pattern: rand::thread_rng()

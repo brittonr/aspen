@@ -103,6 +103,7 @@ struct ShardRunInput {
     scenario_fixture_ref: String,
     topology_ref: String,
     package_ref: String,
+    evidence_scope: String,
     node_evidence_refs: Vec<String>,
     child_receipt_refs: Vec<String>,
     diagnostic_log_refs: Vec<String>,
@@ -118,6 +119,7 @@ struct AggregateInput {
     manifest_ref: String,
     required_shard_ids: Vec<String>,
     shard_refs: Vec<String>,
+    shard_scopes: Vec<String>,
     denied_shard_ids: Vec<String>,
     unavailable_as_pass_shard_ids: Vec<String>,
     stale_child_refs: Vec<String>,
@@ -301,6 +303,7 @@ pub(super) fn run(command: Command) -> Outcome<()> {
             scenario_fixture_ref,
             topology_ref,
             package_ref,
+            evidence_scope,
             node_evidence_refs,
             child_receipt_refs,
             diagnostic_log_refs,
@@ -313,6 +316,7 @@ pub(super) fn run(command: Command) -> Outcome<()> {
             scenario_fixture_ref,
             topology_ref,
             package_ref,
+            evidence_scope,
             node_evidence_refs,
             child_receipt_refs,
             diagnostic_log_refs,
@@ -327,6 +331,7 @@ pub(super) fn run(command: Command) -> Outcome<()> {
             manifest_ref,
             required_shard_ids,
             shard_refs,
+            shard_scopes,
             denied_shard_ids,
             unavailable_as_pass_shard_ids,
             stale_child_refs,
@@ -339,6 +344,7 @@ pub(super) fn run(command: Command) -> Outcome<()> {
             manifest_ref,
             required_shard_ids,
             shard_refs,
+            shard_scopes,
             denied_shard_ids,
             unavailable_as_pass_shard_ids,
             stale_child_refs,
@@ -597,6 +603,7 @@ fn run_shard_run(input: ShardRunInput) -> Outcome<()> {
         scenario_fixture_ref: &input.scenario_fixture_ref,
         topology_ref: &input.topology_ref,
         package_ref: &input.package_ref,
+        evidence_scope: &input.evidence_scope,
         node_evidence_refs: &input.node_evidence_refs,
         child_receipt_refs: &input.child_receipt_refs,
         diagnostic_log_refs: &input.diagnostic_log_refs,
@@ -625,12 +632,20 @@ fn run_shard_run(input: ShardRunInput) -> Outcome<()> {
 }
 
 fn run_aggregate(input: AggregateInput) -> Outcome<()> {
+    let default_shard_scopes;
+    let shard_scopes = if input.shard_scopes.is_empty() {
+        default_shard_scopes = vec![molten::nixos_vm::NIXOS_VM_SCOPE_EXECUTABLE_VM.to_string(); input.shard_refs.len()];
+        &default_shard_scopes
+    } else {
+        &input.shard_scopes
+    };
     let aggregate = molten::nixos_vm::evaluate_vm_aggregate(&molten::nixos_vm::NixosVmAggregateInput {
         topology_ref: &input.topology_ref,
         package_ref: &input.package_ref,
         manifest_ref: &input.manifest_ref,
         required_shard_ids: &input.required_shard_ids,
         shard_refs: &input.shard_refs,
+        shard_scopes,
         denied_shard_ids: &input.denied_shard_ids,
         unavailable_as_pass_shard_ids: &input.unavailable_as_pass_shard_ids,
         stale_child_refs: &input.stale_child_refs,

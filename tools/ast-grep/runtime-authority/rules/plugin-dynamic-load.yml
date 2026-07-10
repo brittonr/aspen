@@ -1,0 +1,10 @@
+id: plugin-dynamic-load
+language: Rust
+severity: hint
+message: Dynamic plugin loading is runtime-authority inventory evidence and must remain policy/receipt-bound.
+metadata:
+  posture: inventory
+  surface: runtime-authority
+  non_claim: structural-candidate-only
+rule:
+  pattern: libloading::Library::new($PATH)

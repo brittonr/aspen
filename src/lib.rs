@@ -9,6 +9,10 @@ macro_rules! compat_module {
 }
 
 #[doc(hidden)]
+#[path = "audit/ast_grep.rs"]
+pub mod ast_grep_runtime_authority_core;
+compat_module!(ast_grep_runtime_authority_audits, ast_grep_runtime_authority_core);
+#[doc(hidden)]
 #[path = "artifacts/mod.rs"]
 pub mod objects;
 compat_module!(artifacts, objects);

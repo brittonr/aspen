@@ -1,0 +1,12 @@
+id: ambient-network-bind
+language: Rust
+severity: hint
+message: Direct std::net use is runtime-authority inventory evidence; bind transport authority through explicit gates.
+metadata:
+  posture: inventory
+  surface: runtime-authority
+  non_claim: structural-candidate-only
+rule:
+  any:
+    - pattern: std::net::TcpListener::bind($ADDR)
+    - pattern: std::net::TcpStream::connect($ADDR)

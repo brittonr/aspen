@@ -171,6 +171,8 @@ pub(crate) enum Command {
         topology_ref: String,
         #[arg(long = "package-ref")]
         package_ref: String,
+        #[arg(long = "evidence-scope", default_value = "executable-vm")]
+        evidence_scope: String,
         #[arg(long = "node-evidence-ref")]
         node_evidence_refs: Vec<String>,
         #[arg(long = "child-receipt-ref")]
@@ -197,6 +199,8 @@ pub(crate) enum Command {
         required_shard_ids: Vec<String>,
         #[arg(long = "shard-ref")]
         shard_refs: Vec<String>,
+        #[arg(long = "shard-scope")]
+        shard_scopes: Vec<String>,
         #[arg(long = "denied-shard-id")]
         denied_shard_ids: Vec<String>,
         #[arg(long = "unavailable-as-pass-shard-id")]

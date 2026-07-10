@@ -124,6 +124,7 @@ struct VmShardFixture {
     scenario_fixture_ref: String,
     topology_ref: String,
     package_ref: String,
+    evidence_scope: String,
     node_evidence_refs: Vec<String>,
     child_receipt_refs: Vec<String>,
     diagnostic_log_refs: Vec<String>,
@@ -135,6 +136,7 @@ fn vm_shard_fixture() -> VmShardFixture {
         scenario_fixture_ref: local_ref("scenario-fixture"),
         topology_ref: local_ref("topology"),
         package_ref: local_ref("package"),
+        evidence_scope: NIXOS_VM_SCOPE_EXECUTABLE_VM.to_string(),
         node_evidence_refs: vec![local_ref("node-a"), local_ref("node-b")],
         child_receipt_refs: vec![local_ref("child-live-control")],
         diagnostic_log_refs: vec![local_ref("vm-log")],
@@ -148,6 +150,7 @@ fn vm_shard_input<'a>(fixture: &'a VmShardFixture, unavailable: bool) -> NixosVm
         scenario_fixture_ref: &fixture.scenario_fixture_ref,
         topology_ref: &fixture.topology_ref,
         package_ref: &fixture.package_ref,
+        evidence_scope: &fixture.evidence_scope,
         node_evidence_refs: &fixture.node_evidence_refs,
         child_receipt_refs: &fixture.child_receipt_refs,
         diagnostic_log_refs: &fixture.diagnostic_log_refs,
@@ -160,6 +163,7 @@ fn vm_shard_input<'a>(fixture: &'a VmShardFixture, unavailable: bool) -> NixosVm
 #[test]
 fn vm_shard_run_binds_scenario_child_receipts_and_logs() {
     // r[verify molten.testing.nixos_vm_multinode.sharded_checks]
+    // r[verify molten.testing.vm_shard_scope.synthetic_metadata_boundary]
     let fixture = vm_shard_fixture();
     let input = vm_shard_input(&fixture, false);
     let shard = evaluate_vm_shard_run(&input).expect("VM shard");
@@ -175,13 +179,21 @@ fn vm_shard_run_binds_scenario_child_receipts_and_logs() {
 #[test]
 fn vm_shard_run_denies_unavailable_or_log_only_pass_claim() {
     // r[verify molten.testing.nixos_vm_multinode.sharded_checks]
+    // r[verify molten.testing.vm_shard_scope.aggregate_scope_denial]
     let mut fixture = vm_shard_fixture();
     fixture.child_receipt_refs = Vec::new();
     fixture.diagnostic_log_refs = Vec::new();
+    fixture.evidence_scope = NIXOS_VM_SCOPE_FIXTURE_METADATA.to_string();
     let input = vm_shard_input(&fixture, true);
     let shard = evaluate_vm_shard_run(&input).expect("VM shard");
 
     assert_eq!(shard.decision, "deny");
+    assert!(
+        shard
+            .diagnostics
+            .iter()
+            .any(|item| item == "vm-shard-non-executable-pass:vm-live-control:fixture-metadata")
+    );
     assert!(shard.diagnostics.iter().any(|item| item == "vm-shard-unavailable-as-pass:vm-live-control"));
     assert!(shard.diagnostics.iter().any(|item| item == "vm-shard-log-only-pass:vm-live-control"));
     assert!(shard.diagnostics.iter().any(|item| item == "vm-shard-missing-diagnostic-log:vm-live-control"));
@@ -193,6 +205,7 @@ struct VmAggregateFixture {
     manifest_ref: String,
     required_shard_ids: Vec<String>,
     shard_refs: Vec<String>,
+    shard_scopes: Vec<String>,
     denied_shard_ids: Vec<String>,
     unavailable_as_pass_shard_ids: Vec<String>,
     stale_child_refs: Vec<String>,
@@ -207,6 +220,10 @@ fn vm_aggregate_fixture() -> VmAggregateFixture {
         manifest_ref: local_ref("manifest"),
         required_shard_ids: vec!["vm-smoke".to_string(), "vm-live-control".to_string()],
         shard_refs: vec![local_ref("vm-smoke-shard"), local_ref("vm-live-control-shard")],
+        shard_scopes: vec![
+            NIXOS_VM_SCOPE_EXECUTABLE_VM.to_string(),
+            NIXOS_VM_SCOPE_EXECUTABLE_VM.to_string(),
+        ],
         denied_shard_ids: Vec::new(),
         unavailable_as_pass_shard_ids: Vec::new(),
         stale_child_refs: Vec::new(),
@@ -222,6 +239,7 @@ fn vm_aggregate_input<'a>(fixture: &'a VmAggregateFixture) -> NixosVmAggregateIn
         manifest_ref: &fixture.manifest_ref,
         required_shard_ids: &fixture.required_shard_ids,
         shard_refs: &fixture.shard_refs,
+        shard_scopes: &fixture.shard_scopes,
         denied_shard_ids: &fixture.denied_shard_ids,
         unavailable_as_pass_shard_ids: &fixture.unavailable_as_pass_shard_ids,
         stale_child_refs: &fixture.stale_child_refs,
@@ -233,6 +251,7 @@ fn vm_aggregate_input<'a>(fixture: &'a VmAggregateFixture) -> NixosVmAggregateIn
 #[test]
 fn vm_aggregate_preserves_child_shard_evidence() {
     // r[verify molten.testing.nixos_vm_multinode.shard_aggregate]
+    // r[verify molten.testing.vm_shard_scope.synthetic_metadata_boundary]
     let fixture = vm_aggregate_fixture();
     let input = vm_aggregate_input(&fixture);
     let aggregate = evaluate_vm_aggregate(&input).expect("VM aggregate");
@@ -248,8 +267,10 @@ fn vm_aggregate_preserves_child_shard_evidence() {
 #[test]
 fn vm_aggregate_denies_missing_unavailable_stale_or_log_only_children() {
     // r[verify molten.testing.nixos_vm_multinode.shard_aggregate]
+    // r[verify molten.testing.vm_shard_scope.aggregate_scope_denial]
     let mut fixture = vm_aggregate_fixture();
     fixture.shard_refs = vec![local_ref("vm-smoke-shard")];
+    fixture.shard_scopes = vec![NIXOS_VM_SCOPE_FIXTURE_METADATA.to_string()];
     fixture.denied_shard_ids = vec!["vm-live-control".to_string()];
     fixture.unavailable_as_pass_shard_ids = vec!["vm-fault".to_string()];
     fixture.stale_child_refs = vec![local_ref("stale-child")];
@@ -260,6 +281,12 @@ fn vm_aggregate_denies_missing_unavailable_stale_or_log_only_children() {
     assert_eq!(aggregate.decision, "deny");
     assert!(aggregate.diagnostics.iter().any(|item| item == "vm-aggregate-missing-shard-ref"));
     assert!(aggregate.diagnostics.iter().any(|item| item == "vm-aggregate-denied-shard:vm-live-control"));
+    assert!(
+        aggregate
+            .diagnostics
+            .iter()
+            .any(|item| item == "vm-aggregate-non-executable-platform-scope:fixture-metadata")
+    );
     assert!(aggregate.diagnostics.iter().any(|item| item == "vm-aggregate-unavailable-as-pass:vm-fault"));
     assert!(aggregate.diagnostics.iter().any(|item| item.starts_with("vm-aggregate-stale-child:")));
     assert!(aggregate.diagnostics.iter().any(|item| item.starts_with("vm-aggregate-log-only-child:")));

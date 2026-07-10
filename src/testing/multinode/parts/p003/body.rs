@@ -1,3 +1,5 @@
+// r[impl molten.testing.three_node_quorum_vm.executable_shard]
+// r[impl molten.testing.three_node_quorum_vm.negatives]
 pub fn evaluate_three_node_quorum_evidence(input: &ThreeNodeQuorumEvidenceInput) -> Result<ThreeNodeQuorumGate> {
     let mut diagnostics = Vec::new();
     collect_invalid_ref_diagnostics(
@@ -29,6 +31,7 @@ pub fn evaluate_three_node_quorum_evidence(input: &ThreeNodeQuorumEvidenceInput)
     })
 }
 
+// r[impl molten.testing.fixture_driven_cluster_execution.observation_gate]
 pub fn evaluate_vm_scenario_gate(input: &VmScenarioGateInput) -> Result<VmScenarioGate> {
     let mut diagnostics = Vec::new();
     collect_invalid_ref_diagnostics(
@@ -64,6 +67,8 @@ pub fn evaluate_vm_scenario_gate(input: &VmScenarioGateInput) -> Result<VmScenar
     })
 }
 
+// r[impl molten.testing.cluster_failure_repro_bundles.bundle_schema]
+// r[impl molten.testing.cluster_failure_repro_bundles.privacy_and_nonpass]
 pub fn export_vm_failure_repro(input: &VmFailureReproExportInput) -> Result<VmFailureReproExport> {
     let bundle_input = vm_failure_repro_bundle_input(input);
     let bundle = build_failure_repro_bundle(&bundle_input)?;
@@ -130,6 +135,7 @@ pub fn run_generated_distributed_case(case: &GeneratedDistributedCase) -> Result
     })
 }
 
+// r[impl molten.testing.cluster_failure_repro_bundles.bundle_schema]
 pub fn build_failure_repro_bundle(input: &FailureReproBundleInput) -> Result<FailureReproBundle> {
     let payload = failure_repro_payload_value(input)?;
     let payload_ref = canonical_hash(&payload)?;
@@ -143,6 +149,7 @@ pub fn build_failure_repro_bundle(input: &FailureReproBundleInput) -> Result<Fai
     })
 }
 
+// r[impl molten.testing.cluster_failure_repro_bundles.privacy_and_nonpass]
 pub fn verify_failure_repro_bundle(input: &FailureReproBundleInput) -> Result<FailureReproVerification> {
     let payload = failure_repro_payload_value(input)?;
     let payload_ref = canonical_hash(&payload)?;
@@ -216,6 +223,8 @@ pub fn evaluate_live_transport_vm_gate(input: &LiveTransportVmEvidenceInput) -> 
     })
 }
 
+// r[impl molten.testing.executable_vm_fault_expansion.real_fault_matrix]
+// r[impl molten.testing.executable_vm_fault_expansion.unavailable_policy]
 pub fn build_vm_fault_support_matrix(cases: &[VmFaultSupportCase]) -> Result<VmFaultSupportMatrix> {
     let mut diagnostics = Vec::new();
     ensure_count_at_most(cases.len(), MAX_MULTINODE_ITEMS, "VM fault support cases")?;

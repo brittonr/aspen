@@ -1,0 +1,10 @@
+id: ambient-process-command
+language: Rust
+severity: hint
+message: Direct process spawning is runtime-authority inventory evidence; keep it in CLI or harness shells.
+metadata:
+  posture: inventory
+  surface: runtime-authority
+  non_claim: structural-candidate-only
+rule:
+  pattern: std::process::Command::new($PROGRAM)

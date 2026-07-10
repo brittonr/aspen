@@ -1,0 +1,10 @@
+id: panic-bypass
+language: Rust
+severity: hint
+message: Panic paths are runtime-authority inventory evidence for fail-closed boundary review.
+metadata:
+  posture: inventory
+  surface: runtime-authority
+  non_claim: structural-candidate-only
+rule:
+  pattern: panic!($$$ARGS)

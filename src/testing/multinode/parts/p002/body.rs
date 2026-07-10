@@ -76,6 +76,7 @@ pub fn build_topology_matrix(profiles: &[TopologyProfile]) -> Result<TopologyMat
     })
 }
 
+// r[impl molten.testing.fixture_driven_cluster_execution.fixture_source_of_truth]
 pub fn derive_scenario_metadata(
     fixture: &ScenarioFixture,
     execution_profiles: &[crate::distributed_core::CiProfile],
@@ -181,6 +182,8 @@ pub fn evaluate_reconciliation(input: &ReconciliationInput) -> Result<Reconcilia
     })
 }
 
+// r[impl molten.testing.local_multiprocess_cluster_tier.middle_tier]
+// r[impl molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
 pub fn build_local_multiprocess_plan(input: &LocalMultiprocessPlanInput) -> Result<LocalMultiprocessPlan> {
     let mut diagnostics = Vec::new();
     collect_invalid_ref_diagnostics(
@@ -209,6 +212,8 @@ pub fn build_local_multiprocess_plan(input: &LocalMultiprocessPlanInput) -> Resu
     })
 }
 
+// r[impl molten.testing.local_multiprocess_cluster_tier.middle_tier]
+// r[impl molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
 pub fn build_local_multiprocess_run_receipt(input: &LocalMultiprocessRunInput) -> Result<LocalMultiprocessRunReceipt> {
     let mut diagnostics = input.diagnostics.clone();
     collect_invalid_ref_diagnostics("local run plan", std::slice::from_ref(&input.plan_ref), &mut diagnostics)?;
@@ -232,6 +237,8 @@ pub fn build_local_multiprocess_run_receipt(input: &LocalMultiprocessRunInput) -
     })
 }
 
+// r[impl molten.testing.local_multiprocess_cluster_tier.middle_tier]
+// r[impl molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
 pub fn build_local_multiprocess_executable_run(
     input: &LocalMultiprocessExecutableRunInput,
 ) -> Result<LocalMultiprocessExecutableRunReceipt> {

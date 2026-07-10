@@ -10,6 +10,10 @@ const NIXOS_VM_FAULT_RECEIPT_SCHEMA: &str = "molten.testing.nixos-vm.fault-recei
 const NIXOS_VM_NETWORK_CONTROL_PROBE_SCHEMA: &str = "molten.testing.nixos-vm.network-control-probe.v1";
 const NIXOS_VM_SHARD_RUN_SCHEMA: &str = "molten.testing.nixos-vm.shard-run.v1";
 const NIXOS_VM_MULTINODE_AGGREGATE_SCHEMA: &str = "molten.testing.nixos-vm.multinode-aggregate.v1";
+pub const NIXOS_VM_SCOPE_FIXTURE_METADATA: &str = "fixture-metadata";
+pub const NIXOS_VM_SCOPE_EXECUTABLE_VM: &str = "executable-vm";
+pub const NIXOS_VM_SCOPE_AGGREGATE_INDEX: &str = "aggregate-index";
+pub const NIXOS_VM_SCOPE_DIAGNOSTIC_ONLY: &str = "diagnostic-only";
 
 fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
@@ -113,6 +117,7 @@ pub struct NixosVmShardRunInput<'a> {
     pub scenario_fixture_ref: &'a str,
     pub topology_ref: &'a str,
     pub package_ref: &'a str,
+    pub evidence_scope: &'a str,
     pub node_evidence_refs: &'a [String],
     pub child_receipt_refs: &'a [String],
     pub diagnostic_log_refs: &'a [String],
@@ -135,6 +140,7 @@ pub struct NixosVmAggregateInput<'a> {
     pub manifest_ref: &'a str,
     pub required_shard_ids: &'a [String],
     pub shard_refs: &'a [String],
+    pub shard_scopes: &'a [String],
     pub denied_shard_ids: &'a [String],
     pub unavailable_as_pass_shard_ids: &'a [String],
     pub stale_child_refs: &'a [String],
@@ -386,14 +392,20 @@ pub fn evaluate_vm_aggregate(input: &NixosVmAggregateInput<'_>) -> Result<NixosV
 }
 
 fn collect_vm_shard_diagnostics(input: &NixosVmShardRunInput<'_>, diagnostics: &mut Vec<String>) -> Result<()> {
+    // r[impl molten.testing.vm_shard_scope.synthetic_metadata_boundary]
+    // r[impl molten.testing.vm_shard_scope.aggregate_scope_denial]
     validate_text_field("VM shard", input.shard_id)?;
     validate_content_ref(input.scenario_fixture_ref)?;
     validate_content_ref(input.topology_ref)?;
     validate_content_ref(input.package_ref)?;
+    validate_vm_evidence_scope(input.evidence_scope)?;
     validate_decision(input.claimed_decision)?;
     validate_ref_slice("VM shard node evidence", input.node_evidence_refs)?;
     validate_ref_slice("VM shard child receipt", input.child_receipt_refs)?;
     validate_ref_slice("VM shard diagnostic log", input.diagnostic_log_refs)?;
+    if input.claimed_decision == "pass" && input.evidence_scope != NIXOS_VM_SCOPE_EXECUTABLE_VM {
+        diagnostics.push(format!("vm-shard-non-executable-pass:{}:{}", input.shard_id, input.evidence_scope));
+    }
     if input.claimed_decision == "pass" && input.unavailable {
         diagnostics.push(format!("vm-shard-unavailable-as-pass:{}", input.shard_id));
     }
@@ -413,11 +425,16 @@ fn collect_vm_shard_diagnostics(input: &NixosVmShardRunInput<'_>, diagnostics: &
 }
 
 fn collect_vm_aggregate_diagnostics(input: &NixosVmAggregateInput<'_>, diagnostics: &mut Vec<String>) -> Result<()> {
+    // r[impl molten.testing.vm_shard_scope.aggregate_scope_denial]
     validate_content_ref(input.topology_ref)?;
     validate_content_ref(input.package_ref)?;
     validate_content_ref(input.manifest_ref)?;
     validate_strings("VM aggregate required shard", input.required_shard_ids, MAX_VM_TEXT_FIELDS)?;
     validate_ref_slice("VM aggregate shard", input.shard_refs)?;
+    validate_strings("VM aggregate shard scope", input.shard_scopes, MAX_VM_TEXT_FIELDS)?;
+    for scope in input.shard_scopes {
+        validate_vm_evidence_scope(scope)?;
+    }
     validate_strings("VM aggregate denied shard", input.denied_shard_ids, MAX_VM_TEXT_FIELDS)?;
     validate_strings(
         "VM aggregate unavailable-as-pass shard",
@@ -431,6 +448,14 @@ fn collect_vm_aggregate_diagnostics(input: &NixosVmAggregateInput<'_>, diagnosti
     }
     if input.shard_refs.len() < input.required_shard_ids.len() {
         diagnostics.push("vm-aggregate-missing-shard-ref".to_string());
+    }
+    if input.shard_scopes.len() != input.shard_refs.len() {
+        diagnostics.push("vm-aggregate-shard-scope-count-mismatch".to_string());
+    }
+    for scope in input.shard_scopes {
+        if scope != NIXOS_VM_SCOPE_EXECUTABLE_VM {
+            diagnostics.push(format!("vm-aggregate-non-executable-platform-scope:{scope}"));
+        }
     }
     for shard_id in input.denied_shard_ids {
         diagnostics.push(format!("vm-aggregate-denied-shard:{shard_id}"));
@@ -459,6 +484,7 @@ fn vm_shard_run_value(input: &NixosVmShardRunInput<'_>, decision: &str, diagnost
         record("scenario-fixture", vec![string(input.scenario_fixture_ref)]),
         record("topology", vec![string(input.topology_ref)]),
         record("package", vec![string(input.package_ref)]),
+        record("evidence-scope", vec![string(input.evidence_scope)]),
         record("node-evidence", vec![sequence(ref_values(input.node_evidence_refs)?)]),
         record("children", vec![sequence(ref_values(input.child_receipt_refs)?)]),
         record("diagnostic-logs", vec![sequence(ref_values(input.diagnostic_log_refs)?)]),
@@ -471,6 +497,7 @@ fn vm_shard_run_value(input: &NixosVmShardRunInput<'_>, decision: &str, diagnost
         )?)]),
         record("checks", vec![sequence(vec![
             check_value("scenario-bound", status(decision == "pass")),
+            check_value("evidence-scope-explicit", "pass"),
             check_value("logs-diagnostic-only", "pass"),
             check_value("unavailable-is-not-pass", status(!input.unavailable || input.claimed_decision != "pass")),
         ])]),
@@ -486,6 +513,7 @@ fn vm_aggregate_value(input: &NixosVmAggregateInput<'_>, decision: &str, diagnos
         record("manifest", vec![string(input.manifest_ref)]),
         record("required-shards", vec![sequence(input.required_shard_ids.iter().map(string).collect())]),
         record("shards", vec![sequence(ref_values(input.shard_refs)?)]),
+        record("shard-scopes", vec![sequence(input.shard_scopes.iter().map(string).collect())]),
         record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
         record("caveats", vec![sequence(string_values(
             "VM aggregate caveat",
@@ -494,6 +522,10 @@ fn vm_aggregate_value(input: &NixosVmAggregateInput<'_>, decision: &str, diagnos
         )?)]),
         record("checks", vec![sequence(vec![
             check_value("child-shards-bound", status(!input.shard_refs.is_empty())),
+            check_value(
+                "child-scope-preserved",
+                status(input.shard_scopes.iter().all(|scope| scope == NIXOS_VM_SCOPE_EXECUTABLE_VM)),
+            ),
             check_value("unavailable-not-promoted", status(input.unavailable_as_pass_shard_ids.is_empty())),
             check_value("logs-diagnostic-only", "pass"),
         ])]),
@@ -559,6 +591,16 @@ fn validate_host_support(status: &str) -> Result<()> {
     match status {
         "supported" | "unavailable" | "denied" => Ok(()),
         other => Err(MoltenError::invalid_harness(format!("unsupported nixos VM host-support status {other}"))),
+    }
+}
+
+fn validate_vm_evidence_scope(scope: &str) -> Result<()> {
+    match scope {
+        NIXOS_VM_SCOPE_FIXTURE_METADATA
+        | NIXOS_VM_SCOPE_EXECUTABLE_VM
+        | NIXOS_VM_SCOPE_AGGREGATE_INDEX
+        | NIXOS_VM_SCOPE_DIAGNOSTIC_ONLY => Ok(()),
+        other => Err(MoltenError::invalid_harness(format!("unsupported nixos VM evidence scope {other}"))),
     }
 }
 

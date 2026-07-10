@@ -1,0 +1,10 @@
+id: direct-authority-bypass
+language: Rust
+severity: hint
+message: Direct authority bypass helpers are structural candidates only; authority still requires Basalt/UCAN and policy evidence.
+metadata:
+  posture: inventory
+  surface: runtime-authority
+  non_claim: structural-candidate-only
+rule:
+  pattern: AuthorityBypass::admit($$$ARGS)

@@ -1,0 +1,12 @@
+id: ambient-clock-now
+language: Rust
+severity: hint
+message: Ambient wall-clock or monotonic time is runtime-authority inventory evidence for replay review.
+metadata:
+  posture: inventory
+  surface: runtime-authority
+  non_claim: structural-candidate-only
+rule:
+  any:
+    - pattern: std::time::SystemTime::now()
+    - pattern: std::time::Instant::now()

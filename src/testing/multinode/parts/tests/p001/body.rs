@@ -17,6 +17,7 @@
     #[test]
     fn local_multiprocess_executable_runner_binds_shell_observations() {
         // r[verify molten.testing.multinode.local_multiprocess_executable_runner]
+        // r[verify molten.testing.local_multiprocess_cluster_tier.middle_tier]
         let receipt = build_local_multiprocess_executable_run(&executable_run_input()).expect("executable local run");
         let rendered = crate::preserves_rail::to_text(&receipt.value).expect("render executable run");
 
@@ -31,6 +32,7 @@
     #[test]
     fn local_multiprocess_executable_runner_denies_stale_timeout_orphan_and_missing_cleanup() {
         // r[verify molten.testing.multinode.local_multiprocess_runner_negatives]
+        // r[verify molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
         let mut input = executable_run_input();
         input.ticket_status = "stale".to_string();
         input.child_timed_out = true;
@@ -67,6 +69,7 @@
     #[test]
     fn three_node_quorum_gate_binds_membership_restart_and_reconciliation_refs() {
         // r[verify molten.testing.multinode.three_node_quorum_topology]
+        // r[verify molten.testing.three_node_quorum_vm.executable_shard]
         let profile = default_topology_profiles()
             .into_iter()
             .find(|profile| profile.id == PROFILE_THREE_NODE_QUORUM)
@@ -84,6 +87,7 @@
     #[test]
     fn three_node_quorum_gate_denies_missing_quorum_duplicate_and_log_only_claims() {
         // r[verify molten.testing.multinode.three_node_membership_negatives]
+        // r[verify molten.testing.three_node_quorum_vm.negatives]
         let mut input = three_node_input();
         input.quorum_refs = Vec::new();
         input.duplicate_semantic_commit = true;
@@ -120,6 +124,7 @@
     fn vm_scenario_gate_binds_metadata_membership_reconciliation_and_live_transport() {
         // r[verify molten.testing.multinode.vm_scenario_metadata_gate]
         // r[verify molten.testing.multinode.vm_reconciliation_gate]
+        // r[verify molten.testing.fixture_driven_cluster_execution.fixture_source_of_truth]
         let gate = evaluate_vm_scenario_gate(&vm_scenario_gate_input()).expect("VM scenario gate");
         let rendered = crate::preserves_rail::to_text(&gate.value).expect("render VM scenario gate");
 
@@ -133,6 +138,7 @@
     fn vm_scenario_gate_denies_wrong_fixture_shape_and_log_only_reconciliation() {
         // r[verify molten.testing.multinode.vm_scenario_metadata_gate]
         // r[verify molten.testing.multinode.vm_reconciliation_gate]
+        // r[verify molten.testing.fixture_driven_cluster_execution.observation_gate]
         let mut input = vm_scenario_gate_input();
         input.observed_artifact_kinds = vec!["log".to_string()];
         input.unsupported_pass_claim = true;
@@ -171,6 +177,7 @@
     #[test]
     fn vm_failure_repro_export_seals_non_replayable_diagnostic_bundle() {
         // r[verify molten.testing.multinode.vm_failure_repro_export]
+        // r[verify molten.testing.cluster_failure_repro_bundles.bundle_schema]
         let export = export_vm_failure_repro(&vm_failure_export_input()).expect("VM failure repro export");
         let rendered = crate::preserves_rail::to_text(&export.value).expect("render VM failure export");
 
@@ -185,6 +192,7 @@
     #[test]
     fn vm_failure_repro_export_denies_private_without_reveal_and_pass_condition_absence() {
         // r[verify molten.testing.multinode.vm_failure_repro_privacy_gate]
+        // r[verify molten.testing.cluster_failure_repro_bundles.privacy_and_nonpass]
         let mut input = vm_failure_export_input();
         input.private_attachment_refs = vec![local_ref("private-log")];
         input.unavailable_host_support = false;
