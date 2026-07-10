@@ -39,7 +39,10 @@ fn access_summary(value: &IoValue) -> Result<Option<String>> {
 }
 
 fn flow_summary(value: &IoValue) -> Result<Option<String>> {
-    if let Some(fields) = value.collect_simple_record("node-control-live-listener-receipt-v1", Some(14)) {
+    if let Some(fields) = value
+        .collect_simple_record("node-control-live-listener-receipt-v1", Some(16))
+        .or_else(|| value.collect_simple_record("node-control-live-listener-receipt-v1", Some(14)))
+    {
         require_schema(
             &fields[0],
             crate::preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA,
@@ -146,7 +149,10 @@ fn gate_summary(value: &IoValue) -> Result<Option<String>> {
 }
 
 fn apply_summary(value: &IoValue) -> Result<Option<String>> {
-    if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15)) {
+    if let Some(fields) = value
+        .collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(17))
+        .or_else(|| value.collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15)))
+    {
         require_schema(
             &fields[0],
             crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
@@ -206,7 +212,10 @@ fn send_summary(value: &IoValue) -> Result<Option<String>> {
             record_string(&fields[10], "prior-send-receipt")?
         )));
     }
-    if let Some(fields) = value.collect_simple_record("node-control-live-send-receipt-v1", Some(13)) {
+    if let Some(fields) = value
+        .collect_simple_record("node-control-live-send-receipt-v1", Some(15))
+        .or_else(|| value.collect_simple_record("node-control-live-send-receipt-v1", Some(13)))
+    {
         require_schema(
             &fields[0],
             crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA,
@@ -221,7 +230,10 @@ fn send_summary(value: &IoValue) -> Result<Option<String>> {
             record_string(&fields[9], "envelope")?
         )));
     }
-    if let Some(fields) = value.collect_simple_record("node-control-live-transport-receipt-v1", Some(11)) {
+    if let Some(fields) = value
+        .collect_simple_record("node-control-live-transport-receipt-v1", Some(13))
+        .or_else(|| value.collect_simple_record("node-control-live-transport-receipt-v1", Some(11)))
+    {
         require_schema(
             &fields[0],
             crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,

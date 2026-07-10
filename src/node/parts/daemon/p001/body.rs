@@ -1,5 +1,44 @@
 
 #[derive(Debug, Clone, Copy)]
+pub struct LiveTopologyProfile<'a> {
+    pub profile_ref: &'a str,
+    pub expected_node: &'a str,
+    pub expected_peer: &'a str,
+    pub expected_topic: &'a str,
+    pub expected_endpoint: Option<&'a str>,
+    pub allowed_alpns: &'a [&'a str],
+    pub ticket_refs: &'a [String],
+    pub peer_admission_refs: &'a [String],
+    pub role: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct LiveTransportProfile<'a> {
+    pub profile_ref: &'a str,
+    pub max_attempts: u64,
+    pub join_timeout_ms: u64,
+    pub publish_timeout_ms: u64,
+    pub relay_preference: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveProfilePreflight {
+    pub decision: String,
+    pub topology_profile_ref: Option<String>,
+    pub transport_profile_ref: Option<String>,
+    pub effective_max_attempts: u64,
+    pub effective_join_timeout_ms: u64,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveProfilePreflightInput<'a> {
+    send: &'a ControlLiveSendInput<'a>,
+    ticket: &'a ControlLiveTicket,
+    envelope: &'a ControlIngressEnvelope,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct ControlLiveSendInput<'a> {
     pub state_root: Option<&'a Path>,
     pub request_value: &'a IoValue,
@@ -10,6 +49,8 @@ pub struct ControlLiveSendInput<'a> {
     pub expected_receiver_node: Option<&'a str>,
     pub expected_topic: Option<&'a str>,
     pub expected_endpoint: Option<&'a str>,
+    pub topology_profile: Option<&'a LiveTopologyProfile<'a>>,
+    pub transport_profile: Option<&'a LiveTransportProfile<'a>>,
     pub max_attempts: u64,
     pub peer_bootstrap_refs: &'a [String],
     pub authority_refs: &'a [String],
@@ -94,6 +135,8 @@ pub struct ControlLiveWorkflowBundleApplyInput<'a> {
     pub policy_refs: &'a [String],
     pub resource_refs: &'a [String],
     pub evidence_refs: &'a [String],
+    pub topology_profile: Option<&'a LiveTopologyProfile<'a>>,
+    pub transport_profile: Option<&'a LiveTransportProfile<'a>>,
     pub max_attempts: u64,
     pub join_timeout_ms: u64,
 }
@@ -258,6 +301,10 @@ struct LiveTransportReceiptValueInput<'a> {
     delivered_from: Option<&'a str>,
     envelope: &'a ControlIngressEnvelope,
     ingress_receipt_ref: Option<&'a str>,
+    topology_profile_ref: Option<&'a str>,
+    transport_profile_ref: Option<&'a str>,
+    effective_max_attempts: Option<u64>,
+    effective_join_timeout_ms: Option<u64>,
     diagnostics: &'a [String],
 }
 
@@ -268,6 +315,10 @@ struct LiveSendReceiptValueInput<'a> {
     ticket: &'a ControlLiveTicket,
     envelope: &'a ControlIngressEnvelope,
     transport_receipt_ref: Option<&'a str>,
+    topology_profile_ref: Option<&'a str>,
+    transport_profile_ref: Option<&'a str>,
+    effective_max_attempts: u64,
+    effective_join_timeout_ms: u64,
     diagnostics: &'a [String],
 }
 

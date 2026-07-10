@@ -91,6 +91,10 @@ struct LiveWorkflowBundleApplyReceiptValueInput<'a> {
     envelope_ref: Option<&'a str>,
     operation_ref: Option<&'a str>,
     send_receipt_ref: Option<&'a str>,
+    topology_profile_ref: Option<&'a str>,
+    transport_profile_ref: Option<&'a str>,
+    effective_max_attempts: u64,
+    effective_join_timeout_ms: u64,
     expected: &'a LiveWorkflowBundleExpectedInput<'a>,
     diagnostics: &'a [String],
 }

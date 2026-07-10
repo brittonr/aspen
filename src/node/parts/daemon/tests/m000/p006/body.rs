@@ -217,6 +217,8 @@
                 policy_refs: &[],
                 resource_refs: &[],
                 evidence_refs: &[],
+                topology_profile: None,
+                transport_profile: None,
                 max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
                 join_timeout_ms: 10_000,
             }))

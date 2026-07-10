@@ -155,6 +155,36 @@ fn send_live(
     input: &super::super::command::control::IngressLiveSend,
     values: &LiveSendValues,
 ) -> molten::error::Result<molten::node_daemon::ControlLiveSend> {
+    let ticket = molten::node_daemon::parse_control_live_ticket(&values.ticket_value)?;
+    let default_profile_alpns = [molten::node_daemon::LIVE_CONTROL_INGRESS_TRANSPORT.to_string()];
+    let profile_alpn_values = if input.topology_profile_alpns.is_empty() {
+        default_profile_alpns.as_slice()
+    } else {
+        input.topology_profile_alpns.as_slice()
+    };
+    let profile_alpn_refs: Vec<&str> = profile_alpn_values.iter().map(String::as_str).collect();
+    let topology_ticket_refs = vec![ticket.ticket_ref.clone()];
+    let topology_peer_admission_refs = input.peer_bootstrap_refs.clone();
+    let topology_profile =
+        input.topology_profile_ref.as_deref().map(|profile_ref| molten::node_daemon::LiveTopologyProfile {
+            profile_ref,
+            expected_node: input.expected_node.as_deref().unwrap_or(&ticket.node_id),
+            expected_peer: &input.from_peer,
+            expected_topic: input.expected_topic.as_deref().unwrap_or(&ticket.topic),
+            expected_endpoint: input.expected_endpoint.as_deref().or(Some(&ticket.live_endpoint_id)),
+            allowed_alpns: &profile_alpn_refs,
+            ticket_refs: &topology_ticket_refs,
+            peer_admission_refs: &topology_peer_admission_refs,
+            role: input.topology_profile_role.as_deref(),
+        });
+    let transport_profile =
+        input.transport_profile_ref.as_deref().map(|profile_ref| molten::node_daemon::LiveTransportProfile {
+            profile_ref,
+            max_attempts: input.max_attempts,
+            join_timeout_ms: input.join_timeout_ms,
+            publish_timeout_ms: input.transport_profile_publish_timeout_ms.unwrap_or(input.join_timeout_ms),
+            relay_preference: &input.transport_profile_relay,
+        });
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -169,6 +199,8 @@ fn send_live(
         expected_receiver_node: input.expected_node.as_deref(),
         expected_topic: input.expected_topic.as_deref(),
         expected_endpoint: input.expected_endpoint.as_deref(),
+        topology_profile: topology_profile.as_ref(),
+        transport_profile: transport_profile.as_ref(),
         max_attempts: input.max_attempts,
         peer_bootstrap_refs: &input.peer_bootstrap_refs,
         authority_refs: &input.authority_refs,

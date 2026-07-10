@@ -156,6 +156,12 @@ fn validate_live_workflow_bundle_apply_input(input: &ControlLiveWorkflowBundleAp
         validate_live_send_timeout(input.join_timeout_ms)?;
         validate_live_send_attempts(input.max_attempts)?;
     }
+    if let Some(profile) = input.topology_profile {
+        validate_live_topology_profile(profile)?;
+    }
+    if let Some(profile) = input.transport_profile {
+        validate_live_transport_profile_shape(profile)?;
+    }
     Ok(())
 }
 

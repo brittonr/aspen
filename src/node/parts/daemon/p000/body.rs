@@ -76,6 +76,10 @@ pub const DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS: u64 = 250;
 const LIVE_WORKFLOW_PROTOCOL_ID: &str = "proto:molten.node-control.live-workflow-bundle.v1";
 const LIVE_WORKFLOW_PROTOCOL_SESSION_PREFIX: &str = "session:node-control-live-workflow:";
 const LIVE_WORKFLOW_LIFECYCLE_DIAGNOSTIC_CAPACITY: usize = 24;
+const LIVE_PROFILE_DIAGNOSTIC_CAPACITY: usize = 12;
+const LIVE_PROFILE_RELAY_DIRECT: &str = "direct";
+const LIVE_PROFILE_RELAY_RELAY: &str = "relay";
+const LIVE_PROFILE_RELAY_AUTO: &str = "auto";
 
 const _: () = assert!(MAX_PENDING_CONTROL_REQUESTS > 0);
 const _: () = assert!(MAX_CONTROL_LOOP_REQUESTS > 0);
@@ -242,6 +246,10 @@ pub struct ControlLiveIngressPublishInput<'a> {
     pub sender: &'a iroh_gossip::api::GossipSender,
     pub envelope_value: &'a IoValue,
     pub node_id: &'a str,
+    pub topology_profile_ref: Option<&'a str>,
+    pub transport_profile_ref: Option<&'a str>,
+    pub effective_max_attempts: Option<u64>,
+    pub effective_join_timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy)]

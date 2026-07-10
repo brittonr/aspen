@@ -12,6 +12,10 @@ fn duplicate_control_live_send(
         delivered_from: None,
         envelope,
         ingress_receipt_ref: None,
+        topology_profile_ref: selected_topology_profile_ref(input),
+        transport_profile_ref: selected_transport_profile_ref(input),
+        effective_max_attempts: Some(effective_live_send_max_attempts(input)),
+        effective_join_timeout_ms: Some(effective_live_send_join_timeout_ms(input)),
         diagnostics: &[],
     })?;
     let transport_receipt_ref = crate::preserves_rail::canonical_hash(&transport_receipt_value)?;
@@ -21,6 +25,10 @@ fn duplicate_control_live_send(
         ticket,
         envelope,
         transport_receipt_ref: Some(&transport_receipt_ref),
+        topology_profile_ref: selected_topology_profile_ref(input),
+        transport_profile_ref: selected_transport_profile_ref(input),
+        effective_max_attempts: effective_live_send_max_attempts(input),
+        effective_join_timeout_ms: effective_live_send_join_timeout_ms(input),
         diagnostics: &[],
     })?;
     let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
@@ -77,6 +85,10 @@ fn denied_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_>) ->
         ticket: denied.ticket,
         envelope: &denied.envelope,
         transport_receipt_ref: None,
+        topology_profile_ref: selected_topology_profile_ref(denied.input),
+        transport_profile_ref: selected_transport_profile_ref(denied.input),
+        effective_max_attempts: effective_live_send_max_attempts(denied.input),
+        effective_join_timeout_ms: effective_live_send_join_timeout_ms(denied.input),
         diagnostics: &denied.diagnostics,
     })?;
     let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
@@ -106,7 +118,8 @@ fn denied_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_>) ->
 
 pub fn parse_control_live_send_receipt(value: &IoValue) -> Result<ControlLiveSendReceipt> {
     let fields = value
-        .collect_simple_record("node-control-live-send-receipt-v1", Some(13))
+        .collect_simple_record("node-control-live-send-receipt-v1", Some(15))
+        .or_else(|| value.collect_simple_record("node-control-live-send-receipt-v1", Some(13)))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-send-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],

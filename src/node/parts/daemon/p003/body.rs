@@ -272,6 +272,10 @@ pub struct ControlLiveSendPreflight {
     pub envelope_ref: String,
     pub operation_ref: String,
     pub receiver_ticket_ref: String,
+    pub topology_profile_ref: Option<String>,
+    pub transport_profile_ref: Option<String>,
+    pub effective_max_attempts: u64,
+    pub effective_join_timeout_ms: u64,
     pub diagnostics: Vec<String>,
 }
 

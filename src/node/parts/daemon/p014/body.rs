@@ -536,5 +536,7 @@ fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_
                 crate::preserves_rail::string("pass"),
             ]),
         ])]),
+        live_profile_ref_records(None, None),
+        live_effective_transport_optional_record(None, None),
     ]))
 }

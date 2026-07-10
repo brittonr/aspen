@@ -257,7 +257,10 @@ fn runtime_summary(value: &IoValue) -> Result<Option<String>> {
 }
 
 fn import_summary(value: &IoValue) -> Result<Option<String>> {
-    if let Some(fields) = value.collect_simple_record("node-control-live-ticket-import-receipt-v1", Some(13)) {
+    if let Some(fields) = value
+        .collect_simple_record("node-control-live-ticket-import-receipt-v1", Some(15))
+        .or_else(|| value.collect_simple_record("node-control-live-ticket-import-receipt-v1", Some(13)))
+    {
         require_schema(
             &fields[0],
             crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA,

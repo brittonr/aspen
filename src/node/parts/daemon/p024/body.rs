@@ -21,7 +21,8 @@ fn service_run_receipt_ref(value: &IoValue) -> Result<String> {
 
 fn live_transport_receipt_ref(value: &IoValue) -> Result<(String, String, String)> {
     let fields = value
-        .collect_simple_record("node-control-live-transport-receipt-v1", Some(11))
+        .collect_simple_record("node-control-live-transport-receipt-v1", Some(13))
+        .or_else(|| value.collect_simple_record("node-control-live-transport-receipt-v1", Some(11)))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
@@ -37,7 +38,8 @@ fn live_transport_receipt_ref(value: &IoValue) -> Result<(String, String, String
 
 fn live_listener_receipt_refs(value: &IoValue) -> Result<(String, Vec<String>, String)> {
     let fields = value
-        .collect_simple_record("node-control-live-listener-receipt-v1", Some(14))
+        .collect_simple_record("node-control-live-listener-receipt-v1", Some(16))
+        .or_else(|| value.collect_simple_record("node-control-live-listener-receipt-v1", Some(14)))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-listener-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
@@ -120,6 +122,10 @@ pub async fn control_live_serve_listener_loopback(
         sender: &sender,
         envelope_value: &envelope.value,
         node_id: input.from_peer,
+        topology_profile_ref: None,
+        transport_profile_ref: None,
+        effective_max_attempts: None,
+        effective_join_timeout_ms: None,
     })
     .await?;
     let listener_input = ControlLiveServeInput {

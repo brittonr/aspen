@@ -148,7 +148,8 @@ pub fn parse_control_live_workflow_bundle_apply_receipt(
     value: &IoValue,
 ) -> Result<ControlLiveWorkflowBundleApplyReceipt> {
     let fields = value
-        .collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15))
+        .collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(17))
+        .or_else(|| value.collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15)))
         .ok_or_else(|| {
             MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-apply-receipt-v1 ...>")
         })?;

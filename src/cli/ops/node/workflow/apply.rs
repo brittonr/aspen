@@ -31,6 +31,48 @@ fn execute(
     input: &super::super::command::live::Apply,
     loaded: &Loaded,
 ) -> molten::error::Result<molten::node_daemon::ControlLiveWorkflowBundleApply> {
+    let default_profile_alpns = [molten::node_daemon::LIVE_CONTROL_INGRESS_TRANSPORT.to_string()];
+    let profile_alpn_values = if input.topology_profile_alpns.is_empty() {
+        default_profile_alpns.as_slice()
+    } else {
+        input.topology_profile_alpns.as_slice()
+    };
+    let profile_alpn_refs: Vec<&str> = profile_alpn_values.iter().map(String::as_str).collect();
+    let topology_ticket_refs: Vec<String> = Vec::new();
+    let topology_peer_admission_refs = input.peer_bootstrap_refs.clone();
+    let topology_profile = input
+        .topology_profile_ref
+        .as_deref()
+        .map(|profile_ref| {
+            Ok::<_, molten::error::MoltenError>(molten::node_daemon::LiveTopologyProfile {
+                profile_ref,
+                expected_node: input.expected_node.as_deref().ok_or_else(|| {
+                    molten::error::MoltenError::invalid_harness("--topology-profile-ref requires --expected-node")
+                })?,
+                expected_peer: input.from_peer.as_deref().or(input.expected_peer.as_deref()).ok_or_else(|| {
+                    molten::error::MoltenError::invalid_harness(
+                        "--topology-profile-ref requires --from-peer or --expected-peer",
+                    )
+                })?,
+                expected_topic: input.expected_topic.as_deref().ok_or_else(|| {
+                    molten::error::MoltenError::invalid_harness("--topology-profile-ref requires --expected-topic")
+                })?,
+                expected_endpoint: input.expected_endpoint.as_deref(),
+                allowed_alpns: &profile_alpn_refs,
+                ticket_refs: &topology_ticket_refs,
+                peer_admission_refs: &topology_peer_admission_refs,
+                role: input.topology_profile_role.as_deref(),
+            })
+        })
+        .transpose()?;
+    let transport_profile =
+        input.transport_profile_ref.as_deref().map(|profile_ref| molten::node_daemon::LiveTransportProfile {
+            profile_ref,
+            max_attempts: input.max_attempts,
+            join_timeout_ms: input.join_timeout_ms,
+            publish_timeout_ms: input.transport_profile_publish_timeout_ms.unwrap_or(input.join_timeout_ms),
+            relay_preference: &input.transport_profile_relay,
+        });
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -60,6 +102,8 @@ fn execute(
             policy_refs: &input.policy_refs,
             resource_refs: &input.resource_refs,
             evidence_refs: &input.evidence_refs,
+            topology_profile: topology_profile.as_ref(),
+            transport_profile: transport_profile.as_ref(),
             max_attempts: input.max_attempts,
             join_timeout_ms: input.join_timeout_ms,
         },

@@ -51,6 +51,8 @@ fn live_workflow_bundle_apply_receipt_value(input: &LiveWorkflowBundleApplyRecei
                 crate::preserves_rail::string("pass"),
             ]),
         ])]),
+        live_profile_ref_records(input.topology_profile_ref, input.transport_profile_ref),
+        live_effective_transport_record(input.effective_max_attempts, input.effective_join_timeout_ms),
     ]))
 }
 

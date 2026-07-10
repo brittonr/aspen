@@ -178,7 +178,8 @@ struct NodeLiveTransportReceipt {
 
 fn parse_node_live_transport_receipt(value: &IoValue) -> Result<NodeLiveTransportReceipt> {
     let fields = value
-        .collect_simple_record("node-control-live-transport-receipt-v1", Some(11))
+        .collect_simple_record("node-control-live-transport-receipt-v1", Some(13))
+        .or_else(|| value.collect_simple_record("node-control-live-transport-receipt-v1", Some(11)))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],

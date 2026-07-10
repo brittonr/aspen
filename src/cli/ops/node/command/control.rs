@@ -114,6 +114,18 @@ pub(crate) struct IngressLiveSend {
     pub(crate) expected_topic: Option<String>,
     #[arg(long = "expected-endpoint")]
     pub(crate) expected_endpoint: Option<String>,
+    #[arg(long = "topology-profile-ref")]
+    pub(crate) topology_profile_ref: Option<String>,
+    #[arg(long = "topology-profile-alpn")]
+    pub(crate) topology_profile_alpns: Vec<String>,
+    #[arg(long = "topology-profile-role")]
+    pub(crate) topology_profile_role: Option<String>,
+    #[arg(long = "transport-profile-ref")]
+    pub(crate) transport_profile_ref: Option<String>,
+    #[arg(long = "transport-profile-publish-timeout-ms")]
+    pub(crate) transport_profile_publish_timeout_ms: Option<u64>,
+    #[arg(long = "transport-profile-relay", default_value = "auto")]
+    pub(crate) transport_profile_relay: String,
     #[arg(long, default_value_t = molten::node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
     pub(crate) max_attempts: u64,
     #[arg(long = "peer-bootstrap")]

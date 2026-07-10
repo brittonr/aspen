@@ -204,6 +204,8 @@
             expected_receiver_node: None,
             expected_topic: None,
             expected_endpoint: None,
+            topology_profile: None,
+            transport_profile: None,
             max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
             peer_bootstrap_refs: &material.peer_bootstrap_refs,
             authority_refs: &material.authority_refs,

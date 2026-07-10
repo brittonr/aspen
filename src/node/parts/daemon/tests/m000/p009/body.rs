@@ -251,6 +251,10 @@
             delivered_from: Some("peer:transport"),
             envelope: &envelope,
             ingress_receipt_ref: None,
+            topology_profile_ref: None,
+            transport_profile_ref: None,
+            effective_max_attempts: None,
+            effective_join_timeout_ms: None,
             diagnostics: &[],
         })
         .expect("transport receipt");

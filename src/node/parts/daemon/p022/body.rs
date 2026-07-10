@@ -96,6 +96,12 @@ fn validate_send_input(input: &ControlLiveSendInput<'_>) -> Result<()> {
     if let Some(endpoint) = input.expected_endpoint {
         validate_node_id(endpoint)?;
     }
+    if let Some(profile) = input.topology_profile {
+        validate_live_topology_profile(profile)?;
+    }
+    if let Some(profile) = input.transport_profile {
+        validate_live_transport_profile_shape(profile)?;
+    }
     Ok(())
 }
 
@@ -120,6 +126,8 @@ fn send_receiver_addr(
     envelope: &ControlIngressEnvelope,
 ) -> Result<std::result::Result<iroh::EndpointAddr, Vec<String>>> {
     let mut diagnostics = live_send_ticket_diagnostics(input, ticket);
+    let profile = live_send_profile_preflight(LiveProfilePreflightInput { send: input, ticket, envelope })?;
+    diagnostics.extend(profile.diagnostics);
     if let Some(state_root) = input.state_root {
         diagnostics.extend(live_send_state_root_evidence_diagnostics(state_root, input, envelope)?);
     }
@@ -148,13 +156,14 @@ async fn publish_with_retries(
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
 ) -> Result<SendRetryOutcome> {
-    let attempt_capacity = usize::try_from(input.max_attempts)
+    let effective_max_attempts = effective_live_send_max_attempts(input);
+    let attempt_capacity = usize::try_from(effective_max_attempts)
         .map_err(|_| MoltenError::invalid_harness("node control live send attempts exceed usize capacity"))?;
     let mut retry_receipt_refs = Vec::with_capacity(attempt_capacity);
     let mut retry_receipt_values = Vec::with_capacity(attempt_capacity);
     let mut diagnostics = Vec::with_capacity(attempt_capacity);
     let mut published = None;
-    for attempt in 1..=input.max_attempts {
+    for attempt in 1..=effective_max_attempts {
         match attempt_control_live_send(input, receiver_addr, envelope).await? {
             Ok(receipt) => {
                 published = Some(receipt);
@@ -163,13 +172,13 @@ async fn publish_with_retries(
             Err(diagnostic) => {
                 let attempt_diagnostics = vec![format!(
                     "node control live send attempt {attempt}/{} failed: {diagnostic}",
-                    input.max_attempts
+                    effective_max_attempts
                 )];
                 diagnostics.extend(attempt_diagnostics.iter().cloned());
                 let retry_value = live_send_retry_receipt_value(&LiveSendRetryReceiptValueInput {
-                    decision: if attempt == input.max_attempts { "deny" } else { "fail" },
+                    decision: if attempt == effective_max_attempts { "deny" } else { "fail" },
                     attempt,
-                    max_attempts: input.max_attempts,
+                    max_attempts: effective_max_attempts,
                     from_peer: input.from_peer,
                     ticket,
                     envelope,
@@ -200,6 +209,10 @@ fn finish_send(input: FinishSendInput<'_>) -> Result<ControlLiveSend> {
         ticket: input.ticket,
         envelope: &input.envelope,
         transport_receipt_ref: Some(&input.published.transport_receipt_ref),
+        topology_profile_ref: selected_topology_profile_ref(input.input),
+        transport_profile_ref: selected_transport_profile_ref(input.input),
+        effective_max_attempts: effective_live_send_max_attempts(input.input),
+        effective_join_timeout_ms: effective_live_send_join_timeout_ms(input.input),
         diagnostics: &[],
     })?;
     let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
@@ -249,7 +262,7 @@ async fn attempt_control_live_send(
         .accept(iroh_gossip::ALPN, sender_gossip.clone())
         .spawn();
     let topic_id = control_live_topic_id(&envelope.topic);
-    let join_timeout = std::time::Duration::from_millis(input.join_timeout_ms);
+    let join_timeout = std::time::Duration::from_millis(effective_live_send_join_timeout_ms(input));
     let join_result =
         tokio::time::timeout(join_timeout, sender_gossip.subscribe_and_join(topic_id, vec![receiver_addr.id])).await;
     let mut result = match join_result {
@@ -267,6 +280,10 @@ async fn attempt_control_live_send(
                 sender: &sender,
                 envelope_value: &envelope.value,
                 node_id: input.from_peer,
+                topology_profile_ref: selected_topology_profile_ref(input),
+                transport_profile_ref: selected_transport_profile_ref(input),
+                effective_max_attempts: Some(effective_live_send_max_attempts(input)),
+                effective_join_timeout_ms: Some(effective_live_send_join_timeout_ms(input)),
             })
             .await;
             if published.is_ok() {

@@ -55,6 +55,10 @@ pub async fn publish_control_live_ingress(
         delivered_from: None,
         envelope: &envelope,
         ingress_receipt_ref: None,
+        topology_profile_ref: input.topology_profile_ref,
+        transport_profile_ref: input.transport_profile_ref,
+        effective_max_attempts: input.effective_max_attempts,
+        effective_join_timeout_ms: input.effective_join_timeout_ms,
         diagnostics: &diagnostics,
     })?;
     let transport_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
@@ -122,6 +126,10 @@ pub fn receive_control_live_ingress_bytes(
         delivered_from: Some(input.delivered_from),
         envelope: &envelope,
         ingress_receipt_ref: Some(&delivered.ingress_receipt_ref),
+        topology_profile_ref: None,
+        transport_profile_ref: None,
+        effective_max_attempts: None,
+        effective_join_timeout_ms: None,
         diagnostics: &diagnostics,
     })?;
     let transport_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
@@ -192,6 +200,10 @@ pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) ->
         sender: &sender,
         envelope_value: &envelope.value,
         node_id: input.from_peer,
+        topology_profile_ref: None,
+        transport_profile_ref: None,
+        effective_max_attempts: None,
+        effective_join_timeout_ms: None,
     })
     .await?;
     let received = tokio::time::timeout(
@@ -262,6 +274,12 @@ pub fn preflight_control_live_send(input: &ControlLiveSendInput<'_>) -> Result<C
         ));
     }
     diagnostics.extend(live_send_ticket_diagnostics(input, &ticket));
+    let profile = live_send_profile_preflight(LiveProfilePreflightInput {
+        send: input,
+        ticket: &ticket,
+        envelope: &envelope,
+    })?;
+    diagnostics.extend(profile.diagnostics.iter().cloned());
     if let Some(state_root) = input.state_root {
         diagnostics.extend(live_send_state_root_evidence_diagnostics(state_root, input, &envelope)?);
     }
@@ -281,6 +299,10 @@ pub fn preflight_control_live_send(input: &ControlLiveSendInput<'_>) -> Result<C
         envelope_ref: envelope.envelope_ref,
         operation_ref: envelope.operation_ref,
         receiver_ticket_ref: ticket.ticket_ref,
+        topology_profile_ref: profile.topology_profile_ref,
+        transport_profile_ref: profile.transport_profile_ref,
+        effective_max_attempts: profile.effective_max_attempts,
+        effective_join_timeout_ms: profile.effective_join_timeout_ms,
         diagnostics,
     })
 }

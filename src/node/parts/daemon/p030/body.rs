@@ -86,6 +86,8 @@ fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<
                 crate::preserves_rail::string("pass"),
             ]),
         ])]),
+        live_profile_ref_records(None, None),
+        live_effective_transport_optional_record(None, None),
     ]))
 }
 
@@ -127,6 +129,8 @@ fn live_transport_receipt_value(input: &LiveTransportReceiptValueInput<'_>) -> R
                 crate::preserves_rail::string("pass"),
             ]),
         ])]),
+        live_profile_ref_records(input.topology_profile_ref, input.transport_profile_ref),
+        live_effective_transport_optional_record(input.effective_max_attempts, input.effective_join_timeout_ms),
     ]))
 }
 
@@ -229,6 +233,7 @@ fn live_send_check_sequence(checks: &LiveSendReceiptChecks) -> IoValue {
         receipt_check_value("join-or-publish-succeeded", pass_if(checks.has_transport_success)),
         receipt_check_value("canonical-envelope-ref", "pass"),
         receipt_check_value("live-iroh-gossip", "pass"),
+        receipt_check_value("live-profile-is-not-authority", "pass"),
         receipt_check_value("transport-is-not-authority", "pass"),
         receipt_check_value("durable-inbox-boundary", "pass"),
     ])
@@ -257,6 +262,8 @@ fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IoVa
             input.diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
         crate::preserves_rail::record("checks", vec![live_send_check_sequence(&checks)]),
+        live_profile_ref_records(input.topology_profile_ref, input.transport_profile_ref),
+        live_effective_transport_record(input.effective_max_attempts, input.effective_join_timeout_ms),
     ]))
 }
 

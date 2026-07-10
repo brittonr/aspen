@@ -118,6 +118,10 @@
             envelope_ref: Some(&delivery.envelope.envelope_ref),
             operation_ref: Some(&delivery.envelope.operation_ref),
             send_receipt_ref: None,
+            topology_profile_ref: None,
+            transport_profile_ref: None,
+            effective_max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
+            effective_join_timeout_ms: MAX_CONTROL_LIVE_SEND_TIMEOUT_MS,
             expected,
             diagnostics: &diagnostics,
         })
