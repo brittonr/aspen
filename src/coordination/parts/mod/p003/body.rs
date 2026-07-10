@@ -139,6 +139,7 @@ fn apply_coordination_read(
         None => None,
     };
     let assertion_refs = assertion.as_ref().map_or_else(Vec::new, |item| vec![item.assertion_ref.clone()]);
+    let output_refs = transition_output_refs(std::slice::from_ref(&fact))?;
     let receipt_value = coordination_receipt_value(ReceiptValueInput {
         decision,
         service: &request.service,
@@ -148,6 +149,15 @@ fn apply_coordination_read(
         raft_receipt_ref: Some(&read.receipt_ref),
         token_ref: None,
         state_ref: &snapshot.state_ref,
+        transition: ReceiptTransitionInput {
+            kind: TRANSITION_KIND_READ_OBSERVE,
+            before_state_ref: &snapshot.state_ref,
+            after_state_ref: None,
+            preserved_state_ref: Some(&snapshot.state_ref),
+            output_refs: &output_refs,
+            control_plane_intent_ref: Some(&read.receipt_ref),
+            prior_receipt_ref: None,
+        },
         dataspace_assertion_refs: &assertion_refs,
         diagnostics: &diagnostics,
         checks: &[
@@ -158,6 +168,7 @@ fn apply_coordination_read(
             ("control-plane-command", "pass"),
             ("normalized-consensus-evidence", "pass"),
             ("active-engine-epoch-bound", "pass"),
+            ("transition-kind-read-observe", "pass"),
         ],
     })?;
     let receipt = parse_coordination_receipt(&receipt_value)?;
@@ -276,11 +287,12 @@ struct ChangeInput<'a> {
 }
 
 struct PartsInput<'a> {
-    prepared: &'a PreparedMutation,
+    transition: &'a PrimitiveTransitionResult,
     request: &'a CoordinationRequest,
     manifest: &'a CoordinationServiceManifest,
     engine_manifest: &'a crate::raft_control_plane::RaftGroupManifest,
     engine_epoch: u64,
+    before_snapshot: &'a CoordinationStateSnapshot,
     snapshot: &'a CoordinationStateSnapshot,
     proposal_ref: &'a str,
 }
@@ -289,8 +301,10 @@ struct PassReceiptInput<'a> {
     request: &'a CoordinationRequest,
     proposal_ref: &'a str,
     token_ref: Option<&'a str>,
+    before_state_ref: &'a str,
     state_ref: &'a str,
     assertion_refs: &'a [String],
+    output_refs: &'a [String],
     checks: &'a [(&'a str, &'a str)],
 }
 
@@ -312,7 +326,8 @@ struct ValuesInput<'a> {
 struct SuccessInput<'a> {
     runtime: &'a mut CoordinationRuntime,
     request: CoordinationRequest,
-    prepared: PreparedMutation,
+    before_snapshot: CoordinationStateSnapshot,
+    transition: PrimitiveTransitionResult,
     snapshot: CoordinationStateSnapshot,
     proposal: Proposal,
 }

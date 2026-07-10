@@ -166,6 +166,14 @@ fn evidence_values_for(input: EvidenceValuesInput<'_>) -> Vec<IoValue> {
     values
 }
 
+fn transition_output_refs(values: &[IoValue]) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
+    for value in values {
+        refs.push_limited(canonical_hash(value)?, MAX_COORDINATION_REFS, "coordination transition output refs")?;
+    }
+    Ok(refs)
+}
+
 fn retention_refs_for_state(state: &CoordinationState) -> Result<Vec<String>> {
     let mut refs = Vec::new();
     for lock in state.locks.values() {

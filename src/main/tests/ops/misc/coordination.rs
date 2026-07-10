@@ -94,9 +94,8 @@
         let parsed_report = molten::coordination::parse_coordination_apply_report(&apply_report).expect("parse apply report");
         assert_eq!(parsed_report.decision, "pass");
         assert_eq!(parsed_report.receipt_refs.len(), 2);
-        assert_eq!(parsed_report.receipt_refs[0], parsed_report.receipt_refs[1]);
-        assert_eq!(parsed_report.assertion_refs.len(), 2);
-        assert_eq!(parsed_report.assertion_refs[0], parsed_report.assertion_refs[1]);
+        assert_ne!(parsed_report.receipt_refs[0], parsed_report.receipt_refs[1]);
+        assert_eq!(parsed_report.assertion_refs.len(), 1);
         run_coordination_command(CoordinationCommand::Show {
             artifact: apply_out.join("report.preserves"),
         })

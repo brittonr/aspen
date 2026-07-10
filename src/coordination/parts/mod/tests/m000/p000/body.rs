@@ -102,16 +102,42 @@
 
     #[test]
     fn lock_acquire_release_stale_fencing_and_duplicate_are_receipted() {
+        // r[verify molten.coordination_state_machine_proof.replay_transition_kind]
+        // r[verify molten.coordination_state_machine_proof.transition_receipt_binding]
         let mut runtime = runtime();
         let acquire = request(SERVICE_LOCK, OP_ACQUIRE, "resource:test", "session-a", 1, None);
         let first = apply_coordination_request(&mut runtime, &acquire).expect("acquire");
         assert_eq!(first.receipt.decision, "pass");
+        assert_eq!(first.receipt.transition_kind, TRANSITION_KIND_ADVANCE);
         let token = first.token.as_ref().expect("token").token;
         assert_eq!(token, 1);
         assert_eq!(first.assertions.len(), 1);
         let duplicate = apply_coordination_request(&mut runtime, &acquire).expect("duplicate");
-        assert_eq!(duplicate.receipt.receipt_ref, first.receipt.receipt_ref);
+        assert_eq!(duplicate.receipt.decision, "pass");
+        assert_ne!(duplicate.receipt.receipt_ref, first.receipt.receipt_ref);
+        assert_eq!(duplicate.receipt.transition_kind, TRANSITION_KIND_DUPLICATE_REPLAY);
+        assert_eq!(duplicate.receipt.prior_receipt_ref.as_deref(), Some(first.receipt.receipt_ref.as_str()));
+        assert_eq!(duplicate.receipt.preserved_state_ref.as_deref(), Some(duplicate.state_snapshot.state_ref.as_str()));
         assert_eq!(runtime.state.next_fencing_token, 2);
+        let parsed_acquire = parse_coordination_request(&acquire).expect("parse acquire");
+        let conflicting = coordination_request_value(&CoordinationRequestInput {
+            service: SERVICE_LOCK.to_string(),
+            operation: OP_ACQUIRE.to_string(),
+            key: "resource:conflict".to_string(),
+            client_session: "session-b".to_string(),
+            operation_id_ref: parsed_acquire.operation_id_ref,
+            read_consistency_mode: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            payload: None,
+            authority_refs: parsed_acquire.authority_refs,
+            resource_refs: parsed_acquire.resource_refs,
+            policy_refs: parsed_acquire.policy_refs,
+        })
+        .expect("conflicting duplicate request");
+        let before_conflict = snapshot_from_state(&runtime.state).expect("before conflict").state_ref;
+        let conflict = apply_coordination_request(&mut runtime, &conflicting).expect("conflicting duplicate");
+        assert_eq!(conflict.receipt.decision, "deny");
+        assert_eq!(conflict.receipt.transition_kind, TRANSITION_KIND_CONFLICTING_DUPLICATE);
+        assert_eq!(snapshot_from_state(&runtime.state).expect("after conflict").state_ref, before_conflict);
         let stale = request(
             SERVICE_LOCK,
             OP_RELEASE,
@@ -138,6 +164,8 @@
 
     #[test]
     fn queue_fifo_duplicate_overflow_and_resource_denial_are_receipted() {
+        // r[verify molten.coordination_state_machine_proof.replay_transition_kind]
+        // r[verify molten.coordination_state_machine_proof.transition_matrix_tests]
         let mut coord_runtime = runtime();
         let one =
             request(SERVICE_QUEUE, OP_ENQUEUE, "queue:test", "producer", 1, Some(record("item", vec![string("one")])));
@@ -145,7 +173,8 @@
             request(SERVICE_QUEUE, OP_ENQUEUE, "queue:test", "producer", 2, Some(record("item", vec![string("two")])));
         let first = apply_coordination_request(&mut coord_runtime, &one).expect("enqueue one");
         let duplicate = apply_coordination_request(&mut coord_runtime, &one).expect("duplicate one");
-        assert_eq!(first.receipt.receipt_ref, duplicate.receipt.receipt_ref);
+        assert_eq!(duplicate.receipt.transition_kind, TRANSITION_KIND_DUPLICATE_REPLAY);
+        assert_eq!(duplicate.receipt.prior_receipt_ref.as_deref(), Some(first.receipt.receipt_ref.as_str()));
         apply_coordination_request(&mut coord_runtime, &two).expect("enqueue two");
         let dequeue = request(SERVICE_QUEUE, OP_DEQUEUE, "queue:test", "consumer", 3, None);
         let dequeue = apply_coordination_request(&mut coord_runtime, &dequeue).expect("dequeue");
@@ -365,6 +394,8 @@
 
     #[test]
     fn semaphore_rate_election_barrier_and_registry_primitives_are_deterministic() {
+        // r[verify molten.coordination_state_machine_proof.primitive_transition_cores]
+        // r[verify molten.coordination_state_machine_proof.transition_matrix_tests]
         let mut runtime = runtime();
         let first =
             apply_coordination_request(&mut runtime, &request(SERVICE_SEMAPHORE, OP_ACQUIRE, "sem:test", "a", 1, None))

@@ -27,6 +27,17 @@
 
     fn assert_status_assertions_bind_result(result: &CoordinationApplyResult) {
         assert_eq!(result.receipt.state_ref, result.state_snapshot.state_ref);
+        crate::preserves_rail::validate_content_ref(&result.receipt.before_state_ref).expect("before state ref");
+        match result.receipt.transition_kind.as_str() {
+            TRANSITION_KIND_ADVANCE => assert_eq!(result.receipt.after_state_ref.as_deref(), Some(result.state_snapshot.state_ref.as_str())),
+            TRANSITION_KIND_DENY_PRESERVE | TRANSITION_KIND_DUPLICATE_REPLAY | TRANSITION_KIND_CONFLICTING_DUPLICATE => {
+                assert_eq!(result.receipt.preserved_state_ref.as_deref(), Some(result.state_snapshot.state_ref.as_str()));
+            }
+            TRANSITION_KIND_READ_OBSERVE => {
+                assert_eq!(result.receipt.preserved_state_ref.as_deref(), Some(result.state_snapshot.state_ref.as_str()));
+            }
+            other => panic!("unexpected transition kind {other}"),
+        }
         for assertion in &result.assertions {
             assert_eq!(assertion.state_ref, result.state_snapshot.state_ref);
             assert_eq!(assertion.receipt_ref, result.receipt.receipt_ref);
@@ -208,6 +219,9 @@
         // r[verify molten.coordination_state_machine_proof.generated_traces]
         // r[verify molten.coordination_state_machine_proof.deny_no_mutation]
         // r[verify molten.coordination_state_machine_proof.duplicate_no_advance]
+        // r[verify molten.coordination_state_machine_proof.replay_transition_kind]
+        // r[verify molten.coordination_state_machine_proof.transition_receipt_binding]
+        // r[verify molten.coordination_state_machine_proof.transition_matrix_tests]
         let salt = draw_coordination_trace_salt(&tc);
         let mut sequence = trace_sequence_start(salt);
         let mut runtime = runtime();
@@ -235,9 +249,11 @@
         let before_receipts = runtime.receipts.len();
         let before_applied = runtime.applied_operations.len();
         let duplicate_lock = apply_generated_request(&mut runtime, &lock_acquire, COORDINATION_DECISION_PASS);
-        assert_eq!(duplicate_lock.receipt.receipt_ref, first_lock.receipt.receipt_ref);
+        assert_eq!(duplicate_lock.receipt.transition_kind, TRANSITION_KIND_DUPLICATE_REPLAY);
+        assert_eq!(duplicate_lock.receipt.prior_receipt_ref.as_deref(), Some(first_lock.receipt.receipt_ref.as_str()));
+        assert_eq!(duplicate_lock.receipt.preserved_state_ref.as_deref(), Some(before_duplicate_ref.as_str()));
         assert_eq!(state_ref(&runtime), before_duplicate_ref);
-        assert_eq!(runtime.receipts.len(), before_receipts);
+        assert_eq!(runtime.receipts.len(), before_receipts.saturating_add(MIN_FENCING_TOKEN as usize));
         assert_eq!(runtime.applied_operations.len(), before_applied);
         assert_coordination_invariants(&runtime, &queue_key, &expected_queue);
 

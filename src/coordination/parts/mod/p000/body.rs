@@ -70,6 +70,20 @@ pub const OP_READ: &str = "read";
 pub const READ_CONSISTENCY_LINEARIZABLE: &str = crate::raft_control_plane::READ_CONSISTENCY_LINEARIZABLE;
 pub const READ_CONSISTENCY_LOCAL_STALE: &str = crate::raft_control_plane::READ_CONSISTENCY_LOCAL_STALE;
 
+const TRANSITION_KIND_ADVANCE: &str = "advance";
+const TRANSITION_KIND_DENY_PRESERVE: &str = "deny-preserve";
+const TRANSITION_KIND_DUPLICATE_REPLAY: &str = "duplicate-replay";
+const TRANSITION_KIND_CONFLICTING_DUPLICATE: &str = "conflicting-duplicate-deny";
+const TRANSITION_KIND_READ_OBSERVE: &str = "read-observe";
+
+const SHELL_INTENT_COMMIT: &str = "control-plane-commit";
+const SHELL_INTENT_ASSERT_STATUS: &str = "dataspace-status-assertion";
+const SHELL_INTENT_EMIT_RECEIPT: &str = "emit-coordination-receipt";
+const SHELL_INTENT_REPLAY_OUTPUT: &str = "return-prior-output";
+
+const COORDINATION_RECEIPT_FIELD_COUNT: usize = 13;
+const COORDINATION_TRANSITION_FIELD_COUNT: usize = 8;
+
 const COORDINATION_NAMESPACE_PREFIX: &str = "coordination";
 pub const DEFAULT_COORDINATION_SERVICE_ID: &str = "coordination:local";
 pub const DEFAULT_COORDINATION_QUEUE_CAPACITY: u64 = 4;
@@ -188,6 +202,13 @@ pub struct CoordinationReceipt {
     pub raft_receipt_ref: Option<String>,
     pub token_ref: Option<String>,
     pub state_ref: String,
+    pub transition_kind: String,
+    pub before_state_ref: String,
+    pub after_state_ref: Option<String>,
+    pub preserved_state_ref: Option<String>,
+    pub output_refs: Vec<String>,
+    pub control_plane_intent_ref: Option<String>,
+    pub prior_receipt_ref: Option<String>,
     pub dataspace_assertion_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
@@ -280,12 +301,48 @@ pub struct RegistryEntry {
     pub evidence_ref: String,
 }
 
+// r[impl molten.coordination_state_machine_proof.primitive_transition_cores]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrimitiveTransitionResult {
+    pub kind: String,
+    pub decision: String,
+    pub before_state: CoordinationState,
+    pub after_state: CoordinationState,
+    pub token: Option<FencingToken>,
+    pub status_fact: IoValue,
+    pub output_facts: Vec<IoValue>,
+    pub diagnostics: Vec<String>,
+    pub checks: Vec<(&'static str, &'static str)>,
+    pub shell_intents: Vec<String>,
+}
+
+impl PrimitiveTransitionResult {
+    fn state_for_receipt(&self) -> &CoordinationState {
+        if self.decision == "pass" {
+            &self.after_state
+        } else {
+            &self.before_state
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct PreparedMutation {
     state: CoordinationState,
     token: Option<FencingToken>,
     status_fact: IoValue,
     checks: Vec<(&'static str, &'static str)>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ReceiptTransitionInput<'a> {
+    pub kind: &'a str,
+    pub before_state_ref: &'a str,
+    pub after_state_ref: Option<&'a str>,
+    pub preserved_state_ref: Option<&'a str>,
+    pub output_refs: &'a [String],
+    pub control_plane_intent_ref: Option<&'a str>,
+    pub prior_receipt_ref: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -298,6 +355,7 @@ pub struct ReceiptValueInput<'a> {
     pub raft_receipt_ref: Option<&'a str>,
     pub token_ref: Option<&'a str>,
     pub state_ref: &'a str,
+    pub transition: ReceiptTransitionInput<'a>,
     pub dataspace_assertion_refs: &'a [String],
     pub diagnostics: &'a [String],
     pub checks: &'a [(&'a str, &'a str)],

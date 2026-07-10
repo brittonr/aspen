@@ -56,6 +56,7 @@ pub fn parse_coordination_status_assertion(value: &IoValue) -> Result<Coordinati
 }
 
 // r[impl molten.coordination.read_consistency_modes]
+// r[impl molten.coordination_state_machine_proof.transition_receipt_binding]
 pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_service(input.service)?;
@@ -69,6 +70,7 @@ pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValu
         validate_ref(value, "coordination receipt token ref")?;
     }
     validate_ref(input.state_ref, "coordination receipt state ref")?;
+    validate_receipt_transition(input.decision, input.state_ref, input.transition)?;
     validate_refs(input.dataspace_assertion_refs, "coordination receipt assertion ref")?;
     ensure_count_at_most(input.diagnostics.len(), MAX_COORDINATION_DIAGNOSTICS, "coordination receipt diagnostics")?;
     Ok(record("coordination-receipt-v1", vec![
@@ -81,6 +83,7 @@ pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValu
         record("raft", vec![optional_ref_value(input.raft_receipt_ref)]),
         record("token", vec![optional_ref_value(input.token_ref)]),
         record("state", vec![string(input.state_ref)]),
+        coordination_transition_value(input.transition)?,
         record("dataspace", vec![strings_sequence(input.dataspace_assertion_refs)]),
         record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(input.checks),
@@ -88,7 +91,7 @@ pub fn coordination_receipt_value(input: ReceiptValueInput<'_>) -> Result<IoValu
 }
 
 pub fn parse_coordination_receipt(value: &IoValue) -> Result<CoordinationReceipt> {
-    let fields = simple_record(value, "coordination-receipt-v1", 12)?;
+    let fields = simple_record(value, "coordination-receipt-v1", COORDINATION_RECEIPT_FIELD_COUNT)?;
     require_schema(&fields[0], COORDINATION_RECEIPT_SCHEMA, "coordination receipt schema")?;
     let decision = record_string(&fields[1], "decision")?;
     let service = record_string(&fields[2], "service")?;
@@ -98,10 +101,24 @@ pub fn parse_coordination_receipt(value: &IoValue) -> Result<CoordinationReceipt
     let raft_receipt_ref = record_optional_ref(&fields[6], "raft")?;
     let token_ref = record_optional_ref(&fields[7], "token")?;
     let state_ref = record_ref(&fields[8], "state")?;
-    let dataspace_assertion_refs = record_ref_sequence(&fields[9], "dataspace")?;
-    let diagnostics = record_string_sequence(&fields[10], "diagnostics")?;
+    let transition = parse_coordination_transition(&fields[9])?;
+    let dataspace_assertion_refs = record_ref_sequence(&fields[10], "dataspace")?;
+    let diagnostics = record_string_sequence(&fields[11], "diagnostics")?;
     validate_read_consistency_mode(&read_consistency_mode)?;
-    require_check(&parse_checks(&fields[11])?, "coordination-request-bound", "coordination receipt")?;
+    validate_receipt_transition(
+        &decision,
+        &state_ref,
+        ReceiptTransitionInput {
+            kind: &transition.kind,
+            before_state_ref: &transition.before_state_ref,
+            after_state_ref: transition.after_state_ref.as_deref(),
+            preserved_state_ref: transition.preserved_state_ref.as_deref(),
+            output_refs: &transition.output_refs,
+            control_plane_intent_ref: transition.control_plane_intent_ref.as_deref(),
+            prior_receipt_ref: transition.prior_receipt_ref.as_deref(),
+        },
+    )?;
+    require_check(&parse_checks(&fields[12])?, "coordination-request-bound", "coordination receipt")?;
     Ok(CoordinationReceipt {
         receipt_ref: canonical_hash(value)?,
         decision,
@@ -112,9 +129,78 @@ pub fn parse_coordination_receipt(value: &IoValue) -> Result<CoordinationReceipt
         raft_receipt_ref,
         token_ref,
         state_ref,
+        transition_kind: transition.kind,
+        before_state_ref: transition.before_state_ref,
+        after_state_ref: transition.after_state_ref,
+        preserved_state_ref: transition.preserved_state_ref,
+        output_refs: transition.output_refs,
+        control_plane_intent_ref: transition.control_plane_intent_ref,
+        prior_receipt_ref: transition.prior_receipt_ref,
         dataspace_assertion_refs,
         diagnostics,
         value: value.clone(),
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedReceiptTransition {
+    kind: String,
+    before_state_ref: String,
+    after_state_ref: Option<String>,
+    preserved_state_ref: Option<String>,
+    output_refs: Vec<String>,
+    control_plane_intent_ref: Option<String>,
+    prior_receipt_ref: Option<String>,
+}
+
+fn coordination_transition_value(input: ReceiptTransitionInput<'_>) -> Result<IoValue> {
+    validate_transition_kind(input.kind)?;
+    validate_ref(input.before_state_ref, "coordination transition before state ref")?;
+    if let Some(value) = input.after_state_ref {
+        validate_ref(value, "coordination transition after state ref")?;
+    }
+    if let Some(value) = input.preserved_state_ref {
+        validate_ref(value, "coordination transition preserved state ref")?;
+    }
+    validate_refs(input.output_refs, "coordination transition output ref")?;
+    if let Some(value) = input.control_plane_intent_ref {
+        validate_ref(value, "coordination transition control-plane intent ref")?;
+    }
+    if let Some(value) = input.prior_receipt_ref {
+        validate_ref(value, "coordination transition prior receipt ref")?;
+    }
+    Ok(record("transition", vec![
+        record("kind", vec![string(input.kind)]),
+        record("before-state", vec![string(input.before_state_ref)]),
+        record("after-state", vec![optional_ref_value(input.after_state_ref)]),
+        record("preserved-state", vec![optional_ref_value(input.preserved_state_ref)]),
+        record("outputs", vec![strings_sequence(input.output_refs)]),
+        record("control-plane-intent", vec![optional_ref_value(input.control_plane_intent_ref)]),
+        record("prior-receipt", vec![optional_ref_value(input.prior_receipt_ref)]),
+        checks_value(&[("transition-state-bound", "pass")]),
+    ]))
+}
+
+fn parse_coordination_transition(value: &Value<IoValue>) -> Result<ParsedReceiptTransition> {
+    let transition = value_to_iovalue(value);
+    let fields = simple_record(&transition, "transition", COORDINATION_TRANSITION_FIELD_COUNT)?;
+    let kind = record_string(&fields[0], "kind")?;
+    validate_transition_kind(&kind)?;
+    let before_state_ref = record_ref(&fields[1], "before-state")?;
+    let after_state_ref = record_optional_ref(&fields[2], "after-state")?;
+    let preserved_state_ref = record_optional_ref(&fields[3], "preserved-state")?;
+    let output_refs = record_ref_sequence(&fields[4], "outputs")?;
+    let control_plane_intent_ref = record_optional_ref(&fields[5], "control-plane-intent")?;
+    let prior_receipt_ref = record_optional_ref(&fields[6], "prior-receipt")?;
+    require_check(&parse_checks(&fields[7])?, "transition-state-bound", "coordination transition")?;
+    Ok(ParsedReceiptTransition {
+        kind,
+        before_state_ref,
+        after_state_ref,
+        preserved_state_ref,
+        output_refs,
+        control_plane_intent_ref,
+        prior_receipt_ref,
     })
 }
 
@@ -142,26 +228,21 @@ pub fn apply_coordination_request(
     request_value: &IoValue,
 ) -> Result<CoordinationApplyResult> {
     let request = parse_coordination_request(request_value)?;
-    if let Some(existing) = runtime.applied_operations.get(&request.operation_id_ref) {
-        return Ok(existing.clone());
+    let current_snapshot = snapshot_from_state(&runtime.state)?;
+    if let Some(existing) = runtime.applied_operations.get(&request.operation_id_ref).cloned() {
+        return replay_or_conflicting_duplicate(runtime, request, current_snapshot, existing);
     }
     let mut diagnostics = Vec::new();
     collect_admission_diagnostics(runtime, &request, &mut diagnostics)?;
-    let current_snapshot = snapshot_from_state(&runtime.state)?;
     if diagnostics.is_empty() {
         if request.operation == OP_READ {
             return apply_coordination_read(runtime, request);
         }
-        let prepared = match prepare_mutation(runtime, &request) {
-            Ok(prepared) => prepared,
-            Err(error) => {
-                return deny_result(runtime, request, current_snapshot, vec![error.to_string()], &[
-                    "semantic-state-transition",
-                    "fail",
-                ]);
-            }
-        };
-        return commit_prepared_mutation(runtime, request, prepared);
+        let transition = primitive_transition(runtime, &request)?;
+        if transition.decision == "pass" {
+            return commit_prepared_mutation(runtime, request, current_snapshot, transition);
+        }
+        return deny_transition_result(runtime, request, current_snapshot, transition, &["semantic-state-transition", "fail"]);
     }
     deny_result(runtime, request, current_snapshot, diagnostics, &["admission-gate", "fail"])
 }

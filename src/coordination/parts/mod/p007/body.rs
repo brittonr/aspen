@@ -214,6 +214,84 @@ fn validate_decision(value: &str) -> Result<()> {
     }
 }
 
+fn validate_transition_kind(value: &str) -> Result<()> {
+    match value {
+        TRANSITION_KIND_ADVANCE
+        | TRANSITION_KIND_DENY_PRESERVE
+        | TRANSITION_KIND_DUPLICATE_REPLAY
+        | TRANSITION_KIND_CONFLICTING_DUPLICATE
+        | TRANSITION_KIND_READ_OBSERVE => Ok(()),
+        _ => Err(MoltenError::invalid_harness(format!("unsupported coordination transition kind {value}"))),
+    }
+}
+
+fn validate_receipt_transition(
+    decision: &str,
+    state_ref: &str,
+    transition: ReceiptTransitionInput<'_>,
+) -> Result<()> {
+    validate_transition_kind(transition.kind)?;
+    validate_ref(transition.before_state_ref, "coordination transition before state ref")?;
+    if let Some(value) = transition.after_state_ref {
+        validate_ref(value, "coordination transition after state ref")?;
+    }
+    if let Some(value) = transition.preserved_state_ref {
+        validate_ref(value, "coordination transition preserved state ref")?;
+    }
+    validate_refs(transition.output_refs, "coordination transition output ref")?;
+    if let Some(value) = transition.control_plane_intent_ref {
+        validate_ref(value, "coordination transition control-plane intent ref")?;
+    }
+    if let Some(value) = transition.prior_receipt_ref {
+        validate_ref(value, "coordination transition prior receipt ref")?;
+    }
+    match transition.kind {
+        TRANSITION_KIND_ADVANCE => validate_advance_transition(decision, state_ref, transition),
+        TRANSITION_KIND_DENY_PRESERVE | TRANSITION_KIND_CONFLICTING_DUPLICATE => {
+            validate_preserved_transition(decision, state_ref, transition)
+        }
+        TRANSITION_KIND_DUPLICATE_REPLAY | TRANSITION_KIND_READ_OBSERVE => {
+            validate_no_advance_transition(state_ref, transition)
+        }
+        _ => Err(MoltenError::invalid_harness("unsupported coordination transition kind")),
+    }
+}
+
+fn validate_advance_transition(
+    decision: &str,
+    state_ref: &str,
+    transition: ReceiptTransitionInput<'_>,
+) -> Result<()> {
+    if decision != "pass" {
+        return Err(MoltenError::invalid_harness("advance transition requires pass decision"));
+    }
+    if transition.after_state_ref != Some(state_ref) || transition.preserved_state_ref.is_some() {
+        return Err(MoltenError::invalid_harness("advance transition must bind after-state as receipt state"));
+    }
+    if transition.control_plane_intent_ref.is_none() {
+        return Err(MoltenError::invalid_harness("advance transition must bind control-plane intent"));
+    }
+    Ok(())
+}
+
+fn validate_preserved_transition(
+    decision: &str,
+    state_ref: &str,
+    transition: ReceiptTransitionInput<'_>,
+) -> Result<()> {
+    if decision != "deny" {
+        return Err(MoltenError::invalid_harness("preserved transition requires deny decision"));
+    }
+    validate_no_advance_transition(state_ref, transition)
+}
+
+fn validate_no_advance_transition(state_ref: &str, transition: ReceiptTransitionInput<'_>) -> Result<()> {
+    if transition.after_state_ref.is_some() || transition.preserved_state_ref != Some(state_ref) {
+        return Err(MoltenError::invalid_harness("no-advance transition must bind preserved-state as receipt state"));
+    }
+    Ok(())
+}
+
 fn validate_read_consistency_mode(value: &str) -> Result<()> {
     match value {
         READ_CONSISTENCY_LINEARIZABLE | READ_CONSISTENCY_LOCAL_STALE => Ok(()),
