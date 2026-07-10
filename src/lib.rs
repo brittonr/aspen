@@ -211,6 +211,10 @@ compat_module!(service_runtime, worker_core);
 pub mod watchdog;
 compat_module!(service_supervision, watchdog);
 #[doc(hidden)]
+#[path = "project/config_portability.rs"]
+pub mod config_portability_core;
+compat_module!(project_config_portability, config_portability_core);
+#[doc(hidden)]
 #[path = "testing/drift.rs"]
 pub mod drift_core;
 compat_module!(deterministic_drift, drift_core);

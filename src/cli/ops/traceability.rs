@@ -19,6 +19,18 @@ const NEXTEST_ZERO_RETRIES: i64 = 0;
 const MAX_NEXTEST_PROFILE_INHERITANCE_DEPTH: usize = 16;
 const NEXTEST_FLAKY_PASS: &str = "pass";
 const DIAGNOSTIC_JOIN_SEPARATOR: &str = "; ";
+const CONFIG_LINT_FILES: &[(&str, bool)] = &[
+    (".pre-commit-config.yaml", true),
+    ("flake.nix", true),
+    ("rust-toolchain.toml", true),
+    ("README.md", true),
+    ("docs/proof-workflow.md", true),
+];
+const CARGO_SOURCE_PREFIX: &str = "git+ssh://git@github.com/OnixResearch/";
+const NIX_SOURCE_PREFIX: &str = "ssh://git@github.com/OnixResearch/";
+const SOURCE_REVISION_SEPARATOR: char = '#';
+const GIT_SUFFIX: &str = ".git";
+const TOML_QUOTE: char = '"';
 
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum TraceabilityCommand {
@@ -91,6 +103,14 @@ pub(crate) enum TraceabilityCommand {
     NextestProfileMatrix {
         #[arg(long = "nextest-config")]
         nextest_config: FilePath,
+        #[arg(long)]
+        out: Option<FilePath>,
+        #[arg(long = "summary-out")]
+        summary_out: Option<FilePath>,
+    },
+    ConfigLint {
+        #[arg(long, default_value = ".")]
+        root: FilePath,
         #[arg(long)]
         out: Option<FilePath>,
         #[arg(long = "summary-out")]
@@ -178,6 +198,9 @@ pub(crate) fn run_traceability_command(command: TraceabilityCommand) -> Outcome<
             out,
             summary_out,
         }),
+        TraceabilityCommand::ConfigLint { root, out, summary_out } => {
+            run_config_lint(ConfigLintCommandInput { root, out, summary_out })
+        }
     }
 }
 
@@ -222,6 +245,12 @@ struct CiRunReceiptCommandInput {
 
 struct NextestProfileMatrixCommandInput {
     nextest_config: FilePath,
+    out: Option<FilePath>,
+    summary_out: Option<FilePath>,
+}
+
+struct ConfigLintCommandInput {
+    root: FilePath,
     out: Option<FilePath>,
     summary_out: Option<FilePath>,
 }
@@ -468,6 +497,117 @@ fn render_nextest_profile_matrix_summary(matrix: &molten::testing_hardening::Nex
     format!(
         "nextest-profile-matrix ref={} decision={} diagnostics={}\n",
         matrix.matrix_ref, matrix.decision, diagnostics
+    )
+}
+
+fn run_config_lint(input: ConfigLintCommandInput) -> Outcome<()> {
+    let files = read_config_lint_files(&input.root)?;
+    let source_pins = read_source_pin_records(&input.root)?;
+    let report = molten::project_config_portability::build_config_portability_report(
+        &molten::project_config_portability::ConfigPortabilityInput { files, source_pins },
+    )?;
+    write_optional_preserves(input.out.as_ref(), &report.value)?;
+    write_optional_text(input.summary_out.as_ref(), &render_config_lint_summary(&report))?;
+    eprintln!("config-portability report={} decision={}", report.report_ref, report.decision);
+    if report.decision == "pass" {
+        Ok(())
+    } else {
+        Err(molten::error::MoltenError::invalid_harness(format!(
+            "config portability denied: {}",
+            report.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
+        )))
+    }
+}
+
+fn read_config_lint_files(
+    root: &std::path::Path,
+) -> Outcome<Vec<molten::project_config_portability::ConfigFileRecord>> {
+    let mut records = Vec::with_capacity(CONFIG_LINT_FILES.len());
+    for (relative_path, release_scoped) in CONFIG_LINT_FILES {
+        let path = root.join(relative_path);
+        let contents = std::fs::read_to_string(&path).map_err(molten::error::MoltenError::from)?;
+        records.push(molten::project_config_portability::ConfigFileRecord {
+            path: (*relative_path).to_string(),
+            contents,
+            release_scoped: *release_scoped,
+        });
+    }
+    Ok(records)
+}
+
+fn read_source_pin_records(
+    root: &std::path::Path,
+) -> Outcome<Vec<molten::project_config_portability::SourcePinRecord>> {
+    let cargo_lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(molten::error::MoltenError::from)?;
+    let flake = std::fs::read_to_string(root.join("flake.nix")).map_err(molten::error::MoltenError::from)?;
+    let cargo_revisions = cargo_private_revisions(&cargo_lock);
+    let nix_revisions = nix_private_revisions(&flake);
+    let mut dependencies = std::collections::BTreeSet::new();
+    dependencies.extend(cargo_revisions.keys().cloned());
+    dependencies.extend(nix_revisions.keys().cloned());
+    Ok(dependencies
+        .into_iter()
+        .map(|dependency| molten::project_config_portability::SourcePinRecord {
+            cargo_revision: cargo_revisions.get(&dependency).cloned().unwrap_or_else(|| "missing".to_string()),
+            nix_revision: nix_revisions.get(&dependency).cloned().unwrap_or_else(|| "missing".to_string()),
+            dependency,
+        })
+        .collect())
+}
+
+fn cargo_private_revisions(lock_text: &str) -> std::collections::BTreeMap<String, String> {
+    let mut revisions = std::collections::BTreeMap::new();
+    for line in lock_text.lines() {
+        let Some(source_start) = line.find(CARGO_SOURCE_PREFIX) else {
+            continue;
+        };
+        let source = &line[source_start + CARGO_SOURCE_PREFIX.len()..];
+        if let Some((dependency, revision)) = parse_source_dependency_revision(source) {
+            revisions.entry(dependency).or_insert(revision);
+        }
+    }
+    revisions
+}
+
+fn nix_private_revisions(flake_text: &str) -> std::collections::BTreeMap<String, String> {
+    let mut revisions = std::collections::BTreeMap::new();
+    for line in flake_text.lines() {
+        let Some(source_start) = line.find(NIX_SOURCE_PREFIX) else {
+            continue;
+        };
+        let source = &line[source_start + NIX_SOURCE_PREFIX.len()..];
+        if let Some((dependency, revision)) = parse_source_dependency_revision(source) {
+            revisions.entry(dependency).or_insert(revision);
+        }
+    }
+    revisions
+}
+
+fn parse_source_dependency_revision(source: &str) -> Option<(String, String)> {
+    let (dependency_part, revision_part) = source.split_once(SOURCE_REVISION_SEPARATOR)?;
+    let dependency = dependency_part.split_once(GIT_SUFFIX).map(|(name, _suffix)| name).unwrap_or(dependency_part);
+    if dependency.is_empty() {
+        return None;
+    }
+    let revision = revision_part.split(TOML_QUOTE).next().unwrap_or_default().trim().to_string();
+    if revision.is_empty() {
+        return None;
+    }
+    Some((dependency.to_string(), revision))
+}
+
+fn render_config_lint_summary(report: &molten::project_config_portability::ConfigPortabilityReport) -> String {
+    let diagnostics = if report.diagnostics.is_empty() {
+        "none".to_string()
+    } else {
+        report.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
+    };
+    format!(
+        "config-portability report={} decision={} compared={} diagnostics={}\n",
+        report.report_ref,
+        report.decision,
+        report.compared_source_pins.join(","),
+        diagnostics
     )
 }
 

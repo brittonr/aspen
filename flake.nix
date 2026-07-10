@@ -12,27 +12,27 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     onix-kache-lib = {
-      url = "path:/home/brittonr/git/onix-core/lib";
+      url = "path:../../onix-core/lib";
       flake = false;
     };
     onix-kache-package-src = {
-      url = "path:/home/brittonr/git/onix-core/pkgs/kache";
+      url = "path:../../onix-core/pkgs/kache";
       flake = false;
     };
     basalt-src = {
-      url = "path:/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/d913dc0";
+      url = "path:../basalt";
       flake = false;
     };
     cairn-src = {
-      url = "path:/home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615cac1/3b4c280";
+      url = "path:../cairn";
       flake = false;
     };
     octet-src = {
-      url = "path:/home/brittonr/.cargo/git/checkouts/octet-d771f362f4abe884/9b6a206";
+      url = "path:../octet";
       flake = false;
     };
     ucan-src = {
-      url = "path:/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/2aad993";
+      url = "path:../ucan";
       flake = false;
     };
     flake-utils.url = "github:numtide/flake-utils";
@@ -318,7 +318,7 @@
                   --arg=--node \
                   --arg node_b \
                   --arg=--package-ref \
-                  --arg blake3:0000000000000000000000000000000000000000000000000000000000000000 \
+                  --arg blake3:2ded4d8475648207836b950368aa4e1037b11b9aeb6f5b939482ad4d859664f7 \
                   --arg=--package-path \
                   --arg /nix/store/example-molten \
                   --arg=--network \
@@ -358,7 +358,7 @@
                   printf '%s\n' 'r[molten.testing.traceability.fixture] Molten MUST bind positive and negative coverage in this fixture.'
                 } > fixture/cairn/changes/traceability/specs/testing-harness/spec.md
                 touch fixture/tests/coverage.rs
-                artifact_ref=blake3:0000000000000000000000000000000000000000000000000000000000000000
+                artifact_ref=blake3:8f5174292fe31f8fc364dc8f49560b21581f2cf01e54ae3fe8820c6d90d62f65
                 positive='molten.testing.traceability.fixture|positive|tests/coverage.rs|cargo test coverage|'
                 negative='molten.testing.traceability.fixture|negative|tests/coverage.rs|cargo test coverage|'
                 molten test traceability scan \
@@ -584,11 +584,11 @@
                 echo "positive: wrapped rust package must preserve rustdoc compatibility" >&2
                 exit 1
               fi
-              if ${pkgs.gnugrep}/bin/grep -R -Fq '/home/brittonr/.cache/kache' ${checkedWrappedRust}; then
+              if ${pkgs.gnugrep}/bin/grep -R -Fq '/home/<user>/.cache/kache' ${checkedWrappedRust}; then
                 echo "negative: wrapper must not reference the user-level kache cache" >&2
                 exit 1
               fi
-              if ${pkgs.gnugrep}/bin/grep -R -Fq '/home/brittonr/.cargo/config.toml' ${checkedWrappedRust}; then
+              if ${pkgs.gnugrep}/bin/grep -R -Fq '/home/<user>/.cargo/config.toml' ${checkedWrappedRust}; then
                 echo "negative: wrapper must not read user-level Cargo config" >&2
                 exit 1
               fi

@@ -3,28 +3,26 @@
     "basalt-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1782891666,
-        "narHash": "sha256-R+xMGd+hWXg5co76zUeD71WCwXI+ySHvoSrHgZ7Y+dg=",
-        "path": "/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/d913dc0",
+        "path": "../basalt",
         "type": "path"
       },
       "original": {
-        "path": "/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/d913dc0",
+        "path": "../basalt",
         "type": "path"
-      }
+      },
+      "parent": []
     },
     "cairn-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1782770665,
-        "narHash": "sha256-5vbLLYY2LLtzGpuS2Lccx2Tw6SO+4tTdvEG13DgHh9I=",
-        "path": "/home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615cac1/3b4c280",
+        "path": "../cairn",
         "type": "path"
       },
       "original": {
-        "path": "/home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615cac1/3b4c280",
+        "path": "../cairn",
         "type": "path"
-      }
+      },
+      "parent": []
     },
     "flake-parts": {
       "inputs": {
@@ -84,41 +82,38 @@
     "octet-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1782770665,
-        "narHash": "sha256-/Xxx52KB13K0q1e2K45EYNlyA0Krrf1cEEtJCvfF1tU=",
-        "path": "/home/brittonr/.cargo/git/checkouts/octet-d771f362f4abe884/9b6a206",
+        "path": "../octet",
         "type": "path"
       },
       "original": {
-        "path": "/home/brittonr/.cargo/git/checkouts/octet-d771f362f4abe884/9b6a206",
+        "path": "../octet",
         "type": "path"
-      }
+      },
+      "parent": []
     },
     "onix-kache-lib": {
       "flake": false,
       "locked": {
-        "lastModified": 1782761033,
-        "narHash": "sha256-qX4qraEwAPpf1+V5wC+8poo9C1DltSmV37X/ARzSshc=",
-        "path": "/home/brittonr/git/onix-core/lib",
+        "path": "../../onix-core/lib",
         "type": "path"
       },
       "original": {
-        "path": "/home/brittonr/git/onix-core/lib",
+        "path": "../../onix-core/lib",
         "type": "path"
-      }
+      },
+      "parent": []
     },
     "onix-kache-package-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1781896678,
-        "narHash": "sha256-bXlYzTwB4V+4wAMLm3v1fl6LCFCDsES6NeXRY+YCSkw=",
-        "path": "/home/brittonr/git/onix-core/pkgs/kache",
+        "path": "../../onix-core/pkgs/kache",
         "type": "path"
       },
       "original": {
-        "path": "/home/brittonr/git/onix-core/pkgs/kache",
+        "path": "../../onix-core/pkgs/kache",
         "type": "path"
-      }
+      },
+      "parent": []
     },
     "root": {
       "inputs": {
@@ -172,15 +167,14 @@
     "ucan-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1782890868,
-        "narHash": "sha256-ArMSAiNM0yGGcNpdqZL9HSjzFl6rPu4JB9aFnxRYf4c=",
-        "path": "/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/2aad993",
+        "path": "../ucan",
         "type": "path"
       },
       "original": {
-        "path": "/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/2aad993",
+        "path": "../ucan",
         "type": "path"
-      }
+      },
+      "parent": []
     },
     "unit2nix": {
       "inputs": {

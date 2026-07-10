@@ -69,7 +69,7 @@ The pure core derives coverage from validated receipt fields rather than rendere
 - `nextest-profile-matrix-v1` records semantic profile ids, command surfaces, filter expressions, expected artifacts/JUnit paths, retry policy, excluded non-replayable partitions, cost class, evidence scope, platform availability, diagnostics, and release caveats. Deterministic profiles must exclude live-only, VM-only, exploratory, retry-only, and diagnostic-only partitions; VM, dogfood, and exploratory profiles remain platform-scoped or diagnostic evidence only.
 - `cli-receipt-first-gate-v1` records whether evidence-bearing CLI tests asserted canonical artifacts or receipts before relying on stdout, stderr, JUnit, markdown, JSON, or terminal summaries.
 
-Focused checks: `cargo test hardening --lib`, `cargo test --test cliharness ci_run_receipt`, `nickel export tests/evidence-matrix.ncl`, and `nix build .#checks.x86_64-linux.nextest-config`.
+Focused checks: `cargo test hardening --lib`, `cargo test config_portability --lib`, `cargo test --test cliharness ci_run_receipt`, `molten test traceability config-lint --root . --out target/config-portability.preserves --summary-out target/config-portability.txt`, `nickel export tests/evidence-matrix.ncl`, and `nix build .#checks.x86_64-linux.nextest-config`.
 
 ## Aggregate proof obligations
 

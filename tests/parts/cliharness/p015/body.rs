@@ -101,6 +101,91 @@ fn cli_nextest_profile_matrix_denies_missing_filter() -> CliResult<()> {
     Ok(())
 }
 
+fn write_config_lint_root(dir: &std::path::Path, drift: bool) -> CliResult<()> {
+    std::fs::create_dir_all(dir.join("docs"))?;
+    let cargo_revision = "d913dc01e765c9b297df5fcc57dfa06aac39bc74";
+    let nix_revision = if drift {
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    } else {
+        cargo_revision
+    };
+    let hook_entry = if drift {
+        "entry: nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .\n"
+    } else {
+        "entry: sh -c 'nix run path:${CAIRN_FLAKE:-../cairn#cairn} -- validate --root .'\n"
+    };
+    let toolchain = if drift {
+        "[toolchain]\nchannel = \"nightly\"\n"
+    } else {
+        "[toolchain]\nchannel = \"nightly-2026-05-26\"\n"
+    };
+
+    std::fs::write(dir.join(".pre-commit-config.yaml"), hook_entry)?;
+    std::fs::write(
+        dir.join("flake.nix"),
+        format!(
+            "localGitSources = {{\n  \"ssh://git@github.com/OnixResearch/basalt.git#{nix_revision}\" = basalt-src;\n}};\n"
+        ),
+    )?;
+    std::fs::write(dir.join("rust-toolchain.toml"), toolchain)?;
+    std::fs::write(dir.join("README.md"), "portable config lint\n")?;
+    std::fs::write(dir.join("docs/proof-workflow.md"), "release refs are explicit\n")?;
+    std::fs::write(
+        dir.join("Cargo.lock"),
+        format!(
+            "[[package]]\nname = \"basalt\"\nsource = \"git+ssh://git@github.com/OnixResearch/basalt.git#{cargo_revision}\"\n"
+        ),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn cli_config_lint_accepts_relocatable_pinned_config() -> CliResult<()> {
+    let dir = temp_dir("cli-config-lint")?;
+    let receipt = dir.join("config-portability.preserves");
+    let summary = dir.join("config-portability.txt");
+    write_config_lint_root(&dir, false)?;
+
+    let output = molten_cmd()
+        .args(["test", "traceability", "config-lint", "--root"])
+        .arg(&dir)
+        .args(["--out"])
+        .arg(&receipt)
+        .args(["--summary-out"])
+        .arg(&summary)
+        .output()?;
+
+    assert_success(&output, "config lint");
+    assert!(stderr(&output).contains("config-portability report=blake3:"));
+    let receipt_text = std::fs::read_to_string(&receipt)?;
+    assert!(receipt_text.contains("config-portability-report-v1"));
+    assert!(receipt_text.contains("compared-source-pins"));
+    assert!(std::fs::read_to_string(&summary)?.contains("decision=pass"));
+    Ok(())
+}
+
+#[test]
+fn cli_config_lint_denies_home_path_floating_toolchain_and_pin_drift() -> CliResult<()> {
+    let dir = temp_dir("cli-config-lint-negative")?;
+    let receipt = dir.join("config-portability.preserves");
+    write_config_lint_root(&dir, true)?;
+
+    let output = molten_cmd()
+        .args(["test", "traceability", "config-lint", "--root"])
+        .arg(&dir)
+        .args(["--out"])
+        .arg(&receipt)
+        .output()?;
+
+    assert_failure(&output, "config lint negative");
+    let stderr_text = stderr(&output);
+    assert!(stderr_text.contains("user-home-path:.pre-commit-config.yaml"));
+    assert!(stderr_text.contains("floating-release-toolchain:rust-toolchain.toml"));
+    assert!(stderr_text.contains("source-pin-drift:basalt"));
+    assert!(std::fs::read_to_string(&receipt)?.contains("source-pin-drift:basalt"));
+    Ok(())
+}
+
 #[test]
 fn cli_ci_run_receipt_binds_nextest_metadata_and_junit_view() -> CliResult<()> {
     let dir = temp_dir("cli-ci-run-receipt")?;

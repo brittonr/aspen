@@ -593,7 +593,7 @@ Release bundle commands can be run manually against a realized check output: `mo
 
 Operator receipt readback is available for local dogfood ledgers: `molten receipts list --ledger STATE/ledger`, `molten receipts show REF --ledger STATE/ledger`, `molten receipts validate REF --ledger STATE/ledger`, and `molten receipts export REF --ledger STATE/ledger --out receipt.preserves`. The commands read canonical Preserves artifacts from the content-addressed ledger, validate supported dogfood/operator receipt kinds, render only non-normative summaries by default, and keep logs auxiliary rather than primary evidence.
 
-For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` -> `/nix/store/bld9ql3g9fwlddawap8jgsb6azqbv22z-molten-nextest`.
+For the current private OnixResearch git dependencies, the flake locks sibling checkout sources as relative `*-src` path inputs (`../basalt`, `../cairn`, `../octet`, and `../ucan`) and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub while avoiding user-local checkout paths in reviewed config. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` -> `/nix/store/bld9ql3g9fwlddawap8jgsb6azqbv22z-molten-nextest`.
 
 Latest refreshed release evidence (2026-07-03) is bound to dogfood output `/nix/store/qmm4zrq72rsajknh65a7zqd9v0zdsffv-molten-dogfood-local-node` and nextest output `/nix/store/bld9ql3g9fwlddawap8jgsb6azqbv22z-molten-nextest`. Readback refs: dogfood report `blake3:8f5174292fe31f8fc364dc8f49560b21581f2cf01e54ae3fe8820c6d90d62f65`, release gate `blake3:2ded4d8475648207836b950368aa4e1037b11b9aeb6f5b939482ad4d859664f7`, replay verify `blake3:e6cfe6b85e63f1eb8bbaf271586411e55885b51611497587164fd2c0adf0aed3`, replay evidence index `blake3:555b0d27ee2e8a2b36c5886b126f1c118e909de89261cd61a399982aec392c67`, Nix dogfood evidence `blake3:9492775b4c3722f1da4b1d955f04e8358341cebbbe8b8bd48596d1ce2ab1e0a8`, Nix dogfood verify `blake3:0e051b1ecdec25fe2e5a2686553825aa1acef960eae0a73d3dedce48d8690f06`, release bundle `blake3:e6a46e7f0155dc1d78f667a792ca0b16daaba477b1e51afbffeb2082c2695c2c`, release bundle verify `blake3:e33de60e7a8c9104bb8bfb03fba6f27b574cc33933a87553dea39e418670915f`, promotion `blake3:bb8a0de843b8375ddbfea5424f28cfd6c662402ce40c7fdd28268b7fcaa09e96`, signed promotion envelope `blake3:53bb724c54972f3154d3ab8b55f442beb230338ff2d706214c0650901bd4af6a`, promotion summary `blake3:f55f027903a213c8647c4a130d6178e100ac968fd0e442142acc9a0ffe616194`, export manifest `blake3:4bdf772a76eedaa50b3d60e0f3c30a7b64e2d418c66ac3015e59023721ac7996`, release evidence archive `/nix/store/qmm4zrq72rsajknh65a7zqd9v0zdsffv-molten-dogfood-local-node/release-evidence.tar.zst`, and export verify `blake3:51758ee6eba525737a652e034aa30bc6522ca13c6360086308d4a7f248f83acf`. These readback artifacts are evidence-only and do not grant authority, policy, provenance, source-gate, resource, transport, retention, destructive-operation, deployment, or release trust.
 
@@ -620,9 +620,9 @@ cargo run -- test octet remediation plan \
   --receipt-out target/octet/remediation-plan.preserves
 cargo test
 cargo clippy --all-targets -- -D warnings
-cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615cac1/3b4c280/Cargo.toml \
-  -p cairn-cli --bin cairn -- validate --root . \
-  --policy /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615cac1/3b4c280/cairn-policy/generated/cairn-policy.json \
+CAIRN_ROOT="${CAIRN_ROOT:-../cairn}"
+nix run "path:$CAIRN_ROOT#cairn" -- validate --root . \
+  --policy "$CAIRN_ROOT/cairn-policy/generated/cairn-policy.json" \
   --strict
 ```
 
@@ -739,7 +739,7 @@ nix flake check
 
 ## References
 
-- [`onix-core` kache Nix Rust helpers](/home/brittonr/git/onix-core/lib/kache-nix-rust.nix) — reference implementation for opt-in Nix-owned kache wrappers around sandboxed Rust builds.
+- [`onix-core` kache Nix Rust helpers](../../onix-core/lib/kache-nix-rust.nix) — reference implementation for opt-in Nix-owned kache wrappers around sandboxed Rust builds.
 - [`n0-computer/iroh-examples`](https://github.com/n0-computer/iroh-examples) — reference patterns for dynamic Iroh protocol routing, framed bidirectional streams, and read-only blob gateway UX.
 - [`n0-computer/iroh-experiments`](https://github.com/n0-computer/iroh-experiments) — reference patterns for Iroh content discovery, deterministic DAG sync, pkarr latest pointers, HTTP3-over-Iroh readback, and remote byte-source verification experiments.
 - [`n0-computer/irpc`](https://github.com/n0-computer/irpc) — reference patterns for local/remote request-response and streaming service sessions over Iroh-style transports.

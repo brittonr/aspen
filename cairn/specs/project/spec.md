@@ -263,7 +263,6 @@ r[molten.shared_bounded_sinks.negative_bounds] Shared bounded helpers MUST inclu
 - WHEN bounded extend runs
 - THEN it denies before appending any incoming item.
 
-
 ### Requirement: CLI modules stay thin shells
 r[molten.modularity.cli_shell.thin_shell] CLI modules SHOULD limit themselves to argument parsing, path resolution, file IO, adapter orchestration, stdout/stderr rendering, process-exit behavior, and conversion between user-facing diagnostics and structured domain results.
 
@@ -306,7 +305,6 @@ r[molten.modularity.cli_shell.tests] CLI core extraction SHOULD include positive
 - WHEN reviewers inspect the tests
 - THEN at least one positive path and at least one denial or malformed-input path are covered
 
-
 ### Requirement: Pure core crate boundary
 r[molten.modularity.core_crate.pure_foundation] The repository SHOULD provide a dedicated core crate for foundational deterministic types and pure validation that can be tested without adapters, CLI commands, filesystem state, network services, clocks, or process execution.
 
@@ -340,7 +338,6 @@ r[molten.modularity.core_crate.validation] Core extraction changes SHOULD includ
 - GIVEN a moved core invariant is executable
 - WHEN reviewers inspect the change evidence
 - THEN valid examples and invalid examples are both covered by focused tests or fixtures
-
 
 ### Requirement: Policy authoring, export, runtime consumption, and freshness are layered
 r[molten.project.policy_boundary.layered_policy] Repository policy systems SHOULD separate authoring-time contracts, deterministic generated exports, runtime consumption of checked artifacts, and freshness validation.
@@ -383,7 +380,6 @@ r[molten.project.policy_boundary.tests] Policy boundary changes SHOULD include p
 - GIVEN a generated policy fixture omits a required current schema field
 - WHEN policy freshness validation runs
 - THEN the fixture fails for the expected missing-field invariant
-
 
 ### Requirement: Public modules are classified
 r[molten.modularity.public_api.classified_surface] Public root-crate modules and re-exports SHOULD be classified as stable API, compatibility alias, internal implementation, or generated/test support before modularity refactors remove or hide them.
@@ -437,7 +433,6 @@ r[molten.modularity.public_api.validation] Public API tightening SHOULD include 
 - WHEN API surface validation runs
 - THEN validation fails or records the unclassified export before release evidence is promoted
 
-
 ### Requirement: Local persistence uses explicit store ports
 r[molten.modularity.store_ports.explicit_port] Repository-owned domain cores that require local indexes or durable metadata SHOULD express persistence needs through explicit store ports, deterministic plans, or typed query/result records rather than direct Redb access.
 
@@ -474,7 +469,6 @@ r[molten.modularity.store_ports.tests] Store port refactors SHOULD include posit
 - GIVEN a store port boundary is introduced
 - WHEN reviewers inspect the tests
 - THEN valid admitted inputs and denied inputs are both covered, including proof that denied inputs do not request writes
-
 
 ### Requirement: Root dependencies are classified by layer
 r[molten.project.modularity.dependency_classes] Cargo dependencies SHOULD be classified by their intended layer: core, codec, policy-evidence, runtime, adapter, CLI, test, or integration.
@@ -513,7 +507,6 @@ r[molten.project.modularity.dependency_tests] Dependency-boundary changes SHOULD
 - WHEN the dependency check runs
 - THEN it reports the offending dependency and owning layer
 
-
 ### Requirement: Source splits use semantic boundaries
 r[molten.modularity.semantic_modules.named_boundaries] Rust source modules SHOULD prefer semantically named submodules over ordinal `include!` shards when the code is repository-owned and manually reviewed.
 
@@ -548,3 +541,84 @@ r[molten.modularity.semantic_modules.exemptions] Remaining ordinal shards MAY ex
 - GIVEN a generated or machine-partitioned shard remains after cleanup
 - WHEN reviewers inspect the module boundary
 - THEN the exemption identifies why semantic naming was not applied and what stable generated input or review artifact owns the content
+
+### Requirement: Repository config paths are relocatable
+
+r[molten.project.config_portability.relocatable_paths] Repository-owned development, hook, Nix, and validation configuration SHOULD avoid user-specific absolute paths and MUST allow required sibling repository paths to be supplied by reviewed workspace-relative defaults, flake inputs, or explicit environment variables.
+
+#### Scenario: Common workspace checkout works without user-specific paths
+
+- GIVEN Molten is checked out under a normal OnixResearch sibling workspace
+- WHEN development hooks, Nix checks, or config validation resolve Cairn and private dependency source paths
+- THEN they resolve through reviewed defaults or explicit environment variables
+- AND reviewed config does not require a `/home/<user>/...` literal to run.
+
+#### Scenario: User-specific path is rejected by config lint
+
+- GIVEN a repo-owned config file introduces a hard-coded user home path for a required tool or sibling repository
+- WHEN the config lint check runs in release-review mode
+- THEN the check fails with a diagnostic naming the file and portability rule.
+
+### Requirement: Release toolchains are pinned
+
+r[molten.project.config_portability.toolchain_pin] Rust toolchain configuration used for release, CI, Nix checks, or canonical evidence SHOULD pin an exact toolchain identity and MUST NOT rely on a floating channel unless that channel is explicitly scoped to local exploratory use and excluded from release evidence.
+
+#### Scenario: Pinned release toolchain passes
+
+- GIVEN the release and Nix check toolchain is a dated Rust channel or exact toolchain identity
+- WHEN config validation inspects the toolchain source
+- THEN validation records the pinned identity as release-review evidence.
+
+#### Scenario: Floating release nightly fails
+
+- GIVEN release-scoped config uses a floating `nightly` Rust channel with no exact date or toolchain identity
+- WHEN config validation runs in release-review mode
+- THEN validation fails before formatter, Clippy, unit2nix, or test evidence can be treated as reproducible release evidence.
+
+### Requirement: Cargo and Nix private source pins stay aligned
+
+r[molten.project.config_portability.git_source_pin_drift] Molten SHOULD provide a deterministic check that compares private OnixResearch git dependency revisions in `Cargo.lock` with the Nix local-source map used for hermetic unit2nix builds.
+
+#### Scenario: Matching source pins pass
+
+- GIVEN Cargo.lock names private dependency revisions that match the Nix local-source map
+- WHEN the source-pin drift check runs
+- THEN it passes and reports the dependency names and revisions that were compared.
+
+#### Scenario: Mismatched source pin fails
+
+- GIVEN Cargo.lock names a private dependency revision that differs from the Nix local-source map
+- WHEN the source-pin drift check runs
+- THEN it fails closed with diagnostics naming the dependency, Cargo revision, and Nix revision.
+
+### Requirement: Config lint is pure-core and shell-owned
+
+r[molten.project.config_portability.config_lint] Config lint decisions SHOULD be computed by a deterministic pure core over explicit file records, while the shell owns filesystem discovery, environment lookup, command execution, and rendered diagnostics.
+
+#### Scenario: Pure config lint accepts explicit inputs
+
+- GIVEN in-memory config records with paths, toolchain channels, source pins, and profile refs
+- WHEN the config lint core evaluates them
+- THEN it returns pass or denial diagnostics without reading files, executing commands, consulting environment variables, or rendering stdout.
+
+#### Scenario: Shell reports denied config
+
+- GIVEN the shell reads repo config files and the pure core returns a denial
+- WHEN the config lint command renders the result
+- THEN it names the denied rule and source file while keeping runtime authority, policy, provenance, and source-gate decisions out of scope.
+
+### Requirement: Repeated config values are named
+
+r[molten.project.config_portability.named_config_constants] Long-lived Nix and test configuration SHOULD express VM addresses, attempt bounds, event limits, timeout values, profile names, and evidence-output paths through named constants or small modules when those values are part of reviewed behavior.
+
+#### Scenario: Named config constant is review-visible
+
+- GIVEN a VM address, retry bound, event limit, timeout, or evidence profile changes
+- WHEN reviewers inspect the diff
+- THEN the changed value is associated with a name describing its role rather than appearing only as an unexplained numeric or string literal.
+
+#### Scenario: Refactor preserves check behavior
+
+- GIVEN a Nix check is refactored to use named constants
+- WHEN the check runs with the same semantic values
+- THEN canonical evidence outputs and pass/deny behavior remain unchanged or the change records an explicit evidence migration note.
