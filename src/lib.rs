@@ -167,6 +167,10 @@ compat_module!(prod_soak, burnin);
 pub mod conversation;
 compat_module!(protocol_session, conversation);
 #[doc(hidden)]
+#[path = "protocol/sans_io.rs"]
+pub mod sans_io_protocol_core;
+compat_module!(sans_io_protocol, sans_io_protocol_core);
+#[doc(hidden)]
 #[path = "provenance/mod.rs"]
 pub mod lineage_meta;
 compat_module!(provenance, lineage_meta);
