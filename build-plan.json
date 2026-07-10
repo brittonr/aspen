@@ -6,125 +6,12 @@
     "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0"
   },
-  "cargoLockHash": "0770a1d875c2a8eb4cb97f71772eef617a5ea7e39f59d7cbb07bd4b976fda6cb",
-  "inputsHash": "4432e9ce1531ad3bd5073be735f0111213a30d987e15c5b71f9f2735b7396532",
+  "cargoLockHash": "eb906f4369211b6b1a3c8abe4df61cf5a6782ab98d195648ac7f8c21698e7b39",
+  "inputsHash": "c7ee282f03e9b0c1442dd75cfe156841e4e8b38b2c7d547a93c1c6ca0f342681",
   "crates": {
-    "git+https://github.com/hegeldev/hegel-rust#hegeltest-macros@0.14.12": {
-      "crateName": "hegeltest-macros",
-      "version": "0.14.12",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "https://github.com/hegeldev/hegel-rust",
-        "rev": "ed949b8084595cb467e983747f1089e214965ac6",
-        "subDir": "hegel-macros",
-        "sha256": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI="
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-          "externCrateName": "proc_macro2"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-          "externCrateName": "quote"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
-          "externCrateName": "syn"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": true,
-      "build": null,
-      "libPath": null,
-      "libName": "hegel_macros",
-      "libCrateTypes": [
-        "proc-macro"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Procedural macros for Hegel.",
-      "homepage": "http://hegel.dev",
-      "license": "MIT",
-      "repository": "https://github.com/hegeldev/hegel-rust"
-    },
-    "git+https://github.com/hegeldev/hegel-rust#hegeltest@0.14.12": {
-      "crateName": "hegeltest",
-      "version": "0.14.12",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "https://github.com/hegeldev/hegel-rust",
-        "rev": "ed949b8084595cb467e983747f1089e214965ac6",
-        "sha256": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI="
-      },
-      "features": [
-        "default",
-        "native"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ciborium@0.2.2",
-          "externCrateName": "ciborium"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.0",
-          "externCrateName": "crc32fast"
-        },
-        {
-          "packageId": "git+https://github.com/hegeldev/hegel-rust#hegeltest-macros@0.14.12",
-          "externCrateName": "hegel_macros"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#num-bigint@0.4.6",
-          "externCrateName": "num_bigint"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
-          "externCrateName": "num_traits"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5",
-          "externCrateName": "parking_lot"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#paste@1.0.15",
-          "externCrateName": "paste"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rand@0.10.1",
-          "externCrateName": "rand"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0",
-          "externCrateName": "tempfile"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": "hegel",
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Property-based testing for Rust, built on Hypothesis",
-      "homepage": "http://hegel.dev",
-      "license": "MIT",
-      "repository": "https://github.com/hegeldev/hegel-rust"
-    },
     "git+ssh://git@github.com/OnixResearch/basalt.git#basalt@0.1.0": {
       "crateName": "basalt",
       "version": "0.1.0",
@@ -428,6 +315,10 @@
           "externCrateName": "cairn"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-std@3.4.5",
+          "externCrateName": "cap_std"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#clap@4.6.1",
           "externCrateName": "clap"
         },
@@ -537,16 +428,6 @@
         }
       ],
       "buildDependencies": [],
-      "devDependencies": [
-        {
-          "packageId": "git+https://github.com/hegeldev/hegel-rust#hegeltest@0.14.12",
-          "externCrateName": "hegel"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wat@1.250.0",
-          "externCrateName": "wat"
-        }
-      ],
       "procMacro": false,
       "build": null,
       "libPath": null,
@@ -2941,118 +2822,6 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/chronotope/chrono"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#ciborium-io@0.2.2": {
-      "crateName": "ciborium-io",
-      "version": "0.2.2",
-      "edition": "2021",
-      "sha256": "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "alloc",
-        "std"
-      ],
-      "dependencies": [],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Nathaniel McCallum <npmccallum@profian.com>"
-      ],
-      "description": "Simplified Read/Write traits for no_std usage",
-      "homepage": "https://github.com/enarx/ciborium",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/enarx/ciborium"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#ciborium-ll@0.2.2": {
-      "crateName": "ciborium-ll",
-      "version": "0.2.2",
-      "edition": "2021",
-      "sha256": "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ciborium-io@0.2.2",
-          "externCrateName": "ciborium_io"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#half@2.7.1",
-          "externCrateName": "half"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Nathaniel McCallum <npmccallum@profian.com>"
-      ],
-      "description": "Low-level CBOR codec primitives",
-      "homepage": "https://github.com/enarx/ciborium",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/enarx/ciborium"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#ciborium@0.2.2": {
-      "crateName": "ciborium",
-      "version": "0.2.2",
-      "edition": "2021",
-      "sha256": "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "std"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ciborium-io@0.2.2",
-          "externCrateName": "ciborium_io"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ciborium-ll@0.2.2",
-          "externCrateName": "ciborium_ll"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Nathaniel McCallum <npmccallum@profian.com>"
-      ],
-      "description": "serde implementation of CBOR using ciborium-basic",
-      "homepage": "https://github.com/enarx/ciborium",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/enarx/ciborium"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#cipher@0.4.4": {
       "crateName": "cipher",
       "version": "0.4.4",
@@ -4448,7 +4217,6 @@
         "type": "crates-io"
       },
       "features": [
-        "default",
         "std"
       ],
       "dependencies": [
@@ -8027,42 +7795,6 @@
       "description": "An HTTP/2 client and server",
       "license": "MIT",
       "repository": "https://github.com/hyperium/h2"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#half@2.7.1": {
-      "crateName": "half",
-      "version": "2.7.1",
-      "edition": "2021",
-      "sha256": "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4",
-          "externCrateName": "cfg_if"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.48",
-          "externCrateName": "zerocopy"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Kathryn Long <squeeself@gmail.com>"
-      ],
-      "description": "Half-precision floating point f16 and bf16 types for Rust implementing the IEEE 754-2008 standard binary16 and bfloat16 types.",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/VoidStarKat/half-rs"
     },
     "registry+https://github.com/rust-lang/crates.io-index#hash32@0.2.1": {
       "crateName": "hash32",
@@ -27135,47 +26867,6 @@
       "license": "Unicode-3.0",
       "repository": "https://github.com/unicode-org/icu4x"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#zerocopy-derive@0.8.48": {
-      "crateName": "zerocopy-derive",
-      "version": "0.8.48",
-      "edition": "2021",
-      "sha256": "70e3cd084b1788766f53af483dd21f93881ff30d7320490ec3ef7526d203bad4",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-          "externCrateName": "proc_macro2"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-          "externCrateName": "quote"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
-          "externCrateName": "syn"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": true,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "proc-macro"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Joshua Liebow-Feeser <joshlf@google.com>",
-        "Jack Wrenn <jswrenn@amazon.com>"
-      ],
-      "description": "Custom derive for traits from the zerocopy crate",
-      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
-      "repository": "https://github.com/google/zerocopy"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.48": {
       "crateName": "zerocopy",
       "version": "0.8.48",
@@ -27185,16 +26876,9 @@
         "type": "crates-io"
       },
       "features": [
-        "derive",
-        "simd",
-        "zerocopy-derive"
+        "simd"
       ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zerocopy-derive@0.8.48",
-          "externCrateName": "zerocopy_derive"
-        }
-      ],
+      "dependencies": [],
       "buildDependencies": [],
       "procMacro": false,
       "build": null,

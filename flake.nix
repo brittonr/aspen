@@ -60,15 +60,39 @@
           overlays = [ (import rust-overlay) ];
         };
 
-        localGitSources = {
-          "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" =
-            basalt-src;
-          "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" = cairn-src;
-          "ssh://git@github.com/OnixResearch/octet.git#9b6a2065ef9e8e363d81299cf59d74f885926215" = octet-src;
-          "ssh://git@github.com/OnixResearch/ucan.git#2aad993027d48ff148028c537cdaf91f6e5285ca" = ucan-src;
-        };
-
         pkgs = pkgsBase;
+
+        localSourceExcludedBaseNames = [
+          ".direnv"
+          ".git"
+          ".hegel"
+          ".pre-commit-cache"
+          ".pytest_cache"
+          "mutants.out"
+          "result"
+          "target"
+        ];
+        cleanLocalGitSource =
+          src:
+          pkgs.lib.cleanSourceWith {
+            inherit src;
+            filter = path: _type: !(builtins.elem (baseNameOf path) localSourceExcludedBaseNames);
+          };
+        # Relative path inputs outside the flake root can arrive as
+        # /nix/store/...-source/../repo. Do not hand those unusable paths to
+        # cleanSourceWith; callers can pass real local paths with --override-input.
+        maybeCleanLocalGitSource =
+          src: if pkgs.lib.hasInfix "/../" (toString src) then null else cleanLocalGitSource src;
+        localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
+          "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" =
+            maybeCleanLocalGitSource basalt-src;
+          "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" =
+            maybeCleanLocalGitSource cairn-src;
+          "ssh://git@github.com/OnixResearch/octet.git#9b6a2065ef9e8e363d81299cf59d74f885926215" =
+            maybeCleanLocalGitSource octet-src;
+          "ssh://git@github.com/OnixResearch/ucan.git#2aad993027d48ff148028c537cdaf91f6e5285ca" =
+            maybeCleanLocalGitSource ucan-src;
+        };
         unit2nixPkgsBase = pkgsBase.extend (
           final: prev: {
             fetchgit =
