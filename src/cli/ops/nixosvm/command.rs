@@ -73,12 +73,16 @@ pub(crate) enum Command {
         test_run: FilePath,
         #[arg(long = "prod-soak")]
         prod_soak: Vec<FilePath>,
+        #[arg(long = "child-artifact")]
+        child_artifacts: Vec<FilePath>,
         #[arg(long = "expected-node")]
         expected_nodes: Vec<String>,
         #[arg(long = "expected-package-ref")]
         expected_package_ref: Option<String>,
         #[arg(long = "expected-child-ref")]
         expected_child_refs: Vec<String>,
+        #[arg(long = "expected-child-receipt")]
+        expected_child_receipts: Vec<String>,
         #[arg(long)]
         out: Option<FilePath>,
     },
@@ -89,6 +93,8 @@ pub(crate) enum Command {
         artifacts: Vec<FilePath>,
         #[arg(long = "log")]
         logs: Vec<FilePath>,
+        #[arg(long = "required-artifact")]
+        required_artifacts: Vec<String>,
         #[arg(long = "caveat")]
         caveats: Vec<String>,
         #[arg(long)]
@@ -153,6 +159,54 @@ pub(crate) enum Command {
         descriptors: Vec<FilePath>,
         #[arg(long = "receipt")]
         receipts: Vec<FilePath>,
+        #[arg(long)]
+        out: Option<FilePath>,
+    },
+    ShardRun {
+        #[arg(long = "shard-id")]
+        shard_id: String,
+        #[arg(long = "scenario-fixture-ref")]
+        scenario_fixture_ref: String,
+        #[arg(long = "topology-ref")]
+        topology_ref: String,
+        #[arg(long = "package-ref")]
+        package_ref: String,
+        #[arg(long = "node-evidence-ref")]
+        node_evidence_refs: Vec<String>,
+        #[arg(long = "child-receipt-ref")]
+        child_receipt_refs: Vec<String>,
+        #[arg(long = "diagnostic-log-ref")]
+        diagnostic_log_refs: Vec<String>,
+        #[arg(long, default_value_t = false)]
+        unavailable: bool,
+        #[arg(long = "claimed-decision", default_value = "pass")]
+        claimed_decision: String,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
+        #[arg(long)]
+        out: Option<FilePath>,
+    },
+    Aggregate {
+        #[arg(long = "topology-ref")]
+        topology_ref: String,
+        #[arg(long = "package-ref")]
+        package_ref: String,
+        #[arg(long = "manifest-ref")]
+        manifest_ref: String,
+        #[arg(long = "required-shard-id")]
+        required_shard_ids: Vec<String>,
+        #[arg(long = "shard-ref")]
+        shard_refs: Vec<String>,
+        #[arg(long = "denied-shard-id")]
+        denied_shard_ids: Vec<String>,
+        #[arg(long = "unavailable-as-pass-shard-id")]
+        unavailable_as_pass_shard_ids: Vec<String>,
+        #[arg(long = "stale-child-ref")]
+        stale_child_refs: Vec<String>,
+        #[arg(long = "log-only-child-ref")]
+        log_only_child_refs: Vec<String>,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
         #[arg(long)]
         out: Option<FilePath>,
     },

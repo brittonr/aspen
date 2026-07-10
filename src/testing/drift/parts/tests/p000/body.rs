@@ -103,3 +103,91 @@
         .expect("compare artifact summaries");
         assert_eq!(comparison.decision, "pass");
     }
+
+    #[test]
+    fn declared_variance_reasons_cover_only_explicit_volatile_fields() {
+        let stable_ref = local_ref("stable-release-gate");
+        let left = summary(vec![
+            field("release-gate", &stable_ref, true),
+            field("runtime-path", "/nix/store/left", false),
+            field("diagnostic-log", "/tmp/left.log", false),
+            field("store-path", "/nix/store/left-output", false),
+            field("temporary-root", "/tmp/left", false),
+            field("rendered-output", "left pretty text", false),
+        ]);
+        let right = summary(vec![
+            field("release-gate", &stable_ref, true),
+            field("runtime-path", "/nix/store/right", false),
+            field("diagnostic-log", "/tmp/right.log", false),
+            field("store-path", "/nix/store/right-output", false),
+            field("temporary-root", "/tmp/right", false),
+            field("rendered-output", "right pretty text", false),
+        ]);
+        let allowed_variances = vec![
+            AllowedVariance {
+                path: "runtime-path".to_string(),
+                reason: "runtime-path".to_string(),
+            },
+            AllowedVariance {
+                path: "diagnostic-log".to_string(),
+                reason: "diagnostic-log".to_string(),
+            },
+            AllowedVariance {
+                path: "store-path".to_string(),
+                reason: "store-path".to_string(),
+            },
+            AllowedVariance {
+                path: "temporary-root".to_string(),
+                reason: "temporary-root".to_string(),
+            },
+            AllowedVariance {
+                path: "rendered-output".to_string(),
+                reason: "rendered-output".to_string(),
+            },
+        ];
+        let comparison = compare(&ComparisonInput {
+            left,
+            right,
+            allowed_variances,
+        })
+        .expect("declared variance comparison");
+        assert_eq!(comparison.decision, "pass");
+        assert!(comparison.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn ambient_state_variance_is_rejected_instead_of_masked() {
+        let stable_ref = local_ref("stable-release-gate");
+        let input = ComparisonInput {
+            left: summary(vec![field("release-gate", &stable_ref, true), field("ambient-state", "left", false)]),
+            right: summary(vec![field("release-gate", &stable_ref, true), field("ambient-state", "right", false)]),
+            allowed_variances: vec![AllowedVariance {
+                path: "ambient-state".to_string(),
+                reason: "ambient-state".to_string(),
+            }],
+        };
+        let error = compare(&input).expect_err("ambient state variance must be rejected");
+        assert!(error.to_string().contains("unsupported drift variance reason ambient-state"));
+    }
+
+    #[test]
+    fn retry_only_rerun_does_not_mask_canonical_ref_drift() {
+        let input = ComparisonInput {
+            left: summary(vec![
+                field("artifact", &local_ref("left-artifact"), true),
+                field("retry-attempt", "first", false),
+            ]),
+            right: summary(vec![
+                field("artifact", &local_ref("right-artifact"), true),
+                field("retry-attempt", "second", false),
+            ]),
+            allowed_variances: vec![AllowedVariance {
+                path: "retry-attempt".to_string(),
+                reason: "diagnostic-log".to_string(),
+            }],
+        };
+        let comparison = compare(&input).expect("retry drift comparison");
+        assert_eq!(comparison.decision, "deny");
+        assert_eq!(comparison.diagnostics[0].path, "artifact");
+        assert_eq!(comparison.diagnostics[0].kind, "value-drift");
+    }

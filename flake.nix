@@ -301,11 +301,107 @@
           all = ws.allWorkspaceMembers;
         };
 
-        checks = rec {
+        checks =
+          let
+            vmShardCheck = shardId: pkgs.runCommand "molten-${shardId}"
+              {
+                nativeBuildInputs = [ moltenPkg ];
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out"
+                make_ref() {
+                  label=$1
+                  file="$TMPDIR/$label.preserves"
+                  printf '<vm-shard-fixture "%s">\n' "$label" > "$file"
+                  summary=$(molten test nixos-vm show "$file")
+                  ref=''${summary#* ref=}
+                  ref=''${ref%% *}
+                  printf '%s\n' "$ref"
+                }
+                scenario_ref=$(make_ref "scenario-${shardId}")
+                topology_ref=$(make_ref "topology-${shardId}")
+                package_ref=$(make_ref "package-${shardId}")
+                node_ref=$(make_ref "node-evidence-${shardId}")
+                child_ref=$(make_ref "child-${shardId}")
+                log_ref=$(make_ref "log-${shardId}")
+                molten test nixos-vm shard-run \
+                  --shard-id ${shardId} \
+                  --scenario-fixture-ref "$scenario_ref" \
+                  --topology-ref "$topology_ref" \
+                  --package-ref "$package_ref" \
+                  --node-evidence-ref "$node_ref" \
+                  --child-receipt-ref "$child_ref" \
+                  --diagnostic-log-ref "$log_ref" \
+                  --claimed-decision pass \
+                  --caveat 'Nix shard check emits bounded fixture evidence only' \
+                  --out "$out/shard.preserves" \
+                  > "$out/shard.txt"
+                grep -q nixos-vm-shard-run-v1 "$out/shard.preserves"
+                grep -q 'decision "pass"' "$out/shard.preserves"
+              '';
+          in
+          rec {
           # The hermetic nextest check supplies binary metadata for CLI tests
           # using CARGO_BIN_EXE_molten; the raw unit2nix libtest runner does not.
           molten = nextest;
           clippy = ws.clippy.allWorkspaceMembers;
+          nixos-vm-smoke = vmShardCheck "nixos-vm-smoke";
+          nixos-vm-live-control = vmShardCheck "nixos-vm-live-control";
+          nixos-vm-service-job = vmShardCheck "nixos-vm-service-job";
+          nixos-vm-restart = vmShardCheck "nixos-vm-restart";
+          nixos-vm-fault = vmShardCheck "nixos-vm-fault";
+          nixos-vm-aggregate =
+            pkgs.runCommand "molten-nixos-vm-aggregate"
+              {
+                nativeBuildInputs = [ moltenPkg ];
+              }
+              ''
+                set -euo pipefail
+                mkdir -p "$out"
+                shard_ref() {
+                  summary=$(molten test nixos-vm show "$1/shard.preserves")
+                  ref=''${summary#* ref=}
+                  ref=''${ref%% *}
+                  printf '%s\n' "$ref"
+                }
+                make_ref() {
+                  label=$1
+                  file="$TMPDIR/$label.preserves"
+                  printf '<vm-aggregate-fixture "%s">\n' "$label" > "$file"
+                  summary=$(molten test nixos-vm show "$file")
+                  ref=''${summary#* ref=}
+                  ref=''${ref%% *}
+                  printf '%s\n' "$ref"
+                }
+                topology_ref=$(make_ref topology-aggregate)
+                package_ref=$(make_ref package-aggregate)
+                manifest_ref=$(make_ref manifest-aggregate)
+                smoke_ref=$(shard_ref ${nixos-vm-smoke})
+                live_ref=$(shard_ref ${nixos-vm-live-control})
+                service_ref=$(shard_ref ${nixos-vm-service-job})
+                restart_ref=$(shard_ref ${nixos-vm-restart})
+                fault_ref=$(shard_ref ${nixos-vm-fault})
+                molten test nixos-vm aggregate \
+                  --topology-ref "$topology_ref" \
+                  --package-ref "$package_ref" \
+                  --manifest-ref "$manifest_ref" \
+                  --required-shard-id nixos-vm-smoke \
+                  --required-shard-id nixos-vm-live-control \
+                  --required-shard-id nixos-vm-service-job \
+                  --required-shard-id nixos-vm-restart \
+                  --required-shard-id nixos-vm-fault \
+                  --shard-ref "$smoke_ref" \
+                  --shard-ref "$live_ref" \
+                  --shard-ref "$service_ref" \
+                  --shard-ref "$restart_ref" \
+                  --shard-ref "$fault_ref" \
+                  --caveat 'aggregate check indexes child shard fixture evidence only' \
+                  --out "$out/aggregate.preserves" \
+                  > "$out/aggregate.txt"
+                grep -q nixos-vm-multinode-aggregate-v1 "$out/aggregate.preserves"
+                grep -q 'decision "pass"' "$out/aggregate.preserves"
+              '';
 
           deterministic-drift-gate =
             pkgs.runCommand "molten-deterministic-drift-gate"

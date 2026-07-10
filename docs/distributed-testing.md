@@ -20,7 +20,7 @@ Named direct fixtures cover benign `delay`, `drop`, `reorder`, `rejoin`, `crash`
 
 ## Declarative multinode scenario fixtures
 
-Multinode scenarios are declared with typed Nickel fixtures under `docs/multinode-scenario-fixtures/` and the shared contract in `docs/multinode-scenario-contracts.ncl`. The contract requires explicit topology/profile ids, command surface, artifact kinds, topology/seed/fault-plan refs, receipt refs, variance refs, diagnostic-log refs, unavailable policy, and evidence-only caveats before execution.
+Multinode scenarios are declared with typed Nickel fixtures under `docs/multinode-scenario-fixtures/` and the shared contract in `docs/multinode-scenario-contracts.ncl`. The contract requires explicit topology/profile ids, command surface, artifact kinds, topology/seed/fault-plan refs, receipt refs, variance refs, diagnostic-log refs, unavailable policy, and evidence-only caveats before execution. Valid VM fixture coverage includes smoke, live-control, service/job, restart, fault, three-node quorum, and aggregate scenario surfaces.
 
 Rust validation derives `multinode-scenario-metadata-v1` from explicit fixture values only. Missing topology, missing command surface, stale or malformed refs, undeclared variance, unsupported pass claims, and mismatched artifact kinds deny before pass metadata is accepted.
 

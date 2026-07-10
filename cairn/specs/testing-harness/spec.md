@@ -2290,21 +2290,6 @@ r[molten.testing.multinode.three_node_quorum_topology] Molten SHOULD include a b
 - THEN the evidence shows idempotent recovery or duplicate suppression
 - AND no second semantic commit is accepted for the same operation id.
 
-### Requirement: Three-node VM negatives reject role and quorum confusion
-r[molten.testing.multinode.three_node_membership_negatives] Molten MUST reject three-node VM pass claims that treat subscriber, observer, transport-only, partitioned-minority, or missing-quorum evidence as admitted voter membership or authority evidence.
-
-#### Scenario: Subscriber cannot satisfy voter membership
-- GIVEN a three-node VM scenario where a subscriber or observer receipt is supplied as voter membership evidence
-- WHEN membership or reconciliation validation runs
-- THEN the gate denies before pass evidence is accepted
-- AND diagnostics name the role mismatch.
-
-#### Scenario: Partitioned minority cannot satisfy quorum
-- GIVEN a three-node VM topology with only minority-side receipts after a partition
-- WHEN quorum validation evaluates the evidence
-- THEN validation denies the quorum claim
-- AND diagnostic logs cannot substitute for missing majority receipts.
-
 ### Requirement: VM failures export sealed diagnostic repro bundles
 r[molten.testing.multinode.vm_failure_repro_export] Molten SHOULD export sealed diagnostic failure repro bundles for VM multinode shard or aggregate failures, binding scenario, topology, node evidence, child receipts, validation receipts, diagnostic logs, replay status, redaction policy, and evidence-only caveats.
 
@@ -3179,3 +3164,242 @@ r[molten.iroh_experiments.reference_docs] Molten SHOULD document `n0-computer/ir
 - GIVEN HTTP3-over-Iroh or remote byte-source adapters are not yet implemented
 - WHEN validation runs for the core discovery and traversal sync slice
 - THEN the deferred adapter requirements can remain unimplemented without weakening locator hint-only or deterministic sync gates.
+
+### Requirement: Cluster CLI lifecycle is receipt-backed
+r[molten.testing.cluster_cli.lifecycle_roundtrip] Molten MUST test the `cluster init`, `cluster start`, `cluster status`, and `cluster stop` CLI lifecycle over at least two isolated node roots, and the test MUST assert canonical manifest and node receipt evidence rather than treating rendered output as authoritative pass evidence.
+
+#### Scenario: Two-node cluster lifecycle records receipts
+- GIVEN an explicit cluster state root and two safe node names
+- WHEN the CLI harness runs `cluster init`, `cluster start`, `cluster status`, and `cluster stop`
+- THEN the cluster manifest binds the expected node ids and each node root contains the required config, identity, startup, health or control, heartbeat, shutdown, and control receipt artifacts
+- AND stdout and stderr remain diagnostic-only views over the canonical receipts.
+
+#### Scenario: Already-running start does not mutate unrelated evidence
+- GIVEN a cluster whose nodes are already running
+- WHEN `cluster start` is invoked again
+- THEN the command reports already-running status from canonical node status evidence
+- AND it does not replace unrelated node lifecycle artifacts.
+
+### Requirement: Cluster CLI negative fixtures fail closed
+r[molten.testing.cluster_cli.fail_closed_negatives] Molten MUST reject cluster CLI pass evidence when the manifest is missing, malformed, empty, stale, or inconsistent with node lifecycle state; unsafe or duplicate node names MUST fail before node-root mutation unless `--force` explicitly resets only planned node roots.
+
+#### Scenario: Malformed manifest denies lifecycle commands
+- GIVEN a cluster state root with a missing, empty, malformed, or unsupported `cluster.nodes` manifest
+- WHEN `cluster start`, `cluster status`, or `cluster stop` reads the cluster plan
+- THEN the command fails closed before operating on node roots
+- AND diagnostics identify the manifest problem.
+
+#### Scenario: Reinitialization requires explicit destructive intent
+- GIVEN a planned node root already has initialized lifecycle state
+- WHEN `cluster init` runs without `--force`
+- THEN the command denies before removing or overwriting that node root
+- AND a forced run removes only the planned node roots and writes fresh lifecycle evidence.
+
+### Requirement: Cluster lifecycle drift gate reruns fresh roots
+r[molten.testing.cluster_drift.lifecycle_rerun_gate] Molten MUST provide a deterministic drift gate that runs cluster lifecycle workflows in fresh isolated state roots with the same declared inputs and compares canonical evidence refs and normalized values through explicit allowed-variance declarations.
+
+#### Scenario: Same cluster lifecycle rerun is stable
+- GIVEN a declared two-node cluster lifecycle input and two fresh isolated state roots
+- WHEN the drift gate runs `cluster init`, `cluster start`, `cluster status`, and `cluster stop` in both roots
+- THEN semantic manifest, node receipt, control receipt, decision, and validation refs match after declared non-semantic variance is normalized
+- AND the drift receipt binds both run summaries and the variance declarations used.
+
+#### Scenario: Already-running path remains deterministic
+- GIVEN equivalent already-running cluster state produced from declared inputs
+- WHEN the drift gate reruns `cluster start`
+- THEN the already-running evidence and status refs match semantically
+- AND rendered output differences alone do not affect pass evidence.
+
+### Requirement: Cluster drift negatives reject ambient and retry-only stability
+r[molten.testing.cluster_drift.ambient_state_negatives] Molten MUST reject cluster drift pass claims when evidence changes due to undeclared ambient state, runtime paths, ordering, stale child refs, unstable map ordering, retry-only success, or rendered-output-only success.
+
+#### Scenario: Undeclared child ref drift fails closed
+- GIVEN two cluster evidence summaries with a changed canonical child receipt ref and no matching variance declaration
+- WHEN the drift comparator evaluates the summaries
+- THEN the decision is deny
+- AND diagnostics name the first differing semantic ref.
+
+#### Scenario: Retry does not mask cluster drift
+- GIVEN a cluster workflow that alternates between two canonical evidence refs across fresh runs
+- WHEN the drift gate is invoked
+- THEN the gate reports drift instead of retrying until two matching outputs appear
+- AND the retry result is not accepted as deterministic pass evidence.
+
+### Requirement: Executable VM network faults use declared backends
+r[molten.testing.nixos_vm_fault_injection.executable_network_backend] Molten SHOULD execute bounded VM network delay, drop, partition, rejoin, and asymmetric-latency faults when a declared network-control backend is supported, and it MUST record unavailable or deny evidence without minting pass evidence when support is absent.
+
+#### Scenario: Supported backend executes a network partition
+- GIVEN a VM topology link and a network-control probe whose backend is supported
+- WHEN a bounded partition fault is injected, observed, removed, and validated
+- THEN the fault receipt binds backend support, topology ref, preflight refs, injection refs, required child workflow refs, cleanup refs, post-fault refs, diagnostics, and caveats
+- AND the support matrix identifies the case as executable evidence for that topology.
+
+#### Scenario: Missing backend remains unavailable
+- GIVEN a VM image or host without a supported network-control backend
+- WHEN a network fault is requested
+- THEN the capability and fault receipts record unavailable support
+- AND the fault matrix does not count the case as pass evidence.
+
+### Requirement: VM network fault cleanup is mandatory for pass evidence
+r[molten.testing.nixos_vm_fault_injection.network_fault_cleanup_validation] Molten MUST reject network-fault pass claims when cleanup evidence, post-fault checks, required child workflow refs, matching topology, or canonical diagnostics are missing.
+
+#### Scenario: Missing cleanup denies pass
+- GIVEN a network fault receipt with injection evidence but no cleanup or post-fault evidence
+- WHEN fault validation evaluates the receipt
+- THEN validation denies before pass evidence is accepted
+- AND diagnostics identify the missing cleanup boundary.
+
+#### Scenario: Log-only network fault claim is rejected
+- GIVEN diagnostic logs that appear to show a partition and rejoin but omit canonical injection, child workflow, cleanup, or post-fault refs
+- WHEN fault validation evaluates the evidence
+- THEN the pass claim is rejected before logs are considered authoritative.
+
+### Requirement: VM shard plans derive from typed multinode fixtures
+r[molten.testing.multinode.fixture_driven_vm_plan] Molten SHOULD derive or validate NixOS VM shard plans from typed repository-owned multinode scenario fixtures that declare topology, execution profile, command surface, expected artifact kinds, required receipts, variance refs, unavailable policy, diagnostic logs, and evidence-only caveats before execution.
+
+#### Scenario: Fixture drives VM shard metadata
+- GIVEN a valid Nickel-authored multinode scenario fixture for a VM shard
+- WHEN the fixture is exported or validated for VM execution
+- THEN the resulting shard plan binds scenario id, topology profile, topology ref, command surface, expected artifact kinds, required receipts, variance refs, unavailable policy, diagnostics, and caveats
+- AND the plan is derived without reading ambient runtime state.
+
+#### Scenario: Fixture update changes expected evidence explicitly
+- GIVEN a VM scenario changes its command surface or required artifact kinds
+- WHEN the fixture is updated and validated
+- THEN the expected VM evidence changes through the fixture metadata
+- AND reviewers can see the scenario-scope change before execution.
+
+### Requirement: VM evidence denies fixture mismatch
+r[molten.testing.multinode.fixture_export_validation_gate] Molten MUST reject VM pass evidence when observed topology, execution profile, command surface, expected artifact kinds, child refs, unavailable policy, source language, or caveats do not match the checked scenario fixture export.
+
+#### Scenario: Wrong fixture cannot satisfy VM run
+- GIVEN VM receipts from one scenario and a fixture export for a different scenario
+- WHEN the VM scenario gate evaluates the evidence
+- THEN validation denies before pass evidence is accepted
+- AND diagnostics identify the mismatched fixture field.
+
+#### Scenario: Invalid fixture blocks VM pass evidence
+- GIVEN a fixture missing required refs, variance declarations, unavailable policy, diagnostic log refs, or evidence-only caveats
+- WHEN VM validation requests that fixture
+- THEN validation denies even if the VM logs appear successful
+- AND logs remain diagnostic-only.
+
+### Requirement: NixOS VM shard checks are executable derivations
+r[molten.testing.nixos_vm_multinode.executable_shard_derivations] Molten MUST expose named executable NixOS VM checks or apps for smoke, live-control, service/job coordination, restart recovery, VM fault evidence, and full aggregation; each shard MUST preserve canonical shard evidence and MUST NOT depend on log text for its pass decision.
+
+#### Scenario: Individual shard emits canonical evidence
+- GIVEN a requested VM shard check for smoke, live-control, service/job, restart, or fault evidence
+- WHEN the shard completes on a supported host
+- THEN its realized output contains a canonical `nixos-vm-shard-run-v1` receipt, required child receipts, diagnostic log refs, and evidence-only caveats
+- AND log output is not accepted as a substitute for missing child receipts.
+
+#### Scenario: Unsupported platform remains non-pass evidence
+- GIVEN the host cannot execute the requested VM shard support boundary
+- WHEN the shard check runs
+- THEN it emits deny or unavailable evidence according to the declared unavailable policy
+- AND unavailable execution is not counted as pass evidence for that shard.
+
+### Requirement: VM aggregate consumes child shard outputs
+r[molten.testing.nixos_vm_multinode.executable_shard_aggregate] Molten MUST build the full multinode VM aggregate from declared child shard outputs and reject missing, denied, stale, unavailable-as-pass, or log-only child evidence before accepting aggregate pass evidence.
+
+#### Scenario: Aggregate indexes passing shards
+- GIVEN passing shard outputs for every required VM shard in the declared matrix
+- WHEN the aggregate check evaluates those outputs
+- THEN it emits a canonical aggregate receipt binding each child shard ref, topology ref, package ref, manifest ref, and evidence-only caveat
+- AND reviewers can inspect each shard independently.
+
+#### Scenario: Missing child shard denies aggregate pass
+- GIVEN a required shard output is absent, denied, stale, or represented only by logs
+- WHEN aggregate validation runs
+- THEN the aggregate decision is deny or unavailable
+- AND diagnostics name the invalid child shard class.
+
+### Requirement: Three-node VM quorum shard exercises majority and restart
+r[molten.testing.multinode.three_node_vm_quorum_execution] Molten SHOULD provide an executable bounded three-node VM shard that exercises voter membership, majority quorum behavior, restart/rejoin, and duplicate semantic commit suppression with canonical topology, node-summary, quorum, and reconciliation evidence.
+
+#### Scenario: Majority quorum evidence passes with reconciliation
+- GIVEN a three-node VM topology with declared voter roles, membership refs, quorum refs, and required workflow receipts
+- WHEN a majority workflow completes and node summaries are reconciled
+- THEN the shard emits passing evidence that binds topology membership, quorum refs, per-node summaries, duplicate-suppression refs, restart or rejoin refs, reconciliation refs, and child workflow refs
+- AND the pass claim is scoped to the declared VM topology.
+
+#### Scenario: Restarting voter rejoins without duplicate commit
+- GIVEN a queued operation and a voter node that restarts during the workflow
+- WHEN the node rejoins and the workflow is reconciled
+- THEN evidence shows idempotent recovery or duplicate suppression
+- AND no second semantic commit is accepted for the same operation id.
+
+### Requirement: Three-node VM negatives reject role and quorum confusion
+r[molten.testing.multinode.three_node_vm_membership_negatives] Molten MUST reject three-node VM pass claims that treat subscriber, observer, transport-only, partitioned-minority, missing-quorum, or log-only evidence as admitted voter membership, quorum, authority, or policy evidence.
+
+#### Scenario: Subscriber evidence cannot satisfy voter membership
+- GIVEN a three-node VM scenario where a subscriber or observer receipt is supplied as voter membership evidence
+- WHEN membership, quorum, or reconciliation validation runs
+- THEN the gate denies before pass evidence is accepted
+- AND diagnostics name the role mismatch.
+
+#### Scenario: Partitioned minority cannot satisfy quorum
+- GIVEN a three-node topology with only minority-side receipts after a partition
+- WHEN quorum validation evaluates the evidence
+- THEN validation denies the quorum claim
+- AND diagnostic logs cannot substitute for missing majority receipts.
+
+### Requirement: VM validation parses child receipt semantics
+r[molten.testing.vm_evidence.child_receipt_semantic_validation] Molten MUST validate VM child workflow evidence by parsing canonical child receipt contents and checking expected topology, node ids, peer ids, operation ids, receipt classes, and pass or deny decisions rather than accepting child ref presence alone.
+
+#### Scenario: Live-control child chain validates semantically
+- GIVEN a VM test-run receipt with child refs for live-control send or receive, ingress, queue, dispatch, reconcile, ack, and protocol-gate evidence
+- WHEN VM evidence validation evaluates the run against expected sender, receiver, peer, topic, and operation bindings
+- THEN validation passes only if each child receipt class and semantic field matches the expected workflow
+- AND transport or log evidence alone cannot replace missing authority, admission, queue, dispatch, reconcile, ack, or protocol refs.
+
+#### Scenario: Wrong child receipt denies validation
+- GIVEN a VM run whose child ref points to the wrong receipt class, wrong node, wrong peer, wrong operation id, denied decision, or stale topology
+- WHEN semantic child validation runs
+- THEN validation denies before accepting the VM pass claim
+- AND diagnostics identify the mismatched child field.
+
+### Requirement: VM validation gates expected child refs explicitly
+r[molten.testing.vm_evidence.expected_child_ref_gate] Molten MUST require declared expected child refs or scenario-derived child expectations for VM pass evidence, and MUST reject missing, duplicate, log-only, stale, or undeclared child refs before accepting a cluster-testing claim.
+
+#### Scenario: Expected child refs all bind
+- GIVEN a VM validation request with explicit expected child refs for live-control, service/job, coordination, soak, and fault validation evidence
+- WHEN the validator parses the VM test-run and child artifacts
+- THEN each expected ref is present, classified, semantically checked, and bound into validation evidence
+- AND extra diagnostic logs do not affect pass evidence.
+
+#### Scenario: Missing expected child ref denies
+- GIVEN a VM validation request that requires a child receipt ref not present in the test-run, manifest, or child artifact set
+- WHEN validation runs
+- THEN the decision is deny
+- AND diagnostics name the missing expected child ref.
+
+### Requirement: VM evidence manifest includes child receipt closure
+r[molten.testing.vm_evidence.child_artifact_manifest_completeness] Molten MUST preserve a VM evidence manifest that includes every canonical child receipt and diagnostic log referenced by VM test-run, prod-soak, shard, aggregate, validation, live-control, service/job, coordination, and VM fault evidence.
+
+#### Scenario: Manifest contains all referenced child receipts
+- GIVEN a VM run with test-run, prod-soak, shard, aggregate, live-control, service/job, coordination, and fault validation child refs
+- WHEN the VM evidence manifest is emitted
+- THEN the manifest includes each referenced canonical artifact with path, artifact kind, content ref, diagnostic-only flag, and caveats
+- AND diagnostic logs are marked as diagnostic-only.
+
+#### Scenario: Omitted child receipt is visible
+- GIVEN a VM run whose top-level receipt references a child artifact not listed in the manifest
+- WHEN manifest closure validation runs
+- THEN validation denies or records unavailable evidence before accepting the manifest as complete
+- AND diagnostics name the missing child ref.
+
+### Requirement: VM evidence manifest closure fails closed
+r[molten.testing.vm_evidence.manifest_reference_closure] Molten MUST reject VM evidence-manifest pass claims when required child artifacts are missing, duplicated, content-ref mismatched, wrong-kind, unreferenced, or represented only by logs.
+
+#### Scenario: Tampered manifest entry denies
+- GIVEN a manifest entry whose stored path or content no longer matches its recorded content ref
+- WHEN manifest closure validation evaluates the evidence
+- THEN validation denies before pass evidence is accepted
+- AND diagnostics name the mismatched path or ref.
+
+#### Scenario: Log-only child cannot satisfy closure
+- GIVEN a manifest that includes diagnostic logs for a child workflow but omits the canonical child receipt
+- WHEN closure validation runs
+- THEN validation rejects the manifest as incomplete
+- AND logs remain diagnostic-only evidence.

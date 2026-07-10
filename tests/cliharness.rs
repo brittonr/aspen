@@ -15,3 +15,4 @@ include!("parts/cliharness/p013/body.rs");
 include!("parts/cliharness/p014/body.rs");
 include!("parts/cliharness/p015/body.rs");
 include!("parts/cliharness/p016/body.rs");
+include!("parts/cliharness/p017/body.rs");

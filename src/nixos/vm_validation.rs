@@ -64,7 +64,19 @@ const SOAK_RUN_TOPOLOGY_INDEX: usize = 3;
 const SOAK_RUN_NODE_EVIDENCE_INDEX: usize = 5;
 const SOAK_RUN_REPLAY_INDEX: usize = 15;
 const SOAK_RUN_CAVEATS_INDEX: usize = 18;
+const SHARD_RUN_ARITY: usize = 14;
+const SHARD_RUN_DECISION_INDEX: usize = 1;
+const AGGREGATE_ARITY: usize = 10;
+const AGGREGATE_DECISION_INDEX: usize = 1;
 const MAX_VM_VALIDATION_ITEMS: usize = 512;
+const CHILD_RECEIPT_CLASSES: &[&str] = &[
+    "nixos-vm-fault-receipt-v1",
+    "nixos-vm-network-control-probe-v1",
+    "nixos-vm-test-run-v1",
+    "nixos-vm-shard-run-v1",
+    "nixos-vm-aggregate-receipt-v1",
+];
+const UNKNOWN_CHILD_DECISION: &str = "unknown";
 const _: () = assert!(MAX_VM_VALIDATION_ITEMS > 0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,9 +85,21 @@ pub struct NixosVmEvidenceValidationInput<'a> {
     pub node_evidence_values: &'a [IoValue],
     pub test_run_value: &'a IoValue,
     pub prod_soak_values: &'a [IoValue],
+    pub child_artifact_values: &'a [IoValue],
     pub expected_nodes: &'a [String],
     pub expected_package_ref: Option<&'a str>,
     pub expected_child_refs: &'a [String],
+    pub expected_child_receipts: &'a [NixosVmExpectedChildReceipt],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixosVmExpectedChildReceipt {
+    pub child_ref: String,
+    pub receipt_class: String,
+    pub decision: String,
+    pub node_id: Option<String>,
+    pub peer_id: Option<String>,
+    pub operation_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,6 +141,27 @@ pub struct VmEvidenceManifestEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VmEvidenceManifestRequiredArtifact {
+    pub kind: String,
+    pub content_ref: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VmEvidenceManifestInput<'a> {
+    pub entries: &'a [VmEvidenceManifestEntry],
+    pub required_artifacts: &'a [VmEvidenceManifestRequiredArtifact],
+    pub caveats: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VmEvidenceManifest {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub manifest_ref: String,
+    pub value: IoValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ParsedTopology {
     nodes: Vec<String>,
     package_ref: String,
@@ -144,6 +189,16 @@ struct ParsedTestRun {
     replay_status: String,
     log_refs: Vec<String>,
     caveats: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedChildReceipt {
+    child_ref: String,
+    receipt_class: String,
+    decision: String,
+    node_id: Option<String>,
+    peer_id: Option<String>,
+    operation_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,6 +245,8 @@ pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceValidationInput<'_>) ->
     let test_run_ref = crate::preserves_rail::canonical_hash(input.test_run_value)?;
     let prod_soaks = parse_prod_soaks(input.prod_soak_values)?;
     let prod_soak_refs = canonical_refs(input.prod_soak_values)?;
+    let child_artifacts = parse_child_receipts(input.child_artifact_values)?;
+    let child_artifact_refs = child_artifacts.iter().map(|artifact| artifact.child_ref.clone()).collect::<Vec<_>>();
     let diagnostics = validation_diagnostics(ValidationContext {
         topology: &topology,
         topology_ref: &topology_ref,
@@ -197,9 +254,11 @@ pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceValidationInput<'_>) ->
         node_refs: &node_evidence_refs,
         test_run: &test_run,
         prod_soaks: &prod_soaks,
+        child_artifacts: &child_artifacts,
         expected_nodes: input.expected_nodes,
         expected_package_ref: input.expected_package_ref,
         expected_child_refs: input.expected_child_refs,
+        expected_child_receipts: input.expected_child_receipts,
     })?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
     let value = vm_evidence_validation_value(ValidationValueInput {
@@ -209,6 +268,7 @@ pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceValidationInput<'_>) ->
         node_evidence_refs: &node_evidence_refs,
         test_run_ref: &test_run_ref,
         prod_soak_refs: &prod_soak_refs,
+        child_artifact_refs: &child_artifact_refs,
     })?;
     let validation_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(NixosVmEvidenceValidation {
@@ -248,17 +308,53 @@ pub fn validate_nixos_vm_fault_evidence(
     })
 }
 
+pub fn build_vm_evidence_manifest(input: &VmEvidenceManifestInput<'_>) -> Result<VmEvidenceManifest> {
+    let diagnostics = manifest_closure_diagnostics(input.entries, input.required_artifacts)?;
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
+    let value = vm_evidence_manifest_value_inner(
+        input.entries,
+        input.required_artifacts,
+        &decision,
+        &diagnostics,
+        input.caveats,
+    )?;
+    let manifest_ref = crate::preserves_rail::canonical_hash(&value)?;
+    Ok(VmEvidenceManifest {
+        decision,
+        diagnostics,
+        manifest_ref,
+        value,
+    })
+}
+
 pub fn vm_evidence_manifest_value(entries: &[VmEvidenceManifestEntry], caveats: &[String]) -> Result<IoValue> {
+    vm_evidence_manifest_value_inner(entries, &[], "pass", &[], caveats)
+}
+
+fn vm_evidence_manifest_value_inner(
+    entries: &[VmEvidenceManifestEntry],
+    required_artifacts: &[VmEvidenceManifestRequiredArtifact],
+    decision: &str,
+    diagnostics: &[String],
+    caveats: &[String],
+) -> Result<IoValue> {
     validate_manifest_entries(entries)?;
+    validate_required_artifacts(required_artifacts)?;
+    validate_decision(decision)?;
+    validate_strings("manifest diagnostic", diagnostics)?;
     validate_strings("manifest caveat", caveats)?;
     Ok(record("nixos-vm-evidence-manifest-v1", vec![
         string(VM_EVIDENCE_MANIFEST_SCHEMA),
+        record("decision", vec![string(decision)]),
         record("artifacts", vec![sequence(manifest_entry_values(entries)?)]),
+        record("required-artifacts", vec![sequence(required_artifact_values(required_artifacts)?)]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
         record("caveats", vec![sequence(caveats.iter().map(string).collect())]),
         record("checks", vec![sequence(vec![
             check_value("canonical-evidence-preserved", status(has_authoritative_entries(entries))),
             check_value("diagnostic-logs-marked", status(has_diagnostic_entries(entries))),
             check_value("manifest-does-not-grant-authority", "pass"),
+            check_value("required-artifact-closure", status(diagnostics.is_empty())),
         ])]),
     ]))
 }
@@ -270,9 +366,11 @@ struct ValidationContext<'a> {
     node_refs: &'a [String],
     test_run: &'a ParsedTestRun,
     prod_soaks: &'a [ParsedProdSoakRun],
+    child_artifacts: &'a [ParsedChildReceipt],
     expected_nodes: &'a [String],
     expected_package_ref: Option<&'a str>,
     expected_child_refs: &'a [String],
+    expected_child_receipts: &'a [NixosVmExpectedChildReceipt],
 }
 
 struct ValidationValueInput<'a> {
@@ -282,6 +380,7 @@ struct ValidationValueInput<'a> {
     node_evidence_refs: &'a [String],
     test_run_ref: &'a str,
     prod_soak_refs: &'a [String],
+    child_artifact_refs: &'a [String],
 }
 
 fn validation_diagnostics(input: ValidationContext<'_>) -> Result<Vec<String>> {
@@ -298,7 +397,13 @@ fn validation_diagnostics(input: ValidationContext<'_>) -> Result<Vec<String>> {
     push_if(&mut diagnostics, input.test_run.caveats.is_empty(), "test-run-missing-evidence-only-caveats")?;
     validate_topology_expectations(input.topology, input.expected_nodes, input.expected_package_ref, &mut diagnostics)?;
     validate_node_evidence(input.topology, input.nodes, input.node_refs, input.test_run, &mut diagnostics)?;
-    validate_child_expectations(input.expected_child_refs, &input.test_run.child_refs, &mut diagnostics)?;
+    validate_child_expectations(
+        input.expected_child_refs,
+        &input.test_run.child_refs,
+        input.child_artifacts,
+        input.expected_child_receipts,
+        &mut diagnostics,
+    )?;
     validate_prod_soak_runs(input.topology_ref, input.node_refs, input.prod_soaks, &mut diagnostics)?;
     Ok(diagnostics)
 }
@@ -354,11 +459,91 @@ fn validate_node_evidence(
 fn validate_child_expectations(
     expected_child_refs: &[String],
     actual_child_refs: &[String],
+    child_artifacts: &[ParsedChildReceipt],
+    expected_child_receipts: &[NixosVmExpectedChildReceipt],
     diagnostics: &mut Vec<String>,
 ) -> Result<()> {
-    let actual = actual_child_refs.iter().map(String::as_str).collect::<OrderedSet<_>>();
+    let mut actual = OrderedSet::new();
+    for child_ref in actual_child_refs {
+        if !actual.insert(child_ref.as_str()) {
+            push_diagnostic(diagnostics, format!("duplicate-child-ref:{child_ref}"))?;
+        }
+    }
+    let expected = expected_child_refs.iter().map(String::as_str).collect::<OrderedSet<_>>();
     for child_ref in expected_child_refs {
         push_if(diagnostics, !actual.contains(child_ref.as_str()), "expected-child-ref-missing")?;
+    }
+    if !expected.is_empty() {
+        for child_ref in actual_child_refs {
+            push_if(diagnostics, !expected.contains(child_ref.as_str()), "undeclared-child-ref-present")?;
+        }
+    }
+
+    let artifacts_by_ref = child_artifacts
+        .iter()
+        .map(|artifact| (artifact.child_ref.as_str(), artifact))
+        .collect::<OrderedMap<_, _>>();
+    for artifact in child_artifacts {
+        push_if(diagnostics, !actual.contains(artifact.child_ref.as_str()), "child-artifact-not-bound-by-test-run")?;
+    }
+    for expectation in expected_child_receipts {
+        validate_expected_child_receipt(expectation)?;
+        let Some(artifact) = artifacts_by_ref.get(expectation.child_ref.as_str()) else {
+            push_diagnostic(diagnostics, format!("expected-child-receipt-artifact-missing:{}", expectation.child_ref))?;
+            continue;
+        };
+        push_if(
+            diagnostics,
+            artifact.receipt_class != expectation.receipt_class,
+            "expected-child-receipt-class-mismatch",
+        )?;
+        push_if(diagnostics, artifact.decision != expectation.decision, "expected-child-receipt-decision-mismatch")?;
+        validate_optional_child_binding(
+            diagnostics,
+            &artifact.node_id,
+            expectation.node_id.as_deref(),
+            "expected-child-receipt-node-mismatch",
+        )?;
+        validate_optional_child_binding(
+            diagnostics,
+            &artifact.peer_id,
+            expectation.peer_id.as_deref(),
+            "expected-child-receipt-peer-mismatch",
+        )?;
+        validate_optional_child_binding(
+            diagnostics,
+            &artifact.operation_id,
+            expectation.operation_id.as_deref(),
+            "expected-child-receipt-operation-mismatch",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_expected_child_receipt(expectation: &NixosVmExpectedChildReceipt) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(&expectation.child_ref)?;
+    validate_text("expected child receipt class", &expectation.receipt_class)?;
+    validate_text("expected child decision", &expectation.decision)?;
+    if let Some(node_id) = &expectation.node_id {
+        validate_text("expected child node", node_id)?;
+    }
+    if let Some(peer_id) = &expectation.peer_id {
+        validate_text("expected child peer", peer_id)?;
+    }
+    if let Some(operation_id) = &expectation.operation_id {
+        validate_text("expected child operation", operation_id)?;
+    }
+    Ok(())
+}
+
+fn validate_optional_child_binding(
+    diagnostics: &mut Vec<String>,
+    actual: &Option<String>,
+    expected: Option<&str>,
+    diagnostic: &'static str,
+) -> Result<()> {
+    if let Some(expected_value) = expected {
+        push_if(diagnostics, actual.as_deref() != Some(expected_value), diagnostic)?;
     }
     Ok(())
 }
@@ -552,6 +737,72 @@ fn parse_test_run(value: &IoValue) -> Result<ParsedTestRun> {
     })
 }
 
+fn parse_child_receipts(values: &[IoValue]) -> Result<Vec<ParsedChildReceipt>> {
+    if values.len() > MAX_VM_VALIDATION_ITEMS {
+        return Err(MoltenError::invalid_harness(format!(
+            "VM child artifact count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
+            values.len()
+        )));
+    }
+    let mut receipts = Vec::with_capacity(values.len());
+    let mut refs = OrderedSet::new();
+    for value in values {
+        let receipt = parse_child_receipt(value)?;
+        if !refs.insert(receipt.child_ref.clone()) {
+            return Err(MoltenError::invalid_harness(format!("duplicate VM child artifact ref {}", receipt.child_ref)));
+        }
+        receipts.push(receipt);
+    }
+    Ok(receipts)
+}
+
+fn parse_child_receipt(value: &IoValue) -> Result<ParsedChildReceipt> {
+    let child_ref = crate::preserves_rail::canonical_hash(value)?;
+    let receipt_class = child_receipt_class(value).to_string();
+    let decision = child_receipt_decision(value).unwrap_or_else(|| UNKNOWN_CHILD_DECISION.to_string());
+    Ok(ParsedChildReceipt {
+        child_ref,
+        receipt_class,
+        decision,
+        node_id: None,
+        peer_id: None,
+        operation_id: child_receipt_operation_id(value),
+    })
+}
+
+fn child_receipt_class(value: &IoValue) -> &'static str {
+    for record_label in CHILD_RECEIPT_CLASSES {
+        if value.collect_simple_record(record_label, None).is_some() {
+            return record_label;
+        }
+    }
+    crate::ledger::artifact_kind(value)
+}
+
+fn child_receipt_decision(value: &IoValue) -> Option<String> {
+    if let Ok(run) = simple_record(value, "nixos-vm-test-run-v1", TEST_RUN_ARITY) {
+        return required_record_string(&run[TEST_RUN_DECISION_INDEX], "decision", "test run decision").ok();
+    }
+    if let Ok(receipt) = simple_record(value, "nixos-vm-fault-receipt-v1", FAULT_RECEIPT_ARITY) {
+        return required_record_string(&receipt[FAULT_RECEIPT_DECISION_INDEX], "decision", "fault receipt decision")
+            .ok();
+    }
+    if let Ok(shard) = simple_record(value, "nixos-vm-shard-run-v1", SHARD_RUN_ARITY) {
+        return required_record_string(&shard[SHARD_RUN_DECISION_INDEX], "decision", "shard run decision").ok();
+    }
+    if let Ok(aggregate) = simple_record(value, "nixos-vm-multinode-aggregate-v1", AGGREGATE_ARITY) {
+        return required_record_string(&aggregate[AGGREGATE_DECISION_INDEX], "decision", "aggregate decision").ok();
+    }
+    None
+}
+
+fn child_receipt_operation_id(value: &IoValue) -> Option<String> {
+    if let Ok(receipt) = simple_record(value, "nixos-vm-fault-receipt-v1", FAULT_RECEIPT_ARITY) {
+        return required_record_string(&receipt[FAULT_RECEIPT_DESCRIPTOR_INDEX], "descriptor", "fault descriptor").ok();
+    }
+    None
+}
+
 fn parse_fault_descriptors(values: &[IoValue]) -> Result<Vec<ParsedFaultDescriptor>> {
     if values.len() > MAX_VM_VALIDATION_ITEMS {
         return Err(MoltenError::invalid_harness(format!(
@@ -693,6 +944,8 @@ fn vm_evidence_validation_value(input: ValidationValueInput<'_>) -> Result<IoVal
     crate::preserves_rail::validate_content_ref(input.test_run_ref)?;
     validate_ref_list("node evidence", input.node_evidence_refs)?;
     validate_ref_list("prod soak", input.prod_soak_refs)?;
+    validate_ref_list("child artifact", input.child_artifact_refs)?;
+    validate_decision(input.decision)?;
     validate_strings("validation diagnostic", input.diagnostics)?;
     Ok(record("nixos-vm-evidence-validation-v1", vec![
         string(VM_EVIDENCE_VALIDATION_SCHEMA),
@@ -701,12 +954,14 @@ fn vm_evidence_validation_value(input: ValidationValueInput<'_>) -> Result<IoVal
         record("node-evidence", vec![sequence(input.node_evidence_refs.iter().map(string).collect())]),
         record("test-run", vec![string(input.test_run_ref)]),
         record("prod-soak", vec![sequence(input.prod_soak_refs.iter().map(string).collect())]),
+        record("child-artifacts", vec![sequence(input.child_artifact_refs.iter().map(string).collect())]),
         record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
         record("checks", vec![sequence(vec![
             check_value("canonical-receipts-parsed", "pass"),
             check_value("topology-bound", status(input.decision == "pass")),
             check_value("logs-diagnostic-only", "pass"),
             check_value("evidence-does-not-grant-authority", "pass"),
+            check_value("child-receipts-bound", status(input.decision == "pass")),
         ])]),
     ]))
 }
@@ -771,6 +1026,52 @@ fn validate_manifest_entries(entries: &[VmEvidenceManifestEntry]) -> Result<()> 
     Ok(())
 }
 
+fn validate_required_artifacts(required_artifacts: &[VmEvidenceManifestRequiredArtifact]) -> Result<()> {
+    if required_artifacts.len() > MAX_VM_VALIDATION_ITEMS {
+        return Err(MoltenError::invalid_harness(format!(
+            "VM required artifact count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
+            required_artifacts.len()
+        )));
+    }
+    for artifact in required_artifacts {
+        validate_text("required artifact kind", &artifact.kind)?;
+        crate::preserves_rail::validate_content_ref(&artifact.content_ref)?;
+    }
+    Ok(())
+}
+
+fn manifest_closure_diagnostics(
+    entries: &[VmEvidenceManifestEntry],
+    required_artifacts: &[VmEvidenceManifestRequiredArtifact],
+) -> Result<Vec<String>> {
+    validate_manifest_entries(entries)?;
+    validate_required_artifacts(required_artifacts)?;
+    let mut diagnostics = Vec::new();
+    let mut semantic_artifacts = OrderedSet::new();
+    let mut entries_by_ref = OrderedMap::new();
+    for entry in entries {
+        if !semantic_artifacts.insert((entry.kind.as_str(), entry.content_ref.as_str())) {
+            push_diagnostic(
+                &mut diagnostics,
+                format!("duplicate-semantic-artifact:{}:{}", entry.kind, entry.content_ref),
+            )?;
+        }
+        entries_by_ref.insert(entry.content_ref.as_str(), entry);
+    }
+    for required in required_artifacts {
+        let Some(entry) = entries_by_ref.get(required.content_ref.as_str()) else {
+            push_diagnostic(
+                &mut diagnostics,
+                format!("required-artifact-missing:{}:{}", required.kind, required.content_ref),
+            )?;
+            continue;
+        };
+        push_if(&mut diagnostics, entry.kind != required.kind, "required-artifact-kind-mismatch")?;
+        push_if(&mut diagnostics, entry.diagnostic_only, "required-artifact-only-present-as-diagnostic")?;
+    }
+    Ok(diagnostics)
+}
+
 fn manifest_entry_values(entries: &[VmEvidenceManifestEntry]) -> Result<Vec<IoValue>> {
     let mut values = Vec::with_capacity(entries.len());
     for entry in entries {
@@ -779,6 +1080,19 @@ fn manifest_entry_values(entries: &[VmEvidenceManifestEntry]) -> Result<Vec<IoVa
             record("kind", vec![string(&entry.kind)]),
             record("ref", vec![string(&entry.content_ref)]),
             record("diagnostic-only", vec![crate::preserves_rail::bool_value(entry.diagnostic_only)]),
+        ]));
+    }
+    Ok(values)
+}
+
+fn required_artifact_values(required_artifacts: &[VmEvidenceManifestRequiredArtifact]) -> Result<Vec<IoValue>> {
+    let mut values = Vec::with_capacity(required_artifacts.len());
+    for artifact in required_artifacts {
+        validate_text("required artifact kind", &artifact.kind)?;
+        crate::preserves_rail::validate_content_ref(&artifact.content_ref)?;
+        values.push(record("required-artifact", vec![
+            record("kind", vec![string(&artifact.kind)]),
+            record("ref", vec![string(&artifact.content_ref)]),
         ]));
     }
     Ok(values)
@@ -916,13 +1230,26 @@ fn validate_text(label: &str, value: &str) -> Result<()> {
     }
 }
 
+fn validate_decision(decision: &str) -> Result<()> {
+    match decision {
+        "pass" | "deny" => Ok(()),
+        other => Err(MoltenError::invalid_harness(format!("unsupported VM decision {other}; expected pass or deny"))),
+    }
+}
+
 fn push_if(diagnostics: &mut Vec<String>, condition: bool, diagnostic: &'static str) -> Result<()> {
     if condition {
-        if diagnostics.len() >= MAX_VM_VALIDATION_ITEMS {
-            return Err(MoltenError::invalid_harness("VM validation diagnostics exceeded bound"));
-        }
-        diagnostics.push(diagnostic.to_string());
+        push_diagnostic(diagnostics, diagnostic.to_string())?;
     }
+    Ok(())
+}
+
+fn push_diagnostic(diagnostics: &mut Vec<String>, diagnostic: String) -> Result<()> {
+    validate_text("diagnostic", &diagnostic)?;
+    if diagnostics.len() >= MAX_VM_VALIDATION_ITEMS {
+        return Err(MoltenError::invalid_harness("VM validation diagnostics exceeded bound"));
+    }
+    diagnostics.push(diagnostic);
     Ok(())
 }
 
@@ -1026,9 +1353,11 @@ mod tests {
             node_evidence_values: &nodes,
             test_run_value: &run,
             prod_soak_values: &[],
+            child_artifact_values: &[],
             expected_nodes: &[NODE_A.to_string(), NODE_B.to_string()],
             expected_package_ref: None,
             expected_child_refs: &child_refs,
+            expected_child_receipts: &[],
         })
         .expect("VM validation");
         assert_eq!(validation.decision, "pass");
@@ -1046,9 +1375,11 @@ mod tests {
             node_evidence_values: &nodes,
             test_run_value: &run,
             prod_soak_values: &[],
+            child_artifact_values: &[],
             expected_nodes: &[NODE_A.to_string(), NODE_B.to_string()],
             expected_package_ref: None,
             expected_child_refs: &child_refs,
+            expected_child_receipts: &[],
         })
         .expect("VM validation");
         assert_eq!(validation.decision, "deny");
@@ -1063,13 +1394,134 @@ mod tests {
             node_evidence_values: &nodes,
             test_run_value: &run,
             prod_soak_values: &[],
+            child_artifact_values: &[],
             expected_nodes: &[NODE_A.to_string(), NODE_B.to_string()],
             expected_package_ref: None,
             expected_child_refs: &child_refs,
+            expected_child_receipts: &[],
         })
         .expect("VM validation");
         assert_eq!(validation.decision, "deny");
         assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic == "vm-test-run-not-pass"));
+    }
+
+    fn shard_child_artifact(topology_ref: &str, node_refs: &[String]) -> crate::nixos_vm::NixosVmShardRunReceipt {
+        crate::nixos_vm::evaluate_vm_shard_run(&crate::nixos_vm::NixosVmShardRunInput {
+            shard_id: "live-control",
+            scenario_fixture_ref: &local_ref("scenario-fixture"),
+            topology_ref,
+            package_ref: &local_ref("package"),
+            node_evidence_refs: node_refs,
+            child_receipt_refs: &[local_ref("operation-receipt")],
+            diagnostic_log_refs: &[local_ref("shard-log")],
+            unavailable: false,
+            claimed_decision: "pass",
+            caveats: &["VM shard evidence is bounded to declared child refs".to_string()],
+        })
+        .expect("shard child artifact")
+    }
+
+    #[test]
+    fn expected_child_receipt_binding_passes_for_declared_artifact() {
+        let (topology, nodes, _, _) = fixture("pass");
+        let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
+        let node_refs = canonical_refs(&nodes).expect("node refs");
+        let shard = shard_child_artifact(&topology_ref, &node_refs);
+        let child_refs = vec![shard.shard_ref.clone()];
+        let run = test_run(&topology_ref, &node_refs, &child_refs, "pass");
+        let expected_child_receipts = vec![NixosVmExpectedChildReceipt {
+            child_ref: shard.shard_ref.clone(),
+            receipt_class: "nixos-vm-shard-run-v1".to_string(),
+            decision: "pass".to_string(),
+            node_id: None,
+            peer_id: None,
+            operation_id: None,
+        }];
+        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceValidationInput {
+            topology_value: &topology,
+            node_evidence_values: &nodes,
+            test_run_value: &run,
+            prod_soak_values: &[],
+            child_artifact_values: &[shard.value],
+            expected_nodes: &[NODE_A.to_string(), NODE_B.to_string()],
+            expected_package_ref: None,
+            expected_child_refs: &child_refs,
+            expected_child_receipts: &expected_child_receipts,
+        })
+        .expect("VM child receipt validation");
+        assert_eq!(validation.decision, "pass");
+        assert!(validation.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn duplicate_or_undeclared_child_refs_deny_vm_validation() {
+        let (topology, nodes, _, _) = fixture("pass");
+        let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
+        let node_refs = canonical_refs(&nodes).expect("node refs");
+        let shard = shard_child_artifact(&topology_ref, &node_refs);
+        let child_refs = vec![shard.shard_ref.clone(), shard.shard_ref.clone()];
+        let expected_child_refs = vec![local_ref("different-child")];
+        let run = test_run(&topology_ref, &node_refs, &child_refs, "pass");
+        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceValidationInput {
+            topology_value: &topology,
+            node_evidence_values: &nodes,
+            test_run_value: &run,
+            prod_soak_values: &[],
+            child_artifact_values: &[shard.value],
+            expected_nodes: &[NODE_A.to_string(), NODE_B.to_string()],
+            expected_package_ref: None,
+            expected_child_refs: &expected_child_refs,
+            expected_child_receipts: &[],
+        })
+        .expect("VM child receipt validation");
+        assert_eq!(validation.decision, "deny");
+        assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic.starts_with("duplicate-child-ref:")));
+        assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic == "undeclared-child-ref-present"));
+        assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic == "expected-child-ref-missing"));
+    }
+
+    #[test]
+    fn mismatched_child_receipt_semantics_deny_vm_validation() {
+        let (topology, nodes, _, _) = fixture("pass");
+        let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
+        let node_refs = canonical_refs(&nodes).expect("node refs");
+        let shard = shard_child_artifact(&topology_ref, &node_refs);
+        let child_refs = vec![shard.shard_ref.clone()];
+        let run = test_run(&topology_ref, &node_refs, &child_refs, "pass");
+        let expected_child_receipts = vec![NixosVmExpectedChildReceipt {
+            child_ref: shard.shard_ref.clone(),
+            receipt_class: "nixos-vm-fault-receipt-v1".to_string(),
+            decision: "deny".to_string(),
+            node_id: Some(NODE_A.to_string()),
+            peer_id: None,
+            operation_id: None,
+        }];
+        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceValidationInput {
+            topology_value: &topology,
+            node_evidence_values: &nodes,
+            test_run_value: &run,
+            prod_soak_values: &[],
+            child_artifact_values: &[shard.value],
+            expected_nodes: &[NODE_A.to_string(), NODE_B.to_string()],
+            expected_package_ref: None,
+            expected_child_refs: &child_refs,
+            expected_child_receipts: &expected_child_receipts,
+        })
+        .expect("VM child receipt validation");
+        assert_eq!(validation.decision, "deny");
+        assert!(
+            validation
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "expected-child-receipt-class-mismatch")
+        );
+        assert!(
+            validation
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "expected-child-receipt-decision-mismatch")
+        );
+        assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic == "expected-child-receipt-node-mismatch"));
     }
 
     #[test]
@@ -1106,6 +1558,89 @@ mod tests {
         let error = vm_evidence_manifest_value(&[duplicate.clone(), duplicate], &[])
             .expect_err("duplicate manifest path must fail");
         assert!(error.to_string().contains("duplicate VM evidence manifest path"));
+    }
+
+    #[test]
+    fn manifest_closure_accepts_required_authoritative_artifacts() {
+        let topology_ref = local_ref("topology-manifest-closure");
+        let entries = vec![
+            VmEvidenceManifestEntry {
+                path: "topology.preserves".to_string(),
+                kind: "nixos-vm-topology".to_string(),
+                content_ref: topology_ref.clone(),
+                diagnostic_only: false,
+            },
+            VmEvidenceManifestEntry {
+                path: "run.log".to_string(),
+                kind: "log".to_string(),
+                content_ref: local_ref("closure-log"),
+                diagnostic_only: true,
+            },
+        ];
+        let required_artifacts = vec![VmEvidenceManifestRequiredArtifact {
+            kind: "nixos-vm-topology".to_string(),
+            content_ref: topology_ref,
+        }];
+        let manifest = build_vm_evidence_manifest(&VmEvidenceManifestInput {
+            entries: &entries,
+            required_artifacts: &required_artifacts,
+            caveats: &["manifest remains evidence-only".to_string()],
+        })
+        .expect("manifest closure");
+        assert_eq!(manifest.decision, "pass");
+        assert!(manifest.diagnostics.is_empty());
+        assert!(crate::preserves_rail::validate_content_ref(&manifest.manifest_ref).is_ok());
+    }
+
+    #[test]
+    fn manifest_closure_denies_missing_wrong_or_log_only_artifacts() {
+        let topology_ref = local_ref("topology-required-as-log-only");
+        let entries = vec![
+            VmEvidenceManifestEntry {
+                path: "topology.log".to_string(),
+                kind: "log".to_string(),
+                content_ref: topology_ref.clone(),
+                diagnostic_only: true,
+            },
+            VmEvidenceManifestEntry {
+                path: "duplicate-a.preserves".to_string(),
+                kind: "nixos-vm-node-evidence".to_string(),
+                content_ref: local_ref("duplicate-semantic"),
+                diagnostic_only: false,
+            },
+            VmEvidenceManifestEntry {
+                path: "duplicate-b.preserves".to_string(),
+                kind: "nixos-vm-node-evidence".to_string(),
+                content_ref: local_ref("duplicate-semantic"),
+                diagnostic_only: false,
+            },
+        ];
+        let required_artifacts = vec![
+            VmEvidenceManifestRequiredArtifact {
+                kind: "nixos-vm-topology".to_string(),
+                content_ref: topology_ref,
+            },
+            VmEvidenceManifestRequiredArtifact {
+                kind: "nixos-vm-test-run".to_string(),
+                content_ref: local_ref("missing-test-run"),
+            },
+        ];
+        let manifest = build_vm_evidence_manifest(&VmEvidenceManifestInput {
+            entries: &entries,
+            required_artifacts: &required_artifacts,
+            caveats: &["manifest remains evidence-only".to_string()],
+        })
+        .expect("manifest closure");
+        assert_eq!(manifest.decision, "deny");
+        assert!(manifest.diagnostics.iter().any(|diagnostic| diagnostic == "required-artifact-kind-mismatch"));
+        assert!(
+            manifest
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "required-artifact-only-present-as-diagnostic")
+        );
+        assert!(manifest.diagnostics.iter().any(|diagnostic| diagnostic.starts_with("required-artifact-missing:")));
+        assert!(manifest.diagnostics.iter().any(|diagnostic| diagnostic.starts_with("duplicate-semantic-artifact:")));
     }
 
     fn fault_descriptor(topology_ref: &str, kind: &str, expected: &str, target_node: &str) -> IoValue {
