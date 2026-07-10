@@ -147,6 +147,10 @@ compat_module!(preserves_rail, codec);
 pub mod launch;
 compat_module!(prod_readiness, launch);
 #[doc(hidden)]
+#[path = "prod/release_profile.rs"]
+pub mod release_profile_core;
+compat_module!(prod_release_profile, release_profile_core);
+#[doc(hidden)]
 #[path = "prod/pilot.rs"]
 pub mod pilot_readiness;
 compat_module!(external_live_pilot, pilot_readiness);

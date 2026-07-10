@@ -2,12 +2,13 @@
 
 These runbooks are evidence-oriented. Terminal output and logs are diagnostics; review uses the canonical Preserves receipts named by each step.
 
-Use a realized content ref such as `blake3:<64 lowercase hex>` for every `*-ref` argument. The placeholder refs below are valid shape examples only.
+Use a realized content ref such as `blake3:<64 lowercase hex>` for every `*-ref` argument. The sample refs below are non-placeholder review fixtures; all-zero, repeated-character, `fixture`, or `placeholder` refs are negative-test material only and fail release-tier validation.
 
 ```sh
-REF0=blake3:0000000000000000000000000000000000000000000000000000000000000000
-REF1=blake3:1111111111111111111111111111111111111111111111111111111111111111
-REF2=blake3:2222222222222222222222222222222222222222222222222222222222222222
+REF0=blake3:8f5174292fe31f8fc364dc8f49560b21581f2cf01e54ae3fe8820c6d90d62f65
+REF1=blake3:2ded4d8475648207836b950368aa4e1037b11b9aeb6f5b939482ad4d859664f7
+REF2=blake3:e6cfe6b85e63f1eb8bbaf271586411e55885b51611497587164fd2c0adf0aed3
+ZERO_REF_NEGATIVE=blake3:0000000000000000000000000000000000000000000000000000000000000000
 ```
 
 ## Deployment profile
@@ -19,7 +20,7 @@ nix develop -c nickel export docs/production-node-profile.ncl > target/productio
 nix build .#checks.$(nix eval --impure --raw --expr builtins.currentSystem).production-profile-fixtures --no-link
 ```
 
-The exported profile root carries `schema_id`, `schema_version`, `source_language`, and `profile_identity` metadata. Bind the reviewed profile content ref into canonical evidence; metadata identifies the profile evidence shape only and grants no authority, source-gate trust, adapter readiness, policy, resource, retention, or transport trust.
+The exported profile root carries `schema_id`, `schema_version`, `source_language`, and `profile_identity` metadata. Bind the reviewed profile content ref into canonical evidence; metadata identifies the profile evidence shape only and grants no authority, source-gate trust, adapter readiness, policy, resource, retention, or transport trust. Treat profiles as one of three review tiers: `development` permits local fixtures only, `pilot` permits bounded operator-readiness evidence with caveats, and `release` requires non-placeholder source-gate, policy, Octet, Cairn, stack-provenance, production-profile, generated-export, and accepted Valence policy hash refs for the exact source candidate.
 
 Named production thresholds live in the contract module: `max_queue_depth`, `max_receipt_bytes`, `max_store_bytes`, `max_delivery_latency_ms`, and `max_recovery_time_ms`. Changing their exported numeric values requires threshold review and fixture expectation updates. Adding adapter, redaction, live-transport, startup, or shutdown vocabulary requires updating the allowed-value contracts plus a negative typo fixture before receipts are refreshed.
 
