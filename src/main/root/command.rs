@@ -8,6 +8,10 @@ pub(super) struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, clap::Subcommand)]
 pub(super) enum Top {
+    Cluster {
+        #[command(subcommand)]
+        command: crate::cli_cluster::ClusterCommand,
+    },
     Test {
         #[command(subcommand)]
         command: Test,

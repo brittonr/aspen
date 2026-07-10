@@ -56,6 +56,7 @@ pub(crate) fn run() -> molten::error::Result<()> {
             println!("{}", molten::greeting());
             Ok(())
         }
+        Some(command::Top::Cluster { command }) => crate::cli_cluster::run(command),
         Some(command::Top::Test { command }) => run_test_command(command),
         Some(command::Top::Dogfood { command }) => crate::cli_dogfood::run_dogfood_command(command),
         Some(command::Top::Receipts { command }) => crate::cli_receipts::run_receipts_command(command),

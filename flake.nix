@@ -1820,7 +1820,7 @@
           ];
 
           shellHook = ''
-            export PATH="$PWD/target/debug:$PATH"
+            export PATH="''${CARGO_TARGET_DIR:-$PWD/target}/debug:$PWD/target/debug:$PATH"
           '';
         };
 

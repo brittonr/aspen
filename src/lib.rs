@@ -36,6 +36,8 @@ compat_module!(capability_tokens, capabilities_core);
 #[path = "coordination/mod.rs"]
 pub mod orchestration;
 compat_module!(coordination, orchestration);
+#[path = "cluster.rs"]
+pub mod cluster;
 #[doc(hidden)]
 #[path = "delivery/idempotency.rs"]
 pub mod dedupe;

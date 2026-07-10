@@ -18,6 +18,11 @@ mod block_port;
 mod cli_chunk {
     pub(crate) use super::block_port::*;
 }
+#[path = "cli/ops/cluster.rs"]
+mod cluster_port;
+mod cli_cluster {
+    pub(crate) use super::cluster_port::*;
+}
 #[path = "cli/workflow/coordination.rs"]
 mod orchestrate_port;
 mod cli_coordination {

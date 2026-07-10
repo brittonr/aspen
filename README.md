@@ -120,6 +120,15 @@ Cairn roadmap status: active production-readiness changes live under `cairn/chan
 
 ## Node runtime daemon
 
+The cluster convenience wrapper initializes and controls per-node state roots while preserving the same node receipts. Use `cargo run -- cluster ...` unless a built `molten` binary is on your `PATH`:
+
+```sh
+cargo run -- cluster init --state-root target/cluster --node node-a --node node-b
+cargo run -- cluster start --state-root target/cluster
+cargo run -- cluster status --state-root target/cluster
+cargo run -- cluster stop --state-root target/cluster
+```
+
 The durable local node boundary is exposed at top level under `molten node`:
 
 ```sh
