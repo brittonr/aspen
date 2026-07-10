@@ -1,4 +1,94 @@
 
+fn cutover_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+    let readiness = evaluate_cutover_readiness(root, plan, task)?;
+    Ok((readiness.decision, readiness.diagnostics, readiness.checks))
+}
+
+fn migration_result(task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+    let has_recipe = task.to_ref.is_some();
+    let has_migration_evidence = !task.postcondition_refs.is_empty();
+    let has_policy = !task.precondition_refs.is_empty();
+    if has_recipe && has_migration_evidence && has_policy {
+        Ok(("pass", Vec::new(), vec![
+            ("schema-or-storage-source-ref-bound", "pass"),
+            ("migration-recipe-bound", "pass"),
+            ("migration-receipt-required", "pass"),
+            ("policy-evidence-bound", "pass"),
+        ]))
+    } else {
+        let mut diagnostics = Vec::new();
+        if !has_recipe {
+            diagnostics.push("migration task lacks executable recipe or target schema ref".to_string());
+        }
+        if !has_migration_evidence {
+            diagnostics.push("migration task lacks migration receipt evidence".to_string());
+        }
+        if !has_policy {
+            diagnostics.push("migration task lacks policy evidence".to_string());
+        }
+        Ok(("deny", diagnostics, vec![
+            ("schema-or-storage-source-ref-bound", pass_fail(task.from_ref.is_some())),
+            ("migration-recipe-bound", pass_fail(has_recipe)),
+            ("migration-receipt-required", pass_fail(has_migration_evidence)),
+            ("policy-evidence-bound", pass_fail(has_policy)),
+        ]))
+    }
+}
+
+fn artifact_update_result(task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+    let has_exact_refs = task.from_ref.is_some() || task.to_ref.is_some();
+    let has_review_evidence = !task.precondition_refs.is_empty() || !task.postcondition_refs.is_empty();
+    if has_exact_refs && has_review_evidence {
+        Ok(("pass", Vec::new(), vec![
+            ("artifact-exact-ref-bound", "pass"),
+            ("artifact-review-evidence", "pass"),
+            ("side-effect-boundary", "pass"),
+        ]))
+    } else {
+        Ok(("deny", vec!["artifact update requires exact artifact refs and review evidence".to_string()], vec![
+            ("artifact-exact-ref-bound", pass_fail(has_exact_refs)),
+            ("artifact-review-evidence", pass_fail(has_review_evidence)),
+            ("side-effect-boundary", "pass"),
+        ]))
+    }
+}
+
+fn protocol_bridge_result(task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+    let has_protocol_refs = task.from_ref.is_some() && task.to_ref.is_some();
+    let has_protocol_evidence = !task.precondition_refs.is_empty() || !task.postcondition_refs.is_empty();
+    if has_protocol_refs && has_protocol_evidence {
+        Ok(("pass", Vec::new(), vec![
+            ("protocol-ref-bound", "pass"),
+            ("protocol-session-gate-bound", "pass"),
+            ("side-effect-boundary", "pass"),
+        ]))
+    } else {
+        Ok(("deny", vec!["protocol bridge requires protocol refs and session gate evidence".to_string()], vec![
+            ("protocol-ref-bound", pass_fail(has_protocol_refs)),
+            ("protocol-session-gate-bound", pass_fail(has_protocol_evidence)),
+            ("side-effect-boundary", "pass"),
+        ]))
+    }
+}
+
+fn policy_or_handler_update_result(task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+    let has_profile_refs = task.from_ref.is_some() && task.to_ref.is_some();
+    let has_policy_evidence = !task.precondition_refs.is_empty() || !task.postcondition_refs.is_empty();
+    if has_profile_refs && has_policy_evidence {
+        Ok(("pass", Vec::new(), vec![
+            ("policy-or-handler-ref-bound", "pass"),
+            ("policy-admission-required", "pass"),
+            ("capability-admission-required", "pass"),
+        ]))
+    } else {
+        Ok(("deny", vec!["policy or handler update requires refs plus policy/capability evidence".to_string()], vec![
+            ("policy-or-handler-ref-bound", pass_fail(has_profile_refs)),
+            ("policy-admission-required", pass_fail(has_policy_evidence)),
+            ("capability-admission-required", pass_fail(has_policy_evidence)),
+        ]))
+    }
+}
+
 fn move_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
     let from_ref =
         task.from_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing from ref"))?;
@@ -28,14 +118,30 @@ fn move_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<Up
 
 fn cleanup_result(root: &Path, ledger_root: &Path, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
     let cleanup_ref = task.to_ref.as_deref().or(task.from_ref.as_deref()).unwrap_or(&task.subject);
+    let has_retention_evidence = !task.precondition_refs.is_empty();
+    let has_dependency_impact_evidence = !task.postcondition_refs.is_empty();
+    if !has_retention_evidence || !has_dependency_impact_evidence {
+        return Ok(("deny", vec![
+            "cleanup requires retention and dependency impact evidence before destructive side effects".to_string(),
+        ], vec![
+            ("retention-evidence-bound", pass_fail(has_retention_evidence)),
+            ("dependency-impact-evidence-bound", pass_fail(has_dependency_impact_evidence)),
+            ("cleanup-safety", "fail"),
+        ]));
+    }
     let cleanup = cleanup_admission(root, ledger_root, cleanup_ref)?;
     if cleanup.decision == "pass" {
-        Ok(("pass", Vec::new(), vec![("cleanup-safety", "pass")]))
+        Ok(("pass", Vec::new(), vec![
+            ("retention-evidence-bound", "pass"),
+            ("dependency-impact-evidence-bound", "pass"),
+            ("cleanup-safety", "pass"),
+        ]))
     } else {
-        Ok(("deny", vec![format!("cleanup denied by receipt {}", cleanup.receipt_ref)], vec![(
-            "cleanup-safety",
-            "fail",
-        )]))
+        Ok(("deny", vec![format!("cleanup denied by receipt {}", cleanup.receipt_ref)], vec![
+            ("retention-evidence-bound", "pass"),
+            ("dependency-impact-evidence-bound", "pass"),
+            ("cleanup-safety", "fail"),
+        ]))
     }
 }
 

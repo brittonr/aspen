@@ -139,12 +139,13 @@ fn validate_plan_input(input: &UpgradePlanInput) -> Result<()> {
     validate_non_empty(&input.reason, "upgrade reason")?;
     validate_non_empty(&input.summary, "upgrade summary")?;
     validate_ref(&input.initiator_ref, "upgrade initiator ref")?;
-    validate_refs(&input.capability_refs, "upgrade capability ref")?;
-    validate_refs(&input.affected_refs, "upgrade affected ref")?;
-    validate_refs(&input.impact_refs, "upgrade impact ref")?;
+    require_non_empty_refs(&input.capability_refs, "upgrade capability refs")?;
+    require_non_empty_refs(&input.affected_refs, "upgrade affected refs")?;
+    require_non_empty_refs(&input.impact_refs, "upgrade impact refs")?;
     validate_refs(&input.rollback_refs, "upgrade rollback ref")?;
-    validate_refs(&input.policy_refs, "upgrade policy ref")?;
-    validate_refs(&input.evidence_refs, "upgrade evidence ref")?;
+    require_non_empty_refs(&input.policy_refs, "upgrade policy refs")?;
+    require_non_empty_refs(&input.evidence_refs, "upgrade evidence refs")?;
+    validate_external_workflow_non_claims(&input.reason, &input.summary)?;
     validate_compatibility(&input.compatibility)?;
     if input.tasks.is_empty() {
         return Err(MoltenError::invalid_harness("upgrade plan must contain at least one task"));
@@ -162,12 +163,13 @@ fn validate_plan_input(input: &UpgradePlanInput) -> Result<()> {
 fn validate_parsed_plan(plan: &UpgradePlan) -> Result<()> {
     validate_non_empty(&plan.session_id, "upgrade session id")?;
     validate_ref(&plan.initiator_ref, "upgrade initiator ref")?;
-    validate_refs(&plan.capability_refs, "upgrade capability ref")?;
-    validate_refs(&plan.affected_refs, "upgrade affected ref")?;
-    validate_refs(&plan.impact_refs, "upgrade impact ref")?;
+    require_non_empty_refs(&plan.capability_refs, "upgrade capability refs")?;
+    require_non_empty_refs(&plan.affected_refs, "upgrade affected refs")?;
+    require_non_empty_refs(&plan.impact_refs, "upgrade impact refs")?;
     validate_refs(&plan.rollback_refs, "upgrade rollback ref")?;
-    validate_refs(&plan.policy_refs, "upgrade policy ref")?;
-    validate_refs(&plan.evidence_refs, "upgrade evidence ref")?;
+    require_non_empty_refs(&plan.policy_refs, "upgrade policy refs")?;
+    require_non_empty_refs(&plan.evidence_refs, "upgrade evidence refs")?;
+    validate_external_workflow_non_claims(&plan.reason, &plan.summary)?;
     validate_compatibility(&plan.compatibility)?;
     if plan.tasks.is_empty() {
         return Err(MoltenError::invalid_harness("upgrade plan must contain at least one task"));
@@ -219,7 +221,8 @@ fn validate_task(task: &UpgradeTask) -> Result<()> {
 
 fn validate_task_shape(kind: &str, from_ref: Option<&str>, to_ref: Option<&str>, reversible: bool) -> Result<()> {
     match kind {
-        "move-name" | "compatibility-alias" | "cutover" | "rollback-pointer" => {
+        "move-name" | "compatibility-alias" | "cutover" | "rollback-pointer" | "replace-artifact" | "migrate-schema"
+        | "update-policy" | "update-handler-profile" | "update-handler-policy" | "install-protocol-bridge" => {
             if from_ref.is_none() || to_ref.is_none() {
                 return Err(MoltenError::invalid_harness(format!("upgrade task kind {kind} requires from/to refs")));
             }
@@ -255,9 +258,9 @@ fn validate_task_kind(kind: &str) -> Result<()> {
 }
 
 fn validate_compatibility(compatibility: &UpgradeCompatibilityWindow) -> Result<()> {
-    validate_refs(&compatibility.old_refs, "compatibility old ref")?;
-    validate_refs(&compatibility.new_refs, "compatibility new ref")?;
-    validate_refs(&compatibility.policy_refs, "compatibility policy ref")?;
+    require_non_empty_refs(&compatibility.old_refs, "compatibility old refs")?;
+    require_non_empty_refs(&compatibility.new_refs, "compatibility new refs")?;
+    require_non_empty_refs(&compatibility.policy_refs, "compatibility policy refs")?;
     let old: BtreeSet<_> = compatibility.old_refs.iter().collect();
     if compatibility.new_refs.iter().any(|new_ref| old.contains(new_ref)) {
         return Err(MoltenError::invalid_harness("compatibility window old/new refs must be explicit and distinct"));

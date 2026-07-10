@@ -93,6 +93,8 @@ pub fn parse_upgrade_plan(value: &IoValue) -> Result<UpgradePlan> {
     require_check(&checks, "canonical-plan-hash", "upgrade plan")?;
     require_check(&checks, "task-status-receipt-backed", "upgrade plan")?;
     require_check(&checks, "names-are-metadata", "upgrade plan")?;
+    require_check(&checks, "structured-session-surfaces", "upgrade plan")?;
+    require_check(&checks, "external-workflows-not-replaced", "upgrade plan")?;
     require_check(&checks, "no-ucm-clone", "upgrade plan")?;
     let plan = UpgradePlan {
         plan_ref: canonical_hash(value)?,
@@ -349,21 +351,14 @@ fn task_result(root: &Path, ledger_root: &Path, plan: &UpgradePlan, task: &Upgra
         "compatibility-alias" => alias_result(root, plan, task),
         "transcript-rerun" => Ok(transcript_result(plan, task)),
         "move-name" => move_result(root, plan, task),
-        "cutover" => {
-            Ok(("pass", Vec::new(), vec![("metadata-cutover", "pass"), ("transcript-gate-before-cutover", "pass")]))
-        }
-        "migrate-storage" => Ok(("pass", Vec::new(), vec![
-            ("typed-storage-migration-recipe-bound", "pass"),
-            ("migration-receipt-required", "pass"),
-        ])),
+        "cutover" => cutover_result(root, plan, task),
+        "migrate-storage" | "migrate-schema" => migration_result(task),
         "cleanup" => cleanup_result(root, ledger_root, task),
         "drain-sessions" => protocol_drain_task_outcome(ledger_root, plan, task),
-        "install-artifact"
-        | "deprecate"
-        | "install-protocol-bridge"
-        | "update-handler-policy"
-        | "update-docs"
-        | "rollback-pointer" => {
+        "replace-artifact" | "install-artifact" | "deprecate" => artifact_update_result(task),
+        "install-protocol-bridge" => protocol_bridge_result(task),
+        "update-policy" | "update-handler-profile" | "update-handler-policy" => policy_or_handler_update_result(task),
+        "update-docs" | "rollback-pointer" => {
             Ok(("pass", Vec::new(), vec![("task-admission", "pass"), ("side-effect-boundary", "pass")]))
         }
         other => Err(MoltenError::invalid_harness(format!(
@@ -385,12 +380,17 @@ fn alias_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<U
     Ok(("pass", Vec::new(), vec![("compatibility-alias", "pass"), ("old-and-new-coexist", "pass")]))
 }
 
-fn transcript_result(plan: &UpgradePlan, task: &UpgradeTask) -> UpgradeTaskOutcome {
-    if task.precondition_refs.is_empty() && plan.evidence_refs.is_empty() {
-        ("deny", vec!["transcript rerun task has no transcript or receipt evidence refs".to_string()], vec![
+fn transcript_result(_plan: &UpgradePlan, task: &UpgradeTask) -> UpgradeTaskOutcome {
+    if task.precondition_refs.is_empty() {
+        ("deny", vec!["transcript rerun task has no transcript, replay, or receipt evidence refs".to_string()], vec![
             ("transcript-evidence", "fail"),
+            ("replay-receipt-required", "fail"),
         ])
     } else {
-        ("pass", Vec::new(), vec![("transcript-evidence", "pass"), ("handler-profile-bound", "pass")])
+        ("pass", Vec::new(), vec![
+            ("transcript-evidence", "pass"),
+            ("replay-receipt-required", "pass"),
+            ("handler-profile-bound", "pass"),
+        ])
     }
 }

@@ -898,6 +898,26 @@
     "scope": "tasks",
     "severity": "high"
   },
+  "function_address_gate": {
+    "accepted_valence_policy_hashes": [
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "allowed_claim_scopes": [
+      "function_address.v1.lifecycle_policy_conformance"
+    ],
+    "mode": "optional",
+    "required_boundary": "Molten consumes Valence, Mantle, and Kamacite function-address evidence for lifecycle and release policy conformance only; it does not prove Rust semantic correctness, compiler correctness, whole-program safety, verifier soundness, runtime authority, or release eligibility",
+    "required_roles": [
+      "function-address-evidence-sidecar",
+      "valence-function-address-evidence-profile",
+      "kamacite-function-address-receipt"
+    ],
+    "required_schemas": [
+      "valence.function-address-evidence.v1",
+      "function-address-evidence-v1",
+      "kamacite.function-address-receipt.v1"
+    ]
+  },
   "gate_policy": {
     "finding": {
       "class": "omission",

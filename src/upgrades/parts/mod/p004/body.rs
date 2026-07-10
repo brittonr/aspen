@@ -141,6 +141,103 @@ fn first_incomplete_prior_task(root: &Path, plan: &UpgradePlan, task_index: usiz
     Ok(None)
 }
 
+fn evaluate_cutover_readiness(
+    root: &Path,
+    plan: &UpgradePlan,
+    task: &UpgradeTask,
+) -> Result<UpgradeCutoverReadinessDecision> {
+    let has_exact_cutover_refs = task.from_ref.is_some() && task.to_ref.is_some();
+    let has_impact_evidence = !plan.impact_refs.is_empty();
+    let has_compatibility =
+        !plan.compatibility.old_refs.is_empty() && !plan.compatibility.new_refs.is_empty() && !plan.compatibility.policy_refs.is_empty();
+    let has_policy = !plan.policy_refs.is_empty();
+    let has_capability = !plan.capability_refs.is_empty();
+    let has_source_gate = !plan.evidence_refs.is_empty();
+    let has_rollback = !plan.rollback_refs.is_empty();
+    let has_transcript_task = plan.tasks.iter().any(|candidate| candidate.kind == "transcript-rerun");
+    let has_replay = task_kind_completed(root, plan, "transcript-rerun")?;
+    let migration_complete = task_kind_completed_or_absent(root, plan, &["migrate-schema", "migrate-storage"])?;
+    let protocol_complete = task_kind_completed_or_absent(root, plan, &["drain-sessions"])?;
+    let is_ready = has_exact_cutover_refs
+        && has_impact_evidence
+        && has_compatibility
+        && has_policy
+        && has_capability
+        && has_source_gate
+        && has_rollback
+        && has_transcript_task
+        && has_replay
+        && migration_complete
+        && protocol_complete;
+    let mut diagnostics = Vec::new();
+    push_cutover_diagnostic(&mut diagnostics, has_exact_cutover_refs, "cutover requires exact from/to refs")?;
+    push_cutover_diagnostic(&mut diagnostics, has_impact_evidence, "cutover requires dependency impact evidence")?;
+    push_cutover_diagnostic(&mut diagnostics, has_compatibility, "cutover requires compatibility evidence")?;
+    push_cutover_diagnostic(&mut diagnostics, has_policy, "cutover requires policy evidence")?;
+    push_cutover_diagnostic(&mut diagnostics, has_capability, "cutover requires capability evidence")?;
+    push_cutover_diagnostic(&mut diagnostics, has_source_gate, "cutover requires source-gate, provenance, build, or review evidence")?;
+    push_cutover_diagnostic(&mut diagnostics, has_rollback, "cutover requires rollback strategy refs")?;
+    push_cutover_diagnostic(&mut diagnostics, has_transcript_task, "cutover requires transcript replay task")?;
+    push_cutover_diagnostic(&mut diagnostics, has_replay, "cutover requires passing replay receipt")?;
+    push_cutover_diagnostic(&mut diagnostics, migration_complete, "cutover requires completed migration receipts")?;
+    push_cutover_diagnostic(&mut diagnostics, protocol_complete, "cutover requires completed protocol session drain")?;
+    Ok(UpgradeCutoverReadinessDecision {
+        decision: if is_ready { "pass" } else { "deny" },
+        diagnostics,
+        checks: vec![
+            ("exact-cutover-refs-bound", pass_fail(has_exact_cutover_refs)),
+            ("impact-query-bound", pass_fail(has_impact_evidence)),
+            ("compatibility-bound", pass_fail(has_compatibility)),
+            ("policy-evidence-bound", pass_fail(has_policy)),
+            ("capability-evidence-bound", pass_fail(has_capability)),
+            ("source-gate-bound", pass_fail(has_source_gate)),
+            ("rollback-strategy-bound", pass_fail(has_rollback)),
+            ("replay-receipt-bound", pass_fail(has_replay)),
+            ("migration-receipt-bound", pass_fail(migration_complete)),
+            ("protocol-session-drain-bound", pass_fail(protocol_complete)),
+            ("metadata-cutover", pass_fail(is_ready)),
+        ],
+    })
+}
+
+fn task_kind_completed_or_absent(root: &Path, plan: &UpgradePlan, kinds: &[&str]) -> Result<bool> {
+    let tasks: Vec<_> = plan.tasks.iter().filter(|task| kinds.contains(&task.kind.as_str())).collect();
+    if tasks.is_empty() {
+        return Ok(true);
+    }
+    for task in tasks {
+        if read_status_receipt_ref(root, plan, &task.task_id)?.is_none() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn task_kind_completed(root: &Path, plan: &UpgradePlan, kind: &str) -> Result<bool> {
+    let tasks: Vec<_> = plan.tasks.iter().filter(|task| task.kind == kind).collect();
+    if tasks.is_empty() {
+        return Ok(false);
+    }
+    for task in tasks {
+        if read_status_receipt_ref(root, plan, &task.task_id)?.is_none() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn push_cutover_diagnostic(diagnostics: &mut Vec<String>, condition: bool, diagnostic: &str) -> Result<()> {
+    if !condition {
+        push_bounded(
+            diagnostics,
+            diagnostic.to_string(),
+            MAX_UPGRADE_DIAGNOSTICS,
+            "upgrade cutover diagnostics",
+        )?;
+    }
+    Ok(())
+}
+
 fn evaluate_upgrade_no_mutation_boundary(
     input: &UpgradeMutationBoundaryInput<'_>,
 ) -> Result<UpgradeMutationBoundaryDecision> {
@@ -245,7 +342,27 @@ fn read_status_receipt_ref(root: &Path, plan: &UpgradePlan, task_id: &str) -> Re
     }
     let receipt_ref = fs::read_to_string(path).map_err(MoltenError::from)?;
     validate_ref(&receipt_ref, "upgrade task status receipt ref")?;
-    Ok(Some(receipt_ref))
+    let Ok(receipt) = read_stored_receipt(root, &receipt_ref) else {
+        return Ok(None);
+    };
+    if receipt.decision == "pass" && receipt.plan_ref == plan.plan_ref && receipt.task_id.as_deref() == Some(task_id) {
+        Ok(Some(receipt_ref))
+    } else {
+        Ok(None)
+    }
+}
+
+fn read_stored_receipt(root: &Path, receipt_ref: &str) -> Result<UpgradeReceipt> {
+    validate_ref(receipt_ref, "upgrade stored receipt ref")?;
+    let receipt = parse_upgrade_receipt(&read_preserves(&receipt_path(root, receipt_ref)?)?)?;
+    if receipt.receipt_ref == receipt_ref {
+        Ok(receipt)
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "upgrade stored receipt hash mismatch: expected {receipt_ref}, got {}",
+            receipt.receipt_ref
+        )))
+    }
 }
 
 fn read_name_pointers(root: &Path) -> Result<Vec<NamePointer>> {

@@ -242,6 +242,15 @@ let PositiveNumber = Prelude.contracts.PositiveInteger in
     required_boundary | NonEmptyString,
   },
 
+  FunctionAddressPolicy = {
+    mode | StackProvenanceGateMode,
+    allowed_claim_scopes | NonEmptyUniqueStringArray | Array NonEmptyString,
+    accepted_valence_policy_hashes | UniqueStringArray | Array Blake3HexContract | default = [],
+    required_roles | NonEmptyUniqueStringArray | Array NonEmptyString,
+    required_schemas | NonEmptyUniqueStringArray | Array NonEmptyString,
+    required_boundary | NonEmptyString,
+  },
+
   RuntimeEvidencePolicy = {
     allowed_capture_origins | NonEmptyUniqueStringArray | Array RuntimeCaptureOrigin,
     allowed_hash_algorithms | NonEmptyUniqueStringArray | Array Blake3Algorithm,
@@ -409,6 +418,7 @@ let PositiveNumber = Prelude.contracts.PositiveInteger in
     steel_orchestration_policy | SteelOrchestrationPolicy,
     traceability_policy | TraceabilityPolicy,
     stack_provenance_gate | StackProvenancePolicy,
+    function_address_gate | FunctionAddressPolicy,
     runtime_evidence_policy | RuntimeEvidencePolicy,
     structured_lifecycle | StructuredLifecycle | default = {},
     probe_policy | ProbePolicy,

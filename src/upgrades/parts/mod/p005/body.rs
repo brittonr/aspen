@@ -175,6 +175,40 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
     Ok(())
 }
 
+fn require_non_empty_refs(refs: &[String], field: &str) -> Result<()> {
+    if refs.is_empty() {
+        return Err(MoltenError::invalid_harness(format!("{field} cannot be empty")));
+    }
+    validate_refs(refs, field)
+}
+
+fn validate_external_workflow_non_claims(reason: &str, summary: &str) -> Result<()> {
+    let claim = format!("{reason}\n{summary}").to_ascii_lowercase();
+    let forbidden_claims = [
+        "compatible with ucm",
+        "ucm compatible",
+        "ucm-compatible",
+        "replace git",
+        "replaces git",
+        "replace cargo",
+        "replaces cargo",
+        "replace nix",
+        "replaces nix",
+        "replace cairn",
+        "replaces cairn",
+        "replace human review",
+        "replaces human review",
+    ];
+    for forbidden in forbidden_claims {
+        if claim.contains(forbidden) {
+            return Err(MoltenError::invalid_harness(format!(
+                "upgrade sessions are coordination evidence only and do not replace external workflows or claim UCM compatibility: {forbidden}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/upgrades/parts/mod/tests/m000/p000/body.rs"));

@@ -32,12 +32,16 @@ mod fs {
 
 pub const SUPPORTED_TASK_KINDS: &[&str] = &[
     "install-artifact",
+    "replace-artifact",
     "move-name",
     "compatibility-alias",
     "deprecate",
+    "migrate-schema",
     "migrate-storage",
     "install-protocol-bridge",
     "drain-sessions",
+    "update-policy",
+    "update-handler-profile",
     "update-handler-policy",
     "transcript-rerun",
     "update-docs",
@@ -148,6 +152,13 @@ struct UpgradeMutationBoundaryInput<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct UpgradeMutationBoundaryDecision {
+    diagnostics: Vec<String>,
+    checks: Vec<UpgradeCheckPair>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UpgradeCutoverReadinessDecision {
+    decision: &'static str,
     diagnostics: Vec<String>,
     checks: Vec<UpgradeCheckPair>,
 }
@@ -335,6 +346,8 @@ pub fn upgrade_plan_value(input: &UpgradePlanInput) -> Result<IoValue> {
             "compatibility-window-explicit",
             "policy-admission-required",
             "strict-octet-source-gate-bound",
+            "structured-session-surfaces",
+            "external-workflows-not-replaced",
             "no-ucm-clone",
         ]),
     ]))

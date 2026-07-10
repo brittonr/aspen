@@ -127,6 +127,188 @@
     }
 
     #[test]
+    fn structured_session_artifacts_cover_supported_surfaces_and_non_claims() {
+        let old = test_ref("surface-old");
+        let new = test_ref("surface-new");
+        let plan_value = upgrade_plan_value(&UpgradePlanInput {
+            session_id: "session-structured-surfaces".to_string(),
+            reason: "structured surfaces".to_string(),
+            summary: "coordinate artifact schema policy handler transcript and cleanup rails".to_string(),
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            affected_refs: vec![old.clone(), new.clone()],
+            impact_refs: vec![old.clone()],
+            tasks: vec![
+                surface_task("replace-artifact", "replace", &old, &new),
+                surface_task("migrate-schema", "schema", &old, &new),
+                surface_task("update-policy", "policy", &old, &new),
+                surface_task("update-handler-profile", "handler", &old, &new),
+                UpgradeTaskInput {
+                    task_id: "cleanup".to_string(),
+                    kind: "cleanup".to_string(),
+                    subject: "cleanup".to_string(),
+                    from_ref: Some(old.clone()),
+                    to_ref: None,
+                    precondition_refs: vec![test_ref("retention-evidence")],
+                    postcondition_refs: vec![test_ref("impact-evidence")],
+                    reversible: false,
+                },
+            ],
+            compatibility: UpgradeCompatibilityWindow {
+                old_refs: vec![old.clone()],
+                new_refs: vec![new],
+                expires_at: None,
+                policy_refs: vec![test_ref("compat-policy")],
+            },
+            rollback_refs: vec![old],
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![test_ref("review-evidence")],
+            source_gate_receipt_values: source_gate_values(),
+        })
+        .expect("structured surface plan");
+        let plan = parse_upgrade_plan(&plan_value).expect("parse structured plan");
+        assert!(plan.checks.contains(&"structured-session-surfaces".to_string()));
+        assert!(plan.checks.contains(&"external-workflows-not-replaced".to_string()));
+
+        let denied = upgrade_plan_value(&UpgradePlanInput {
+            session_id: "session-bad-claim".to_string(),
+            reason: "compatible with UCM".to_string(),
+            summary: "replace git and human review".to_string(),
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            affected_refs: vec![test_ref("old")],
+            impact_refs: vec![test_ref("old")],
+            tasks: vec![UpgradeTaskInput {
+                task_id: "transcript".to_string(),
+                kind: "transcript-rerun".to_string(),
+                subject: "transcript".to_string(),
+                from_ref: None,
+                to_ref: None,
+                precondition_refs: vec![test_ref("transcript")],
+                postcondition_refs: Vec::new(),
+                reversible: true,
+            }],
+            compatibility: UpgradeCompatibilityWindow {
+                old_refs: vec![test_ref("old")],
+                new_refs: vec![test_ref("new")],
+                expires_at: None,
+                policy_refs: vec![test_ref("compat-policy")],
+            },
+            rollback_refs: vec![test_ref("old")],
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![test_ref("review-evidence")],
+            source_gate_receipt_values: source_gate_values(),
+        })
+        .expect_err("UCM/source-control replacement claim denied");
+        assert!(denied.to_string().contains("UCM compatibility"), "{denied}");
+    }
+
+    #[test]
+    fn task_status_requires_matching_receipt_not_checkbox_metadata() {
+        let root = temp_dir("upgrade-status-receipt-backed");
+        let store = root.join("upgrades");
+        let old = test_ref("old");
+        let new = test_ref("new");
+        let plan_value = cutover_plan_value(&old, &new, vec![transcript_task_input("transcript", true)]);
+        let created = create_session(&store, &plan_value).expect("create session");
+        let fake_status_path = status_path(&store, &created.plan.session_id, "transcript").expect("status path");
+        if let Some(parent) = fake_status_path.parent() {
+            fs::create_dir_all(parent).expect("status parent");
+        }
+        fs::write(fake_status_path, test_ref("fake-checkbox-receipt")).expect("write fake status");
+        let cutover = execute_task(&store, &root.join("ledger"), &created.plan.plan_ref, "cutover")
+            .expect("cutover denied for fake status");
+        assert_eq!(cutover.receipt.decision, "deny");
+        assert!(to_text(&cutover.receipt.value).expect("cutover text").contains("transcript"));
+    }
+
+    #[test]
+    fn cutover_denies_failed_replay_and_incomplete_migration_receipts() {
+        let root = temp_dir("upgrade-cutover-denials");
+        let failed_store = root.join("failed-replay");
+        let old = test_ref("old");
+        let new = test_ref("new");
+        let failed_plan = cutover_plan_value(&old, &new, vec![transcript_task_input("transcript", false)]);
+        let failed_created = create_session(&failed_store, &failed_plan).expect("create failed replay plan");
+        let replay = execute_task(&failed_store, &root.join("ledger"), &failed_created.plan.plan_ref, "transcript")
+            .expect("execute failed replay");
+        assert_eq!(replay.receipt.decision, "deny");
+        assert!(to_text(&replay.receipt.value).expect("replay text").contains("transcript-evidence"));
+        let cutover = execute_task(&failed_store, &root.join("ledger"), &failed_created.plan.plan_ref, "cutover")
+            .expect("cutover denied after failed replay");
+        assert_eq!(cutover.receipt.decision, "deny");
+
+        let migration_store = root.join("incomplete-migration");
+        let migration_plan = cutover_plan_value(&old, &new, vec![
+            transcript_task_input("transcript", true),
+            UpgradeTaskInput {
+                task_id: "migrate".to_string(),
+                kind: "migrate-storage".to_string(),
+                subject: "profiles".to_string(),
+                from_ref: Some(old.clone()),
+                to_ref: Some(test_ref("migration-recipe")),
+                precondition_refs: vec![test_ref("migration-policy")],
+                postcondition_refs: Vec::new(),
+                reversible: false,
+            },
+        ]);
+        let migration_created = create_session(&migration_store, &migration_plan).expect("create migration plan");
+        execute_task(&migration_store, &root.join("ledger"), &migration_created.plan.plan_ref, "transcript")
+            .expect("execute transcript");
+        let migrate = execute_task(&migration_store, &root.join("ledger"), &migration_created.plan.plan_ref, "migrate")
+            .expect("execute incomplete migration");
+        assert_eq!(migrate.receipt.decision, "deny");
+        assert!(to_text(&migrate.receipt.value).expect("migration text").contains("migration receipt"));
+        let cutover = execute_task(&migration_store, &root.join("ledger"), &migration_created.plan.plan_ref, "cutover")
+            .expect("cutover denied after incomplete migration");
+        assert_eq!(cutover.receipt.decision, "deny");
+    }
+
+    #[test]
+    fn cleanup_task_requires_retention_and_dependency_impact_evidence() {
+        let root = temp_dir("upgrade-cleanup-evidence");
+        let store = root.join("upgrades");
+        let ledger_root = root.join("ledger");
+        let artifact = crate::ledger::import_artifact(&ledger_root, &parse_text("<old-artifact>").expect("artifact"))
+            .expect("import artifact")
+            .artifact_ref;
+        let plan_value = upgrade_plan_value(&UpgradePlanInput {
+            session_id: "session-cleanup".to_string(),
+            reason: "cleanup".to_string(),
+            summary: "cleanup needs retention evidence".to_string(),
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            affected_refs: vec![artifact.clone()],
+            impact_refs: vec![artifact.clone()],
+            tasks: vec![UpgradeTaskInput {
+                task_id: "cleanup".to_string(),
+                kind: "cleanup".to_string(),
+                subject: "cleanup".to_string(),
+                from_ref: Some(artifact.clone()),
+                to_ref: None,
+                precondition_refs: Vec::new(),
+                postcondition_refs: Vec::new(),
+                reversible: false,
+            }],
+            compatibility: UpgradeCompatibilityWindow {
+                old_refs: vec![artifact.clone()],
+                new_refs: vec![test_ref("replacement")],
+                expires_at: None,
+                policy_refs: vec![test_ref("compat-policy")],
+            },
+            rollback_refs: vec![artifact],
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![test_ref("review-evidence")],
+            source_gate_receipt_values: source_gate_values(),
+        })
+        .expect("cleanup plan");
+        let created = create_session(&store, &plan_value).expect("create cleanup plan");
+        let cleanup = execute_task(&store, &ledger_root, &created.plan.plan_ref, "cleanup").expect("cleanup denied");
+        assert_eq!(cleanup.receipt.decision, "deny");
+        assert!(to_text(&cleanup.receipt.value).expect("cleanup text").contains("retention"));
+    }
+
+    #[test]
     fn upgrade_plan_requires_valid_source_gate_receipt_content() {
         let base_input = || UpgradePlanInput {
             session_id: "session-source-gate".to_string(),

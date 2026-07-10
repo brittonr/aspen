@@ -209,6 +209,66 @@
         }
     }
 
+    fn surface_task(kind: &str, task_id: &str, from_ref: &str, to_ref: &str) -> UpgradeTaskInput {
+        UpgradeTaskInput {
+            task_id: task_id.to_string(),
+            kind: kind.to_string(),
+            subject: task_id.to_string(),
+            from_ref: Some(from_ref.to_string()),
+            to_ref: Some(to_ref.to_string()),
+            precondition_refs: vec![test_ref(&format!("{task_id}-precondition"))],
+            postcondition_refs: vec![test_ref(&format!("{task_id}-postcondition"))],
+            reversible: !matches!(kind, "cleanup" | "migrate-storage"),
+        }
+    }
+
+    fn transcript_task_input(task_id: &str, with_evidence: bool) -> UpgradeTaskInput {
+        UpgradeTaskInput {
+            task_id: task_id.to_string(),
+            kind: "transcript-rerun".to_string(),
+            subject: "replay".to_string(),
+            from_ref: None,
+            to_ref: None,
+            precondition_refs: if with_evidence { vec![test_ref("replay-pass")] } else { Vec::new() },
+            postcondition_refs: Vec::new(),
+            reversible: true,
+        }
+    }
+
+    fn cutover_plan_value(old: &str, new: &str, mut prior_tasks: Vec<UpgradeTaskInput>) -> IoValue {
+        prior_tasks.push(UpgradeTaskInput {
+            task_id: "cutover".to_string(),
+            kind: "cutover".to_string(),
+            subject: "cutover".to_string(),
+            from_ref: Some(old.to_string()),
+            to_ref: Some(new.to_string()),
+            precondition_refs: Vec::new(),
+            postcondition_refs: Vec::new(),
+            reversible: true,
+        });
+        upgrade_plan_value(&UpgradePlanInput {
+            session_id: "session-cutover".to_string(),
+            reason: "cutover".to_string(),
+            summary: "validate cutover gates".to_string(),
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            affected_refs: vec![old.to_string(), new.to_string()],
+            impact_refs: vec![old.to_string()],
+            tasks: prior_tasks,
+            compatibility: UpgradeCompatibilityWindow {
+                old_refs: vec![old.to_string()],
+                new_refs: vec![new.to_string()],
+                expires_at: None,
+                policy_refs: vec![test_ref("compat-policy")],
+            },
+            rollback_refs: vec![old.to_string()],
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![test_ref("review-evidence")],
+            source_gate_receipt_values: source_gate_values(),
+        })
+        .expect("cutover plan")
+    }
+
     fn test_ref(label: &str) -> String {
         canonical_hash(&record("upgrade-test-ref", vec![string(label)])).expect("test ref")
     }

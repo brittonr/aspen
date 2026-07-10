@@ -114,6 +114,23 @@ let RuntimeEvidenceMaxSummaryBytes = 256 in
     required_boundary = "Molten consumes stack provenance as evidence-only lifecycle and release metadata; it does not prove source-code correctness, upstream verifier soundness, runtime authority, deployment trust, or behavioral correctness by itself",
   },
 
+  function_address_gate = {
+    mode = "optional",
+    allowed_claim_scopes = ["function_address.v1.lifecycle_policy_conformance"],
+    accepted_valence_policy_hashes = ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+    required_roles = [
+      "function-address-evidence-sidecar",
+      "valence-function-address-evidence-profile",
+      "kamacite-function-address-receipt",
+    ],
+    required_schemas = [
+      "valence.function-address-evidence.v1",
+      "function-address-evidence-v1",
+      "kamacite.function-address-receipt.v1",
+    ],
+    required_boundary = "Molten consumes Valence, Mantle, and Kamacite function-address evidence for lifecycle and release policy conformance only; it does not prove Rust semantic correctness, compiler correctness, whole-program safety, verifier soundness, runtime authority, or release eligibility",
+  },
+
   runtime_evidence_policy = {
     allowed_capture_origins = ["boundary_captured", "ingested_telemetry", "wrapper_asserted", "unknown"],
     allowed_hash_algorithms = ["BLAKE3"],
