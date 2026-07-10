@@ -22,6 +22,14 @@ const MAX_ITEMS: usize = 4096;
 const MAX_REFS: usize = 256;
 const MINIMUM_CI_TOTAL_FOR_PASS: u64 = 1;
 const ZERO_COUNT: u64 = 0;
+const PROFILE_METADATA_ARTIFACT: &str = "profile-metadata";
+const FILTER_READBACK_ARTIFACT: &str = "filter-readback";
+const JUNIT_ARTIFACT: &str = "junit";
+const CANONICAL_TEST_RUN_ARTIFACT: &str = "canonical-test-run-receipt";
+const NEXTEST_JUNIT_RELATIVE_PATH: &str = "junit.xml";
+const NEXTEST_COMMAND_PREFIX: &str = "cargo nextest run --profile ";
+const NEXTEST_PARTITION_SELECTOR: &str = "test(";
+const NEXTEST_ALL_FILTER: &str = "all()";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoundaryObservationInput {
@@ -234,10 +242,13 @@ pub struct SemanticProfileInput {
     pub profile_id: String,
     pub evidence_scope: String,
     pub command_surface: String,
+    pub filter_expression: String,
     pub retry_policy: String,
     pub expected_artifacts: Vec<String>,
+    pub expected_junit_path: String,
     pub cost_class: String,
     pub caveats: Vec<String>,
+    pub excluded_partitions: Vec<String>,
     pub platform_required: bool,
     pub platform_available: bool,
 }
@@ -294,10 +305,10 @@ pub struct CliReceiptFirstGate {
 // r[impl molten.testing.replay_smoke.all_evidence_suites]
 // r[impl molten.testing.replay_smoke.fresh_rerun]
 // r[impl molten.testing.replay_smoke.non_replayable_excluded]
-// r[impl molten.testing.nextest.semantic_profiles]
-// r[impl molten.testing.nextest.risk_scope]
-// r[impl molten.testing.nextest.nix_outputs]
-// r[impl molten.testing.nextest.exploratory_exclusion]
+// r[impl molten.testing.nextest_profiles.semantic_partitions]
+// r[impl molten.testing.nextest_profiles.config_readback]
+// r[impl molten.testing.nextest_profiles.deterministic_exclusion]
+// r[impl molten.testing.nextest_profiles.positive_negative_coverage]
 // r[impl molten.testing.cli_receipt_first.normative_artifacts]
 // r[impl molten.testing.cli_receipt_first.stdout_diagnostic_only]
 // r[impl molten.testing.cli_receipt_first.negative_fail_closed]
@@ -548,6 +559,121 @@ pub fn build_replay_smoke_gate(input: &ReplaySmokeInput) -> Result<ReplaySmokeGa
         gate_ref,
         value,
     })
+}
+
+pub fn reviewed_nextest_profile_rows() -> Vec<SemanticProfileInput> {
+    vec![
+        semantic_profile_row(ProfileRowInput {
+            profile_id: "fast-core",
+            evidence_scope: "unit",
+            filter_expression: "package(molten) & test(/hardening|bounded|preserves|profile|receipt/) & not test(/live|vm|dogfood|soak|exploratory/)",
+            retry_policy: "zero-retry",
+            expected_junit_path: "target/nextest/fast-core/junit.xml",
+            cost_class: "fast",
+            caveats: &["deterministic profile excludes live, VM, exploratory, retry-only, and diagnostic-only tests"],
+            excluded_partitions: required_deterministic_exclusions(),
+            platform_required: false,
+            platform_available: true,
+        }),
+        semantic_profile_row(ProfileRowInput {
+            profile_id: "harness",
+            evidence_scope: "integration",
+            filter_expression: "package(molten) & test(/harness|replay|repro|gate|receipt/) & not test(/live|vm|dogfood|soak|exploratory/)",
+            retry_policy: "zero-retry",
+            expected_junit_path: "target/nextest/harness/junit.xml",
+            cost_class: "moderate",
+            caveats: &[
+                "harness receipts are evidence-only and exclude live/VM diagnostics from deterministic pass evidence",
+            ],
+            excluded_partitions: required_deterministic_exclusions(),
+            platform_required: false,
+            platform_available: true,
+        }),
+        semantic_profile_row(ProfileRowInput {
+            profile_id: "cli",
+            evidence_scope: "cli",
+            filter_expression: "package(molten) & test(/cli|cliharness|command|receipt/) & not test(/live|vm|dogfood|soak|exploratory/)",
+            retry_policy: "zero-retry",
+            expected_junit_path: "target/nextest/cli/junit.xml",
+            cost_class: "moderate",
+            caveats: &["CLI rendered output remains diagnostic unless bound to canonical artifacts"],
+            excluded_partitions: required_deterministic_exclusions(),
+            platform_required: false,
+            platform_available: true,
+        }),
+        semantic_profile_row(ProfileRowInput {
+            profile_id: "distributed-simulation",
+            evidence_scope: "integration",
+            filter_expression: "package(molten) & test(/distributed|simulation|fault|two_peer|remote/) & not test(/live|vm|dogfood|soak|exploratory/)",
+            retry_policy: "zero-retry",
+            expected_junit_path: "target/nextest/distributed-simulation/junit.xml",
+            cost_class: "moderate",
+            caveats: &["simulation evidence covers deterministic model faults, not live transport behavior"],
+            excluded_partitions: required_deterministic_exclusions(),
+            platform_required: false,
+            platform_available: true,
+        }),
+        semantic_profile_row(ProfileRowInput {
+            profile_id: "vm-platform",
+            evidence_scope: "vm",
+            filter_expression: "package(molten) & test(/vm|nixos|platform/)",
+            retry_policy: "zero-retry",
+            expected_junit_path: "target/nextest/vm-platform/junit.xml",
+            cost_class: "platform",
+            caveats: &["VM evidence is platform integration evidence and availability is host-dependent"],
+            excluded_partitions: &[],
+            platform_required: true,
+            platform_available: true,
+        }),
+        semantic_profile_row(ProfileRowInput {
+            profile_id: "dogfood-soak",
+            evidence_scope: "dogfood",
+            filter_expression: "package(molten) & test(/dogfood|soak|release/)",
+            retry_policy: "zero-retry",
+            expected_junit_path: "target/nextest/dogfood-soak/junit.xml",
+            cost_class: "soak",
+            caveats: &["dogfood soak evidence is operator-readiness evidence only"],
+            excluded_partitions: &[],
+            platform_required: false,
+            platform_available: true,
+        }),
+        semantic_profile_row(ProfileRowInput {
+            profile_id: "ci",
+            evidence_scope: "integration",
+            filter_expression: "package(molten)",
+            retry_policy: "zero-retry",
+            expected_junit_path: "target/nextest/ci/junit.xml",
+            cost_class: "moderate",
+            caveats: &["CI profile aggregates evidence and does not replace subsystem receipts"],
+            excluded_partitions: &[],
+            platform_required: false,
+            platform_available: true,
+        }),
+        semantic_profile_row(ProfileRowInput {
+            profile_id: "deterministic",
+            evidence_scope: "integration",
+            filter_expression: "package(molten) & not test(/live|vm|dogfood|soak|exploratory/)",
+            retry_policy: "zero-retry",
+            expected_junit_path: "target/nextest/deterministic/junit.xml",
+            cost_class: "moderate",
+            caveats: &["deterministic aggregate excludes non-replayable evidence partitions"],
+            excluded_partitions: required_deterministic_exclusions(),
+            platform_required: false,
+            platform_available: true,
+        }),
+        semantic_profile_row(ProfileRowInput {
+            profile_id: "exploratory",
+            evidence_scope: "exemption",
+            filter_expression: "package(molten)",
+            retry_policy: "retry-pass",
+            expected_junit_path: "target/nextest/exploratory/junit.xml",
+            cost_class: "moderate",
+            caveats: &["exploratory retry success is diagnostic-only and cannot satisfy deterministic pass evidence"],
+            excluded_partitions: &[],
+            platform_required: false,
+            platform_available: true,
+        }),
+    ]
 }
 
 pub fn build_nextest_profile_matrix(input: &NextestProfileMatrixInput) -> Result<NextestProfileMatrix> {
@@ -886,17 +1012,16 @@ fn validate_profile(profile: &SemanticProfileInput, diagnostics: &mut Vec<String
     validate_semantic_profile_id(&profile.profile_id)?;
     validate_evidence_scope(&profile.evidence_scope, diagnostics)?;
     validate_text("profile command surface", &profile.command_surface)?;
+    validate_profile_filter(profile, diagnostics);
     validate_retry_policy(&profile.retry_policy, diagnostics)?;
-    if profile.expected_artifacts.is_empty() {
-        diagnostics.push(format!("missing-expected-artifacts:{}", profile.profile_id));
-    }
-    for artifact in &profile.expected_artifacts {
-        validate_text("profile expected artifact", artifact)?;
-    }
+    validate_expected_profile_artifacts(profile, diagnostics)?;
+    validate_profile_junit_path(profile, diagnostics);
     validate_cost_class(&profile.cost_class, diagnostics)?;
     for caveat in &profile.caveats {
         validate_text("profile caveat", caveat)?;
     }
+    validate_excluded_partitions(profile, diagnostics)?;
+    validate_deterministic_profile_exclusions(profile, diagnostics);
     if profile.platform_required && !profile.platform_available {
         diagnostics.push(format!("required-platform-unavailable:{}", profile.profile_id));
     }
@@ -907,6 +1032,87 @@ fn validate_profile(profile: &SemanticProfileInput, diagnostics: &mut Vec<String
         diagnostics.push(format!("retry-pass-not-deterministic:{}", profile.profile_id));
     }
     Ok(())
+}
+
+fn validate_profile_filter(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) {
+    let filter = profile.filter_expression.trim();
+    if filter.is_empty() {
+        diagnostics.push(format!("missing-filter:{}", profile.profile_id));
+        return;
+    }
+    if required_semantic_profiles().contains(&profile.profile_id.as_str()) && filter == NEXTEST_ALL_FILTER {
+        diagnostics.push(format!("unpartitioned-filter:{}", profile.profile_id));
+    }
+    if required_semantic_profiles().contains(&profile.profile_id.as_str())
+        && !filter.contains(NEXTEST_PARTITION_SELECTOR)
+    {
+        diagnostics.push(format!("missing-metadata-selector:{}", profile.profile_id));
+    }
+}
+
+fn validate_expected_profile_artifacts(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) -> Result<()> {
+    if profile.expected_artifacts.is_empty() {
+        diagnostics.push(format!("missing-expected-artifacts:{}", profile.profile_id));
+    }
+    for artifact in &profile.expected_artifacts {
+        validate_text("profile expected artifact", artifact)?;
+    }
+    if artifact_present(&profile.expected_artifacts, JUNIT_ARTIFACT)
+        && !artifact_present(&profile.expected_artifacts, CANONICAL_TEST_RUN_ARTIFACT)
+    {
+        diagnostics.push(format!("junit-without-canonical-test-run:{}", profile.profile_id));
+    }
+    if !artifact_present(&profile.expected_artifacts, PROFILE_METADATA_ARTIFACT) {
+        diagnostics.push(format!("missing-profile-metadata-artifact:{}", profile.profile_id));
+    }
+    if !artifact_present(&profile.expected_artifacts, FILTER_READBACK_ARTIFACT) {
+        diagnostics.push(format!("missing-filter-readback-artifact:{}", profile.profile_id));
+    }
+    Ok(())
+}
+
+fn validate_profile_junit_path(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) {
+    let path = profile.expected_junit_path.trim();
+    if path.is_empty() {
+        diagnostics.push(format!("missing-junit-path:{}", profile.profile_id));
+        return;
+    }
+    if !path.ends_with(NEXTEST_JUNIT_RELATIVE_PATH) {
+        diagnostics.push(format!("unsupported-junit-path:{}", profile.profile_id));
+    }
+}
+
+fn validate_excluded_partitions(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) -> Result<()> {
+    for partition in &profile.excluded_partitions {
+        validate_text("profile excluded partition", partition)?;
+        if !allowed_excluded_partitions().contains(&partition.as_str()) {
+            diagnostics.push(format!("unsupported-excluded-partition:{}:{partition}", profile.profile_id));
+        }
+    }
+    Ok(())
+}
+
+fn validate_deterministic_profile_exclusions(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) {
+    if !deterministic_profile_requires_exclusions(&profile.profile_id) {
+        return;
+    }
+    for required in required_deterministic_exclusions() {
+        if !profile.excluded_partitions.iter().any(|partition| partition == required) {
+            diagnostics.push(format!("missing-deterministic-exclusion:{}:{required}", profile.profile_id));
+        }
+    }
+}
+
+fn artifact_present(artifacts: &[String], expected: &str) -> bool {
+    artifacts.iter().any(|artifact| artifact == expected)
+}
+
+fn deterministic_profile_requires_exclusions(profile_id: &str) -> bool {
+    matches!(profile_id, "fast-core" | "harness" | "cli" | "distributed-simulation" | "deterministic")
+}
+
+fn allowed_excluded_partitions() -> &'static [&'static str] {
+    &["live-only", "vm-only", "exploratory", "retry-only", "diagnostic-only"]
 }
 
 fn validate_semantic_profile_id(profile_id: &str) -> Result<()> {
@@ -1017,6 +1223,52 @@ fn required_semantic_profiles() -> &'static [&'static str] {
         "vm-platform",
         "dogfood-soak",
     ]
+}
+
+fn required_deterministic_exclusions() -> &'static [&'static str] {
+    &["live-only", "vm-only", "exploratory", "retry-only", "diagnostic-only"]
+}
+
+struct ProfileRowInput<'a> {
+    profile_id: &'a str,
+    evidence_scope: &'a str,
+    filter_expression: &'a str,
+    retry_policy: &'a str,
+    expected_junit_path: &'a str,
+    cost_class: &'a str,
+    caveats: &'a [&'a str],
+    excluded_partitions: &'a [&'a str],
+    platform_required: bool,
+    platform_available: bool,
+}
+
+fn semantic_profile_row(input: ProfileRowInput<'_>) -> SemanticProfileInput {
+    SemanticProfileInput {
+        profile_id: input.profile_id.to_string(),
+        evidence_scope: input.evidence_scope.to_string(),
+        command_surface: format!("{NEXTEST_COMMAND_PREFIX}{}", input.profile_id),
+        filter_expression: input.filter_expression.to_string(),
+        retry_policy: input.retry_policy.to_string(),
+        expected_artifacts: default_profile_artifacts(),
+        expected_junit_path: input.expected_junit_path.to_string(),
+        cost_class: input.cost_class.to_string(),
+        caveats: input.caveats.iter().map(|caveat| (*caveat).to_string()).collect(),
+        excluded_partitions: input.excluded_partitions.iter().map(|partition| (*partition).to_string()).collect(),
+        platform_required: input.platform_required,
+        platform_available: input.platform_available,
+    }
+}
+
+fn default_profile_artifacts() -> Vec<String> {
+    [
+        PROFILE_METADATA_ARTIFACT,
+        FILTER_READBACK_ARTIFACT,
+        JUNIT_ARTIFACT,
+        CANONICAL_TEST_RUN_ARTIFACT,
+    ]
+    .iter()
+    .map(|artifact| (*artifact).to_string())
+    .collect()
 }
 
 fn boundary_gate_value(
@@ -1314,10 +1566,13 @@ fn profile_values(values: &[SemanticProfileInput]) -> Result<Vec<IoValue>> {
                 field_string("profile-id", &item.profile_id),
                 field_string("evidence-scope", &item.evidence_scope),
                 field_string("command-surface", &item.command_surface),
+                field_string("filter-expression", &item.filter_expression),
                 field_string("retry-policy", &item.retry_policy),
                 field_sequence("expected-artifacts", string_values(&item.expected_artifacts)?),
+                field_string("expected-junit-path", &item.expected_junit_path),
                 field_string("cost-class", &item.cost_class),
                 field_sequence("caveats", string_values(&item.caveats)?),
+                field_sequence("excluded-partitions", string_values(&item.excluded_partitions)?),
                 record("platform-required", vec![bool_value(item.platform_required)]),
                 record("platform-available", vec![bool_value(item.platform_available)]),
             ]))
@@ -1497,17 +1752,26 @@ mod tests {
     }
 
     fn semantic_profile(id: &str, scope: &str, cost: &str) -> SemanticProfileInput {
-        SemanticProfileInput {
-            profile_id: id.to_string(),
-            evidence_scope: scope.to_string(),
-            command_surface: format!("cargo nextest run --profile {id}"),
-            retry_policy: "zero-retry".to_string(),
-            expected_artifacts: vec!["profile-metadata".to_string(), "junit".to_string()],
-            cost_class: cost.to_string(),
-            caveats: vec!["evidence-only".to_string()],
-            platform_required: false,
-            platform_available: true,
-        }
+        let mut profile = reviewed_nextest_profile_rows()
+            .into_iter()
+            .find(|profile| profile.profile_id == id)
+            .unwrap_or_else(|| {
+                semantic_profile_row(ProfileRowInput {
+                    profile_id: id,
+                    evidence_scope: scope,
+                    filter_expression: "package(molten) & test(/fixture/)",
+                    retry_policy: "zero-retry",
+                    expected_junit_path: "target/nextest/fixture/junit.xml",
+                    cost_class: cost,
+                    caveats: &["evidence-only"],
+                    excluded_partitions: &[],
+                    platform_required: false,
+                    platform_available: true,
+                })
+            });
+        profile.evidence_scope = scope.to_string();
+        profile.cost_class = cost.to_string();
+        profile
     }
 
     // r[verify molten.testing.boundary_coverage.gate]
@@ -1530,10 +1794,10 @@ mod tests {
     // r[verify molten.testing.replay_smoke.all_evidence_suites]
     // r[verify molten.testing.replay_smoke.fresh_rerun]
     // r[verify molten.testing.replay_smoke.non_replayable_excluded]
-    // r[verify molten.testing.nextest.semantic_profiles]
-    // r[verify molten.testing.nextest.risk_scope]
-    // r[verify molten.testing.nextest.nix_outputs]
-    // r[verify molten.testing.nextest.exploratory_exclusion]
+    // r[verify molten.testing.nextest_profiles.semantic_partitions]
+    // r[verify molten.testing.nextest_profiles.config_readback]
+    // r[verify molten.testing.nextest_profiles.deterministic_exclusion]
+    // r[verify molten.testing.nextest_profiles.positive_negative_coverage]
     // r[verify molten.testing.cli_receipt_first.normative_artifacts]
     // r[verify molten.testing.cli_receipt_first.stdout_diagnostic_only]
     // r[verify molten.testing.cli_receipt_first.negative_fail_closed]
@@ -1834,14 +2098,10 @@ mod tests {
     #[test]
     fn nextest_profile_matrix_accepts_semantic_profiles() {
         let matrix = build_nextest_profile_matrix(&NextestProfileMatrixInput {
-            profiles: vec![
-                semantic_profile("fast-core", "unit", "fast"),
-                semantic_profile("harness", "integration", "moderate"),
-                semantic_profile("cli", "cli", "moderate"),
-                semantic_profile("distributed-simulation", "integration", "moderate"),
-                semantic_profile("vm-platform", "vm", "platform"),
-                semantic_profile("dogfood-soak", "dogfood", "soak"),
-            ],
+            profiles: reviewed_nextest_profile_rows()
+                .into_iter()
+                .filter(|profile| required_semantic_profiles().contains(&profile.profile_id.as_str()))
+                .collect(),
         })
         .expect("profile matrix");
         assert_eq!(matrix.decision, DECISION_PASS);
@@ -1864,6 +2124,63 @@ mod tests {
                 .any(|diagnostic| diagnostic == "required-platform-unavailable:vm-platform")
         );
         assert!(matrix.diagnostics.iter().any(|diagnostic| diagnostic == "missing-profile:fast-core"));
+    }
+
+    #[test]
+    fn nextest_profile_matrix_denies_missing_filter_duplicate_and_junit_only() {
+        let mut first = semantic_profile("fast-core", "unit", "fast");
+        first.filter_expression.clear();
+        first.expected_artifacts = vec![JUNIT_ARTIFACT.to_string()];
+        let duplicate = first.clone();
+        let matrix = build_nextest_profile_matrix(&NextestProfileMatrixInput {
+            profiles: vec![
+                first,
+                duplicate,
+                semantic_profile("harness", "integration", "moderate"),
+                semantic_profile("cli", "cli", "moderate"),
+                semantic_profile("distributed-simulation", "integration", "moderate"),
+                semantic_profile("vm-platform", "vm", "platform"),
+                semantic_profile("dogfood-soak", "dogfood", "soak"),
+            ],
+        })
+        .expect("profile matrix");
+        assert_eq!(matrix.decision, DECISION_DENY);
+        assert!(matrix.diagnostics.iter().any(|diagnostic| diagnostic == "missing-filter:fast-core"));
+        assert!(matrix.diagnostics.iter().any(|diagnostic| diagnostic == "duplicate-profile:fast-core"));
+        assert!(
+            matrix
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "junit-without-canonical-test-run:fast-core")
+        );
+    }
+
+    #[test]
+    fn nextest_profile_matrix_denies_deterministic_live_mixing_and_bad_retry() {
+        let mut profile = semantic_profile("cli", "cli", "moderate");
+        profile.filter_expression = NEXTEST_ALL_FILTER.to_string();
+        profile.excluded_partitions = vec!["live-only".to_string()];
+        profile.retry_policy = "retry-pass".to_string();
+        let matrix = build_nextest_profile_matrix(&NextestProfileMatrixInput {
+            profiles: vec![
+                semantic_profile("fast-core", "unit", "fast"),
+                semantic_profile("harness", "integration", "moderate"),
+                profile,
+                semantic_profile("distributed-simulation", "integration", "moderate"),
+                semantic_profile("vm-platform", "vm", "platform"),
+                semantic_profile("dogfood-soak", "dogfood", "soak"),
+            ],
+        })
+        .expect("profile matrix");
+        assert_eq!(matrix.decision, DECISION_DENY);
+        assert!(matrix.diagnostics.iter().any(|diagnostic| diagnostic == "unpartitioned-filter:cli"));
+        assert!(
+            matrix
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "missing-deterministic-exclusion:cli:vm-only")
+        );
+        assert!(matrix.diagnostics.iter().any(|diagnostic| diagnostic == "retry-pass-not-deterministic:cli"));
     }
 
     #[test]

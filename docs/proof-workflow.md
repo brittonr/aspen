@@ -66,7 +66,7 @@ The pure core derives coverage from validated receipt fields rather than rendere
 - `tamper-negative-matrix-v1` lists positive controls plus generated negative mutations such as stale refs, wrong kinds, duplicate members, noncanonical values, diagnostic-only pass misuse, and unsupported schema versions.
 - `hegel-counterexample-fixture-v1` binds property id, generator profile, seed, shrink path, shrunk input ref, replay identity, traces, receipts, diagnostics, and confidentiality handling before promotion.
 - `replay-smoke-gate-v1` compares fresh run, replay, and fresh-rerun canonical refs, while live-only, exploratory, unavailable, or diagnostic-only suites remain visibly excluded from deterministic pass evidence.
-- `nextest-profile-matrix-v1` records semantic profile ids, command surfaces, expected artifacts, retry policy, cost class, evidence scope, platform availability, and release caveats.
+- `nextest-profile-matrix-v1` records semantic profile ids, command surfaces, filter expressions, expected artifacts/JUnit paths, retry policy, excluded non-replayable partitions, cost class, evidence scope, platform availability, diagnostics, and release caveats. Deterministic profiles must exclude live-only, VM-only, exploratory, retry-only, and diagnostic-only partitions; VM, dogfood, and exploratory profiles remain platform-scoped or diagnostic evidence only.
 - `cli-receipt-first-gate-v1` records whether evidence-bearing CLI tests asserted canonical artifacts or receipts before relying on stdout, stderr, JUnit, markdown, JSON, or terminal summaries.
 
 Focused checks: `cargo test hardening --lib`, `cargo test --test cliharness ci_run_receipt`, `nickel export tests/evidence-matrix.ncl`, and `nix build .#checks.x86_64-linux.nextest-config`.

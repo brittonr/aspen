@@ -1700,6 +1700,7 @@
                 nativeBuildInputs = [
                   rustToolchain
                   pkgs.cargo-nextest
+                  pkgs.gnugrep
                 ];
                 src = sourceForConfigChecks;
               }
@@ -1720,7 +1721,19 @@
                 cargo nextest show-config version --user-config-file none --profile dogfood-soak > dogfood-soak.txt
                 mkdir -p $out
                 cp default.txt ci.txt deterministic.txt exploratory.txt fast-core.txt harness.txt cli.txt distributed-simulation.txt vm-platform.txt dogfood-soak.txt .config/nextest.toml $out/
+                profiles='ci deterministic exploratory fast-core harness cli distributed-simulation vm-platform dogfood-soak'
+                profile_block_context=16
+                for profile in $profiles; do
+                  grep -q "^\[profile.$profile\]" .config/nextest.toml
+                  grep -A $profile_block_context "^\[profile.$profile\]" .config/nextest.toml | grep '^default-filter = ' > "$out/$profile-filter.txt"
+                  grep -A $profile_block_context "^\[profile.$profile\]" .config/nextest.toml | grep '^junit = ' > "$out/$profile-junit-config.txt"
+                done
+                grep -A $profile_block_context '^\[profile.exploratory\]' .config/nextest.toml | grep '^retries = 1' > $out/exploratory-retry-policy.txt
+                grep -A $profile_block_context '^\[profile.exploratory\]' .config/nextest.toml | grep '^flaky-result = "pass"' > $out/exploratory-flaky-result.txt
+                printf 'nextest-profile-matrix decision=pass diagnostics=none\n' > $out/nextest-profile-matrix.txt
                 printf 'cargo nextest run --profile ci\n' > $out/ci-command.txt
+                printf 'cargo nextest run --profile deterministic\n' > $out/deterministic-command.txt
+                printf 'cargo nextest run --profile exploratory\n' > $out/exploratory-command.txt
                 printf 'cargo nextest run --profile fast-core\n' > $out/fast-core-command.txt
                 printf 'cargo nextest run --profile harness\n' > $out/harness-command.txt
                 printf 'cargo nextest run --profile cli\n' > $out/cli-command.txt
@@ -1729,7 +1742,13 @@
                 printf 'cargo nextest run --profile dogfood-soak\n' > $out/dogfood-soak-command.txt
                 printf 'target/nextest/ci/junit.xml\n' > $out/ci-junit-path.txt
                 printf 'target/nextest/deterministic/junit.xml\n' > $out/deterministic-junit-path.txt
+                printf 'target/nextest/exploratory/junit.xml\n' > $out/exploratory-junit-path.txt
+                printf 'target/nextest/fast-core/junit.xml\n' > $out/fast-core-junit-path.txt
                 printf 'target/nextest/harness/junit.xml\n' > $out/harness-junit-path.txt
+                printf 'target/nextest/cli/junit.xml\n' > $out/cli-junit-path.txt
+                printf 'target/nextest/distributed-simulation/junit.xml\n' > $out/distributed-simulation-junit-path.txt
+                printf 'target/nextest/vm-platform/junit.xml\n' > $out/vm-platform-junit-path.txt
+                printf 'target/nextest/dogfood-soak/junit.xml\n' > $out/dogfood-soak-junit-path.txt
               '';
 
           fmt =

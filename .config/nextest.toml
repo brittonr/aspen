@@ -17,6 +17,7 @@ global-timeout = "30m"
 
 [profile.ci]
 inherits = "default"
+default-filter = 'package(molten)'
 test-threads = 4
 global-timeout = "45m"
 slow-timeout = { period = "60s", terminate-after = 3, grace-period = "10s" }
@@ -24,6 +25,7 @@ junit = { path = "junit.xml", report-name = "molten-ci", store-failure-output = 
 
 [profile.deterministic]
 inherits = "default"
+default-filter = 'package(molten) & not test(/live|vm|dogfood|soak|exploratory/)'
 test-threads = 4
 global-timeout = "20m"
 slow-timeout = { period = "10s", terminate-after = 1, grace-period = "5s" }
@@ -31,6 +33,7 @@ junit = { path = "junit.xml", report-name = "molten-deterministic", store-failur
 
 [profile.exploratory]
 inherits = "default"
+default-filter = 'package(molten)'
 retries = 1
 flaky-result = "pass"
 status-level = "retry"
@@ -41,26 +44,32 @@ junit = { path = "junit.xml", report-name = "molten-exploratory", store-failure-
 
 [profile.fast-core]
 inherits = "deterministic"
+default-filter = 'package(molten) & test(/hardening|bounded|preserves|profile|receipt/) & not test(/live|vm|dogfood|soak|exploratory/)'
 junit = { path = "junit.xml", report-name = "molten-fast-core", store-failure-output = true, store-success-output = false }
 
 [profile.harness]
 inherits = "deterministic"
+default-filter = 'package(molten) & test(/harness|replay|repro|gate|receipt/) & not test(/live|vm|dogfood|soak|exploratory/)'
 junit = { path = "junit.xml", report-name = "molten-harness", store-failure-output = true, store-success-output = false }
 
 [profile.cli]
 inherits = "ci"
+default-filter = 'package(molten) & test(/cli|cliharness|command|receipt/) & not test(/live|vm|dogfood|soak|exploratory/)'
 junit = { path = "junit.xml", report-name = "molten-cli", store-failure-output = true, store-success-output = false }
 
 [profile.distributed-simulation]
 inherits = "deterministic"
+default-filter = 'package(molten) & test(/distributed|simulation|fault|two_peer|remote/) & not test(/live|vm|dogfood|soak|exploratory/)'
 junit = { path = "junit.xml", report-name = "molten-distributed-simulation", store-failure-output = true, store-success-output = false }
 
 [profile.vm-platform]
 inherits = "ci"
+default-filter = 'package(molten) & test(/vm|nixos|platform/)'
 global-timeout = "60m"
 junit = { path = "junit.xml", report-name = "molten-vm-platform", store-failure-output = true, store-success-output = false }
 
 [profile.dogfood-soak]
 inherits = "ci"
+default-filter = 'package(molten) & test(/dogfood|soak|release/)'
 global-timeout = "60m"
 junit = { path = "junit.xml", report-name = "molten-dogfood-soak", store-failure-output = true, store-success-output = false }
