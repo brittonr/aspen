@@ -183,14 +183,28 @@ fn capability_receipt_refs(state_root: &Path) -> Result<Vec<String>> {
 }
 
 fn profile_metadata_refs(state_root: &Path) -> Result<Vec<String>> {
-    Ok(vec![local_ref(
+    let mut refs = vec![local_ref(
         "node-production-profile-metadata",
         &format!(
             "{}:{}",
             crate::preserves_rail::PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
             state_root_profile_ref(state_root)?
         ),
-    )?])
+    )?];
+    let profile_resolution = state_root.join(PROFILE_RESOLUTION_FILE);
+    if profile_resolution.exists() {
+        let resolution_value = read_preserves(&profile_resolution)?;
+        refs.extend(profile_resolution_metadata_refs(&resolution_value)?);
+        refs.push(crate::preserves_rail::canonical_hash(&resolution_value)?);
+    }
+    Ok(refs)
+}
+
+fn profile_resolution_metadata_refs(value: &IoValue) -> Result<Vec<String>> {
+    let fields = value
+        .collect_simple_record("node-profile-config-resolution-v1", Some(9))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-profile-config-resolution-v1 ...>"))?;
+    Ok(vec![record_ref_string(&fields[3], "profile")?])
 }
 
 fn state_root_profile_ref(state_root: &Path) -> Result<String> {

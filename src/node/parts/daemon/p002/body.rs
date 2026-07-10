@@ -286,8 +286,10 @@ pub struct Init {
     pub config_ref: String,
     pub identity_ref: String,
     pub identity_receipt_ref: String,
+    pub profile_resolution_ref: String,
     pub config_value: IoValue,
     pub identity_receipt_value: IoValue,
+    pub profile_resolution_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -50,6 +50,39 @@ molten test prod-soak deployment-profile \
 
 Canonical review artifact: `target/prod/deployment-profile.preserves`.
 
+Profile-backed daemon init consumes checked exports or reviewed refs only; it does not evaluate Nickel at runtime. Supply all selected adapter/profile refs explicitly and retain the profile-resolution artifact for startup review:
+
+```sh
+molten node init \
+  --state-root target/node \
+  --node-id node:pilot \
+  --profile-ref "$PROFILE_REF" \
+  --actual-profile-ref "$PROFILE_REF" \
+  --profile-source-kind checked-export \
+  --profile-tier pilot \
+  --profile-identity pilot-node \
+  --profile-state-root-ref "$REF0" \
+  --adapter-profile ledger="$REF0" \
+  --adapter-profile registry="$REF0" \
+  --adapter-profile chunks="$REF0" \
+  --adapter-profile storage="$REF0" \
+  --adapter-profile cache="$REF0" \
+  --adapter-profile remote-dataspace="$REF0" \
+  --adapter-profile services="$REF0" \
+  --adapter-profile jobs="$REF0" \
+  --adapter-profile coordination="$REF0" \
+  --adapter-profile plugin-host="$REF0" \
+  --adapter-profile catalog-mcp="$REF0" \
+  --adapter-profile control="$REF0" \
+  --policy-ref "$REF0" \
+  --capability-ref "$REF0" \
+  --resource-ref "$REF0" \
+  --effect-profile-ref "$REF0" \
+  --profile-resolution-out target/prod/node-profile-resolution.preserves
+```
+
+No-profile `molten node init` remains available for local fixtures, but the stored profile resolution carries the `local-fixture-config` caveat and cannot satisfy release profile evidence.
+
 ## Init, run, status, stop
 
 Follow the normal node path and bind the profile/source-gate receipts in the operator review bundle:

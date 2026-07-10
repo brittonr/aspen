@@ -21,9 +21,15 @@
         })
         .expect("init node");
         crate::preserves_rail::validate_content_ref(&init.config_ref).expect("config ref is canonical");
+        crate::preserves_rail::validate_content_ref(&init.profile_resolution_ref)
+            .expect("profile resolution ref is canonical");
+        let resolution_text = crate::preserves_rail::to_text(&init.profile_resolution_value).expect("resolution text");
+        assert!(resolution_text.contains("local-fixture-config"));
         let run = run_local(&RunInput { state_root: &root }).expect("run node");
         crate::preserves_rail::validate_content_ref(&run.startup_ref).expect("startup ref is canonical");
         assert_eq!(run.adapter_receipt_refs.len(), crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
+        let startup = crate::node_runtime::parse_node_startup_receipt(&run.startup_value).expect("startup parse");
+        assert!(startup.profile_metadata_refs.contains(&init.profile_resolution_ref));
         let status = status_local(&StatusInput { state_root: &root }).expect("status node");
         assert_eq!(status.status, "running");
         let stop = stop_local(&StopInput { state_root: &root }).expect("stop node");
@@ -36,7 +42,6 @@
         assert_eq!(restarted_status.status, "running");
         let stale = run_local(&RunInput { state_root: &root }).expect_err("stale running state denied");
         assert!(stale.to_string().contains("previous startup has no clean shutdown receipt"));
-        let startup = crate::node_runtime::parse_node_startup_receipt(&run.startup_value).expect("startup parse");
         let restart = crate::node_runtime::node_restart_health_receipt_value(
             &crate::node_runtime::RestartHealthReceiptValueInput {
                 startup_receipt: &startup,

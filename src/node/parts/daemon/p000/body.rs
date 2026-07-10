@@ -44,6 +44,7 @@ use n0_future::StreamExt;
 use crate::bounded::VecSink;
 
 const CONFIG_FILE: &str = "config.preserves";
+const PROFILE_RESOLUTION_FILE: &str = "profile-resolution.preserves";
 const STARTUP_FILE: &str = "startup-receipt.preserves";
 const HEALTH_FILE: &str = "health-receipt.preserves";
 const SHUTDOWN_FILE: &str = "shutdown-receipt.preserves";
@@ -95,6 +96,14 @@ const _: () = assert!(DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS > 0);
 pub struct InitInput<'a> {
     pub state_root: &'a Path,
     pub node_id: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ProfileInitInput<'a> {
+    pub state_root: &'a Path,
+    pub node_id: &'a str,
+    pub profile: &'a crate::node_profile_config::CheckedNodeProfile,
+    pub overrides: &'a crate::node_profile_config::NodeProfileOverrides,
 }
 
 #[derive(Debug, Clone, Copy)]

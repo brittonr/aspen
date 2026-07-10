@@ -111,6 +111,10 @@ compat_module!(node_iroh, transport);
 pub mod kernel;
 compat_module!(node_runtime, kernel);
 #[doc(hidden)]
+#[path = "node/profile_config.rs"]
+pub mod node_profile_config_core;
+compat_module!(node_profile_config, node_profile_config_core);
+#[doc(hidden)]
 #[path = "octet/gate.rs"]
 pub mod quality;
 compat_module!(octet_gate, quality);

@@ -8,6 +8,40 @@ pub(crate) struct Init {
     pub(crate) config_out: Option<std::path::PathBuf>,
     #[arg(long)]
     pub(crate) identity_receipt_out: Option<std::path::PathBuf>,
+    #[arg(long)]
+    pub(crate) profile_resolution_out: Option<std::path::PathBuf>,
+    #[arg(long)]
+    pub(crate) profile_ref: Option<String>,
+    #[arg(long)]
+    pub(crate) actual_profile_ref: Option<String>,
+    #[arg(long, default_value = "checked-export")]
+    pub(crate) profile_source_kind: String,
+    #[arg(long, default_value = "pilot")]
+    pub(crate) profile_tier: String,
+    #[arg(long, default_value = molten::preserves_rail::PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA)]
+    pub(crate) profile_schema_id: String,
+    #[arg(long, default_value = "1")]
+    pub(crate) profile_schema_version: String,
+    #[arg(long, default_value = "nickel")]
+    pub(crate) profile_source_language: String,
+    #[arg(long)]
+    pub(crate) profile_identity: Option<String>,
+    #[arg(long)]
+    pub(crate) profile_state_root_ref: Option<String>,
+    #[arg(long = "adapter-profile")]
+    pub(crate) adapter_profiles: Vec<String>,
+    #[arg(long = "policy-ref")]
+    pub(crate) policy_refs: Vec<String>,
+    #[arg(long = "capability-ref")]
+    pub(crate) capability_refs: Vec<String>,
+    #[arg(long = "resource-ref")]
+    pub(crate) resource_refs: Vec<String>,
+    #[arg(long = "effect-profile-ref")]
+    pub(crate) effect_profile_refs: Vec<String>,
+    #[arg(long = "overrideable-field")]
+    pub(crate) overrideable_fields: Vec<String>,
+    #[arg(long)]
+    pub(crate) override_state_root_ref: Option<String>,
 }
 
 #[derive(Debug, clap::Args)]

@@ -4,25 +4,133 @@ pub(crate) fn init(input: super::command::base::Init) -> molten::error::Result<(
         node_id,
         config_out,
         identity_receipt_out,
+        profile_resolution_out,
+        profile_ref,
+        actual_profile_ref,
+        profile_source_kind,
+        profile_tier,
+        profile_schema_id,
+        profile_schema_version,
+        profile_source_language,
+        profile_identity,
+        profile_state_root_ref,
+        adapter_profiles,
+        policy_refs,
+        capability_refs,
+        resource_refs,
+        effect_profile_refs,
+        overrideable_fields,
+        override_state_root_ref,
     } = input;
-    let init = molten::node_daemon::init_local(&molten::node_daemon::InitInput {
-        state_root: &state_root,
-        node_id: &node_id,
-    })?;
+    let init = if let Some(profile_ref) = profile_ref {
+        let profile = checked_node_profile_from_cli(CheckedNodeProfileCliInput {
+            profile_ref,
+            actual_profile_ref,
+            profile_source_kind,
+            profile_tier,
+            profile_schema_id,
+            profile_schema_version,
+            profile_source_language,
+            profile_identity,
+            profile_state_root_ref,
+            adapter_profiles,
+            policy_refs,
+            capability_refs,
+            resource_refs,
+            effect_profile_refs,
+            overrideable_fields,
+        })?;
+        let overrides = molten::node_profile_config::NodeProfileOverrides {
+            state_root_ref: override_state_root_ref,
+            adapters: None,
+            policy_refs: None,
+        };
+        molten::node_daemon::init_with_profile(&molten::node_daemon::ProfileInitInput {
+            state_root: &state_root,
+            node_id: &node_id,
+            profile: &profile,
+            overrides: &overrides,
+        })?
+    } else {
+        molten::node_daemon::init_local(&molten::node_daemon::InitInput {
+            state_root: &state_root,
+            node_id: &node_id,
+        })?
+    };
     if let Some(path) = config_out.as_ref() {
         super::core::write_file(path, &molten::preserves_rail::to_text(&init.config_value)?)?;
     }
     if let Some(path) = identity_receipt_out.as_ref() {
         super::core::write_file(path, &molten::preserves_rail::to_text(&init.identity_receipt_value)?)?;
     }
+    if let Some(path) = profile_resolution_out.as_ref() {
+        super::core::write_file(path, &molten::preserves_rail::to_text(&init.profile_resolution_value)?)?;
+    }
     println!(
-        "node init config={} identity={} identity_receipt={} state_root={}",
+        "node init config={} identity={} identity_receipt={} profile_resolution={} state_root={}",
         init.config_ref,
         init.identity_ref,
         init.identity_receipt_ref,
+        init.profile_resolution_ref,
         state_root.display()
     );
     Ok(())
+}
+
+struct CheckedNodeProfileCliInput {
+    profile_ref: String,
+    actual_profile_ref: Option<String>,
+    profile_source_kind: String,
+    profile_tier: String,
+    profile_schema_id: String,
+    profile_schema_version: String,
+    profile_source_language: String,
+    profile_identity: Option<String>,
+    profile_state_root_ref: Option<String>,
+    adapter_profiles: Vec<String>,
+    policy_refs: Vec<String>,
+    capability_refs: Vec<String>,
+    resource_refs: Vec<String>,
+    effect_profile_refs: Vec<String>,
+    overrideable_fields: Vec<String>,
+}
+
+fn checked_node_profile_from_cli(
+    input: CheckedNodeProfileCliInput,
+) -> molten::error::Result<molten::node_profile_config::CheckedNodeProfile> {
+    let profile_identity = input.profile_identity.unwrap_or_else(|| "profile-backed-node".to_string());
+    let profile_state_root_ref = input.profile_state_root_ref.ok_or_else(|| {
+        molten::error::MoltenError::invalid_harness("--profile-state-root-ref is required with --profile-ref")
+    })?;
+    let adapters = parse_adapter_profiles(&input.adapter_profiles)?;
+    Ok(molten::node_profile_config::CheckedNodeProfile {
+        profile_ref: input.profile_ref,
+        actual_profile_ref: input.actual_profile_ref,
+        source_kind: input.profile_source_kind,
+        tier: input.profile_tier,
+        schema_id: input.profile_schema_id,
+        schema_version: input.profile_schema_version,
+        source_language: input.profile_source_language,
+        profile_identity,
+        state_root_ref: profile_state_root_ref,
+        adapters,
+        policy_refs: input.policy_refs,
+        capability_refs: input.capability_refs,
+        resource_refs: input.resource_refs,
+        effect_profile_refs: input.effect_profile_refs,
+        overrideable_fields: input.overrideable_fields,
+    })
+}
+
+fn parse_adapter_profiles(values: &[String]) -> molten::error::Result<Vec<molten::node_runtime::NodeAdapterBinding>> {
+    let mut adapters = Vec::with_capacity(values.len());
+    for value in values {
+        let (name, profile_ref) = value.split_once('=').ok_or_else(|| {
+            molten::error::MoltenError::invalid_harness("--adapter-profile must use name=blake3:<hash>")
+        })?;
+        adapters.push(molten::node_runtime::node_adapter_binding(name, profile_ref)?);
+    }
+    Ok(adapters)
 }
 
 pub(crate) fn run(input: super::command::base::Run) -> molten::error::Result<()> {
