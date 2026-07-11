@@ -36,6 +36,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: Runtime,
     },
+    FabricTime {
+        #[command(subcommand)]
+        command: crate::cli_fabric_time::FabricTimeCommand,
+    },
     SystemExtension {
         #[command(subcommand)]
         command: crate::cli_system_extension::SystemExtensionCommand,

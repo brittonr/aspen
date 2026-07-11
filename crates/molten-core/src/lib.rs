@@ -7,6 +7,7 @@
 pub mod codec;
 pub mod dependency;
 pub mod fabric;
+pub mod fabric_time;
 pub mod planning;
 pub mod policy;
 pub mod preserves_profile;

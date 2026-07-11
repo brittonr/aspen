@@ -22,6 +22,12 @@ Long-running protocol and distributed-service implementations run through the se
 
 The pure core plans generation-fenced lifecycle transitions, callback admission, deadlines/cancellation, overload behavior, typed effects, restart/quarantine, and state migration. The shell invokes admitted native or sandboxed code, validates its output before releasing typed port requests, accounts resources, and emits canonical lifecycle/callback/status evidence. Upgrade and rollback create new generations so delayed work from an old implementation cannot mutate current state. Native execution is trusted and is not a sandbox; the no-WASI Wasmtime fixture proves bounded callback invocation only, not production isolation or semantic correctness.
 
+## Fabric time, scheduling, and entropy
+
+The admitted runtime described in [`fabric-time-scheduler-runtime.md`](fabric-time-scheduler-runtime.md) keeps wall-clock observations, monotonic instants, logical event positions, and virtual instants as distinct canonical domains. Checked arithmetic and explicit evidence-bound conversion prevent silent crossing. Generation-fenced one-shot/periodic timers, a bounded runnable scheduler, purpose/capability-bound entropy streams, uncertainty-aware deadlines, finite retry plans, and local/fenced lease decisions share pure transition cores in `molten-core`.
+
+Live clock/sleep and Unix cryptographic entropy are adapter effects; deterministic virtual time and seeded entropy are simulation adapters behind the same observable contracts. Exact clock, timer, scheduler, and entropy fabric ports deny unknown profiles and silent fallback. System extensions consume them through active-generation and manifest-resource snapshots. Event receipts omit entropy output and preserve non-claims for global time, synchronized clocks, fairness without a bound, liveness, safe retry, partition absence, remote deadline agreement, and distributed lease exclusivity.
+
 Molten combines several prior-art lines without adopting them as compatibility targets:
 
 - Synit / the Syndicated Actor Model inspire the dataspace interaction model.

@@ -168,6 +168,11 @@ mod worker_port;
 mod cli_service {
     pub(crate) use super::worker_port::*;
 }
+#[path = "cli/runtime/fabric_time.rs"]
+mod fabric_time_port;
+mod cli_fabric_time {
+    pub(crate) use super::fabric_time_port::*;
+}
 #[path = "cli/runtime/system_extension.rs"]
 mod system_extension_port;
 mod cli_system_extension {
