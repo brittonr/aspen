@@ -1,0 +1,6 @@
+{
+  "depends_on": [
+    "adopt-wasm-component-runtime-profile",
+    "fabric-transport-session-runtime"
+  ]
+}

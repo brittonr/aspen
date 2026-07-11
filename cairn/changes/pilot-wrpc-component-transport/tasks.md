@@ -1,0 +1,10 @@
+## Tasks
+
+- [ ] [serial] Define the pinned wRPC/WIT pilot profile, unary call world, transport-port declaration, compatibility cohort, resource bounds, and explicit experimental non-claims. r[molten.component_rpc.profile] r[molten.component_rpc.async_scope]
+- [ ] [depends:component-rpc-profile] Implement pure WIT-wire/Preserves mapping, invocation identity, authority/resource request, transcript, replay, and pilot-classification cores. r[molten.component_rpc.bridge] r[molten.component_rpc.authority] r[molten.component_rpc.transcript] r[molten.component_rpc.functional_core]
+- [ ] [depends:component-rpc-profile] Add the opt-in wRPC runtime adapter over an admitted fabric transport session without rerouting existing Molten protocols. r[molten.component_rpc.transport]
+- [ ] [depends:component-rpc-authority-core] Enforce peer, component, world, function, policy, Basalt/UCAN authority, resource, delivery, retry, and replay admission before live transport effects. r[molten.component_rpc.authority]
+- [ ] [depends:component-rpc-bridge] Emit canonical bridge/call receipts binding both wire representations, component/WIT identity, transport session, authority/resource, delivery, and terminal result. r[molten.component_rpc.transcript]
+- [ ] [parallel] Add optional redacted OpenTelemetry-WASI export with bounded queues, diagnostic-only roles, canonical receipt links, and payload exclusion tests. r[molten.component_rpc.telemetry]
+- [ ] [parallel] Add positive unary loopback/replay fixtures and negative wrong-world, malformed mapping, unauthorized peer/function, over-budget call, duplicate/reordered transcript, stream/future use, telemetry leak, and live-timing replay fixtures. r[molten.component_rpc.validation]
+- [ ] [depends:component-rpc-validation] Record pilot graduation/retirement criteria and run focused adapter, transport-session, replay, authority, telemetry, Octet, Cairn validation, and lifecycle gates. r[molten.component_rpc.nonclaims] r[molten.component_rpc.validation]
