@@ -168,6 +168,11 @@ mod worker_port;
 mod cli_service {
     pub(crate) use super::worker_port::*;
 }
+#[path = "cli/runtime/system_extension.rs"]
+mod system_extension_port;
+mod cli_system_extension {
+    pub(crate) use super::system_extension_port::*;
+}
 #[path = "cli/core/storage.rs"]
 mod cell_port;
 mod cli_storage {

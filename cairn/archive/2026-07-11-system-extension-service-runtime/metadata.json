@@ -1,0 +1,5 @@
+{
+  "depends_on": [
+    "distributed-system-fabric-boundary"
+  ]
+}

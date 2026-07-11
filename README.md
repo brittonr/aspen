@@ -6,11 +6,12 @@ Includes Rust dependencies for Steel Scheme (`steel-core`), iroh (`iroh`, `iroh-
 
 ## Architecture direction
 
-See [`docs/architecture.md`](docs/architecture.md) for the fuller architecture. See [`docs/distributed-system-fabric.md`](docs/distributed-system-fabric.md) for the primitive, adapter, system-extension, and workload ownership boundary. See [`docs/syndicate-reference-harness.md`](docs/syndicate-reference-harness.md) for the Syndicate reference-semantics boundary. See [`docs/local-filesystem-authority.md`](docs/local-filesystem-authority.md) for the local capability-root filesystem boundary. See [`docs/choreography-typed-facade.md`](docs/choreography-typed-facade.md) for the ChoRus-inspired typed-facade boundary. See [`docs/effect-manifest-profiles.md`](docs/effect-manifest-profiles.md) for the Unison-inspired effect manifest/profile boundary. See [`docs/unison-reference-execution.md`](docs/unison-reference-execution.md) for the artifact-ref remote execution boundary. See [`docs/plugin-lifecycle-fsm.md`](docs/plugin-lifecycle-fsm.md) for the explicit plugin lifecycle FSM boundary. See [`docs/iroh-alpn-routing-registry.md`](docs/iroh-alpn-routing-registry.md) for the canonical Iroh ALPN routing registry boundary. See [`docs/rkyv-derived-cache-boundary.md`](docs/rkyv-derived-cache-boundary.md) for the rkyv-derived cache and typed-storage sidecar boundary. See [`docs/peer-session-transition-relation.md`](docs/peer-session-transition-relation.md) for the reviewed peer-session FSM boundary. See [`docs/replay-coverage-readiness.md`](docs/replay-coverage-readiness.md) for replay coverage/readiness matrices. See [`docs/replay-effect-log-hardening.md`](docs/replay-effect-log-hardening.md) for replay effect-log ordering and binding validation. See [`docs/replay-identity-freshness.md`](docs/replay-identity-freshness.md) for release-bound replay identity freshness checks. See [`docs/replay-multiturn-explain.md`](docs/replay-multiturn-explain.md) for multi-turn replay compare/explain diagnostics. See [`docs/runtime-limit-profiles.md`](docs/runtime-limit-profiles.md) for reviewed runtime budget admission under hard caps. See [`docs/ast-grep-runtime-authority-audits.md`](docs/ast-grep-runtime-authority-audits.md) for inventory-only ast-grep structural authority audits.
+See [`docs/architecture.md`](docs/architecture.md) for the fuller architecture. See [`docs/distributed-system-fabric.md`](docs/distributed-system-fabric.md) for the primitive, adapter, system-extension, and workload ownership boundary. See [`docs/system-extension-runtime.md`](docs/system-extension-runtime.md) for executable system-extension manifests, lifecycle, generation fencing, supervision, typed fabric effects, and operator evidence. See [`docs/syndicate-reference-harness.md`](docs/syndicate-reference-harness.md) for the Syndicate reference-semantics boundary. See [`docs/local-filesystem-authority.md`](docs/local-filesystem-authority.md) for the local capability-root filesystem boundary. See [`docs/choreography-typed-facade.md`](docs/choreography-typed-facade.md) for the ChoRus-inspired typed-facade boundary. See [`docs/effect-manifest-profiles.md`](docs/effect-manifest-profiles.md) for the Unison-inspired effect manifest/profile boundary. See [`docs/unison-reference-execution.md`](docs/unison-reference-execution.md) for the artifact-ref remote execution boundary. See [`docs/plugin-lifecycle-fsm.md`](docs/plugin-lifecycle-fsm.md) for the explicit plugin lifecycle FSM boundary. See [`docs/iroh-alpn-routing-registry.md`](docs/iroh-alpn-routing-registry.md) for the canonical Iroh ALPN routing registry boundary. See [`docs/rkyv-derived-cache-boundary.md`](docs/rkyv-derived-cache-boundary.md) for the rkyv-derived cache and typed-storage sidecar boundary. See [`docs/peer-session-transition-relation.md`](docs/peer-session-transition-relation.md) for the reviewed peer-session FSM boundary. See [`docs/replay-coverage-readiness.md`](docs/replay-coverage-readiness.md) for replay coverage/readiness matrices. See [`docs/replay-effect-log-hardening.md`](docs/replay-effect-log-hardening.md) for replay effect-log ordering and binding validation. See [`docs/replay-identity-freshness.md`](docs/replay-identity-freshness.md) for release-bound replay identity freshness checks. See [`docs/replay-multiturn-explain.md`](docs/replay-multiturn-explain.md) for multi-turn replay compare/explain diagnostics. See [`docs/runtime-limit-profiles.md`](docs/runtime-limit-profiles.md) for reviewed runtime budget admission under hard caps. See [`docs/ast-grep-runtime-authority-audits.md`](docs/ast-grep-runtime-authority-audits.md) for inventory-only ast-grep structural authority audits.
 
 Molten is a workload-neutral, policy-gated distributed-systems fabric built around a canonical Preserves envelope spine:
 
 - Pure primitives own deterministic laws and plans; capability-rooted adapters perform external effects without defining authority; optional manifest-installed system extensions own distributed-service semantics.
+- Executable system extensions use a distinct system-tier manifest, exact fabric-port bindings, active-generation callback fencing, finite resources, bounded supervision, and canonical status/evidence; ordinary plugin metadata or artifact possession cannot activate that tier.
 - Fabric ports resolve exact versions and reviewed profiles without silent substitution. Rust DTO layout, backend handles, transport identity, clocks, randomness, and ambient state are not canonical authority.
 - OpenRaft is not selected, adapted, or used; consistency remains an explicit extension and port boundary.
 - Deterministic playback is a central law: the same artifacts, dependency closure, initial state, policy/schema refs, handler profile, and seed or recorded effect log must reproduce the same canonical traces, receipts, outputs, and final state hash.
@@ -21,6 +22,18 @@ Molten is a workload-neutral, policy-gated distributed-systems fabric built arou
 - Trellis Raft primitives define strongly consistent replicated control-plane state, not normal actor traffic.
 - Basalt/UCAN, Nickel contracts, reviewed Steel predicates, Trellis predicates, Cairn receipts, and Octet/Valence evidence gate side effects. Molten-to-Valence stack evidence identity compatibility is documented in [`docs/valence-stack-evidence-adapter.md`](docs/valence-stack-evidence-adapter.md).
 - Iroh bridges envelopes, blobs, and docs across peers; Wasmtime actors run behind deny-by-default hostcalls; Redb stores local durable metadata and indexes.
+
+The executable system-extension fixture invokes initialization, start, request, checkpoint, retryable failure, restart/recovery, drain, and shutdown callbacks under native and no-WASI Wasmtime profiles, then writes canonical evidence and bounded operator status:
+
+```sh
+cargo run -- system-extension run-fixture \
+  --profile sandboxed-component \
+  --out target/system-extension-fixture
+cargo run -- system-extension show \
+  --status target/system-extension-fixture/status.preserves
+```
+
+The fixture proves callback execution and host-contract conformance only. It does not prove consensus, durability, protocol compatibility, extension semantic correctness, or production readiness.
 
 Cairn roadmap status: active production-readiness changes live under `cairn/changes/` when present; use `cairn change list --root .` for the current active set. Accepted requirements live under `cairn/specs/`, and completed roadmap slices are archived under `cairn/archive/`. The drained/archived roadmap includes:
 
@@ -115,6 +128,7 @@ Cairn roadmap status: active production-readiness changes live under `cairn/chan
 - `dataspace-delivery-idempotency`
 - `secrets-redaction-encrypted-refs`
 - `plugin-host-lifecycle-runtime`
+- `system-extension-service-runtime`
 - `coordination-services-control-plane`
 - `coordination-control-plane-ux`
 - `operator-dogfood-node-workflow`

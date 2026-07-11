@@ -11,6 +11,7 @@ pub mod planning;
 pub mod policy;
 pub mod preserves_profile;
 pub mod stack;
+pub mod system_extension;
 
 pub mod prelude {
     pub use crate::codec::CodecIssue;

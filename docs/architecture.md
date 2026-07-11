@@ -16,6 +16,12 @@ Canonical values are Preserves records identified with BLAKE3. Rust structure la
 
 No global coordination mechanism is mandatory. OpenRaft is not selected, adapted, or used. A consistency service is an explicit optional extension, and local verified transition laws do not imply whole-system correctness.
 
+## Executable system-extension tier
+
+Long-running protocol and distributed-service implementations run through the separate system-extension host described in [`system-extension-runtime.md`](system-extension-runtime.md). A canonical manifest binds implementation identity, lifecycle callbacks, exact fabric-port versions, capabilities, policy/provenance evidence, finite resources, execution profile, state schema, compatible migrations, evidence profile, and non-claims. System-tier admission is required in addition to artifact availability; ordinary plugin metadata, service names, transport identity, and receipts cannot substitute for it.
+
+The pure core plans generation-fenced lifecycle transitions, callback admission, deadlines/cancellation, overload behavior, typed effects, restart/quarantine, and state migration. The shell invokes admitted native or sandboxed code, validates its output before releasing typed port requests, accounts resources, and emits canonical lifecycle/callback/status evidence. Upgrade and rollback create new generations so delayed work from an old implementation cannot mutate current state. Native execution is trusted and is not a sandbox; the no-WASI Wasmtime fixture proves bounded callback invocation only, not production isolation or semantic correctness.
+
 Molten combines several prior-art lines without adopting them as compatibility targets:
 
 - Synit / the Syndicated Actor Model inspire the dataspace interaction model.
@@ -453,6 +459,7 @@ Active production-readiness work lives under `cairn/changes/`. Accepted requirem
 - `delivery-idempotency-ux` — direct CLI diagnostics for canonical delivery scope refs, operation ids, idempotency checks, stored receipt lookup, and duplicate-suppression evidence without granting transport, authority, provenance, policy, resource, or execution trust.
 - `secrets-redaction-encrypted-refs` — usable confidentiality rail with secret refs, redaction markers, encrypted refs, reveal/decrypt receipts, and commitment-based replay.
 - `plugin-host-lifecycle-runtime` — artifact-backed plugin install/permission/lifecycle/hostcall/health/upgrade receipts over existing executor/effect boundaries.
+- `system-extension-service-runtime` — distinct executable system-tier manifests, generation-fenced callbacks, exact typed fabric effects, bounded supervision, checkpoint recovery, upgrade/rollback, readiness, and operator evidence without widening ordinary plugin authority.
 - `coordination-services-control-plane` — concrete Raft-backed coordination services for locks/fencing, queues, semaphores, rate limits, elections, barriers, and service registry assertions.
 - `coordination-control-plane-ux` — operator CLI for canonical coordination manifests, requests, batch apply reports, read-only summaries, and duplicate operation-id replay evidence.
 - `operator-dogfood-node-workflow` — end-to-end local node dogfood workflow with canonical checkpoints, reports, repro bundles, and release gate receipts.
