@@ -20,6 +20,20 @@ r[molten.component_rpc.profile] Molten MUST expose wRPC only through a versioned
 - WHEN admission runs
 - THEN Molten MUST deny before opening a transport session.
 
+### Requirement: Pilot guests are Mantle-materialized
+
+r[molten.component_rpc.materialization] Pilot client/server components, generated bindings, composition outputs, and any WASI virtualization MUST be supplied through a versioned Mantle materialization bundle binding exact bytes and the wRPC/WIT/runtime cohorts; Molten MUST remeasure and admit the bundle and MUST NOT build production pilot guests locally.
+
+#### Scenario: Complete pilot bundle is available
+- GIVEN the client/server artifacts, WIT world, composition graph, remaining imports, and expected runtime profile all match a verified Mantle bundle
+- WHEN pilot artifact admission runs
+- THEN Molten MAY instantiate the adapters and continue to independent transport and authority admission.
+
+#### Scenario: Pilot artifact is loose or mismatched
+- GIVEN a production pilot artifact lacks a complete bundle, differs from its BLAKE3 identity, or requests a different world/cohort/import set
+- WHEN artifact admission runs
+- THEN Molten MUST deny before instantiation or network effects and MUST NOT rebuild it locally.
+
 ### Requirement: Wire values and Preserves envelopes are both retained
 
 r[molten.component_rpc.bridge] The pilot MUST use a declared mapping between WIT component-value wire bytes and canonical Preserves request/result envelopes, MUST retain both identities, and MUST NOT claim general semantic equivalence between them.
@@ -96,7 +110,7 @@ r[molten.component_rpc.telemetry] Optional OpenTelemetry-WASI export MUST be sep
 
 ### Requirement: Pilot decisions have a functional core
 
-r[molten.component_rpc.functional_core] Profile admission, WIT/Preserves mapping, invocation identity, authority/resource planning, unsupported-async rejection, transcript validation, replay comparison, telemetry redaction planning, and pilot classification MUST be pure deterministic logic.
+r[molten.component_rpc.functional_core] Profile and Mantle-bundle admission, WIT/Preserves mapping, invocation identity, authority/resource planning, unsupported-async rejection, transcript validation, replay comparison, telemetry redaction planning, and pilot classification MUST be pure deterministic logic.
 
 #### Scenario: Identical facts produce identical call plan
 - GIVEN identical profile, mapping, peer, authority, resource, request, and transport facts
@@ -114,7 +128,7 @@ r[molten.component_rpc.nonclaims] The pilot MUST state that successful calls do 
 
 ### Requirement: Pilot includes positive and negative evidence
 
-r[molten.component_rpc.validation] The pilot MUST include positive unary loopback/replay cases and negative cohort, mapping, authority, resource, transcript, unsupported-async, telemetry-redaction, and live-timing cases plus focused lifecycle gates.
+r[molten.component_rpc.validation] The pilot MUST include positive Mantle-materialized unary loopback/replay cases and negative incomplete-bundle, local-build, cohort, mapping, authority, resource, transcript, unsupported-async, telemetry-redaction, and live-timing cases plus focused lifecycle gates.
 
 #### Scenario: Pilot is reviewed for graduation
 - GIVEN implementation and evidence are proposed for promotion

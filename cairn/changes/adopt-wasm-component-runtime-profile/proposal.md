@@ -7,6 +7,7 @@ A shared WebAssembly Component Model profile is needed before ordinary plugins, 
 ## What Changes
 
 - Define a versioned Molten Wasm component runtime profile with one pinned Wasmtime, wasm-tools, wit-bindgen, WASI, WIT package/world, and enabled-feature compatibility cohort.
+- Require evidence-bearing and production execution to consume a rehashable Mantle component materialization bundle instead of compiling, composing, virtualizing, transforming, or precompiling artifacts inside Molten.
 - Use WIT for the outer executable ABI while retaining canonical Preserves bytes and schemas as the authoritative actor, hostcall, and receipt payload representation.
 - Extend deterministic execution admission to cover NaN canonicalization, relaxed SIMD posture, memory/table growth, fuel interruption, explicit imports, and deterministic host inputs.
 - Keep WASI and host capabilities denied unless the component profile, Basalt/UCAN authority, policy, and resource admission all authorize a specific binding.
@@ -16,6 +17,6 @@ A shared WebAssembly Component Model profile is needed before ordinary plugins, 
 ## Impact
 
 - **Surfaces**: Wasm executor core and shell, plugin/system-extension execution profiles, WIT packages, Nickel runtime-profile configuration, Preserves receipts, fixtures, and operator readback.
-- **Cross-stack inputs**: Mantle may later supply built/precompiled components, Octet may supply artifact checks, Valence may wrap component evidence, and Kamacite may supply adapter descriptors. Molten still owns runtime admission and execution semantics.
+- **Cross-stack inputs**: Mantle supplies exact built/precompiled component bundles, Octet supplies independently bound artifact checks, Valence wraps component evidence, and Kamacite may supply adapter descriptors. Molten remeasures every admitted byte object and still owns runtime admission and execution semantics.
 - **Safety**: WIT compatibility is not behavioral correctness; component validity is not authority; WASI virtualization is not a substitute for runtime linker admission; execution receipts do not prove application correctness.
 - **Compatibility**: the existing core-module profile remains separately named during migration and is never selected as an implicit fallback for a component request.

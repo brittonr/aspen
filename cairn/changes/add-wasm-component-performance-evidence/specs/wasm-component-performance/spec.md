@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Measure and optimize Molten WebAssembly component compilation, instantiation, and execution without weakening deterministic runtime admission or promoting host-scoped measurements into correctness or release claims.
+Measure and optimize Mantle-materialized Molten WebAssembly component compilation, instantiation, and execution without weakening deterministic runtime admission or promoting host-scoped measurements into correctness or release claims.
 
 ## Requirements
 
 ### Requirement: Benchmark suites have exact identity
 
-r[molten.wasm_performance.suite] Molten MUST define benchmark suites with exact component, WIT, runtime-profile, workload-input, phase-marker, host-requirement, measurement, resource-envelope, and sampling identities.
+r[molten.wasm_performance.suite] Molten MUST define benchmark suites with exact Mantle materialization-bundle, component, WIT, runtime-profile, workload-input, phase-marker, host-requirement, measurement, resource-envelope, and sampling identities.
 
 #### Scenario: Suite is unchanged
 - GIVEN two runs use identical suite and fixture bytes plus matching declared environment facts
@@ -16,9 +16,23 @@ r[molten.wasm_performance.suite] Molten MUST define benchmark suites with exact 
 - THEN both runs MUST resolve to the same BLAKE3 suite identity.
 
 #### Scenario: Workload or profile drifts
-- GIVEN component bytes, WIT, inputs, profile, phase markers, resource bounds, or sampling configuration change
+- GIVEN materialization bundle, component bytes, WIT, inputs, profile, phase markers, resource bounds, or sampling configuration change
 - WHEN suite identity is checked
 - THEN the run MUST receive a different identity and MUST NOT be compared as the old suite.
+
+### Requirement: Build-shaped benchmark artifacts come from Mantle
+
+r[molten.wasm_performance.materialization] Portable components, Wizer outputs, and Wasmtime precompiled inputs used by accepted performance suites MUST arrive through verified Mantle materialization bundles; Molten MUST remeasure and admit them but MUST NOT compile production guest components, invoke Wizer, precompile Wasmtime artifacts, or publish replacement build receipts.
+
+#### Scenario: Mantle-materialized variants are benchmarked
+- GIVEN portable, transformed, and precompiled variants have complete matching bundles and profile identities
+- WHEN a benchmark suite admits them
+- THEN Molten MAY measure the declared phases while retaining each distinct artifact and derivation identity.
+
+#### Scenario: Benchmark harness produces its own optimized artifact
+- GIVEN the performance rail locally invokes Wizer or Wasmtime precompilation, or receives an optimized artifact without a complete matching Mantle bundle
+- WHEN suite admission runs
+- THEN Molten MUST reject it from accepted performance evidence.
 
 ### Requirement: Performance phases remain separate
 
@@ -71,23 +85,23 @@ r[molten.wasm_performance.optimizations] Pooling allocation, copy-on-write heap 
 - WHEN allocation or scheduling reaches the bound
 - THEN Molten MUST apply typed failure or backpressure and MUST NOT silently expand capacity.
 
-### Requirement: Wizer transforms are deterministic build evidence
+### Requirement: Wizer artifacts retain deterministic Mantle build evidence
 
-r[molten.wasm_performance.wizer] A Wizer-preinitialized artifact MUST bind original bytes, initialization entrypoint, tool identity, denied or deterministically virtualized imports, repeated output identities, transformed bytes, and explicit semantic-equivalence non-claims.
+r[molten.wasm_performance.wizer] A Wizer-preinitialized artifact MUST be Mantle-materialized and MUST bind original bytes, initialization entrypoint, tool identity, denied or deterministically virtualized imports, repeated output identities, transformed bytes, and explicit semantic-equivalence non-claims.
 
-#### Scenario: Repeated preinitialization matches
-- GIVEN identical admitted inputs and deterministic virtual imports
-- WHEN the configured Wizer transform runs repeatedly
-- THEN exact output BLAKE3 identities MUST match before the artifact is performance-eligible.
+#### Scenario: Repeated Mantle preinitialization matches
+- GIVEN identical admitted inputs and deterministic virtual imports produced exact matching outputs in independent Mantle transforms
+- WHEN Molten admits the materialization bundle
+- THEN the artifact MAY become performance-eligible without Molten invoking Wizer.
 
-#### Scenario: Initialization observes ambient state
-- GIVEN initialization can observe undeclared clock, randomness, environment, filesystem, network, credentials, or process state
-- WHEN Wizer admission runs
-- THEN the transform MUST be rejected or classified as diagnostic-only.
+#### Scenario: Initialization observed ambient state or lacks build evidence
+- GIVEN initialization could observe undeclared clock, randomness, environment, filesystem, network, credentials, or process state, or the transformed bytes lack a complete Mantle receipt
+- WHEN Wizer artifact admission runs
+- THEN the artifact MUST be rejected or classified as diagnostic-only.
 
 ### Requirement: Performance decisions have a functional core
 
-r[molten.wasm_performance.functional_core] Suite validation, compatibility checks, sample normalization, comparison, regression classification, AOT manifest admission, and receipt construction MUST be pure deterministic logic over already-loaded facts.
+r[molten.wasm_performance.functional_core] Suite and Mantle-bundle validation, compatibility checks, sample normalization, comparison, regression classification, Wizer/AOT manifest admission, and receipt construction MUST be pure deterministic logic over already-loaded facts.
 
 #### Scenario: Identical samples produce identical report
 - GIVEN identical normalized suite, environment, and sample facts
@@ -105,7 +119,7 @@ r[molten.wasm_performance.evidence] Benchmark and optimization artifacts MUST re
 
 ### Requirement: Performance rails include positive and negative validation
 
-r[molten.wasm_performance.validation] The performance rail MUST include positive baseline/comparison cases and negative stale, incompatible, undersampled, exhausted, tampered, nondeterministic-transform, and overclaim cases plus focused lifecycle validation.
+r[molten.wasm_performance.validation] The performance rail MUST include positive Mantle-materialized baseline/comparison cases and negative incomplete-bundle, local-transform, stale, incompatible, undersampled, exhausted, tampered, nondeterministic-transform, and overclaim cases plus focused lifecycle validation.
 
 #### Scenario: Performance change is reviewed
 - GIVEN a suite, runner, optimization, AOT, Wizer, or receipt change

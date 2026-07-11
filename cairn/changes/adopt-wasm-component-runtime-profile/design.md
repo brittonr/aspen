@@ -56,14 +56,21 @@ Build-time WASI-Virt composition may reduce imports, but the runtime linker stil
 
 **Rationale:** Component execution is a mechanism. It must not absorb the system-extension lifecycle or fabric authority model.
 
+### 9. Mantle materialization is the production artifact boundary
+
+**Choice:** Evidence-bearing and production execution consumes a versioned Mantle materialization bundle binding exact portable or precompiled bytes, WIT/package inputs, build cohort, expected runtime profile, stage receipts, and required Octet/Valence/Cairn references. Molten remeasures bytes, re-inspects runtime-relevant facts, and performs independent capability/resource admission; it never treats a store path or Mantle success as runtime authority. Direct loose-byte loading remains available only to an explicitly test-only profile that cannot emit production evidence.
+
+**Rationale:** Build, composition, virtualization, Wizer, and precompilation are reproducible materialization concerns. Keeping them out of the runtime prevents toolchain drift and makes unsafe `.cwasm` deserialization depend on one exact authenticated derivation chain.
+
 ## Functional core / imperative shell split
 
-- **Pure core**: compatibility-cohort validation, artifact-fact admission, WIT/world matching, import/capability resolution, deterministic configuration planning, resource decisions, migration classification, and receipt payload construction over already-loaded values.
-- **Imperative shell**: read artifact/WIT bytes, invoke wasm-tools parsers, create Wasmtime engines/linkers/stores, instantiate and call components, perform admitted host effects, and persist/render receipts.
+- **Pure core**: compatibility-cohort validation, Mantle bundle/identity admission, artifact-fact admission, WIT/world matching, import/capability resolution, deterministic configuration planning, resource decisions, migration classification, and receipt payload construction over already-loaded values.
+- **Imperative shell**: read and rehash materialized artifact/WIT bytes, invoke wasm-tools parsers, create Wasmtime engines/linkers/stores, instantiate and call components, perform admitted host effects, and persist/render receipts; it does not build, compose, virtualize, transform, or precompile production components.
 
 ## Risks / Trade-offs
 
 - Component tooling is still evolving. Pinning a cohort reduces drift but requires deliberate upgrade changes and conformance reruns.
+- Mantle bundle and Molten runtime profiles can advance at different rates. Unknown or incompatible profile identities deny rather than triggering a local rebuild or fallback.
 - Canonical ABI lowering adds runtime machinery and may change performance. Performance optimization remains a separate evidence package after deterministic conformance passes.
 - A byte-carrier WIT ABI is less domain-typed than duplicating Preserves schemas in WIT, but it avoids competing canonical schemas and permits incremental typed control fields.
 - WASI-Virt library defaults can pass host subsystems through. Any direct library integration must construct explicit deny-all state before applying reviewed grants.
@@ -73,4 +80,5 @@ Build-time WASI-Virt composition may reduce imports, but the runtime linker stil
 - No replacement of Preserves with WIT values as canonical Molten data.
 - No authority derived from component validity, imports, signatures, package origin, or transport identity.
 - No automatic adoption of WASIp3, wRPC, OpenTelemetry-WASI, JavaScript, Python, WAMR, or another runtime.
+- No production component compilation, composition, WASI virtualization, Wizer transformation, or Wasmtime precompilation in Molten.
 - No claim that matching WIT worlds, replay outputs, or component hashes prove behavioral correctness or semantic equivalence.

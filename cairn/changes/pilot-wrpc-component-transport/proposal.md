@@ -7,6 +7,7 @@ The pilot also needs a clear telemetry boundary: OpenTelemetry-WASI may expose c
 ## What Changes
 
 - Add an opt-in wRPC adapter profile for a single versioned Molten component world and pinned wRPC compatibility cohort.
+- Materialize the pilot's client/server components, generated bindings, composition graph, and any WASI virtualization through Mantle; Molten admits and runs the resulting exact bundle rather than owning a second component build path.
 - Carry wRPC calls over one admitted transport-session adapter while preserving Iroh peer/session evidence and canonical Preserves request/result envelope identities.
 - Bind each call to explicit policy, Basalt/UCAN authority, resource, delivery, and replay context rather than treating WIT or transport connectivity as authority.
 - Exclude evolving WIT stream/future behavior from the first pilot unless separately versioned and admitted.
@@ -16,6 +17,6 @@ The pilot also needs a clear telemetry boundary: OpenTelemetry-WASI may expose c
 ## Impact
 
 - **Surfaces**: component RPC adapters, Iroh transport sessions, WIT packages, Preserves bridge DTOs, authority/resource gates, replay transcripts, optional telemetry, and pilot fixtures.
-- **Dependencies**: this pilot depends on the shared Wasm component runtime profile and the active fabric transport-session boundary.
+- **Dependencies**: this pilot depends on the shared Wasm component runtime profile, Mantle component materialization, and the active fabric transport-session boundary.
 - **Scope**: the pilot does not replace Iroh, Preserves, Molten delivery semantics, local component calls, or existing remote dataspace protocols.
 - **Claims**: successful loopback proves only the pinned adapter fixture; it is not protocol stability, production readiness, transport security, or semantic-equivalence proof.

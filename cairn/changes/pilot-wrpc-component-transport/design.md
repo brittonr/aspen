@@ -46,15 +46,21 @@ The pilot must therefore be an adapter between two explicit representations, not
 
 **Choice:** Promotion requires stable pinned-cohort conformance, deterministic replay of recorded calls, negative authority/schema/resource coverage, bounded failure handling, and a written decision about overlap with existing Iroh protocols. Otherwise the adapter remains experimental or is removed.
 
+### 8. Mantle materializes the pilot artifact graph
+
+**Choice:** Client/server guest components, generated bindings, WAC composition, and any WASI-Virt reduction are produced only through a versioned Mantle materialization bundle that binds the wRPC/WIT/runtime cohorts and exact bytes. Molten remeasures and independently admits the bundle before opening transport effects; it does not compile, compose, virtualize, transform, or precompile pilot guests.
+
+**Rationale:** The experiment should measure wRPC interoperability and authority behavior, not create a second unaudited component toolchain inside the network runtime.
+
 ## Functional core / imperative shell split
 
-- **Pure core**: profile validation, WIT/Preserves mapping, invocation identity, authority/resource request construction, stream/future rejection, transcript validation, replay comparison, telemetry redaction plans, and pilot classification.
-- **Imperative shell**: instantiate wRPC/Wasmtime adapters, open Iroh transport sessions, send/receive bytes, invoke admitted components, export telemetry, and persist receipts.
+- **Pure core**: profile and Mantle-bundle validation, WIT/Preserves mapping, invocation identity, authority/resource request construction, stream/future rejection, transcript validation, replay comparison, telemetry redaction plans, and pilot classification.
+- **Imperative shell**: rehash and instantiate materialized wRPC/Wasmtime adapters, open Iroh transport sessions, send/receive bytes, invoke admitted components, export telemetry, and persist receipts; it does not build guest artifacts.
 
 ## Risks / Trade-offs
 
 - Maintaining two wire representations increases complexity and payload overhead.
-- wRPC/WIT async evolution may require cohort upgrades or make the pilot obsolete.
+- wRPC/WIT async evolution may require coordinated Mantle and runtime cohort upgrades or make the pilot obsolete.
 - Mapping bugs can produce well-typed but semantically wrong requests; positive and negative golden mappings are mandatory.
 - Telemetry exporters can introduce network effects or sensitive data; telemetry is opt-in and independently admitted.
 
@@ -63,4 +69,5 @@ The pilot must therefore be an adapter between two explicit representations, not
 - No replacement of Iroh, Preserves, Molten delivery/idempotency, or existing protocols.
 - No general-purpose RPC framework claim outside the pinned pilot world.
 - No support for streams/futures in the first profile.
+- No pilot guest compilation, component composition, WASI virtualization, Wizer transformation, or precompilation in Molten.
 - No promotion of OpenTelemetry data into canonical evidence, authority, provenance, or release eligibility.

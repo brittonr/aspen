@@ -8,7 +8,7 @@ Precompiled Wasmtime artifacts are especially sensitive: deserialization assumes
 
 ### 1. Benchmark suites are immutable identified inputs
 
-**Choice:** Define a typed Nickel benchmark-suite manifest covering exact component bytes, WIT/profile identity, workload inputs, warmup/sample plan, phase markers, host requirements, resource envelope, and non-claims. Each suite and fixture receives BLAKE3 identity.
+**Choice:** Define a typed Nickel benchmark-suite manifest covering exact Mantle materialization-bundle identity, component bytes, WIT/profile identity, workload inputs, warmup/sample plan, phase markers, host requirements, resource envelope, and non-claims. Each suite and fixture receives BLAKE3 identity.
 
 **Rationale:** A benchmark name is not enough to compare results after workload, profile, or fixture drift.
 
@@ -36,11 +36,11 @@ Precompiled Wasmtime artifacts are especially sensitive: deserialization assumes
 
 **Rationale:** Performance knobs can alter allocation failure, memory reservation, scheduling, or startup behavior and therefore belong in runtime identity.
 
-### 6. Wizer is a build transform with bounded evidence
+### 6. Wizer remains a Mantle build transform
 
-**Choice:** Wizer execution occurs in the build shell with imports denied unless deterministic virtualization is explicitly declared. Repeated builds over identical admitted inputs must produce the same exact output identity before the artifact is eligible for runtime performance comparison. Receipts bind original module/component, initialization entrypoint, virtualized inputs, tool version, output, and non-claims.
+**Choice:** Mantle alone materializes Wizer outputs for this rail, with imports denied unless deterministic virtualization is explicitly declared and repeated clean builds required to agree exactly. Molten verifies the materialization bundle and receipts binding original bytes, initialization entrypoint, virtual inputs, tool cohort, output, and non-claims, then only benchmarks the admitted result. It never invokes Wizer or republishes transformed bytes.
 
-**Rationale:** Preinitialization can embed host-derived state and is not semantic proof even when repeated bytes match.
+**Rationale:** Preinitialization can embed host-derived state and changes artifact identity; keeping production transforms in Mantle prevents the benchmark harness from becoming a second build pipeline.
 
 ### 7. Performance evidence stays recorded-only
 
@@ -48,8 +48,8 @@ Precompiled Wasmtime artifacts are especially sensitive: deserialization assumes
 
 ## Functional core / imperative shell split
 
-- **Pure core**: suite validation, compatibility checks, sample normalization, statistical comparison, regression classification, AOT manifest admission, optimization profile admission, and receipt construction.
-- **Imperative shell**: build or load components, run Sightglass/Wasmtime, read host measurement facts, materialize Wizer/AOT outputs, enforce runtime backpressure, and write reports.
+- **Pure core**: suite and Mantle-bundle validation, compatibility checks, sample normalization, statistical comparison, regression classification, Wizer/AOT manifest admission, optimization profile admission, and receipt construction.
+- **Imperative shell**: rehash and load materialized components, run Sightglass/Wasmtime, read host measurement facts, enforce runtime backpressure, and write reports; it does not produce Wizer or AOT outputs.
 
 ## Risks / Trade-offs
 
@@ -63,4 +63,5 @@ Precompiled Wasmtime artifacts are especially sensitive: deserialization assumes
 - No cross-runtime benchmark ranking.
 - No claim that faster execution is more correct, deterministic, secure, or release-ready.
 - No acceptance of untrusted precompiled Wasmtime artifacts.
+- No component compilation, Wizer transformation, or Wasmtime precompilation in the Molten performance rail.
 - No use of benchmark output as authority, policy, or provenance evidence.

@@ -20,6 +20,20 @@ r[molten.wasm_component.profile] Molten MUST admit WebAssembly components only t
 - WHEN profile admission runs
 - THEN Molten MUST deny before compilation or instantiation with deterministic diagnostics.
 
+### Requirement: Production artifacts cross a Mantle materialization boundary
+
+r[molten.wasm_component.materialization] Evidence-bearing and production component execution MUST consume a versioned Mantle materialization bundle that binds exact portable or precompiled bytes, WIT/package inputs, build cohort, expected runtime profile, stage receipts, and policy-required Octet/Valence/Cairn references; Molten MUST remeasure every byte object and MUST NOT derive runtime authority from bundle success.
+
+#### Scenario: Complete materialization bundle is admitted
+- GIVEN every required bundle object, BLAKE3 identity, parent receipt, and expected runtime profile matches the bytes Molten remeasures
+- WHEN artifact admission runs
+- THEN Molten MAY re-inspect runtime facts and continue to independent capability and resource admission without rebuilding the component.
+
+#### Scenario: Production request supplies loose or mismatched bytes
+- GIVEN a production request supplies an arbitrary path, loose bytes, a stale profile, an incomplete bundle, or a bundle whose object identity differs from measured bytes
+- WHEN artifact admission runs
+- THEN Molten MUST deny before compilation, instantiation, or precompiled deserialization; only an explicitly test-only profile MAY load loose fixtures and it MUST NOT emit production evidence.
+
 ### Requirement: WIT is the outer ABI and Preserves remains canonical
 
 r[molten.wasm_component.abi] Molten MUST use a versioned WIT package/world for component entrypoints and hostcalls, while canonical Preserves bytes and schemas MUST remain authoritative for actor payload, hostcall payload, replay, and receipt identity.
@@ -106,7 +120,7 @@ r[molten.wasm_component.migration] Molten MUST classify core modules and compone
 
 ### Requirement: Runtime decisions have a functional core
 
-r[molten.wasm_component.functional_core] Compatibility validation, WIT/world matching, feature/import/resource admission, deterministic configuration planning, migration classification, and receipt payload construction MUST be pure deterministic logic over already-loaded values.
+r[molten.wasm_component.functional_core] Compatibility and Mantle-bundle validation, WIT/world matching, feature/import/resource admission, deterministic configuration planning, migration classification, and receipt payload construction MUST be pure deterministic logic over already-loaded values.
 
 #### Scenario: Identical facts produce identical plan
 - GIVEN identical profile, artifact, WIT, policy, authority, resource, and input facts
@@ -124,7 +138,7 @@ r[molten.wasm_component.nonclaims] Molten component artifacts and receipts MUST 
 
 ### Requirement: Positive and negative conformance evidence
 
-r[molten.wasm_component.fixtures] The component profile MUST include positive execution/replay fixtures and negative malformed, stale, unauthorized, nondeterministic, over-resource, tampered, and fallback fixtures.
+r[molten.wasm_component.fixtures] The component profile MUST include positive Mantle-materialized execution/replay fixtures and negative loose-production-byte, incomplete-bundle, malformed, stale, unauthorized, nondeterministic, over-resource, tampered, and fallback fixtures.
 
 #### Scenario: Conformance suite runs
 - GIVEN the component profile is proposed for activation or upgrade
@@ -133,7 +147,7 @@ r[molten.wasm_component.fixtures] The component profile MUST include positive ex
 
 ### Requirement: Component profile validation is reviewable
 
-r[molten.wasm_component.validation] Changes to the component profile MUST run focused core tests, component integration tests, executor conformance, deterministic replay, negative authority/resource tests, Octet checks, and Cairn lifecycle gates.
+r[molten.wasm_component.validation] Changes to the component profile MUST run focused core tests, Mantle-bundle verification, component integration tests, executor conformance, deterministic replay, negative authority/resource tests, Octet checks, and Cairn lifecycle gates.
 
 #### Scenario: Profile change is reviewed
 - GIVEN code, WIT, configuration, or receipts for the profile change
