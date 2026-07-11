@@ -74,6 +74,7 @@ compat_module!(evidence_chain, lineage);
 #[path = "federation/mod.rs"]
 pub mod mesh;
 compat_module!(federation, mesh);
+pub mod fabric;
 #[doc(hidden)]
 #[path = "harness/mod.rs"]
 pub mod testbed;

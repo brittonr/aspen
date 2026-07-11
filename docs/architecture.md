@@ -1,10 +1,20 @@
 # Molten Architecture
 
-Molten is a policy-gated distributed runtime built around a canonical, evidence-bearing envelope spine. The core design rules are simple:
+Molten is a workload-neutral, policy-gated distributed-systems fabric built around a canonical, evidence-bearing envelope spine. The core design rules are simple:
 
 > Effects happen only through admitted adapters; all communication and evidence has a canonical Preserves boundary.
 
 > Deterministic playback is a central law: the same artifacts, dependency closure, initial state, schema refs, policy refs, handler profile, and deterministic seed or recorded effect log must produce the same canonical traces, receipts, outputs, and final state hash.
+
+The detailed primitive, adapter, system-extension, workload, port-registry, reference-system, evidence-granularity, clean-room licensing, and no-OpenRaft rules are defined in [`distributed-system-fabric.md`](distributed-system-fabric.md).
+
+## Fabric ownership
+
+Pure primitives own deterministic validation, transitions, plans, bounds, and canonical identity inputs. Adapters perform capability-rooted filesystem, storage, transport, time, entropy, process, or telemetry effects without defining authority or workload semantics. Optional system extensions own long-lived distributed-service protocols and policies behind exact manifest and fabric-port admission. Applications consume admitted services without inheriting adapter or system-extension authority.
+
+Canonical values are Preserves records identified with BLAKE3. Rust structure layout, debug text, backend handles, transport identity, clocks, randomness, and ambient process state are never canonical authority. Port resolution rejects unknown, duplicate, disabled, incompatible, over-authorizing, or silently substituted implementations.
+
+No global coordination mechanism is mandatory. OpenRaft is not selected, adapted, or used. A consistency service is an explicit optional extension, and local verified transition laws do not imply whole-system correctness.
 
 Molten combines several prior-art lines without adopting them as compatibility targets:
 
@@ -24,8 +34,8 @@ Typed Molten config and artifacts
         v
 +-------------------------------------------------------------+
 | molten-core                                                  |
-| Envelope, ids, content refs, capabilities, evidence refs     |
-| Serde DTOs, Preserves conversion, Blake3 hashes              |
+| Pure fabric, envelope, capability, policy, and planning laws |
+| In-memory semantic inputs; no Rust-layout identity claims     |
 | Pure validation only: no IO, network, clocks, or scripting   |
 +-------------------------------------------------------------+
         |                         |                         |
@@ -349,7 +359,7 @@ Persistence must preserve authority graphs. Object snapshots should not be able 
 
 ## Roadmap Cairn changes
 
-`cairn/changes/` is currently empty. Accepted requirements are recorded under `cairn/specs/`, and completed architectural slices are preserved under `cairn/archive/`. The drained/archived roadmap includes:
+Active production-readiness work lives under `cairn/changes/`. Accepted requirements are recorded under `cairn/specs/`, and completed architectural slices are preserved under `cairn/archive/`. The drained/archived roadmap includes:
 
 - `runtime-spine` — canonical envelope, Preserves boundary, adapters, policy/evidence/storage gates.
 - `synit-sam-runtime` — dataspace assertions, Observe patterns, turn semantics, service dependency assertions, tracing.
