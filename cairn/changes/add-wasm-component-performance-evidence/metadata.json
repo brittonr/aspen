@@ -1,0 +1,5 @@
+{
+  "depends_on": [
+    "adopt-wasm-component-runtime-profile"
+  ]
+}
