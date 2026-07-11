@@ -1,0 +1,9 @@
+proof-verifier-profile: octet-verus-0.2026.04.03.21dfcd2
+proof-verifier: verus@0.2026.04.03.21dfcd2
+proof-verifier-release-sha256: 246a8bcad800f02f71509834469baa001f79a6efb6853c6c7217ef8be3a9d8c6
+proof-verifier-binary-blake3: ba69ba3243d8af049ad91e6d8bba7c5de79baced16c7ede6db6cad7916b11e7b
+proof-toolchain: 1.94.0-x86_64-unknown-linux-gnu
+proof-toolchain-blake3: 45f67242cc3acf5d2db0fa409dac19ba19b48be1b2ed89dc979e6ea26950c9ba
+proof-solver: z3@verus-0.2026.04.03.21dfcd2
+proof-solver-blake3: 42e48a26bf3b38ca33d84749f4317cc179791de0d578d4d98a67f51782b54331
+trust-boundary: compatibility probe only; no proof or runtime-admission claim

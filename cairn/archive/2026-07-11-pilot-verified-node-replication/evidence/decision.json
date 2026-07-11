@@ -1,0 +1,63 @@
+{
+  "decision_blake3": "215753baf9e04b29fc5ad99d08e9d593ed597e2d6859928429f17a57beadfe6f",
+  "hash_scope": "blake3-of-jq-sorted-compact-payload-json",
+  "payload": {
+    "claim_scope": "compatibility-and-trusted-boundary-pilot-only",
+    "current_probe": {
+      "current_diagnostic_blake3": "29ec2df1c78fa6cda1d142bcaa86f2a1ed4faa0fb19820c678736e10286fd91d",
+      "no_feature_diagnostic_blake3": "dba33792b6b4a7cc68a464c03a8f6a25de194e865846da99477b68eb48d3af50",
+      "profile_id": "octet-verus-0.2026.04.03.21dfcd2",
+      "solver_blake3": "42e48a26bf3b38ca33d84749f4317cc179791de0d578d4d98a67f51782b54331",
+      "toolchain": "1.94.0-x86_64-unknown-linux-gnu",
+      "toolchain_blake3": "45f67242cc3acf5d2db0fa409dac19ba19b48be1b2ed89dc979e6ea26950c9ba",
+      "verifier": "verus@0.2026.04.03.21dfcd2",
+      "verifier_binary_blake3": "ba69ba3243d8af049ad91e6d8bba7c5de79baced16c7ede6db6cad7916b11e7b",
+      "verifier_nix_output": "/nix/store/4h8mcxlaw2kfn4z2w04rsapz66p5sv3z-molten-node-replication-verus-0.2026.04.03.21dfcd2",
+      "with_required_flag": "internal-error",
+      "without_required_flag": "unsupported-feature"
+    },
+    "decision": "blocked-verifier-internal-error",
+    "historical_verus": {
+      "revision": "d8f073f31d72a5df2113b4ab9c011c1a27b38abf",
+      "rust_version": "1.76.0",
+      "source_hash": "sha256-N6YeKGI6xBKZltjdCb6vtw3CBU66mNBHbb0wdh5wbCE="
+    },
+    "non_claims": [
+      "Node replication is a local multicore and NUMA data-structure technique, not network replication, distributed replication, Raft, consensus, or fabric membership.",
+      "Source identity, a historical upstream proof result, or a future current-verifier pass would not independently discharge trusted theorem, trait, external-body, or assume boundaries.",
+      "This pilot does not add a Molten runtime dependency and does not prove Molten, Aspen, Trellis, whole-system, distributed-system, performance, or release-readiness claims."
+    ],
+    "payload_schema": "molten-verified-node-replication-pilot-decision-payload-v1",
+    "pilot_id": "molten-node-replication-eb8e2724-current-verus-probe",
+    "promotion_eligible": false,
+    "runtime_dependency_status": "denied",
+    "scope": "local-multicore-numa-data-structure-only",
+    "trusted_boundary": {
+      "assume_count": 1,
+      "assume_sites_blake3": "a9b26f9494e4c8fb84133133039ef116ba35d99bb9838aaed590a99e7b8f3b5a",
+      "external_bodies_blake3": "2ffa64d0ea0ca2093fa4a316b279c52d8c54e69a1ff6b11a16eef98f29a978c1",
+      "external_body_count": 9,
+      "public_traits_trusted": true,
+      "top_level_refinement_theorems_trusted": true,
+      "trusted_marker_count": 33,
+      "trusted_markers_blake3": "123e0a8d77b484c276b9c709dee0007dc0b92abe9156d0ce56c51296d9871b9f"
+    },
+    "unmet_promotion_criteria": [
+      "The exact current verifier completes without unsupported-feature diagnostics, internal errors, timeouts, or failed obligations.",
+      "Every trusted, external-body, and assume boundary is cataloged and accepted for the intended local API scope.",
+      "A bounded adapter design keeps local NUMA semantics distinct from Iroh transport, distributed consistency, and consensus.",
+      "Positive and negative concurrency tests exercise admission, misuse, failure, and recovery paths without mocks in the pure core.",
+      "A declared NUMA benchmark profile demonstrates value under bounded topology, workload, memory, and latency inputs.",
+      "A dependency removal and runtime rollback path is tested before promotion.",
+      "Octet, source provenance, Valence role boundaries, and Cairn readiness evidence pass without broadening claims."
+    ],
+    "upstream": {
+      "license": "MIT",
+      "project": "verus-lang/verified-node-replication",
+      "revision": "eb8e27244a4f1b7714defe55aa495c6173a1c330",
+      "source_hash": "sha256-7y9Sh9oLyZs47BtJqON0DVhD70sa9nG67SIwiX2Yc4g=",
+      "source_hash_protocol": "nix-sha256-unpacked"
+    }
+  },
+  "schema_version": "molten-verified-node-replication-pilot-decision-v1"
+}

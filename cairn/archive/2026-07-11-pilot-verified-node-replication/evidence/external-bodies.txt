@@ -1,0 +1,9 @@
+verified-node-replication/src/exec/log.rs:33:#[verifier(external_body)]  /* vattr */
+verified-node-replication/src/exec/log.rs:39:#[verifier(external_body)]  /* vattr */
+verified-node-replication/src/exec/replica.rs:1006:    #[verifier(external_body)]  /* vattr */
+verified-node-replication/src/exec/replica.rs:45:#[verifier(external_body)]  /* vattr */
+verified-node-replication/src/exec/rwlock.rs:56:#[verifier(external_body)]  /* vattr */
+verified-node-replication/src/lib.rs:204:#[verifier(external_body)]  /* vattr */
+verified-node-replication/src/lib.rs:213:    #[verifier(external_body)]  /* vattr */
+verified-node-replication/src/lib.rs:219:    #[verifier(external_body)]  /* vattr */
+verified-node-replication/src/spec/unbounded_log_refines_simplelog.rs:45:#[verifier::external_body]

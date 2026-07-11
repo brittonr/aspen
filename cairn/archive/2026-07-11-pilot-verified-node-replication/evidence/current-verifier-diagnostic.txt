@@ -1,0 +1,5 @@
+status=internal-error
+diagnostic=Verus Internal Error: var_local_id failed
+source=verified-node-replication/src/exec/rwlock.rs
+decision=blocked-verifier-internal-error
+saved_log_scope=normalized-summary-only

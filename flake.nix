@@ -224,6 +224,12 @@
             in
             !(base == "target" || base == ".direnv" || base == ".git");
         };
+        verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
+          inherit pkgs;
+          profileDir = ./verification/verified-node-replication-pilot;
+          workspaceSource = sourceForConfigChecks;
+          savedEvidenceDir = ./cairn/archive/2026-07-11-pilot-verified-node-replication/evidence;
+        };
 
         moltenVmNodeModule =
           nodeId:
@@ -299,6 +305,8 @@
           molten-kache = kacheWs.workspaceMembers."molten".build;
           molten-kache-rust = kacheWrappedRust;
           all = ws.allWorkspaceMembers;
+        } // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          verified-node-replication-pilot = verifiedNodeReplicationPilot.check;
         };
 
         checks =
@@ -1884,6 +1892,8 @@
                 cargo fmt --check
                 touch $out
               '';
+        } // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          verified-node-replication-pilot = verifiedNodeReplicationPilot.check;
         };
 
         apps = {

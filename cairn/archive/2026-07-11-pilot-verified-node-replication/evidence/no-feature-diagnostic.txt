@@ -1,0 +1,4 @@
+status=unsupported-feature
+diagnostic_count=7
+required_flag=-V new-mut-ref
+saved_log_scope=normalized-summary-only
