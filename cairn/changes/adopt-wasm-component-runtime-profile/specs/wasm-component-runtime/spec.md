@@ -22,15 +22,15 @@ r[molten.wasm_component.profile] Molten MUST admit WebAssembly components only t
 
 ### Requirement: Production artifacts cross a Mantle materialization boundary
 
-r[molten.wasm_component.materialization] Evidence-bearing and production component execution MUST consume a versioned Mantle materialization bundle that binds exact portable or precompiled bytes, WIT/package inputs, build cohort, expected runtime profile, stage receipts, and policy-required Octet/Valence/Cairn references; Molten MUST remeasure every byte object and MUST NOT derive runtime authority from bundle success.
+r[molten.wasm_component.materialization] Evidence-bearing and production component execution MUST consume a versioned Mantle materialization bundle that binds exact portable or precompiled bytes, WIT/package inputs, build cohort, expected runtime profile, stage receipts, and the pre-materialization Octet report. Policy-required Valence sidecars and Cairn acceptance receipts MUST be supplied through a separate admission envelope keyed to the canonical bundle and child identities; Molten MUST remeasure every byte object and MUST NOT derive runtime authority from either envelope's success.
 
 #### Scenario: Complete materialization bundle is admitted
 - GIVEN every required bundle object, BLAKE3 identity, parent receipt, and expected runtime profile matches the bytes Molten remeasures
 - WHEN artifact admission runs
 - THEN Molten MAY re-inspect runtime facts and continue to independent capability and resource admission without rebuilding the component.
 
-#### Scenario: Production request supplies loose or mismatched bytes
-- GIVEN a production request supplies an arbitrary path, loose bytes, a stale profile, an incomplete bundle, or a bundle whose object identity differs from measured bytes
+#### Scenario: Production request supplies loose, mismatched, or circular evidence
+- GIVEN a production request supplies an arbitrary path, loose bytes, a stale profile, an incomplete bundle, a bundle whose object identity differs from measured bytes, or a Valence/Cairn identity embedded into the canonical bundle that it references
 - WHEN artifact admission runs
 - THEN Molten MUST deny before compilation, instantiation, or precompiled deserialization; only an explicitly test-only profile MAY load loose fixtures and it MUST NOT emit production evidence.
 
