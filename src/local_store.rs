@@ -24,6 +24,7 @@ pub enum LocalStoreKind {
     Exchange,
     Ledger,
     Delivery,
+    Durable,
 }
 
 impl LocalStoreKind {
@@ -36,6 +37,7 @@ impl LocalStoreKind {
             Self::Exchange => "exchange",
             Self::Ledger => "ledger",
             Self::Delivery => "delivery",
+            Self::Durable => "durable",
         }
     }
 }
@@ -351,6 +353,7 @@ typed_root!(DataspaceStoreRoot, LocalStoreKind::Dataspace);
 typed_root!(ExchangeStoreRoot, LocalStoreKind::Exchange);
 typed_root!(LedgerStoreRoot, LocalStoreKind::Ledger);
 typed_root!(DeliveryStoreRoot, LocalStoreKind::Delivery);
+typed_root!(DurableStoreRoot, LocalStoreKind::Durable);
 
 impl ArtifactStoreRoot {
     pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {

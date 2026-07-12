@@ -132,6 +132,7 @@ Cairn roadmap status: active production-readiness changes live under `cairn/chan
 - `secrets-redaction-encrypted-refs`
 - `plugin-host-lifecycle-runtime`
 - `system-extension-service-runtime`
+- `fabric-durable-state-ports`
 - `coordination-services-control-plane`
 - `coordination-control-plane-ux`
 - `operator-dogfood-node-workflow`
