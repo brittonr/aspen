@@ -31,6 +31,7 @@
       url = "path:../octet";
       flake = false;
     };
+    octet-toolchain.url = "github:OnixResearch/octet?rev=fc38f59330b626961d166febfdf1a5aa6575460f";
     ucan-src = {
       url = "path:../ucan";
       flake = false;
@@ -49,6 +50,7 @@
       basalt-src,
       cairn-src,
       octet-src,
+      octet-toolchain,
       ucan-src,
       ...
     }:
@@ -226,9 +228,11 @@
         };
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
+          octetPackages = octet-toolchain.packages.${system};
+          octetRevision = "fc38f59330b626961d166febfdf1a5aa6575460f";
           profileDir = ./verification/verified-node-replication-pilot;
           workspaceSource = sourceForConfigChecks;
-          savedEvidenceDir = ./cairn/archive/2026-07-11-pilot-verified-node-replication/evidence;
+          savedEvidenceDir = ./cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence;
         };
 
         moltenVmNodeModule =

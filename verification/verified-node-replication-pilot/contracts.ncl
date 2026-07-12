@@ -56,8 +56,6 @@ let OneOf = fun allowed => std.contract.from_predicate (fun value =>
       verifier_binary_blake3 | Blake3Hex,
       solver_blake3 | Blake3Hex,
       rust_version | OneOf ["1.94.0"],
-      rust_compiler_source_hash | NixSha256,
-      rust_std_source_hash | NixSha256,
       command_argv | NonEmptyArray | Array NonEmptyString,
       timeout_seconds | PositiveInteger,
       maximum_saved_log_bytes | PositiveInteger,

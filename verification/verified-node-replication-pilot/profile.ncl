@@ -35,10 +35,8 @@ let contracts = import "contracts.ncl" in
     verifier_binary_blake3 = "ba69ba3243d8af049ad91e6d8bba7c5de79baced16c7ede6db6cad7916b11e7b",
     solver_blake3 = "42e48a26bf3b38ca33d84749f4317cc179791de0d578d4d98a67f51782b54331",
     rust_version = "1.94.0",
-    rust_compiler_source_hash = "sha256-ZvBp/ET9PbbZqmlNxuUWDspGSD5WgcoAR/rI5rvfCMc=",
-    rust_std_source_hash = "sha256-exB7+mfC2nVW4cJ4I1yFk+aoxoN9feQ5XKRFO8brLEg=",
     command_argv = [
-      "molten-node-replication-verus",
+      "octet-production-verus",
       "-V",
       "new-mut-ref",
       "--crate-type=lib",

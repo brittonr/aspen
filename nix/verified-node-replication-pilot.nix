@@ -1,5 +1,7 @@
 {
   pkgs,
+  octetPackages,
+  octetRevision,
   profileDir,
   workspaceSource,
   savedEvidenceDir ? null,
@@ -7,11 +9,7 @@
 
 let
   profile = builtins.fromJSON (builtins.readFile (profileDir + "/generated/profile.json"));
-  verifierVersion = builtins.replaceStrings [ "verus@" ] [ "" ] profile.current_probe.verifier;
-  rustVersion = profile.current_probe.rust_version;
-  rustTarget = "x86_64-unknown-linux-gnu";
-  rustToolchainLabel = "${rustVersion}-${rustTarget}";
-  rustupRunPrefixArgCount = 2;
+  rustToolchainLabel = "${profile.current_probe.rust_version}-x86_64-unknown-linux-gnu";
   expectedProbeFailureExitCode = 1;
   timeoutExitCode = 124;
   source = pkgs.fetchzip {
@@ -26,129 +24,8 @@ let
     url = "https://github.com/verus-lang/verus/archive/${profile.historical_verus.revision}.tar.gz";
     hash = profile.historical_verus.source_hash;
   };
-  rustCompilerRelease = pkgs.fetchzip {
-    url = "https://static.rust-lang.org/dist/rustc-${rustVersion}-${rustTarget}.tar.xz";
-    hash = profile.current_probe.rust_compiler_source_hash;
-  };
-  rustStdRelease = pkgs.fetchzip {
-    url = "https://static.rust-lang.org/dist/rust-std-${rustVersion}-${rustTarget}.tar.xz";
-    hash = profile.current_probe.rust_std_source_hash;
-  };
-  rustToolchain = pkgs.runCommand "molten-node-replication-rust-${rustVersion}" { } ''
-    mkdir -p "$out"
-    cp -R ${rustCompilerRelease}/rustc/. "$out/"
-    chmod -R u+w "$out"
-    cp -R ${rustStdRelease}/rust-std-${rustTarget}/. "$out/"
-  '';
-  verifier = pkgs.stdenvNoCC.mkDerivation {
-    pname = "molten-node-replication-verus";
-    version = verifierVersion;
-    src = pkgs.fetchurl {
-      url = "https://github.com/verus-lang/verus/releases/download/release/${verifierVersion}/verus-${verifierVersion}-x86-linux.zip";
-      hash = profile.current_probe.verifier_release_nix_sri;
-    };
-    nativeBuildInputs = with pkgs; [ autoPatchelfHook b3sum findutils makeWrapper unzip ];
-    buildInputs = [ pkgs.stdenv.cc.cc.lib pkgs.zlib rustToolchain ];
-    dontUnpack = true;
-    preFixup = ''
-      addAutoPatchelfSearchPath ${rustToolchain}/lib
-    '';
-    installPhase = ''
-      runHook preInstall
-      unpack_dir="$TMPDIR/verus-release"
-      release_dir="$out/libexec/verus-release"
-      mkdir -p "$unpack_dir" "$release_dir" "$out/bin" "$out/share"
-      unzip -q "$src" -d "$unpack_dir"
-      release_binary="$(find "$unpack_dir" -type f -name verus -print -quit)"
-      test -n "$release_binary"
-      release_root="$(dirname "$release_binary")"
-      cp -R "$release_root/." "$release_dir/"
-      chmod -R u+w "$release_dir"
-
-      rustup_shim="$release_dir/rustup"
-      cat > "$rustup_shim" <<'SHIM'
-      #!${pkgs.runtimeShell}
-      set -eu
-      case "''${1:-}" in
-        --version|-V)
-          printf 'rustup 1.28.2 (Molten node-replication pilot shim)\n'
-          ;;
-        toolchain)
-          if [ "''${2:-}" = "list" ]; then
-            printf '${rustToolchainLabel} (default)\n'
-          else
-            echo "Molten pilot rustup shim: unsupported toolchain ''${2:-}" >&2
-            exit 1
-          fi
-          ;;
-        run)
-          requested="''${2:-}"
-          shift ${toString rustupRunPrefixArgCount}
-          if [ "''${1:-}" = "--" ]; then
-            shift
-          fi
-          case "$requested" in
-            ${rustToolchainLabel}|${rustVersion}) ;;
-            *) echo "Molten pilot rustup shim: unsupported toolchain $requested" >&2; exit 1 ;;
-          esac
-          export LD_LIBRARY_PATH="${rustToolchain}/lib:''${LD_LIBRARY_PATH:-}"
-          exec "$@"
-          ;;
-        which)
-          case "''${2:-}" in
-            rustc) printf '%s/bin/rustc\n' "${rustToolchain}" ;;
-            *) echo "Molten pilot rustup shim: unsupported which ''${2:-}" >&2; exit 1 ;;
-          esac
-          ;;
-        show)
-          if [ "''${2:-}" = "active-toolchain" ]; then
-            printf '${rustToolchainLabel} (default)\n'
-          else
-            printf '${rustToolchainLabel}\n'
-          fi
-          ;;
-        *) echo "Molten pilot rustup shim: unsupported: $*" >&2; exit 1 ;;
-      esac
-      SHIM
-      chmod +x "$rustup_shim"
-      makeWrapper "$release_dir/verus" "$out/libexec/verus-run" \
-        --prefix PATH : "$release_dir" \
-        --prefix LD_LIBRARY_PATH : "${rustToolchain}/lib" \
-        --prefix LD_LIBRARY_PATH : "${pkgs.zlib}/lib" \
-        --set VERUS_Z3_PATH "$release_dir/z3"
-
-      verifier_blake3="$(b3sum "$release_dir/verus")"
-      verifier_blake3="''${verifier_blake3%% *}"
-      solver_blake3="$(b3sum "$release_dir/z3")"
-      solver_blake3="''${solver_blake3%% *}"
-      toolchain_blake3="$(b3sum ${rustToolchain}/bin/rustc)"
-      toolchain_blake3="''${toolchain_blake3%% *}"
-      test "$verifier_blake3" = '${profile.current_probe.verifier_binary_blake3}'
-      test "$solver_blake3" = '${profile.current_probe.solver_blake3}'
-      cat > "$out/share/identity.txt" <<IDENTITY
-      proof-verifier-profile: ${profile.current_probe.profile_id}
-      proof-verifier: ${profile.current_probe.verifier}
-      proof-verifier-release-sha256: ${profile.current_probe.verifier_release_sha256_hex}
-      proof-verifier-binary-blake3: $verifier_blake3
-      proof-toolchain: ${rustToolchainLabel}
-      proof-toolchain-blake3: $toolchain_blake3
-      proof-solver: z3@verus-${verifierVersion}
-      proof-solver-blake3: $solver_blake3
-      trust-boundary: compatibility probe only; no proof or runtime-admission claim
-      IDENTITY
-      cat > "$out/bin/molten-node-replication-verus" <<WRAPPER
-      #!${pkgs.runtimeShell}
-      set -eu
-      if [ "\$#" -eq 1 ] && [ "\$1" = "--identity" ]; then
-        cat "$out/share/identity.txt"
-        exit 0
-      fi
-      exec "$out/libexec/verus-run" "\$@"
-      WRAPPER
-      chmod +x "$out/bin/molten-node-replication-verus"
-      runHook postInstall
-    '';
-  };
+  verusToolchainProfile = builtins.getAttr "octet-verus-toolchain-profile" octetPackages;
+  verifier = builtins.getAttr "octet-production-verus" octetPackages;
   check = pkgs.runCommand "molten-verified-node-replication-pilot" {
     nativeBuildInputs = with pkgs; [
       b3sum
@@ -159,10 +36,11 @@ let
       jq
       nickel
       ripgrep
-    ] ++ [ verifier ];
+    ] ++ [ verusToolchainProfile verifier ];
   } ''
     set -eu
     profile_dir=${profileDir}
+    octet_profile_json=${verusToolchainProfile}/share/octet/verus-toolchain/profile.json
     upstream=${source}
     crate_root="$upstream/verified-node-replication"
     output_dir="$out/share/molten/verified-node-replication-pilot"
@@ -178,6 +56,27 @@ let
         exit 1
       fi
     done
+    validate_octet_profile() {
+      jq --exit-status '
+        .schema_version == "octet-verus-toolchain-profile/v1"
+        and .profile_id == "${profile.current_probe.profile_id}"
+        and .verifier.release == "${builtins.replaceStrings [ "verus@" ] [ "" ] profile.current_probe.verifier}"
+        and .verifier.release_nix_sri == "${profile.current_probe.verifier_release_nix_sri}"
+        and .verifier.rust_toolchain_label == "${rustToolchainLabel}"
+        and any(.compatibility[];
+          .consumer == "aspen-node-replication-pilot"
+          and .status == "native"
+          and .verifier_release == "${builtins.replaceStrings [ "verus@" ] [ "" ] profile.current_probe.verifier}")
+      ' "$1" > /dev/null
+    }
+    validate_octet_profile "$octet_profile_json"
+    jq '(.compatibility[] | select(.consumer == "aspen-node-replication-pilot")).status = "unsupported"' \
+      "$octet_profile_json" > "$TMPDIR/mismatched-octet-profile.json"
+    if validate_octet_profile "$TMPDIR/mismatched-octet-profile.json"; then
+      echo "mismatched Octet Aspen compatibility profile unexpectedly passed" >&2
+      exit 1
+    fi
+    cp "$octet_profile_json" "$output_dir/octet-profile.json"
 
     ${pkgs.lib.concatMapStringsSep "\n" (sentinel: ''
       test -e "$upstream/${sentinel}"
@@ -226,16 +125,26 @@ let
         rg --fixed-strings '${symbol}' "$upstream/${sourcePath}" > /dev/null
       '') profile.trusted_boundary.required_locations}
 
-    molten-node-replication-verus --identity > "$output_dir/verifier-identity.txt"
+    octet-production-verus --identity > "$output_dir/verifier-identity.txt"
     grep -F 'proof-verifier: ${profile.current_probe.verifier}' "$output_dir/verifier-identity.txt" > /dev/null
+    identity_value() {
+      identity_key="$1"
+      identity_result="$(awk -F ': ' -v key="$identity_key" '$1 == key { sub(/^[^:]*: /, ""); print; exit }' "$output_dir/verifier-identity.txt")"
+      test -n "$identity_result"
+      printf '%s' "$identity_result"
+    }
+    verifier_binary_blake3="$(identity_value proof-verifier-binary-blake3)"
+    solver_blake3="$(identity_value proof-solver-blake3)"
+    test "$verifier_binary_blake3" = '${profile.current_probe.verifier_binary_blake3}'
+    test "$solver_blake3" = '${profile.current_probe.solver_blake3}'
     entrypoint="$crate_root/src/lib.rs"
     set +e
     timeout '${toString profile.current_probe.timeout_seconds}' \
-      molten-node-replication-verus --crate-type=lib "$entrypoint" \
+      octet-production-verus --crate-type=lib "$entrypoint" \
       > "$TMPDIR/no-feature.stdout" 2> "$TMPDIR/no-feature.stderr"
     no_feature_status="$?"
     timeout '${toString profile.current_probe.timeout_seconds}' \
-      molten-node-replication-verus -V new-mut-ref --crate-type=lib "$entrypoint" \
+      octet-production-verus -V new-mut-ref --crate-type=lib "$entrypoint" \
       > "$TMPDIR/current.stdout" 2> "$TMPDIR/current.stderr"
     current_status="$?"
     set -e
@@ -282,7 +191,11 @@ let
     current_diagnostic_blake3="''${current_diagnostic_blake3%% *}"
     no_feature_diagnostic_blake3="$(b3sum "$output_dir/no-feature-diagnostic.txt")"
     no_feature_diagnostic_blake3="''${no_feature_diagnostic_blake3%% *}"
+    octet_profile_blake3="$(b3sum "$octet_profile_json")"
+    octet_profile_blake3="''${octet_profile_blake3%% *}"
+    toolchain="$(awk -F ': ' '$1 == "proof-toolchain" { print $2 }' "$output_dir/verifier-identity.txt")"
     toolchain_blake3="$(awk -F ': ' '$1 == "proof-toolchain-blake3" { print $2 }' "$output_dir/verifier-identity.txt")"
+    test "$toolchain" = '${rustToolchainLabel}'
 
     jq --null-input \
       --arg trusted_blake3 "$trusted_blake3" \
@@ -290,6 +203,12 @@ let
       --arg assume_blake3 "$assume_blake3" \
       --arg current_diagnostic_blake3 "$current_diagnostic_blake3" \
       --arg no_feature_diagnostic_blake3 "$no_feature_diagnostic_blake3" \
+      --arg octet_profile_blake3 "$octet_profile_blake3" \
+      --arg octet_profile_nix_output '${verusToolchainProfile}' \
+      --arg octet_revision '${octetRevision}' \
+      --arg verifier_binary_blake3 "$verifier_binary_blake3" \
+      --arg solver_blake3 "$solver_blake3" \
+      --arg toolchain "$toolchain" \
       --arg toolchain_blake3 "$toolchain_blake3" \
       --arg verifier_nix_output '${verifier}' \
       --argjson trusted_count "$trusted_count" \
@@ -315,11 +234,15 @@ let
           rust_version: "${profile.historical_verus.rust_version}"
         },
         current_probe: {
+          provider: "octet",
+          provider_revision: $octet_revision,
           profile_id: "${profile.current_probe.profile_id}",
+          profile_blake3: $octet_profile_blake3,
+          profile_nix_output: $octet_profile_nix_output,
           verifier: "${profile.current_probe.verifier}",
-          verifier_binary_blake3: "${profile.current_probe.verifier_binary_blake3}",
-          solver_blake3: "${profile.current_probe.solver_blake3}",
-          toolchain: "${rustToolchainLabel}",
+          verifier_binary_blake3: $verifier_binary_blake3,
+          solver_blake3: $solver_blake3,
+          toolchain: $toolchain,
           toolchain_blake3: $toolchain_blake3,
           verifier_nix_output: $verifier_nix_output,
           without_required_flag: "unsupported-feature",
@@ -374,6 +297,7 @@ let
     ${pkgs.lib.optionalString (savedEvidenceDir != null) ''
       diff --unified ${savedEvidenceDir}/decision.json "$output_dir/decision.json"
       diff --unified ${savedEvidenceDir}/decision-payload.canonical.json "$output_dir/decision-payload.canonical.json"
+      diff --unified ${savedEvidenceDir}/octet-profile.json "$output_dir/octet-profile.json"
       diff --unified ${savedEvidenceDir}/verifier-identity.txt "$output_dir/verifier-identity.txt"
       diff --unified ${savedEvidenceDir}/trusted-markers.txt "$output_dir/trusted-markers.txt"
       diff --unified ${savedEvidenceDir}/external-bodies.txt "$output_dir/external-bodies.txt"

@@ -1,0 +1,11 @@
+[rustc_mir_build/src/builder/mod.rs:269:13] ids = (
+    800,
+    132,
+)
+[rustc_mir_build/src/builder/mod.rs:270:13] self.def_id = DefId(0:799 ~ lib[40b2]::exec::rwlock::{impl#4}::acquire_write)
+[rustc_mir_build/src/builder/mod.rs:273:13] real_id.0.owner.def_id.local_def_index.as_usize() = 799
+[rustc_mir_build/src/builder/mod.rs:274:13] self.fn_span = <PINNED_UPSTREAM_SOURCE>/verified-node-replication/src/exec/rwlock.rs:277:5: 348:6 (#0)
+
+thread 'rustc' (<PID>) panicked at rustc_mir_build/src/builder/mod.rs:275:13:
+Verus Internal Error: var_local_id failed: (800, 132)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

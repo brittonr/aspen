@@ -9,7 +9,7 @@ The typed source of truth is [`verification/verified-node-replication-pilot/prof
 - upstream source `eb8e27244a4f1b7714defe55aa495c6173a1c330` and its fixed-output source hash;
 - the source tree's Verus gitlink `d8f073f31d72a5df2113b4ab9c011c1a27b38abf` and its fixed-output source hash;
 - the historical Rust `1.76.0` context;
-- Octet profile `octet-verus-0.2026.04.03.21dfcd2`, exact Verus release/binary, solver, and official Rust component identities;
+- Octet revision `fc38f59330b626961d166febfdf1a5aa6575460f`, profile `octet-verus-0.2026.04.03.21dfcd2`, and its exact production Verus package, solver, and Rust toolchain identities;
 - bounded probe timeout and saved-log size;
 - trusted-boundary counts, promotion criteria, and non-claims.
 
@@ -29,10 +29,10 @@ The current decision is `blocked-verifier-internal-error`:
 3. The source contains 33 `#[verus::trusted]` markers, nine external-body markers, and one `assume` site. The trusted set includes the three top-level refinement theorems and public `Dispatch` and `NodeReplicatedT` traits.
 4. No Molten Cargo manifest or lockfile admits the upstream crate.
 
-The normalized diagnostics, marker inventories, canonical decision payload, and BLAKE3-bound decision are saved under [`cairn/archive/2026-07-11-pilot-verified-node-replication/evidence/`](../cairn/archive/2026-07-11-pilot-verified-node-replication/evidence/).
+The refreshed normalized diagnostics, marker inventories, Octet profile bytes, canonical decision payload, and BLAKE3-bound decision are saved under [`cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence/`](../cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence/). The original pilot archive remains historical evidence from before central package consumption.
 
 ## Promotion gate
 
 Runtime dependency work remains denied until all profile criteria pass: current-verifier compatibility, trusted-boundary acceptance, a NUMA-local adapter design, positive and negative concurrency tests, bounded NUMA benchmarks, rollback/removal testing, and scoped Octet/provenance/Valence/Cairn evidence.
 
-Even a future successful verifier run would prove only named obligations over the exact upstream model and its explicit trusted boundaries. It would not prove Molten integration, whole-system behavior, distributed correctness, production performance, or release readiness.
+The probe has no locally reconstructed Verus or Rust package fallback: absent or mismatched Octet profile/package evidence fails before a decision is emitted. Even a future successful verifier run would prove only named obligations over the exact upstream model and its explicit trusted boundaries. It would not prove Molten integration, whole-system behavior, distributed correctness, production performance, or release readiness.
