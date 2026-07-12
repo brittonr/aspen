@@ -1,7 +1,15 @@
 
 pub fn import_control_live_ticket(input: &ControlLiveTicketImportInput<'_>) -> Result<ControlLiveTicketImport> {
     validate_state_root(input.state_root)?;
-    ensure_state_layout(input.state_root)?;
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    import_control_live_ticket_with_root(&state_root, input)
+}
+
+fn import_control_live_ticket_with_root(
+    state_root: &crate::node_state::NodeStateRoot,
+    input: &ControlLiveTicketImportInput<'_>,
+) -> Result<ControlLiveTicketImport> {
+    ensure_state_layout(state_root)?;
     if let Some(node) = input.expected_node {
         validate_node_id(node)?;
     }
@@ -23,15 +31,14 @@ pub fn import_control_live_ticket(input: &ControlLiveTicketImportInput<'_>) -> R
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let mut imported_refs = Vec::with_capacity(2);
     if diagnostics.is_empty() {
-        imported_refs.push(import_artifact(input.state_root, input.ticket_value)?);
+        imported_refs.push(import_artifact(state_root, input.ticket_value)?);
         if let Some(value) = input.peer_admission_value {
-            imported_refs.push(import_artifact(input.state_root, value)?);
+            imported_refs.push(import_artifact(state_root, value)?);
         }
     }
     let peer_id = admission.as_ref().map(|value| value.peer_id.as_str()).or(input.expected_peer);
     let receipt_value = live_ticket_import_receipt_value(&LiveTicketImportReceiptValueInput {
         decision,
-        state_root: input.state_root,
         ticket: &ticket,
         peer_admission_ref: admission.as_ref().map(|value| value.admission_ref.as_str()),
         peer_id,
@@ -40,7 +47,7 @@ pub fn import_control_live_ticket(input: &ControlLiveTicketImportInput<'_>) -> R
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_artifact(input.state_root, &receipt_value)?;
+    import_artifact(state_root, &receipt_value)?;
     Ok(ControlLiveTicketImport {
         decision: decision.to_string(),
         ticket_ref: ticket.ticket_ref,
@@ -56,7 +63,15 @@ pub fn import_control_authority_grant_checked(
     input: &ControlAuthorityGrantImportInput<'_>,
 ) -> Result<ControlAuthorityGrantImport> {
     validate_state_root(input.state_root)?;
-    ensure_state_layout(input.state_root)?;
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    import_control_authority_grant_checked_with_root(&state_root, input)
+}
+
+fn import_control_authority_grant_checked_with_root(
+    state_root: &crate::node_state::NodeStateRoot,
+    input: &ControlAuthorityGrantImportInput<'_>,
+) -> Result<ControlAuthorityGrantImport> {
+    ensure_state_layout(state_root)?;
     if let Some(peer) = input.expected_peer {
         validate_node_id(peer)?;
     }
@@ -77,18 +92,17 @@ pub fn import_control_authority_grant_checked(
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let mut imported_refs = Vec::with_capacity(1);
     if diagnostics.is_empty() {
-        imported_refs.push(import_artifact(input.state_root, input.grant_value)?);
+        imported_refs.push(import_artifact(state_root, input.grant_value)?);
     }
     let receipt_value = authority_grant_import_receipt_value(&AuthorityGrantImportReceiptValueInput {
         decision,
-        state_root: input.state_root,
         grant: &grant,
         as_of_epoch: input.as_of_epoch,
         imported_refs: &imported_refs,
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_artifact(input.state_root, &receipt_value)?;
+    import_artifact(state_root, &receipt_value)?;
     Ok(ControlAuthorityGrantImport {
         decision: decision.to_string(),
         grant_ref: grant.grant_ref,

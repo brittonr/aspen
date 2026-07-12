@@ -87,7 +87,23 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<Resolution> {
     if input.secret.trim().is_empty() {
         return Err(MoltenError::invalid_harness("node endpoint secret must not be empty"));
     }
-    let existing_endpoint = fs::read_to_string(input.endpoint_path).ok().map(|value| value.trim().to_string());
+    let existing_endpoint = match input.root.observe_file(input.endpoint_path)? {
+        crate::node_state::NodeStateFileObservation::Missing => None,
+        crate::node_state::NodeStateFileObservation::NonRegular(kind) => {
+            return Err(MoltenError::invalid_harness(format!(
+                "node endpoint identity leaf must be a regular file, got {kind:?}"
+            )));
+        }
+        crate::node_state::NodeStateFileObservation::Regular(file) => {
+            let bytes = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
+            Some(
+                String::from_utf8(bytes)
+                    .map_err(|error| MoltenError::invalid_harness(format!("node endpoint id is not UTF-8: {error}")))?
+                    .trim()
+                    .to_string(),
+            )
+        }
+    };
     let expected_rotation_receipt_ref = existing_endpoint
         .as_deref()
         .filter(|prior_endpoint_id| *prior_endpoint_id != input.material.endpoint_id.as_str())
@@ -106,8 +122,7 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<Resolution> {
         return endpoint_observation_denial(&input, &observation);
     }
 
-    fs::create_dir_all(&input.config.data_dir).map_err(MoltenError::from)?;
-    fs::write(input.endpoint_path, &input.material.endpoint_id).map_err(MoltenError::from)?;
+    input.root.write(input.endpoint_path, input.material.endpoint_id.as_bytes())?;
     let receipt_operation = resolution_operation(&input, observation.kind);
     let pre_receipt_value = pass_receipt(&input, &observation, receipt_operation, None);
     let pre_receipt_ref = crate::preserves_rail::canonical_hash(&pre_receipt_value)?;
@@ -268,12 +283,10 @@ fn derive_endpoint_material(secret: &str) -> Result<EndpointMaterial> {
     })
 }
 
-fn generate_secret(node_id: &str, data_dir: &std::path::Path) -> Result<String> {
+fn generate_secret(node_id: &str) -> Result<String> {
     let seed_ref = crate::preserves_rail::canonical_hash(&record("node-identity-generated-secret-seed", vec![
         record("node-id", vec![string(node_id)]),
-        record("data-dir-ref", vec![string(crate::preserves_rail::content_ref_from_bytes(
-            data_dir.display().to_string().as_bytes(),
-        ))]),
+        record("namespace", vec![string(IDENTITY_NAMESPACE_LABEL)]),
     ]))?;
     Ok(format!("molten-local-generated:{node_id}:{seed_ref}"))
 }
@@ -285,26 +298,22 @@ fn selected_backend_ref(config: &Config, source_class: &str) -> Result<String> {
         require_ref(backend_ref, "managed secret backend ref")?;
         return Ok(backend_ref.to_string());
     }
-    backend_ref(&config.data_dir, source_class)
+    backend_ref(source_class)
 }
 
-fn backend_ref(data_dir: &std::path::Path, source_class: &str) -> Result<String> {
+fn backend_ref(source_class: &str) -> Result<String> {
     crate::preserves_rail::canonical_hash(&record("node-identity-backend", vec![
         record("class", vec![string(source_class)]),
-        record("data-dir-ref", vec![string(crate::preserves_rail::content_ref_from_bytes(
-            data_dir.display().to_string().as_bytes(),
-        ))]),
+        record("namespace", vec![string(IDENTITY_NAMESPACE_LABEL)]),
     ]))
 }
 
-fn source_metadata_ref(data_dir: &std::path::Path, source_class: &str, backend_ref: &str) -> Result<String> {
+fn source_metadata_ref(source_class: &str, backend_ref: &str) -> Result<String> {
     crate::preserves_rail::canonical_hash(&record("node-identity-source-metadata", vec![
         record("class", vec![string(source_class)]),
         record("backend-ref", vec![string(backend_ref)]),
         record("path-class", vec![string("node-state-redacted")]),
-        record("data-dir-ref", vec![string(crate::preserves_rail::content_ref_from_bytes(
-            data_dir.display().to_string().as_bytes(),
-        ))]),
+        record("namespace", vec![string(IDENTITY_NAMESPACE_LABEL)]),
     ]))
 }
 
@@ -327,6 +336,17 @@ pub fn admitted_rotation_receipt_ref(
     ]))
 }
 
+fn validate_identity_namespace(root: &crate::node_state::NodeStateNamespace) -> Result<()> {
+    match root.kind() {
+        crate::node_state::NodeStateNamespaceKind::Identity | crate::node_state::NodeStateNamespaceKind::Secrets => {
+            Ok(())
+        }
+        other => Err(MoltenError::invalid_harness(format!(
+            "node identity requires identity or secrets namespace, got {other:?}"
+        ))),
+    }
+}
+
 fn validate_config(config: &Config) -> Result<()> {
     if config.node_id.trim().is_empty() {
         return Err(MoltenError::invalid_harness("node id must not be empty"));
@@ -346,47 +366,50 @@ fn validate_config(config: &Config) -> Result<()> {
     validate_refs(&config.policy_refs, "node identity policy ref")
 }
 
-fn write_secret_restricted(path: &std::path::Path, secret: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(OWNER_ONLY_SECRET_FILE_MODE)
-            .open(path)
-            .map_err(MoltenError::from)?;
-        file.write_all(secret.as_bytes()).map_err(MoltenError::from)?;
-        file.write_all(b"\n").map_err(MoltenError::from)?;
-        Ok(())
-    }
-    #[cfg(not(unix))]
-    {
-        fs::write(path, format!("{secret}\n")).map_err(MoltenError::from)
-    }
+fn write_secret_restricted(
+    root: &crate::node_state::NodeStateNamespace,
+    path: &crate::node_state::NodeStatePath,
+    secret: &str,
+) -> Result<()> {
+    let bytes = format!("{secret}\n");
+    root.write_restricted(path, bytes.as_bytes(), OWNER_ONLY_SECRET_FILE_MODE)
 }
 
-fn secret_file_permission_status(path: &std::path::Path) -> Result<IrohSecretPermissionStatus> {
-    if !path.exists() {
-        return Ok(IrohSecretPermissionStatus::NotPresent);
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let metadata = fs::metadata(path).map_err(MoltenError::from)?;
-        if metadata.permissions().mode() & GROUP_OR_OTHER_SECRET_PERMISSION_BITS == 0 {
-            Ok(IrohSecretPermissionStatus::Restricted)
-        } else {
-            Ok(IrohSecretPermissionStatus::Unsafe)
+fn read_observed_secret(observation: crate::node_state::NodeStateFileObservation) -> Result<String> {
+    let crate::node_state::NodeStateFileObservation::Regular(file) = observation else {
+        return Err(MoltenError::invalid_harness(
+            "persisted endpoint secret changed after source selection",
+        ));
+    };
+    let bytes = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
+    String::from_utf8(bytes)
+        .map(|secret| secret.trim().to_string())
+        .map_err(|error| MoltenError::invalid_harness(format!("persisted endpoint secret is not UTF-8: {error}")))
+}
+
+fn secret_file_permission_status(
+    observation: &crate::node_state::NodeStateFileObservation,
+) -> IrohSecretPermissionStatus {
+    match observation {
+        crate::node_state::NodeStateFileObservation::Missing => IrohSecretPermissionStatus::NotPresent,
+        crate::node_state::NodeStateFileObservation::NonRegular(_) => IrohSecretPermissionStatus::Unsafe,
+        crate::node_state::NodeStateFileObservation::Regular(file) => {
+            #[cfg(unix)]
+            {
+                file.unix_mode().map_or(IrohSecretPermissionStatus::Unsupported, |mode| {
+                    if mode & GROUP_OR_OTHER_SECRET_PERMISSION_BITS == 0 {
+                        IrohSecretPermissionStatus::Restricted
+                    } else {
+                        IrohSecretPermissionStatus::Unsafe
+                    }
+                })
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = file;
+                IrohSecretPermissionStatus::Unsupported
+            }
         }
-    }
-    #[cfg(not(unix))]
-    {
-        Ok(IrohSecretPermissionStatus::Unsupported)
     }
 }
 

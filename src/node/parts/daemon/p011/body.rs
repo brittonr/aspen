@@ -122,7 +122,7 @@ fn live_workflow_bundle_ack_import_diagnostics(
 }
 
 fn import_live_workflow_bundle_ack_members(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     ack: &ControlLiveWorkflowBundleAck,
 ) -> Result<Vec<String>> {
     let mut imported_refs = Vec::with_capacity(8);

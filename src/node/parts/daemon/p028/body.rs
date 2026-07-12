@@ -28,7 +28,8 @@ fn evaluate_control_provenance(input: &ControlProvenanceInput<'_>) -> Result<cra
         prior_diagnostics: &provenance_diagnostics,
     })?;
     write_preserves(
-        &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, input.subreceipt_kind),
+        input.state_root,
+        &control_operation_subreceipt_path(&input.request.request_ref, input.subreceipt_kind)?,
         &evaluation.receipt_value,
     )?;
     import_artifact(input.state_root, &evaluation.receipt_value)?;
@@ -41,7 +42,7 @@ struct InstallRefs {
 }
 
 struct InstallFinishInput<'a> {
-    state_root: &'a Path,
+    state_root: &'a crate::node_state::NodeStateRoot,
     request: &'a crate::node_runtime::ControlRequest,
     startup_receipt_ref: &'a str,
     payload_ref: &'a str,
@@ -51,7 +52,7 @@ struct InstallFinishInput<'a> {
 }
 
 fn finish_install_dispatch(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
     startup_receipt_ref: &str,
     subreceipt_refs: &[String],
@@ -95,8 +96,9 @@ fn finish_install(input: InstallFinishInput<'_>) -> Result<ControlDispatch> {
     let mut diagnostics = input.diagnostics;
     let provenance_receipt_refs = [input.provenance.receipt_ref.clone()];
     let refs = install_refs(input.request, input.payload_ref, &provenance_receipt_refs[0])?;
-    let install = match crate::artifacts::install_artifact(
-        &input.state_root.join("registry"),
+    let artifact_root = input.state_root.artifact_store()?;
+    let install = match crate::artifacts::install_artifact_with_root(
+        &artifact_root,
         &crate::artifacts::ArtifactInstallInput {
             kind: "node-control-artifact".to_string(),
             payload: input.payload_value,
@@ -123,7 +125,8 @@ fn finish_install(input: InstallFinishInput<'_>) -> Result<ControlDispatch> {
     };
     let install_receipt_ref = crate::preserves_rail::canonical_hash(&install.receipt_value)?;
     write_preserves(
-        &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "artifact-install"),
+        input.state_root,
+        &control_operation_subreceipt_path(&input.request.request_ref, "artifact-install")?,
         &install.receipt_value,
     )?;
     import_artifact(input.state_root, &install.receipt_value)?;
@@ -140,7 +143,7 @@ fn finish_install(input: InstallFinishInput<'_>) -> Result<ControlDispatch> {
 }
 
 fn dispatch_install_request(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
     let startup = current_startup_receipt(state_root)?;
@@ -200,7 +203,7 @@ struct RunStart {
 }
 
 struct CompleteRunInput<'a> {
-    state_root: &'a Path,
+    state_root: &'a crate::node_state::NodeStateRoot,
     request: &'a crate::node_runtime::ControlRequest,
     startup_receipt_ref: &'a str,
     prepared: PreparedRun,
@@ -211,7 +214,7 @@ struct CompleteRunInput<'a> {
 type RunStartResult = std::result::Result<RunStart, Box<ControlDispatch>>;
 
 struct RunDenyInput<'a> {
-    state_root: &'a Path,
+    state_root: &'a crate::node_state::NodeStateRoot,
     request: &'a crate::node_runtime::ControlRequest,
     startup_receipt_ref: &'a str,
     diagnostics: Vec<String>,
@@ -229,7 +232,7 @@ fn deny_run_start(input: RunDenyInput<'_>) -> Result<RunStartResult> {
 }
 
 fn prepare_run(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
     startup_receipt_ref: &str,
 ) -> Result<RunStartResult> {

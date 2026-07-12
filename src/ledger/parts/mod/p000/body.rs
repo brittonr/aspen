@@ -1,6 +1,12 @@
 const MAX_SCAN_ENTRIES: usize = 100_000;
 const _: () = assert!(MAX_SCAN_ENTRIES > 0);
 
+pub type CapabilityLedgerRoot = crate::local_store::LedgerStoreRoot;
+
+pub fn open_capability_ledger_root(root: &std::path::Path) -> crate::error::Result<CapabilityLedgerRoot> {
+    CapabilityLedgerRoot::open(root)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub artifact_ref: String,
@@ -39,22 +45,36 @@ pub struct GcInput<'a> {
 }
 
 pub fn import_artifact(root: &std::path::Path, artifact: &preserves::IOValue) -> crate::error::Result<Import> {
-    ensure_dirs(root)?;
+    let root = open_capability_ledger_root(root)?;
+    import_artifact_with_root(&root, artifact)
+}
+
+pub fn import_artifact_with_root(
+    root: &CapabilityLedgerRoot,
+    artifact: &preserves::IOValue,
+) -> crate::error::Result<Import> {
+    ensure_dirs_with_root(root)?;
     let artifact_ref = crate::preserves_rail::canonical_hash(artifact)?;
     let artifact_kind = artifact_kind(artifact).to_string();
     let bytes = crate::preserves_rail::canonical_bytes(artifact)?;
-    let path = content_path(root, &artifact_ref)?;
-    if path.exists() {
-        let existing = std::fs::read(&path).map_err(crate::error::MoltenError::from)?;
-        let existing_value = crate::preserves_rail::parse_canonical_bytes(&existing)?;
-        let existing_ref = crate::preserves_rail::canonical_hash(&existing_value)?;
-        if existing_ref != artifact_ref {
+    let path = content_store_path(&artifact_ref)?;
+    match root.root().entry_kind_optional(&path)? {
+        Some(crate::local_store::LocalStoreEntryKind::File) => {
+            let existing = root.root().read(&path)?;
+            let existing_value = crate::preserves_rail::parse_canonical_bytes(&existing)?;
+            let existing_ref = crate::preserves_rail::canonical_hash(&existing_value)?;
+            if existing_ref != artifact_ref {
+                return Err(crate::error::MoltenError::invalid_harness(format!(
+                    "ledger content path for {artifact_ref} contains corrupted bytes hashing to {existing_ref}"
+                )));
+            }
+        }
+        None => root.root().write(&path, &bytes)?,
+        Some(kind) => {
             return Err(crate::error::MoltenError::invalid_harness(format!(
-                "ledger content path for {artifact_ref} contains corrupted bytes hashing to {existing_ref}"
+                "ledger content path for {artifact_ref} must be a regular file, got {kind:?}"
             )));
         }
-    } else {
-        std::fs::write(&path, bytes).map_err(crate::error::MoltenError::from)?;
     }
     let receipt_value = import_receipt_value(&artifact_ref, &artifact_kind);
     Ok(Import {
@@ -99,8 +119,16 @@ pub fn export_artifact(
 }
 
 pub fn read_artifact(root: &std::path::Path, artifact_ref: &str) -> crate::error::Result<preserves::IOValue> {
-    let path = content_path(root, artifact_ref)?;
-    let bytes = std::fs::read(&path).map_err(crate::error::MoltenError::from)?;
+    let root = CapabilityLedgerRoot::open_existing(root)?;
+    read_artifact_with_root(&root, artifact_ref)
+}
+
+pub fn read_artifact_with_root(
+    root: &CapabilityLedgerRoot,
+    artifact_ref: &str,
+) -> crate::error::Result<preserves::IOValue> {
+    let path = content_store_path(artifact_ref)?;
+    let bytes = root.root().read(&path)?;
     let value = crate::preserves_rail::parse_canonical_bytes(&bytes)?;
     let actual_ref = crate::preserves_rail::canonical_hash(&value)?;
     if actual_ref != artifact_ref {

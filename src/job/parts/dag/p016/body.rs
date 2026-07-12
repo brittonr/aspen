@@ -62,6 +62,23 @@ fn recompute_execution_closure(
     Ok(closure.closure_refs)
 }
 
+fn recompute_execution_closure_with_root(
+    target_registry: &crate::artifacts::CapabilityArtifactRoot,
+    dag: &JobDag,
+    stage_order: &[String],
+) -> Result<Vec<String>> {
+    let selected = stage_order.iter().cloned().collect::<OrderedSet<_>>();
+    let roots = admission_roots_with_root(target_registry, dag, &selected)?;
+    let closure = crate::artifacts::dependency_closure_with_root(target_registry, &roots)?;
+    if !closure.missing_refs.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "job execution target closure missing refs: {}",
+            closure.missing_refs.join(",")
+        )));
+    }
+    Ok(closure.closure_refs)
+}
+
 fn status(ok: bool) -> &'static str {
     if ok { "pass" } else { "fail" }
 }

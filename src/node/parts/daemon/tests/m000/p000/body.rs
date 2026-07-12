@@ -195,10 +195,16 @@
             request_value,
         })
         .expect("submit request");
-        assert!(submitted.inbox_path.exists());
-        dispatch_control_request(&ControlDispatchInput {
+        let state_root = crate::node_state::NodeStateRoot::open(root).expect("open node state root");
+        let inbox = state_root.control_inbox().expect("open control inbox");
+        assert!(
+            inbox
+                .try_exists(&crate::node_state::NodeStatePath::parse(&submitted.inbox_entry).expect("inbox entry"))
+                .expect("inspect inbox entry")
+        );
+        dispatch_control_request_entry(&ControlDispatchEntryInput {
             state_root: root,
-            request_path: Some(&submitted.inbox_path),
+            request_entry: Some(&submitted.inbox_entry),
         })
         .expect("dispatch request")
     }
@@ -280,12 +286,24 @@
     }
 
     fn assert_dispatch_requires_lock(root: &Path) {
-        let error = dispatch_control_request(&ControlDispatchInput {
+        let error = dispatch_control_request_entry(&ControlDispatchEntryInput {
             state_root: root,
-            request_path: None,
+            request_entry: None,
         })
         .expect_err("dispatch requires lock");
         assert!(error.to_string().contains("active node lock"));
+    }
+
+    #[test]
+    fn compatibility_request_path_rejects_directory_authority() {
+        // r[verify molten.node.cap_std_request_lifecycle]
+        let root = temp_dir("node-control-compatibility-path-deny");
+        let error = dispatch_control_request(&ControlDispatchInput {
+            state_root: &root,
+            request_path: Some(Path::new("../outside.preserves")),
+        })
+        .expect_err("directory-bearing compatibility path must deny");
+        assert!(error.to_string().contains("selected state root inbox"));
     }
 
     #[test]
@@ -370,13 +388,15 @@
             request_value: &status_request.value,
         })
         .expect("submit status");
-        dispatch_control_request(&ControlDispatchInput {
+        dispatch_control_request_entry(&ControlDispatchEntryInput {
             state_root: &root,
-            request_path: Some(&submitted.inbox_path),
+            request_entry: Some(&submitted.inbox_entry),
         })
         .expect("dispatch status");
+        let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
         write_preserves(
-            &control_outbox_request_path(&root, &status_request.request_ref),
+            &state_root,
+            &control_outbox_request_path(&status_request.request_ref).expect("outbox request path"),
             &crate::preserves_rail::record("tampered-node-control-request", vec![crate::preserves_rail::string(
                 "conflict",
             )]),
@@ -387,9 +407,9 @@
             request_value: &status_request.value,
         })
         .expect("resubmit duplicate");
-        let denied = dispatch_control_request(&ControlDispatchInput {
+        let denied = dispatch_control_request_entry(&ControlDispatchEntryInput {
             state_root: &root,
-            request_path: Some(&duplicate.inbox_path),
+            request_entry: Some(&duplicate.inbox_entry),
         })
         .expect_err("conflicting duplicate denied");
         assert!(denied.to_string().contains("conflicts with archived request evidence"));

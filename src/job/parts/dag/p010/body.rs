@@ -51,6 +51,61 @@ fn check_target_selection(
     Ok(())
 }
 
+fn check_target_selection_with_root(
+    target_registry: &crate::artifacts::CapabilityArtifactRoot,
+    request: &JobExecutionRequest,
+    admission: &JobAdmissionReceipt,
+    dag: &JobDag,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    checks: &mut impl crate::bounded::VecSink<(&'static str, &'static str)>,
+) -> Result<()> {
+    let stage_order = if request.stage_ids.is_empty() {
+        admission.stage_order.clone()
+    } else {
+        request.stage_ids.clone()
+    };
+    let has_selected_stage_binding = stage_order == admission.stage_order;
+    push_check(checks, "selected-stage-binding", has_selected_stage_binding);
+    if !has_selected_stage_binding {
+        diagnostics.push_item("job execution selected stages do not match admission stage order".to_string());
+    }
+
+    let full_stage_order = trellis_execution_plan(&dag.nodes, &dag.edges)?.order_ids;
+    let has_full_stage_selection = stage_order == full_stage_order;
+    push_check(checks, "selected-stages-full-target", has_full_stage_selection);
+    if !has_full_stage_selection {
+        diagnostics.push_item(
+            "job execution loopback currently requires admitted stages to cover the full target DAG".to_string(),
+        );
+    }
+
+    match recompute_execution_closure_with_root(target_registry, dag, &stage_order) {
+        Ok(closure_refs) => {
+            let has_recomputed_closure = sorted_unique(&closure_refs) == sorted_unique(&admission.closure_refs);
+            push_check(checks, "target-closure-recomputed", has_recomputed_closure);
+            if !has_recomputed_closure {
+                diagnostics
+                    .push_item("job execution recomputed target closure diverges from admission closure".to_string());
+            }
+        }
+        Err(error) => {
+            push_check(checks, "target-closure-recomputed", false);
+            diagnostics.push_item(format!("job execution target closure recompute failed: {error}"));
+        }
+    }
+
+    let has_request_ref_bindings = refs_are_bound_in_admission(&request.policy_refs, &admission.refs)
+        && refs_are_bound_in_admission(&request.capability_refs, &admission.refs)
+        && refs_are_bound_in_admission(&request.resource_refs, &admission.refs);
+    push_check(checks, "request-ref-binding", has_request_ref_bindings);
+    if !has_request_ref_bindings {
+        diagnostics.push_item(
+            "job execution request policy/capability/resource refs are not all bound by admission".to_string(),
+        );
+    }
+    Ok(())
+}
+
 struct DenyInput<'a> {
     request: JobExecutionRequest,
     admission: JobAdmissionReceipt,
@@ -235,6 +290,24 @@ fn selected_stage_set(
 
 fn admission_roots(target_registry: &FilePath, dag: &JobDag, selected: &OrderedSet<String>) -> Result<Vec<String>> {
     let mut roots = vec![job_artifact_ref(target_registry, &dag.job_ref)?];
+    for node in &dag.nodes {
+        if selected.contains(&node.id)
+            && let Some(stage_artifact_ref) = node.stage_artifact_ref.as_ref()
+        {
+            push_bounded(&mut roots, stage_artifact_ref.clone(), MAX_JOB_REFS, "job admission roots")?;
+        }
+    }
+    roots.sort();
+    roots.dedup();
+    Ok(roots)
+}
+
+fn admission_roots_with_root(
+    target_registry: &crate::artifacts::CapabilityArtifactRoot,
+    dag: &JobDag,
+    selected: &OrderedSet<String>,
+) -> Result<Vec<String>> {
+    let mut roots = vec![job_artifact_ref_with_root(target_registry, &dag.job_ref)?];
     for node in &dag.nodes {
         if selected.contains(&node.id)
             && let Some(stage_artifact_ref) = node.stage_artifact_ref.as_ref()

@@ -43,9 +43,7 @@ fn live_send_duplicate_receipt_value(input: &LiveSendDuplicateReceiptValueInput<
 fn service_lock_value(input: &ServiceLockValueInput<'_>) -> Result<IoValue> {
     Ok(crate::preserves_rail::record("node-control-service-lock-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_SERVICE_LOCK_SCHEMA),
-        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(
-            input.state_root,
-        )?)]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(&())?)]),
         crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(input.startup_receipt_ref)]),
         crate::preserves_rail::record("node", vec![crate::preserves_rail::string(input.node_id)]),
         crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(input.topic)]),

@@ -1,0 +1,59 @@
+id: node-state-ambient-filesystem-call
+language: Rust
+severity: error
+message: Converted node-state code must use supplied capability roots and validated logical locators, not ambient descendant filesystem access.
+metadata:
+  posture: blocking
+  surface: node-state-adapters
+  non_claim: structural-node-state-containment-only
+files:
+  - src/node/parts/daemon/p*/body.rs
+  - src/node/parts/identity/p001/body.rs
+  - src/job/parts/dag/p009/body.rs
+  - src/job/parts/dag/p017/body.rs
+  - tools/ast-grep/runtime-authority/fixtures/positive/node_state_ambient_authority.rs
+  - tools/ast-grep/runtime-authority/fixtures/negative/node_state_capability_shell.rs
+ignores:
+  - "**/tests/**"
+  - src/node/parts/daemon/p000/body.rs
+  - src/node/parts/daemon/p036/body.rs
+rule:
+  any:
+    - pattern: std::fs::read($PATH)
+    - pattern: std::fs::read_to_string($PATH)
+    - pattern: std::fs::write($PATH, $DATA)
+    - pattern: std::fs::read_dir($PATH)
+    - pattern: std::fs::create_dir($PATH)
+    - pattern: std::fs::create_dir_all($PATH)
+    - pattern: std::fs::copy($FROM, $TO)
+    - pattern: std::fs::metadata($PATH)
+    - pattern: std::fs::symlink_metadata($PATH)
+    - pattern: std::fs::set_permissions($PATH, $PERMISSIONS)
+    - pattern: std::fs::remove_file($PATH)
+    - pattern: std::fs::remove_dir_all($PATH)
+    - pattern: std::fs::rename($FROM, $TO)
+    - pattern: std::fs::canonicalize($PATH)
+    - pattern: std::fs::File::create($PATH)
+    - pattern: std::fs::File::open($PATH)
+    - pattern: std::fs::OpenOptions::new()
+    - pattern: fs::read($PATH)
+    - pattern: fs::read_to_string($PATH)
+    - pattern: fs::write($PATH, $DATA)
+    - pattern: fs::read_dir($PATH)
+    - pattern: fs::create_dir($PATH)
+    - pattern: fs::create_dir_all($PATH)
+    - pattern: fs::copy($FROM, $TO)
+    - pattern: fs::metadata($PATH)
+    - pattern: fs::symlink_metadata($PATH)
+    - pattern: fs::set_permissions($PATH, $PERMISSIONS)
+    - pattern: fs::remove_file($PATH)
+    - pattern: fs::remove_dir_all($PATH)
+    - pattern: fs::rename($FROM, $TO)
+    - pattern: fs::canonicalize($PATH)
+    - pattern: cap_std::fs::Dir::open_ambient_dir($$$ARGS)
+    - pattern: Dir::open_ambient_dir($$$ARGS)
+    - pattern: state_root.join($CHILD)
+    - pattern: input.state_root.join($CHILD)
+    - pattern: $INPUT.state_root.join($CHILD)
+    - pattern: state_root.canonicalize()
+    - pattern: input.state_root.canonicalize()

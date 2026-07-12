@@ -1,6 +1,6 @@
 
 fn live_peer_admission_diagnostics(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     envelope: &ControlIngressEnvelope,
     admission: &ControlLivePeerAdmission,
 ) -> Result<Vec<String>> {
@@ -66,7 +66,10 @@ fn live_peer_admission_diagnostics(
     Ok(diagnostics)
 }
 
-fn evaluate_live_authority_delegation(state_root: &Path, envelope: &ControlIngressEnvelope) -> Result<Vec<String>> {
+fn evaluate_live_authority_delegation(
+    root: &crate::node_state::NodeStateRoot,
+    envelope: &ControlIngressEnvelope,
+) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(envelope.authority_refs.len().saturating_add(2));
     let mut admitted_grant_ref = None;
     let candidate_authority_refs = envelope
@@ -78,7 +81,7 @@ fn evaluate_live_authority_delegation(state_root: &Path, envelope: &ControlIngre
         diagnostics.push("node control live authority refs are not bound to the request".to_string());
     }
     for authority_ref in candidate_authority_refs {
-        match read_ledger_artifact(state_root, authority_ref) {
+        match read_ledger_artifact(root, authority_ref) {
             Ok(value) => match parse_control_authority_grant(&value) {
                 Ok(grant) => {
                     let grant_diagnostics = authority_grant_diagnostics(envelope, &grant);
@@ -115,8 +118,8 @@ fn evaluate_live_authority_delegation(state_root: &Path, envelope: &ControlIngre
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    write_preserves(&control_authority_receipt_path(state_root, &envelope.envelope_ref), &receipt_value)?;
-    import_artifact(state_root, &receipt_value)?;
+    write_preserves(root, &control_authority_receipt_path(&envelope.envelope_ref)?, &receipt_value)?;
+    import_artifact(root, &receipt_value)?;
     if decision == "deny" {
         diagnostics.push(format!("node control authority receipt {receipt_ref} denied"));
     }
@@ -226,22 +229,22 @@ fn ingress_idempotency_evidence_refs(envelope: &ControlIngressEnvelope) -> Vec<S
     refs
 }
 
-fn prior_queue_receipt_ref(state_root: &Path, request_ref: &str) -> Result<String> {
-    let receipt = read_preserves(&queue_receipt_path(state_root, request_ref))?;
+fn prior_queue_receipt_ref(root: &crate::node_state::NodeStateRoot, request_ref: &str) -> Result<String> {
+    let receipt = read_preserves(root, &queue_receipt_path(request_ref)?)?;
     crate::preserves_rail::canonical_hash(&receipt)
 }
 
 fn prior_dispatch_for_request(
-    state_root: &Path,
+    root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<Option<ControlDispatch>> {
-    let receipt_path = control_outbox_receipt_path(state_root, &request.request_ref);
-    if !receipt_path.exists() {
+    let receipt_path = control_outbox_receipt_path(&request.request_ref)?;
+    if !root.try_exists(&receipt_path)? {
         return Ok(None);
     }
-    let archived_path = control_outbox_request_path(state_root, &request.request_ref);
-    if archived_path.exists() {
-        let archived_value = read_preserves(&archived_path)?;
+    let archived_path = control_outbox_request_path(&request.request_ref)?;
+    if root.try_exists(&archived_path)? {
+        let archived_value = read_preserves(root, &archived_path)?;
         let archived_ref = crate::preserves_rail::canonical_hash(&archived_value)?;
         if archived_ref != request.request_ref {
             return Err(MoltenError::invalid_harness(
@@ -249,7 +252,7 @@ fn prior_dispatch_for_request(
             ));
         }
     }
-    let control_receipt_value = read_preserves(&receipt_path)?;
+    let control_receipt_value = read_preserves(root, &receipt_path)?;
     let control = crate::node_runtime::parse_control_receipt(&control_receipt_value)?;
     if control.request_ref != request.request_ref {
         return Err(MoltenError::invalid_harness("node control duplicate receipt conflicts with request ref"));
@@ -264,13 +267,13 @@ fn prior_dispatch_for_request(
 }
 
 fn write_dispatch_queue_receipt(
-    state_root: &Path,
+    root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
     phase: &str,
 ) -> Result<String> {
     let location_ref = local_ref(
         "node-control-outbox-path",
-        &control_outbox_receipt_path(state_root, &request.request_ref).display().to_string(),
+        &control_outbox_receipt_path(&request.request_ref)?.display(),
     )?;
     let diagnostics = Vec::new();
     let queue_receipt = queue_receipt_value(&QueueReceiptValueInput {
@@ -282,17 +285,21 @@ fn write_dispatch_queue_receipt(
         diagnostics: &diagnostics,
     })?;
     let queue_receipt_ref = crate::preserves_rail::canonical_hash(&queue_receipt)?;
-    write_preserves(&dispatch_receipt_path(state_root, &request.request_ref), &queue_receipt)?;
-    import_artifact(state_root, &queue_receipt)?;
+    write_preserves(root, &dispatch_receipt_path(&request.request_ref)?, &queue_receipt)?;
+    import_artifact(root, &queue_receipt)?;
     Ok(queue_receipt_ref)
 }
 
 fn dispatch_status_request(
-    state_root: &Path,
+    root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
-    let status = status_local_node_with_request(&StatusInput { state_root }, request)?;
-    write_preserves(&control_outbox_receipt_path(state_root, &request.request_ref), &status.control_receipt_value)?;
+    let status = status_local_node_with_request(root, request)?;
+    write_preserves(
+        root,
+        &control_outbox_receipt_path(&request.request_ref)?,
+        &status.control_receipt_value,
+    )?;
     Ok(ControlDispatch {
         operation: request.operation.clone(),
         request_ref: request.request_ref.clone(),
@@ -303,11 +310,15 @@ fn dispatch_status_request(
 }
 
 fn dispatch_shutdown_request(
-    state_root: &Path,
+    root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
-    let stop = stop_local_node_with_request(&StopInput { state_root }, request)?;
-    write_preserves(&control_outbox_receipt_path(state_root, &request.request_ref), &stop.control_receipt_value)?;
+    let stop = stop_local_node_with_request(root, request)?;
+    write_preserves(
+        root,
+        &control_outbox_receipt_path(&request.request_ref)?,
+        &stop.control_receipt_value,
+    )?;
     Ok(ControlDispatch {
         operation: request.operation.clone(),
         request_ref: request.request_ref.clone(),
@@ -319,7 +330,7 @@ fn dispatch_shutdown_request(
 
 #[derive(Debug, Clone, Copy)]
 struct ControlProvenanceInput<'a> {
-    state_root: &'a Path,
+    state_root: &'a crate::node_state::NodeStateRoot,
     request: &'a crate::node_runtime::ControlRequest,
     artifact_ref: &'a str,
     operation: &'a str,

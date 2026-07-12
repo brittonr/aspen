@@ -146,6 +146,21 @@ pub fn job_artifact_ref(registry_root: &FilePath, job_ref: &str) -> Result<Strin
     Err(MoltenError::invalid_harness(format!("job artifact {job_ref} not found in registry")))
 }
 
+pub fn job_artifact_ref_with_root(
+    registry_root: &crate::artifacts::CapabilityArtifactRoot,
+    job_ref: &str,
+) -> Result<String> {
+    validate_ref(job_ref, "job artifact lookup ref")?;
+    for artifact in crate::artifacts::list_artifacts_with_root(registry_root, Some(JOB_ARTIFACT_KIND))? {
+        let payload = crate::artifacts::read_payload_with_root(registry_root, &artifact.artifact_ref)?;
+        let dag = parse_job_dag_value(&payload)?;
+        if dag.job_ref == job_ref || artifact.artifact_ref == job_ref {
+            return Ok(artifact.artifact_ref);
+        }
+    }
+    Err(MoltenError::invalid_harness(format!("job artifact {job_ref} not found in registry")))
+}
+
 pub fn read_job_dag(registry_root: &FilePath, reference: &str) -> Result<JobDag> {
     if validate_ref(reference, "job ref").is_ok() {
         if let Ok(payload) = crate::artifacts::read_payload(registry_root, reference)
@@ -155,6 +170,27 @@ pub fn read_job_dag(registry_root: &FilePath, reference: &str) -> Result<JobDag>
         }
         for artifact in crate::artifacts::list_artifacts(registry_root, Some(JOB_ARTIFACT_KIND))? {
             let payload = crate::artifacts::read_payload(registry_root, &artifact.artifact_ref)?;
+            let dag = parse_job_dag_value(&payload)?;
+            if dag.job_ref == reference || artifact.artifact_ref == reference {
+                return Ok(dag);
+            }
+        }
+    }
+    Err(MoltenError::invalid_harness(format!("job dag {reference} not found in registry")))
+}
+
+pub fn read_job_dag_with_root(
+    registry_root: &crate::artifacts::CapabilityArtifactRoot,
+    reference: &str,
+) -> Result<JobDag> {
+    if validate_ref(reference, "job ref").is_ok() {
+        if let Ok(payload) = crate::artifacts::read_payload_with_root(registry_root, reference)
+            && let Ok(dag) = parse_job_dag_value(&payload)
+        {
+            return Ok(dag);
+        }
+        for artifact in crate::artifacts::list_artifacts_with_root(registry_root, Some(JOB_ARTIFACT_KIND))? {
+            let payload = crate::artifacts::read_payload_with_root(registry_root, &artifact.artifact_ref)?;
             let dag = parse_job_dag_value(&payload)?;
             if dag.job_ref == reference || artifact.artifact_ref == reference {
                 return Ok(dag);
@@ -207,6 +243,33 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
     })
 }
 
+fn run_job_dag_with_capabilities(
+    dag: &JobDag,
+    options: &CapabilityJobRunOptions<'_>,
+) -> Result<JobRun> {
+    let request = request_for_dag(dag, None)?;
+    ensure_count_at_most(dag.nodes.len(), MAX_JOB_NODES, "job run nodes")?;
+    ensure_count_at_most(dag.edges.len(), MAX_JOB_EDGES, "job run edges")?;
+    let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
+    let stages = run_stages_with_capabilities(dag, &request, &plan, options)?;
+    let finish = complete_run(CompleteInput {
+        dag,
+        request: &request,
+        plan: &plan,
+        outputs_by_index: &stages.outputs_by_index,
+        output_refs_by_index: &stages.output_refs_by_index,
+        stage_receipt_refs: &stages.receipt_refs,
+    })?;
+    Ok(JobRun {
+        job_ref: dag.job_ref.clone(),
+        request_ref: request.request_ref,
+        stage_receipt_refs: stages.receipt_refs,
+        output_refs: finish.output_refs,
+        output_value: finish.output_value,
+        receipt_value: finish.receipt_value,
+    })
+}
+
 struct RunStages {
     receipt_refs: Vec<String>,
     outputs_by_index: Vec<Option<Vec<IoValue>>>,
@@ -239,6 +302,58 @@ fn run_stages(
         if let Some(ledger_root) = options.ledger_root {
             crate::ledger::import_artifact(ledger_root, &stage.receipt_value)?;
         }
+        ensure_count_at_most(stage.output_refs.len(), MAX_JOB_REFS, "job stage output refs")?;
+        ensure_count_at_most(stage.output_values.len(), MAX_JOB_STAGE_VALUES, "job stage output values")?;
+        push_bounded(&mut receipt_refs, receipt_ref, MAX_JOB_NODES, "job stage receipt refs")?;
+        let node_index = *plan
+            .node_index
+            .get(node_id)
+            .ok_or_else(|| MoltenError::invalid_harness(format!("trellis node index missing for {node_id}")))?;
+        let output_refs_slot = output_refs_by_index.get_mut(node_index).ok_or_else(|| {
+            MoltenError::invalid_harness(format!("job output refs index {node_index} outside node set"))
+        })?;
+        *output_refs_slot = Some(stage.output_refs.clone());
+        let output_slot = outputs_by_index
+            .get_mut(node_index)
+            .ok_or_else(|| MoltenError::invalid_harness(format!("job output index {node_index} outside node set")))?;
+        *output_slot = Some(stage.output_values);
+        push_bounded(
+            &mut completed_indices,
+            usize_to_u64(node_index, "trellis completed node index")?,
+            MAX_JOB_NODES,
+            "trellis completed node indices",
+        )?;
+    }
+    Ok(RunStages {
+        receipt_refs,
+        outputs_by_index,
+        output_refs_by_index,
+    })
+}
+
+fn run_stages_with_capabilities(
+    dag: &JobDag,
+    request: &JobOutputRequest,
+    plan: &TrellisExecutionPlan,
+    options: &CapabilityJobRunOptions<'_>,
+) -> Result<RunStages> {
+    let mut completed_indices = Vec::with_capacity(plan.order_ids.len());
+    let mut outputs_by_index: Vec<Option<Vec<IoValue>>> = vec![None; dag.nodes.len()];
+    let mut output_refs_by_index: Vec<Option<Vec<String>>> = vec![None; dag.nodes.len()];
+    let mut receipt_refs = Vec::with_capacity(plan.order_ids.len());
+    for node_id in &plan.order_ids {
+        let deps = plan.dependency_indices.get(node_id).cloned().unwrap_or_default();
+        if !trellis::job_dag::all_deps_satisfied(&deps, &completed_indices)
+            || trellis::job_dag::unsatisfied_count(&deps, &completed_indices) != 0
+        {
+            return Err(MoltenError::invalid_harness(format!(
+                "trellis dependency readiness failed for job node {node_id}"
+            )));
+        }
+        let node = find_job_node(&dag.nodes, node_id)?;
+        let inputs = gather_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)?;
+        let stage = execute_stage_with_capabilities(dag, request, node, &inputs, options)?;
+        let receipt_ref = crate::preserves_rail::canonical_hash(&stage.receipt_value)?;
         ensure_count_at_most(stage.output_refs.len(), MAX_JOB_REFS, "job stage output refs")?;
         ensure_count_at_most(stage.output_values.len(), MAX_JOB_STAGE_VALUES, "job stage output values")?;
         push_bounded(&mut receipt_refs, receipt_ref, MAX_JOB_NODES, "job stage receipt refs")?;

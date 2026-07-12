@@ -15,16 +15,14 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<ControlDispatch> {
             });
         }
     };
-    let execution = crate::job_dag::execution_loopback(crate::job_dag::ExecutionLoopbackInput {
-        target_registry: &input.state_root.join("registry"),
-        storage_root: &input.state_root.join("storage"),
-        cache_root: &input.state_root.join("cache"),
-        chunk_root: &input.state_root.join("chunks"),
-        admission_receipt_value: &admission_receipt_value,
-        request_value: &input.prepared.execution_request_value,
-    })?;
+    let execution = crate::job_dag::execution_loopback_with_node_state(
+        input.state_root,
+        &admission_receipt_value,
+        &input.prepared.execution_request_value,
+    )?;
     write_preserves(
-        &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "job-execution"),
+        input.state_root,
+        &control_operation_subreceipt_path(&input.request.request_ref, "job-execution")?,
         &execution.receipt_value,
     )?;
     import_artifact(input.state_root, &execution.receipt_value)?;
@@ -34,7 +32,8 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<ControlDispatch> {
     if let Some(run) = execution.run.as_ref() {
         let run_ref = crate::preserves_rail::canonical_hash(&run.receipt_value)?;
         write_preserves(
-            &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "job-run"),
+            input.state_root,
+            &control_operation_subreceipt_path(&input.request.request_ref, "job-run")?,
             &run.receipt_value,
         )?;
         import_artifact(input.state_root, &run.receipt_value)?;
@@ -53,7 +52,10 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<ControlDispatch> {
     })
 }
 
-fn dispatch_run_request(state_root: &Path, request: &crate::node_runtime::ControlRequest) -> Result<ControlDispatch> {
+fn dispatch_run_request(
+    state_root: &crate::node_state::NodeStateRoot,
+    request: &crate::node_runtime::ControlRequest,
+) -> Result<ControlDispatch> {
     let startup = current_startup_receipt(state_root)?;
     let start = match prepare_run(state_root, request, &startup.receipt_ref)? {
         Ok(start) => start,
@@ -88,7 +90,10 @@ fn dispatch_run_request(state_root: &Path, request: &crate::node_runtime::Contro
     })
 }
 
-fn dispatch_gate_request(state_root: &Path, request: &crate::node_runtime::ControlRequest) -> Result<ControlDispatch> {
+fn dispatch_gate_request(
+    state_root: &crate::node_state::NodeStateRoot,
+    request: &crate::node_runtime::ControlRequest,
+) -> Result<ControlDispatch> {
     let startup = current_startup_receipt(state_root)?;
     let mut diagnostics = side_effect_preflight_diagnostics(request);
     let Some(subject_ref) = request.target_ref.as_deref() else {
@@ -141,7 +146,8 @@ fn dispatch_gate_request(state_root: &Path, request: &crate::node_runtime::Contr
             source_scope: crate::octet_gate::default_source_scope("node-control-gate")?,
         })?;
     write_preserves(
-        &control_operation_subreceipt_path(state_root, &request.request_ref, "octet-source-gate"),
+        state_root,
+        &control_operation_subreceipt_path(&request.request_ref, "octet-source-gate")?,
         &validation.value,
     )?;
     import_artifact(state_root, &validation.value)?;
@@ -166,7 +172,11 @@ fn finalize_operation_dispatch(input: &OperationFinalizeInput<'_>) -> Result<Con
         diagnostics: input.diagnostics,
     })?;
     let operation_receipt_ref = crate::preserves_rail::canonical_hash(&operation_receipt)?;
-    write_preserves(&control_operation_receipt_path(input.state_root, &input.request.request_ref), &operation_receipt)?;
+    write_preserves(
+        input.state_root,
+        &control_operation_receipt_path(&input.request.request_ref)?,
+        &operation_receipt,
+    )?;
     import_artifact(input.state_root, &operation_receipt)?;
     let mut all_subreceipt_refs = Vec::with_capacity(input.subreceipt_refs.len() + 1);
     all_subreceipt_refs.extend(input.subreceipt_refs.iter().cloned());
@@ -179,7 +189,11 @@ fn finalize_operation_dispatch(input: &OperationFinalizeInput<'_>) -> Result<Con
         input.diagnostics,
     )?;
     let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt)?;
-    write_preserves(&control_outbox_receipt_path(input.state_root, &input.request.request_ref), &control_receipt)?;
+    write_preserves(
+        input.state_root,
+        &control_outbox_receipt_path(&input.request.request_ref)?,
+        &control_receipt,
+    )?;
     import_artifact(input.state_root, &control_receipt)?;
     Ok(ControlDispatch {
         operation: input.request.operation.clone(),
@@ -204,12 +218,14 @@ fn side_effect_preflight_diagnostics(request: &crate::node_runtime::ControlReque
     diagnostics
 }
 
-fn read_ledger_artifact(state_root: &Path, artifact_ref: &str) -> Result<IoValue> {
-    crate::ledger::read_artifact(&state_root.join("ledger"), artifact_ref)
+fn read_ledger_artifact<Root: NodeStateAuthority + ?Sized>(source: &Root, artifact_ref: &str) -> Result<IoValue> {
+    let root = source.acquire_node_state_root()?;
+    let ledger = root.ledger_store()?;
+    crate::ledger::read_artifact_with_root(&ledger, artifact_ref)
 }
 
 fn control_receipt_for_request(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
     startup_receipt_ref: &str,
     subreceipt_refs: &[String],

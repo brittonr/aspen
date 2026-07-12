@@ -417,6 +417,46 @@
                     > "$TMPDIR/converted.json"
                   touch "$out"
                 '';
+            nodeStateAuthorityCheck =
+              pkgs.runCommand "molten-node-state-authority"
+                {
+                  nativeBuildInputs = [ pkgs.ast-grep ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  ambient_rule=tools/ast-grep/runtime-authority/rules/node-state-ambient-filesystem-call.yml
+                  reacquisition_rule=tools/ast-grep/runtime-authority/rules/node-state-root-reacquisition.yml
+                  positive=tools/ast-grep/runtime-authority/fixtures/positive/node_state_ambient_authority.rs
+                  if ast-grep scan --rule "$ambient_rule" --json=compact "$positive" > "$TMPDIR/ambient-positive.json"; then
+                    echo "blocking node-state ambient fixture unexpectedly produced no findings" >&2
+                    exit 1
+                  fi
+                  if ast-grep scan --rule "$reacquisition_rule" --json=compact "$positive" > "$TMPDIR/reacquisition-positive.json"; then
+                    echo "blocking node-state reacquisition fixture unexpectedly produced no findings" >&2
+                    exit 1
+                  fi
+                  ast-grep scan --rule "$ambient_rule" --json=compact \
+                    tools/ast-grep/runtime-authority/fixtures/negative/node_state_capability_shell.rs \
+                    > "$TMPDIR/ambient-negative.json"
+                  ast-grep scan --rule "$reacquisition_rule" --json=compact \
+                    tools/ast-grep/runtime-authority/fixtures/negative/node_state_carried_authority.rs \
+                    > "$TMPDIR/reacquisition-negative.json"
+                  ast-grep scan --rule "$ambient_rule" --json=compact \
+                    src/node/parts/daemon \
+                    src/node/parts/identity/p001/body.rs \
+                    src/job/parts/dag/p009/body.rs \
+                    src/job/parts/dag/p017/body.rs \
+                    > "$TMPDIR/ambient-converted.json"
+                  ast-grep scan --rule "$reacquisition_rule" --json=compact \
+                    src/node/parts/daemon \
+                    src/node/parts/identity/p001/body.rs \
+                    src/job/parts/dag/p009/body.rs \
+                    src/job/parts/dag/p017/body.rs \
+                    > "$TMPDIR/reacquisition-converted.json"
+                  touch "$out"
+                '';
             materializationAuthorityCheck =
               pkgs.runCommand "molten-materialization-authority"
                 {
@@ -453,6 +493,7 @@
             clippy = ws.clippy.allWorkspaceMembers;
             cap-std-store-authority = capStdStoreAuthorityCheck;
             cap-std-test-workspaces = capStdTestWorkspaceCheck;
+            node-state-authority = nodeStateAuthorityCheck;
             materialization-authority = materializationAuthorityCheck;
             nixos-vm-smoke = vmShardCheck "nixos-vm-smoke";
             nixos-vm-live-control = vmShardCheck "nixos-vm-live-control";

@@ -19,7 +19,7 @@ pub struct Stop {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ControlSubmit {
     pub request_ref: String,
-    pub inbox_path: PathBuf,
+    pub inbox_entry: String,
     pub queue_receipt_ref: String,
     pub queue_receipt_value: IoValue,
 }

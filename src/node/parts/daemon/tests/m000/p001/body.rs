@@ -84,8 +84,12 @@
         })
         .expect("process queued missing provenance");
         assert_eq!(loop_result.processed_request_refs, vec![queued.request_ref.clone()]);
-        let value =
-            read_preserves(&control_outbox_receipt_path(root, &queued.request_ref)).expect("queued receipt value");
+        let state_root = crate::node_state::NodeStateRoot::open(root).expect("open node state root");
+        let value = read_preserves(
+            &state_root,
+            &control_outbox_receipt_path(&queued.request_ref).expect("outbox receipt path"),
+        )
+        .expect("queued receipt value");
         let receipt = crate::node_runtime::parse_control_receipt(&value).expect("queued receipt");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing provenance evidence")));
@@ -236,9 +240,9 @@
             request_value: &request,
         })
         .expect("submit reproducible request");
-        let dispatch = dispatch_control_request(&ControlDispatchInput {
+        let dispatch = dispatch_control_request_entry(&ControlDispatchEntryInput {
             state_root: root,
-            request_path: Some(&submitted.inbox_path),
+            request_entry: Some(&submitted.inbox_entry),
         })
         .expect("dispatch reproducible request");
         let receipt = crate::node_runtime::parse_control_receipt(&dispatch.control_receipt_value)

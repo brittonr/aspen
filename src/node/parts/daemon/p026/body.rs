@@ -1,8 +1,5 @@
 
-fn live_receive_diagnostics(
-    input: &ControlLiveIngressReceiveBytesInput<'_>,
-    envelope: &ControlIngressEnvelope,
-) -> Vec<String> {
+fn live_receive_diagnostics(topic: &str, receiver_node: &str, envelope: &ControlIngressEnvelope) -> Vec<String> {
     let mut diagnostics = Vec::new();
     if envelope.transport != LIVE_CONTROL_INGRESS_TRANSPORT {
         diagnostics.push(format!(
@@ -10,16 +7,16 @@ fn live_receive_diagnostics(
             envelope.transport
         ));
     }
-    if envelope.topic != input.topic {
+    if envelope.topic != topic {
         diagnostics.push(format!(
             "node control live receive topic {} does not match subscribed topic {}",
-            envelope.topic, input.topic
+            envelope.topic, topic
         ));
     }
-    if envelope.to_node != input.receiver_node {
+    if envelope.to_node != receiver_node {
         diagnostics.push(format!(
             "node control live receive target {} does not match receiver {}",
-            envelope.to_node, input.receiver_node
+            envelope.to_node, receiver_node
         ));
     }
     if envelope.peer_bootstrap_refs.is_empty() {
@@ -91,12 +88,14 @@ pub fn parse_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressE
 }
 
 pub fn publish_control_ingress(input: &ControlIngressPublishInput<'_>) -> Result<ControlIngressPublish> {
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
-    ensure_state_layout(input.state_root)?;
+    ensure_state_layout(&state_root)?;
     let envelope = parse_control_ingress_envelope(input.envelope_value)?;
-    let envelope_path = control_ingress_envelope_path(input.state_root, &envelope.topic, &envelope.envelope_ref);
-    write_ingress_envelope_and_verify(input.state_root, &envelope.topic, &envelope)?;
-    import_artifact(input.state_root, &envelope.value)?;
+    let envelope_locator = control_ingress_envelope_path(&envelope.topic, &envelope.envelope_ref)?;
+    let envelope_path = diagnostic_node_state_path(input.state_root, &envelope_locator);
+    write_ingress_envelope_and_verify(&state_root, &envelope.topic, &envelope)?;
+    import_artifact(&state_root, &envelope.value)?;
     let diagnostics = Vec::new();
     let receipt_value = ingress_receipt_value(&IngressReceiptValueInput {
         decision: "pass",
@@ -109,10 +108,11 @@ pub fn publish_control_ingress(input: &ControlIngressPublishInput<'_>) -> Result
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(
-        &control_ingress_receipt_path(input.state_root, &envelope.envelope_ref, "publish"),
+        &state_root,
+        &control_ingress_receipt_path(&envelope.envelope_ref, "publish")?,
         &receipt_value,
     )?;
-    import_artifact(input.state_root, &receipt_value)?;
+    import_artifact(&state_root, &receipt_value)?;
     Ok(ControlIngressPublish {
         envelope_ref: envelope.envelope_ref,
         envelope_path,
@@ -129,30 +129,33 @@ struct EnqueueOutcome {
     diagnostics: Vec<String>,
 }
 
-fn apply_ingress_enqueue(state_root: &Path, envelope: &ControlIngressEnvelope) -> Result<EnqueueOutcome> {
+fn apply_ingress_enqueue(
+    state_root: &crate::node_state::NodeStateRoot,
+    envelope: &ControlIngressEnvelope,
+) -> Result<EnqueueOutcome> {
     let idempotency_evidence_refs = ingress_idempotency_evidence_refs(envelope);
     let scope_ref = crate::delivery_idempotency::remote_topic_scope_ref(&envelope.topic, &envelope.to_node)?;
-    let delivery = crate::delivery_idempotency::check(crate::delivery_idempotency::CheckInput {
-        root: &state_root.join(CONTROL_IDEMPOTENCY_DIR),
-        scope_profile: crate::delivery_idempotency::SCOPE_REMOTE_TOPIC,
-        scope_ref: &scope_ref,
-        producer: &envelope.from_peer,
-        consumer: &envelope.to_node,
-        sequence: envelope.sequence,
-        intent: "node-control-ingress",
-        payload_ref: &envelope.request.request_ref,
-        policy_refs: &envelope.policy_refs,
-        evidence_refs: &idempotency_evidence_refs,
-        semantic_result_ref: Some(&envelope.request.request_ref),
-        gap_policy: crate::delivery_idempotency::GapPolicy::Deny,
+    let delivery_root = state_root.delivery_store()?;
+    let delivery = crate::delivery_idempotency::check_with_root(crate::delivery_idempotency::CapabilityCheckInput {
+        root: &delivery_root,
+        request: crate::delivery_idempotency::CheckRequest {
+            scope_profile: crate::delivery_idempotency::SCOPE_REMOTE_TOPIC,
+            scope_ref: &scope_ref,
+            producer: &envelope.from_peer,
+            consumer: &envelope.to_node,
+            sequence: envelope.sequence,
+            intent: "node-control-ingress",
+            payload_ref: &envelope.request.request_ref,
+            policy_refs: &envelope.policy_refs,
+            evidence_refs: &idempotency_evidence_refs,
+            semantic_result_ref: Some(&envelope.request.request_ref),
+            gap_policy: crate::delivery_idempotency::GapPolicy::Deny,
+        },
     })?;
     let idempotency_receipt_ref = Some(delivery.receipt.receipt_ref.clone());
     import_artifact(state_root, &delivery.receipt.value)?;
     if delivery.should_commit_side_effect {
-        let submitted = submit_control_request(&ControlSubmitInput {
-            state_root,
-            request_value: &envelope.request.value,
-        })?;
+        let submitted = submit_control_request_with_root(state_root, &envelope.request.value)?;
         return Ok(EnqueueOutcome {
             idempotency_receipt_ref,
             queue_receipt_ref: Some(submitted.queue_receipt_ref),
@@ -179,23 +182,31 @@ fn apply_ingress_enqueue(state_root: &Path, envelope: &ControlIngressEnvelope) -
 }
 
 pub fn deliver_control_ingress(input: &ControlIngressDeliverInput<'_>) -> Result<ControlIngressDeliver> {
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
-    validate_node_id(input.topic)?;
-    validate_ingress_ref(input.envelope_ref, "node control ingress envelope ref")?;
-    ensure_state_layout(input.state_root)?;
-    let envelope_value =
-        read_preserves(&control_ingress_envelope_path(input.state_root, input.topic, input.envelope_ref))?;
+    deliver_control_ingress_with_root(&state_root, input.topic, input.envelope_ref)
+}
+
+fn deliver_control_ingress_with_root(
+    state_root: &crate::node_state::NodeStateRoot,
+    topic: &str,
+    envelope_ref: &str,
+) -> Result<ControlIngressDeliver> {
+    validate_node_id(topic)?;
+    validate_ingress_ref(envelope_ref, "node control ingress envelope ref")?;
+    ensure_state_layout(state_root)?;
+    let envelope_value = read_preserves(state_root, &control_ingress_envelope_path(topic, envelope_ref)?)?;
     let envelope = parse_control_ingress_envelope(&envelope_value)?;
-    if envelope.envelope_ref != input.envelope_ref {
+    if envelope.envelope_ref != envelope_ref {
         return Err(MoltenError::invalid_harness(format!(
             "node control ingress materialized envelope ref {} does not match requested {}",
-            envelope.envelope_ref, input.envelope_ref
+            envelope.envelope_ref, envelope_ref
         )));
     }
-    let mut diagnostics = ingress_pre_enqueue_diagnostics(input.state_root, input.topic, &envelope)?;
+    let mut diagnostics = ingress_pre_enqueue_diagnostics(state_root, topic, &envelope)?;
     let mut enqueue = EnqueueOutcome::default();
     if diagnostics.is_empty() {
-        enqueue = apply_ingress_enqueue(input.state_root, &envelope)?;
+        enqueue = apply_ingress_enqueue(state_root, &envelope)?;
         diagnostics.append(&mut enqueue.diagnostics);
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
@@ -214,10 +225,11 @@ pub fn deliver_control_ingress(input: &ControlIngressDeliverInput<'_>) -> Result
     })?;
     let ingress_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(
-        &control_ingress_receipt_path(input.state_root, &envelope.envelope_ref, "deliver"),
+        state_root,
+        &control_ingress_receipt_path(&envelope.envelope_ref, "deliver")?,
         &receipt_value,
     )?;
-    import_artifact(input.state_root, &receipt_value)?;
+    import_artifact(state_root, &receipt_value)?;
     Ok(ControlIngressDeliver {
         envelope_ref: envelope.envelope_ref,
         request_ref: envelope.request.request_ref,
@@ -230,7 +242,7 @@ pub fn deliver_control_ingress(input: &ControlIngressDeliverInput<'_>) -> Result
 }
 
 fn ingress_pre_enqueue_diagnostics(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     topic: &str,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
@@ -241,7 +253,10 @@ fn ingress_pre_enqueue_diagnostics(
     if envelope.topic != topic {
         diagnostics.push(format!("node control ingress topic {} does not match requested {topic}", envelope.topic));
     }
-    let identity = crate::node_identity::parse_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_identity(&read_preserves(
+        state_root,
+        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+    )?)?;
     if envelope.to_node != identity.node_id {
         diagnostics
             .push(format!("node control ingress target {} does not match node {}", envelope.to_node, identity.node_id));
@@ -267,7 +282,10 @@ fn ingress_pre_enqueue_diagnostics(
     Ok(diagnostics)
 }
 
-fn evaluate_live_peer_bootstrap(state_root: &Path, envelope: &ControlIngressEnvelope) -> Result<Vec<String>> {
+fn evaluate_live_peer_bootstrap(
+    state_root: &crate::node_state::NodeStateRoot,
+    envelope: &ControlIngressEnvelope,
+) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(envelope.peer_bootstrap_refs.len().saturating_add(1));
     let mut admitted_peer_ref = None;
     for peer_ref in envelope.peer_bootstrap_refs.iter() {

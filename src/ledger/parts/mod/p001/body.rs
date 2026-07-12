@@ -226,6 +226,15 @@ pub fn artifact_kind(value: &preserves::IOValue) -> &'static str {
     "artifact"
 }
 
+fn ensure_dirs_with_root(root: &CapabilityLedgerRoot) -> crate::error::Result<()> {
+    root.root().create_dir_all(&crate::local_store::LocalStorePath::parse("content")?)?;
+    root.root().create_dir_all(&crate::local_store::LocalStorePath::parse("pins")?)
+}
+
+fn content_store_path(artifact_ref: &str) -> crate::error::Result<crate::local_store::LocalStorePath> {
+    crate::local_store::LocalStorePath::parse("content")?.join(&filename_for_ref(artifact_ref)?)
+}
+
 fn ensure_dirs(root: &std::path::Path) -> crate::error::Result<()> {
     std::fs::create_dir_all(root.join("content")).map_err(crate::error::MoltenError::from)?;
     std::fs::create_dir_all(root.join("pins")).map_err(crate::error::MoltenError::from)

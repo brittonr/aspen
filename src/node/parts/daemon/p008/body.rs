@@ -58,23 +58,23 @@ pub fn import_control_live_workflow_bundle_ack(
     input: &ControlLiveWorkflowBundleAckImportInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleAckImport> {
     validate_live_workflow_bundle_ack_import_input(input)?;
-    ensure_state_layout(input.state_root)?;
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    ensure_state_layout(&state_root)?;
     let ack = parse_control_live_workflow_bundle_ack(input.ack_value)?;
     let mut diagnostics = live_workflow_bundle_ack_import_diagnostics(input, &ack)?;
     let mut imported_refs = Vec::with_capacity(8);
     if diagnostics.is_empty() {
-        imported_refs.extend(import_live_workflow_bundle_ack_members(input.state_root, &ack)?);
+        imported_refs.extend(import_live_workflow_bundle_ack_members(&state_root, &ack)?);
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = live_workflow_bundle_ack_import_receipt_value(&LiveWorkflowBundleAckImportReceiptValueInput {
         decision,
-        state_root: input.state_root,
         ack: &ack,
         imported_refs: &imported_refs,
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_artifact(input.state_root, &receipt_value)?;
+    import_artifact(&state_root, &receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(ControlLiveWorkflowBundleAckImport {
         ack_ref: ack.ack_ref.clone(),

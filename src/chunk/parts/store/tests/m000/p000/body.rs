@@ -225,7 +225,7 @@
         let missing = missing_chunks(&root, &put.manifest_ref).expect("missing chunks");
         assert_eq!(missing, vec![manifest.chunks[0].chunk_ref.clone()]);
         let error = read_object(&root, &put.manifest_ref).expect_err("missing chunk fails");
-        assert!(["No such file", "io error"].iter().any(|needle| error.to_string().contains(needle)));
+        assert!(error.to_string().contains("does not exist"), "{error}");
     }
 
     #[test]

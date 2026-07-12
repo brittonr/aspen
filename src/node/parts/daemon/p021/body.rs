@@ -75,17 +75,25 @@ pub fn receive_control_live_ingress_event(
     topic: &str,
     receiver_node: &str,
 ) -> Result<Option<ControlLiveIngressReceive>> {
+    let state_root = crate::node_state::NodeStateRoot::open(state_root)?;
+    receive_control_live_ingress_event_with_root(&state_root, event, topic, receiver_node)
+}
+
+fn receive_control_live_ingress_event_with_root(
+    state_root: &crate::node_state::NodeStateRoot,
+    event: &iroh_gossip::api::Event,
+    topic: &str,
+    receiver_node: &str,
+) -> Result<Option<ControlLiveIngressReceive>> {
     match event {
-        iroh_gossip::api::Event::Received(message) => {
-            receive_control_live_ingress_bytes(&ControlLiveIngressReceiveBytesInput {
-                state_root,
-                topic,
-                receiver_node,
-                delivered_from: &format!("iroh:{}", message.delivered_from),
-                bytes: message.content.as_ref(),
-            })
-            .map(Some)
-        }
+        iroh_gossip::api::Event::Received(message) => receive_control_live_ingress_bytes_with_root(
+            state_root,
+            topic,
+            receiver_node,
+            &format!("iroh:{}", message.delivered_from),
+            message.content.as_ref(),
+        )
+        .map(Some),
         iroh_gossip::api::Event::NeighborUp(_)
         | iroh_gossip::api::Event::NeighborDown(_)
         | iroh_gossip::api::Event::Lagged => Ok(None),
@@ -95,24 +103,37 @@ pub fn receive_control_live_ingress_event(
 pub fn receive_control_live_ingress_bytes(
     input: &ControlLiveIngressReceiveBytesInput<'_>,
 ) -> Result<ControlLiveIngressReceive> {
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
-    validate_node_id(input.topic)?;
-    validate_node_id(input.receiver_node)?;
-    validate_node_id(input.delivered_from)?;
-    ensure_state_layout(input.state_root)?;
-    let value = crate::preserves_rail::parse_canonical_bytes(input.bytes)?;
+    receive_control_live_ingress_bytes_with_root(
+        &state_root,
+        input.topic,
+        input.receiver_node,
+        input.delivered_from,
+        input.bytes,
+    )
+}
+
+fn receive_control_live_ingress_bytes_with_root(
+    state_root: &crate::node_state::NodeStateRoot,
+    topic: &str,
+    receiver_node: &str,
+    delivered_from: &str,
+    bytes: &[u8],
+) -> Result<ControlLiveIngressReceive> {
+    validate_node_id(topic)?;
+    validate_node_id(receiver_node)?;
+    validate_node_id(delivered_from)?;
+    ensure_state_layout(state_root)?;
+    let value = crate::preserves_rail::parse_canonical_bytes(bytes)?;
     let envelope = parse_control_ingress_envelope(&value)?;
-    let mut diagnostics = live_receive_diagnostics(input, &envelope);
-    write_ingress_envelope_and_verify(input.state_root, input.topic, &envelope)?;
-    import_artifact(input.state_root, &value)?;
+    let mut diagnostics = live_receive_diagnostics(topic, receiver_node, &envelope);
+    write_ingress_envelope_and_verify(state_root, topic, &envelope)?;
+    import_artifact(state_root, &value)?;
     let delivered = if diagnostics.is_empty() {
-        deliver_control_ingress(&ControlIngressDeliverInput {
-            state_root: input.state_root,
-            topic: input.topic,
-            envelope_ref: &envelope.envelope_ref,
-        })?
+        deliver_control_ingress_with_root(state_root, topic, &envelope.envelope_ref)?
     } else {
-        denied_live_ingress_delivery(input.state_root, &envelope, &diagnostics)?
+        denied_live_ingress_delivery(state_root, &envelope, &diagnostics)?
     };
     let ingress_decision = ingress_receipt_decision(&delivered.ingress_receipt_value)?;
     if ingress_decision != "pass" {
@@ -122,8 +143,8 @@ pub fn receive_control_live_ingress_bytes(
     let receipt_value = live_transport_receipt_value(&LiveTransportReceiptValueInput {
         operation: "receive",
         decision,
-        node_id: input.receiver_node,
-        delivered_from: Some(input.delivered_from),
+        node_id: receiver_node,
+        delivered_from: Some(delivered_from),
         envelope: &envelope,
         ingress_receipt_ref: Some(&delivered.ingress_receipt_ref),
         topology_profile_ref: None,
@@ -134,10 +155,11 @@ pub fn receive_control_live_ingress_bytes(
     })?;
     let transport_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(
-        &control_live_transport_receipt_path(input.state_root, &envelope.envelope_ref, "receive"),
+        state_root,
+        &control_live_transport_receipt_path(&envelope.envelope_ref, "receive")?,
         &receipt_value,
     )?;
-    import_artifact(input.state_root, &receipt_value)?;
+    import_artifact(state_root, &receipt_value)?;
     Ok(ControlLiveIngressReceive {
         envelope_ref: envelope.envelope_ref,
         transport_receipt_ref,
@@ -164,8 +186,9 @@ fn envelope_for_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<Control
 }
 
 pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<ControlLiveLoopback> {
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
-    ensure_state_layout(input.state_root)?;
+    ensure_state_layout(&state_root)?;
     let envelope = envelope_for_loopback(input)?;
     let topic_id = control_live_topic_id(input.topic);
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
@@ -208,7 +231,7 @@ pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) ->
     .await?;
     let received = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        receive_first_live_ingress_event(input.state_root, &mut receiver_topic, input.topic, input.to_node),
+        receive_first_live_ingress_event(&state_root, &mut receiver_topic, input.topic, input.to_node),
     )
     .await
     .map_err(|_| MoltenError::invalid_harness("live Iroh node control loopback timed out waiting for envelope"))??;
@@ -232,8 +255,18 @@ pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) ->
 }
 
 pub fn preflight_control_live_send(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSendPreflight> {
-    if let Some(state_root) = input.state_root {
-        validate_state_root(state_root)?;
+    let state_root = input.state_root.map(crate::node_state::NodeStateRoot::open).transpose()?;
+    preflight_control_live_send_with_root(input, state_root.as_ref())
+}
+
+fn preflight_control_live_send_with_root(
+    input: &ControlLiveSendInput<'_>,
+    state_root: Option<&crate::node_state::NodeStateRoot>,
+) -> Result<ControlLiveSendPreflight> {
+    if let Some(path) = input.state_root {
+        validate_state_root(path)?;
+    }
+    if let Some(state_root) = state_root {
         ensure_state_layout(state_root)?;
     }
     validate_node_id(input.from_peer)?;
@@ -280,7 +313,7 @@ pub fn preflight_control_live_send(input: &ControlLiveSendInput<'_>) -> Result<C
         envelope: &envelope,
     })?;
     diagnostics.extend(profile.diagnostics.iter().cloned());
-    if let Some(state_root) = input.state_root {
+    if let Some(state_root) = state_root {
         diagnostics.extend(live_send_state_root_evidence_diagnostics(state_root, input, &envelope)?);
     }
     if ticket.address_refs.is_empty() {

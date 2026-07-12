@@ -80,9 +80,10 @@
             request_value: value,
         })
         .expect("submit request");
+        let request_path = case.root.join(CONTROL_INBOX_DIR).join(&submitted.inbox_entry);
         let dispatched = dispatch_control_request(&ControlDispatchInput {
             state_root: &case.root,
-            request_path: Some(&submitted.inbox_path),
+            request_path: Some(&request_path),
         })
         .expect("dispatch request");
         crate::node_runtime::parse_control_receipt(&dispatched.control_receipt_value).expect("control receipt")

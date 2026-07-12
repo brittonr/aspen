@@ -9,8 +9,8 @@
     "molten": "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0"
   },
-  "cargoLockHash": "eb906f4369211b6b1a3c8abe4df61cf5a6782ab98d195648ac7f8c21698e7b39",
-  "inputsHash": "c7ee282f03e9b0c1442dd75cfe156841e4e8b38b2c7d547a93c1c6ca0f342681",
+  "cargoLockHash": "3c6c1482d02b83f6977f6f038fa61e2e36c1047f5debaa9d9161d189a1b43a14",
+  "inputsHash": "3cd5a5a8b5dd7e4fb0e357917d7f15def5aaa8405d8dd55d3ac90887804ff9ac",
   "crates": {
     "git+ssh://git@github.com/OnixResearch/basalt.git#basalt@0.1.0": {
       "crateName": "basalt",
@@ -313,6 +313,10 @@
         {
           "packageId": "git+ssh://git@github.com/OnixResearch/cairn.git#cairn-core@0.1.0",
           "externCrateName": "cairn"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-fs-ext@3.4.5",
+          "externCrateName": "cap_fs_ext"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-std@3.4.5",
@@ -4949,7 +4953,7 @@
           "externCrateName": "data_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@1.0.109",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
           "externCrateName": "syn"
         }
       ],
@@ -19620,7 +19624,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
           "externCrateName": "heck"
         },
         {

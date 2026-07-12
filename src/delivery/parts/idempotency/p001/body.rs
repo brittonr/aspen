@@ -61,6 +61,15 @@ pub fn classify_idempotency_decision(input: DecisionLawInput<'_>) -> Result<Idem
 }
 
 pub fn check(input: CheckInput<'_>) -> Result<Decision> {
+    let root = crate::local_store::DeliveryStoreRoot::open(input.root)?;
+    check_request(&root, input.request())
+}
+
+pub fn check_with_root(input: CapabilityCheckInput<'_>) -> Result<Decision> {
+    check_request(input.root, input.request)
+}
+
+fn check_request(root: &crate::local_store::DeliveryStoreRoot, input: CheckRequest<'_>) -> Result<Decision> {
     validate_scope_profile(input.scope_profile)?;
     require_ref(input.scope_ref, "delivery scope ref")?;
     validate_refs(input.policy_refs, "delivery policy ref")?;
@@ -78,7 +87,7 @@ pub fn check(input: CheckInput<'_>) -> Result<Decision> {
         policy_refs: input.policy_refs.to_vec(),
     })?;
     let dedup_key = dedup_key_ref(&operation)?;
-    let db = ensure_store_tables(input.root)?;
+    let db = ensure_store_tables_with_root(root)?;
     let existing_entry = read_entry_from_store(&db, &dedup_key)?;
     let current_window = read_or_create_window(&db, input.scope_profile, input.scope_ref, input.policy_refs)?;
     let law = classify_idempotency_decision(DecisionLawInput {
@@ -244,7 +253,7 @@ pub fn summary(value: &IoValue) -> Result<String> {
 }
 
 fn first_decision(
-    input: CheckInput<'_>,
+    input: CheckRequest<'_>,
     db: &redb::Database,
     operation: OperationId,
     window: Window,
@@ -297,7 +306,7 @@ fn first_decision(
 }
 
 fn duplicate_or_conflict_decision(
-    _input: CheckInput<'_>,
+    _input: CheckRequest<'_>,
     db: &redb::Database,
     operation: OperationId,
     window: Window,

@@ -23,6 +23,12 @@ pub struct ExecutionLoopbackInput<'a> {
     pub request_value: &'a IoValue,
 }
 
+const TYPED_STORAGE_SOURCE_FIELD_COUNT: usize = 3;
+
+struct CapabilityJobRunOptions<'a> {
+    chunk_root: &'a crate::chunk_store::CapabilityChunkRoot,
+}
+
 struct ExecutionReceiptValueInput<'a> {
     decision: &'a str,
     request: &'a JobExecutionRequest,

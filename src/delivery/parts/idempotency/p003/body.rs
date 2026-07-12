@@ -1,7 +1,13 @@
 
 fn ensure_store_tables(root: &std::path::Path) -> Result<redb::Database> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
-    let db = redb::Database::create(store_path(root)).map_err(store_error)?;
+    let root = crate::local_store::DeliveryStoreRoot::open(root)?;
+    ensure_store_tables_with_root(&root)
+}
+
+fn ensure_store_tables_with_root(root: &crate::local_store::DeliveryStoreRoot) -> Result<redb::Database> {
+    let path = crate::local_store::LocalStorePath::parse(STORE_FILE)?;
+    let file = root.root().open_database_file(&path)?;
+    let db = redb::Database::builder().create_file(file).map_err(store_error)?;
     let write_txn = db.begin_write().map_err(store_error)?;
     {
         write_txn.open_table(STORE_WINDOWS).map_err(store_error)?;
@@ -11,10 +17,6 @@ fn ensure_store_tables(root: &std::path::Path) -> Result<redb::Database> {
     }
     write_txn.commit().map_err(store_error)?;
     Ok(db)
-}
-
-fn store_path(root: &std::path::Path) -> std::path::PathBuf {
-    root.join(STORE_FILE)
 }
 
 fn store_error(error: impl std::fmt::Display) -> MoltenError {

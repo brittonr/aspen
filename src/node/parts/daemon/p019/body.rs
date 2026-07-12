@@ -1,31 +1,53 @@
 
 pub fn serve_control(input: &ControlServeInput<'_>) -> Result<ControlServe> {
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
+    serve_control_with_root(&state_root, input)
+}
+
+fn serve_control_with_root(
+    state_root: &crate::node_state::NodeStateRoot,
+    input: &ControlServeInput<'_>,
+) -> Result<ControlServe> {
     validate_node_id(input.topic)?;
-    ensure_state_layout(input.state_root)?;
+    ensure_state_layout(state_root)?;
     let max_ticks = validate_service_tick_limit(input.max_ticks)?;
     let max_requests_per_tick = validate_loop_request_limit(input.max_requests_per_tick)?;
     let supervisor_policy = input
         .supervisor_policy_value
-        .map(|value| import_control_supervisor_policy(input.state_root, value))
+        .map(|value| import_control_supervisor_policy_with_root(state_root, value))
         .transpose()?;
-    require_active_lock(input.state_root)?;
-    let startup = current_startup_receipt(input.state_root)?;
+    require_active_lock(state_root)?;
+    let startup = current_startup_receipt(state_root)?;
 
-    let existing_lock = handle_existing_service_lock(input, &startup, supervisor_policy.as_ref(), Vec::new())?;
+    let existing_lock =
+        handle_existing_service_lock(state_root, input, &startup, supervisor_policy.as_ref(), Vec::new())?;
     if let Some(denied) = existing_lock.denied {
         return Ok(denied);
     }
     if let Some(policy) = supervisor_policy.as_ref() {
-        let prior_runs = count_prior_supervised_service_runs(input.state_root, &policy.policy_ref)?;
+        let prior_runs = count_prior_supervised_service_runs(state_root, &policy.policy_ref)?;
         if prior_runs > policy.max_restarts {
-            return denied_restart_attempt(input, &startup, policy, prior_runs, &existing_lock.supervisor_receipt_refs);
+            return denied_restart_attempt(
+                state_root,
+                input,
+                &startup,
+                policy,
+                prior_runs,
+                &existing_lock.supervisor_receipt_refs,
+            );
         }
     }
 
-    let start = start_service_run(input, &startup, supervisor_policy.as_ref(), existing_lock.supervisor_receipt_refs)?;
+    let start = start_service_run(
+        state_root,
+        input,
+        &startup,
+        supervisor_policy.as_ref(),
+        existing_lock.supervisor_receipt_refs,
+    )?;
     let run = run_service_ticks(ServiceTickInput {
-        state_root: input.state_root,
+        state_root,
         topic: input.topic,
         max_ticks: input.max_ticks,
         max_requests_per_tick: input.max_requests_per_tick,
@@ -35,7 +57,7 @@ pub fn serve_control(input: &ControlServeInput<'_>) -> Result<ControlServe> {
         service_lock_ref: &start.service_lock_ref,
     })?;
     let shutdown = note_shutdown_drain(ShutdownDrainInput {
-        state_root: input.state_root,
+        state_root,
         topic: input.topic,
         startup_receipt_ref: &startup.receipt_ref,
         service_lock_ref: &start.service_lock_ref,
@@ -43,9 +65,9 @@ pub fn serve_control(input: &ControlServeInput<'_>) -> Result<ControlServe> {
         run,
         supervisor_receipt_refs: start.supervisor_receipt_refs,
     })?;
-    remove_service_lock(input.state_root, &start.service_lock_ref)?;
+    remove_service_lock(state_root, &start.service_lock_ref)?;
     finish_service_run(FinishServiceInput {
-        state_root: input.state_root,
+        state_root,
         topic: input.topic,
         max_ticks: input.max_ticks,
         max_requests_per_tick: input.max_requests_per_tick,
@@ -68,7 +90,7 @@ struct ServiceStart {
 }
 
 struct ServiceTickInput<'a> {
-    state_root: &'a Path,
+    state_root: &'a crate::node_state::NodeStateRoot,
     topic: &'a str,
     max_ticks: u64,
     max_requests_per_tick: u64,
@@ -89,7 +111,7 @@ struct ServiceRunParts {
 }
 
 struct ShutdownDrainInput<'a> {
-    state_root: &'a Path,
+    state_root: &'a crate::node_state::NodeStateRoot,
     topic: &'a str,
     startup_receipt_ref: &'a str,
     service_lock_ref: &'a str,
@@ -104,7 +126,7 @@ struct ShutdownDrain {
 }
 
 struct FinishServiceInput<'a> {
-    state_root: &'a Path,
+    state_root: &'a crate::node_state::NodeStateRoot,
     topic: &'a str,
     max_ticks: u64,
     max_requests_per_tick: u64,
@@ -116,12 +138,14 @@ struct FinishServiceInput<'a> {
 }
 
 fn handle_existing_service_lock(
+    state_root: &crate::node_state::NodeStateRoot,
     input: &ControlServeInput<'_>,
     startup: &crate::node_runtime::NodeStartupReceipt,
     supervisor_policy: Option<&ControlSupervisorPolicy>,
     mut supervisor_receipt_refs: Vec<String>,
 ) -> Result<ExistingServiceLock> {
-    if !input.state_root.join(CONTROL_SERVICE_LOCK_FILE).exists() {
+    let lock_path = crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?;
+    if !state_root.try_exists(&lock_path)? {
         return Ok(ExistingServiceLock {
             supervisor_receipt_refs,
             denied: None,
@@ -130,10 +154,10 @@ fn handle_existing_service_lock(
     if let Some(policy) = supervisor_policy
         && policy.stale_lock_recovery
     {
-        let lock_value = read_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE))?;
+        let lock_value = read_preserves(state_root, &lock_path)?;
         let stale_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
         let diagnostics = vec!["node control stale service lock recovered by supervisor policy".to_string()];
-        let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+        let receipt_ref = write_supervisor_receipt(state_root, &SupervisorReceiptValueInput {
             decision: "pass",
             operation: "stale-lock-recover",
             startup_receipt_ref: &startup.receipt_ref,
@@ -143,13 +167,19 @@ fn handle_existing_service_lock(
             diagnostics: &diagnostics,
         })?;
         supervisor_receipt_refs.push(receipt_ref);
-        fs::remove_file(input.state_root.join(CONTROL_SERVICE_LOCK_FILE)).map_err(MoltenError::from)?;
+        state_root.remove_regular_file(&lock_path)?;
         return Ok(ExistingServiceLock {
             supervisor_receipt_refs,
             denied: None,
         });
     }
-    let denied = denied_duplicate_service_run(input, startup, supervisor_policy, &supervisor_receipt_refs)?;
+    let denied = denied_duplicate_service_run(
+        state_root,
+        input,
+        startup,
+        supervisor_policy,
+        &supervisor_receipt_refs,
+    )?;
     Ok(ExistingServiceLock {
         supervisor_receipt_refs,
         denied: Some(denied),
@@ -157,6 +187,7 @@ fn handle_existing_service_lock(
 }
 
 fn denied_restart_attempt(
+    state_root: &crate::node_state::NodeStateRoot,
     input: &ControlServeInput<'_>,
     startup: &crate::node_runtime::NodeStartupReceipt,
     policy: &ControlSupervisorPolicy,
@@ -168,7 +199,7 @@ fn denied_restart_attempt(
         policy.max_restarts
     )];
     let mut supervisor_receipt_refs = inherited_supervisor_receipt_refs.to_vec();
-    let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+    let receipt_ref = write_supervisor_receipt(state_root, &SupervisorReceiptValueInput {
         decision: "deny",
         operation: "restart-attempt-deny",
         startup_receipt_ref: &startup.receipt_ref,
@@ -196,8 +227,8 @@ fn denied_restart_attempt(
         diagnostics: &diagnostics,
     })?;
     let service_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
-    import_artifact(input.state_root, &receipt_value)?;
+    write_preserves(state_root, &control_service_run_receipt_path(&service_receipt_ref)?, &receipt_value)?;
+    import_artifact(state_root, &receipt_value)?;
     Ok(ControlServe {
         service_receipt_ref,
         service_receipt_value: receipt_value,
@@ -215,18 +246,21 @@ fn denied_restart_attempt(
 }
 
 fn start_service_run(
+    state_root: &crate::node_state::NodeStateRoot,
     input: &ControlServeInput<'_>,
     startup: &crate::node_runtime::NodeStartupReceipt,
     supervisor_policy: Option<&ControlSupervisorPolicy>,
     mut supervisor_receipt_refs: Vec<String>,
 ) -> Result<ServiceStart> {
-    let identity = crate::node_identity::parse_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let identity = crate::node_identity::parse_identity(&read_preserves(
+        state_root,
+        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+    )?)?;
     let service_run_id = local_ref(
         "node-control-service-run",
         &format!("{}:{}:{}:{}", startup.receipt_ref, input.topic, input.max_ticks, input.max_requests_per_tick),
     )?;
     let lock_value = service_lock_value(&ServiceLockValueInput {
-        state_root: input.state_root,
         startup_receipt_ref: &startup.receipt_ref,
         node_id: &identity.node_id,
         topic: input.topic,
@@ -235,10 +269,14 @@ fn start_service_run(
         service_run_ref: &service_run_id,
     })?;
     let service_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
-    write_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value)?;
-    import_artifact(input.state_root, &lock_value)?;
+    write_preserves(
+        state_root,
+        &crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?,
+        &lock_value,
+    )?;
+    import_artifact(state_root, &lock_value)?;
     if let Some(policy) = supervisor_policy {
-        let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+        let receipt_ref = write_supervisor_receipt(state_root, &SupervisorReceiptValueInput {
             decision: "pass",
             operation: "restart-attempt",
             startup_receipt_ref: &startup.receipt_ref,

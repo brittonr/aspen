@@ -3,7 +3,15 @@ pub fn import_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleImportInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleImport> {
     validate_state_root(input.state_root)?;
-    ensure_state_layout(input.state_root)?;
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    import_control_live_workflow_bundle_with_root(&state_root, input)
+}
+
+fn import_control_live_workflow_bundle_with_root(
+    state_root: &crate::node_state::NodeStateRoot,
+    input: &ControlLiveWorkflowBundleImportInput<'_>,
+) -> Result<ControlLiveWorkflowBundleImport> {
+    ensure_state_layout(state_root)?;
     if let Some(node) = input.expected_node {
         validate_node_id(node)?;
     }
@@ -36,14 +44,13 @@ pub fn import_control_live_workflow_bundle(
         authority_import_ref: None,
     };
     if diagnostics.is_empty() {
-        let (imported, import_diagnostics) = import_parts(input, &bundle)?;
+        let (imported, import_diagnostics) = import_parts(state_root, input, &bundle)?;
         parts = imported;
         diagnostics.extend(import_diagnostics);
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = live_workflow_bundle_import_receipt_value(&LiveWorkflowBundleImportReceiptValueInput {
         decision,
-        state_root: input.state_root,
         bundle: &bundle,
         ticket_import_ref: parts.ticket_import_ref.as_deref(),
         authority_import_ref: parts.authority_import_ref.as_deref(),
@@ -51,7 +58,7 @@ pub fn import_control_live_workflow_bundle(
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_artifact(input.state_root, &receipt_value)?;
+    import_artifact(state_root, &receipt_value)?;
     Ok(ControlLiveWorkflowBundleImport {
         bundle_ref: bundle.bundle_ref,
         ticket_import_ref: parts.ticket_import_ref,
@@ -65,6 +72,7 @@ pub fn import_control_live_workflow_bundle(
 }
 
 fn import_parts(
+    state_root: &crate::node_state::NodeStateRoot,
     input: &ControlLiveWorkflowBundleImportInput<'_>,
     bundle: &ControlLiveWorkflowBundle,
 ) -> Result<(ImportParts, Vec<String>)> {
@@ -74,7 +82,7 @@ fn import_parts(
         ticket_import_ref: None,
         authority_import_ref: None,
     };
-    let ticket_import = import_control_live_ticket(&ControlLiveTicketImportInput {
+    let ticket_import_input = ControlLiveTicketImportInput {
         state_root: input.state_root,
         ticket_value: &bundle.ticket_value,
         peer_admission_value: Some(&bundle.peer_admission_value),
@@ -83,8 +91,9 @@ fn import_parts(
         expected_endpoint: input.expected_endpoint,
         expected_peer: input.expected_peer,
         as_of_sequence: input.as_of_sequence,
-    })?;
-    let authority_import = import_control_authority_grant_checked(&ControlAuthorityGrantImportInput {
+    };
+    let ticket_import = import_control_live_ticket_with_root(state_root, &ticket_import_input)?;
+    let authority_import_input = ControlAuthorityGrantImportInput {
         state_root: input.state_root,
         grant_value: &bundle.authority_grant_value,
         expected_peer: input.expected_peer,
@@ -93,7 +102,8 @@ fn import_parts(
         expected_target_scope: input.expected_target_scope,
         expected_resource_scope: input.expected_resource_scope,
         as_of_epoch: input.as_of_epoch,
-    })?;
+    };
+    let authority_import = import_control_authority_grant_checked_with_root(state_root, &authority_import_input)?;
     parts.ticket_import_ref = Some(ticket_import.receipt_ref.clone());
     parts.authority_import_ref = Some(authority_import.receipt_ref.clone());
     if ticket_import.decision != "pass" {
@@ -105,9 +115,9 @@ fn import_parts(
     if diagnostics.is_empty() {
         parts.imported_refs.extend(ticket_import.imported_refs);
         parts.imported_refs.extend(authority_import.imported_refs);
-        parts.imported_refs.push(import_artifact(input.state_root, input.bundle_value)?);
+        parts.imported_refs.push(import_artifact(state_root, input.bundle_value)?);
         for receipt_value in &bundle.receipt_values {
-            parts.imported_refs.push(import_artifact(input.state_root, receipt_value)?);
+            parts.imported_refs.push(import_artifact(state_root, receipt_value)?);
         }
     }
     Ok((parts, diagnostics))

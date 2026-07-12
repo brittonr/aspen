@@ -25,9 +25,7 @@ fn live_workflow_bundle_import_receipt_value(input: &LiveWorkflowBundleImportRec
     Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-import-receipt-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA),
         crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
-        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(
-            input.state_root,
-        )?)]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(&())?)]),
         crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(&input.bundle.bundle_ref)]),
         crate::preserves_rail::record("ticket", vec![crate::preserves_rail::string(&input.bundle.ticket_ref)]),
         crate::preserves_rail::record("peer-admission", vec![crate::preserves_rail::string(
@@ -165,9 +163,17 @@ pub fn parse_control_supervisor_policy(value: &IoValue) -> Result<ControlSupervi
 
 pub fn import_control_supervisor_policy(state_root: &Path, policy_value: &IoValue) -> Result<ControlSupervisorPolicy> {
     validate_state_root(state_root)?;
-    ensure_state_layout(state_root)?;
+    let root = crate::node_state::NodeStateRoot::open(state_root)?;
+    import_control_supervisor_policy_with_root(&root, policy_value)
+}
+
+pub fn import_control_supervisor_policy_with_root(
+    root: &crate::node_state::NodeStateRoot,
+    policy_value: &IoValue,
+) -> Result<ControlSupervisorPolicy> {
+    ensure_state_layout(root)?;
     let policy = parse_control_supervisor_policy(policy_value)?;
-    import_artifact(state_root, policy_value)?;
+    import_artifact(root, policy_value)?;
     Ok(policy)
 }
 
@@ -197,29 +203,26 @@ fn service_run_supervisor_policy_ref(value: &IoValue) -> Result<Option<String>> 
     Ok(None)
 }
 
-fn count_prior_supervised_service_runs(state_root: &Path, supervisor_policy_ref: &str) -> Result<u64> {
-    let service_dir = state_root.join(CONTROL_SERVICE_DIR);
-    if !service_dir.exists() {
-        return Ok(0);
-    }
+fn count_prior_supervised_service_runs(
+    root: &crate::node_state::NodeStateRoot,
+    supervisor_policy_ref: &str,
+) -> Result<u64> {
+    let service = root.control_service()?;
     let mut count = 0_u64;
-    for entry in fs::read_dir(&service_dir)
-        .map_err(|error| MoltenError::invalid_harness(format!("read node control service dir failed: {error}")))?
-    {
-        let entry = entry.map_err(|error| {
-            MoltenError::invalid_harness(format!("read node control service entry failed: {error}"))
-        })?;
-        let path = entry.path();
-        if !path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".service-run-receipt.preserves"))
+    for entry in service.list_entries()? {
+        if entry.kind != crate::node_state::NodeStateEntryKind::RegularFile
+            || !entry.name.ends_with(".service-run-receipt.preserves")
         {
             continue;
         }
-        let value = read_preserves(&path)?;
+        let bytes = service.read_entry(&entry, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
+        let text = String::from_utf8(bytes)
+            .map_err(|error| MoltenError::invalid_harness(format!("node service receipt is not UTF-8: {error}")))?;
+        let value = crate::preserves_rail::parse_text(&text)?;
         if service_run_supervisor_policy_ref(&value)?.as_deref() == Some(supervisor_policy_ref) {
-            count = count.saturating_add(1);
+            count = count
+                .checked_add(1)
+                .ok_or_else(|| MoltenError::invalid_harness("node supervised service run count overflow"))?;
         }
     }
     Ok(count)
@@ -227,21 +230,33 @@ fn count_prior_supervised_service_runs(state_root: &Path, supervisor_policy_ref:
 
 pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
+    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    init_local_with_root(&root, input)
+}
+
+pub fn init_local_with_root(root: &crate::node_state::NodeStateRoot, input: &InitInput<'_>) -> Result<Init> {
     validate_node_id(input.node_id)?;
-    verify_init_state(input.state_root)?;
-    ensure_state_layout(input.state_root)?;
+    verify_init_state(root)
+        .map_err(|error| MoltenError::invalid_harness(format!("node init state verification failed: {error}")))?;
+    ensure_state_layout(root)
+        .map_err(|error| MoltenError::invalid_harness(format!("node init layout creation failed: {error}")))?;
     let policy_refs = vec![local_ref("node-policy", input.node_id)?];
-    let mut identity_config = crate::node_identity::Config::new(input.node_id, input.state_root.join("identity"));
+    let mut identity_config = crate::node_identity::Config::new(input.node_id, PathBuf::from("identity"));
     identity_config.policy_refs = policy_refs.clone();
-    let identity_resolution = crate::node_identity::resolve(&identity_config)?;
+    let identity_root = root
+        .identity()
+        .map_err(|error| MoltenError::invalid_harness(format!("node init identity namespace failed: {error}")))?;
+    let identity_resolution = crate::node_identity::resolve_with_root(&identity_config, &identity_root)
+        .map_err(|error| MoltenError::invalid_harness(format!("node init identity resolution failed: {error}")))?;
     let identity = identity_resolution
         .identity
         .ok_or_else(|| MoltenError::invalid_harness("node daemon identity resolution denied"))?;
-    let adapters = default_adapter_bindings(input.state_root)?;
+    let adapters = default_adapter_bindings(root)
+        .map_err(|error| MoltenError::invalid_harness(format!("node init adapter binding failed: {error}")))?;
     let capability_refs = vec![local_ref("node-capability", input.node_id)?];
     let resource_refs = vec![local_ref("node-resource", input.node_id)?];
     let effect_profile_refs = vec![local_ref("node-effect-profile", input.node_id)?];
-    let state_root_ref = state_root_profile_ref(input.state_root)?;
+    let state_root_ref = state_root_profile_ref(root)?;
     let profile_resolution = crate::node_profile_config::resolve_local_default_config(
         &crate::node_profile_config::LocalDefaultConfigInput {
             identity_ref: identity.identity_ref.clone(),
@@ -253,13 +268,18 @@ pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
             effect_profile_refs,
         },
     )?;
-    write_preserves(&input.state_root.join(CONFIG_FILE), &profile_resolution.config_value)?;
+    write_preserves(root, &fixed_node_path(CONFIG_FILE)?, &profile_resolution.config_value)?;
     write_preserves(
-        &input.state_root.join(PROFILE_RESOLUTION_FILE),
+        root,
+        &fixed_node_path(PROFILE_RESOLUTION_FILE)?,
         &profile_resolution.resolution_value,
     )?;
-    write_preserves(&input.state_root.join(IDENTITY_RECEIPT_FILE), &identity_resolution.receipt_value)?;
-    write_preserves(&input.state_root.join(IDENTITY_FILE), &identity.value)?;
+    write_preserves(
+        root,
+        &fixed_node_path(IDENTITY_RECEIPT_FILE)?,
+        &identity_resolution.receipt_value,
+    )?;
+    write_preserves(root, &fixed_node_path(IDENTITY_FILE)?, &identity.value)?;
     Ok(Init {
         config_ref: profile_resolution.config_ref,
         identity_ref: identity.identity_ref,
@@ -273,13 +293,22 @@ pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
 
 pub fn init_with_profile(input: &ProfileInitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
+    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    init_with_profile_and_root(&root, input)
+}
+
+pub fn init_with_profile_and_root(
+    root: &crate::node_state::NodeStateRoot,
+    input: &ProfileInitInput<'_>,
+) -> Result<Init> {
     validate_node_id(input.node_id)?;
-    verify_init_state(input.state_root)?;
-    ensure_state_layout(input.state_root)?;
+    verify_init_state(root)?;
+    ensure_state_layout(root)?;
     let policy_refs = vec![local_ref("node-policy", input.node_id)?];
-    let mut identity_config = crate::node_identity::Config::new(input.node_id, input.state_root.join("identity"));
+    let mut identity_config = crate::node_identity::Config::new(input.node_id, PathBuf::from("identity"));
     identity_config.policy_refs = policy_refs;
-    let identity_resolution = crate::node_identity::resolve(&identity_config)?;
+    let identity_root = root.identity()?;
+    let identity_resolution = crate::node_identity::resolve_with_root(&identity_config, &identity_root)?;
     let identity = identity_resolution
         .identity
         .ok_or_else(|| MoltenError::invalid_harness("node daemon identity resolution denied"))?;
@@ -296,13 +325,18 @@ pub fn init_with_profile(input: &ProfileInitInput<'_>) -> Result<Init> {
             profile_resolution.diagnostics.join("; ")
         )));
     }
-    write_preserves(&input.state_root.join(CONFIG_FILE), &profile_resolution.config_value)?;
+    write_preserves(root, &fixed_node_path(CONFIG_FILE)?, &profile_resolution.config_value)?;
     write_preserves(
-        &input.state_root.join(PROFILE_RESOLUTION_FILE),
+        root,
+        &fixed_node_path(PROFILE_RESOLUTION_FILE)?,
         &profile_resolution.resolution_value,
     )?;
-    write_preserves(&input.state_root.join(IDENTITY_RECEIPT_FILE), &identity_resolution.receipt_value)?;
-    write_preserves(&input.state_root.join(IDENTITY_FILE), &identity.value)?;
+    write_preserves(
+        root,
+        &fixed_node_path(IDENTITY_RECEIPT_FILE)?,
+        &identity_resolution.receipt_value,
+    )?;
+    write_preserves(root, &fixed_node_path(IDENTITY_FILE)?, &identity.value)?;
     Ok(Init {
         config_ref: profile_resolution.config_ref,
         identity_ref: identity.identity_ref,

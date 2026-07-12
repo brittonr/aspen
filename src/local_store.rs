@@ -1,3 +1,6 @@
+use std::io::Read;
+use std::io::Write;
+
 use cap_fs_ext::FollowSymlinks;
 use cap_fs_ext::OpenOptionsFollowExt;
 
@@ -19,6 +22,8 @@ pub enum LocalStoreKind {
     Retention,
     Dataspace,
     Exchange,
+    Ledger,
+    Delivery,
 }
 
 impl LocalStoreKind {
@@ -29,6 +34,8 @@ impl LocalStoreKind {
             Self::Retention => "retention",
             Self::Dataspace => "dataspace",
             Self::Exchange => "exchange",
+            Self::Ledger => "ledger",
+            Self::Delivery => "delivery",
         }
     }
 }
@@ -138,6 +145,10 @@ impl LocalStoreRoot {
         self.dir.try_clone().map_err(MoltenError::from)
     }
 
+    pub(crate) fn from_dir(kind: LocalStoreKind, dir: cap_std::fs::Dir) -> Self {
+        Self { kind, dir }
+    }
+
     fn open_subdir(&self, kind: LocalStoreKind, path: &LocalStorePath) -> Result<Self> {
         self.create_dir_all(path)?;
         let dir = self.dir.open_dir(path.as_path()).map_err(MoltenError::from)?;
@@ -154,11 +165,30 @@ impl LocalStoreRoot {
     }
 
     pub fn read(&self, path: &LocalStorePath) -> Result<Vec<u8>> {
-        self.dir.read(path.as_path()).map_err(MoltenError::from)
+        if self.entry_kind(path)? != LocalStoreEntryKind::File {
+            return Err(MoltenError::invalid_harness(format!(
+                "local store read leaf {} must be a regular file",
+                path.display()
+            )));
+        }
+        let mut options = cap_std::fs::OpenOptions::new();
+        options.read(true).follow(FollowSymlinks::No);
+        let mut file = self.dir.open_with(path.as_path(), &options).map_err(MoltenError::from)?;
+        if !file.metadata().map_err(MoltenError::from)?.is_file() {
+            return Err(MoltenError::invalid_harness(format!(
+                "local store read leaf {} changed away from a regular file",
+                path.display()
+            )));
+        }
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes).map_err(MoltenError::from)?;
+        Ok(bytes)
     }
 
     pub fn read_to_string(&self, path: &LocalStorePath) -> Result<String> {
-        self.dir.read_to_string(path.as_path()).map_err(MoltenError::from)
+        String::from_utf8(self.read(path)?).map_err(|error| {
+            MoltenError::invalid_harness(format!("local store file {} is not UTF-8: {error}", path.display()))
+        })
     }
 
     pub fn write(&self, path: &LocalStorePath, contents: &[u8]) -> Result<()> {
@@ -170,7 +200,26 @@ impl LocalStoreRoot {
             };
             self.create_dir_all(&parent_path)?;
         }
-        self.dir.write(path.as_path(), contents).map_err(MoltenError::from)
+        match self.entry_kind_optional(path)? {
+            Some(LocalStoreEntryKind::File) | None => {}
+            Some(kind) => {
+                return Err(MoltenError::invalid_harness(format!(
+                    "local store write leaf {} must be a regular file, got {kind:?}",
+                    path.display()
+                )));
+            }
+        }
+        let mut options = cap_std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true).follow(FollowSymlinks::No);
+        let mut file = self.dir.open_with(path.as_path(), &options).map_err(MoltenError::from)?;
+        if !file.metadata().map_err(MoltenError::from)?.is_file() {
+            return Err(MoltenError::invalid_harness(format!(
+                "local store write leaf {} changed away from a regular file",
+                path.display()
+            )));
+        }
+        file.write_all(contents).map_err(MoltenError::from)?;
+        file.flush().map_err(MoltenError::from)
     }
 
     pub fn remove_file(&self, path: &LocalStorePath) -> Result<()> {
@@ -182,12 +231,20 @@ impl LocalStoreRoot {
     }
 
     pub fn try_exists(&self, path: &LocalStorePath) -> Result<bool> {
-        self.dir.try_exists(path.as_path()).map_err(MoltenError::from)
+        self.entry_kind_optional(path).map(|kind| kind.is_some())
     }
 
     pub fn entry_kind(&self, path: &LocalStorePath) -> Result<LocalStoreEntryKind> {
-        let metadata = self.dir.symlink_metadata(path.as_path()).map_err(MoltenError::from)?;
-        Ok(local_store_entry_kind(&metadata.file_type()))
+        self.entry_kind_optional(path)?
+            .ok_or_else(|| MoltenError::invalid_harness(format!("local store path {} does not exist", path.display())))
+    }
+
+    pub fn entry_kind_optional(&self, path: &LocalStorePath) -> Result<Option<LocalStoreEntryKind>> {
+        match self.dir.symlink_metadata(path.as_path()) {
+            Ok(metadata) => Ok(Some(local_store_entry_kind(&metadata.file_type()))),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(MoltenError::from(error)),
+        }
     }
 
     pub fn list_entries(&self, path: &LocalStorePath) -> Result<Vec<LocalStoreEntry>> {
@@ -292,6 +349,40 @@ typed_root!(ChunkStoreRoot, LocalStoreKind::Chunk);
 typed_root!(RetentionStoreRoot, LocalStoreKind::Retention);
 typed_root!(DataspaceStoreRoot, LocalStoreKind::Dataspace);
 typed_root!(ExchangeStoreRoot, LocalStoreKind::Exchange);
+typed_root!(LedgerStoreRoot, LocalStoreKind::Ledger);
+typed_root!(DeliveryStoreRoot, LocalStoreKind::Delivery);
+
+impl ArtifactStoreRoot {
+    pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {
+        Self {
+            root: LocalStoreRoot::from_dir(LocalStoreKind::Artifact, dir),
+        }
+    }
+}
+
+impl ChunkStoreRoot {
+    pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {
+        Self {
+            root: LocalStoreRoot::from_dir(LocalStoreKind::Chunk, dir),
+        }
+    }
+}
+
+impl LedgerStoreRoot {
+    pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {
+        Self {
+            root: LocalStoreRoot::from_dir(LocalStoreKind::Ledger, dir),
+        }
+    }
+}
+
+impl DeliveryStoreRoot {
+    pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {
+        Self {
+            root: LocalStoreRoot::from_dir(LocalStoreKind::Delivery, dir),
+        }
+    }
+}
 
 impl ChunkStoreRoot {
     pub(crate) fn open_artifact_chunks(parent: &ArtifactStoreRoot) -> Result<Self> {
@@ -506,6 +597,7 @@ mod tests {
             error.to_string().contains("outside")
                 || error.to_string().contains("symlink")
                 || error.to_string().contains("permission")
+                || error.to_string().contains("regular file")
         );
         let intermediate_error = root
             .root()

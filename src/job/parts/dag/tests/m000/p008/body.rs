@@ -211,6 +211,51 @@
     }
 
     #[test]
+    fn capability_node_runner_fails_closed_for_typed_storage_without_losing_chunk_authority() {
+        let workspace = crate::test_support::TestWorkspace::new("job-capability-typed-storage-deny")
+            .expect("test workspace");
+        let state = workspace.state().expect("state root");
+        let root = crate::node_state::NodeStateRoot::from_dir(state.dir().try_clone().expect("clone state root"));
+        root.create_layout().expect("node layout");
+        let chunk_root = root.chunk_store().expect("chunk root");
+        let options = CapabilityJobRunOptions { chunk_root: &chunk_root };
+        let node = JobNode {
+            id: "source".to_string(),
+            kind: "source".to_string(),
+            stage_artifact_ref: None,
+            input_ports: Vec::new(),
+            output_ports: vec!["out".to_string()],
+            config: crate::preserves_rail::record("source", vec![crate::preserves_rail::record(
+                "typed-storage",
+                vec![
+                    crate::preserves_rail::string("namespace"),
+                    crate::preserves_rail::string("key"),
+                    crate::preserves_rail::record("none", Vec::new()),
+                ],
+            )]),
+            effect_manifest_refs: Vec::new(),
+            policy_refs: Vec::new(),
+            evidence_refs: Vec::new(),
+            checks: Vec::new(),
+        };
+        let mut effects = Vec::new();
+        let error = execute_source_with_capabilities(&node, &options, &mut effects)
+            .expect_err("typed storage must fail closed without a capability adapter");
+        assert!(error.to_string().contains("capability-aware typed storage adapter"));
+        assert!(effects.is_empty());
+
+        let put = crate::chunk_store::put_bytes_with_root(
+            &chunk_root,
+            "job-capability-test",
+            b"still-authorized",
+            crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
+        )
+        .expect("chunk authority remains usable");
+        crate::chunk_store::read_object_with_root(&chunk_root, &put.manifest_ref)
+            .expect("read capability chunk");
+    }
+
+    #[test]
     fn remote_execution_admission_denies_missing_capability_and_local_policy() {
         let fixture = remote_execution_fixture("binding-deny");
         let denied = admit_remote_execution(RemoteExecutionAdmissionInput {

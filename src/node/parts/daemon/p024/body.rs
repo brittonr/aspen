@@ -1,4 +1,7 @@
 
+const LOOPBACK_LISTENER_MAX_EVENTS: u64 = 4;
+const LOOPBACK_LISTENER_TIMEOUT_MS: u64 = 1_000;
+
 fn service_run_receipt_ref(value: &IoValue) -> Result<String> {
     if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(17)) {
         require_schema(
@@ -54,16 +57,20 @@ fn live_listener_receipt_refs(value: &IoValue) -> Result<(String, Vec<String>, S
 }
 
 pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> Result<ControlLiveServe> {
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     validate_listener_event_limit(input.max_events)?;
     validate_loop_request_limit(input.max_requests_per_tick)?;
-    ensure_state_layout(input.state_root)?;
-    let identity = crate::node_identity::parse_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    ensure_state_layout(&state_root)?;
+    let identity = crate::node_identity::parse_identity(&read_preserves(
+        &state_root,
+        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+    )?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
     let bound_endpoint_id = format!("iroh:{}", endpoint.id());
-    let live_ticket = live_ticket_for_bound_endpoint(input.state_root, &identity, input.topic, &endpoint.addr())?;
+    let live_ticket = live_ticket_for_bound_endpoint(&state_root, &identity, input.topic, &endpoint.addr())?;
     lookup.add_endpoint_info(endpoint.addr());
     let gossip = iroh_gossip::Gossip::builder().spawn(endpoint.clone());
     let router = iroh::protocol::Router::builder(endpoint).accept(iroh_gossip::ALPN, gossip.clone()).spawn();
@@ -72,6 +79,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
         .await
         .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve subscribe failed: {error}")))?;
     let served = serve_node_control_live_listener_with_topic(
+        &state_root,
         input,
         &mut topic,
         &identity.node_id,
@@ -92,8 +100,9 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
 pub async fn control_live_serve_listener_loopback(
     input: &ControlLiveServeLoopbackInput<'_>,
 ) -> Result<ControlLiveServeLoopback> {
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
-    ensure_state_layout(input.state_root)?;
+    ensure_state_layout(&state_root)?;
     let envelope_input = ControlIngressEnvelopeInput {
         request_value: input.request_value,
         from_peer: input.from_peer,
@@ -117,7 +126,7 @@ pub async fn control_live_serve_listener_loopback(
         sender_router,
         node_id,
         endpoint_id,
-    } = loopback_pair(input.state_root, input.topic).await?;
+    } = loopback_pair(&state_root, input.topic).await?;
     let published = publish_control_live_ingress(&ControlLiveIngressPublishInput {
         sender: &sender,
         envelope_value: &envelope.value,
@@ -131,12 +140,13 @@ pub async fn control_live_serve_listener_loopback(
     let listener_input = ControlLiveServeInput {
         state_root: input.state_root,
         topic: input.topic,
-        max_events: 4,
-        event_timeout_ms: 1_000,
+        max_events: LOOPBACK_LISTENER_MAX_EVENTS,
+        event_timeout_ms: LOOPBACK_LISTENER_TIMEOUT_MS,
         max_requests_per_tick: input.max_requests_per_tick,
         supervisor_policy_value: None,
     };
     let mut listener = serve_node_control_live_listener_with_topic(
+        &state_root,
         &listener_input,
         &mut receiver_topic,
         &node_id,
@@ -172,8 +182,11 @@ struct LoopbackPair {
     endpoint_id: String,
 }
 
-async fn loopback_pair(state_root: &Path, topic: &str) -> Result<LoopbackPair> {
-    let identity = crate::node_identity::parse_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
+async fn loopback_pair(state_root: &crate::node_state::NodeStateRoot, topic: &str) -> Result<LoopbackPair> {
+    let identity = crate::node_identity::parse_identity(&read_preserves(
+        state_root,
+        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+    )?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
     let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
@@ -221,6 +234,7 @@ struct EventScan {
 }
 
 async fn scan_events(
+    state_root: &crate::node_state::NodeStateRoot,
     input: &ControlLiveServeInput<'_>,
     receiver: &mut iroh_gossip::api::GossipTopic,
     node_id: &str,
@@ -253,7 +267,7 @@ async fn scan_events(
             iroh_gossip::api::Event::Lagged => diagnostics.push("live Iroh serve listener lagged".to_string()),
             iroh_gossip::api::Event::Received(_) => {
                 if let Some(received) =
-                    receive_control_live_ingress_event(input.state_root, &event, input.topic, node_id)?
+                    receive_control_live_ingress_event_with_root(state_root, &event, input.topic, node_id)?
                 {
                     transport_receipt_refs.push(received.transport_receipt_ref);
                 }

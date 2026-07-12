@@ -1,22 +1,20 @@
-use std::io::Write;
-
 const KEY_SOURCE_EXPLICIT: &str = "explicit-key";
 const KEY_SOURCE_GENERATE: &str = "generate-and-persist";
 const KEY_SOURCE_MANAGED_BACKEND: &str = "managed-secret-backend";
 const KEY_SOURCE_PERSISTED_FILE: &str = "persisted-file";
 const KEY_SOURCE_UNAVAILABLE: &str = "unavailable";
 const IROH_ENDPOINT_PREFIX: &str = "iroh:";
-#[cfg(unix)]
 const OWNER_ONLY_SECRET_FILE_MODE: u32 = 0o600;
 #[cfg(unix)]
 const GROUP_OR_OTHER_SECRET_PERMISSION_BITS: u32 = 0o077;
+const IDENTITY_NAMESPACE_LABEL: &str = "node-state/identity";
 
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
-type OpenOptions = std::fs::OpenOptions;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 
+#[cfg(test)]
 mod fs {
     pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         std::fs::create_dir_all(path)
@@ -299,13 +297,14 @@ pub fn admit_iroh_endpoint_observation(facts: &IrohEndpointObservationFacts) -> 
 
 struct ResolutionInput<'a> {
     config: &'a Config,
+    root: &'a crate::node_state::NodeStateNamespace,
     operation: &'a str,
     secret: &'a str,
     material: &'a EndpointMaterial,
     backend_ref: &'a str,
     source_metadata_ref: &'a str,
     permission_status: IrohSecretPermissionStatus,
-    endpoint_path: &'a std::path::Path,
+    endpoint_path: &'a crate::node_state::NodeStatePath,
     is_first_boot: bool,
 }
 
@@ -327,20 +326,33 @@ struct ReceiptValueInput<'a> {
 }
 
 pub fn resolve(config: &Config) -> Result<Resolution> {
+    let root = crate::node_state::NodeStateNamespace::open(
+        crate::node_state::NodeStateNamespaceKind::Identity,
+        &config.data_dir,
+    )?;
+    resolve_with_root(config, &root)
+}
+
+pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNamespace) -> Result<Resolution> {
     validate_config(config)?;
-    let secret_path = config.data_dir.join(SECRET_FILE);
-    let endpoint_path = config.data_dir.join(ENDPOINT_FILE);
-    let permission_status = secret_file_permission_status(&secret_path)?;
+    validate_identity_namespace(root)?;
+    let secret_path = crate::node_state::NodeStatePath::parse(SECRET_FILE)?;
+    let endpoint_path = crate::node_state::NodeStatePath::parse(ENDPOINT_FILE)?;
+    let secret_observation = root.observe_file(&secret_path)?;
+    let permission_status = secret_file_permission_status(&secret_observation);
     let source_decision = resolve_iroh_secret_source(&IrohSecretSourceFacts {
         explicit_key_present: config.explicit_key.is_some(),
         managed_secret_present: config.secret_backend_key.is_some(),
         managed_secret_required: config.require_secret_backend,
-        persisted_file_present: secret_path.exists(),
+        persisted_file_present: !matches!(
+            &secret_observation,
+            crate::node_state::NodeStateFileObservation::Missing
+        ),
         persisted_file_permission: permission_status,
         generation_allowed: config.allow_generate,
     });
     let backend_ref = selected_backend_ref(config, source_decision.key_source_class)?;
-    let source_metadata_ref = source_metadata_ref(&config.data_dir, source_decision.key_source_class, &backend_ref)?;
+    let source_metadata_ref = source_metadata_ref(source_decision.key_source_class, &backend_ref)?;
     match source_decision.kind {
         IrohSecretSourceDecisionKind::LoadExplicit => {
             let explicit_key = config
@@ -350,6 +362,7 @@ pub fn resolve(config: &Config) -> Result<Resolution> {
             let material = derive_endpoint_material(explicit_key)?;
             finish_resolution(ResolutionInput {
                 config,
+                root,
                 operation: source_decision.key_source_class,
                 secret: explicit_key,
                 material: &material,
@@ -368,6 +381,7 @@ pub fn resolve(config: &Config) -> Result<Resolution> {
             let material = derive_endpoint_material(backend_key)?;
             finish_resolution(ResolutionInput {
                 config,
+                root,
                 operation: source_decision.key_source_class,
                 secret: backend_key,
                 material: &material,
@@ -379,11 +393,11 @@ pub fn resolve(config: &Config) -> Result<Resolution> {
             })
         }
         IrohSecretSourceDecisionKind::LoadFile => {
-            let secret = fs::read_to_string(&secret_path).map_err(MoltenError::from)?;
-            let secret = secret.trim().to_string();
+            let secret = read_observed_secret(secret_observation)?;
             let material = derive_endpoint_material(&secret)?;
             finish_resolution(ResolutionInput {
                 config,
+                root,
                 operation: source_decision.key_source_class,
                 secret: &secret,
                 material: &material,
@@ -395,12 +409,12 @@ pub fn resolve(config: &Config) -> Result<Resolution> {
             })
         }
         IrohSecretSourceDecisionKind::GenerateAndPersist => {
-            fs::create_dir_all(&config.data_dir).map_err(MoltenError::from)?;
-            let secret = generate_secret(&config.node_id, &config.data_dir)?;
-            write_secret_restricted(&secret_path, &secret)?;
+            let secret = generate_secret(&config.node_id)?;
+            write_secret_restricted(root, &secret_path, &secret)?;
             let material = derive_endpoint_material(&secret)?;
             finish_resolution(ResolutionInput {
                 config,
+                root,
                 operation: source_decision.key_source_class,
                 secret: &secret,
                 material: &material,

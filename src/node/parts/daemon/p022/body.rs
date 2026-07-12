@@ -1,6 +1,14 @@
 
 pub async fn send_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSend> {
-    validate_send_input(input)?;
+    let state_root = input.state_root.map(crate::node_state::NodeStateRoot::open).transpose()?;
+    send_control_live_ingress_with_root(input, state_root.as_ref()).await
+}
+
+async fn send_control_live_ingress_with_root(
+    input: &ControlLiveSendInput<'_>,
+    state_root: Option<&crate::node_state::NodeStateRoot>,
+) -> Result<ControlLiveSend> {
+    validate_send_input(input, state_root)?;
     let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
     let envelope = send_envelope(input, &ticket)?;
     if let Some(operation_ref) = input.expected_operation_ref
@@ -12,6 +20,7 @@ pub async fn send_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Resu
         )];
         return denied_control_live_send_with_diagnostics(DeniedLiveSendInput {
             input,
+            state_root,
             ticket: &ticket,
             envelope,
             diagnostics,
@@ -19,11 +28,12 @@ pub async fn send_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Resu
             retry_receipt_values: Vec::new(),
         });
     }
-    let receiver_addr = match send_receiver_addr(input, &ticket, &envelope)? {
+    let receiver_addr = match send_receiver_addr(input, state_root, &ticket, &envelope)? {
         Ok(addr) => addr,
         Err(diagnostics) => {
             return denied_control_live_send_with_diagnostics(DeniedLiveSendInput {
                 input,
+                state_root,
                 ticket: &ticket,
                 envelope,
                 diagnostics,
@@ -32,15 +42,16 @@ pub async fn send_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Resu
             });
         }
     };
-    if let Some(state_root) = input.state_root
+    if let Some(state_root) = state_root
         && let Some(duplicate) = duplicate_control_live_send(input, state_root, &ticket, &envelope)?
     {
         return Ok(duplicate);
     }
-    let retries = publish_with_retries(input, &receiver_addr, &ticket, &envelope).await?;
+    let retries = publish_with_retries(input, state_root, &receiver_addr, &ticket, &envelope).await?;
     let Some(published) = retries.published else {
         return denied_control_live_send_with_diagnostics(DeniedLiveSendInput {
             input,
+            state_root,
             ticket: &ticket,
             envelope,
             diagnostics: retries.diagnostics,
@@ -50,6 +61,7 @@ pub async fn send_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Resu
     };
     finish_send(FinishSendInput {
         input,
+        state_root,
         ticket: &ticket,
         envelope,
         published,
@@ -69,6 +81,7 @@ struct SendRetryOutcome {
 #[derive(Debug)]
 struct FinishSendInput<'a> {
     input: &'a ControlLiveSendInput<'a>,
+    state_root: Option<&'a crate::node_state::NodeStateRoot>,
     ticket: &'a ControlLiveTicket,
     envelope: ControlIngressEnvelope,
     published: ControlLiveIngressPublish,
@@ -76,9 +89,14 @@ struct FinishSendInput<'a> {
     retry_receipt_values: Vec<IoValue>,
 }
 
-fn validate_send_input(input: &ControlLiveSendInput<'_>) -> Result<()> {
-    if let Some(state_root) = input.state_root {
-        validate_state_root(state_root)?;
+fn validate_send_input(
+    input: &ControlLiveSendInput<'_>,
+    state_root: Option<&crate::node_state::NodeStateRoot>,
+) -> Result<()> {
+    if let Some(path) = input.state_root {
+        validate_state_root(path)?;
+    }
+    if let Some(state_root) = state_root {
         ensure_state_layout(state_root)?;
     }
     validate_node_id(input.from_peer)?;
@@ -122,13 +140,14 @@ fn send_envelope(input: &ControlLiveSendInput<'_>, ticket: &ControlLiveTicket) -
 
 fn send_receiver_addr(
     input: &ControlLiveSendInput<'_>,
+    state_root: Option<&crate::node_state::NodeStateRoot>,
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
 ) -> Result<std::result::Result<iroh::EndpointAddr, Vec<String>>> {
     let mut diagnostics = live_send_ticket_diagnostics(input, ticket);
     let profile = live_send_profile_preflight(LiveProfilePreflightInput { send: input, ticket, envelope })?;
     diagnostics.extend(profile.diagnostics);
-    if let Some(state_root) = input.state_root {
+    if let Some(state_root) = state_root {
         diagnostics.extend(live_send_state_root_evidence_diagnostics(state_root, input, envelope)?);
     }
     if ticket.address_refs.is_empty() {
@@ -152,6 +171,7 @@ fn send_receiver_addr(
 
 async fn publish_with_retries(
     input: &ControlLiveSendInput<'_>,
+    state_root: Option<&crate::node_state::NodeStateRoot>,
     receiver_addr: &iroh::EndpointAddr,
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
@@ -185,8 +205,8 @@ async fn publish_with_retries(
                     diagnostics: &attempt_diagnostics,
                 })?;
                 let retry_ref = crate::preserves_rail::canonical_hash(&retry_value)?;
-                if let Some(state_root) = input.state_root {
-                    write_preserves(&control_live_send_retry_receipt_path(state_root, &retry_ref), &retry_value)?;
+                if let Some(state_root) = state_root {
+                    write_preserves(state_root, &control_live_send_retry_receipt_path(&retry_ref)?, &retry_value)?;
                     import_artifact(state_root, &retry_value)?;
                 }
                 retry_receipt_refs.push(retry_ref);
@@ -216,16 +236,17 @@ fn finish_send(input: FinishSendInput<'_>) -> Result<ControlLiveSend> {
         diagnostics: &[],
     })?;
     let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
-    if let Some(state_root) = input.input.state_root {
+    if let Some(state_root) = input.state_root {
         import_artifact(state_root, input.input.receiver_ticket_value)?;
         write_ingress_envelope_and_verify(state_root, &input.ticket.topic, &input.envelope)?;
         import_artifact(state_root, &input.envelope.value)?;
         write_preserves(
-            &control_live_transport_receipt_path(state_root, &input.envelope.envelope_ref, "send"),
+            state_root,
+            &control_live_transport_receipt_path(&input.envelope.envelope_ref, "send")?,
             &input.published.transport_receipt_value,
         )?;
         import_artifact(state_root, &input.published.transport_receipt_value)?;
-        write_preserves(&control_live_send_receipt_path(state_root, &send_receipt_ref), &send_receipt_value)?;
+        write_preserves(state_root, &control_live_send_receipt_path(&send_receipt_ref)?, &send_receipt_value)?;
         import_artifact(state_root, &send_receipt_value)?;
     }
     Ok(ControlLiveSend {

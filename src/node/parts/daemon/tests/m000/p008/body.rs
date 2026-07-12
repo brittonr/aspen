@@ -145,9 +145,15 @@
         })
         .expect("init node");
         run_local(&RunInput { state_root: &root }).expect("run node");
-        let identity =
-            crate::node_identity::parse_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
-                .expect("parse identity");
+        let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
+        let identity = crate::node_identity::parse_identity(
+            &read_preserves(
+                &state_root,
+                &crate::node_state::NodeStatePath::parse(IDENTITY_FILE).expect("identity path"),
+            )
+            .expect("identity"),
+        )
+        .expect("parse identity");
         (root, identity)
     }
 
@@ -237,8 +243,9 @@
                 .await
                 .expect("receiver endpoint");
             let receiver_addr = receiver_endpoint.addr();
+            let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
             let live_ticket =
-                live_ticket_for_bound_endpoint(&root, &identity, DEFAULT_CONTROL_INGRESS_TOPIC, &receiver_addr)
+                live_ticket_for_bound_endpoint(&state_root, &identity, DEFAULT_CONTROL_INGRESS_TOPIC, &receiver_addr)
                     .expect("live ticket");
             lookup.add_endpoint_info(receiver_addr);
             let receiver_gossip = iroh_gossip::Gossip::builder().spawn(receiver_endpoint.clone());
@@ -257,6 +264,7 @@
             assert_duplicate(&sent, &duplicate);
             let listener_input = build_listener_input(&root);
             let listener = serve_node_control_live_listener_with_topic(
+                &state_root,
                 &listener_input,
                 &mut receiver_topic,
                 &identity.node_id,

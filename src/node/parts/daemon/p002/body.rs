@@ -14,7 +14,6 @@ struct LivePeerAdmissionValueInput<'a> {
 #[derive(Debug, Clone, Copy)]
 struct LiveTicketImportReceiptValueInput<'a> {
     decision: &'a str,
-    state_root: &'a Path,
     ticket: &'a ControlLiveTicket,
     peer_admission_ref: Option<&'a str>,
     peer_id: Option<&'a str>,
@@ -26,7 +25,6 @@ struct LiveTicketImportReceiptValueInput<'a> {
 #[derive(Debug, Clone, Copy)]
 struct AuthorityGrantImportReceiptValueInput<'a> {
     decision: &'a str,
-    state_root: &'a Path,
     grant: &'a ControlAuthorityGrant,
     as_of_epoch: u64,
     imported_refs: &'a [String],
@@ -81,7 +79,6 @@ struct LiveWorkflowBundleGateReceiptValueInput<'a> {
 #[derive(Debug, Clone, Copy)]
 struct LiveWorkflowBundleApplyReceiptValueInput<'a> {
     decision: &'a str,
-    state_root: &'a Path,
     bundle_ref: &'a str,
     gate_receipt_ref: Option<&'a str>,
     recomputed_verify_receipt_ref: &'a str,
@@ -147,7 +144,6 @@ struct LiveWorkflowBundleAckExportReceiptValueInput<'a> {
 #[derive(Debug, Clone, Copy)]
 struct LiveWorkflowBundleAckImportReceiptValueInput<'a> {
     decision: &'a str,
-    state_root: &'a Path,
     ack: &'a ControlLiveWorkflowBundleAck,
     imported_refs: &'a [String],
     diagnostics: &'a [String],
@@ -196,7 +192,6 @@ struct LiveWorkflowBundleExpectedInput<'a> {
 #[derive(Debug, Clone, Copy)]
 struct LiveWorkflowBundleImportReceiptValueInput<'a> {
     decision: &'a str,
-    state_root: &'a Path,
     bundle: &'a ControlLiveWorkflowBundle,
     ticket_import_ref: Option<&'a str>,
     authority_import_ref: Option<&'a str>,
@@ -207,6 +202,7 @@ struct LiveWorkflowBundleImportReceiptValueInput<'a> {
 #[derive(Debug)]
 struct DeniedLiveSendInput<'a> {
     input: &'a ControlLiveSendInput<'a>,
+    state_root: Option<&'a crate::node_state::NodeStateRoot>,
     ticket: &'a ControlLiveTicket,
     envelope: ControlIngressEnvelope,
     diagnostics: Vec<String>,
@@ -278,7 +274,7 @@ struct LoopReceiptValueInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 struct OperationFinalizeInput<'a> {
-    state_root: &'a Path,
+    state_root: &'a crate::node_state::NodeStateRoot,
     request: &'a crate::node_runtime::ControlRequest,
     startup_receipt_ref: &'a str,
     subreceipt_refs: &'a [String],

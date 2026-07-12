@@ -132,6 +132,101 @@ fn execute_stage(
     })
 }
 
+fn execute_stage_with_capabilities(
+    dag: &JobDag,
+    request: &JobOutputRequest,
+    node: &JobNode,
+    inputs: &[IoValue],
+    options: &CapabilityJobRunOptions<'_>,
+) -> Result<JobStageRun> {
+    let mut effects = Vec::new();
+    let output_values = match node.kind.as_str() {
+        "source" => execute_source_with_capabilities(node, options, &mut effects)?,
+        "map" => execute_map(node, inputs)?,
+        "filter" => execute_filter(node, inputs)?,
+        "reduce" => execute_reduce(node, inputs)?,
+        "materialize" => execute_materialize_with_capabilities(node, inputs, options, &mut effects)?,
+        _ => return Err(MoltenError::invalid_harness(format!("unsupported job stage kind {}", node.kind))),
+    };
+    let output_refs = refs_for_values(&output_values)?;
+    let receipt_value = job_receipt_value(JobReceiptInput {
+        operation: if node.kind == "materialize" {
+            "materialize"
+        } else {
+            "stage"
+        },
+        decision: "pass",
+        job_ref: Some(&dag.job_ref),
+        request_ref: Some(&request.request_ref),
+        stage_id: Some(&node.id),
+        input_refs: &refs_for_values(inputs)?,
+        output_refs: &output_refs,
+        cache_ref: None,
+        effect_refs: &effects,
+        policy_refs: &combined_policy_refs(dag, request, Some(node)),
+        evidence_refs: &node.evidence_refs,
+        diagnostics: &[],
+        checks: &[
+            ("deterministic-stage", "pass"),
+            ("explicit-effect-boundary", "pass"),
+            ("no-mobile-closures", "pass"),
+            ("capability-rooted-node-state", "pass"),
+        ],
+    })?;
+    Ok(JobStageRun {
+        node_id: node.id.clone(),
+        output_values,
+        output_refs,
+        receipt_value,
+    })
+}
+
+fn execute_source_with_capabilities(
+    node: &JobNode,
+    options: &CapabilityJobRunOptions<'_>,
+    effects: &mut impl crate::bounded::VecSink<String>,
+) -> Result<Vec<IoValue>> {
+    let source = simple_record(&node.config, "source", 1)?;
+    let payload = crate::preserves_rail::value_to_iovalue(&source[0]);
+    if let Some(values) = payload.collect_simple_record("values", Some(1)) {
+        return sequence_items(&values[0], "source values");
+    }
+    if let Some(value) = payload.collect_simple_record("value", Some(1)) {
+        return Ok(vec![crate::preserves_rail::value_to_iovalue(&value[0])]);
+    }
+    if payload
+        .collect_simple_record("typed-storage", Some(TYPED_STORAGE_SOURCE_FIELD_COUNT))
+        .is_some()
+    {
+        return Err(MoltenError::invalid_harness(
+            "typed-storage job sources require a capability-aware typed storage adapter",
+        ));
+    }
+    if let Some(chunk) = payload.collect_simple_record("chunk-manifest", Some(1)) {
+        let manifest_ref = required_ref(&chunk[0], "source chunk manifest ref")?;
+        let read = crate::chunk_store::read_object_with_root(options.chunk_root, &manifest_ref)?;
+        effects.push_item(crate::preserves_rail::canonical_hash(&read.receipt_value)?);
+        let value = crate::preserves_rail::parse_canonical_bytes(&read.bytes)?;
+        if let Some(items) = value.collect_sequence() {
+            ensure_count_at_most(items.len(), MAX_JOB_STAGE_VALUES, "source chunk values")?;
+            let mut output = Vec::with_capacity(items.len());
+            for item in items.iter() {
+                push_bounded(
+                    &mut output,
+                    crate::preserves_rail::value_to_iovalue(item),
+                    MAX_JOB_STAGE_VALUES,
+                    "source chunk values",
+                )?;
+            }
+            return Ok(output);
+        }
+        return Ok(vec![value]);
+    }
+    Err(MoltenError::invalid_harness(
+        "unsupported source config; expected inline values or a chunk manifest under capability-rooted node execution",
+    ))
+}
+
 fn execute_source(
     node: &JobNode,
     options: &JobRunOptions<'_>,
@@ -270,6 +365,36 @@ fn execute_materialize(
         "chunk-manifest" => {
             let bytes = crate::preserves_rail::canonical_bytes(&value)?;
             let put = crate::chunk_store::put_bytes(
+                options.chunk_root,
+                "job-materialization",
+                &bytes,
+                DEFAULT_FIXED_V1_CHUNK_SIZE,
+            )?;
+            effects.push_item(crate::preserves_rail::canonical_hash(&put.receipt_value)?);
+            Ok(vec![crate::preserves_rail::record("chunk-manifest-ref", vec![
+                crate::preserves_rail::string(&put.manifest_ref),
+            ])])
+        }
+        other => Err(MoltenError::invalid_harness(format!("unsupported materialization kind {other}"))),
+    }
+}
+
+fn execute_materialize_with_capabilities(
+    node: &JobNode,
+    inputs: &[IoValue],
+    options: &CapabilityJobRunOptions<'_>,
+    effects: &mut impl crate::bounded::VecSink<String>,
+) -> Result<Vec<IoValue>> {
+    let config = materialize_config(&node.config)?;
+    let value = crate::preserves_rail::sequence(inputs.to_vec());
+    match config.kind.as_str() {
+        "inline" => Ok(vec![value]),
+        "typed-storage" => Err(MoltenError::invalid_harness(
+            "typed-storage job materialization requires a capability-aware typed storage adapter",
+        )),
+        "chunk-manifest" => {
+            let bytes = crate::preserves_rail::canonical_bytes(&value)?;
+            let put = crate::chunk_store::put_bytes_with_root(
                 options.chunk_root,
                 "job-materialization",
                 &bytes,

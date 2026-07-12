@@ -6,34 +6,42 @@ type PathBuf = std::path::PathBuf;
 type Result<T> = crate::error::Result<T>;
 type SocketAddr = std::net::SocketAddr;
 
+trait NodeStateAuthority {
+    fn acquire_node_state_root(&self) -> Result<crate::node_state::NodeStateRoot>;
+}
+
+#[cfg(test)]
+impl NodeStateAuthority for Path {
+    fn acquire_node_state_root(&self) -> Result<crate::node_state::NodeStateRoot> {
+        crate::node_state::NodeStateRoot::open(self)
+    }
+}
+
+impl NodeStateAuthority for crate::node_state::NodeStateRoot {
+    fn acquire_node_state_root(&self) -> Result<crate::node_state::NodeStateRoot> {
+        Ok(self.clone())
+    }
+}
+
+#[cfg(test)]
+impl NodeStateAuthority for PathBuf {
+    fn acquire_node_state_root(&self) -> Result<crate::node_state::NodeStateRoot> {
+        crate::node_state::NodeStateRoot::open(self)
+    }
+}
+
 #[cfg(test)]
 type Counter = std::sync::atomic::AtomicU64;
 
 #[cfg(test)]
 const RELAXED: std::sync::atomic::Ordering = std::sync::atomic::Ordering::Relaxed;
 
+#[cfg(test)]
 mod fs {
     pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         std::fs::create_dir_all(path)
     }
 
-    pub(super) fn read_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<std::fs::ReadDir> {
-        std::fs::read_dir(path)
-    }
-
-    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
-        std::fs::read_to_string(path)
-    }
-
-    pub(super) fn remove_file(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_file(path)
-    }
-
-    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-        std::fs::write(path, contents)
-    }
-
-    #[cfg(test)]
     pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         std::fs::remove_dir_all(path)
     }
@@ -53,7 +61,6 @@ const CONTROL_STOP_FILE: &str = "stop-control-receipt.preserves";
 const CONTROL_INBOX_DIR: &str = "control/inbox";
 const CONTROL_OUTBOX_DIR: &str = "control/outbox";
 const CONTROL_INGRESS_DIR: &str = "control/iroh-ingress";
-const CONTROL_IDEMPOTENCY_DIR: &str = "control/idempotency";
 const CONTROL_SERVICE_DIR: &str = "control/service";
 pub const DEFAULT_CONTROL_INGRESS_TOPIC: &str = "node-control";
 pub const LOCAL_CONTROL_INGRESS_TRANSPORT: &str = "iroh-local-gossip";
@@ -138,6 +145,12 @@ pub struct ControlDispatchInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct ControlDispatchEntryInput<'a> {
+    pub state_root: &'a Path,
+    pub request_entry: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct ControlLoopInput<'a> {
     pub state_root: &'a Path,
     pub max_requests: u64,
@@ -194,7 +207,6 @@ struct SupervisorReceiptValueInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 struct ServiceLockValueInput<'a> {
-    state_root: &'a Path,
     startup_receipt_ref: &'a str,
     node_id: &'a str,
     topic: &'a str,

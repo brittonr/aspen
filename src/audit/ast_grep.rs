@@ -544,6 +544,7 @@ mod tests {
         // r[verify aspen.ast_grep_runtime_authority_audits.validation]
         // r[verify molten.testing.cap_std_regression_gate]
         // r[verify molten.filesystem_materialization.regression_gate]
+        // r[verify molten.node.cap_std_regression_gate]
         let profile = runtime_authority_profile();
         let surface_ids = profile.surfaces.iter().map(|surface| surface.id.clone()).collect::<Vec<_>>();
         let scope_hash = scan_scope_hash(&surface_ids);

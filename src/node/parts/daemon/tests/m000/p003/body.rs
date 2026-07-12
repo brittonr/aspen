@@ -108,7 +108,6 @@
         let diagnostics = Vec::new();
         live_workflow_bundle_apply_receipt_value(&LiveWorkflowBundleApplyReceiptValueInput {
             decision: "pass",
-            state_root: &delivery.root,
             bundle_ref: &exported.bundle.bundle_ref,
             gate_receipt_ref: Some(&gated.receipt_ref),
             recomputed_verify_receipt_ref: &verified.receipt_ref,
@@ -199,7 +198,9 @@
             evidence_refs: &[],
         })
         .expect("reconcile authority envelope");
-        let diagnostics = live_send_authority_grant_diagnostics(&case.delivery.root, &envelope)
+        let state_root =
+            crate::node_state::NodeStateRoot::open(&case.delivery.root).expect("open node state root");
+        let diagnostics = live_send_authority_grant_diagnostics(&state_root, &envelope)
             .expect("reconcile authority diagnostics");
         assert!(diagnostics.iter().any(|value| value.contains("is not a grant")));
         assert!(diagnostics.iter().any(|value| value.contains("authority delegation missing admitted grant")));

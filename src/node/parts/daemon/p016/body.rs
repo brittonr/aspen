@@ -5,9 +5,7 @@ fn live_workflow_bundle_apply_receipt_value(input: &LiveWorkflowBundleApplyRecei
     Ok(crate::preserves_rail::record("node-control-live-workflow-bundle-apply-receipt-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA),
         crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
-        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(
-            input.state_root.display().to_string(),
-        )]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(&())?)]),
         crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(input.bundle_ref)]),
         crate::preserves_rail::record("gate-receipt", vec![optional_string(input.gate_receipt_ref)]),
         crate::preserves_rail::record("recomputed-verify", vec![crate::preserves_rail::string(
@@ -250,9 +248,7 @@ fn live_workflow_bundle_ack_import_receipt_value(
             crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_IMPORT_RECEIPT_SCHEMA,
         ),
         crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
-        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(
-            input.state_root.display().to_string(),
-        )]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(&())?)]),
         crate::preserves_rail::record("ack", vec![crate::preserves_rail::string(&input.ack.ack_ref)]),
         crate::preserves_rail::record("bundle", vec![crate::preserves_rail::string(&input.ack.bundle_ref)]),
         crate::preserves_rail::record("imported", vec![crate::preserves_rail::sequence(

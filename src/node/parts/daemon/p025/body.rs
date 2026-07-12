@@ -1,5 +1,6 @@
 
 async fn serve_node_control_live_listener_with_topic(
+    state_root: &crate::node_state::NodeStateRoot,
     input: &ControlLiveServeInput<'_>,
     receiver: &mut iroh_gossip::api::GossipTopic,
     node_id: &str,
@@ -8,15 +9,16 @@ async fn serve_node_control_live_listener_with_topic(
 ) -> Result<ControlLiveServe> {
     validate_listener_event_limit(input.max_events)?;
     validate_loop_request_limit(input.max_requests_per_tick)?;
-    let startup = current_startup_receipt(input.state_root)?;
-    let mut scan = scan_events(input, receiver, node_id).await?;
-    let service = serve_control(&ControlServeInput {
+    let startup = current_startup_receipt(state_root)?;
+    let mut scan = scan_events(state_root, input, receiver, node_id).await?;
+    let service_input = ControlServeInput {
         state_root: input.state_root,
         topic: input.topic,
         max_ticks: 1,
         max_requests_per_tick: input.max_requests_per_tick,
         supervisor_policy_value: input.supervisor_policy_value,
-    })?;
+    };
+    let service = serve_control_with_root(state_root, &service_input)?;
     if service.decision != "pass" {
         scan.diagnostics
             .push(format!("node control live listener service drain decision {}", service.decision));
@@ -37,8 +39,12 @@ async fn serve_node_control_live_listener_with_topic(
         diagnostics: &scan.diagnostics,
     })?;
     let listener_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    write_preserves(&control_live_listener_receipt_path(input.state_root, &listener_receipt_ref), &receipt_value)?;
-    import_artifact(input.state_root, &receipt_value)?;
+    write_preserves(
+        state_root,
+        &control_live_listener_receipt_path(&listener_receipt_ref)?,
+        &receipt_value,
+    )?;
+    import_artifact(state_root, &receipt_value)?;
     Ok(ControlLiveServe {
         listener_receipt_ref,
         listener_receipt_value: receipt_value,
@@ -53,7 +59,7 @@ async fn serve_node_control_live_listener_with_topic(
 }
 
 async fn receive_first_live_ingress_event(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     receiver: &mut iroh_gossip::api::GossipTopic,
     topic: &str,
     receiver_node: &str,
@@ -64,7 +70,7 @@ async fn receive_first_live_ingress_event(
         };
         let event =
             event.map_err(|error| MoltenError::invalid_harness(format!("live Iroh receive failed: {error}")))?;
-        if let Some(received) = receive_control_live_ingress_event(state_root, &event, topic, receiver_node)? {
+        if let Some(received) = receive_control_live_ingress_event_with_root(state_root, &event, topic, receiver_node)? {
             return Ok(received);
         }
     }
@@ -89,7 +95,7 @@ fn live_ticket_address_refs(addr: &iroh::EndpointAddr) -> Vec<String> {
 }
 
 fn live_ticket_for_bound_endpoint(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     identity: &crate::node_identity::Identity,
     topic: &str,
     addr: &iroh::EndpointAddr,
@@ -136,7 +142,7 @@ fn live_send_ticket_diagnostics(input: &ControlLiveSendInput<'_>, ticket: &Contr
 }
 
 fn live_send_state_root_evidence_diagnostics(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     input: &ControlLiveSendInput<'_>,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
@@ -176,7 +182,10 @@ fn live_send_state_root_evidence_diagnostics(
     Ok(diagnostics)
 }
 
-fn live_send_authority_grant_diagnostics(state_root: &Path, envelope: &ControlIngressEnvelope) -> Result<Vec<String>> {
+fn live_send_authority_grant_diagnostics(
+    state_root: &crate::node_state::NodeStateRoot,
+    envelope: &ControlIngressEnvelope,
+) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(envelope.authority_refs.len().saturating_add(2));
     let mut has_candidate_authority = false;
     let mut has_admitted_grant = false;
@@ -280,7 +289,7 @@ fn control_live_topic_id(topic: &str) -> iroh_gossip::TopicId {
 }
 
 fn denied_live_ingress_delivery(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     envelope: &ControlIngressEnvelope,
     diagnostics: &[String],
 ) -> Result<ControlIngressDeliver> {
@@ -294,7 +303,11 @@ fn denied_live_ingress_delivery(
         diagnostics,
     })?;
     let ingress_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    write_preserves(&control_ingress_receipt_path(state_root, &envelope.envelope_ref, "deliver"), &receipt_value)?;
+    write_preserves(
+        state_root,
+        &control_ingress_receipt_path(&envelope.envelope_ref, "deliver")?,
+        &receipt_value,
+    )?;
     import_artifact(state_root, &receipt_value)?;
     Ok(ControlIngressDeliver {
         envelope_ref: envelope.envelope_ref.clone(),

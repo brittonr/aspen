@@ -192,6 +192,65 @@ pub fn execution_loopback(input: ExecutionLoopbackInput<'_>) -> Result<JobExecut
     })
 }
 
+pub fn execution_loopback_with_node_state(
+    state_root: &crate::node_state::NodeStateRoot,
+    admission_receipt_value: &IoValue,
+    request_value: &IoValue,
+) -> Result<JobExecutionLoopback> {
+    let target_registry = state_root.artifact_store()?;
+    let chunk_root = state_root.chunk_store()?;
+    let request = parse_job_execution_request_value(request_value)?;
+    let admission = parse_job_admission_receipt_value(admission_receipt_value)?;
+    let mut diagnostics = Vec::new();
+    let mut checks = Vec::new();
+
+    check_receipt_bindings(&request, &admission, &mut diagnostics, &mut checks);
+    check_admission_readiness(&admission, &mut diagnostics, &mut checks);
+
+    let dag = match read_job_dag_with_root(&target_registry, &request.job_ref) {
+        Ok(dag) => dag,
+        Err(error) => {
+            diagnostics.push(format!("target job unavailable before execution: {error}"));
+            return deny_result(DenyInput {
+                request,
+                admission,
+                diagnostics,
+                checks,
+                extra_checks: &[("target-job-present", "fail"), ("no-stage-execution-on-deny", "pass")],
+            });
+        }
+    };
+    push_check(&mut checks, "target-job-present", true);
+
+    check_target_selection_with_root(
+        &target_registry,
+        &request,
+        &admission,
+        &dag,
+        &mut diagnostics,
+        &mut checks,
+    )?;
+
+    if checks.iter().any(|(_, status)| *status != "pass") {
+        return deny_result(DenyInput {
+            request,
+            admission,
+            diagnostics,
+            checks,
+            extra_checks: &[("no-stage-execution-on-deny", "pass")],
+        });
+    }
+
+    let run = run_job_dag_with_capabilities(&dag, &CapabilityJobRunOptions { chunk_root: &chunk_root })?;
+    pass_result(PassInput {
+        request,
+        admission,
+        run,
+        diagnostics,
+        checks,
+    })
+}
+
 fn check_receipt_bindings(
     request: &JobExecutionRequest,
     admission: &JobAdmissionReceipt,

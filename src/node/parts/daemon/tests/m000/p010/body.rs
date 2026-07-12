@@ -1,6 +1,7 @@
 
     #[tokio::test]
     async fn control_live_iroh_loopback_delivers_to_durable_inbox() {
+        // r[verify molten.node.cap_std_async_authority]
         let root = crate::test_support::process_workspace("node_control_live_iroh")
             .expect("create isolated async node workspace");
         init_local(&InitInput {
@@ -110,14 +111,23 @@
             supervisor_policy_value: None,
         })
         .expect("serve ingress");
-        assert_eq!(served.decision, "pass");
+        assert_eq!(
+            served.decision,
+            "pass",
+            "{}",
+            crate::preserves_rail::to_text(&served.service_receipt_value).expect("service receipt text")
+        );
         assert_eq!(served.heartbeat_receipt_refs.len(), 1);
         assert_eq!(served.ingress_receipt_refs.len(), 1);
         assert_eq!(served.loop_receipt_refs.len(), 1);
         assert_eq!(served.processed_request_refs.len(), 1);
         assert_eq!(crate::ledger::artifact_kind(&served.service_receipt_value), "node-control-service-run-receipt");
-        let control_value = read_preserves(&control_outbox_receipt_path(&root, &served.processed_request_refs[0]))
-            .expect("read served control receipt");
+        let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
+        let control_value = read_preserves(
+            &state_root,
+            &control_outbox_receipt_path(&served.processed_request_refs[0]).expect("control receipt path"),
+        )
+        .expect("read served control receipt");
         let control = crate::node_runtime::parse_control_receipt(&control_value).expect("parse served control");
         assert_eq!(control.decision, "pass");
     }
@@ -131,13 +141,18 @@
         })
         .expect("init node");
         run_local(&RunInput { state_root: &root }).expect("run node");
-        let startup = current_startup_receipt(&root).expect("startup");
-        let identity =
-            crate::node_identity::parse_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
-                .expect("parse identity");
+        let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
+        let startup = current_startup_receipt(&state_root).expect("startup");
+        let identity = crate::node_identity::parse_identity(
+            &read_preserves(
+                &state_root,
+                &crate::node_state::NodeStatePath::parse(IDENTITY_FILE).expect("identity path"),
+            )
+            .expect("identity"),
+        )
+        .expect("parse identity");
         let service_run_ref = local_ref("node-control-service-run", "already-active").expect("service run ref");
         let lock_value = service_lock_value(&ServiceLockValueInput {
-            state_root: &root,
             startup_receipt_ref: &startup.receipt_ref,
             node_id: &identity.node_id,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
@@ -146,7 +161,12 @@
             service_run_ref: &service_run_ref,
         })
         .expect("service lock");
-        write_preserves(&root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value).expect("write service lock");
+        write_preserves(
+            &state_root,
+            &crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE).expect("service lock path"),
+            &lock_value,
+        )
+        .expect("write service lock");
         let request = status_request().expect("status request");
         submit_control_request(&ControlSubmitInput {
             state_root: &root,
@@ -234,14 +254,36 @@
         assert!(text.contains("exceeded supervisor bound"));
     }
 
+    #[test]
+    fn canonical_lock_identity_is_portable_across_host_state_paths() {
+        // r[verify molten.node.cap_std_validation]
+        let left_path = crate::test_support::process_workspace("node_lock_portable_left").expect("left workspace");
+        let right_path = crate::test_support::process_workspace("node_lock_portable_right").expect("right workspace");
+        let left = crate::node_state::NodeStateRoot::open(&left_path).expect("left root");
+        let right = crate::node_state::NodeStateRoot::open(&right_path).expect("right root");
+        let startup_ref = local_ref("node-startup", "portable-lock").expect("startup ref");
+        let left_value = active_lock_value(&left, &startup_ref).expect("left lock");
+        let right_value = active_lock_value(&right, &startup_ref).expect("right lock");
+
+        assert_eq!(left_value, right_value);
+        let text = crate::preserves_rail::to_text(&left_value).expect("lock text");
+        assert!(!text.contains(left_path.to_string_lossy().as_ref()));
+        assert!(!text.contains(right_path.to_string_lossy().as_ref()));
+    }
+
     fn write_active_service_lock(root: &Path, service_suffix: &str) {
-        let startup = current_startup_receipt(root).expect("startup");
-        let identity =
-            crate::node_identity::parse_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
-                .expect("parse identity");
+        let state_root = crate::node_state::NodeStateRoot::open(root).expect("open node state root");
+        let startup = current_startup_receipt(&state_root).expect("startup");
+        let identity = crate::node_identity::parse_identity(
+            &read_preserves(
+                &state_root,
+                &crate::node_state::NodeStatePath::parse(IDENTITY_FILE).expect("identity path"),
+            )
+            .expect("identity"),
+        )
+        .expect("parse identity");
         let service_run_ref = local_ref("node-control-service-run", service_suffix).expect("service run ref");
         let lock_value = service_lock_value(&ServiceLockValueInput {
-            state_root: root,
             startup_receipt_ref: &startup.receipt_ref,
             node_id: &identity.node_id,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
@@ -250,7 +292,12 @@
             service_run_ref: &service_run_ref,
         })
         .expect("service lock");
-        write_preserves(&root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value).expect("write service lock");
+        write_preserves(
+            &state_root,
+            &crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE).expect("service lock path"),
+            &lock_value,
+        )
+        .expect("write service lock");
     }
 
     fn recovering_policy(policy_refs: &[String]) -> IoValue {

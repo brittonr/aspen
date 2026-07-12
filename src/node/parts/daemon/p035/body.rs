@@ -1,51 +1,56 @@
 
-fn control_live_transport_receipt_path(state_root: &Path, envelope_ref: &str, operation: &str) -> PathBuf {
-    state_root.join(CONTROL_INGRESS_DIR).join("receipts").join(format!(
+fn control_live_transport_receipt_path(
+    envelope_ref: &str,
+    operation: &str,
+) -> Result<crate::node_state::NodeStatePath> {
+    ingress_receipt_leaf(&format!(
         "{}.live-{}.receipt.preserves",
         ref_file_stem(envelope_ref),
         operation
     ))
 }
 
-fn control_live_send_receipt_path(state_root: &Path, send_ref: &str) -> PathBuf {
-    state_root
-        .join(CONTROL_INGRESS_DIR)
-        .join("receipts")
-        .join(format!("{}.live-send.receipt.preserves", ref_file_stem(send_ref)))
+fn control_live_send_receipt_path(send_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+    ingress_receipt_leaf(&format!("{}.live-send.receipt.preserves", ref_file_stem(send_ref)))
 }
 
-fn control_live_send_retry_receipt_path(state_root: &Path, retry_ref: &str) -> PathBuf {
-    state_root
-        .join(CONTROL_INGRESS_DIR)
-        .join("receipts")
-        .join(format!("{}.live-send-retry.receipt.preserves", ref_file_stem(retry_ref)))
+fn control_live_send_retry_receipt_path(retry_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+    ingress_receipt_leaf(&format!(
+        "{}.live-send-retry.receipt.preserves",
+        ref_file_stem(retry_ref)
+    ))
 }
 
-fn control_live_send_duplicate_receipt_path(state_root: &Path, duplicate_ref: &str) -> PathBuf {
-    state_root
-        .join(CONTROL_INGRESS_DIR)
-        .join("receipts")
-        .join(format!("{}.live-send-duplicate.receipt.preserves", ref_file_stem(duplicate_ref)))
+fn control_live_send_duplicate_receipt_path(duplicate_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+    ingress_receipt_leaf(&format!(
+        "{}.live-send-duplicate.receipt.preserves",
+        ref_file_stem(duplicate_ref)
+    ))
 }
 
-fn control_live_workflow_receipt_path(state_root: &Path, workflow_ref: &str) -> PathBuf {
-    state_root
-        .join(CONTROL_INGRESS_DIR)
-        .join("receipts")
-        .join(format!("{}.live-workflow.receipt.preserves", ref_file_stem(workflow_ref)))
+fn control_live_workflow_receipt_path(workflow_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+    ingress_receipt_leaf(&format!(
+        "{}.live-workflow.receipt.preserves",
+        ref_file_stem(workflow_ref)
+    ))
 }
 
-fn control_live_listener_receipt_path(state_root: &Path, listener_ref: &str) -> PathBuf {
-    state_root
-        .join(CONTROL_SERVICE_DIR)
-        .join(format!("{}.live-listener-receipt.preserves", ref_file_stem(listener_ref)))
+fn control_live_listener_receipt_path(listener_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+    node_leaf_path(
+        CONTROL_SERVICE_DIR,
+        &format!("{}.live-listener-receipt.preserves", ref_file_stem(listener_ref)),
+    )
 }
 
-fn control_authority_receipt_path(state_root: &Path, envelope_ref: &str) -> PathBuf {
-    state_root
-        .join(CONTROL_INGRESS_DIR)
-        .join("receipts")
-        .join(format!("{}.authority-receipt.preserves", ref_file_stem(envelope_ref)))
+fn control_authority_receipt_path(envelope_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+    ingress_receipt_leaf(&format!(
+        "{}.authority-receipt.preserves",
+        ref_file_stem(envelope_ref)
+    ))
+}
+
+fn ingress_receipt_leaf(leaf: &str) -> Result<crate::node_state::NodeStatePath> {
+    fixed_node_path(CONTROL_INGRESS_DIR)?.join("receipts")?.join_segment(leaf)
 }
 
 fn ref_file_stem(value_ref: &str) -> String {

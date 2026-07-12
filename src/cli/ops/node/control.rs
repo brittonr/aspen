@@ -1,6 +1,8 @@
 #[path = "control/ingress.rs"]
 pub(crate) mod ingress;
 
+const CONTROL_INBOX_RELATIVE: &str = "control/inbox";
+
 pub(crate) fn submit(input: super::command::control::Submit) -> molten::error::Result<()> {
     let super::command::control::Submit {
         state_root,
@@ -17,11 +19,12 @@ pub(crate) fn submit(input: super::command::control::Submit) -> molten::error::R
         "node control queue receipt",
         &submitted.queue_receipt_value,
     )?;
+    let inbox_path = state_root.join(CONTROL_INBOX_RELATIVE).join(&submitted.inbox_entry);
     println!(
         "node control submit request={} queue_receipt={} inbox={}",
         submitted.request_ref,
         submitted.queue_receipt_ref,
-        submitted.inbox_path.display()
+        inbox_path.display()
     );
     Ok(())
 }

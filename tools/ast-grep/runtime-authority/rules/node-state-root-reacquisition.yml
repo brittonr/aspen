@@ -1,0 +1,39 @@
+id: node-state-root-reacquisition
+language: Rust
+severity: error
+message: Inner node-state and job execution code must carry an opened authority object instead of reopening an ambient root.
+metadata:
+  posture: blocking
+  surface: node-state-carried-authority
+  non_claim: structural-authority-threading-only
+files:
+  - src/node/parts/daemon/p020/body.rs
+  - src/node/parts/daemon/p025/body.rs
+  - src/node/parts/daemon/p027/body.rs
+  - src/node/parts/daemon/p028/body.rs
+  - src/node/parts/daemon/p029/body.rs
+  - src/node/parts/daemon/p030/body.rs
+  - src/node/parts/daemon/p031/body.rs
+  - src/node/parts/daemon/p032/body.rs
+  - src/node/parts/daemon/p033/body.rs
+  - src/node/parts/daemon/p034/body.rs
+  - src/node/parts/daemon/p035/body.rs
+  - src/node/parts/identity/p001/body.rs
+  - src/job/parts/dag/p009/body.rs
+  - src/job/parts/dag/p017/body.rs
+  - tools/ast-grep/runtime-authority/fixtures/positive/node_state_ambient_authority.rs
+  - tools/ast-grep/runtime-authority/fixtures/negative/node_state_carried_authority.rs
+ignores:
+  - "**/tests/**"
+rule:
+  any:
+    - pattern: crate::node_state::NodeStateRoot::open($PATH)
+    - pattern: crate::node_state::NodeStateRoot::open_existing($PATH)
+    - pattern: NodeStateRoot::open($PATH)
+    - pattern: NodeStateRoot::open_existing($PATH)
+    - pattern: crate::node_state::NodeStateNamespace::open($$$ARGS)
+    - pattern: crate::node_state::NodeStateNamespace::open_existing($$$ARGS)
+    - pattern: NodeStateNamespace::open($$$ARGS)
+    - pattern: NodeStateNamespace::open_existing($$$ARGS)
+    - pattern: cap_std::fs::Dir::open_ambient_dir($$$ARGS)
+    - pattern: Dir::open_ambient_dir($$$ARGS)

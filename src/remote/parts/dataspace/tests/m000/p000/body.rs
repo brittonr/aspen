@@ -307,7 +307,7 @@
         publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
         let wrong_topic = deliver_local_gossip(&root, "other", &envelope.envelope_ref, "peer:b")
             .expect_err("wrong topic has no stored envelope");
-        assert!(wrong_topic.to_string().contains("io error"));
+        assert!(wrong_topic.to_string().contains("does not exist"), "{wrong_topic}");
         let wrong_peer =
             deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:c").expect_err("wrong peer rejects");
         assert!(wrong_peer.to_string().contains("target"));

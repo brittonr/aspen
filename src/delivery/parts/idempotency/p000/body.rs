@@ -177,6 +177,45 @@ pub struct CheckInput<'a> {
     pub gap_policy: GapPolicy,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CheckRequest<'a> {
+    pub scope_profile: &'a str,
+    pub scope_ref: &'a str,
+    pub producer: &'a str,
+    pub consumer: &'a str,
+    pub sequence: u64,
+    pub intent: &'a str,
+    pub payload_ref: &'a str,
+    pub policy_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+    pub semantic_result_ref: Option<&'a str>,
+    pub gap_policy: GapPolicy,
+}
+
+#[derive(Debug)]
+pub struct CapabilityCheckInput<'a> {
+    pub root: &'a crate::local_store::DeliveryStoreRoot,
+    pub request: CheckRequest<'a>,
+}
+
+impl<'a> CheckInput<'a> {
+    fn request(&self) -> CheckRequest<'a> {
+        CheckRequest {
+            scope_profile: self.scope_profile,
+            scope_ref: self.scope_ref,
+            producer: self.producer,
+            consumer: self.consumer,
+            sequence: self.sequence,
+            intent: self.intent,
+            payload_ref: self.payload_ref,
+            policy_refs: self.policy_refs,
+            evidence_refs: self.evidence_refs,
+            semantic_result_ref: self.semantic_result_ref,
+            gap_policy: self.gap_policy,
+        }
+    }
+}
+
 pub fn scope_profile_value(profile: &str, scope_name: &str, retention_refs: &[String]) -> Result<IoValue> {
     validate_scope_profile(profile)?;
     validate_name(scope_name, "delivery scope name")?;

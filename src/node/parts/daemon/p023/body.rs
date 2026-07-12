@@ -1,7 +1,7 @@
 
 fn duplicate_control_live_send(
     input: &ControlLiveSendInput<'_>,
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Option<ControlLiveSend>> {
@@ -32,11 +32,11 @@ fn duplicate_control_live_send(
         diagnostics: &[],
     })?;
     let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
-    let send_path = control_live_send_receipt_path(state_root, &send_receipt_ref);
-    if !send_path.exists() {
+    let send_path = control_live_send_receipt_path(&send_receipt_ref)?;
+    if !state_root.try_exists(&send_path)? {
         return Ok(None);
     }
-    let prior_send_value = read_preserves(&send_path)?;
+    let prior_send_value = read_preserves(state_root, &send_path)?;
     let prior_send = parse_control_live_send_receipt(&prior_send_value)?;
     if prior_send.receipt_ref != send_receipt_ref {
         return Err(MoltenError::invalid_harness("node control live send prior receipt path is stale"));
@@ -57,7 +57,8 @@ fn duplicate_control_live_send(
     })?;
     let duplicate_receipt_ref = crate::preserves_rail::canonical_hash(&duplicate_receipt_value)?;
     write_preserves(
-        &control_live_send_duplicate_receipt_path(state_root, &duplicate_receipt_ref),
+        state_root,
+        &control_live_send_duplicate_receipt_path(&duplicate_receipt_ref)?,
         &duplicate_receipt_value,
     )?;
     import_artifact(state_root, &duplicate_receipt_value)?;
@@ -92,11 +93,11 @@ fn denied_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_>) ->
         diagnostics: &denied.diagnostics,
     })?;
     let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
-    if let Some(state_root) = denied.input.state_root {
+    if let Some(state_root) = denied.state_root {
         import_artifact(state_root, denied.input.receiver_ticket_value)?;
         write_ingress_envelope_and_verify(state_root, &denied.ticket.topic, &denied.envelope)?;
         import_artifact(state_root, &denied.envelope.value)?;
-        write_preserves(&control_live_send_receipt_path(state_root, &send_receipt_ref), &send_receipt_value)?;
+        write_preserves(state_root, &control_live_send_receipt_path(&send_receipt_ref)?, &send_receipt_value)?;
         import_artifact(state_root, &send_receipt_value)?;
     }
     Ok(ControlLiveSend {
@@ -236,7 +237,7 @@ impl FlowChecks<'_> {
 }
 
 fn import_flow_values(
-    state_root: &Path,
+    state_root: &crate::node_state::NodeStateRoot,
     input: &ControlLiveWorkflowInput<'_>,
     receipt_ref: &str,
     receipt_value: &IoValue,
@@ -252,14 +253,17 @@ fn import_flow_values(
         import_artifact(state_root, listener_value)?;
     }
     import_artifact(state_root, input.service_receipt_value)?;
-    write_preserves(&control_live_workflow_receipt_path(state_root, receipt_ref), receipt_value)?;
+    write_preserves(state_root, &control_live_workflow_receipt_path(receipt_ref)?, receipt_value)?;
     import_artifact(state_root, receipt_value)?;
     Ok(())
 }
 
 pub fn control_live_workflow_receipt(input: &ControlLiveWorkflowInput<'_>) -> Result<ControlLiveWorkflowReceipt> {
-    if let Some(state_root) = input.state_root {
-        validate_state_root(state_root)?;
+    let state_root = input.state_root.map(crate::node_state::NodeStateRoot::open).transpose()?;
+    if let Some(path) = input.state_root {
+        validate_state_root(path)?;
+    }
+    if let Some(state_root) = state_root.as_ref() {
         ensure_state_layout(state_root)?;
     }
     let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
@@ -290,7 +294,7 @@ pub fn control_live_workflow_receipt(input: &ControlLiveWorkflowInput<'_>) -> Re
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    if let Some(state_root) = input.state_root {
+    if let Some(state_root) = state_root.as_ref() {
         import_flow_values(state_root, input, &receipt_ref, &receipt_value)?;
     }
     Ok(ControlLiveWorkflowReceipt {

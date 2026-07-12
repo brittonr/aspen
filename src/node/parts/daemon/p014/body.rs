@@ -496,9 +496,7 @@ fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_
     Ok(crate::preserves_rail::record("node-control-live-ticket-import-receipt-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA),
         crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
-        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(
-            input.state_root,
-        )?)]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(&())?)]),
         crate::preserves_rail::record("ticket", vec![crate::preserves_rail::string(&input.ticket.ticket_ref)]),
         crate::preserves_rail::record("node", vec![crate::preserves_rail::string(&input.ticket.node_id)]),
         crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(&input.ticket.topic)]),

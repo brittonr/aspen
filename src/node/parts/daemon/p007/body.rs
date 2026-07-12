@@ -46,8 +46,12 @@ fn apply_gate_check(
     })
 }
 
-fn apply_import_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) -> Result<ImportStep> {
-    let imported = import_control_live_workflow_bundle(&live_workflow_bundle_import_input_from_apply(input))?;
+fn apply_import_step(
+    state_root: &crate::node_state::NodeStateRoot,
+    input: &ControlLiveWorkflowBundleApplyInput<'_>,
+) -> Result<ImportStep> {
+    let import_input = live_workflow_bundle_import_input_from_apply(input);
+    let imported = import_control_live_workflow_bundle_with_root(state_root, &import_input)?;
     if imported.decision == "pass" {
         Ok(ImportStep {
             receipt_ref: Some(imported.receipt_ref),
@@ -63,7 +67,10 @@ fn apply_import_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) -> Result<
     }
 }
 
-async fn apply_transfer_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) -> Result<TransferStep> {
+async fn apply_transfer_step(
+    state_root: &crate::node_state::NodeStateRoot,
+    input: &ControlLiveWorkflowBundleApplyInput<'_>,
+) -> Result<TransferStep> {
     let Some(request_value) = input.request_value else {
         return Ok(TransferStep::default());
     };
@@ -101,7 +108,7 @@ async fn apply_transfer_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) ->
         join_timeout_ms: input.join_timeout_ms,
     };
     if input.should_send {
-        let sent = send_control_live_ingress(&send_input).await?;
+        let sent = send_control_live_ingress_with_root(&send_input, Some(state_root)).await?;
         let send_receipt = parse_control_live_send_receipt(&sent.send_receipt_value)?;
         let diagnostics = if send_receipt.decision == "pass" {
             Vec::new()
@@ -116,7 +123,7 @@ async fn apply_transfer_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) ->
             diagnostics,
         })
     } else {
-        let preflight = preflight_control_live_send(&send_input)?;
+        let preflight = preflight_control_live_send_with_root(&send_input, Some(state_root))?;
         let diagnostics = if preflight.decision == "pass" {
             Vec::new()
         } else {
@@ -131,7 +138,10 @@ async fn apply_transfer_step(input: &ControlLiveWorkflowBundleApplyInput<'_>) ->
     }
 }
 
-fn finish_apply(input: FinishInput<'_>) -> Result<ControlLiveWorkflowBundleApply> {
+fn finish_apply(
+    state_root: &crate::node_state::NodeStateRoot,
+    input: FinishInput<'_>,
+) -> Result<ControlLiveWorkflowBundleApply> {
     let decision = if input.diagnostics.is_empty() { "pass" } else { "deny" };
     let mode = if input.input.should_send {
         "send"
@@ -142,7 +152,6 @@ fn finish_apply(input: FinishInput<'_>) -> Result<ControlLiveWorkflowBundleApply
     };
     let receipt_value = live_workflow_bundle_apply_receipt_value(&LiveWorkflowBundleApplyReceiptValueInput {
         decision,
-        state_root: input.input.state_root,
         bundle_ref: &input.verified.bundle_ref,
         gate_receipt_ref: input.gate_receipt_ref.as_deref(),
         recomputed_verify_receipt_ref: &input.verified.receipt_ref,
@@ -160,7 +169,7 @@ fn finish_apply(input: FinishInput<'_>) -> Result<ControlLiveWorkflowBundleApply
         diagnostics: &input.diagnostics,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    import_artifact(input.input.state_root, &receipt_value)?;
+    import_artifact(state_root, &receipt_value)?;
     Ok(ControlLiveWorkflowBundleApply {
         bundle_ref: input.verified.bundle_ref,
         gate_receipt_ref: input.gate_receipt_ref,
@@ -182,7 +191,8 @@ pub async fn apply_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleApplyInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleApply> {
     validate_live_workflow_bundle_apply_input(input)?;
-    ensure_state_layout(input.state_root)?;
+    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    ensure_state_layout(&state_root)?;
     let verify_input = live_workflow_bundle_verify_input_from_apply(input);
     let verified = verify_control_live_workflow_bundle(&verify_input)?;
     let expected = live_workflow_bundle_expected_input_from_verify(&verify_input);
@@ -200,7 +210,7 @@ pub async fn apply_control_live_workflow_bundle(
         imported_refs,
         diagnostics: import_diagnostics,
     } = if diagnostics.is_empty() {
-        apply_import_step(input)?
+        apply_import_step(&state_root, input)?
     } else {
         ImportStep::default()
     };
@@ -212,12 +222,12 @@ pub async fn apply_control_live_workflow_bundle(
         send_receipt_value,
         diagnostics: transfer_diagnostics,
     } = if diagnostics.is_empty() {
-        apply_transfer_step(input).await?
+        apply_transfer_step(&state_root, input).await?
     } else {
         TransferStep::default()
     };
     diagnostics.extend(transfer_diagnostics);
-    finish_apply(FinishInput {
+    finish_apply(&state_root, FinishInput {
         input,
         verified,
         expected,

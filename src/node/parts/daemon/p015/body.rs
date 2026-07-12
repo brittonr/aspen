@@ -5,9 +5,7 @@ fn authority_grant_import_receipt_value(input: &AuthorityGrantImportReceiptValue
     Ok(crate::preserves_rail::record("node-control-authority-grant-import-receipt-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA),
         crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(input.decision)]),
-        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(
-            input.state_root,
-        )?)]),
+        crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(&())?)]),
         crate::preserves_rail::record("grant", vec![crate::preserves_rail::string(&input.grant.grant_ref)]),
         crate::preserves_rail::record("peer", vec![crate::preserves_rail::string(&input.grant.peer_id)]),
         crate::preserves_rail::record("node", vec![crate::preserves_rail::string(&input.grant.node_id)]),
