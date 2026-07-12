@@ -472,7 +472,9 @@ mod tests {
                 .to_string()
                 .contains("platform-prefixed")
         );
-        let missing_root = std::env::temp_dir().join("molten-cap-std-missing-root").join(unique_suffix());
+        let missing_parent =
+            crate::test_support::process_workspace("cap_std_missing_root").expect("create missing-root workspace");
+        let missing_root = missing_parent.join("missing");
         let error = RetentionStoreRoot::open_existing(&missing_root).expect_err("missing root denied");
         assert!(error.to_string().contains("No such") || error.to_string().contains("not found"));
     }
@@ -584,19 +586,7 @@ mod tests {
         assert_eq!(std::fs::read(root_path.join("replacement.txt")).expect("read replacement"), b"replacement");
     }
 
-    fn temp_dir(label: &str) -> PathBuf {
-        crate::test_support::cleanup_stale_molten_temp_dirs();
-        let dir = std::env::temp_dir().join(format!("molten-{label}-{}", unique_suffix()));
-        if dir.exists() {
-            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
-        }
-        std::fs::create_dir_all(&dir).expect("create temp dir");
-        dir
-    }
-
-    fn unique_suffix() -> String {
-        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        format!("{}-{nonce}", std::process::id())
+    fn temp_dir(label: &str) -> crate::test_support::ProcessWorkspace {
+        crate::test_support::process_workspace(label).expect("create isolated local-store workspace")
     }
 }

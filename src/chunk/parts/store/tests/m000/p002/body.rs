@@ -191,14 +191,6 @@
         canonical_hash(&record("chunk-test-ref", vec![string(kind), string(label)])).expect("chunk test ref")
     }
 
-    fn temp_dir(label: &str) -> PathBuf {
-        crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("molten-{label}-{}-{nonce}", std::process::id()));
-        if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
-        }
-        fs::create_dir_all(&dir).expect("create temp dir");
-        dir
+    fn temp_dir(label: &str) -> crate::test_support::ProcessWorkspace {
+        crate::test_support::process_workspace(label).expect("create isolated chunk workspace")
     }

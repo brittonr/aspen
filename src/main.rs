@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[path = "test/support.rs"]
+mod test_support;
+
 #[path = "cli/core/artifact.rs"]
 mod object_port;
 mod cli_artifact {

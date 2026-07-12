@@ -231,7 +231,7 @@
         assert!(protected_error.to_string().contains("protected encryption implementation"));
     }
 
-    fn write_unsupported_manifest() -> (std::path::PathBuf, String) {
+    fn write_unsupported_manifest() -> (crate::test_support::ProcessWorkspace, String) {
         let root = temp_dir("chunk-transform-unsupported");
         let put = put_bytes(&root, "artifact", b"aaaabbbb", 4).expect("put public");
         let public_manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");

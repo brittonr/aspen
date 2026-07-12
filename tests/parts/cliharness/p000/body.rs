@@ -1,7 +1,5 @@
 type CliResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-static TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
 #[test]
 fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
     let dir = temp_dir("cli-happy")?;

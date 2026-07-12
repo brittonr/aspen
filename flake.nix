@@ -383,6 +383,40 @@
                     > "$TMPDIR/converted.json"
                   touch "$out"
                 '';
+            capStdTestWorkspaceCheck =
+              pkgs.runCommand "molten-cap-std-test-workspaces"
+                {
+                  nativeBuildInputs = [ pkgs.ast-grep ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  rule=tools/ast-grep/runtime-authority/rules/test-ambient-temp-workspace.yml
+                  positive=tools/ast-grep/runtime-authority/fixtures/positive/test_ambient_temp_workspace.rs
+                  if ast-grep scan --rule "$rule" --json=compact "$positive" > "$TMPDIR/positive.json"; then
+                    echo "blocking test-workspace fixture unexpectedly produced no findings" >&2
+                    exit 1
+                  fi
+                  ast-grep scan --rule "$rule" --json=compact \
+                    tools/ast-grep/runtime-authority/fixtures/negative/test_capability_workspace.rs \
+                    > "$TMPDIR/negative.json"
+                  ast-grep scan --rule "$rule" --json=compact \
+                    src/test/support.rs \
+                    src/main/tests/ops/helpers.rs \
+                    src/local_store.rs \
+                    src/chunk/parts/store/tests/m000/p002/body.rs \
+                    src/retention/parts/mod/tests/m000/p000/body.rs \
+                    src/remote/parts/dataspace/tests/m000/p001/body.rs \
+                    src/iroh/parts/exchange/tests/m000/p001/body.rs \
+                    src/evidence/parts/chain/tests/m000/p003/body.rs \
+                    src/node/parts/daemon/tests/m000/p000/body.rs \
+                    src/node/parts/daemon/tests/m000/p010/body.rs \
+                    tests/parts/cliharness/p000/body.rs \
+                    tests/parts/cliharness/p013/body.rs \
+                    > "$TMPDIR/converted.json"
+                  touch "$out"
+                '';
           in
           rec {
             # The hermetic nextest check supplies binary metadata for CLI tests
@@ -390,6 +424,7 @@
             molten = nextest;
             clippy = ws.clippy.allWorkspaceMembers;
             cap-std-store-authority = capStdStoreAuthorityCheck;
+            cap-std-test-workspaces = capStdTestWorkspaceCheck;
             nixos-vm-smoke = vmShardCheck "nixos-vm-smoke";
             nixos-vm-live-control = vmShardCheck "nixos-vm-live-control";
             nixos-vm-service-job = vmShardCheck "nixos-vm-service-job";

@@ -1,9 +1,6 @@
     use super::*;
     use std::fs;
 
-    type AtomicU64 = std::sync::atomic::AtomicU64;
-    type Ordering = std::sync::atomic::Ordering;
-
     fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
     }

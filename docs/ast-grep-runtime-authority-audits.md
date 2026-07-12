@@ -17,6 +17,7 @@ r[impl aspen.ast_grep_runtime_authority_audits.profile] The `runtime-authority` 
 | `policy-evidence-gates` | `src/evidence/**/*.rs`, `cairn-policy/**/*.ncl` |
 | `operator-workflow` | `src/operator/**/*.rs`, `docs/production-*.ncl` |
 | `local-store-adapters` | Converted artifact, chunk, retention, dataspace, and exchange adapter pages |
+| `test-workspace-shells` | Shared CLI and representative converted unit-test workspace helpers |
 
 ## Inventory rules
 
@@ -35,8 +36,11 @@ r[impl aspen.ast_grep_runtime_authority_audits.inventory] The initial rules stay
 | `panic-bypass` | panic hotspot | inventory |
 | `direct-authority-bypass` | direct authority bypass candidate | inventory |
 | `store-ambient-filesystem-call` | ambient child I/O or root reacquisition in converted stores | **blocking** |
+| `test-ambient-temp-workspace` | predictable ambient temporary roots or broad prefix cleanup | **blocking** |
 
 r[impl molten.chunk_store.cap_std_regression_gate] The blocking store rule is path-scoped, ignores test fixture trees, and has dedicated positive and negative fixtures. It permits typed root bootstrap/delegation because those shapes do not directly call ambient child APIs. Explicit output materialization remains shell-owned outside the scanned store-page scope.
+
+r[impl molten.testing.cap_std_regression_gate] The test-workspace rule is limited to helpers migrated to the shared `cap-tempfile` shell. It rejects ambient temporary-root construction and stale-prefix deletion while permitting capability-rooted workspace acquisition and explicit selected-artifact export.
 
 Rules live under `tools/ast-grep/runtime-authority/rules/`. Positive and negative fixtures live under `tools/ast-grep/runtime-authority/fixtures/`; fixture coverage is required before any rule can be promoted from inventory to warning or blocking posture.
 
@@ -78,6 +82,16 @@ ast-grep scan --rule tools/ast-grep/runtime-authority/rules/store-ambient-filesy
   --json=compact \
   src/artifacts/parts/mod src/chunk/parts/store src/retention/parts/mod \
   src/remote/parts/dataspace src/iroh/parts/exchange
+
+# Must report prohibited predictable-root and broad-cleanup findings.
+ast-grep scan --rule tools/ast-grep/runtime-authority/rules/test-ambient-temp-workspace.yml \
+  --json=compact \
+  tools/ast-grep/runtime-authority/fixtures/positive/test_ambient_temp_workspace.rs
+
+# Must report no findings for the shared capability workspace shape.
+ast-grep scan --rule tools/ast-grep/runtime-authority/rules/test-ambient-temp-workspace.yml \
+  --json=compact \
+  tools/ast-grep/runtime-authority/fixtures/negative/test_capability_workspace.rs
 ```
 
 Rust unit tests validate the pure profile, fixture-promotion gate, BLAKE3 identity binding, stale-rule-bundle detection, and evidence-only receipt non-claims.

@@ -18,7 +18,7 @@ fn setup_job_cli_fixture() -> JobSetup {
 }
 
 struct JobPaths {
-    dir: PathBuf,
+    dir: crate::test_support::ProcessWorkspace,
     registry: PathBuf,
     storage: PathBuf,
     cache: PathBuf,

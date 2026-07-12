@@ -1,9 +1,6 @@
     use super::*;
     use std::fs;
 
-    type AtomicU64 = std::sync::atomic::AtomicU64;
-    type Ordering = std::sync::atomic::Ordering;
-
     #[test]
     fn local_gossip_roundtrip_preserves_envelope_identity() {
         // r[verify molten.chunk_store.cap_std_conversion_validation]

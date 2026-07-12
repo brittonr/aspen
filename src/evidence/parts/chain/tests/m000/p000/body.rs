@@ -2,18 +2,6 @@
 
     use super::*;
 
-    type PathBuf = std::path::PathBuf;
-
-    mod fs {
-        pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-            std::fs::create_dir_all(path)
-        }
-
-        pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-            std::fs::remove_dir_all(path)
-        }
-    }
-
     fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
         crate::preserves_rail::canonical_bytes(value)
     }

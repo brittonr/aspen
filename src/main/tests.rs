@@ -46,10 +46,6 @@ mod fs {
         std::fs::read_to_string(path)
     }
 
-    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_dir_all(path)
-    }
-
     pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
         std::fs::write(path, contents)
     }

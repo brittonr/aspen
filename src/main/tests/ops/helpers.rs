@@ -130,47 +130,6 @@
         .expect("test ref")
     }
 
-    fn cleanup_stale_molten_temp_dirs() {
-        static CLEAN_STALE_TEMP_DIRS: std::sync::Once = std::sync::Once::new();
-        CLEAN_STALE_TEMP_DIRS.call_once(|| {
-            let Ok(entries) = fs::read_dir(std::env::temp_dir()) else {
-                return;
-            };
-            for entry_result in entries {
-                let Ok(entry) = entry_result else {
-                    continue;
-                };
-                let Ok(file_type) = entry.file_type() else {
-                    continue;
-                };
-                if file_type.is_dir() {
-                    let file_name = entry.file_name();
-                    let Some(name) = file_name.to_str() else {
-                        continue;
-                    };
-                    if is_stale_molten_temp_dir(name) {
-                        let remove_result = fs::remove_dir_all(entry.path());
-                        if remove_result.is_err() {
-                            continue;
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    fn is_stale_molten_temp_dir(name: &str) -> bool {
-        name.starts_with("molten-") && live_process_token_count(name) == 0
-    }
-
-    fn live_process_token_count(name: &str) -> usize {
-        let current_pid = u64::from(std::process::id());
-        name.split('-')
-            .filter_map(|token| token.parse::<u64>().ok())
-            .filter(|pid| *pid == current_pid || std::path::Path::new("/proc").join(pid.to_string()).exists())
-            .count()
-    }
-
     fn install_cli_stage_artifact(registry: &Path, operation: &str) -> String {
         let payload = molten::job_dag::builtin_stage_operation_value(operation).expect("stage operation");
         let installed = molten::artifacts::install_artifact(registry, &molten::artifacts::ArtifactInstallInput {
@@ -243,14 +202,6 @@
         context_ref
     }
 
-    fn temp_dir(label: &str) -> PathBuf {
-        cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("molten-{label}-{}-{nonce}", std::process::id()));
-        if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
-        }
-        fs::create_dir_all(&dir).expect("create temp dir");
-        dir
+    fn temp_dir(label: &str) -> crate::test_support::ProcessWorkspace {
+        crate::test_support::process_workspace(label).expect("create isolated process workspace")
     }

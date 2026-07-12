@@ -1,3 +1,6 @@
+#[path = "../src/test/support.rs"]
+mod test_support;
+
 include!("parts/cliharness/p000/body.rs");
 include!("parts/cliharness/p001/body.rs");
 include!("parts/cliharness/p002/body.rs");

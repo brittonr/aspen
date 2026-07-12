@@ -7,7 +7,7 @@
         content_ref_from_bytes(label.as_bytes())
     }
 
-    fn adoption_manifest() -> (std::path::PathBuf, ChunkManifest, Vec<(String, Vec<u8>)>) {
+    fn adoption_manifest() -> (crate::test_support::ProcessWorkspace, ChunkManifest, Vec<(String, Vec<u8>)>) {
         let root = temp_dir("chunk-iroh-adoption");
         let body = b"abcdefgh";
         let put = put_bytes(&root, "artifact", body, IROH_ADOPTION_TEST_CHUNK_SIZE).expect("put bytes");

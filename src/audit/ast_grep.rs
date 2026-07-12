@@ -12,6 +12,10 @@ const STORE_POSITIVE_FIXTURE_PATH: &str =
     "tools/ast-grep/runtime-authority/fixtures/positive/store_ambient_filesystem_calls.rs";
 const STORE_NEGATIVE_FIXTURE_PATH: &str =
     "tools/ast-grep/runtime-authority/fixtures/negative/store_capability_shells.rs";
+const TEST_WORKSPACE_POSITIVE_FIXTURE_PATH: &str =
+    "tools/ast-grep/runtime-authority/fixtures/positive/test_ambient_temp_workspace.rs";
+const TEST_WORKSPACE_NEGATIVE_FIXTURE_PATH: &str =
+    "tools/ast-grep/runtime-authority/fixtures/negative/test_capability_workspace.rs";
 
 const REQUIRED_SURFACES: &[&str] = &[
     "core-runtime",
@@ -23,6 +27,7 @@ const REQUIRED_SURFACES: &[&str] = &[
     "policy-evidence-gates",
     "operator-workflow",
     "local-store-adapters",
+    "test-workspace-shells",
 ];
 
 const REQUIRED_INVENTORY_CATEGORIES: &[&str] = &[
@@ -337,6 +342,12 @@ fn required_surfaces() -> Vec<AuditSurface> {
             "src/remote/parts/dataspace/p*/body.rs",
             "src/iroh/parts/exchange/p*/body.rs",
         ]),
+        surface("test-workspace-shells", &[
+            "src/test/support.rs",
+            "src/main/tests/ops/helpers.rs",
+            "tests/parts/cliharness/p013/body.rs",
+            "selected converted unit-test helper pages",
+        ]),
     ]
 }
 
@@ -358,6 +369,13 @@ fn inventory_rules() -> Vec<AuditRule> {
             "std::fs/fs child calls and ambient root reacquisition in converted stores",
             STORE_POSITIVE_FIXTURE_PATH,
             STORE_NEGATIVE_FIXTURE_PATH,
+        ),
+        blocking_rule(
+            "test-ambient-temp-workspace",
+            "ambient-filesystem",
+            "predictable ambient temp roots and broad prefix cleanup in converted test helpers",
+            TEST_WORKSPACE_POSITIVE_FIXTURE_PATH,
+            TEST_WORKSPACE_NEGATIVE_FIXTURE_PATH,
         ),
     ]
 }
@@ -388,6 +406,7 @@ fn blocking_rule(
     negative_fixture: &str,
 ) -> AuditRule {
     // r[impl molten.chunk_store.cap_std_regression_gate]
+    // r[impl molten.testing.cap_std_regression_gate]
     AuditRule {
         id: id.to_string(),
         category: category.to_string(),
@@ -504,6 +523,7 @@ mod tests {
     #[test]
     fn validation_evidence_names_rule_fixtures_and_scan_scope() {
         // r[verify aspen.ast_grep_runtime_authority_audits.validation]
+        // r[verify molten.testing.cap_std_regression_gate]
         let profile = runtime_authority_profile();
         let surface_ids = profile.surfaces.iter().map(|surface| surface.id.clone()).collect::<Vec<_>>();
         let scope_hash = scan_scope_hash(&surface_ids);
@@ -520,6 +540,13 @@ mod tests {
             .expect("store blocking rule");
         assert_eq!(store_rule.positive_fixture.as_deref(), Some(STORE_POSITIVE_FIXTURE_PATH));
         assert_eq!(store_rule.negative_fixture.as_deref(), Some(STORE_NEGATIVE_FIXTURE_PATH));
+        let workspace_rule = profile
+            .rules
+            .iter()
+            .find(|rule| rule.id == "test-ambient-temp-workspace")
+            .expect("test workspace blocking rule");
+        assert_eq!(workspace_rule.positive_fixture.as_deref(), Some(TEST_WORKSPACE_POSITIVE_FIXTURE_PATH));
+        assert_eq!(workspace_rule.negative_fixture.as_deref(), Some(TEST_WORKSPACE_NEGATIVE_FIXTURE_PATH));
     }
 
     #[test]

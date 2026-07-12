@@ -61,7 +61,8 @@
     #[test]
     fn pinned_objects_are_not_delete_eligible_until_unpinned() {
         // r[verify molten.chunk_store.cap_std_conversion_validation]
-        let root_path = temp_dir("retention-pinned");
+        let root_path = crate::test_support::process_workspace("retention_pinned")
+            .expect("create isolated retention workspace");
         let root = CapabilityRetentionRoot::open(&root_path).expect("open retention capability root");
         let object_ref = fake_ref("object");
         let owner_ref = fake_ref("owner");

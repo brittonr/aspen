@@ -132,7 +132,7 @@
     }
 
     struct CheckpointFixture {
-        root: PathBuf,
+        root: crate::test_support::ProcessWorkspace,
         anchor_ref: String,
         checkpoint_ref: String,
         genesis_link_ref: String,

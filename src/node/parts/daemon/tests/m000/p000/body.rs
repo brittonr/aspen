@@ -14,7 +14,8 @@
 
     #[test]
     fn local_node_init_run_status_stop_and_restart_recovery_are_receipted() {
-        let root = temp_dir("node-daemon-lifecycle");
+        let root = crate::test_support::process_workspace("node_daemon_lifecycle")
+            .expect("create isolated node workspace");
         let init = init_local(&InitInput {
             state_root: &root,
             node_id: "node:test",

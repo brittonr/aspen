@@ -1,7 +1,8 @@
 
     #[tokio::test]
     async fn control_live_iroh_loopback_delivers_to_durable_inbox() {
-        let root = temp_dir("node-control-live-iroh");
+        let root = crate::test_support::process_workspace("node_control_live_iroh")
+            .expect("create isolated async node workspace");
         init_local(&InitInput {
             state_root: &root,
             node_id: "node:live-ingress",

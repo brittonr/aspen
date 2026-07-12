@@ -54,47 +54,6 @@ fn manifest_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn cleanup_stale_molten_temp_dirs() {
-    static CLEAN_STALE_TEMP_DIRS: std::sync::Once = std::sync::Once::new();
-    CLEAN_STALE_TEMP_DIRS.call_once(|| {
-        let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
-            return;
-        };
-        for entry_result in entries {
-            let Ok(entry) = entry_result else {
-                continue;
-            };
-            let Ok(file_type) = entry.file_type() else {
-                continue;
-            };
-            if file_type.is_dir() {
-                let file_name = entry.file_name();
-                let Some(name) = file_name.to_str() else {
-                    continue;
-                };
-                if is_stale_molten_temp_dir(name) {
-                    let remove_result = std::fs::remove_dir_all(entry.path());
-                    if remove_result.is_err() {
-                        continue;
-                    }
-                }
-            }
-        }
-    });
-}
-
-fn is_stale_molten_temp_dir(name: &str) -> bool {
-    name.starts_with("molten-") && live_process_token_count(name) == 0
-}
-
-fn live_process_token_count(name: &str) -> usize {
-    let current_pid = u64::from(std::process::id());
-    name.split('-')
-        .filter_map(|token| token.parse::<u64>().ok())
-        .filter(|pid| *pid == current_pid || std::path::Path::new("/proc").join(pid.to_string()).exists())
-        .count()
-}
-
 fn write_release_export_test_archive(
     output_dir: &std::path::Path,
     archive_path: &std::path::Path,
@@ -227,15 +186,8 @@ fn append_release_export_test_bytes<W: std::io::Write>(
     Ok(())
 }
 
-fn temp_dir(label: &str) -> CliResult<std::path::PathBuf> {
-    cleanup_stale_molten_temp_dirs();
-    let nonce = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("molten-{label}-{}-{nonce}", std::process::id()));
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir)?;
-    }
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
+fn temp_dir(label: &str) -> CliResult<test_support::ProcessWorkspace> {
+    Ok(test_support::process_workspace(label)?)
 }
 
 fn read_preserves(path: &std::path::Path) -> CliResult<preserves::IOValue> {

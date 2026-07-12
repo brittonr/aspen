@@ -1,5 +1,5 @@
     struct JobSetup {
-        dir: PathBuf,
+        dir: crate::test_support::ProcessWorkspace,
         registry: PathBuf,
         storage: PathBuf,
         cache: PathBuf,

@@ -60,5 +60,6 @@ wit-bindgen = "0.46"
 zstd = "0.13"
 
 [dev-dependencies]
+cap-tempfile = "3"
 hegeltest = { git = "https://github.com/hegeldev/hegel-rust", features = ["native"] }
 wat = "1"
