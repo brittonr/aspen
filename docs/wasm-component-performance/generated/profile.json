@@ -1,0 +1,112 @@
+{
+  "profile": {
+    "comparison": {
+      "basis_points": 10000,
+      "confidence_basis_points": 9500,
+      "max_sample_value": 1000000000,
+      "max_sightglass_benchmark_bytes": 16777216,
+      "max_sightglass_engine_bytes": 67108864,
+      "max_sightglass_output_bytes": 4194304,
+      "max_sightglass_run_seconds": 3600,
+      "max_sightglass_runner_bytes": 33554432,
+      "parts_per_million": 1000000,
+      "practical_threshold_ppm": 10000
+    },
+    "component_profile_id": "molten.wasm.component.v1",
+    "deep": {
+      "engine_artifact_ref": "blake3:5295b3f4ef5ec7f4ebabff7a2e8aaa8ef585a4dda6c40226b67988c5474c09d1",
+      "engine_cohort_ref": "blake3:5295b3f4ef5ec7f4ebabff7a2e8aaa8ef585a4dda6c40226b67988c5474c09d1",
+      "host_class_ref": "blake3:09959b9b17ddf92cef356c835fc8bfb6020f642d7f5018b9b758f0f8e9bfa62c",
+      "lane": "deep",
+      "materialization_bundle_refs": [
+        "blake3:6ea7c323251905bff8a51935567a0ce75fad233ac498530f202307c35ea9b925",
+        "blake3:7393db08a46ff6733394426fa42c38c3a4be2ca11eaf8746631d0cae2fdc8a5b"
+      ],
+      "measurement": "cycles",
+      "phases": [
+        "compilation",
+        "instantiation",
+        "execution"
+      ],
+      "pin_to_single_core": true,
+      "resource_envelope_ref": "blake3:291658cf3a3c5653c1f109b66453cef93e3f1b9e8a9bcb20d55014d2ad93ff1b",
+      "runner_artifact_ref": "blake3:b06044cd1cc2067897ae836504de53e63e56b4171ec09180e08f9c4208927462",
+      "sampling": {
+        "iterations_per_process": 10,
+        "max_samples_per_phase": 128,
+        "min_samples_per_phase": 100,
+        "processes": 10
+      },
+      "suite_id": "molten-wasm-component-deep-v1",
+      "workload_refs": [
+        "blake3:31e5f8b8a4579f62dde10521790a1a36905cb1900480fabb0e190f61b3f95a3b",
+        "blake3:c41e25ce415096156dde58eb0057e60a3b84a6d4f1912506accc4eab1da39e26"
+      ]
+    },
+    "evidence_role": "recorded-only",
+    "fast": {
+      "engine_artifact_ref": "blake3:5295b3f4ef5ec7f4ebabff7a2e8aaa8ef585a4dda6c40226b67988c5474c09d1",
+      "engine_cohort_ref": "blake3:5295b3f4ef5ec7f4ebabff7a2e8aaa8ef585a4dda6c40226b67988c5474c09d1",
+      "host_class_ref": "blake3:09959b9b17ddf92cef356c835fc8bfb6020f642d7f5018b9b758f0f8e9bfa62c",
+      "lane": "fast",
+      "materialization_bundle_refs": [
+        "blake3:8984e68c835ce8bd0b3af729092b98cc2c47d3a7a8f2eada28f2d23970e26884"
+      ],
+      "measurement": "cycles",
+      "phases": [
+        "compilation",
+        "instantiation",
+        "execution"
+      ],
+      "pin_to_single_core": true,
+      "resource_envelope_ref": "blake3:291658cf3a3c5653c1f109b66453cef93e3f1b9e8a9bcb20d55014d2ad93ff1b",
+      "runner_artifact_ref": "blake3:b06044cd1cc2067897ae836504de53e63e56b4171ec09180e08f9c4208927462",
+      "sampling": {
+        "iterations_per_process": 3,
+        "max_samples_per_phase": 3,
+        "min_samples_per_phase": 3,
+        "processes": 1
+      },
+      "suite_id": "molten-wasm-component-fast-v1",
+      "workload_refs": [
+        "blake3:31e5f8b8a4579f62dde10521790a1a36905cb1900480fabb0e190f61b3f95a3b"
+      ]
+    },
+    "non_claims": [
+      "not-behavioral-correctness",
+      "not-determinism-beyond-conformance",
+      "not-authority",
+      "not-security",
+      "not-cross-machine-performance",
+      "not-cross-runtime-ranking",
+      "not-release-eligibility",
+      "not-semantic-equivalence"
+    ],
+    "optimization_limits": {
+      "max_concurrency": 16,
+      "max_pool_memories": 32,
+      "max_pool_tables": 32,
+      "max_queue_depth": 64,
+      "reviewed_profile_ids": [
+        "molten.wasm.optimization.baseline.v1",
+        "molten.wasm.optimization.pooling.v1",
+        "molten.wasm.optimization.cow.v1",
+        "molten.wasm.optimization.instance-pre.v1"
+      ]
+    },
+    "phases": [
+      "compilation",
+      "instantiation",
+      "execution"
+    ],
+    "profile_id": "molten.wasm.performance.v1",
+    "sightglass": {
+      "raw_schema": "sightglass-data.measurement.v1",
+      "revision": "c18bbe75803a6a610f7ff3b15549c927c6e02667",
+      "runner": "sightglass-cli"
+    }
+  },
+  "schema_id": "molten.wasm-component-performance-profile.v1",
+  "schema_version": 1,
+  "source_language": "nickel"
+}

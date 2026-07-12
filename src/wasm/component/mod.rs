@@ -62,4 +62,21 @@ pub use runtime::ComponentExecutionRequest;
 pub use runtime::execute_component;
 
 #[cfg(test)]
+pub(crate) fn test_identity_component_bytes() -> Vec<u8> {
+    tests::support::identity_component_bytes()
+}
+
+#[cfg(test)]
+pub(crate) fn test_alternate_component_bytes() -> Vec<u8> {
+    tests::support::invalid_output_component_bytes()
+}
+
+#[cfg(test)]
+pub(crate) fn test_precompiled_component_bytes() -> Vec<u8> {
+    let profile = supported_component_profile().expect("supported component profile");
+    let component_bytes = test_identity_component_bytes();
+    runtime::test_precompile_component(&profile, &component_bytes).expect("precompiled component test fixture")
+}
+
+#[cfg(test)]
 mod tests;

@@ -518,6 +518,37 @@
                   done
                   touch "$out"
                 '';
+            wasmComponentPerformanceProfileCheck =
+              pkgs.runCommand "molten-wasm-component-performance-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.nickel
+                    pkgs.diffutils
+                    pkgs.gnugrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=docs/wasm-component-performance/profile.ncl
+                  generated=docs/wasm-component-performance/generated/profile.json
+                  nickel export "$profile" --format json > "$TMPDIR/profile.json"
+                  diff -u "$generated" "$TMPDIR/profile.json"
+                  grep -q 'c18bbe75803a6a610f7ff3b15549c927c6e02667' "$generated"
+                  for fixture in docs/wasm-component-performance/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative Wasm performance profile fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if grep -R -E 'Command::new\([^)]*(wizer|precompile)' src/wasm/performance; then
+                    echo "Wasm performance shell must not invoke Wizer or precompile tools" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
           in
           rec {
             # The hermetic nextest check supplies binary metadata for CLI tests
@@ -529,6 +560,7 @@
             node-state-authority = nodeStateAuthorityCheck;
             materialization-authority = materializationAuthorityCheck;
             wasm-component-profile = wasmComponentProfileCheck;
+            wasm-component-performance-profile = wasmComponentPerformanceProfileCheck;
             nixos-vm-smoke = vmShardCheck "nixos-vm-smoke";
             nixos-vm-live-control = vmShardCheck "nixos-vm-live-control";
             nixos-vm-service-job = vmShardCheck "nixos-vm-service-job";

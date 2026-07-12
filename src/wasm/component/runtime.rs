@@ -102,6 +102,19 @@ fn invocation_denial(store: &RuntimeStore<ComponentStoreState>, error: wasmtime:
     }
 }
 
+#[cfg(test)]
+pub(super) fn test_precompile_component(
+    profile: &ComponentRuntimeProfile,
+    component_bytes: &[u8],
+) -> ComponentResult<Vec<u8>> {
+    component_engine(profile)?.precompile_component(component_bytes).map_err(|error| {
+        ComponentDenial::classified(
+            ComponentDenialClass::ComponentCompilationDenied,
+            format!("component test precompilation failed: {error}"),
+        )
+    })
+}
+
 fn component_engine(profile: &ComponentRuntimeProfile) -> ComponentResult<RuntimeEngine> {
     let stack_size = usize::try_from(profile.resources.max_stack_bytes).map_err(|error| {
         ComponentDenial::classified(

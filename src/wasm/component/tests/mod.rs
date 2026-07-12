@@ -3,4 +3,4 @@ mod materialization;
 mod profile;
 mod receipt;
 mod shell;
-mod support;
+pub(super) mod support;
