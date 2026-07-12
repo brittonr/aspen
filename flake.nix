@@ -485,6 +485,39 @@
                     > "$TMPDIR/converted.json"
                   touch "$out"
                 '';
+            wasmComponentProfileCheck =
+              pkgs.runCommand "molten-wasm-component-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.nickel
+                    pkgs.diffutils
+                    pkgs.b3sum
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=docs/wasm-component-runtime/profile.ncl
+                  generated=docs/wasm-component-runtime/generated/profile.json
+                  nickel export "$profile" --format json > "$TMPDIR/profile.json"
+                  diff -u "$generated" "$TMPDIR/profile.json"
+                  expected_wit_hash=83be349bb27975ada30dbe60817c5404df7862babdf02ae229b399886e76d5e8
+                  printf '%s  %s\n' "$expected_wit_hash" wit/molten-component-runtime/runtime.wit \
+                    | b3sum --check
+                  for fixture in \
+                    docs/wasm-component-runtime/fixtures/negative/stale-cohort.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/incomplete-cohort.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/ambient-wasi.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/nondeterministic-growth.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative Wasm component profile fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  touch "$out"
+                '';
           in
           rec {
             # The hermetic nextest check supplies binary metadata for CLI tests
@@ -495,6 +528,7 @@
             cap-std-test-workspaces = capStdTestWorkspaceCheck;
             node-state-authority = nodeStateAuthorityCheck;
             materialization-authority = materializationAuthorityCheck;
+            wasm-component-profile = wasmComponentProfileCheck;
             nixos-vm-smoke = vmShardCheck "nixos-vm-smoke";
             nixos-vm-live-control = vmShardCheck "nixos-vm-live-control";
             nixos-vm-service-job = vmShardCheck "nixos-vm-service-job";

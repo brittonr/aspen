@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Execute reviewed WebAssembly components through one deterministic, capability-scoped Molten profile while preserving Preserves as the canonical payload boundary and keeping build, evidence, and authority claims separate.
+Defines the `wasm-component-runtime` capability.
 
 ## Requirements
 

@@ -1,0 +1,24 @@
+pub(crate) mod materialization;
+pub(crate) mod receipt;
+
+pub use materialization::COMPONENT_ADMISSION_ENVELOPE_SCHEMA;
+pub use materialization::ComponentAdmissionEnvelope;
+pub use materialization::ComponentArtifactSource;
+pub use materialization::MANTLE_COMPONENT_BUNDLE_SCHEMA;
+pub use materialization::MantleComponentBundle;
+pub use materialization::MaterializationAdmission;
+pub use materialization::MaterializedObjectIdentity;
+pub use materialization::mantle_bundle_ref;
+pub use materialization::verify_materialization;
+pub use receipt::COMPONENT_RECEIPT_SCHEMA;
+pub use receipt::ComponentReceipt;
+pub use receipt::ComponentReceiptDecision;
+pub use receipt::ComponentReceiptInput;
+pub use receipt::ComponentReceiptStage;
+pub use receipt::build_component_receipt;
+pub use receipt::component_receipt_summary;
+pub use receipt::component_receipt_value;
+pub use receipt::replay_receipts_match;
+pub use receipt::validate_component_receipt;
+pub use receipt::validate_component_receipt_against;
+pub use receipt::validate_component_receipt_chain;

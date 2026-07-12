@@ -1,0 +1,10 @@
+package molten:component-runtime@1.0.0;
+
+/// A deterministic component actor exchanges canonical Preserves byte carriers.
+world actor {
+  /// Canonical Preserves bytes remain the authoritative payload representation.
+  type preserves-payload = list<u8>;
+
+  /// Guest failures are explicit values and never trigger legacy ABI fallback.
+  export invoke: func(input: preserves-payload) -> result<preserves-payload, string>;
+}

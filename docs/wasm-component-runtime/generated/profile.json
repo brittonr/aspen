@@ -1,0 +1,76 @@
+{
+  "profile": {
+    "allowed_imports": [],
+    "allowed_wasi_interfaces": [],
+    "determinism": {
+      "fuel_interruption": true,
+      "host_inputs": "recorded-effects-only",
+      "memory_growth": "fixed",
+      "nan_canonicalization": true,
+      "relaxed_simd_deterministic": true,
+      "table_growth": "fixed"
+    },
+    "evidence_scope": "production",
+    "features": {
+      "bulk_memory": true,
+      "component_async": false,
+      "component_model": true,
+      "custom_page_sizes": false,
+      "exceptions": false,
+      "extended_const": false,
+      "function_references": false,
+      "gc": false,
+      "memory64": false,
+      "multi_memory": false,
+      "multi_value": true,
+      "reference_types": true,
+      "relaxed_simd": false,
+      "simd": true,
+      "tail_call": false,
+      "threads": false,
+      "wide_arithmetic": false
+    },
+    "non_claims": [
+      "not-behavioral-correctness",
+      "not-semantic-equivalence",
+      "not-authority",
+      "not-release-eligibility",
+      "not-whole-system-safety",
+      "not-build-trust-transfer"
+    ],
+    "profile_id": "molten.wasm.component.v1",
+    "resources": {
+      "fuel": 100000,
+      "max_component_bytes": 4194304,
+      "max_concurrency": 1,
+      "max_exports": 128,
+      "max_hostcall_bytes": 65536,
+      "max_imports": 128,
+      "max_instances": 16,
+      "max_memories": 4,
+      "max_memory_bytes": 16777216,
+      "max_result_bytes": 65536,
+      "max_stack_bytes": 524288,
+      "max_table_elements": 1024,
+      "max_tables": 4,
+      "max_wit_bytes": 65536
+    },
+    "runtime_strategy": "portable-component",
+    "toolchain": {
+      "wasi_package": "0.2.6",
+      "wasm_tools": "1.240.0",
+      "wasmparser": "0.240.0",
+      "wasmtime": "45.0.0",
+      "wasmtime_wasi": "45.0.0",
+      "wit_bindgen": "0.46.0"
+    },
+    "wit": {
+      "package": "molten:component-runtime@1.0.0",
+      "source_ref": "blake3:83be349bb27975ada30dbe60817c5404df7862babdf02ae229b399886e76d5e8",
+      "world": "actor"
+    }
+  },
+  "schema_id": "molten.wasm-component-profile.v1",
+  "schema_version": 1,
+  "source_language": "nickel"
+}

@@ -206,6 +206,15 @@ fn prepare<'a>(input: &WasmActorStepInput<'a>) -> Result<Option<Prepared<'a>>> {
 }
 
 fn compile(actor_id: &str, bytes: &[u8]) -> Result<Compiled> {
+    crate::wasm_component::classify_for_profile(
+        crate::wasm_component::RequestedExecutionProfile::LegacyCoreV1,
+        bytes,
+    )
+    .map_err(|error| {
+        MoltenError::invalid_harness(format!(
+            "Wasm executor artifact profile mismatch for actor {actor_id}: {error}"
+        ))
+    })?;
     let mut engine_config = Config::new();
     engine_config.consume_fuel(true);
     let engine = Engine::new(&engine_config).map_err(|error| {

@@ -80,6 +80,8 @@ pub mod system_extension;
 #[doc(hidden)]
 #[path = "harness/mod.rs"]
 pub mod testbed;
+#[path = "wasm/component/mod.rs"]
+pub mod wasm_component;
 compat_module!(harness, testbed);
 #[doc(hidden)]
 #[path = "iroh/exchange.rs"]
