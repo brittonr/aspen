@@ -1,11 +1,14 @@
     use super::*;
+    use std::fs;
 
     type AtomicU64 = std::sync::atomic::AtomicU64;
     type Ordering = std::sync::atomic::Ordering;
 
     #[test]
     fn local_gossip_roundtrip_preserves_envelope_identity() {
-        let root = temp_dir("remote-dataspace-roundtrip");
+        // r[verify molten.chunk_store.cap_std_conversion_validation]
+        let root_path = temp_dir("remote-dataspace-roundtrip");
+        let root = CapabilityDataspaceRoot::open(&root_path).expect("open dataspace capability root");
         let payload = record("service-ready", vec![string("db")]);
         let envelope = assert_envelope(AssertEnvelopeInput {
             from_peer: "peer:a",
@@ -17,9 +20,10 @@
             evidence_refs: Vec::new(),
         })
         .expect("envelope");
-        let published = publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
+        let published = publish_local_gossip_with_root(&root, &envelope, "peer:a").expect("publish");
         assert_eq!(published.envelope_ref, envelope.envelope_ref);
-        let delivered = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
+        let delivered =
+            deliver_local_gossip_with_root(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
         assert_eq!(delivered.envelope.envelope_ref, envelope.envelope_ref);
         assert_eq!(delivered.envelope.topic, "services");
         let receipt_ref = crate::preserves_rail::canonical_hash(&delivered.receipt_value).expect("receipt ref");

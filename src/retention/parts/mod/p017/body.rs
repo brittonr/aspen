@@ -272,8 +272,13 @@ pub fn parse_gc_audit(value: &IoValue) -> Result<GcAudit> {
 }
 
 pub fn read_gc_audit(root: &Path, audit_ref: &str) -> Result<GcAudit> {
+    let root = open_capability_retention_root(root)?;
+    read_gc_audit_with_root(&root, audit_ref)
+}
+
+pub fn read_gc_audit_with_root(root: &CapabilityRetentionRoot, audit_ref: &str) -> Result<GcAudit> {
     require_ref(audit_ref, "retention GC audit ref")?;
-    let value = read_store_value(&gc_audit_path(root, audit_ref)?)?;
+    let value = read_store_value_with_root(root, &capability_ref_path(GC_AUDIT_DIR, audit_ref)?)?;
     let audit = parse_gc_audit(&value)?;
     if audit.audit_ref != audit_ref {
         return Err(MoltenError::invalid_harness("stored retention GC audit ref mismatch"));
@@ -282,6 +287,20 @@ pub fn read_gc_audit(root: &Path, audit_ref: &str) -> Result<GcAudit> {
 }
 
 pub fn explain_candidate(input: CandidateExplainInput<'_>) -> Result<CandidateExplain> {
+    let root = open_capability_retention_root(input.root)?;
+    explain_candidate_with_root(CandidateExplainInput {
+        root: &root,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        subsystem: input.subsystem,
+    })
+}
+
+pub fn explain_candidate_with_root(
+    input: CandidateExplainInput<'_, CapabilityRetentionRoot>,
+) -> Result<CandidateExplain> {
     validate_candidate_explain_input(&input)?;
     let filter = CandidateFilter {
         object_ref: input.object_ref,
@@ -291,13 +310,13 @@ pub fn explain_candidate(input: CandidateExplainInput<'_>) -> Result<CandidateEx
         subsystem: input.subsystem,
     };
     let refs = MatchRefs::collect(input.root, &filter)?;
-    let diagnostics = candidate_explain_diagnostics(&refs.value_input(input, &[]))?;
-    let value = candidate_explain_value(&refs.value_input(input, &diagnostics))?;
+    let diagnostics = candidate_explain_diagnostics(&refs.value_input(&input, &[]))?;
+    let value = candidate_explain_value(&refs.value_input(&input, &diagnostics))?;
     parse_candidate_explain(&value)
 }
 
 impl MatchRefs {
-    fn collect(root: &Path, filter: &CandidateFilter<'_>) -> Result<Self> {
+    fn collect(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Self> {
         let pin_refs = pins_for(root, filter)?;
         let admission_refs = admissions_for(root, filter)?;
         let remote_clearance_refs = clearances_for(root, filter)?;
@@ -322,9 +341,9 @@ impl MatchRefs {
         })
     }
 
-    fn value_input<'a>(
+    fn value_input<'a, Root: ?Sized>(
         &'a self,
-        input: CandidateExplainInput<'a>,
+        input: &CandidateExplainInput<'a, Root>,
         diagnostics: &'a [String],
     ) -> CandidateExplainValueInput<'a> {
         CandidateExplainValueInput {
@@ -348,9 +367,10 @@ impl MatchRefs {
     }
 }
 
-fn pins_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
+fn pins_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_refs(
-        &pins_dir(root),
+        root,
+        PIN_DIR,
         parse_pin,
         |pin| filter.matches_object(&pin.object_ref, &pin.object_kind, &pin.retention_class),
         |pin| pin.pin_ref.clone(),
@@ -358,9 +378,10 @@ fn pins_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     )
 }
 
-fn admissions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
+fn admissions_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_refs(
-        &admissions_dir(root),
+        root,
+        ADMISSION_DIR,
         parse_evidence_admission,
         |admission| {
             filter.matches_retention(
@@ -375,9 +396,10 @@ fn admissions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<Strin
     )
 }
 
-fn clearances_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
+fn clearances_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_refs(
-        &remote_clearances_dir(root),
+        root,
+        REMOTE_CLEARANCE_DIR,
         parse_remote_gc_clearance,
         |clearance| {
             filter.matches_retention(
@@ -392,9 +414,10 @@ fn clearances_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<Strin
     )
 }
 
-fn imports_for(root: &Path, remote_clearance_refs: &[String]) -> Result<Vec<String>> {
+fn imports_for(root: &CapabilityRetentionRoot, remote_clearance_refs: &[String]) -> Result<Vec<String>> {
     collect_matching_refs(
-        &remote_clearance_imports_dir(root),
+        root,
+        REMOTE_CLEARANCE_IMPORT_DIR,
         parse_remote_gc_clearance_import,
         |import| import.clearance_ref.as_ref().is_some_and(|reference| remote_clearance_refs.contains(reference)),
         |import| import.import_ref.clone(),
@@ -402,9 +425,10 @@ fn imports_for(root: &Path, remote_clearance_refs: &[String]) -> Result<Vec<Stri
     )
 }
 
-fn plans_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
+fn plans_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_refs(
-        &gc_plans_dir(root),
+        root,
+        GC_PLAN_DIR,
         parse_gc_plan,
         |plan| {
             filter.matches_gc(&plan.subsystem, &plan.object_ref, &plan.object_kind, &plan.retention_class, &plan.action)
@@ -414,9 +438,10 @@ fn plans_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     )
 }
 
-fn applies_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
+fn applies_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_refs(
-        &gc_applies_dir(root),
+        root,
+        GC_APPLY_DIR,
         parse_gc_apply,
         |apply| {
             filter.matches_gc(

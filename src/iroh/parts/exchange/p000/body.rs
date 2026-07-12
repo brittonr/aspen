@@ -1,5 +1,6 @@
 type IoValue = preserves::IOValue;
 
+type LocalStorePath = crate::local_store::LocalStorePath;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type Path = std::path::Path;
 type Value<T> = preserves::Value<T>;
@@ -10,25 +11,6 @@ const EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA: &str = crate::preserves_rail::EVIDEN
 const EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
 const CHAIN_RECEIPT_SCHEMA: &str = crate::preserves_rail::IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA;
 const REPRO_RECEIPT_SCHEMA: &str = crate::preserves_rail::IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA;
-
-mod fs {
-    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::create_dir_all(path)
-    }
-
-    pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
-        std::fs::read(path)
-    }
-
-    #[cfg(test)]
-    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_dir_all(path)
-    }
-
-    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-        std::fs::write(path, contents)
-    }
-}
 
 fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
@@ -131,8 +113,8 @@ struct ParsedChainVerifyReceipt {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FetchBundleInput<'a> {
-    pub root: &'a Path,
+pub struct FetchBundleInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub ticket: &'a str,
     pub expected_bundle_ref: Option<&'a str>,
     pub peer: &'a str,
@@ -141,8 +123,8 @@ pub struct FetchBundleInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct PublishChainSegmentInput<'a> {
-    pub iroh_root: &'a Path,
+pub struct PublishChainSegmentInput<'a, Root: ?Sized = Path> {
+    pub iroh_root: &'a Root,
     pub ledger_root: &'a Path,
     pub chain: &'a crate::evidence_chain::ChainScope,
     pub anchor_ref: Option<&'a str>,
@@ -152,8 +134,8 @@ pub struct PublishChainSegmentInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FetchChainSegmentInput<'a> {
-    pub iroh_root: &'a Path,
+pub struct FetchChainSegmentInput<'a, Root: ?Sized = Path> {
+    pub iroh_root: &'a Root,
     pub ticket: &'a str,
     pub expected_bundle_ref: Option<&'a str>,
     pub peer: &'a str,
@@ -202,7 +184,11 @@ struct ReceiptValueInput<'a> {
 }
 
 pub fn publish_bundle(root: &Path, bundle: &IoValue, node: &str) -> Result<Repro> {
-    fs::create_dir_all(root.join("blobs")).map_err(MoltenError::from)?;
+    let root = open_capability_exchange_root(root)?;
+    publish_bundle_with_root(&root, bundle, node)
+}
+
+pub fn publish_bundle_with_root(root: &CapabilityExchangeRoot, bundle: &IoValue, node: &str) -> Result<Repro> {
     let verify_receipt = crate::harness::repro_verify_receipt_value(bundle)?;
     let bundle_ref = canonical_hash(bundle)?;
     let bytes = canonical_bytes(bundle)?;
@@ -210,7 +196,7 @@ pub fn publish_bundle(root: &Path, bundle: &IoValue, node: &str) -> Result<Repro
     if blob_ref != bundle_ref {
         return Err(MoltenError::invalid_harness("Iroh publish bundle blob ref does not match bundle ref"));
     }
-    fs::write(blob_path(root, &bundle_ref)?, bytes).map_err(MoltenError::from)?;
+    root.root().write(&blob_store_path(&bundle_ref)?, &bytes)?;
     let ticket = format!("iroh-local:{bundle_ref}");
     let verify_ref = canonical_hash(&verify_receipt)?;
     let receipt_value = receipt_value(&ReceiptValueInput {
@@ -230,6 +216,18 @@ pub fn publish_bundle(root: &Path, bundle: &IoValue, node: &str) -> Result<Repro
 }
 
 pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<Repro> {
+    let root = open_capability_exchange_root(input.root)?;
+    fetch_bundle_with_root(&FetchBundleInput {
+        root: &root,
+        ticket: input.ticket,
+        expected_bundle_ref: input.expected_bundle_ref,
+        peer: input.peer,
+        out: input.out,
+        ledger_root: input.ledger_root,
+    })
+}
+
+pub fn fetch_bundle_with_root(input: &FetchBundleInput<'_, CapabilityExchangeRoot>) -> Result<Repro> {
     let advertised_ref = input.ticket.strip_prefix("iroh-local:").ok_or_else(|| {
         MoltenError::invalid_harness("unsupported Iroh repro ticket; expected iroh-local:<bundle-ref>")
     })?;
@@ -240,7 +238,7 @@ pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<Repro> {
             "Iroh repro ticket advertises bundle {advertised_ref}, expected {expected_bundle_ref}"
         )));
     }
-    let bytes = fs::read(blob_path(input.root, advertised_ref)?).map_err(MoltenError::from)?;
+    let bytes = input.root.root().read(&blob_store_path(advertised_ref)?)?;
     let bundle = parse_canonical_bytes(&bytes)?;
     let bundle_ref = canonical_hash(&bundle)?;
     if bundle_ref != advertised_ref {
@@ -250,10 +248,7 @@ pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<Repro> {
     }
     let verify_receipt = crate::harness::repro_verify_receipt_value(&bundle)?;
     if let Some(out) = input.out {
-        if let Some(parent) = out.parent() {
-            fs::create_dir_all(parent).map_err(MoltenError::from)?;
-        }
-        fs::write(out, crate::preserves_rail::to_text(&bundle)?).map_err(MoltenError::from)?;
+        write_explicit_bundle_output(out, &bundle)?;
     }
     if let Some(ledger_root) = input.ledger_root {
         crate::ledger::import_artifact(ledger_root, &bundle)?;

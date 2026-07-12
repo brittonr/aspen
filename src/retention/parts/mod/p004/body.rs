@@ -1,6 +1,25 @@
 
 pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
-    ensure_store(input.root)?;
+    let root = open_capability_retention_root(input.root)?;
+    evaluate_with_root(EvaluationInput {
+        root: &root,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        requester_ref: input.requester_ref,
+        is_reference_index_complete: input.is_reference_index_complete,
+        retained_refs: input.retained_refs,
+        remote_refs: input.remote_refs,
+        policy_refs: input.policy_refs,
+        evidence_refs: input.evidence_refs,
+        has_delete_authority: input.has_delete_authority,
+        has_remote_gc_clearance: input.has_remote_gc_clearance,
+    })
+}
+
+pub fn evaluate_with_root(input: EvaluationInput<'_, CapabilityRetentionRoot>) -> Result<Evaluation> {
+    ensure_store_with_root(input.root)?;
     validate_class(input.retention_class)?;
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention object ref")?;
@@ -10,7 +29,7 @@ pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
     validate_refs(input.evidence_refs, "retention evidence ref")?;
     validate_refs(input.retained_refs, "retention retained ref")?;
     validate_refs(input.remote_refs, "retention remote ref")?;
-    let index = reference_index_for_object(ReferenceIndexForObjectInput {
+    let index = reference_index_for_object_with_root(ReferenceIndexForObjectInput {
         root: input.root,
         object_ref: input.object_ref,
         object_kind: input.object_kind,
@@ -36,7 +55,11 @@ pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
         tombstone_ref: None,
         diagnostics: &diagnostics,
     })?;
-    write_store_value(&receipt_path(input.root, &receipt.receipt_ref)?, &receipt.value)?;
+    write_store_value_with_root(
+        input.root,
+        &capability_ref_path(RECEIPT_DIR, &receipt.receipt_ref)?,
+        &receipt.value,
+    )?;
     if decision == "pass" && is_destructive_action(input.action) {
         let tombstone = build_tombstone(TombstoneBuildInput {
             object_ref: input.object_ref,
@@ -47,7 +70,11 @@ pub fn evaluate(input: EvaluationInput<'_>) -> Result<Evaluation> {
             policy_refs: input.policy_refs,
             evidence_refs: input.evidence_refs,
         })?;
-        write_store_value(&tombstone_path(input.root, &tombstone.tombstone_ref)?, &tombstone.value)?;
+        write_store_value_with_root(
+            input.root,
+            &capability_ref_path(TOMBSTONE_DIR, &tombstone.tombstone_ref)?,
+            &tombstone.value,
+        )?;
         return Ok(Evaluation {
             receipt,
             index,
@@ -137,10 +164,18 @@ pub fn parse_evidence_admission(value: &IoValue) -> Result<EvidenceAdmission> {
 }
 
 pub fn store_evidence_admission(root: &Path, input: &EvidenceAdmissionInput<'_>) -> Result<EvidenceAdmission> {
-    ensure_store(root)?;
+    let root = open_capability_retention_root(root)?;
+    store_evidence_admission_with_root(&root, input)
+}
+
+pub fn store_evidence_admission_with_root(
+    root: &CapabilityRetentionRoot,
+    input: &EvidenceAdmissionInput<'_>,
+) -> Result<EvidenceAdmission> {
+    ensure_store_with_root(root)?;
     let value = evidence_admission_value(input)?;
     let admission = parse_evidence_admission(&value)?;
-    write_store_value(&admission_path(root, &admission.admission_ref)?, &admission.value)?;
+    write_store_value_with_root(root, &capability_ref_path(ADMISSION_DIR, &admission.admission_ref)?, &admission.value)?;
     Ok(admission)
 }
 
@@ -221,10 +256,22 @@ pub fn parse_remote_gc_clearance(value: &IoValue) -> Result<RemoteGcClearance> {
 }
 
 pub fn store_remote_gc_clearance(root: &Path, input: &RemoteGcClearanceInput<'_>) -> Result<RemoteGcClearance> {
-    ensure_store(root)?;
+    let root = open_capability_retention_root(root)?;
+    store_remote_gc_clearance_with_root(&root, input)
+}
+
+pub fn store_remote_gc_clearance_with_root(
+    root: &CapabilityRetentionRoot,
+    input: &RemoteGcClearanceInput<'_>,
+) -> Result<RemoteGcClearance> {
+    ensure_store_with_root(root)?;
     let value = remote_gc_clearance_value(input)?;
     let clearance = parse_remote_gc_clearance(&value)?;
-    write_store_value(&remote_clearance_path(root, &clearance.clearance_ref)?, &clearance.value)?;
+    write_store_value_with_root(
+        root,
+        &capability_ref_path(REMOTE_CLEARANCE_DIR, &clearance.clearance_ref)?,
+        &clearance.value,
+    )?;
     Ok(clearance)
 }
 
@@ -278,9 +325,21 @@ pub fn store_remote_gc_clearance_request(
     root: &Path,
     input: &RemoteGcClearanceRequestInput<'_>,
 ) -> Result<RemoteGcClearanceRequest> {
-    ensure_store(root)?;
+    let root = open_capability_retention_root(root)?;
+    store_remote_gc_clearance_request_with_root(&root, input)
+}
+
+pub fn store_remote_gc_clearance_request_with_root(
+    root: &CapabilityRetentionRoot,
+    input: &RemoteGcClearanceRequestInput<'_>,
+) -> Result<RemoteGcClearanceRequest> {
+    ensure_store_with_root(root)?;
     let value = remote_gc_clearance_request_value(input)?;
     let request = parse_remote_gc_clearance_request(&value)?;
-    write_store_value(&remote_clearance_request_path(root, &request.request_ref)?, &request.value)?;
+    write_store_value_with_root(
+        root,
+        &capability_ref_path(REMOTE_CLEARANCE_REQUEST_DIR, &request.request_ref)?,
+        &request.value,
+    )?;
     Ok(request)
 }

@@ -20,7 +20,7 @@
         assert_eq!(rebuild.status.receipts, 3);
 
         let manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");
-        fs::remove_file(chunk_path(&root, &manifest.chunks[0].chunk_ref).expect("chunk path")).expect("remove chunk");
+        fs::remove_file(test_chunk_path(&root, &manifest.chunks[0].chunk_ref).expect("chunk path")).expect("remove chunk");
         let missing = missing_chunks(&root, &put.manifest_ref).expect("missing chunks");
         assert_eq!(missing, vec![manifest.chunks[0].chunk_ref.clone()]);
         let status = index_status(&root).expect("index status after missing scan");
@@ -93,7 +93,7 @@
         let denial_root = temp_dir("chunk-denial-receipts");
         let denial_put = put_bytes(&denial_root, "artifact", b"aaaabbbb", 4).expect("put denial fixture");
         let denial_manifest = read_manifest(&denial_root, &denial_put.manifest_ref).expect("read denial manifest");
-        fs::write(chunk_path(&denial_root, &denial_manifest.chunks[0].chunk_ref).expect("chunk path"), b"zzzz")
+        fs::write(test_chunk_path(&denial_root, &denial_manifest.chunks[0].chunk_ref).expect("chunk path"), b"zzzz")
             .expect("corrupt chunk");
         verify_manifest(&denial_root, &denial_put.manifest_ref).expect_err("corrupt verify denied");
         range_read(&denial_root, &denial_put.manifest_ref, 99, 1).expect_err("range denied");
@@ -278,7 +278,7 @@
         });
         let transformed_manifest_ref = canonical_hash(&transformed_manifest_value).expect("manifest ref");
         fs::write(
-            manifest_path(&root, &transformed_manifest_ref).expect("manifest path"),
+            test_manifest_path(&root, &transformed_manifest_ref).expect("manifest path"),
             canonical_bytes(&transformed_manifest_value).expect("manifest bytes"),
         )
         .expect("write transformed manifest");

@@ -68,21 +68,25 @@ pub fn parse_candidate_bundle(value: &IoValue) -> Result<CandidateBundle> {
 }
 
 pub fn verify_candidate_bundle(input: CandidateBundleVerifyInput<'_>) -> Result<CandidateBundleVerify> {
-    let bundle_value = read_store_value(&input.bundle_dir.join("bundle.preserves"))?;
+    let bundle_root = CapabilityBundleRoot::open(input.bundle_dir)?;
+    verify_candidate_bundle_with_root(CandidateBundleVerifyInput {
+        bundle_dir: &bundle_root,
+    })
+}
+
+pub fn verify_candidate_bundle_with_root(
+    input: CandidateBundleVerifyInput<'_, CapabilityBundleRoot>,
+) -> Result<CandidateBundleVerify> {
+    let bundle_value = read_bundle_value(input.bundle_dir, &bundle_path("bundle.preserves")?)?;
     let bundle = parse_candidate_bundle(&bundle_value)?;
-    let explain_value = read_store_value(&input.bundle_dir.join("explain.preserves"))?;
+    let explain_value = read_bundle_value(input.bundle_dir, &bundle_path("explain.preserves")?)?;
     let explain = parse_candidate_explain(&explain_value)?;
     let mut diagnostics = Vec::new();
     push_bundle_scope_diagnostics(&bundle, &explain, &mut diagnostics)?;
     let expected_refs = candidate_bundle_expected_refs(&bundle)?;
     let expected_ref_set = push_expected_ref_notes(&bundle, &expected_refs, &mut diagnostics)?;
     let mut file_refs = Vec::new();
-    scan_bundle_artifact_files(
-        &input.bundle_dir.join("artifacts"),
-        &expected_ref_set,
-        &mut file_refs,
-        &mut diagnostics,
-    )?;
+    scan_bundle_artifact_files(input.bundle_dir, &expected_ref_set, &mut file_refs, &mut diagnostics)?;
     verify_artifact_groups(input.bundle_dir, &bundle, &mut diagnostics)?;
     file_refs.sort();
     diagnostics.sort();
@@ -133,7 +137,7 @@ fn push_expected_ref_notes(
 }
 
 fn verify_artifact_groups(
-    bundle_dir: &Path,
+    bundle_root: &CapabilityBundleRoot,
     bundle: &CandidateBundle,
     diagnostics: &mut impl VecSink<String>,
 ) -> Result<()> {
@@ -172,7 +176,7 @@ fn verify_artifact_groups(
     for group in groups {
         verify_bundle_artifact_group(
             BundleVerifyGroupInput {
-                bundle_dir,
+                bundle_root,
                 dir_name: group.dir_name,
                 refs: group.refs,
                 parse: group.parse,

@@ -20,7 +20,8 @@ fn finish_put(input: FinalizeInput<'_>) -> Result<ChunkStorePut> {
     });
     let manifest_ref = canonical_hash(&manifest_value)?;
     write_immutable_bytes(
-        &manifest_path(input.root, &manifest_ref)?,
+        input.root,
+        &manifest_path(&manifest_ref)?,
         &canonical_bytes(&manifest_value)?,
         &manifest_ref,
         parse_canonical_bytes,
@@ -62,7 +63,12 @@ fn finish_put(input: FinalizeInput<'_>) -> Result<ChunkStorePut> {
 }
 
 pub fn read_manifest(root: &Path, manifest_ref: &str) -> Result<ChunkManifest> {
-    let bytes = fs::read(manifest_path(root, manifest_ref)?).map_err(MoltenError::from)?;
+    let root = open_capability_chunk_root(root)?;
+    read_manifest_with_root(&root, manifest_ref)
+}
+
+pub fn read_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkManifest> {
+    let bytes = root.root().read(&manifest_path(manifest_ref)?)?;
     let value = parse_canonical_bytes(&bytes)?;
     parse_manifest_value(&value, Some(manifest_ref))
 }
@@ -232,7 +238,12 @@ pub fn parse_chunk_ref_value(value: &IoValue, expected_chunk_size: u64) -> Resul
 }
 
 pub fn verify_manifest(root: &Path, manifest_ref: &str) -> Result<ChunkStoreVerify> {
-    let manifest = match read_manifest(root, manifest_ref) {
+    let root = open_capability_chunk_root(root)?;
+    verify_manifest_with_root(&root, manifest_ref)
+}
+
+pub fn verify_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkStoreVerify> {
+    let manifest = match read_manifest_with_root(root, manifest_ref) {
         Ok(manifest) => manifest,
         Err(error) => {
             let receipt_value = denial_receipt_value("chunk-verify", Some(manifest_ref), &[], error.to_string(), vec![

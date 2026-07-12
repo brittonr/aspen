@@ -1,64 +1,4 @@
 
-fn receipts_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(RECEIPT_DIR)
-}
-
-fn tombstones_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(TOMBSTONE_DIR)
-}
-
-fn pin_path(root: &Path, pin_ref: &str) -> Result<PathBuf> {
-    Ok(pins_dir(root).join(format!("{}.preserves", ref_file_name(pin_ref)?)))
-}
-
-fn admission_path(root: &Path, admission_ref: &str) -> Result<PathBuf> {
-    Ok(admissions_dir(root).join(format!("{}.preserves", ref_file_name(admission_ref)?)))
-}
-
-fn remote_clearance_path(root: &Path, clearance_ref: &str) -> Result<PathBuf> {
-    Ok(remote_clearances_dir(root).join(format!("{}.preserves", ref_file_name(clearance_ref)?)))
-}
-
-fn remote_clearance_request_path(root: &Path, request_ref: &str) -> Result<PathBuf> {
-    Ok(remote_clearance_requests_dir(root).join(format!("{}.preserves", ref_file_name(request_ref)?)))
-}
-
-fn remote_clearance_response_path(root: &Path, response_ref: &str) -> Result<PathBuf> {
-    Ok(remote_clearance_responses_dir(root).join(format!("{}.preserves", ref_file_name(response_ref)?)))
-}
-
-fn remote_clearance_import_path(root: &Path, import_ref: &str) -> Result<PathBuf> {
-    Ok(remote_clearance_imports_dir(root).join(format!("{}.preserves", ref_file_name(import_ref)?)))
-}
-
-fn remote_clearance_live_workflow_path(root: &Path, workflow_ref: &str) -> Result<PathBuf> {
-    Ok(remote_clearance_live_workflows_dir(root).join(format!("{}.preserves", ref_file_name(workflow_ref)?)))
-}
-
-fn gc_plan_path(root: &Path, plan_ref: &str) -> Result<PathBuf> {
-    Ok(gc_plans_dir(root).join(format!("{}.preserves", ref_file_name(plan_ref)?)))
-}
-
-fn gc_apply_path(root: &Path, apply_ref: &str) -> Result<PathBuf> {
-    Ok(gc_applies_dir(root).join(format!("{}.preserves", ref_file_name(apply_ref)?)))
-}
-
-fn gc_execute_path(root: &Path, execution_ref: &str) -> Result<PathBuf> {
-    Ok(gc_executes_dir(root).join(format!("{}.preserves", ref_file_name(execution_ref)?)))
-}
-
-fn gc_audit_path(root: &Path, audit_ref: &str) -> Result<PathBuf> {
-    Ok(gc_audits_dir(root).join(format!("{}.preserves", ref_file_name(audit_ref)?)))
-}
-
-fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {
-    Ok(receipts_dir(root).join(format!("{}.preserves", ref_file_name(receipt_ref)?)))
-}
-
-fn tombstone_path(root: &Path, tombstone_ref: &str) -> Result<PathBuf> {
-    Ok(tombstones_dir(root).join(format!("{}.preserves", ref_file_name(tombstone_ref)?)))
-}
-
 fn ref_file_name(reference: &str) -> Result<String> {
     require_ref(reference, "retention file ref")?;
     let name = reference.replace(':', "_");
@@ -66,15 +6,43 @@ fn ref_file_name(reference: &str) -> Result<String> {
     Ok(name)
 }
 
-fn write_store_value(path: &Path, value: &IoValue) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
-    }
-    fs::write(path, crate::preserves_rail::to_text(value)?).map_err(MoltenError::from)
+fn capability_store_path(suffix: &str) -> Result<LocalStorePath> {
+    LocalStorePath::parse(&format!("{STORE_DIR}/{suffix}"))
 }
 
-fn read_store_value(path: &Path) -> Result<IoValue> {
-    let text = fs::read_to_string(path).map_err(MoltenError::from)?;
+fn capability_ref_path(directory: &str, reference: &str) -> Result<LocalStorePath> {
+    capability_store_path(&format!("{directory}/{}.preserves", ref_file_name(reference)?))
+}
+
+fn write_store_value_with_root(
+    root: &CapabilityRetentionRoot,
+    path: &LocalStorePath,
+    value: &IoValue,
+) -> Result<()> {
+    let text = crate::preserves_rail::to_text(value)?;
+    root.root().write(path, text.as_bytes())
+}
+
+fn read_store_value_with_root(root: &CapabilityRetentionRoot, path: &LocalStorePath) -> Result<IoValue> {
+    let text = root.root().read_to_string(path)?;
+    crate::preserves_rail::parse_text(&text)
+}
+
+fn bundle_path(path: &str) -> Result<LocalStorePath> {
+    LocalStorePath::parse(path)
+}
+
+fn bundle_artifact_path(directory: &str, reference: &str) -> Result<LocalStorePath> {
+    bundle_path(&format!("artifacts/{directory}/{}.preserves", ref_file_name(reference)?))
+}
+
+fn write_bundle_value(root: &CapabilityBundleRoot, path: &LocalStorePath, value: &IoValue) -> Result<()> {
+    let text = crate::preserves_rail::to_text(value)?;
+    root.root().write(path, text.as_bytes())
+}
+
+fn read_bundle_value(root: &CapabilityBundleRoot, path: &LocalStorePath) -> Result<IoValue> {
+    let text = root.root().read_to_string(path)?;
     crate::preserves_rail::parse_text(&text)
 }
 

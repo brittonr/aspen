@@ -1,6 +1,57 @@
     use n0_future::StreamExt;
 
     use super::*;
+    use std::fs;
+
+    type PathBuf = std::path::PathBuf;
+
+    fn store_dir(root: &Path) -> PathBuf {
+        root.join(STORE_DIR)
+    }
+
+    fn gc_plans_dir(root: &Path) -> PathBuf {
+        store_dir(root).join(GC_PLAN_DIR)
+    }
+
+    fn gc_applies_dir(root: &Path) -> PathBuf {
+        store_dir(root).join(GC_APPLY_DIR)
+    }
+
+    fn gc_executes_dir(root: &Path) -> PathBuf {
+        store_dir(root).join(GC_EXECUTE_DIR)
+    }
+
+    fn gc_audits_dir(root: &Path) -> PathBuf {
+        store_dir(root).join(GC_AUDIT_DIR)
+    }
+
+    fn receipts_dir(root: &Path) -> PathBuf {
+        store_dir(root).join(RECEIPT_DIR)
+    }
+
+    fn tombstones_dir(root: &Path) -> PathBuf {
+        store_dir(root).join(TOMBSTONE_DIR)
+    }
+
+    fn gc_execute_path(root: &Path, reference: &str) -> Result<PathBuf> {
+        Ok(gc_executes_dir(root).join(format!("{}.preserves", ref_file_name(reference)?)))
+    }
+
+    fn tombstone_path(root: &Path, reference: &str) -> Result<PathBuf> {
+        Ok(tombstones_dir(root).join(format!("{}.preserves", ref_file_name(reference)?)))
+    }
+
+    fn write_store_value(path: &Path, value: &IoValue) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        }
+        fs::write(path, crate::preserves_rail::to_text(value)?).map_err(MoltenError::from)
+    }
+
+    fn read_store_value(path: &Path) -> Result<IoValue> {
+        let text = fs::read_to_string(path).map_err(MoltenError::from)?;
+        crate::preserves_rail::parse_text(&text)
+    }
 
     type AtomicU64 = std::sync::atomic::AtomicU64;
     type Duration = std::time::Duration;
@@ -9,12 +60,14 @@
 
     #[test]
     fn pinned_objects_are_not_delete_eligible_until_unpinned() {
-        let root = temp_dir("retention-pinned");
+        // r[verify molten.chunk_store.cap_std_conversion_validation]
+        let root_path = temp_dir("retention-pinned");
+        let root = CapabilityRetentionRoot::open(&root_path).expect("open retention capability root");
         let object_ref = fake_ref("object");
         let owner_ref = fake_ref("owner");
         let policy_refs = vec![fake_ref("policy")];
         let evidence_refs = vec![fake_ref("evidence")];
-        let pin = pin_object(&root, PinInput {
+        let pin = pin_object_with_root(&root, PinInput {
             object_ref: object_ref.clone(),
             object_kind: "artifact".to_string(),
             retention_class: CLASS_PUBLIC_ARTIFACT.to_string(),
@@ -27,7 +80,7 @@
             has_authority: true,
         })
         .expect("pin");
-        let denied = evaluate(EvaluationInput {
+        let denied = evaluate_with_root(EvaluationInput {
             root: &root,
             object_ref: &object_ref,
             object_kind: "artifact",
@@ -45,7 +98,7 @@
         .expect("deny delete");
         assert_eq!(denied.receipt.decision, "deny");
         assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "active-pins-present"));
-        let unpin = unpin_object(UnpinObjectInput {
+        let unpin = unpin_object_with_root(UnpinObjectInput {
             root: &root,
             pin_ref: &pin.pin.pin_ref,
             requester_ref: &owner_ref,
@@ -55,7 +108,7 @@
         })
         .expect("unpin");
         assert_eq!(unpin.decision, "pass");
-        let allowed = evaluate(EvaluationInput {
+        let allowed = evaluate_with_root(EvaluationInput {
             root: &root,
             object_ref: &object_ref,
             object_kind: "artifact",

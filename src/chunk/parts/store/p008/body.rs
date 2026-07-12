@@ -8,10 +8,10 @@ fn finish_gc(input: GcFinishInput<'_>) -> Result<ChunkStoreGc> {
         removed_chunks = input.targets.chunks;
         if !input.is_dry_run {
             for manifest_ref in &removed_manifests {
-                fs::remove_file(manifest_path(input.root, manifest_ref)?).map_err(MoltenError::from)?;
+                input.root.root().remove_file(&manifest_path(manifest_ref)?)?;
             }
             for chunk_ref in &removed_chunks {
-                fs::remove_file(chunk_path(input.root, chunk_ref)?).map_err(MoltenError::from)?;
+                input.root.root().remove_file(&chunk_path(chunk_ref)?)?;
             }
         }
     }
@@ -45,11 +45,16 @@ fn finish_gc(input: GcFinishInput<'_>) -> Result<ChunkStoreGc> {
 }
 
 pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
+    let root = open_capability_chunk_root(root)?;
+    gc_with_root(&root, input)
+}
+
+pub fn gc_with_root(root: &CapabilityChunkRoot, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
     ensure_dirs(root)?;
     let targets = gc_targets(
         root,
-        pinned_refs(&root.join("pins").join("manifests"))?,
-        pinned_refs(&root.join("pins").join("chunks"))?,
+        pinned_refs(root, &store_path("pins/manifests")?)?,
+        pinned_refs(root, &store_path("pins/chunks")?)?,
     )?;
     let action = if input.dry_run {
         crate::retention::ACTION_ELIGIBILITY
@@ -59,8 +64,9 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
     let requester_ref =
         crate::retention::destructive_requester_ref(input.retention_evidence, "chunk-store-gc-missing-requester")?;
     let evidence_summary = crate::retention::destructive_evidence_value(input.retention_evidence)?;
+    let retention_root = crate::local_store::RetentionStoreRoot::share_chunk_state(root)?;
     let env = GcEnv {
-        root,
+        retention_root: &retention_root,
         is_dry_run: input.dry_run,
         evidence: input.retention_evidence,
         apply_refs: input.apply_refs,
@@ -92,14 +98,29 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
 }
 
 pub fn list_manifest_refs(root: &Path) -> Result<Vec<String>> {
-    refs_from_dir(&root.join("manifests"))
+    let root = open_capability_chunk_root(root)?;
+    list_manifest_refs_with_root(&root)
+}
+
+pub fn list_manifest_refs_with_root(root: &CapabilityChunkRoot) -> Result<Vec<String>> {
+    refs_from_dir(root, &store_path("manifests")?)
 }
 
 pub fn list_chunk_refs(root: &Path) -> Result<Vec<String>> {
-    refs_from_dir(&root.join("chunks"))
+    let root = open_capability_chunk_root(root)?;
+    list_chunk_refs_with_root(&root)
+}
+
+pub fn list_chunk_refs_with_root(root: &CapabilityChunkRoot) -> Result<Vec<String>> {
+    refs_from_dir(root, &store_path("chunks")?)
 }
 
 pub fn list_receipt_refs(root: &Path) -> Result<Vec<String>> {
+    let root = open_capability_chunk_root(root)?;
+    list_receipt_refs_with_root(&root)
+}
+
+pub fn list_receipt_refs_with_root(root: &CapabilityChunkRoot) -> Result<Vec<String>> {
     ensure_dirs(root)?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -114,6 +135,11 @@ pub fn list_receipt_refs(root: &Path) -> Result<Vec<String>> {
 }
 
 pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<ChunkStoreReceipt> {
+    let root = open_capability_chunk_root(root)?;
+    read_receipt_with_root(&root, receipt_ref)
+}
+
+pub fn read_receipt_with_root(root: &CapabilityChunkRoot, receipt_ref: &str) -> Result<ChunkStoreReceipt> {
     ensure_dirs(root)?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -126,10 +152,15 @@ pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<ChunkStoreReceipt>
 }
 
 pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLineage> {
-    let manifest = read_manifest(root, manifest_ref)?;
-    let mut receipts = list_receipt_refs(root)?
+    let root = open_capability_chunk_root(root)?;
+    build_chunk_lineage_with_root(&root, manifest_ref)
+}
+
+pub fn build_chunk_lineage_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkLineage> {
+    let manifest = read_manifest_with_root(root, manifest_ref)?;
+    let mut receipts = list_receipt_refs_with_root(root)?
         .into_iter()
-        .map(|receipt_ref| read_receipt(root, &receipt_ref))
+        .map(|receipt_ref| read_receipt_with_root(root, &receipt_ref))
         .collect::<Result<Vec<_>>>()?
         .into_iter()
         .filter(|receipt| receipt.decision == "pass" && receipt.manifest_ref.as_deref() == Some(manifest_ref))

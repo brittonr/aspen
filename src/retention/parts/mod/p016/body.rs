@@ -46,8 +46,16 @@ pub fn parse_gc_execution_gate(value: &IoValue) -> Result<GcExecutionGate> {
 }
 
 pub fn audit_gc_execution(input: GcAuditInput<'_>) -> Result<GcAudit> {
-    ensure_store(input.root)?;
-    let execution = read_gc_execution_gate(input.root, input.execution_ref)?;
+    let root = open_capability_retention_root(input.root)?;
+    audit_gc_execution_with_root(GcAuditInput {
+        root: &root,
+        execution_ref: input.execution_ref,
+    })
+}
+
+pub fn audit_gc_execution_with_root(input: GcAuditInput<'_, CapabilityRetentionRoot>) -> Result<GcAudit> {
+    ensure_store_with_root(input.root)?;
+    let execution = read_gc_execution_gate_with_root(input.root, input.execution_ref)?;
     let execution_scope = gc_audit_scope(
         &execution.subsystem,
         &execution.action,
@@ -77,11 +85,15 @@ pub fn audit_gc_execution(input: GcAuditInput<'_>) -> Result<GcAudit> {
         diagnostics: &facts.diagnostics,
     })?;
     let audit = parse_gc_audit(&value)?;
-    write_store_value(&gc_audit_path(input.root, &audit.audit_ref)?, &audit.value)?;
+    write_store_value_with_root(input.root, &capability_ref_path(GC_AUDIT_DIR, &audit.audit_ref)?, &audit.value)?;
     Ok(audit)
 }
 
-fn audit_facts(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope<'_>) -> Result<AuditFacts> {
+fn audit_facts(
+    root: &CapabilityRetentionRoot,
+    execution: &GcExecutionGate,
+    scope: &GcAuditScope<'_>,
+) -> Result<AuditFacts> {
     let mut diagnostics = execution_notes(execution)?;
     let ApplyStatus {
         decision: apply_decision,
@@ -130,12 +142,16 @@ fn execution_notes(execution: &GcExecutionGate) -> Result<Vec<String>> {
     Ok(diagnostics)
 }
 
-fn apply_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope<'_>) -> Result<ApplyStatus> {
+fn apply_status(
+    root: &CapabilityRetentionRoot,
+    execution: &GcExecutionGate,
+    scope: &GcAuditScope<'_>,
+) -> Result<ApplyStatus> {
     let mut diagnostics = Vec::new();
     let mut decision = "missing".to_string();
     let mut plan_ref = execution.plan_ref.clone();
     if let Some(apply_ref) = execution.apply_ref.as_ref() {
-        let apply = read_gc_apply(root, apply_ref)?;
+        let apply = read_gc_apply_with_root(root, apply_ref)?;
         decision.clone_from(&apply.decision);
         if apply.decision != "pass" {
             push_diag(&mut diagnostics, "retention-gc-audit-apply-not-pass")?;
@@ -180,11 +196,15 @@ fn apply_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope<'
     })
 }
 
-fn plan_status(root: &Path, plan_ref: Option<&str>, scope: &GcAuditScope<'_>) -> Result<PlanStatus> {
+fn plan_status(
+    root: &CapabilityRetentionRoot,
+    plan_ref: Option<&str>,
+    scope: &GcAuditScope<'_>,
+) -> Result<PlanStatus> {
     let mut diagnostics = Vec::new();
     let mut decision = "missing".to_string();
     if let Some(reference) = plan_ref {
-        let plan = read_gc_plan(root, reference)?;
+        let plan = read_gc_plan_with_root(root, reference)?;
         decision.clone_from(&plan.decision);
         if plan.decision != "pass" {
             push_diag(&mut diagnostics, "retention-gc-audit-plan-not-pass")?;
@@ -201,11 +221,15 @@ fn plan_status(root: &Path, plan_ref: Option<&str>, scope: &GcAuditScope<'_>) ->
     Ok(PlanStatus { decision, diagnostics })
 }
 
-fn receipt_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope<'_>) -> Result<ReceiptStatus> {
+fn receipt_status(
+    root: &CapabilityRetentionRoot,
+    execution: &GcExecutionGate,
+    scope: &GcAuditScope<'_>,
+) -> Result<ReceiptStatus> {
     let mut diagnostics = Vec::new();
     let mut decision = "missing".to_string();
     if let Some(receipt_ref) = execution.retention_receipt_ref.as_ref() {
-        let receipt = read_receipt(root, receipt_ref)?;
+        let receipt = read_receipt_with_root(root, receipt_ref)?;
         decision.clone_from(&receipt.decision);
         if receipt.decision != "pass" {
             push_diag(&mut diagnostics, "retention-gc-audit-retention-receipt-not-pass")?;
@@ -222,11 +246,15 @@ fn receipt_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope
     Ok(ReceiptStatus { decision, diagnostics })
 }
 
-fn tombstone_status(root: &Path, execution: &GcExecutionGate, scope: &GcAuditScope<'_>) -> Result<TombstoneStatus> {
+fn tombstone_status(
+    root: &CapabilityRetentionRoot,
+    execution: &GcExecutionGate,
+    scope: &GcAuditScope<'_>,
+) -> Result<TombstoneStatus> {
     let mut diagnostics = Vec::new();
     let mut status = "missing".to_string();
     if let Some(tombstone_ref) = execution.tombstone_ref.as_ref() {
-        let tombstone = read_tombstone(root, tombstone_ref)?;
+        let tombstone = read_tombstone_with_root(root, tombstone_ref)?;
         status = "present".to_string();
         if !same_audit_scope(
             &scope.retention,

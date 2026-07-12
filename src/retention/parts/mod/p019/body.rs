@@ -4,12 +4,16 @@ fn export_bundle_artifact_group(
     artifact_refs: &mut impl VecSink<String>,
     diagnostics: &mut impl VecSink<String>,
 ) -> Result<()> {
-    let group_dir = input.bundle_dir.join(input.dir_name);
-    fs::create_dir_all(&group_dir).map_err(MoltenError::from)?;
+    let group_dir = bundle_path(&format!("artifacts/{}", input.dir_name))?;
+    input.bundle_root.root().create_dir_all(&group_dir)?;
     for reference in input.refs {
         match (input.read)(input.root, reference) {
             Ok(value) => {
-                write_store_value(&group_dir.join(format!("{}.preserves", ref_file_name(reference)?)), &value)?;
+                write_bundle_value(
+                    input.bundle_root,
+                    &bundle_artifact_path(input.dir_name, reference)?,
+                    &value,
+                )?;
                 push_bounded(artifact_refs, reference.clone(), MAX_RETENTION_REFS, "retention bundle artifact refs")?;
             }
             Err(_) => push_bounded(
@@ -24,7 +28,7 @@ fn export_bundle_artifact_group(
 }
 
 fn profile_candidate_bundle(
-    bundle_dir: &Path,
+    bundle_root: &CapabilityBundleRoot,
     profile: CandidateBundleExportProfile,
     bundle: &CandidateBundle,
 ) -> Result<CandidateBundleProfile> {
@@ -32,9 +36,9 @@ fn profile_candidate_bundle(
     let mut diagnostics = Vec::new();
     if profile != CandidateBundleExportProfile::Internal {
         collect_bundle_sensitive_markers(&bundle.value, "/bundle", &bundle.bundle_ref, &mut marker_refs)?;
-        let explain_value = read_store_value(&bundle_dir.join("explain.preserves"))?;
+        let explain_value = read_bundle_value(bundle_root, &bundle_path("explain.preserves")?)?;
         collect_bundle_sensitive_markers(&explain_value, "/explain", &bundle.bundle_ref, &mut marker_refs)?;
-        collect_bundle_artifact_sensitive_markers(bundle_dir, &bundle.bundle_ref, &mut marker_refs)?;
+        collect_bundle_artifact_sensitive_markers(bundle_root, &bundle.bundle_ref, &mut marker_refs)?;
         marker_refs.sort();
         marker_refs.dedup();
     }
@@ -75,33 +79,27 @@ fn profile_candidate_bundle(
 }
 
 fn collect_bundle_artifact_sensitive_markers(
-    bundle_dir: &Path,
+    bundle_root: &CapabilityBundleRoot,
     bundle_ref: &str,
     marker_refs: &mut impl VecSink<String>,
 ) -> Result<()> {
-    let artifact_dir = bundle_dir.join("artifacts");
-    if !artifact_dir.exists() {
+    let artifact_dir = bundle_path("artifacts")?;
+    if !bundle_root.root().try_exists(&artifact_dir)? {
         return Ok(());
     }
     for dir_name in bundle_artifact_dirs() {
-        let group_dir = artifact_dir.join(dir_name);
-        if !group_dir.exists() {
+        let group_dir = bundle_path(&format!("artifacts/{dir_name}"))?;
+        if !bundle_root.root().try_exists(&group_dir)? {
             continue;
         }
-        for entry in fs::read_dir(&group_dir).map_err(MoltenError::from)? {
-            let entry = entry.map_err(MoltenError::from)?;
-            if !entry.file_type().map_err(MoltenError::from)?.is_file() {
+        for entry in bundle_root.root().list_entries(&group_dir)? {
+            if entry.kind != crate::local_store::LocalStoreEntryKind::File || !entry.name.ends_with(".preserves") {
                 continue;
             }
-            let path = entry.path();
-            if path.extension().and_then(|extension| extension.to_str()) != Some("preserves") {
-                continue;
-            }
-            let value = read_store_value(&path)?;
-            let file_name = entry.file_name().to_string_lossy().into_owned();
+            let value = read_bundle_value(bundle_root, &entry.path)?;
             collect_bundle_sensitive_markers(
                 &value,
-                &format!("/artifacts/{dir_name}/{file_name}"),
+                &format!("/artifacts/{dir_name}/{}", entry.name),
                 bundle_ref,
                 marker_refs,
             )?;
@@ -170,39 +168,46 @@ fn collect_bundle_sensitive_markers(
     Ok(())
 }
 
-fn write_candidate_bundle_redacted_view(bundle_dir: &Path, bundle: &CandidateBundle) -> Result<()> {
-    let redacted_dir = bundle_dir.join(BUNDLE_REDACTED_DIR);
+fn write_candidate_bundle_redacted_view(
+    bundle_root: &CapabilityBundleRoot,
+    bundle: &CandidateBundle,
+) -> Result<()> {
     let mut ignored_markers = Vec::new();
-    let bundle_value = read_store_value(&bundle_dir.join("bundle.preserves"))?;
+    let bundle_value = read_bundle_value(bundle_root, &bundle_path("bundle.preserves")?)?;
     let redacted_bundle = redacted_bundle_value(&bundle_value, "/bundle", &bundle.bundle_ref, &mut ignored_markers)?;
-    write_store_value(&redacted_dir.join("bundle.preserves"), &redacted_bundle)?;
-    let explain_value = read_store_value(&bundle_dir.join("explain.preserves"))?;
+    write_bundle_value(
+        bundle_root,
+        &bundle_path(&format!("{BUNDLE_REDACTED_DIR}/bundle.preserves"))?,
+        &redacted_bundle,
+    )?;
+    let explain_value = read_bundle_value(bundle_root, &bundle_path("explain.preserves")?)?;
     let redacted_explain = redacted_bundle_value(&explain_value, "/explain", &bundle.bundle_ref, &mut ignored_markers)?;
-    write_store_value(&redacted_dir.join("explain.preserves"), &redacted_explain)?;
-    let artifact_dir = bundle_dir.join("artifacts");
+    write_bundle_value(
+        bundle_root,
+        &bundle_path(&format!("{BUNDLE_REDACTED_DIR}/explain.preserves"))?,
+        &redacted_explain,
+    )?;
     for dir_name in bundle_artifact_dirs() {
-        let group_dir = artifact_dir.join(dir_name);
-        if !group_dir.exists() {
+        let group_dir = bundle_path(&format!("artifacts/{dir_name}"))?;
+        if !bundle_root.root().try_exists(&group_dir)? {
             continue;
         }
-        for entry in fs::read_dir(&group_dir).map_err(MoltenError::from)? {
-            let entry = entry.map_err(MoltenError::from)?;
-            if !entry.file_type().map_err(MoltenError::from)?.is_file() {
+        for entry in bundle_root.root().list_entries(&group_dir)? {
+            if entry.kind != crate::local_store::LocalStoreEntryKind::File || !entry.name.ends_with(".preserves") {
                 continue;
             }
-            let path = entry.path();
-            if path.extension().and_then(|extension| extension.to_str()) != Some("preserves") {
-                continue;
-            }
-            let value = read_store_value(&path)?;
-            let file_name = entry.file_name().to_string_lossy().into_owned();
+            let value = read_bundle_value(bundle_root, &entry.path)?;
             let redacted = redacted_bundle_value(
                 &value,
-                &format!("/artifacts/{dir_name}/{file_name}"),
+                &format!("/artifacts/{dir_name}/{}", entry.name),
                 &bundle.bundle_ref,
                 &mut ignored_markers,
             )?;
-            write_store_value(&redacted_dir.join("artifacts").join(dir_name).join(file_name), &redacted)?;
+            write_bundle_value(
+                bundle_root,
+                &bundle_path(&format!("{BUNDLE_REDACTED_DIR}/artifacts/{dir_name}/{}", entry.name))?,
+                &redacted,
+            )?;
         }
     }
     Ok(())

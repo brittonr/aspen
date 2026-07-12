@@ -6,7 +6,12 @@ use redb::ReadableTable;
 use redb::ReadableTableMetadata;
 
 type Path = std::path::Path;
+#[cfg(test)]
 type PathBuf = std::path::PathBuf;
+#[cfg(test)]
+use std::fs;
+type StorePath = crate::local_store::LocalStorePath;
+type StoreEntryKind = crate::local_store::LocalStoreEntryKind;
 type CompoundClass = preserves::CompoundClass;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
@@ -20,37 +25,6 @@ const CHUNK_LINEAGE_SCHEMA: &str = crate::preserves_rail::CHUNK_LINEAGE_SCHEMA;
 const CHUNK_MANIFEST_SCHEMA: &str = crate::preserves_rail::CHUNK_MANIFEST_SCHEMA;
 const CHUNK_REF_SCHEMA: &str = crate::preserves_rail::CHUNK_REF_SCHEMA;
 const CHUNK_STORE_RECEIPT_SCHEMA: &str = crate::preserves_rail::CHUNK_STORE_RECEIPT_SCHEMA;
-
-mod fs {
-    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::create_dir_all(path)
-    }
-
-    pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
-        std::fs::read(path)
-    }
-
-    pub(super) fn read_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<std::fs::ReadDir> {
-        std::fs::read_dir(path)
-    }
-
-    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
-        std::fs::read_to_string(path)
-    }
-
-    #[cfg(test)]
-    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_dir_all(path)
-    }
-
-    pub(super) fn remove_file(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_file(path)
-    }
-
-    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-        std::fs::write(path, contents)
-    }
-}
 
 fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)
@@ -142,6 +116,10 @@ pub type CapabilityChunkRoot = crate::local_store::ChunkStoreRoot;
 
 pub fn open_capability_chunk_root(root: &Path) -> Result<CapabilityChunkRoot> {
     crate::local_store::ChunkStoreRoot::open(root)
+}
+
+fn store_path(path: &str) -> Result<StorePath> {
+    StorePath::parse(path)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

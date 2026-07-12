@@ -1,5 +1,9 @@
 
-fn loaded_ticket(iroh_root: &Path, dest_root: &Path, advertised_manifest_ref: &str) -> Result<IrohChunkTicket> {
+fn loaded_ticket(
+    iroh_root: &CapabilityChunkRoot,
+    dest_root: &CapabilityChunkRoot,
+    advertised_manifest_ref: &str,
+) -> Result<IrohChunkTicket> {
     let ticket_value = match read_iroh_ticket(iroh_root, advertised_manifest_ref) {
         Ok(ticket_value) => ticket_value,
         Err(error) => {
@@ -39,7 +43,11 @@ fn loaded_ticket(iroh_root: &Path, dest_root: &Path, advertised_manifest_ref: &s
     Ok(parsed_ticket)
 }
 
-fn received_manifest(iroh_root: &Path, dest_root: &Path, parsed_ticket: &IrohChunkTicket) -> Result<ChunkManifest> {
+fn received_manifest(
+    iroh_root: &CapabilityChunkRoot,
+    dest_root: &CapabilityChunkRoot,
+    parsed_ticket: &IrohChunkTicket,
+) -> Result<ChunkManifest> {
     let manifest_bytes = match read_iroh_blob(iroh_root, &parsed_ticket.manifest_blob_ref) {
         Ok(bytes) => bytes,
         Err(error) => {
@@ -73,7 +81,8 @@ fn received_manifest(iroh_root: &Path, dest_root: &Path, parsed_ticket: &IrohChu
         return Err(MoltenError::invalid_harness(message));
     }
     write_immutable_bytes(
-        &manifest_path(dest_root, &manifest_ref)?,
+        dest_root,
+        &manifest_path(&manifest_ref)?,
         &manifest_bytes,
         &manifest_ref,
         parse_canonical_bytes,
@@ -87,7 +96,7 @@ fn ticket_parts(parsed_ticket: &IrohChunkTicket) -> OrderedMap<String, IrohChunk
 
 fn require_part(
     parts: &OrderedMap<String, IrohChunkBlob>,
-    dest_root: &Path,
+    dest_root: &CapabilityChunkRoot,
     manifest: &ChunkManifest,
     refs: &[String],
     part_ref: &str,
@@ -105,14 +114,14 @@ fn require_part(
 }
 
 fn available_ref(
-    dest_root: &Path,
+    dest_root: &CapabilityChunkRoot,
     manifest: &ChunkManifest,
     refs: &[String],
     part: &ChunkRef,
     part_size: usize,
 ) -> Result<Option<String>> {
-    let dest_chunk_path = chunk_path(dest_root, &part.chunk_ref)?;
-    if !dest_chunk_path.exists() {
+    let dest_chunk_path = chunk_path(&part.chunk_ref)?;
+    if !dest_root.root().try_exists(&dest_chunk_path)? {
         return Ok(None);
     }
     match read_verified_chunk(dest_root, part, part_size) {
@@ -130,7 +139,7 @@ fn available_ref(
 }
 
 fn plan_incoming(
-    dest_root: &Path,
+    dest_root: &CapabilityChunkRoot,
     manifest: &ChunkManifest,
     refs: &[String],
     parts: &OrderedMap<String, IrohChunkBlob>,
@@ -177,7 +186,7 @@ fn blob_for<'a>(parts: &'a OrderedMap<String, IrohChunkBlob>, part_ref: &str) ->
 }
 
 fn require_blob_len(
-    dest_root: &Path,
+    dest_root: &CapabilityChunkRoot,
     manifest: &ChunkManifest,
     refs: &[String],
     part: &ChunkRef,
@@ -199,8 +208,8 @@ fn require_blob_len(
 }
 
 struct BlobInput<'a> {
-    iroh_root: &'a Path,
-    dest_root: &'a Path,
+    iroh_root: &'a CapabilityChunkRoot,
+    dest_root: &'a CapabilityChunkRoot,
     manifest: &'a ChunkManifest,
     refs: &'a [String],
     blob: &'a IrohChunkBlob,
@@ -235,8 +244,8 @@ fn blob_bytes(input: BlobInput<'_>) -> Result<Vec<u8>> {
 }
 
 struct IncomingInput<'a> {
-    iroh_root: &'a Path,
-    dest_root: &'a Path,
+    iroh_root: &'a CapabilityChunkRoot,
+    dest_root: &'a CapabilityChunkRoot,
     manifest: &'a ChunkManifest,
     refs: &'a [String],
     parts: &'a OrderedMap<String, IrohChunkBlob>,
@@ -271,7 +280,7 @@ fn copy_incoming(input: IncomingInput<'_>) -> Result<Vec<String>> {
             store_receipt(input.dest_root, &receipt_value)?;
             return Err(error);
         }
-        fs::write(chunk_path(input.dest_root, &part.chunk_ref)?, bytes).map_err(MoltenError::from)?;
+        input.dest_root.root().write(&chunk_path(&part.chunk_ref)?, &bytes)?;
         push_bounded(
             &mut fetched_chunks,
             part.chunk_ref.clone(),
@@ -290,7 +299,7 @@ fn copy_incoming(input: IncomingInput<'_>) -> Result<Vec<String>> {
 }
 
 struct FinishIncoming<'a> {
-    dest_root: &'a Path,
+    dest_root: &'a CapabilityChunkRoot,
     ticket_text: &'a str,
     peer: &'a str,
     manifest: ChunkManifest,

@@ -14,7 +14,7 @@ pub fn validate_destructive_evidence(input: &DestructiveEvidence) -> Result<()> 
     validate_refs(&input.remote_clearance_refs, "retention remote clearance ref")
 }
 
-fn validate_gc_plan_input(input: &GcPlanInput<'_>) -> Result<()> {
+fn validate_gc_plan_input<Root: ?Sized>(input: &GcPlanInput<'_, Root>) -> Result<()> {
     validate_name(input.subsystem, "retention GC plan subsystem")?;
     require_ref(input.object_ref, "retention GC plan object ref")?;
     validate_name(input.object_kind, "retention GC plan object kind")?;
@@ -132,9 +132,22 @@ pub fn destructive_evidence_value(input: &DestructiveEvidence) -> Result<IoValue
 }
 
 pub fn store_gc_plan(input: GcPlanInput<'_>) -> Result<GcPlan> {
-    ensure_store(input.root)?;
+    let root = open_capability_retention_root(input.root)?;
+    store_gc_plan_with_root(GcPlanInput {
+        root: &root,
+        subsystem: input.subsystem,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        evidence: input.evidence,
+    })
+}
+
+pub fn store_gc_plan_with_root(input: GcPlanInput<'_, CapabilityRetentionRoot>) -> Result<GcPlan> {
+    ensure_store_with_root(input.root)?;
     validate_gc_plan_input(&input)?;
-    let index = reference_index_for_object(ReferenceIndexForObjectInput {
+    let index = reference_index_for_object_with_root(ReferenceIndexForObjectInput {
         root: input.root,
         object_ref: input.object_ref,
         object_kind: input.object_kind,
@@ -175,7 +188,7 @@ pub fn store_gc_plan(input: GcPlanInput<'_>) -> Result<GcPlan> {
         diagnostics: &diagnostics,
     })?;
     let plan = parse_gc_plan(&value)?;
-    write_store_value(&gc_plan_path(input.root, &plan.plan_ref)?, &plan.value)?;
+    write_store_value_with_root(input.root, &capability_ref_path(GC_PLAN_DIR, &plan.plan_ref)?, &plan.value)?;
     Ok(plan)
 }
 
@@ -272,8 +285,13 @@ pub fn parse_gc_plan(value: &IoValue) -> Result<GcPlan> {
 }
 
 pub fn read_gc_plan(root: &Path, plan_ref: &str) -> Result<GcPlan> {
+    let root = open_capability_retention_root(root)?;
+    read_gc_plan_with_root(&root, plan_ref)
+}
+
+pub fn read_gc_plan_with_root(root: &CapabilityRetentionRoot, plan_ref: &str) -> Result<GcPlan> {
     require_ref(plan_ref, "retention GC plan ref")?;
-    let value = read_store_value(&gc_plan_path(root, plan_ref)?)?;
+    let value = read_store_value_with_root(root, &capability_ref_path(GC_PLAN_DIR, plan_ref)?)?;
     let plan = parse_gc_plan(&value)?;
     if plan.plan_ref != plan_ref {
         return Err(MoltenError::invalid_harness("stored retention GC plan ref mismatch"));

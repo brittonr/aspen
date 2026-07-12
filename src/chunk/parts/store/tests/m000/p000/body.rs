@@ -10,15 +10,18 @@
 
     #[test]
     fn fixed_v1_chunking_has_stable_manifest_identity() {
-        let root = temp_dir("chunk-stable");
+        // r[verify molten.chunk_store.cap_std_conversion_validation]
+        let root_path = temp_dir("chunk-stable");
+        let root = CapabilityChunkRoot::open(&root_path).expect("open chunk capability root");
         let bytes = b"abcdefghij0123456789";
-        let first = put_bytes(&root, "artifact", bytes, 4).expect("put first");
-        let second = put_bytes(&root, "artifact", bytes, 4).expect("put second");
+        let first = put_bytes_with_root(&root, "artifact", bytes, 4).expect("put first");
+        let second = put_bytes_with_root(&root, "artifact", bytes, 4).expect("put second");
         assert_eq!(first.manifest_ref, second.manifest_ref);
         assert_eq!(second.dedup_hits, first.chunk_refs.len());
-        let different_chunk_size = put_bytes(&root, "artifact", bytes, 5).expect("put different size");
+        let different_chunk_size = put_bytes_with_root(&root, "artifact", bytes, 5).expect("put different size");
         assert_ne!(first.manifest_ref, different_chunk_size.manifest_ref);
-        let different_bytes = put_bytes(&root, "artifact", b"abcdefghij012345678X", 4).expect("put different bytes");
+        let different_bytes =
+            put_bytes_with_root(&root, "artifact", b"abcdefghij012345678X", 4).expect("put different bytes");
         assert_ne!(first.manifest_ref, different_bytes.manifest_ref);
     }
 
@@ -59,7 +62,7 @@
         .expect("gc pinned root");
         assert_eq!(read_object(&root, &first.manifest_ref).expect("read after gc").bytes, bytes);
         for chunk_ref in &first.chunk_refs {
-            assert!(chunk_path(&root, chunk_ref).expect("chunk path").exists());
+            assert!(test_chunk_path(&root, chunk_ref).expect("chunk path").exists());
         }
     }
 
@@ -210,7 +213,7 @@
         let root = temp_dir("chunk-corrupt");
         let put = put_bytes(&root, "artifact", b"aaaabbbbcccc", 4).expect("put");
         let manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");
-        fs::write(chunk_path(&root, &manifest.chunks[1].chunk_ref).expect("chunk path"), b"zzzz").expect("corrupt");
+        fs::write(test_chunk_path(&root, &manifest.chunks[1].chunk_ref).expect("chunk path"), b"zzzz").expect("corrupt");
         let error = verify_manifest(&root, &put.manifest_ref).expect_err("corruption fails");
         assert!(error.to_string().contains("chunk hash mismatch"));
 
@@ -218,7 +221,7 @@
         fs::create_dir_all(root.join("chunks")).expect("recreate chunks");
         let put = put_bytes(&root, "artifact", b"aaaabbbbcccc", 4).expect("put after corruption");
         let manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");
-        fs::remove_file(chunk_path(&root, &manifest.chunks[0].chunk_ref).expect("chunk path")).expect("remove chunk");
+        fs::remove_file(test_chunk_path(&root, &manifest.chunks[0].chunk_ref).expect("chunk path")).expect("remove chunk");
         let missing = missing_chunks(&root, &put.manifest_ref).expect("missing chunks");
         assert_eq!(missing, vec![manifest.chunks[0].chunk_ref.clone()]);
         let error = read_object(&root, &put.manifest_ref).expect_err("missing chunk fails");

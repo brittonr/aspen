@@ -25,6 +25,11 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
 }
 
 pub fn index_status(root: &Path) -> Result<ChunkStoreIndexStatus> {
+    let root = open_capability_chunk_root(root)?;
+    index_status_with_root(&root)
+}
+
+pub fn index_status_with_root(root: &CapabilityChunkRoot) -> Result<ChunkStoreIndexStatus> {
     ensure_dirs(root)?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -68,11 +73,16 @@ pub fn index_status(root: &Path) -> Result<ChunkStoreIndexStatus> {
 }
 
 pub fn rebuild_index(root: &Path) -> Result<ChunkStoreIndexRebuild> {
+    let root = open_capability_chunk_root(root)?;
+    rebuild_index_with_root(&root)
+}
+
+pub fn rebuild_index_with_root(root: &CapabilityChunkRoot) -> Result<ChunkStoreIndexRebuild> {
     ensure_dirs(root)?;
     let inputs = scan_inputs(root)?;
     let receipt_value = write_inputs(root, &inputs)?;
     Ok(ChunkStoreIndexRebuild {
-        status: index_status(root)?,
+        status: index_status_with_root(root)?,
         receipt_value,
     })
 }
@@ -84,11 +94,11 @@ struct IndexInputs {
     pinned_chunks: Vec<String>,
 }
 
-fn scan_inputs(root: &Path) -> Result<IndexInputs> {
+fn scan_inputs(root: &CapabilityChunkRoot) -> Result<IndexInputs> {
     let mut manifest_entries = Vec::new();
     let mut chunk_entries: OrderedMap<String, (ChunkRef, String)> = OrderedMap::new();
-    for manifest_ref in list_manifest_refs(root)? {
-        let bytes = fs::read(manifest_path(root, &manifest_ref)?).map_err(MoltenError::from)?;
+    for manifest_ref in list_manifest_refs_with_root(root)? {
+        let bytes = root.root().read(&manifest_path(&manifest_ref)?)?;
         let value = parse_canonical_bytes(&bytes)?;
         let manifest = parse_manifest_value(&value, Some(&manifest_ref))?;
         scan_manifest_chunks(root, &manifest, &mut chunk_entries)?;
@@ -102,19 +112,19 @@ fn scan_inputs(root: &Path) -> Result<IndexInputs> {
     Ok(IndexInputs {
         manifest_entries,
         chunk_entries,
-        pinned_manifests: pinned_refs(&root.join("pins").join("manifests"))?,
-        pinned_chunks: pinned_refs(&root.join("pins").join("chunks"))?,
+        pinned_manifests: pinned_refs(root, &store_path("pins/manifests")?)?,
+        pinned_chunks: pinned_refs(root, &store_path("pins/chunks")?)?,
     })
 }
 
 fn scan_manifest_chunks(
-    root: &Path,
+    root: &CapabilityChunkRoot,
     manifest: &ChunkManifest,
     chunk_entries: &mut OrderedMap<String, (ChunkRef, String)>,
 ) -> Result<()> {
     let chunk_size = chunk_size_to_usize(manifest.chunk_size, "manifest chunk size")?;
     for chunk in &manifest.chunks {
-        let available = if chunk_path(root, &chunk.chunk_ref)?.exists() {
+        let available = if root.root().try_exists(&chunk_path(&chunk.chunk_ref)?)? {
             read_verified_chunk(root, chunk, chunk_size)?;
             "available"
         } else {
@@ -132,7 +142,7 @@ fn scan_manifest_chunks(
     Ok(())
 }
 
-fn write_inputs(root: &Path, inputs: &IndexInputs) -> Result<IoValue> {
+fn write_inputs(root: &CapabilityChunkRoot, inputs: &IndexInputs) -> Result<IoValue> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     clear_index_tables_in_tx(&write_txn)?;

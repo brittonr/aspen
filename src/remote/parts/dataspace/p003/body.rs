@@ -187,10 +187,10 @@ fn validate_envelope_identity(envelope: &Envelope) -> Result<()> {
     Ok(())
 }
 
-fn validate_content_refs_available(root: &Path, refs: &[String]) -> Result<()> {
+fn validate_content_refs_available_with_root(root: &CapabilityDataspaceRoot, refs: &[String]) -> Result<()> {
     for reference in refs {
         validate_ref(reference, "content ref")?;
-        let bytes = fs::read(blob_path(root, reference)?).map_err(MoltenError::from)?;
+        let bytes = root.root().read(&blob_store_path(reference)?)?;
         let actual_ref = content_ref_from_bytes(&bytes);
         if actual_ref != *reference {
             return Err(MoltenError::invalid_harness(format!(
@@ -239,14 +239,30 @@ fn validate_name(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
+fn blob_store_path(reference: &str) -> Result<LocalStorePath> {
+    LocalStorePath::parse(&format!("blobs/{}", filename_for_ref(reference)?))
+}
+
+fn envelope_store_path(topic: &str, envelope_ref: &str) -> Result<LocalStorePath> {
+    topic_store_path(topic)?.join(&filename_for_ref(envelope_ref)?)
+}
+
+fn topic_store_path(topic: &str) -> Result<LocalStorePath> {
+    let topic_hash = blake3::hash(topic.as_bytes()).to_hex().to_string();
+    LocalStorePath::parse(&format!("gossip/topic_{topic_hash}"))
+}
+
+#[cfg(test)]
 fn blob_path(root: &Path, reference: &str) -> Result<PathBuf> {
     Ok(root.join("blobs").join(filename_for_ref(reference)?))
 }
 
+#[cfg(test)]
 fn envelope_path(root: &Path, topic: &str, envelope_ref: &str) -> Result<PathBuf> {
     Ok(topic_dir(root, topic).join(filename_for_ref(envelope_ref)?))
 }
 
+#[cfg(test)]
 fn topic_dir(root: &Path, topic: &str) -> PathBuf {
     let topic_hash = blake3::hash(topic.as_bytes()).to_hex().to_string();
     root.join("gossip").join(format!("topic_{topic_hash}"))

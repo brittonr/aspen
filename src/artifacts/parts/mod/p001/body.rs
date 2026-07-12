@@ -1,6 +1,6 @@
 
 fn commit_install(
-    root: &Path,
+    root: &CapabilityArtifactRoot,
     artifact: &ArtifactRecord,
     payload_bytes: &[u8],
     receipt_value: &IoValue,
@@ -108,6 +108,11 @@ pub fn parse_artifact_value(value: &IoValue) -> Result<ArtifactRecord> {
 }
 
 pub fn read_artifact(root: &Path, artifact_ref: &str) -> Result<ArtifactRecord> {
+    let root = open_capability_artifact_root(root)?;
+    read_artifact_with_root(&root, artifact_ref)
+}
+
+pub fn read_artifact_with_root(root: &CapabilityArtifactRoot, artifact_ref: &str) -> Result<ArtifactRecord> {
     validate_ref(artifact_ref, "artifact ref")?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -127,7 +132,12 @@ pub fn read_artifact(root: &Path, artifact_ref: &str) -> Result<ArtifactRecord> 
 }
 
 pub fn read_payload(root: &Path, artifact_ref: &str) -> Result<IoValue> {
-    let artifact = read_artifact(root, artifact_ref)?;
+    let root = open_capability_artifact_root(root)?;
+    read_payload_with_root(&root, artifact_ref)
+}
+
+pub fn read_payload_with_root(root: &CapabilityArtifactRoot, artifact_ref: &str) -> Result<IoValue> {
+    let artifact = read_artifact_with_root(root, artifact_ref)?;
     match &artifact.payload {
         ArtifactPayloadRef::Inline { value_ref, .. } => {
             let db = ensure_index_tables(root)?;
@@ -148,7 +158,7 @@ pub fn read_payload(root: &Path, artifact_ref: &str) -> Result<IoValue> {
             Ok(value)
         }
         ArtifactPayloadRef::ContentRef { manifest_ref, .. } => {
-            let read = read_chunk_object(&chunk_root(root), manifest_ref)?;
+            let read = read_chunk_object(root, manifest_ref)?;
             let value = parse_canonical_bytes(&read.bytes)?;
             Ok(value)
         }
@@ -156,6 +166,14 @@ pub fn read_payload(root: &Path, artifact_ref: &str) -> Result<IoValue> {
 }
 
 pub fn list_artifacts(root: &Path, kind_filter: Option<&str>) -> Result<Vec<ArtifactRecord>> {
+    let root = open_capability_artifact_root(root)?;
+    list_artifacts_with_root(&root, kind_filter)
+}
+
+pub fn list_artifacts_with_root(
+    root: &CapabilityArtifactRoot,
+    kind_filter: Option<&str>,
+) -> Result<Vec<ArtifactRecord>> {
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let table = read_txn.open_table(INDEX_ARTIFACTS).map_err(index_error)?;
@@ -173,13 +191,22 @@ pub fn list_artifacts(root: &Path, kind_filter: Option<&str>) -> Result<Vec<Arti
 }
 
 pub fn set_name_pointer(root: &Path, input: &SetNamePointerInput<'_>) -> Result<ArtifactNamePointer> {
+    let root = open_capability_artifact_root(root)?;
+    set_name_pointer_with_root(&root, input)
+}
+
+pub fn set_name_pointer_with_root(
+    root: &CapabilityArtifactRoot,
+    input: &SetNamePointerInput<'_>,
+) -> Result<ArtifactNamePointer> {
     validate_pointer_kind(input.pointer_kind)?;
     validate_non_empty(input.name, "artifact pointer name")?;
     validate_ref(input.artifact_ref, "artifact pointer ref")?;
     validate_refs(input.policy_refs, "artifact pointer policy ref")?;
     validate_refs(input.evidence_refs, "artifact pointer evidence ref")?;
-    read_artifact(root, input.artifact_ref)?;
-    let previous = read_name_pointer(root, input.pointer_kind, input.name)?.map(|pointer| pointer.artifact_ref);
+    read_artifact_with_root(root, input.artifact_ref)?;
+    let previous =
+        read_name_pointer_with_root(root, input.pointer_kind, input.name)?.map(|pointer| pointer.artifact_ref);
     let mut refs = Vec::new();
     push_bounded(&mut refs, input.artifact_ref.to_string(), MAX_ARTIFACT_REF_LIST, "artifact name pointer refs")?;
     extend_cloned_bounded(&mut refs, input.policy_refs, MAX_ARTIFACT_REF_LIST, "artifact name pointer refs")?;
@@ -271,16 +298,24 @@ pub fn parse_name_view_value(value: &IoValue) -> Result<ArtifactNameView> {
 }
 
 pub fn set_name_view(root: &Path, input: &ArtifactNameViewInput) -> Result<ArtifactNameViewUpdate> {
+    let root = open_capability_artifact_root(root)?;
+    set_name_view_with_root(&root, input)
+}
+
+pub fn set_name_view_with_root(
+    root: &CapabilityArtifactRoot,
+    input: &ArtifactNameViewInput,
+) -> Result<ArtifactNameViewUpdate> {
     validate_name_view_update_authority(input)?;
     if input.target_kind == "artifact-ref" {
-        read_artifact(root, &input.target_ref)?;
+        read_artifact_with_root(root, &input.target_ref)?;
     }
     let scoped_name = scoped_name_view_key(&input.scope, &input.name)?;
-    let previous_pointer = read_name_pointer(root, &input.view_kind, &scoped_name)?;
+    let previous_pointer = read_name_pointer_with_root(root, &input.view_kind, &scoped_name)?;
     let previous_view_ref = previous_pointer.as_ref().map(|pointer| pointer.pointer_ref.as_str());
     let value = name_view_value(input, previous_view_ref)?;
     let view = parse_name_view_value(&value)?;
-    let pointer = set_name_pointer(root, &SetNamePointerInput {
+    let pointer = set_name_pointer_with_root(root, &SetNamePointerInput {
         pointer_kind: &input.view_kind,
         name: &scoped_name,
         artifact_ref: &input.target_ref,
@@ -391,6 +426,15 @@ pub fn name_view_use_receipt(input: &ArtifactNameUseInput) -> Result<ArtifactNam
 }
 
 pub fn read_name_pointer(root: &Path, pointer_kind: &str, name: &str) -> Result<Option<ArtifactNamePointer>> {
+    let root = open_capability_artifact_root(root)?;
+    read_name_pointer_with_root(&root, pointer_kind, name)
+}
+
+pub fn read_name_pointer_with_root(
+    root: &CapabilityArtifactRoot,
+    pointer_kind: &str,
+    name: &str,
+) -> Result<Option<ArtifactNamePointer>> {
     validate_pointer_kind(pointer_kind)?;
     validate_non_empty(name, "artifact pointer name")?;
     let db = ensure_index_tables(root)?;
@@ -404,10 +448,20 @@ pub fn read_name_pointer(root: &Path, pointer_kind: &str, name: &str) -> Result<
 }
 
 pub fn direct_dependencies(root: &Path, artifact_ref: &str) -> Result<Vec<String>> {
-    Ok(read_artifact(root, artifact_ref)?.dependency_refs)
+    let root = open_capability_artifact_root(root)?;
+    direct_dependencies_with_root(&root, artifact_ref)
+}
+
+pub fn direct_dependencies_with_root(root: &CapabilityArtifactRoot, artifact_ref: &str) -> Result<Vec<String>> {
+    Ok(read_artifact_with_root(root, artifact_ref)?.dependency_refs)
 }
 
 pub fn dependency_closure(root: &Path, roots: &[String]) -> Result<ArtifactClosure> {
+    let root = open_capability_artifact_root(root)?;
+    dependency_closure_with_root(&root, roots)
+}
+
+pub fn dependency_closure_with_root(root: &CapabilityArtifactRoot, roots: &[String]) -> Result<ArtifactClosure> {
     let (closure_refs, missing_refs) = compute_closure_refs(root, roots)?;
     let closure_value = closure_value(roots, &closure_refs, &missing_refs)?;
     let closure_hash = canonical_hash(&closure_value)?;
@@ -450,7 +504,12 @@ pub fn dependency_closure(root: &Path, roots: &[String]) -> Result<ArtifactClosu
 }
 
 pub fn impact(root: &Path, seeds: &[String]) -> Result<ArtifactImpact> {
-    let impacted_refs = impact_refs(root, seeds)?;
+    let root = open_capability_artifact_root(root)?;
+    impact_with_root(&root, seeds)
+}
+
+pub fn impact_with_root(root: &CapabilityArtifactRoot, seeds: &[String]) -> Result<ArtifactImpact> {
+    let impacted_refs = impact_refs_with_root(root, seeds)?;
     let impact_value = record("artifact-impact-v1", vec![
         refs_record("seeds", &sorted_unique(seeds)),
         refs_record("impacted", &impacted_refs),
@@ -478,6 +537,11 @@ pub fn impact(root: &Path, seeds: &[String]) -> Result<ArtifactImpact> {
 }
 
 pub fn impact_refs(root: &Path, seeds: &[String]) -> Result<Vec<String>> {
+    let root = open_capability_artifact_root(root)?;
+    impact_refs_with_root(&root, seeds)
+}
+
+pub fn impact_refs_with_root(root: &CapabilityArtifactRoot, seeds: &[String]) -> Result<Vec<String>> {
     validate_refs(seeds, "artifact impact seed ref")?;
     let db = ensure_index_tables(root)?;
     let mut impacted: std::collections::BTreeSet<String> = seeds.iter().cloned().collect();

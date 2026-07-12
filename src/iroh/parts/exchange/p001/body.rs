@@ -1,6 +1,20 @@
 
 pub fn publish_chain_segment(input: &PublishChainSegmentInput<'_>) -> Result<ChainSegment> {
-    fs::create_dir_all(input.iroh_root.join("blobs")).map_err(MoltenError::from)?;
+    let root = open_capability_exchange_root(input.iroh_root)?;
+    publish_chain_segment_with_root(&PublishChainSegmentInput {
+        iroh_root: &root,
+        ledger_root: input.ledger_root,
+        chain: input.chain,
+        anchor_ref: input.anchor_ref,
+        expected_head: input.expected_head,
+        node: input.node,
+        fork_policy: input.fork_policy,
+    })
+}
+
+pub fn publish_chain_segment_with_root(
+    input: &PublishChainSegmentInput<'_, CapabilityExchangeRoot>,
+) -> Result<ChainSegment> {
     let bundle = build_chain_segment_bundle_value(
         input.ledger_root,
         input.chain,
@@ -14,7 +28,7 @@ pub fn publish_chain_segment(input: &PublishChainSegmentInput<'_>) -> Result<Cha
     if blob_ref != parsed.bundle_ref {
         return Err(MoltenError::invalid_harness("Iroh publish chain bundle blob ref does not match bundle ref"));
     }
-    fs::write(blob_path(input.iroh_root, &parsed.bundle_ref)?, bytes).map_err(MoltenError::from)?;
+    input.iroh_root.root().write(&blob_store_path(&parsed.bundle_ref)?, &bytes)?;
     let ticket = format!("iroh-local-chain:{}", parsed.bundle_ref);
     let receipt_value = chain_receipt_value(&ChainReceiptValueInput {
         operation: "publish",
@@ -37,6 +51,20 @@ pub fn publish_chain_segment(input: &PublishChainSegmentInput<'_>) -> Result<Cha
 }
 
 pub fn fetch_chain_segment(input: &FetchChainSegmentInput<'_>) -> Result<ChainSegment> {
+    let root = open_capability_exchange_root(input.iroh_root)?;
+    fetch_chain_segment_with_root(&FetchChainSegmentInput {
+        iroh_root: &root,
+        ticket: input.ticket,
+        expected_bundle_ref: input.expected_bundle_ref,
+        peer: input.peer,
+        ledger_root: input.ledger_root,
+        fork_policy: input.fork_policy,
+    })
+}
+
+pub fn fetch_chain_segment_with_root(
+    input: &FetchChainSegmentInput<'_, CapabilityExchangeRoot>,
+) -> Result<ChainSegment> {
     let advertised_ref = input.ticket.strip_prefix("iroh-local-chain:").ok_or_else(|| {
         MoltenError::invalid_harness("unsupported Iroh chain ticket; expected iroh-local-chain:<bundle-ref>")
     })?;
@@ -47,7 +75,7 @@ pub fn fetch_chain_segment(input: &FetchChainSegmentInput<'_>) -> Result<ChainSe
             "Iroh chain ticket advertises bundle {advertised_ref}, expected {expected_bundle_ref}"
         )));
     }
-    let bytes = fs::read(blob_path(input.iroh_root, advertised_ref)?).map_err(MoltenError::from)?;
+    let bytes = input.iroh_root.root().read(&blob_store_path(advertised_ref)?)?;
     let bundle = parse_canonical_bytes(&bytes)?;
     let parsed = parse_chain_segment_bundle(&bundle, input.fork_policy)?;
     if parsed.bundle_ref != advertised_ref {

@@ -150,7 +150,7 @@ fn loopback_value(input: &LoopbackValueInput<'_>) -> Result<IoValue> {
     })
 }
 
-fn gate_scope<'a>(input: &'a GcPlanInput<'a>) -> AdmissionScope<'a> {
+fn gate_scope<'a>(input: &'a GcPlanInput<'a, CapabilityRetentionRoot>) -> AdmissionScope<'a> {
     AdmissionScope {
         requester_ref: input.evidence.requester_ref.as_deref(),
         object_ref: input.object_ref,
@@ -160,36 +160,39 @@ fn gate_scope<'a>(input: &'a GcPlanInput<'a>) -> AdmissionScope<'a> {
     }
 }
 
-fn gate_admissions(input: &GcPlanInput<'_>, scope: &AdmissionScope<'_>) -> Result<GateAdmissions> {
-    let policy = admit_evidence_refs(AdmissionRefsInput {
+fn gate_admissions(
+    input: &GcPlanInput<'_, CapabilityRetentionRoot>,
+    scope: &AdmissionScope<'_>,
+) -> Result<GateAdmissions> {
+    let policy = admit_evidence_refs_with_root(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.policy_refs,
         expected_kind: ADMISSION_KIND_POLICY,
         scope,
         required_remote_refs: &[],
     })?;
-    let authority = admit_evidence_refs(AdmissionRefsInput {
+    let authority = admit_evidence_refs_with_root(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.authority_refs,
         expected_kind: ADMISSION_KIND_AUTHORITY,
         scope,
         required_remote_refs: &[],
     })?;
-    let supporting = admit_evidence_refs(AdmissionRefsInput {
+    let supporting = admit_evidence_refs_with_root(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.evidence_refs,
         expected_kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
         scope,
         required_remote_refs: &[],
     })?;
-    let reference_index = admit_evidence_refs(AdmissionRefsInput {
+    let reference_index = admit_evidence_refs_with_root(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.reference_index_refs,
         expected_kind: ADMISSION_KIND_REFERENCE_INDEX,
         scope,
         required_remote_refs: &[],
     })?;
-    let remote_gc = admit_evidence_refs(AdmissionRefsInput {
+    let remote_gc = admit_evidence_refs_with_root(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.remote_gc_refs,
         expected_kind: ADMISSION_KIND_REMOTE_GC,
@@ -205,8 +208,11 @@ fn gate_admissions(input: &GcPlanInput<'_>, scope: &AdmissionScope<'_>) -> Resul
     })
 }
 
-fn gate_remote_clearance(input: &GcPlanInput<'_>, scope: &AdmissionScope<'_>) -> Result<RemoteClearanceRefsResult> {
-    admit_remote_clearance_refs(RemoteClearanceRefsInput {
+fn gate_remote_clearance(
+    input: &GcPlanInput<'_, CapabilityRetentionRoot>,
+    scope: &AdmissionScope<'_>,
+) -> Result<RemoteClearanceRefsResult> {
+    admit_remote_clearance_refs_with_root(RemoteClearanceRefsInput {
         root: input.root,
         refs: &input.evidence.remote_clearance_refs,
         scope,
@@ -222,7 +228,7 @@ fn has_all_refs(required: &[String], admitted: &[String]) -> bool {
 }
 
 fn is_clearance_complete(
-    input: &GcPlanInput<'_>,
+    input: &GcPlanInput<'_, CapabilityRetentionRoot>,
     remote_gc: &AdmissionRefsResult,
     remote_clearance: &RemoteClearanceRefsResult,
 ) -> bool {
@@ -232,7 +238,7 @@ fn is_clearance_complete(
     has_local_plan && has_remote_refs && has_remote_peers
 }
 
-fn gate_inputs<'a>(input: &'a GcPlanInput<'a>) -> Result<GateInputs<'a>> {
+fn gate_inputs<'a>(input: &'a GcPlanInput<'a, CapabilityRetentionRoot>) -> Result<GateInputs<'a>> {
     let scope = gate_scope(input);
     let admissions = gate_admissions(input, &scope)?;
     let remote_clearance = gate_remote_clearance(input, &scope)?;

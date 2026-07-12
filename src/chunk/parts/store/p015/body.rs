@@ -1,7 +1,12 @@
 
-fn write_immutable_blob(path: &Path, bytes: &[u8], expected_ref: &str) -> Result<()> {
-    if path.exists() {
-        let existing = fs::read(path).map_err(MoltenError::from)?;
+fn write_immutable_blob(
+    root: &CapabilityChunkRoot,
+    path: &StorePath,
+    bytes: &[u8],
+    expected_ref: &str,
+) -> Result<()> {
+    if root.root().try_exists(path)? {
+        let existing = root.root().read(path)?;
         let existing_ref = hash_blob_bytes(&existing);
         if existing_ref != expected_ref {
             return Err(MoltenError::invalid_harness(format!(
@@ -9,7 +14,7 @@ fn write_immutable_blob(path: &Path, bytes: &[u8], expected_ref: &str) -> Result
             )));
         }
     } else {
-        fs::write(path, bytes).map_err(MoltenError::from)?;
+        root.root().write(path, bytes)?;
     }
     Ok(())
 }

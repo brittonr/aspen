@@ -116,20 +116,33 @@ fn parsed_ref(input: RefParts<'_>) -> Result<String> {
 }
 
 pub fn store_content_blob(root: &Path, bytes: &[u8]) -> Result<String> {
-    fs::create_dir_all(root.join("blobs")).map_err(MoltenError::from)?;
+    let root = open_capability_dataspace_root(root)?;
+    store_content_blob_with_root(&root, bytes)
+}
+
+pub fn store_content_blob_with_root(root: &CapabilityDataspaceRoot, bytes: &[u8]) -> Result<String> {
     let content_ref = content_ref_from_bytes(bytes);
-    fs::write(blob_path(root, &content_ref)?, bytes).map_err(MoltenError::from)?;
+    root.root().write(&blob_store_path(&content_ref)?, bytes)?;
     Ok(content_ref)
 }
 
 pub fn publish_local_gossip(root: &Path, envelope: &Envelope, node: &str) -> Result<Exchange> {
+    let root = open_capability_dataspace_root(root)?;
+    publish_local_gossip_with_root(&root, envelope, node)
+}
+
+pub fn publish_local_gossip_with_root(
+    root: &CapabilityDataspaceRoot,
+    envelope: &Envelope,
+    node: &str,
+) -> Result<Exchange> {
     validate_name(node, "publisher node")?;
     validate_envelope_identity(envelope)?;
-    validate_content_refs_available(root, &envelope.content_refs)?;
-    let topic_dir = topic_dir(root, &envelope.topic);
-    fs::create_dir_all(&topic_dir).map_err(MoltenError::from)?;
-    fs::write(envelope_path(root, &envelope.topic, &envelope.envelope_ref)?, canonical_bytes(&envelope.value)?)
-        .map_err(MoltenError::from)?;
+    validate_content_refs_available_with_root(root, &envelope.content_refs)?;
+    root.root().write(
+        &envelope_store_path(&envelope.topic, &envelope.envelope_ref)?,
+        &canonical_bytes(&envelope.value)?,
+    )?;
     Ok(Exchange {
         envelope_ref: envelope.envelope_ref.clone(),
         receipt_value: transport_receipt_value_for_transport(TransportReceiptInput {
@@ -183,8 +196,18 @@ pub fn deliver_live_gossip_event(
     topic: &str,
     receiver_peer: &str,
 ) -> Result<Option<Delivery>> {
+    let root = open_capability_dataspace_root(root)?;
+    deliver_live_gossip_event_with_root(&root, event, topic, receiver_peer)
+}
+
+pub fn deliver_live_gossip_event_with_root(
+    root: &CapabilityDataspaceRoot,
+    event: &iroh_gossip::api::Event,
+    topic: &str,
+    receiver_peer: &str,
+) -> Result<Option<Delivery>> {
     match event {
-        iroh_gossip::api::Event::Received(message) => deliver_live_gossip_bytes(
+        iroh_gossip::api::Event::Received(message) => deliver_live_gossip_bytes_with_root(
             root,
             message.content.as_ref(),
             topic,
@@ -200,6 +223,17 @@ pub fn deliver_live_gossip_event(
 
 pub fn deliver_live_gossip_bytes(
     root: &Path,
+    bytes: &[u8],
+    topic: &str,
+    receiver_peer: &str,
+    delivered_from: &str,
+) -> Result<Delivery> {
+    let root = open_capability_dataspace_root(root)?;
+    deliver_live_gossip_bytes_with_root(&root, bytes, topic, receiver_peer, delivered_from)
+}
+
+pub fn deliver_live_gossip_bytes_with_root(
+    root: &CapabilityDataspaceRoot,
     bytes: &[u8],
     topic: &str,
     receiver_peer: &str,
@@ -222,7 +256,7 @@ pub fn deliver_live_gossip_bytes(
             envelope.to_peer
         )));
     }
-    validate_content_refs_available(root, &envelope.content_refs)?;
+    validate_content_refs_available_with_root(root, &envelope.content_refs)?;
     let receipt_value = transport_receipt_value_for_transport(TransportReceiptInput {
         transport: LIVE_GOSSIP_TRANSPORT,
         operation: "deliver",
@@ -245,10 +279,20 @@ pub fn deliver_live_gossip_bytes(
 }
 
 pub fn deliver_local_gossip(root: &Path, topic: &str, envelope_ref: &str, receiver_peer: &str) -> Result<Delivery> {
+    let root = open_capability_dataspace_root(root)?;
+    deliver_local_gossip_with_root(&root, topic, envelope_ref, receiver_peer)
+}
+
+pub fn deliver_local_gossip_with_root(
+    root: &CapabilityDataspaceRoot,
+    topic: &str,
+    envelope_ref: &str,
+    receiver_peer: &str,
+) -> Result<Delivery> {
     validate_name(topic, "topic")?;
     validate_name(receiver_peer, "receiver peer")?;
     validate_ref(envelope_ref, "envelope ref")?;
-    let bytes = fs::read(envelope_path(root, topic, envelope_ref)?).map_err(MoltenError::from)?;
+    let bytes = root.root().read(&envelope_store_path(topic, envelope_ref)?)?;
     let value = parse_canonical_bytes(&bytes)?;
     let actual_ref = canonical_hash(&value)?;
     if actual_ref != envelope_ref {
@@ -269,7 +313,7 @@ pub fn deliver_local_gossip(root: &Path, topic: &str, envelope_ref: &str, receiv
             envelope.to_peer
         )));
     }
-    validate_content_refs_available(root, &envelope.content_refs)?;
+    validate_content_refs_available_with_root(root, &envelope.content_refs)?;
     let receipt_value = transport_receipt_value_for_transport(TransportReceiptInput {
         transport: LOCAL_GOSSIP_TRANSPORT,
         operation: "deliver",

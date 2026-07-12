@@ -16,8 +16,8 @@ pub struct RemoteGcClearanceRequest {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RemoteGcClearanceResponseInput<'a> {
-    pub root: &'a Path,
+pub struct RemoteGcClearanceResponseInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub request_value: &'a IoValue,
     pub evidence_refs: &'a [String],
     pub retained_refs: &'a [String],
@@ -39,8 +39,8 @@ pub struct RemoteGcClearanceResponse {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RemoteGcClearanceImportInput<'a> {
-    pub root: &'a Path,
+pub struct RemoteGcClearanceImportInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub request_value: &'a IoValue,
     pub response_value: &'a IoValue,
     pub expected_peer_ref: Option<&'a str>,
@@ -72,8 +72,8 @@ pub struct RemoteGcClearanceImport {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RemoteGcClearanceLiveLoopbackInput<'a> {
-    pub root: &'a Path,
+pub struct RemoteGcClearanceLiveLoopbackInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub requester_node_root: &'a Path,
     pub peer_node_root: &'a Path,
     pub requester_node_id: &'a str,
@@ -109,8 +109,8 @@ pub struct RemoteGcClearanceLiveLoopbackInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RemoteGcClearanceLiveRequestSendInput<'a> {
-    pub root: &'a Path,
+pub struct RemoteGcClearanceLiveRequestSendInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub requester_node_root: Option<&'a Path>,
     pub peer_ticket_value: &'a IoValue,
     pub requester_node_id: &'a str,
@@ -137,8 +137,8 @@ pub struct RemoteGcClearanceLiveRequestSendInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RemoteGcClearanceLiveResponseSendInput<'a> {
-    pub root: &'a Path,
+pub struct RemoteGcClearanceLiveResponseSendInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub peer_node_root: Option<&'a Path>,
     pub requester_ticket_value: &'a IoValue,
     pub request_value: &'a IoValue,
@@ -161,8 +161,8 @@ pub struct RemoteGcClearanceLiveResponseSendInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RemoteGcClearanceLiveImportWorkflowInput<'a> {
-    pub root: &'a Path,
+pub struct RemoteGcClearanceLiveImportWorkflowInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub request_value: &'a IoValue,
     pub response_value: &'a IoValue,
     pub request_control_value: &'a IoValue,
@@ -254,8 +254,8 @@ pub struct DestructiveAdmission {
     pub has_remote_gc_clearance: bool,
 }
 
-pub struct DestructiveAdmissionInput<'a> {
-    pub root: &'a Path,
+pub struct DestructiveAdmissionInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub evidence: &'a DestructiveEvidence,
     pub object_ref: &'a str,
     pub object_kind: &'a str,

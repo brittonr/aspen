@@ -1,6 +1,7 @@
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
+type LocalStorePath = crate::local_store::LocalStorePath;
 type Path = std::path::Path;
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
@@ -469,6 +470,14 @@ pub struct ArtifactIndexRebuild {
 }
 
 pub fn install_artifact(root: &Path, input: &ArtifactInstallInput) -> Result<ArtifactInstall> {
+    let root = open_capability_artifact_root(root)?;
+    install_artifact_with_root(&root, input)
+}
+
+pub fn install_artifact_with_root(
+    root: &CapabilityArtifactRoot,
+    input: &ArtifactInstallInput,
+) -> Result<ArtifactInstall> {
     validate_install_input(input)?;
     ensure_dirs(root)?;
     let payload = prepare_install_payload(root, &input.payload)?;
@@ -503,7 +512,7 @@ struct InstallPayload {
     chunk_receipt_ref: Option<String>,
 }
 
-fn prepare_install_payload(root: &Path, payload: &IoValue) -> Result<InstallPayload> {
+fn prepare_install_payload(root: &CapabilityArtifactRoot, payload: &IoValue) -> Result<InstallPayload> {
     let payload_bytes = canonical_bytes(payload)?;
     let payload_value_ref = canonical_hash(payload)?;
     let (payload_ref, chunk_receipt_ref) = if payload_bytes.len() <= INLINE_PAYLOAD_LIMIT {
@@ -515,7 +524,7 @@ fn prepare_install_payload(root: &Path, payload: &IoValue) -> Result<InstallPayl
             None,
         )
     } else {
-        let put = put_payload_bytes(&chunk_root(root), &payload_bytes)?;
+        let put = put_payload_bytes(root, &payload_bytes)?;
         (
             ArtifactPayloadRef::ContentRef {
                 manifest_ref: put.manifest_ref,

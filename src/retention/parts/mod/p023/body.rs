@@ -43,31 +43,31 @@ fn validate_candidate_bundle_value_input(input: &CandidateBundleValueInput<'_>) 
     validate_diagnostics(input.diagnostics, "retention bundle diagnostics")
 }
 
-fn read_gc_plan_value(root: &Path, reference: &str) -> Result<IoValue> {
-    Ok(read_gc_plan(root, reference)?.value)
+fn read_gc_plan_value(root: &CapabilityRetentionRoot, reference: &str) -> Result<IoValue> {
+    Ok(read_gc_plan_with_root(root, reference)?.value)
 }
 
-fn read_apply_value(root: &Path, reference: &str) -> Result<IoValue> {
-    Ok(read_gc_apply(root, reference)?.value)
+fn read_apply_value(root: &CapabilityRetentionRoot, reference: &str) -> Result<IoValue> {
+    Ok(read_gc_apply_with_root(root, reference)?.value)
 }
 
-fn read_gc_execution_value(root: &Path, reference: &str) -> Result<IoValue> {
-    Ok(read_gc_execution_gate(root, reference)?.value)
+fn read_gc_execution_value(root: &CapabilityRetentionRoot, reference: &str) -> Result<IoValue> {
+    Ok(read_gc_execution_gate_with_root(root, reference)?.value)
 }
 
-fn read_gc_audit_value(root: &Path, reference: &str) -> Result<IoValue> {
-    Ok(read_gc_audit(root, reference)?.value)
+fn read_gc_audit_value(root: &CapabilityRetentionRoot, reference: &str) -> Result<IoValue> {
+    Ok(read_gc_audit_with_root(root, reference)?.value)
 }
 
-fn read_receipt_value(root: &Path, reference: &str) -> Result<IoValue> {
-    Ok(read_receipt(root, reference)?.value)
+fn read_receipt_value(root: &CapabilityRetentionRoot, reference: &str) -> Result<IoValue> {
+    Ok(read_receipt_with_root(root, reference)?.value)
 }
 
-fn read_tombstone_value(root: &Path, reference: &str) -> Result<IoValue> {
-    Ok(read_tombstone(root, reference)?.value)
+fn read_tombstone_value(root: &CapabilityRetentionRoot, reference: &str) -> Result<IoValue> {
+    Ok(read_tombstone_with_root(root, reference)?.value)
 }
 
-fn validate_candidate_explain_input(input: &CandidateExplainInput<'_>) -> Result<()> {
+fn validate_candidate_explain_input<Root: ?Sized>(input: &CandidateExplainInput<'_, Root>) -> Result<()> {
     require_ref(input.object_ref, "retention candidate object ref")?;
     if let Some(object_kind) = input.object_kind {
         validate_name(object_kind, "retention candidate object kind")?;
@@ -132,7 +132,8 @@ impl CandidateFilter<'_> {
 }
 
 fn collect_matching_refs<T, Parse, Matches, Reference>(
-    dir: &Path,
+    root: &CapabilityRetentionRoot,
+    directory: &str,
     parse: Parse,
     matches: Matches,
     reference: Reference,
@@ -144,19 +145,15 @@ where
     Reference: Fn(&T) -> String,
 {
     let mut refs = Vec::new();
-    if !dir.exists() {
+    let directory = capability_store_path(directory)?;
+    if !root.root().try_exists(&directory)? {
         return Ok(refs);
     }
-    let mut paths = Vec::new();
-    for entry_result in fs::read_dir(dir).map_err(MoltenError::from)? {
-        let entry = entry_result.map_err(MoltenError::from)?;
-        if entry.file_type().map_err(MoltenError::from)?.is_file() {
-            push_bounded(&mut paths, entry.path(), MAX_RETENTION_REFS, label)?;
+    for entry in root.root().list_entries(&directory)? {
+        if entry.kind != crate::local_store::LocalStoreEntryKind::File {
+            continue;
         }
-    }
-    paths.sort();
-    for path in paths {
-        let value = read_store_value(&path)?;
+        let value = read_store_value_with_root(root, &entry.path)?;
         let parsed = parse(&value)?;
         if matches(&parsed) {
             push_bounded(&mut refs, reference(&parsed), MAX_RETENTION_REFS, label)?;
@@ -280,14 +277,24 @@ pub fn parse_tombstone(value: &IoValue) -> Result<Tombstone> {
 }
 
 pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<Receipt> {
+    let root = open_capability_retention_root(root)?;
+    read_receipt_with_root(&root, receipt_ref)
+}
+
+pub fn read_receipt_with_root(root: &CapabilityRetentionRoot, receipt_ref: &str) -> Result<Receipt> {
     require_ref(receipt_ref, "retention receipt ref")?;
-    let value = read_store_value(&receipt_path(root, receipt_ref)?)?;
+    let value = read_store_value_with_root(root, &capability_ref_path(RECEIPT_DIR, receipt_ref)?)?;
     parse_receipt(&value)
 }
 
 pub fn read_tombstone(root: &Path, tombstone_ref: &str) -> Result<Tombstone> {
+    let root = open_capability_retention_root(root)?;
+    read_tombstone_with_root(&root, tombstone_ref)
+}
+
+pub fn read_tombstone_with_root(root: &CapabilityRetentionRoot, tombstone_ref: &str) -> Result<Tombstone> {
     require_ref(tombstone_ref, "retention tombstone ref")?;
-    let value = read_store_value(&tombstone_path(root, tombstone_ref)?)?;
+    let value = read_store_value_with_root(root, &capability_ref_path(TOMBSTONE_DIR, tombstone_ref)?)?;
     let tombstone = parse_tombstone(&value)?;
     if tombstone.tombstone_ref != tombstone_ref {
         return Err(MoltenError::invalid_harness("stored retention tombstone ref mismatch"));

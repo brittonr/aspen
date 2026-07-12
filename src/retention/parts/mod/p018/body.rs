@@ -1,7 +1,8 @@
 
-fn executions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
+fn executions_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_refs(
-        &gc_executes_dir(root),
+        root,
+        GC_EXECUTE_DIR,
         parse_gc_execution_gate,
         |execute| {
             filter.matches_gc(
@@ -17,9 +18,10 @@ fn executions_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<Strin
     )
 }
 
-fn audits_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
+fn audits_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_refs(
-        &gc_audits_dir(root),
+        root,
+        GC_AUDIT_DIR,
         parse_gc_audit,
         |audit| {
             filter.matches_gc(
@@ -35,9 +37,10 @@ fn audits_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> 
     )
 }
 
-fn receipts_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
+fn receipts_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_refs(
-        &receipts_dir(root),
+        root,
+        RECEIPT_DIR,
         parse_receipt,
         |receipt| {
             filter.matches_retention(
@@ -52,9 +55,10 @@ fn receipts_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>
     )
 }
 
-fn tombstones_for(root: &Path, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
+fn tombstones_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
     collect_matching_refs(
-        &tombstones_dir(root),
+        root,
+        TOMBSTONE_DIR,
         parse_tombstone,
         |tombstone| {
             filter.matches_retention(
@@ -210,28 +214,41 @@ pub fn parse_candidate_explain(value: &IoValue) -> Result<CandidateExplain> {
 }
 
 pub fn export_candidate_bundle(input: CandidateBundleExportInput<'_>) -> Result<CandidateBundle> {
-    let explain = parse_candidate_explain(input.explain_value)?;
-    fs::create_dir_all(input.out).map_err(MoltenError::from)?;
-    let artifact_dir = input.out.join("artifacts");
-    fs::create_dir_all(&artifact_dir).map_err(MoltenError::from)?;
-    write_store_value(&input.out.join("explain.preserves"), &explain.value)?;
-    let (artifact_refs, diagnostics) = export_groups(input.root, &artifact_dir, &explain)?;
+    let retention_root = open_capability_retention_root(input.root)?;
+    let bundle_root = CapabilityBundleRoot::open(input.out)?;
+    export_candidate_bundle_with_roots(&retention_root, &bundle_root, input.explain_value, input.profile)
+}
+
+pub fn export_candidate_bundle_with_roots(
+    retention_root: &CapabilityRetentionRoot,
+    bundle_root: &CapabilityBundleRoot,
+    explain_value: &IoValue,
+    profile: CandidateBundleExportProfile,
+) -> Result<CandidateBundle> {
+    let explain = parse_candidate_explain(explain_value)?;
+    bundle_root.root().create_dir_all(&bundle_path("artifacts")?)?;
+    write_bundle_value(bundle_root, &bundle_path("explain.preserves")?, &explain.value)?;
+    let (artifact_refs, diagnostics) = export_groups(retention_root, bundle_root, &explain)?;
     let value = candidate_bundle_value(&CandidateBundleValueInput {
         explain: &explain,
         artifact_refs: &artifact_refs,
         diagnostics: &diagnostics,
     })?;
-    write_store_value(&input.out.join("bundle.preserves"), &value)?;
+    write_bundle_value(bundle_root, &bundle_path("bundle.preserves")?, &value)?;
     let bundle = parse_candidate_bundle(&value)?;
-    let profile = profile_candidate_bundle(input.out, input.profile, &bundle)?;
-    write_store_value(&input.out.join(BUNDLE_PROFILE_FILE), &profile.value)?;
-    if input.profile == CandidateBundleExportProfile::Diagnostic {
-        write_candidate_bundle_redacted_view(input.out, &bundle)?;
+    let profile_value = profile_candidate_bundle(bundle_root, profile, &bundle)?;
+    write_bundle_value(bundle_root, &bundle_path(BUNDLE_PROFILE_FILE)?, &profile_value.value)?;
+    if profile == CandidateBundleExportProfile::Diagnostic {
+        write_candidate_bundle_redacted_view(bundle_root, &bundle)?;
     }
     Ok(bundle)
 }
 
-fn export_groups(root: &Path, artifact_dir: &Path, explain: &CandidateExplain) -> Result<(Vec<String>, Vec<String>)> {
+fn export_groups(
+    root: &CapabilityRetentionRoot,
+    bundle_root: &CapabilityBundleRoot,
+    explain: &CandidateExplain,
+) -> Result<(Vec<String>, Vec<String>)> {
     let groups = [
         GroupSpec {
             dir_name: "gc-plans",
@@ -270,7 +287,7 @@ fn export_groups(root: &Path, artifact_dir: &Path, explain: &CandidateExplain) -
         export_bundle_artifact_group(
             BundleArtifactGroupInput {
                 root,
-                bundle_dir: artifact_dir,
+                bundle_root,
                 dir_name: group.dir_name,
                 refs: group.refs,
                 read: group.read,

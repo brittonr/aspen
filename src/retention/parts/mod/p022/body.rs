@@ -23,12 +23,13 @@ fn ref_set(refs: &[String]) -> OrderedSet<String> {
 }
 
 fn scan_bundle_artifact_files(
-    artifact_dir: &Path,
+    bundle_root: &CapabilityBundleRoot,
     expected_refs: &OrderedSet<String>,
     file_refs: &mut impl VecSink<String>,
     diagnostics: &mut impl VecSink<String>,
 ) -> Result<()> {
-    if !artifact_dir.exists() {
+    let artifact_dir = bundle_path("artifacts")?;
+    if !bundle_root.root().try_exists(&artifact_dir)? {
         push_bounded(
             diagnostics,
             "retention-bundle-artifacts-dir-missing".to_string(),
@@ -38,10 +39,8 @@ fn scan_bundle_artifact_files(
         return Ok(());
     }
     let mut seen_files = OrderedSet::new();
-    for entry in fs::read_dir(artifact_dir).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        let file_type = entry.file_type().map_err(MoltenError::from)?;
-        if !file_type.is_dir() {
+    for entry in bundle_root.root().list_entries(&artifact_dir)? {
+        if entry.kind != crate::local_store::LocalStoreEntryKind::Directory {
             push_bounded(
                 diagnostics,
                 "retention-bundle-unexpected-artifact-root-entry".to_string(),
@@ -50,8 +49,7 @@ fn scan_bundle_artifact_files(
             )?;
             continue;
         }
-        let dir_name = entry.file_name().to_string_lossy().into_owned();
-        if !bundle_artifact_dirs().contains(&dir_name.as_str()) {
+        if !bundle_artifact_dirs().contains(&entry.name.as_str()) {
             push_bounded(
                 diagnostics,
                 "retention-bundle-unexpected-artifact-dir".to_string(),
@@ -62,8 +60,8 @@ fn scan_bundle_artifact_files(
         }
         scan_bundle_artifact_group_files(
             BundleArtifactGroupScanInput {
-                group_dir: &entry.path(),
-                dir_name: &dir_name,
+                bundle_root,
+                dir_name: &entry.name,
                 expected_refs,
             },
             file_refs,
@@ -80,12 +78,9 @@ fn scan_bundle_artifact_group_files(
     diagnostics: &mut impl VecSink<String>,
     seen_files: &mut OrderedSet<String>,
 ) -> Result<()> {
-    for entry in fs::read_dir(input.group_dir).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        let file_type = entry.file_type().map_err(MoltenError::from)?;
-        if !file_type.is_file()
-            || entry.path().extension().and_then(|extension| extension.to_str()) != Some("preserves")
-        {
+    let group_dir = bundle_path(&format!("artifacts/{}", input.dir_name))?;
+    for entry in input.bundle_root.root().list_entries(&group_dir)? {
+        if entry.kind != crate::local_store::LocalStoreEntryKind::File || !entry.name.ends_with(".preserves") {
             push_bounded(
                 diagnostics,
                 format!("retention-bundle-unexpected-artifact-entry:{}", input.dir_name),
@@ -94,7 +89,7 @@ fn scan_bundle_artifact_group_files(
             )?;
             continue;
         }
-        match read_store_value(&entry.path()) {
+        match read_bundle_value(input.bundle_root, &entry.path) {
             Ok(value) => {
                 let actual_ref = crate::preserves_rail::canonical_hash(&value)?;
                 if !seen_files.insert(actual_ref.clone()) {
@@ -131,12 +126,8 @@ fn verify_bundle_artifact_group(
     diagnostics: &mut impl VecSink<String>,
 ) -> Result<()> {
     for reference in input.refs {
-        let path = input
-            .bundle_dir
-            .join("artifacts")
-            .join(input.dir_name)
-            .join(format!("{}.preserves", ref_file_name(reference)?));
-        if !path.exists() {
+        let path = bundle_artifact_path(input.dir_name, reference)?;
+        if !input.bundle_root.root().try_exists(&path)? {
             push_bounded(
                 diagnostics,
                 format!("retention-bundle-missing-file:{}:{reference}", input.dir_name),
@@ -145,7 +136,7 @@ fn verify_bundle_artifact_group(
             )?;
             continue;
         }
-        let value = match read_store_value(&path) {
+        let value = match read_bundle_value(input.bundle_root, &path) {
             Ok(value) => value,
             Err(_) => {
                 push_bounded(

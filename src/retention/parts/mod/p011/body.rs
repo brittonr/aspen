@@ -90,8 +90,8 @@ where S: VecSink<String> {
     push_bounded(diagnostics, diagnostic, MAX_RETENTION_DIAGNOSTICS, "retention admission diagnostics")
 }
 
-fn check_admission_basics<S>(
-    input: &AdmissionRefsInput<'_>,
+fn check_admission_basics<Root: ?Sized, S>(
+    input: &AdmissionRefsInput<'_, Root>,
     reference: &str,
     admission: &EvidenceAdmission,
     diagnostics: &mut S,
@@ -153,8 +153,8 @@ fn admission_scope_mismatch_count(scope: &AdmissionScope<'_>, admission: &Eviden
     count
 }
 
-fn check_admission_required_refs<S>(
-    input: &AdmissionRefsInput<'_>,
+fn check_admission_required_refs<Root: ?Sized, S>(
+    input: &AdmissionRefsInput<'_, Root>,
     reference: &str,
     admission: &EvidenceAdmission,
     diagnostics: &mut S,
@@ -181,8 +181,8 @@ where
     Ok(is_admitted)
 }
 
-fn check_admission_ref<S>(
-    input: &AdmissionRefsInput<'_>,
+fn check_admission_ref<Root: ?Sized, S>(
+    input: &AdmissionRefsInput<'_, Root>,
     reference: &str,
     admission: &EvidenceAdmission,
     diagnostics: &mut S,
@@ -204,13 +204,25 @@ where
     })
 }
 
-fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsResult> {
+fn admit_evidence_refs_with_root(
+    input: AdmissionRefsInput<'_, CapabilityRetentionRoot>,
+) -> Result<AdmissionRefsResult> {
+    admit_evidence_refs_core(input, read_evidence_admission_with_root)
+}
+
+fn admit_evidence_refs_core<Root: ?Sized, ReadAdmission>(
+    input: AdmissionRefsInput<'_, Root>,
+    mut read_admission: ReadAdmission,
+) -> Result<AdmissionRefsResult>
+where
+    ReadAdmission: FnMut(&Root, &str) -> Result<EvidenceAdmission>,
+{
     let mut diagnostics = Vec::new();
     let mut admitted_refs = Vec::new();
     let mut remote_refs = Vec::new();
     let mut scope_mismatches = 0usize;
     for reference in input.refs {
-        let admission = match read_evidence_admission(input.root, reference) {
+        let admission = match read_admission(input.root, reference) {
             Ok(admission) => admission,
             Err(error) => {
                 push_admission_diagnostic(
@@ -275,7 +287,7 @@ where S: VecSink<String> {
     Ok(is_admitted)
 }
 
-fn check_scope(input: &RemoteClearanceRefsInput<'_>, clearance: &RemoteGcClearance) -> Check {
+fn check_scope<Root: ?Sized>(input: &RemoteClearanceRefsInput<'_, Root>, clearance: &RemoteGcClearance) -> Check {
     let mut scope_mismatches = 0usize;
     if input.scope.requester_ref != Some(clearance.requester_ref.as_str()) {
         scope_mismatches += 1;

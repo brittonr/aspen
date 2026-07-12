@@ -5,7 +5,9 @@ mod tests {
 
     #[test]
     fn artifact_identity_is_stable_across_names_and_changes_with_payload_kind_or_deps() {
-        let root = temp_dir("artifact-identity");
+        // r[verify molten.chunk_store.cap_std_conversion_validation]
+        let root_path = temp_dir("artifact-identity");
+        let root = CapabilityArtifactRoot::open(&root_path).expect("open artifact capability root");
         let payload = record("module", vec![string("v1")]);
         let input = ArtifactInstallInput {
             kind: "steel".to_string(),
@@ -18,15 +20,15 @@ mod tests {
             installer_ref: test_ref("installer"),
             capability_refs: vec![test_ref("capability")],
         };
-        let first = install_artifact(&root, &input).expect("install first");
-        let duplicate = install_artifact(&root, &input).expect("install duplicate");
+        let first = install_artifact_with_root(&root, &input).expect("install first");
+        let duplicate = install_artifact_with_root(&root, &input).expect("install duplicate");
         let identity_receipt = parse_artifact_identity_receipt(&first.identity_receipt_value).expect("identity receipt");
         assert_eq!(first.decision, "pass");
         assert_eq!(first.identity_receipt_ref, identity_receipt.receipt_ref);
         assert_eq!(identity_receipt.decision, "pass");
         assert_eq!(identity_receipt.artifact_ref.as_deref(), Some(first.artifact_ref.as_str()));
         assert_eq!(first.artifact_ref, duplicate.artifact_ref);
-        let pointer = set_name_pointer(&root, &SetNamePointerInput {
+        let pointer = set_name_pointer_with_root(&root, &SetNamePointerInput {
             pointer_kind: "name",
             name: "app/main",
             artifact_ref: &first.artifact_ref,
@@ -35,21 +37,21 @@ mod tests {
         })
         .expect("set name");
         assert_eq!(pointer.artifact_ref, first.artifact_ref);
-        assert_eq!(read_payload(&root, &first.artifact_ref).expect("payload"), payload);
+        assert_eq!(read_payload_with_root(&root, &first.artifact_ref).expect("payload"), payload);
 
-        let changed_payload = install_artifact(&root, &ArtifactInstallInput {
+        let changed_payload = install_artifact_with_root(&root, &ArtifactInstallInput {
             payload: record("module", vec![string("v2")]),
             ..input.clone()
         })
         .expect("changed payload");
         assert_ne!(first.artifact_ref, changed_payload.artifact_ref);
-        let changed_kind = install_artifact(&root, &ArtifactInstallInput {
+        let changed_kind = install_artifact_with_root(&root, &ArtifactInstallInput {
             kind: "wasm".to_string(),
             ..input.clone()
         })
         .expect("changed kind");
         assert_ne!(first.artifact_ref, changed_kind.artifact_ref);
-        let changed_deps = install_artifact(&root, &ArtifactInstallInput {
+        let changed_deps = install_artifact_with_root(&root, &ArtifactInstallInput {
             dependency_refs: vec![first.artifact_ref.clone()],
             ..input
         })
@@ -185,7 +187,8 @@ mod tests {
         let first = install_artifact(&root, &test_input("steel", "first", &[])).expect("first artifact");
         let second = install_artifact(&root, &test_input("steel", "second", &[])).expect("second artifact");
         assert_ne!(first.artifact_ref, second.artifact_ref);
-        let db = ensure_index_tables(&root).expect("artifact db");
+        let capability_root = CapabilityArtifactRoot::open(&root).expect("open artifact capability root");
+        let db = ensure_index_tables(&capability_root).expect("artifact db");
         let write_txn = db.begin_write().expect("write txn");
         {
             let mut artifacts = write_txn.open_table(INDEX_ARTIFACTS).expect("artifacts table");
@@ -587,7 +590,9 @@ mod tests {
             capability_refs: vec![test_ref("tamper-capability")],
         })
         .expect("install tampered fixture snapshot");
-        let db = ensure_index_tables(&tampered_root).expect("artifact db");
+        let capability_root =
+            CapabilityArtifactRoot::open(&tampered_root).expect("open tampered artifact capability root");
+        let db = ensure_index_tables(&capability_root).expect("artifact db");
         let write_txn = db.begin_write().expect("write txn");
         {
             let mut artifacts = write_txn.open_table(INDEX_ARTIFACTS).expect("artifacts table");

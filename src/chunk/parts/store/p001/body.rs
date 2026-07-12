@@ -42,24 +42,46 @@ pub struct PutBytesWithTransformsInput<'a> {
     pub transforms: &'a ChunkTransforms,
 }
 
+struct CapabilityPutBytesWithTransformsInput<'a> {
+    root: &'a CapabilityChunkRoot,
+    object_kind: &'a str,
+    bytes: &'a [u8],
+    chunk_size: u64,
+    metadata: &'a IoValue,
+    policy_refs: &'a [String],
+    transforms: &'a ChunkTransforms,
+}
+
 pub fn put_bytes(root: &Path, object_kind: &str, bytes: &[u8], chunk_size: u64) -> Result<ChunkStorePut> {
+    let root = open_capability_chunk_root(root)?;
+    put_bytes_with_root(&root, object_kind, bytes, chunk_size)
+}
+
+pub fn put_bytes_with_root(
+    root: &CapabilityChunkRoot,
+    object_kind: &str,
+    bytes: &[u8],
+    chunk_size: u64,
+) -> Result<ChunkStorePut> {
     let metadata = record("chunk-metadata-v1", vec![
         record("object-kind", vec![string(object_kind)]),
         record("policy", vec![string("public-local-fixture")]),
     ]);
-    put_bytes_with_metadata(&PutBytesWithMetadataInput {
+    put_bytes_with_transforms_root(&CapabilityPutBytesWithTransformsInput {
         root,
         object_kind,
         bytes,
         chunk_size,
         metadata: &metadata,
         policy_refs: &[],
+        transforms: &ChunkTransforms::public_plaintext(),
     })
 }
 
 pub fn put_bytes_with_metadata(input: &PutBytesWithMetadataInput<'_>) -> Result<ChunkStorePut> {
-    put_bytes_with_transforms(&PutBytesWithTransformsInput {
-        root: input.root,
+    let root = open_capability_chunk_root(input.root)?;
+    put_bytes_with_transforms_root(&CapabilityPutBytesWithTransformsInput {
+        root: &root,
         object_kind: input.object_kind,
         bytes: input.bytes,
         chunk_size: input.chunk_size,
@@ -82,7 +104,7 @@ struct Written {
 }
 
 struct FinalizeInput<'a> {
-    root: &'a Path,
+    root: &'a CapabilityChunkRoot,
     object_kind: &'a str,
     total_len: u64,
     chunk_size_input: u64,
@@ -94,6 +116,19 @@ struct FinalizeInput<'a> {
 }
 
 pub fn put_bytes_with_transforms(input: &PutBytesWithTransformsInput<'_>) -> Result<ChunkStorePut> {
+    let root = open_capability_chunk_root(input.root)?;
+    put_bytes_with_transforms_root(&CapabilityPutBytesWithTransformsInput {
+        root: &root,
+        object_kind: input.object_kind,
+        bytes: input.bytes,
+        chunk_size: input.chunk_size,
+        metadata: input.metadata,
+        policy_refs: input.policy_refs,
+        transforms: input.transforms,
+    })
+}
+
+fn put_bytes_with_transforms_root(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<ChunkStorePut> {
     let ready = prepare_put(input)?;
     let written = write_put_parts(input.root, input.bytes, ready.chunk_size, input.transforms)?;
     finish_put(FinalizeInput {
@@ -109,7 +144,7 @@ pub fn put_bytes_with_transforms(input: &PutBytesWithTransformsInput<'_>) -> Res
     })
 }
 
-fn prepare_put(input: &PutBytesWithTransformsInput<'_>) -> Result<Ready> {
+fn prepare_put(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<Ready> {
     ensure_dirs(input.root)?;
     if input.object_kind.is_empty() {
         let receipt_value =
@@ -159,7 +194,8 @@ fn prepare_put(input: &PutBytesWithTransformsInput<'_>) -> Result<Ready> {
     }
     let metadata_ref = canonical_hash(input.metadata)?;
     write_immutable_bytes(
-        &metadata_path(input.root, &metadata_ref)?,
+        input.root,
+        &metadata_path(&metadata_ref)?,
         &canonical_bytes(input.metadata)?,
         &metadata_ref,
         parse_canonical_bytes,
@@ -170,11 +206,11 @@ fn prepare_put(input: &PutBytesWithTransformsInput<'_>) -> Result<Ready> {
     })
 }
 
-fn ensure_part(root: &Path, chunk: &[u8], chunk_size: usize) -> Result<(String, bool)> {
+fn ensure_part(root: &CapabilityChunkRoot, chunk: &[u8], chunk_size: usize) -> Result<(String, bool)> {
     let chunk_ref = hash_chunk(chunk, chunk_size);
-    let path = chunk_path(root, &chunk_ref)?;
-    if path.exists() {
-        if let Err(error) = verify_raw_chunk_file(&path, &chunk_ref, chunk.len() as u64, chunk_size) {
+    let path = chunk_path(&chunk_ref)?;
+    if root.root().try_exists(&path)? {
+        if let Err(error) = verify_raw_chunk_file(root, &path, &chunk_ref, chunk.len() as u64, chunk_size) {
             let receipt_value =
                 denial_receipt_value("dedup-hit", None, std::slice::from_ref(&chunk_ref), error.to_string(), vec![
                     ("existing-chunk-hash-binding", "fail"),
@@ -185,12 +221,17 @@ fn ensure_part(root: &Path, chunk: &[u8], chunk_size: usize) -> Result<(String, 
         }
         Ok((chunk_ref, true))
     } else {
-        fs::write(&path, chunk).map_err(MoltenError::from)?;
+        root.root().write(&path, chunk)?;
         Ok((chunk_ref, false))
     }
 }
 
-fn write_put_parts(root: &Path, bytes: &[u8], chunk_size: usize, transforms: &ChunkTransforms) -> Result<Written> {
+fn write_put_parts(
+    root: &CapabilityChunkRoot,
+    bytes: &[u8],
+    chunk_size: usize,
+    transforms: &ChunkTransforms,
+) -> Result<Written> {
     let mut values = Vec::new();
     let mut refs = Vec::new();
     let mut dedup_refs = Vec::new();
@@ -228,7 +269,7 @@ fn write_put_parts(root: &Path, bytes: &[u8], chunk_size: usize, transforms: &Ch
     })
 }
 
-fn note_reuse(root: &Path, manifest_ref: &str, refs: &[String]) -> Result<()> {
+fn note_reuse(root: &CapabilityChunkRoot, manifest_ref: &str, refs: &[String]) -> Result<()> {
     if refs.is_empty() {
         return Ok(());
     }

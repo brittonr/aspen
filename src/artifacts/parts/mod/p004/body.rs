@@ -7,10 +7,13 @@ fn pass_fail(is_pass: bool) -> &'static str {
     if is_pass { "pass" } else { "fail" }
 }
 
-fn release_snapshot_dependency_index_digest(root: &Path, artifact_refs: &[String]) -> Result<String> {
+fn release_snapshot_dependency_index_digest(
+    root: &CapabilityArtifactRoot,
+    artifact_refs: &[String],
+) -> Result<String> {
     let mut edges = Vec::new();
     for artifact_ref in sorted_unique(artifact_refs) {
-        let artifact = read_artifact(root, &artifact_ref)?;
+        let artifact = read_artifact_with_root(root, &artifact_ref)?;
         extend_bounded(
             &mut edges,
             dependency_edges_for_artifact(&artifact)?,

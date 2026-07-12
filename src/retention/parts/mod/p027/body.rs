@@ -17,7 +17,9 @@ fn validate_remote_gc_clearance_live_workflow_value_input(
     )
 }
 
-fn remote_clearance_response_diagnostics(input: RemoteGcClearanceResponseInput<'_>) -> Result<Vec<String>> {
+fn remote_clearance_response_diagnostics<Root: ?Sized>(
+    input: &RemoteGcClearanceResponseInput<'_, Root>,
+) -> Result<Vec<String>> {
     validate_refs(input.evidence_refs, "retention remote clearance response evidence ref")?;
     validate_refs(input.retained_refs, "retention remote clearance response retained ref")?;
     validate_refs(input.revoked_refs, "retention remote clearance response revoked ref")?;
@@ -142,11 +144,11 @@ where S: VecSink<String> {
     )
 }
 
-fn push_remote_clearance_import_diagnostics<S>(
+fn push_remote_clearance_import_diagnostics<Root: ?Sized, S>(
     diagnostics: &mut S,
     request: &RemoteGcClearanceRequest,
     response: &RemoteGcClearanceResponse,
-    input: RemoteGcClearanceImportInput<'_>,
+    input: &RemoteGcClearanceImportInput<'_, Root>,
 ) -> Result<()>
 where
     S: VecSink<String>,
@@ -192,34 +194,38 @@ where
     Ok(())
 }
 
-fn ensure_store(root: &Path) -> Result<()> {
-    fs::create_dir_all(pins_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(admissions_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(remote_clearances_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(remote_clearance_requests_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(remote_clearance_responses_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(remote_clearance_imports_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(remote_clearance_live_workflows_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(gc_plans_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(gc_applies_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(gc_executes_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(gc_audits_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(receipts_dir(root)).map_err(MoltenError::from)?;
-    fs::create_dir_all(tombstones_dir(root)).map_err(MoltenError::from)
+fn ensure_store_with_root(root: &CapabilityRetentionRoot) -> Result<()> {
+    for directory in [
+        PIN_DIR,
+        ADMISSION_DIR,
+        REMOTE_CLEARANCE_DIR,
+        REMOTE_CLEARANCE_REQUEST_DIR,
+        REMOTE_CLEARANCE_RESPONSE_DIR,
+        REMOTE_CLEARANCE_IMPORT_DIR,
+        REMOTE_CLEARANCE_LIVE_WORKFLOW_DIR,
+        GC_PLAN_DIR,
+        GC_APPLY_DIR,
+        GC_EXECUTE_DIR,
+        GC_AUDIT_DIR,
+        RECEIPT_DIR,
+        TOMBSTONE_DIR,
+    ] {
+        root.root().create_dir_all(&capability_store_path(directory)?)?;
+    }
+    Ok(())
 }
 
-fn pins_for_object(root: &Path, object_ref: &str) -> Result<Vec<Pin>> {
+fn pins_for_object_with_root(root: &CapabilityRetentionRoot, object_ref: &str) -> Result<Vec<Pin>> {
     let mut pins = Vec::new();
-    let dir = pins_dir(root);
-    if !dir.exists() {
+    let directory = capability_store_path(PIN_DIR)?;
+    if !root.root().try_exists(&directory)? {
         return Ok(pins);
     }
-    for entry_result in fs::read_dir(dir).map_err(MoltenError::from)? {
-        let entry = entry_result.map_err(MoltenError::from)?;
-        if !entry.file_type().map_err(MoltenError::from)?.is_file() {
+    for entry in root.root().list_entries(&directory)? {
+        if entry.kind != crate::local_store::LocalStoreEntryKind::File {
             continue;
         }
-        let value = read_store_value(&entry.path())?;
+        let value = read_store_value_with_root(root, &entry.path)?;
         let pin = parse_pin(&value)?;
         if pin.object_ref == object_ref {
             push_bounded(&mut pins, pin, MAX_RETENTION_REFS, "retention pins")?;
@@ -229,18 +235,17 @@ fn pins_for_object(root: &Path, object_ref: &str) -> Result<Vec<Pin>> {
     Ok(pins)
 }
 
-fn tombstone_refs_for_object(root: &Path, object_ref: &str) -> Result<Vec<String>> {
+fn tombstone_refs_for_object_with_root(root: &CapabilityRetentionRoot, object_ref: &str) -> Result<Vec<String>> {
     let mut refs = Vec::new();
-    let dir = tombstones_dir(root);
-    if !dir.exists() {
+    let directory = capability_store_path(TOMBSTONE_DIR)?;
+    if !root.root().try_exists(&directory)? {
         return Ok(refs);
     }
-    for entry_result in fs::read_dir(dir).map_err(MoltenError::from)? {
-        let entry = entry_result.map_err(MoltenError::from)?;
-        if !entry.file_type().map_err(MoltenError::from)?.is_file() {
+    for entry in root.root().list_entries(&directory)? {
+        if entry.kind != crate::local_store::LocalStoreEntryKind::File {
             continue;
         }
-        let value = read_store_value(&entry.path())?;
+        let value = read_store_value_with_root(root, &entry.path)?;
         let tombstone = parse_tombstone(&value)?;
         if tombstone.object_ref == object_ref {
             push_bounded(&mut refs, tombstone.tombstone_ref, MAX_RETENTION_REFS, "retention tombstone refs")?;
@@ -248,52 +253,4 @@ fn tombstone_refs_for_object(root: &Path, object_ref: &str) -> Result<Vec<String
     }
     refs.sort();
     Ok(refs)
-}
-
-fn store_dir(root: &Path) -> PathBuf {
-    root.join(STORE_DIR)
-}
-
-fn pins_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(PIN_DIR)
-}
-
-fn admissions_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(ADMISSION_DIR)
-}
-
-fn remote_clearances_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(REMOTE_CLEARANCE_DIR)
-}
-
-fn remote_clearance_requests_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(REMOTE_CLEARANCE_REQUEST_DIR)
-}
-
-fn remote_clearance_responses_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(REMOTE_CLEARANCE_RESPONSE_DIR)
-}
-
-fn remote_clearance_imports_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(REMOTE_CLEARANCE_IMPORT_DIR)
-}
-
-fn remote_clearance_live_workflows_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(REMOTE_CLEARANCE_LIVE_WORKFLOW_DIR)
-}
-
-fn gc_plans_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(GC_PLAN_DIR)
-}
-
-fn gc_applies_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(GC_APPLY_DIR)
-}
-
-fn gc_executes_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(GC_EXECUTE_DIR)
-}
-
-fn gc_audits_dir(root: &Path) -> PathBuf {
-    store_dir(root).join(GC_AUDIT_DIR)
 }

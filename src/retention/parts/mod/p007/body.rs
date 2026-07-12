@@ -272,9 +272,21 @@ pub fn parse_remote_gc_clearance_live_workflow(value: &IoValue) -> Result<Remote
 }
 
 pub fn store_remote_gc_clearance_live_workflow(root: &Path, value: &IoValue) -> Result<RemoteGcClearanceLiveWorkflow> {
-    ensure_store(root)?;
+    let root = open_capability_retention_root(root)?;
+    store_remote_gc_clearance_live_workflow_with_root(&root, value)
+}
+
+pub fn store_remote_gc_clearance_live_workflow_with_root(
+    root: &CapabilityRetentionRoot,
+    value: &IoValue,
+) -> Result<RemoteGcClearanceLiveWorkflow> {
+    ensure_store_with_root(root)?;
     let workflow = parse_remote_gc_clearance_live_workflow(value)?;
-    write_store_value(&remote_clearance_live_workflow_path(root, &workflow.workflow_ref)?, &workflow.value)?;
+    write_store_value_with_root(
+        root,
+        &capability_ref_path(REMOTE_CLEARANCE_LIVE_WORKFLOW_DIR, &workflow.workflow_ref)?,
+        &workflow.value,
+    )?;
     Ok(workflow)
 }
 
@@ -286,8 +298,8 @@ struct AdmissionScope<'a> {
     action: &'a str,
 }
 
-struct AdmissionRefsInput<'a> {
-    root: &'a Path,
+struct AdmissionRefsInput<'a, Root: ?Sized = Path> {
+    root: &'a Root,
     refs: &'a [String],
     expected_kind: &'a str,
     scope: &'a AdmissionScope<'a>,

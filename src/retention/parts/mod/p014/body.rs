@@ -1,8 +1,16 @@
 
 pub fn apply_gc_plan(input: GcApplyFromPlanInput<'_>) -> Result<GcApply> {
-    ensure_store(input.root)?;
-    let original = read_gc_plan(input.root, input.plan_ref)?;
-    let recomputed = store_gc_plan(GcPlanInput {
+    let root = open_capability_retention_root(input.root)?;
+    apply_gc_plan_with_root(GcApplyFromPlanInput {
+        root: &root,
+        plan_ref: input.plan_ref,
+    })
+}
+
+pub fn apply_gc_plan_with_root(input: GcApplyFromPlanInput<'_, CapabilityRetentionRoot>) -> Result<GcApply> {
+    ensure_store_with_root(input.root)?;
+    let original = read_gc_plan_with_root(input.root, input.plan_ref)?;
+    let recomputed = store_gc_plan_with_root(GcPlanInput {
         root: input.root,
         subsystem: &original.subsystem,
         object_ref: &original.object_ref,
@@ -11,7 +19,7 @@ pub fn apply_gc_plan(input: GcApplyFromPlanInput<'_>) -> Result<GcApply> {
         action: &original.action,
         evidence: &original.evidence,
     })?;
-    let admission = admit_destructive_evidence(DestructiveAdmissionInput {
+    let admission = admit_destructive_evidence_with_root(DestructiveAdmissionInput {
         root: input.root,
         evidence: &original.evidence,
         object_ref: &original.object_ref,
@@ -40,12 +48,12 @@ pub fn apply_gc_plan(input: GcApplyFromPlanInput<'_>) -> Result<GcApply> {
         diagnostics: &outcome.diagnostics,
     })?;
     let apply = parse_gc_apply(&value)?;
-    write_store_value(&gc_apply_path(input.root, &apply.apply_ref)?, &apply.value)?;
+    write_store_value_with_root(input.root, &capability_ref_path(GC_APPLY_DIR, &apply.apply_ref)?, &apply.value)?;
     Ok(apply)
 }
 
 fn apply_outcome(
-    root: &Path,
+    root: &CapabilityRetentionRoot,
     original: &GcPlan,
     recomputed: &GcPlan,
     admission: &DestructiveAdmission,
@@ -90,9 +98,13 @@ fn apply_diagnostics(original: &GcPlan, recomputed: &GcPlan, admission: &Destruc
     Ok(diagnostics)
 }
 
-fn apply_success_outcome(root: &Path, original: &GcPlan, admission: &DestructiveAdmission) -> Result<ApplyOutcome> {
+fn apply_success_outcome(
+    root: &CapabilityRetentionRoot,
+    original: &GcPlan,
+    admission: &DestructiveAdmission,
+) -> Result<ApplyOutcome> {
     let requester_ref = destructive_requester_ref(&original.evidence, "retention-gc-apply-missing-requester")?;
-    let evaluation = evaluate(EvaluationInput {
+    let evaluation = evaluate_with_root(EvaluationInput {
         root,
         object_ref: &original.object_ref,
         object_kind: &original.object_kind,
@@ -238,8 +250,13 @@ pub fn parse_gc_apply(value: &IoValue) -> Result<GcApply> {
 }
 
 pub fn read_gc_apply(root: &Path, apply_ref: &str) -> Result<GcApply> {
+    let root = open_capability_retention_root(root)?;
+    read_gc_apply_with_root(&root, apply_ref)
+}
+
+pub fn read_gc_apply_with_root(root: &CapabilityRetentionRoot, apply_ref: &str) -> Result<GcApply> {
     require_ref(apply_ref, "retention GC apply ref")?;
-    let value = read_store_value(&gc_apply_path(root, apply_ref)?)?;
+    let value = read_store_value_with_root(root, &capability_ref_path(GC_APPLY_DIR, apply_ref)?)?;
     let apply = parse_gc_apply(&value)?;
     if apply.apply_ref != apply_ref {
         return Err(MoltenError::invalid_harness("stored retention GC apply ref mismatch"));
@@ -248,8 +265,16 @@ pub fn read_gc_apply(root: &Path, apply_ref: &str) -> Result<GcApply> {
 }
 
 pub fn read_gc_execution_gate(root: &Path, execution_ref: &str) -> Result<GcExecutionGate> {
+    let root = open_capability_retention_root(root)?;
+    read_gc_execution_gate_with_root(&root, execution_ref)
+}
+
+pub fn read_gc_execution_gate_with_root(
+    root: &CapabilityRetentionRoot,
+    execution_ref: &str,
+) -> Result<GcExecutionGate> {
     require_ref(execution_ref, "retention GC execution ref")?;
-    let value = read_store_value(&gc_execute_path(root, execution_ref)?)?;
+    let value = read_store_value_with_root(root, &capability_ref_path(GC_EXECUTE_DIR, execution_ref)?)?;
     let gate = parse_gc_execution_gate(&value)?;
     if gate.execution_ref != execution_ref {
         return Err(MoltenError::invalid_harness("stored retention GC execution ref mismatch"));

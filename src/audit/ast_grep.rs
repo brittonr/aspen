@@ -8,6 +8,10 @@ const RECEIPT_DECISION_INVALID: &str = "invalid";
 const CLAIM_SCOPE_STRUCTURAL_HYGIENE: &str = "structural-hygiene-only";
 const POSITIVE_FIXTURE_PATH: &str = "tools/ast-grep/runtime-authority/fixtures/positive/inventory_candidates.rs";
 const NEGATIVE_FIXTURE_PATH: &str = "tools/ast-grep/runtime-authority/fixtures/negative/allowed_shell_effects.rs";
+const STORE_POSITIVE_FIXTURE_PATH: &str =
+    "tools/ast-grep/runtime-authority/fixtures/positive/store_ambient_filesystem_calls.rs";
+const STORE_NEGATIVE_FIXTURE_PATH: &str =
+    "tools/ast-grep/runtime-authority/fixtures/negative/store_capability_shells.rs";
 
 const REQUIRED_SURFACES: &[&str] = &[
     "core-runtime",
@@ -18,6 +22,7 @@ const REQUIRED_SURFACES: &[&str] = &[
     "iroh-transport",
     "policy-evidence-gates",
     "operator-workflow",
+    "local-store-adapters",
 ];
 
 const REQUIRED_INVENTORY_CATEGORIES: &[&str] = &[
@@ -231,6 +236,15 @@ pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditRece
     let known_rule_ids = input.profile.rules.iter().map(|rule| rule.id.as_str()).collect::<BTreeSet<_>>();
     let finding_rule_ids = finding_rule_ids(&input.findings);
     let findings_known = input.findings.iter().all(|finding| known_rule_ids.contains(finding.rule_id.as_str()));
+    let blocking_rule_ids = input
+        .profile
+        .rules
+        .iter()
+        .filter(|rule| rule.posture == RulePosture::Blocking)
+        .map(|rule| rule.id.as_str())
+        .collect::<BTreeSet<_>>();
+    let blocking_findings_absent =
+        input.findings.iter().all(|finding| !blocking_rule_ids.contains(finding.rule_id.as_str()));
     let non_claims_bound = has_all_required_non_claims(&input.profile.non_claims);
 
     let mut checks = Vec::new();
@@ -263,6 +277,11 @@ pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditRece
         "findings-reference-known-rules",
         findings_known,
         "all structural findings must reference declared inventory rules".to_string(),
+    ));
+    checks.push(check(
+        "blocking-findings-absent",
+        blocking_findings_absent,
+        "blocking structural rules must have no findings in converted scopes".to_string(),
     ));
     checks.push(check(
         "findings-are-structural-candidates",
@@ -311,6 +330,13 @@ fn required_surfaces() -> Vec<AuditSurface> {
         surface("iroh-transport", &["src/iroh/**/*.rs", "src/node/iroh.rs"]),
         surface("policy-evidence-gates", &["src/evidence/**/*.rs", "cairn-policy/**/*.ncl"]),
         surface("operator-workflow", &["src/operator/**/*.rs", "docs/production-*.ncl"]),
+        surface("local-store-adapters", &[
+            "src/artifacts/parts/mod/p*/body.rs",
+            "src/chunk/parts/store/p*/body.rs",
+            "src/retention/parts/mod/p*/body.rs",
+            "src/remote/parts/dataspace/p*/body.rs",
+            "src/iroh/parts/exchange/p*/body.rs",
+        ]),
     ]
 }
 
@@ -326,6 +352,13 @@ fn inventory_rules() -> Vec<AuditRule> {
         inventory_rule("unsafe-block", "unsafe-hotspot", "unsafe block"),
         inventory_rule("panic-bypass", "panic-hotspot", "panic!"),
         inventory_rule("direct-authority-bypass", "direct-authority-bypass", "AuthorityBypass::admit"),
+        blocking_rule(
+            "store-ambient-filesystem-call",
+            "ambient-filesystem",
+            "std::fs/fs child calls and ambient root reacquisition in converted stores",
+            STORE_POSITIVE_FIXTURE_PATH,
+            STORE_NEGATIVE_FIXTURE_PATH,
+        ),
     ]
 }
 
@@ -344,6 +377,24 @@ fn inventory_rule(id: &str, category: &str, pattern_summary: &str) -> AuditRule 
         posture: RulePosture::Inventory,
         positive_fixture: Some(POSITIVE_FIXTURE_PATH.to_string()),
         negative_fixture: Some(NEGATIVE_FIXTURE_PATH.to_string()),
+    }
+}
+
+fn blocking_rule(
+    id: &str,
+    category: &str,
+    pattern_summary: &str,
+    positive_fixture: &str,
+    negative_fixture: &str,
+) -> AuditRule {
+    // r[impl molten.chunk_store.cap_std_regression_gate]
+    AuditRule {
+        id: id.to_string(),
+        category: category.to_string(),
+        pattern_summary: pattern_summary.to_string(),
+        posture: RulePosture::Blocking,
+        positive_fixture: Some(positive_fixture.to_string()),
+        negative_fixture: Some(negative_fixture.to_string()),
     }
 }
 
@@ -416,7 +467,13 @@ mod tests {
         let validation = validate_ast_grep_profile(&profile);
 
         assert!(validation.valid, "{:?}", validation.diagnostics);
-        assert!(profile.rules.iter().all(|rule| rule.posture == RulePosture::Inventory));
+        assert!(
+            profile
+                .rules
+                .iter()
+                .any(|rule| { rule.id == "store-ambient-filesystem-call" && rule.posture == RulePosture::Blocking })
+        );
+        assert!(profile.rules.iter().any(|rule| rule.posture == RulePosture::Inventory));
         assert!(has_all_required_non_claims(&profile.non_claims));
     }
 
@@ -452,8 +509,17 @@ mod tests {
         let scope_hash = scan_scope_hash(&surface_ids);
 
         assert!(is_content_ref(&scope_hash));
-        assert!(profile.rules.iter().all(|rule| rule.positive_fixture.as_deref() == Some(POSITIVE_FIXTURE_PATH)));
-        assert!(profile.rules.iter().all(|rule| rule.negative_fixture.as_deref() == Some(NEGATIVE_FIXTURE_PATH)));
+        assert!(profile.rules.iter().filter(|rule| rule.posture == RulePosture::Inventory).all(|rule| {
+            rule.positive_fixture.as_deref() == Some(POSITIVE_FIXTURE_PATH)
+                && rule.negative_fixture.as_deref() == Some(NEGATIVE_FIXTURE_PATH)
+        }));
+        let store_rule = profile
+            .rules
+            .iter()
+            .find(|rule| rule.id == "store-ambient-filesystem-call")
+            .expect("store blocking rule");
+        assert_eq!(store_rule.positive_fixture.as_deref(), Some(STORE_POSITIVE_FIXTURE_PATH));
+        assert_eq!(store_rule.negative_fixture.as_deref(), Some(STORE_NEGATIVE_FIXTURE_PATH));
     }
 
     #[test]
@@ -483,6 +549,31 @@ mod tests {
         assert_eq!(receipt.finding_rule_ids, vec!["ambient-filesystem-call"]);
         assert!(receipt.non_claims.iter().any(|claim| claim == "not-runtime-authority-admission"));
         assert!(receipt.non_claims.iter().any(|claim| claim == "not-release-readiness-proof"));
+    }
+
+    #[test]
+    fn blocking_store_finding_invalidates_receipt_without_overclaiming_runtime_safety() {
+        // r[verify molten.chunk_store.cap_std_regression_gate]
+        let profile = runtime_authority_profile();
+        let rule_bundle_hash = rule_bundle_hash(&profile);
+        let receipt = build_ast_grep_audit_receipt(AstGrepScanInput {
+            profile,
+            ast_grep_version: AST_GREP_VERSION_FIXTURE.to_string(),
+            rule_bundle_hash,
+            scan_scope_hash: SCOPE_REF_FIXTURE.to_string(),
+            evidence_gate_run_ref: RUN_REF_FIXTURE.to_string(),
+            findings: vec![AstGrepFinding {
+                rule_id: "store-ambient-filesystem-call".to_string(),
+                surface: "local-store-adapters".to_string(),
+                path: "src/chunk/parts/store/p001/body.rs".to_string(),
+                message: "ambient child read in converted store".to_string(),
+            }],
+        });
+
+        assert!(!receipt.valid());
+        assert_eq!(receipt.decision, RECEIPT_DECISION_INVALID);
+        assert_eq!(receipt.claim_scope, CLAIM_SCOPE_STRUCTURAL_HYGIENE);
+        assert!(receipt.checks.iter().any(|check| check.name == "blocking-findings-absent" && !check.passed));
     }
 
     #[test]

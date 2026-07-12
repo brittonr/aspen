@@ -57,7 +57,7 @@ fn ref_set(refs: &[String]) -> OrderedSet<String> {
 fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
     let mut fallback_ref = None;
     for apply_ref in input.apply_refs {
-        let Ok(apply) = crate::retention::read_gc_apply(input.root, apply_ref) else {
+        let Ok(apply) = crate::retention::read_gc_apply_with_root(input.root, apply_ref) else {
             if fallback_ref.is_none() {
                 fallback_ref = Some(apply_ref.as_str());
             }
@@ -84,11 +84,15 @@ struct GcTargets {
     chunks: Vec<String>,
 }
 
-fn gc_targets(root: &Path, pinned_manifests: Vec<String>, mut reachable_chunks: Vec<String>) -> Result<GcTargets> {
+fn gc_targets(
+    root: &CapabilityChunkRoot,
+    pinned_manifests: Vec<String>,
+    mut reachable_chunks: Vec<String>,
+) -> Result<GcTargets> {
     let mut manifests = Vec::new();
-    for manifest_ref in list_manifest_refs(root)? {
+    for manifest_ref in list_manifest_refs_with_root(root)? {
         if pinned_manifests.iter().any(|pinned| pinned == &manifest_ref) {
-            let manifest = read_manifest(root, &manifest_ref)?;
+            let manifest = read_manifest_with_root(root, &manifest_ref)?;
             for chunk in manifest.chunks {
                 if !reachable_chunks.iter().any(|reachable| reachable == &chunk.chunk_ref) {
                     push_bounded(
@@ -109,7 +113,7 @@ fn gc_targets(root: &Path, pinned_manifests: Vec<String>, mut reachable_chunks: 
         }
     }
     let mut chunks = Vec::new();
-    for chunk_ref in list_chunk_refs(root)? {
+    for chunk_ref in list_chunk_refs_with_root(root)? {
         if reachable_chunks.iter().any(|reachable| reachable == &chunk_ref) {
             continue;
         }
@@ -119,7 +123,7 @@ fn gc_targets(root: &Path, pinned_manifests: Vec<String>, mut reachable_chunks: 
 }
 
 struct GcEnv<'a> {
-    root: &'a Path,
+    retention_root: &'a crate::local_store::RetentionStoreRoot,
     is_dry_run: bool,
     evidence: &'a crate::retention::DestructiveEvidence,
     apply_refs: &'a [String],
@@ -146,17 +150,19 @@ struct GcNotes {
 
 impl GcNotes {
     fn consider(&mut self, env: &GcEnv<'_>, object: GcObject<'_>) -> Result<()> {
-        let admission = crate::retention::admit_destructive_evidence(crate::retention::DestructiveAdmissionInput {
-            root: env.root,
-            evidence: env.evidence,
-            object_ref: object.object_ref,
-            object_kind: object.object_kind,
-            retention_class: object.retention_class,
-            action: env.action,
-        })?;
+        let admission = crate::retention::admit_destructive_evidence_with_root(
+            crate::retention::DestructiveAdmissionInput {
+                root: env.retention_root,
+                evidence: env.evidence,
+                object_ref: object.object_ref,
+                object_kind: object.object_kind,
+                retention_class: object.retention_class,
+                action: env.action,
+            },
+        )?;
         self.note_admission(&admission)?;
-        let evaluation = crate::retention::evaluate(crate::retention::EvaluationInput {
-            root: env.root,
+        let evaluation = crate::retention::evaluate_with_root(crate::retention::EvaluationInput {
+            root: env.retention_root,
             object_ref: object.object_ref,
             object_kind: object.object_kind,
             retention_class: object.retention_class,
@@ -214,7 +220,7 @@ impl GcNotes {
 
     fn note_execution(&mut self, env: &GcEnv<'_>, object: GcObject<'_>) -> Result<bool> {
         let apply_ref = matching_apply_ref(ApplyRefMatchInput {
-            root: env.root,
+            root: env.retention_root,
             apply_refs: env.apply_refs,
             subsystem: "chunk-gc",
             action: env.action,
@@ -222,8 +228,9 @@ impl GcNotes {
             object_kind: object.object_kind,
             retention_class: object.retention_class,
         });
-        let execution_gate = crate::retention::store_gc_execution_gate(crate::retention::GcExecutionGateInput {
-            root: env.root,
+        let execution_gate =
+            crate::retention::store_gc_execution_gate_with_root(crate::retention::GcExecutionGateInput {
+            root: env.retention_root,
             subsystem: "chunk-gc",
             action: env.action,
             object_ref: object.object_ref,
@@ -330,7 +337,7 @@ fn gc_tombstone_value(input: GcReceiptInput<'_>) -> Option<IoValue> {
 }
 
 struct GcFinishInput<'a> {
-    root: &'a Path,
+    root: &'a CapabilityChunkRoot,
     is_dry_run: bool,
     targets: GcTargets,
     notes: GcNotes,

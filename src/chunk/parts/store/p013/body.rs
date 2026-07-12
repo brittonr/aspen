@@ -53,13 +53,13 @@ fn parse_iroh_ticket_value(value: &IoValue) -> Result<IrohChunkTicket> {
     })
 }
 
-fn read_iroh_ticket(root: &Path, manifest_ref: &str) -> Result<IoValue> {
-    let bytes = fs::read(iroh_ticket_path(root, manifest_ref)?).map_err(MoltenError::from)?;
+fn read_iroh_ticket(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<IoValue> {
+    let bytes = root.root().read(&iroh_ticket_path(manifest_ref)?)?;
     parse_canonical_bytes(&bytes)
 }
 
-fn read_iroh_blob(root: &Path, blob_ref: &str) -> Result<Vec<u8>> {
-    let bytes = fs::read(iroh_blob_path(root, blob_ref)?).map_err(MoltenError::from)?;
+fn read_iroh_blob(root: &CapabilityChunkRoot, blob_ref: &str) -> Result<Vec<u8>> {
+    let bytes = root.root().read(&iroh_blob_path(blob_ref)?)?;
     let actual_ref = hash_blob_bytes(&bytes);
     if actual_ref != blob_ref {
         return Err(MoltenError::invalid_harness(format!("Iroh blob {blob_ref} hashes to {actual_ref}")));
@@ -67,19 +67,28 @@ fn read_iroh_blob(root: &Path, blob_ref: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn index_put(root: &Path, manifest_value: &IoValue, chunks: &[ChunkRef], receipt_value: &IoValue) -> Result<()> {
+fn index_put(
+    root: &CapabilityChunkRoot,
+    manifest_value: &IoValue,
+    chunks: &[ChunkRef],
+    receipt_value: &IoValue,
+) -> Result<()> {
     let manifest = parse_manifest_value(manifest_value, None)?;
     let chunk_refs = chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
     index_set_manifest_chunk_availability(root, &manifest, &chunk_refs, &[], Some(receipt_value))
 }
 
-fn index_manifest_available(root: &Path, manifest: &ChunkManifest, receipt_value: &IoValue) -> Result<()> {
+fn index_manifest_available(
+    root: &CapabilityChunkRoot,
+    manifest: &ChunkManifest,
+    receipt_value: &IoValue,
+) -> Result<()> {
     let chunk_refs = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
     index_set_manifest_chunk_availability(root, manifest, &chunk_refs, &[], Some(receipt_value))
 }
 
 fn index_set_manifest_chunk_availability(
-    root: &Path,
+    root: &CapabilityChunkRoot,
     manifest: &ChunkManifest,
     available: &[String],
     missing: &[String],
@@ -102,7 +111,7 @@ fn index_set_manifest_chunk_availability(
             chunks.insert(chunk.chunk_ref.as_str(), chunk_value.as_slice()).map_err(index_error)?;
             let status = if missing.contains(&chunk.chunk_ref) {
                 "missing"
-            } else if available.contains(&chunk.chunk_ref) || chunk_path(root, &chunk.chunk_ref)?.exists() {
+            } else if available.contains(&chunk.chunk_ref) || root.root().try_exists(&chunk_path(&chunk.chunk_ref)?)? {
                 "available"
             } else {
                 "missing"
@@ -117,7 +126,7 @@ fn index_set_manifest_chunk_availability(
 }
 
 fn index_set_partial_fetch(
-    root: &Path,
+    root: &CapabilityChunkRoot,
     manifest_ref: &str,
     status: &str,
     missing_before: &[String],
@@ -134,7 +143,7 @@ fn index_set_partial_fetch(
 }
 
 fn index_set_pin(
-    root: &Path,
+    root: &CapabilityChunkRoot,
     kind: &str,
     reference: &str,
     pinned: bool,
@@ -158,7 +167,7 @@ fn index_set_pin(
 }
 
 struct IndexApplyGcInput<'a> {
-    root: &'a Path,
+    root: &'a CapabilityChunkRoot,
     dry_run: bool,
     removed_manifests: &'a [String],
     removed_chunks: &'a [String],
@@ -196,7 +205,7 @@ fn index_apply_gc(input: &IndexApplyGcInput<'_>) -> Result<()> {
     write_txn.commit().map_err(index_error)
 }
 
-fn store_receipt(root: &Path, receipt_value: &IoValue) -> Result<()> {
+fn store_receipt(root: &CapabilityChunkRoot, receipt_value: &IoValue) -> Result<()> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     store_receipt_in_tx(&write_txn, receipt_value)?;
@@ -211,9 +220,9 @@ fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IoVal
     Ok(())
 }
 
-fn ensure_index_tables(root: &Path) -> Result<Database> {
-    fs::create_dir_all(root).map_err(MoltenError::from)?;
-    let db = Database::create(index_path(root)).map_err(index_error)?;
+fn ensure_index_tables(root: &CapabilityChunkRoot) -> Result<Database> {
+    let database_file = root.root().open_database_file(&store_path(INDEX_FILE)?)?;
+    let db = Database::builder().create_file(database_file).map_err(index_error)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     {
         write_txn.open_table(INDEX_MANIFESTS).map_err(index_error)?;
@@ -280,10 +289,6 @@ fn str_table_keys(table: &redb::Table<'_, &str, &str>) -> Result<Vec<String>> {
         .map_err(index_error)?
         .map(|item| item.map(|(key, _value)| key.value().to_string()).map_err(index_error))
         .collect()
-}
-
-fn index_path(root: &Path) -> PathBuf {
-    root.join(INDEX_FILE)
 }
 
 fn pin_key(kind: &str, reference: &str) -> String {

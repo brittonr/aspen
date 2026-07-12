@@ -1,6 +1,11 @@
 
 pub fn read_object(root: &Path, manifest_ref: &str) -> Result<ChunkStoreRead> {
-    let manifest = match read_manifest(root, manifest_ref) {
+    let root = open_capability_chunk_root(root)?;
+    read_object_with_root(&root, manifest_ref)
+}
+
+pub fn read_object_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkStoreRead> {
+    let manifest = match read_manifest_with_root(root, manifest_ref) {
         Ok(manifest) => manifest,
         Err(error) => {
             let receipt_value = denial_receipt_value("fetch", Some(manifest_ref), &[], error.to_string(), vec![
@@ -54,7 +59,7 @@ pub fn read_object(root: &Path, manifest_ref: &str) -> Result<ChunkStoreRead> {
 }
 
 struct SpanInput<'a> {
-    root: &'a Path,
+    root: &'a CapabilityChunkRoot,
     manifest: &'a ChunkManifest,
     refs: &'a [String],
     offset: u64,
@@ -167,7 +172,17 @@ fn read_span(input: SpanInput<'_>) -> Result<SpanData> {
 }
 
 pub fn range_read(root: &Path, manifest_ref: &str, offset: u64, length: u64) -> Result<ChunkStoreRangeRead> {
-    let manifest = match read_manifest(root, manifest_ref) {
+    let root = open_capability_chunk_root(root)?;
+    range_read_with_root(&root, manifest_ref, offset, length)
+}
+
+pub fn range_read_with_root(
+    root: &CapabilityChunkRoot,
+    manifest_ref: &str,
+    offset: u64,
+    length: u64,
+) -> Result<ChunkStoreRangeRead> {
+    let manifest = match read_manifest_with_root(root, manifest_ref) {
         Ok(manifest) => manifest,
         Err(error) => {
             let receipt_value = denial_receipt_value("range-read", Some(manifest_ref), &[], error.to_string(), vec![
@@ -233,11 +248,16 @@ pub fn range_read(root: &Path, manifest_ref: &str, offset: u64, length: u64) -> 
 }
 
 pub fn missing_chunks(root: &Path, manifest_ref: &str) -> Result<Vec<String>> {
-    let manifest = read_manifest(root, manifest_ref)?;
+    let root = open_capability_chunk_root(root)?;
+    missing_chunks_with_root(&root, manifest_ref)
+}
+
+pub fn missing_chunks_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<Vec<String>> {
+    let manifest = read_manifest_with_root(root, manifest_ref)?;
     let mut missing = Vec::new();
     let mut available = Vec::new();
     for chunk in &manifest.chunks {
-        if chunk_path(root, &chunk.chunk_ref)?.exists() {
+        if root.root().try_exists(&chunk_path(&chunk.chunk_ref)?)? {
             push_bounded(
                 &mut available,
                 chunk.chunk_ref.clone(),

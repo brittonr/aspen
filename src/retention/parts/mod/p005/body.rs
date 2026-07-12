@@ -2,9 +2,24 @@
 pub fn store_remote_gc_clearance_response(
     input: RemoteGcClearanceResponseInput<'_>,
 ) -> Result<RemoteGcClearanceResponse> {
-    ensure_store(input.root)?;
+    let root = open_capability_retention_root(input.root)?;
+    store_remote_gc_clearance_response_with_root(RemoteGcClearanceResponseInput {
+        root: &root,
+        request_value: input.request_value,
+        evidence_refs: input.evidence_refs,
+        retained_refs: input.retained_refs,
+        is_current: input.is_current,
+        revoked_refs: input.revoked_refs,
+        diagnostics: input.diagnostics,
+    })
+}
+
+pub fn store_remote_gc_clearance_response_with_root(
+    input: RemoteGcClearanceResponseInput<'_, CapabilityRetentionRoot>,
+) -> Result<RemoteGcClearanceResponse> {
+    ensure_store_with_root(input.root)?;
     let request = parse_remote_gc_clearance_request(input.request_value)?;
-    let diagnostics = remote_clearance_response_diagnostics(input)?;
+    let diagnostics = remote_clearance_response_diagnostics(&input)?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let mut clearance_evidence_refs = request.evidence_refs.clone();
     for reference in input.evidence_refs {
@@ -35,7 +50,11 @@ pub fn store_remote_gc_clearance_response(
     let clearance = parse_remote_gc_clearance(&clearance_value)?;
     let value = remote_gc_clearance_response_value(&request, &clearance, decision, &diagnostics)?;
     let response = parse_remote_gc_clearance_response(&value)?;
-    write_store_value(&remote_clearance_response_path(input.root, &response.response_ref)?, &response.value)?;
+    write_store_value_with_root(
+        input.root,
+        &capability_ref_path(REMOTE_CLEARANCE_RESPONSE_DIR, &response.response_ref)?,
+        &response.value,
+    )?;
     Ok(response)
 }
 
@@ -108,7 +127,20 @@ pub fn parse_remote_gc_clearance_response(value: &IoValue) -> Result<RemoteGcCle
 }
 
 pub fn import_remote_gc_clearance_response(input: RemoteGcClearanceImportInput<'_>) -> Result<RemoteGcClearanceImport> {
-    ensure_store(input.root)?;
+    let root = open_capability_retention_root(input.root)?;
+    import_remote_gc_clearance_response_with_root(RemoteGcClearanceImportInput {
+        root: &root,
+        request_value: input.request_value,
+        response_value: input.response_value,
+        expected_peer_ref: input.expected_peer_ref,
+        expected_remote_ref: input.expected_remote_ref,
+    })
+}
+
+pub fn import_remote_gc_clearance_response_with_root(
+    input: RemoteGcClearanceImportInput<'_, CapabilityRetentionRoot>,
+) -> Result<RemoteGcClearanceImport> {
+    ensure_store_with_root(input.root)?;
     if let Some(peer_ref) = input.expected_peer_ref {
         require_ref(peer_ref, "retention remote clearance import expected peer ref")?;
     }
@@ -131,16 +163,21 @@ pub fn import_remote_gc_clearance_response(input: RemoteGcClearanceImportInput<'
                 diagnostics: &diagnostics,
             })?;
             let import = parse_remote_gc_clearance_import(&value)?;
-            write_store_value(&remote_clearance_import_path(input.root, &import.import_ref)?, &import.value)?;
+            write_store_value_with_root(
+                input.root,
+                &capability_ref_path(REMOTE_CLEARANCE_IMPORT_DIR, &import.import_ref)?,
+                &import.value,
+            )?;
             return Ok(import);
         }
     };
     let mut diagnostics = Vec::new();
-    push_remote_clearance_import_diagnostics(&mut diagnostics, &request, &response, input)?;
+    push_remote_clearance_import_diagnostics(&mut diagnostics, &request, &response, &input)?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let clearance_ref = if decision == "pass" {
-        write_store_value(
-            &remote_clearance_path(input.root, &response.clearance.clearance_ref)?,
+        write_store_value_with_root(
+            input.root,
+            &capability_ref_path(REMOTE_CLEARANCE_DIR, &response.clearance.clearance_ref)?,
             &response.clearance.value,
         )?;
         Some(response.clearance.clearance_ref.clone())
@@ -157,7 +194,11 @@ pub fn import_remote_gc_clearance_response(input: RemoteGcClearanceImportInput<'
         diagnostics: &diagnostics,
     })?;
     let import = parse_remote_gc_clearance_import(&value)?;
-    write_store_value(&remote_clearance_import_path(input.root, &import.import_ref)?, &import.value)?;
+    write_store_value_with_root(
+        input.root,
+        &capability_ref_path(REMOTE_CLEARANCE_IMPORT_DIR, &import.import_ref)?,
+        &import.value,
+    )?;
     Ok(import)
 }
 
@@ -227,9 +268,10 @@ pub fn parse_remote_gc_clearance_import(value: &IoValue) -> Result<RemoteGcClear
 pub async fn run_remote_gc_clearance_live_loopback(
     input: RemoteGcClearanceLiveLoopbackInput<'_>,
 ) -> Result<RemoteGcClearanceLiveLoopback> {
-    ensure_store(input.root)?;
+    let retention_root = open_capability_retention_root(input.root)?;
+    ensure_store_with_root(&retention_root)?;
     validate_remote_gc_clearance_live_loopback_input(&input)?;
-    let request = store_remote_gc_clearance_request(input.root, &RemoteGcClearanceRequestInput {
+    let request = store_remote_gc_clearance_request_with_root(&retention_root, &RemoteGcClearanceRequestInput {
         requester_ref: input.requester_ref,
         peer_ref: input.peer_ref,
         object_ref: input.object_ref,
@@ -246,8 +288,8 @@ pub async fn run_remote_gc_clearance_live_loopback(
         request_control(&input, &request.request_ref, &request_control_evidence)?;
     let request_live = request_leg(&input, &request_control_value, &request_control_evidence).await?;
 
-    let response = store_remote_gc_clearance_response(RemoteGcClearanceResponseInput {
-        root: input.root,
+    let response = store_remote_gc_clearance_response_with_root(RemoteGcClearanceResponseInput {
+        root: &retention_root,
         request_value: &request.value,
         evidence_refs: input.response_evidence_refs,
         retained_refs: input.retained_refs,
@@ -260,8 +302,8 @@ pub async fn run_remote_gc_clearance_live_loopback(
         response_control(&input, &request.request_ref, &response.response_ref, &response_control_evidence)?;
     let response_live = response_leg(&input, &response_control_value, &response_control_evidence).await?;
 
-    let import = import_remote_gc_clearance_response(RemoteGcClearanceImportInput {
-        root: input.root,
+    let import = import_remote_gc_clearance_response_with_root(RemoteGcClearanceImportInput {
+        root: &retention_root,
         request_value: &request.value,
         response_value: &response.value,
         expected_peer_ref: Some(input.peer_ref),
@@ -278,7 +320,7 @@ pub async fn run_remote_gc_clearance_live_loopback(
         response_live: &response_live,
         transport_diagnostics: &transport_diagnostics,
     })?;
-    let workflow = store_remote_gc_clearance_live_workflow(input.root, &workflow_value)?;
+    let workflow = store_remote_gc_clearance_live_workflow_with_root(&retention_root, &workflow_value)?;
     Ok(RemoteGcClearanceLiveLoopback {
         request,
         response,

@@ -2,9 +2,10 @@
 pub async fn send_remote_gc_clearance_live_request(
     input: RemoteGcClearanceLiveRequestSendInput<'_>,
 ) -> Result<RemoteGcClearanceLiveRequestSend> {
-    ensure_store(input.root)?;
+    let retention_root = open_capability_retention_root(input.root)?;
+    ensure_store_with_root(&retention_root)?;
     validate_remote_gc_clearance_live_request_send_input(&input)?;
-    let request = store_remote_gc_clearance_request(input.root, &RemoteGcClearanceRequestInput {
+    let request = store_remote_gc_clearance_request_with_root(&retention_root, &RemoteGcClearanceRequestInput {
         requester_ref: input.requester_ref,
         peer_ref: input.peer_ref,
         object_ref: input.object_ref,
@@ -61,11 +62,12 @@ pub async fn send_remote_gc_clearance_live_request(
 pub async fn send_remote_gc_clearance_live_response(
     input: RemoteGcClearanceLiveResponseSendInput<'_>,
 ) -> Result<RemoteGcClearanceLiveResponseSend> {
-    ensure_store(input.root)?;
+    let retention_root = open_capability_retention_root(input.root)?;
+    ensure_store_with_root(&retention_root)?;
     validate_remote_gc_clearance_live_response_send_input(&input)?;
     let request = parse_remote_gc_clearance_request(input.request_value)?;
-    let response = store_remote_gc_clearance_response(RemoteGcClearanceResponseInput {
-        root: input.root,
+    let response = store_remote_gc_clearance_response_with_root(RemoteGcClearanceResponseInput {
+        root: &retention_root,
         request_value: input.request_value,
         evidence_refs: input.response_evidence_refs,
         retained_refs: input.retained_refs,
@@ -118,12 +120,13 @@ pub async fn send_remote_gc_clearance_live_response(
 pub fn import_remote_gc_clearance_live_workflow(
     input: RemoteGcClearanceLiveImportWorkflowInput<'_>,
 ) -> Result<RemoteGcClearanceLiveImportWorkflow> {
-    ensure_store(input.root)?;
+    let retention_root = open_capability_retention_root(input.root)?;
+    ensure_store_with_root(&retention_root)?;
     validate_remote_gc_clearance_live_import_workflow_input(&input)?;
     let request = parse_remote_gc_clearance_request(input.request_value)?;
     let response_ref = crate::preserves_rail::canonical_hash(input.response_value)?;
-    let import = import_remote_gc_clearance_response(RemoteGcClearanceImportInput {
-        root: input.root,
+    let import = import_remote_gc_clearance_response_with_root(RemoteGcClearanceImportInput {
+        root: &retention_root,
         request_value: input.request_value,
         response_value: input.response_value,
         expected_peer_ref: input.expected_peer_ref,
@@ -167,7 +170,7 @@ pub fn import_remote_gc_clearance_live_workflow(
         response_ingress_ref: input.response_ingress_ref,
         transport_diagnostics: &diagnostics,
     })?;
-    let workflow = store_remote_gc_clearance_live_workflow(input.root, &workflow_value)?;
+    let workflow = store_remote_gc_clearance_live_workflow_with_root(&retention_root, &workflow_value)?;
     Ok(RemoteGcClearanceLiveImportWorkflow {
         import,
         workflow,

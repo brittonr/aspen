@@ -126,6 +126,13 @@ fn receipt_value(input: &ReceiptValueInput<'_>) -> IoValue {
     ])
 }
 
+fn blob_store_path(bundle_ref: &str) -> Result<LocalStorePath> {
+    let hex = content_ref_hex(bundle_ref)
+        .map_err(|error| MoltenError::invalid_harness(format!("unsupported Iroh bundle ref {bundle_ref}: {error}")))?;
+    LocalStorePath::parse(&format!("blobs/blake3_{hex}.bin"))
+}
+
+#[cfg(test)]
 fn blob_path(root: &Path, bundle_ref: &str) -> Result<std::path::PathBuf> {
     let hex = content_ref_hex(bundle_ref)
         .map_err(|error| MoltenError::invalid_harness(format!("unsupported Iroh bundle ref {bundle_ref}: {error}")))?;

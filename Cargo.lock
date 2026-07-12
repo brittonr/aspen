@@ -3608,6 +3608,7 @@ dependencies = [
  "basalt",
  "blake3",
  "cairn-core",
+ "cap-fs-ext",
  "cap-std",
  "clap 4.6.1",
  "hegeltest",

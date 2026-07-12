@@ -1,6 +1,6 @@
 
-fn check_bindings<S>(
-    input: &RemoteClearanceRefsInput<'_>,
+fn check_bindings<Root: ?Sized, S>(
+    input: &RemoteClearanceRefsInput<'_, Root>,
     clearance: &RemoteGcClearance,
     diagnostics: &mut S,
 ) -> Result<bool>
@@ -19,8 +19,8 @@ where
     Ok(is_admitted)
 }
 
-fn check_clear_ref<S>(
-    input: &RemoteClearanceRefsInput<'_>,
+fn check_clear_ref<Root: ?Sized, S>(
+    input: &RemoteClearanceRefsInput<'_, Root>,
     reference: &str,
     clearance: &RemoteGcClearance,
     diagnostics: &mut S,
@@ -48,8 +48,8 @@ fn collect_clear_refs(
     push_bounded(peer_refs, clearance.peer_ref, MAX_RETENTION_REFS, "retention remote clearance peer refs")
 }
 
-fn push_missing_clear_refs<S>(
-    input: &RemoteClearanceRefsInput<'_>,
+fn push_missing_clear_refs<Root: ?Sized, S>(
+    input: &RemoteClearanceRefsInput<'_, Root>,
     remote_refs: &[String],
     peer_refs: &[String],
     diagnostics: &mut S,
@@ -70,14 +70,26 @@ where
     Ok(())
 }
 
-fn admit_remote_clearance_refs(input: RemoteClearanceRefsInput<'_>) -> Result<RemoteClearanceRefsResult> {
+fn admit_remote_clearance_refs_with_root(
+    input: RemoteClearanceRefsInput<'_, CapabilityRetentionRoot>,
+) -> Result<RemoteClearanceRefsResult> {
+    admit_remote_clearance_refs_core(input, read_remote_gc_clearance_with_root)
+}
+
+fn admit_remote_clearance_refs_core<Root: ?Sized, ReadClearance>(
+    input: RemoteClearanceRefsInput<'_, Root>,
+    mut read_clearance: ReadClearance,
+) -> Result<RemoteClearanceRefsResult>
+where
+    ReadClearance: FnMut(&Root, &str) -> Result<RemoteGcClearance>,
+{
     let mut diagnostics = Vec::new();
     let mut admitted_refs = Vec::new();
     let mut remote_refs = Vec::new();
     let mut peer_refs = Vec::new();
     let mut scope_mismatches = 0usize;
     for reference in input.refs {
-        let clearance = match read_remote_gc_clearance(input.root, reference) {
+        let clearance = match read_clearance(input.root, reference) {
             Ok(clearance) => clearance,
             Err(error) => {
                 push_clear_note(&mut diagnostics, format!("remote-clearance-unreadable:{}:{}", reference, error))?;
@@ -102,26 +114,32 @@ fn admit_remote_clearance_refs(input: RemoteClearanceRefsInput<'_>) -> Result<Re
     })
 }
 
-fn read_evidence_admission(root: &Path, admission_ref: &str) -> Result<EvidenceAdmission> {
+fn read_evidence_admission_with_root(
+    root: &CapabilityRetentionRoot,
+    admission_ref: &str,
+) -> Result<EvidenceAdmission> {
     require_ref(admission_ref, "retention evidence admission ref")?;
-    let value = read_store_value(&admission_path(root, admission_ref)?)?;
+    let value = read_store_value_with_root(root, &capability_ref_path(ADMISSION_DIR, admission_ref)?)?;
     parse_evidence_admission(&value)
 }
 
-fn read_remote_gc_clearance(root: &Path, clearance_ref: &str) -> Result<RemoteGcClearance> {
+fn read_remote_gc_clearance_with_root(
+    root: &CapabilityRetentionRoot,
+    clearance_ref: &str,
+) -> Result<RemoteGcClearance> {
     require_ref(clearance_ref, "retention remote GC clearance ref")?;
-    let value = read_store_value(&remote_clearance_path(root, clearance_ref)?)?;
+    let value = read_store_value_with_root(root, &capability_ref_path(REMOTE_CLEARANCE_DIR, clearance_ref)?)?;
     parse_remote_gc_clearance(&value)
 }
 
-fn admit_refs<'a>(
-    root: &'a Path,
+fn admit_refs_with_root<'a>(
+    root: &'a CapabilityRetentionRoot,
     refs: &'a [String],
     expected_kind: &'a str,
     scope: &'a AdmissionScope<'a>,
     required_remote_refs: &'a [String],
 ) -> Result<AdmissionRefsResult> {
-    admit_evidence_refs(AdmissionRefsInput {
+    admit_evidence_refs_with_root(AdmissionRefsInput {
         root,
         refs,
         expected_kind,
@@ -130,12 +148,12 @@ fn admit_refs<'a>(
     })
 }
 
-fn admit_clear_refs<'a>(
-    root: &'a Path,
+fn admit_clear_refs_with_root<'a>(
+    root: &'a CapabilityRetentionRoot,
     evidence: &'a DestructiveEvidence,
     scope: &'a AdmissionScope<'a>,
 ) -> Result<RemoteClearanceRefsResult> {
-    admit_remote_clearance_refs(RemoteClearanceRefsInput {
+    admit_remote_clearance_refs_with_root(RemoteClearanceRefsInput {
         root,
         refs: &evidence.remote_clearance_refs,
         scope,
@@ -163,14 +181,36 @@ struct AdmitFlags {
     has_remote_refs: bool,
 }
 
-fn admit_set<'a>(root: &'a Path, evidence: &'a DestructiveEvidence, scope: &'a AdmissionScope<'a>) -> Result<AdmitSet> {
+fn admit_set_with_root<'a>(
+    root: &'a CapabilityRetentionRoot,
+    evidence: &'a DestructiveEvidence,
+    scope: &'a AdmissionScope<'a>,
+) -> Result<AdmitSet> {
     Ok(AdmitSet {
-        policy: admit_refs(root, &evidence.policy_refs, ADMISSION_KIND_POLICY, scope, &[])?,
-        authority: admit_refs(root, &evidence.authority_refs, ADMISSION_KIND_AUTHORITY, scope, &[])?,
-        supporting: admit_refs(root, &evidence.evidence_refs, ADMISSION_KIND_SUPPORTING_EVIDENCE, scope, &[])?,
-        reference_index: admit_refs(root, &evidence.reference_index_refs, ADMISSION_KIND_REFERENCE_INDEX, scope, &[])?,
-        remote_gc: admit_refs(root, &evidence.remote_gc_refs, ADMISSION_KIND_REMOTE_GC, scope, &evidence.remote_refs)?,
-        remote_clearance: admit_clear_refs(root, evidence, scope)?,
+        policy: admit_refs_with_root(root, &evidence.policy_refs, ADMISSION_KIND_POLICY, scope, &[])?,
+        authority: admit_refs_with_root(root, &evidence.authority_refs, ADMISSION_KIND_AUTHORITY, scope, &[])?,
+        supporting: admit_refs_with_root(
+            root,
+            &evidence.evidence_refs,
+            ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            scope,
+            &[],
+        )?,
+        reference_index: admit_refs_with_root(
+            root,
+            &evidence.reference_index_refs,
+            ADMISSION_KIND_REFERENCE_INDEX,
+            scope,
+            &[],
+        )?,
+        remote_gc: admit_refs_with_root(
+            root,
+            &evidence.remote_gc_refs,
+            ADMISSION_KIND_REMOTE_GC,
+            scope,
+            &evidence.remote_refs,
+        )?,
+        remote_clearance: admit_clear_refs_with_root(root, evidence, scope)?,
     })
 }
 
@@ -243,7 +283,21 @@ where
 }
 
 pub fn admit_destructive_evidence(input: DestructiveAdmissionInput<'_>) -> Result<DestructiveAdmission> {
-    ensure_store(input.root)?;
+    let root = open_capability_retention_root(input.root)?;
+    admit_destructive_evidence_with_root(DestructiveAdmissionInput {
+        root: &root,
+        evidence: input.evidence,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+    })
+}
+
+pub fn admit_destructive_evidence_with_root(
+    input: DestructiveAdmissionInput<'_, CapabilityRetentionRoot>,
+) -> Result<DestructiveAdmission> {
+    ensure_store_with_root(input.root)?;
     validate_destructive_evidence(input.evidence)?;
     require_ref(input.object_ref, "retention admission object ref")?;
     validate_name(input.object_kind, "retention admission object kind")?;
@@ -258,7 +312,7 @@ pub fn admit_destructive_evidence(input: DestructiveAdmissionInput<'_>) -> Resul
         retention_class: input.retention_class,
         action: input.action,
     };
-    let set = admit_set(input.root, input.evidence, &scope)?;
+    let set = admit_set_with_root(input.root, input.evidence, &scope)?;
     let flags = admit_flags(input.evidence, &set);
     collect_admit_outputs(&mut diagnostics, &mut admitted_refs, set)?;
     let has_delete_authority = is_destructive_action(input.action)

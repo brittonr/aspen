@@ -1,4 +1,5 @@
     use super::*;
+    use std::fs;
 
     type AtomicU64 = std::sync::atomic::AtomicU64;
     type Ordering = std::sync::atomic::Ordering;
@@ -9,7 +10,9 @@
 
     #[test]
     fn local_iroh_publish_fetch_verifies_bundle_refs() {
-        let root = temp_dir("iroh");
+        // r[verify molten.chunk_store.cap_std_conversion_validation]
+        let root_path = temp_dir("iroh");
+        let root = CapabilityExchangeRoot::open(&root_path).expect("open exchange capability root");
         let suite = parse_text(
             r#"<harness-suite-v1 "molten.harness.suite.v1" "iroh" 1
               <budget-v1 "molten.harness.budget.v1" <limits 8 2 32 65536>>
@@ -21,8 +24,8 @@
         let run = crate::harness::run_suite_value(&suite).expect("run suite");
         let bundle = crate::harness::sealed_repro_bundle_value_with_command(&run.report_value, &["molten".to_string()])
             .expect("seal bundle");
-        let published = publish_bundle(&root, &bundle, "node:local").expect("publish bundle");
-        let fetched = fetch_bundle(&FetchBundleInput {
+        let published = publish_bundle_with_root(&root, &bundle, "node:local").expect("publish bundle");
+        let fetched = fetch_bundle_with_root(&FetchBundleInput {
             root: &root,
             ticket: &published.ticket,
             expected_bundle_ref: Some(&published.bundle_ref),
@@ -32,7 +35,7 @@
         })
         .expect("fetch bundle");
         assert_eq!(published.bundle_ref, fetched.bundle_ref);
-        let error = fetch_bundle(&FetchBundleInput {
+        let error = fetch_bundle_with_root(&FetchBundleInput {
             root: &root,
             ticket: &published.ticket,
             expected_bundle_ref: Some("blake3:deadbeef"),

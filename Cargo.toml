@@ -27,6 +27,7 @@ path = "src/main.rs"
 [dependencies]
 basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", version = "0.1.0" }
 blake3 = "1"
+cap-fs-ext = "3"
 cap-std = "3"
 molten-core = { path = "crates/molten-core" }
 cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", package = "cairn-core" }

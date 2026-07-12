@@ -6,8 +6,8 @@ struct ApplyOutcome {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct GcExecutionGateInput<'a> {
-    pub root: &'a Path,
+pub struct GcExecutionGateInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub subsystem: &'a str,
     pub action: &'a str,
     pub object_ref: &'a str,
@@ -35,8 +35,8 @@ pub struct GcExecutionGate {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct GcAuditInput<'a> {
-    pub root: &'a Path,
+pub struct GcAuditInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub execution_ref: &'a str,
 }
 
@@ -78,8 +78,8 @@ pub struct RetentionGcLifecycleDecision {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct CandidateExplainInput<'a> {
-    pub root: &'a Path,
+pub struct CandidateExplainInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub object_ref: &'a str,
     pub object_kind: Option<&'a str>,
     pub retention_class: Option<&'a str>,
@@ -146,8 +146,8 @@ impl CandidateBundleExportProfile {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct CandidateBundleExportInput<'a> {
-    pub root: &'a Path,
+pub struct CandidateBundleExportInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub explain_value: &'a IoValue,
     pub out: &'a Path,
     pub profile: CandidateBundleExportProfile,
@@ -186,8 +186,8 @@ pub struct CandidateBundleProfile {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct CandidateBundleVerifyInput<'a> {
-    pub bundle_dir: &'a Path,
+pub struct CandidateBundleVerifyInput<'a, Root: ?Sized = Path> {
+    pub bundle_dir: &'a Root,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

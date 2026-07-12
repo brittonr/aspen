@@ -40,10 +40,15 @@ fn parse_name_pointer_value(value: &IoValue) -> Result<ArtifactNamePointer> {
 }
 
 pub fn list_name_pointers(root: &Path) -> Result<Vec<ArtifactNamePointer>> {
+    let root = open_capability_artifact_root(root)?;
+    list_name_pointers_with_root(&root)
+}
+
+pub fn list_name_pointers_with_root(root: &CapabilityArtifactRoot) -> Result<Vec<ArtifactNamePointer>> {
     all_name_pointers(root)
 }
 
-fn all_name_pointers(root: &Path) -> Result<Vec<ArtifactNamePointer>> {
+fn all_name_pointers(root: &CapabilityArtifactRoot) -> Result<Vec<ArtifactNamePointer>> {
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let names = read_txn.open_table(INDEX_NAMES).map_err(index_error)?;
@@ -177,7 +182,7 @@ fn release_snapshot_subject_input_from_snapshot(snapshot: &ReleaseSnapshot) -> R
 }
 
 fn release_snapshot_verify_core(
-    root: &Path,
+    root: &CapabilityArtifactRoot,
     artifact: &ArtifactRecord,
     snapshot: &ReleaseSnapshot,
     required_caveats: &[String],
@@ -205,7 +210,7 @@ fn release_snapshot_verify_core(
         )?;
     }
     for member_ref in &expected_members {
-        if let Err(error) = read_artifact(root, member_ref) {
+        if let Err(error) = read_artifact_with_root(root, member_ref) {
             exact_member_closure = false;
             push_bounded(
                 &mut diagnostics,
@@ -383,7 +388,7 @@ fn sorted_unique(refs: &[String]) -> Vec<String> {
     refs.iter().cloned().collect::<std::collections::BTreeSet<_>>().into_iter().collect()
 }
 
-fn registry_contains_structural_ref(root: &Path, target_ref: &str) -> Result<bool> {
+fn registry_contains_structural_ref(root: &CapabilityArtifactRoot, target_ref: &str) -> Result<bool> {
     for receipt in receipt_values(root)? {
         if crate::preserves_rail::contains_structural_content_ref(&receipt, target_ref)? {
             return Ok(true);
@@ -392,7 +397,7 @@ fn registry_contains_structural_ref(root: &Path, target_ref: &str) -> Result<boo
     Ok(false)
 }
 
-fn receipt_values(root: &Path) -> Result<Vec<IoValue>> {
+fn receipt_values(root: &CapabilityArtifactRoot) -> Result<Vec<IoValue>> {
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let receipts = read_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
@@ -409,7 +414,7 @@ fn receipt_values(root: &Path) -> Result<Vec<IoValue>> {
     Ok(values)
 }
 
-fn store_receipt(root: &Path, receipt_value: &IoValue) -> Result<()> {
+fn store_receipt(root: &CapabilityArtifactRoot, receipt_value: &IoValue) -> Result<()> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     store_receipt_in_tx(&write_txn, receipt_value)?;
@@ -471,14 +476,14 @@ fn str_table_keys(table: &redb::Table<'_, &str, &str>) -> Result<Vec<String>> {
     Ok(keys)
 }
 
-fn ensure_dirs(root: &Path) -> Result<()> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
-    std::fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
+fn ensure_dirs(root: &CapabilityArtifactRoot) -> Result<()> {
+    root.root().create_dir_all(&LocalStorePath::parse("chunks")?)
 }
 
-fn ensure_index_tables(root: &Path) -> Result<redb::Database> {
+fn ensure_index_tables(root: &CapabilityArtifactRoot) -> Result<redb::Database> {
     ensure_dirs(root)?;
-    let db = redb::Database::create(index_path(root)).map_err(index_error)?;
+    let database_file = root.root().open_database_file(&LocalStorePath::parse(INDEX_FILE)?)?;
+    let db = redb::Database::builder().create_file(database_file).map_err(index_error)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     {
         write_txn.open_table(INDEX_ARTIFACTS).map_err(index_error)?;
@@ -497,12 +502,8 @@ fn ensure_index_tables(root: &Path) -> Result<redb::Database> {
     Ok(db)
 }
 
-fn index_path(root: &Path) -> std::path::PathBuf {
-    root.join(INDEX_FILE)
-}
-
-fn chunk_root(root: &Path) -> std::path::PathBuf {
-    root.join("chunks")
+fn chunk_root_with_root(root: &CapabilityArtifactRoot) -> Result<crate::local_store::ChunkStoreRoot> {
+    crate::local_store::ChunkStoreRoot::open_artifact_chunks(root)
 }
 
 fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
@@ -537,17 +538,25 @@ fn value_to_iovalue(value: &RailValue) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
-fn put_payload_bytes(root: &Path, payload_bytes: &[u8]) -> Result<crate::chunk_store::ChunkStorePut> {
-    crate::chunk_store::put_bytes(
-        root,
+fn put_payload_bytes(
+    root: &CapabilityArtifactRoot,
+    payload_bytes: &[u8],
+) -> Result<crate::chunk_store::ChunkStorePut> {
+    let chunk_root = chunk_root_with_root(root)?;
+    crate::chunk_store::put_bytes_with_root(
+        &chunk_root,
         "artifact-payload",
         payload_bytes,
         crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
     )
 }
 
-fn read_chunk_object(root: &Path, manifest_ref: &str) -> Result<crate::chunk_store::ChunkStoreRead> {
-    crate::chunk_store::read_object(root, manifest_ref)
+fn read_chunk_object(
+    root: &CapabilityArtifactRoot,
+    manifest_ref: &str,
+) -> Result<crate::chunk_store::ChunkStoreRead> {
+    let chunk_root = chunk_root_with_root(root)?;
+    crate::chunk_store::read_object_with_root(&chunk_root, manifest_ref)
 }
 
 fn name_key(pointer_kind: &str, name: &str) -> Result<String> {

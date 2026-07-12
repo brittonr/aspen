@@ -60,14 +60,14 @@ fn stored(value: &IoValue) -> Option<String> {
 }
 
 pub fn run_fixture(out: &Path) -> Result<Vec<(String, IoValue)>> {
-    fs::create_dir_all(out).map_err(MoltenError::from)?;
-    let root = out.join("state");
-    ensure_store(&root)?;
+    let output_root = CapabilityBundleRoot::open(out)?;
+    let root = CapabilityRetentionRoot::open_bundle_state(&output_root)?;
+    ensure_store_with_root(&root)?;
     let seed = seed_refs()?;
     let class = class_value(&seed)?;
     let pin = pin_step(&root, &seed)?;
     let deny = eval_step(&root, &seed, ACTION_DELETE)?;
-    let unpin = unpin_object(UnpinObjectInput {
+    let unpin = unpin_object_with_root(UnpinObjectInput {
         root: &root,
         pin_ref: &pin.pin.pin_ref,
         requester_ref: &seed.owner_ref,
@@ -84,7 +84,7 @@ pub fn run_fixture(out: &Path) -> Result<Vec<(String, IoValue)>> {
         delete,
     })?;
     for (name, value) in &artifacts {
-        write_store_value(&out.join(name), value)?;
+        write_bundle_value(&output_root, &bundle_path(name)?, value)?;
     }
     Ok(artifacts)
 }
@@ -118,8 +118,8 @@ fn class_value(seed: &SeedRefs) -> Result<IoValue> {
     })
 }
 
-fn pin_step(root: &Path, seed: &SeedRefs) -> Result<PinOperation> {
-    pin_object(root, PinInput {
+fn pin_step(root: &CapabilityRetentionRoot, seed: &SeedRefs) -> Result<PinOperation> {
+    pin_object_with_root(root, PinInput {
         object_ref: seed.object_ref.clone(),
         object_kind: "encrypted-ref".to_string(),
         retention_class: CLASS_PRIVATE_SECRET_REF.to_string(),
@@ -133,8 +133,8 @@ fn pin_step(root: &Path, seed: &SeedRefs) -> Result<PinOperation> {
     })
 }
 
-fn eval_step(root: &Path, seed: &SeedRefs, action: &str) -> Result<Evaluation> {
-    evaluate(EvaluationInput {
+fn eval_step(root: &CapabilityRetentionRoot, seed: &SeedRefs, action: &str) -> Result<Evaluation> {
+    evaluate_with_root(EvaluationInput {
         root,
         object_ref: &seed.object_ref,
         object_kind: "encrypted-ref",
@@ -270,7 +270,10 @@ fn build_tombstone(input: TombstoneBuildInput<'_>) -> Result<Tombstone> {
     parse_tombstone(&value)
 }
 
-fn evaluation_diagnostics(input: &EvaluationInput<'_>, index: &ReferenceIndex) -> Result<Vec<String>> {
+fn evaluation_diagnostics<Root: ?Sized>(
+    input: &EvaluationInput<'_, Root>,
+    index: &ReferenceIndex,
+) -> Result<Vec<String>> {
     let is_destructive = is_destructive_action(input.action);
     let mut diagnostics = Vec::new();
     push_notes(&mut diagnostics, [

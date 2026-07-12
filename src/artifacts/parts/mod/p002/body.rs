@@ -1,8 +1,16 @@
 
 pub fn reference_diagnostics(root: &Path, target_ref: &str) -> Result<Vec<String>> {
+    let root = open_capability_artifact_root(root)?;
+    reference_diagnostics_with_root(&root, target_ref)
+}
+
+pub fn reference_diagnostics_with_root(
+    root: &CapabilityArtifactRoot,
+    target_ref: &str,
+) -> Result<Vec<String>> {
     validate_ref(target_ref, "artifact reference diagnostic ref")?;
     let mut diagnostics = Vec::new();
-    if let Ok(impact) = impact_refs(root, &[target_ref.to_string()])
+    if let Ok(impact) = impact_refs_with_root(root, &[target_ref.to_string()])
         && impact.iter().any(|reference| reference != target_ref)
     {
         push_bounded(
@@ -34,8 +42,13 @@ pub fn reference_diagnostics(root: &Path, target_ref: &str) -> Result<Vec<String
 }
 
 pub fn rebuild_index(root: &Path) -> Result<ArtifactIndexRebuild> {
+    let root = open_capability_artifact_root(root)?;
+    rebuild_index_with_root(&root)
+}
+
+pub fn rebuild_index_with_root(root: &CapabilityArtifactRoot) -> Result<ArtifactIndexRebuild> {
     ensure_dirs(root)?;
-    let artifacts = list_artifacts(root, None)?;
+    let artifacts = list_artifacts_with_root(root, None)?;
     let names = all_name_pointers(root)?;
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
@@ -134,8 +147,13 @@ pub fn dependency_edges_for_artifact(artifact: &ArtifactRecord) -> Result<Vec<Ar
 }
 
 pub fn list_dependency_edges(root: &Path) -> Result<Vec<ArtifactDependencyEdge>> {
+    let root = open_capability_artifact_root(root)?;
+    list_dependency_edges_with_root(&root)
+}
+
+pub fn list_dependency_edges_with_root(root: &CapabilityArtifactRoot) -> Result<Vec<ArtifactDependencyEdge>> {
     let mut edges = Vec::new();
-    for artifact in list_artifacts(root, None)? {
+    for artifact in list_artifacts_with_root(root, None)? {
         extend_bounded(
             &mut edges,
             dependency_edges_for_artifact(&artifact)?,
@@ -162,10 +180,18 @@ pub fn dependency_index_digest(edges: &[ArtifactDependencyEdge]) -> Result<Strin
 
 // r[impl molten.artifacts.impact_query_receipts]
 pub fn impact_query(root: &Path, input: &ArtifactImpactQueryInput) -> Result<ArtifactImpactQueryReceipt> {
+    let root = open_capability_artifact_root(root)?;
+    impact_query_with_root(&root, input)
+}
+
+pub fn impact_query_with_root(
+    root: &CapabilityArtifactRoot,
+    input: &ArtifactImpactQueryInput,
+) -> Result<ArtifactImpactQueryReceipt> {
     validate_ref(&input.subject_ref, "artifact impact query subject ref")?;
     validate_relation_filters(&input.relation_filters)?;
     validate_refs(&input.hidden_refs, "artifact impact query hidden ref")?;
-    let edges = list_dependency_edges(root)?;
+    let edges = list_dependency_edges_with_root(root)?;
     let index_ref = dependency_index_digest(&edges)?;
     let hidden = input.hidden_refs.iter().cloned().collect::<std::collections::BTreeSet<_>>();
     let direct_all = dependents_from_edges(&edges, std::slice::from_ref(&input.subject_ref), &input.relation_filters)?;
@@ -219,6 +245,14 @@ pub fn impact_query(root: &Path, input: &ArtifactImpactQueryInput) -> Result<Art
 
 // r[impl molten.release_snapshots.namespace_snapshot_artifacts]
 pub fn release_snapshot_value_input(root: &Path, draft: &ReleaseSnapshotDraftInput) -> Result<ReleaseSnapshotValueInput> {
+    let root = open_capability_artifact_root(root)?;
+    release_snapshot_value_input_with_root(&root, draft)
+}
+
+pub fn release_snapshot_value_input_with_root(
+    root: &CapabilityArtifactRoot,
+    draft: &ReleaseSnapshotDraftInput,
+) -> Result<ReleaseSnapshotValueInput> {
     validate_release_snapshot_draft(draft)?;
     let artifact_refs = sorted_unique(&draft.artifact_refs);
     let (closure_refs, missing_refs) = compute_closure_refs(root, &artifact_refs)?;
@@ -392,15 +426,23 @@ pub fn parse_release_snapshot_value(value: &IoValue) -> Result<ReleaseSnapshot> 
 }
 
 pub fn install_release_snapshot(root: &Path, input: &ReleaseSnapshotInstallInput) -> Result<ReleaseSnapshotInstall> {
+    let root = open_capability_artifact_root(root)?;
+    install_release_snapshot_with_root(&root, input)
+}
+
+pub fn install_release_snapshot_with_root(
+    root: &CapabilityArtifactRoot,
+    input: &ReleaseSnapshotInstallInput,
+) -> Result<ReleaseSnapshotInstall> {
     validate_ref(&input.installer_ref, "release snapshot installer ref")?;
     if input.capability_refs.is_empty() {
         return Err(MoltenError::invalid_harness("release snapshot install requires at least one capability ref"));
     }
     validate_refs(&input.capability_refs, "release snapshot capability ref")?;
-    let snapshot_input = release_snapshot_value_input(root, &input.snapshot)?;
+    let snapshot_input = release_snapshot_value_input_with_root(root, &input.snapshot)?;
     let payload = release_snapshot_value(&snapshot_input)?;
     let evidence_refs = release_snapshot_install_evidence_refs(&snapshot_input)?;
-    let install = install_artifact(root, &ArtifactInstallInput {
+    let install = install_artifact_with_root(root, &ArtifactInstallInput {
         kind: RELEASE_SNAPSHOT_ARTIFACT_KIND.to_string(),
         payload: payload.clone(),
         schema_refs: Vec::new(),
@@ -420,10 +462,18 @@ pub fn install_release_snapshot(root: &Path, input: &ReleaseSnapshotInstallInput
 
 // r[impl molten.release_snapshots.closure_integrity]
 pub fn verify_release_snapshot(root: &Path, input: &ReleaseSnapshotVerifyInput) -> Result<ReleaseSnapshotVerifyReceipt> {
+    let root = open_capability_artifact_root(root)?;
+    verify_release_snapshot_with_root(&root, input)
+}
+
+pub fn verify_release_snapshot_with_root(
+    root: &CapabilityArtifactRoot,
+    input: &ReleaseSnapshotVerifyInput,
+) -> Result<ReleaseSnapshotVerifyReceipt> {
     validate_ref(&input.snapshot_ref, "release snapshot ref")?;
     validate_strings(&input.required_caveats, "release snapshot required caveat")?;
-    let artifact = read_artifact(root, &input.snapshot_ref)?;
-    let payload = read_payload(root, &input.snapshot_ref)?;
+    let artifact = read_artifact_with_root(root, &input.snapshot_ref)?;
+    let payload = read_payload_with_root(root, &input.snapshot_ref)?;
     let snapshot = parse_release_snapshot_value(&payload)?;
     let core = release_snapshot_verify_core(root, &artifact, &snapshot, &input.required_caveats)?;
     let decision = if core.diagnostics.is_empty() { "pass" } else { "deny" };
@@ -460,16 +510,24 @@ pub fn verify_release_snapshot(root: &Path, input: &ReleaseSnapshotVerifyInput) 
 
 // r[impl molten.release_snapshots.channel_view_non_authority]
 pub fn set_release_channel(root: &Path, input: &ReleaseChannelUpdateInput) -> Result<ReleaseChannelUpdate> {
+    let root = open_capability_artifact_root(root)?;
+    set_release_channel_with_root(&root, input)
+}
+
+pub fn set_release_channel_with_root(
+    root: &CapabilityArtifactRoot,
+    input: &ReleaseChannelUpdateInput,
+) -> Result<ReleaseChannelUpdate> {
     validate_release_channel_update_input(input)?;
-    let artifact = read_artifact(root, &input.snapshot_ref)?;
+    let artifact = read_artifact_with_root(root, &input.snapshot_ref)?;
     if artifact.kind != RELEASE_SNAPSHOT_ARTIFACT_KIND {
         return Err(MoltenError::invalid_harness(format!(
             "release channel target {} is {}, expected {RELEASE_SNAPSHOT_ARTIFACT_KIND}",
             input.snapshot_ref, artifact.kind
         )));
     }
-    parse_release_snapshot_value(&read_payload(root, &input.snapshot_ref)?)?;
-    let pointer = set_name_pointer(root, &SetNamePointerInput {
+    parse_release_snapshot_value(&read_payload_with_root(root, &input.snapshot_ref)?)?;
+    let pointer = set_name_pointer_with_root(root, &SetNamePointerInput {
         pointer_kind: "channel",
         name: &input.channel,
         artifact_ref: &input.snapshot_ref,
@@ -534,6 +592,11 @@ pub fn release_channel_admission_receipt(
 }
 
 pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<ArtifactReceipt> {
+    let root = open_capability_artifact_root(root)?;
+    read_receipt_with_root(&root, receipt_ref)
+}
+
+pub fn read_receipt_with_root(root: &CapabilityArtifactRoot, receipt_ref: &str) -> Result<ArtifactReceipt> {
     validate_ref(receipt_ref, "artifact receipt ref")?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -546,6 +609,11 @@ pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<ArtifactReceipt> {
 }
 
 pub fn list_receipts(root: &Path) -> Result<Vec<ArtifactReceipt>> {
+    let root = open_capability_artifact_root(root)?;
+    list_receipts_with_root(&root)
+}
+
+pub fn list_receipts_with_root(root: &CapabilityArtifactRoot) -> Result<Vec<ArtifactReceipt>> {
     let mut receipts = Vec::new();
     for value in receipt_values(root)? {
         push_bounded(
@@ -658,7 +726,7 @@ fn insert_str_index(
     Ok(())
 }
 
-fn missing_dependencies(root: &Path, dependency_refs: &[String]) -> Result<Vec<String>> {
+fn missing_dependencies(root: &CapabilityArtifactRoot, dependency_refs: &[String]) -> Result<Vec<String>> {
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let artifacts = read_txn.open_table(INDEX_ARTIFACTS).map_err(index_error)?;
@@ -671,7 +739,10 @@ fn missing_dependencies(root: &Path, dependency_refs: &[String]) -> Result<Vec<S
     Ok(missing)
 }
 
-fn compute_closure_refs(root: &Path, roots: &[String]) -> Result<(Vec<String>, Vec<String>)> {
+fn compute_closure_refs(
+    root: &CapabilityArtifactRoot,
+    roots: &[String],
+) -> Result<(Vec<String>, Vec<String>)> {
     validate_refs(roots, "artifact closure root ref")?;
     let db = ensure_index_tables(root)?;
     let mut closure = std::collections::BTreeSet::new();

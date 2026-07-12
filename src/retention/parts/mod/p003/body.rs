@@ -127,11 +127,16 @@ pub fn parse_pin(value: &IoValue) -> Result<Pin> {
 }
 
 pub fn pin_object(root: &Path, input: PinInput) -> Result<PinOperation> {
-    ensure_store(root)?;
+    let root = open_capability_retention_root(root)?;
+    pin_object_with_root(&root, input)
+}
+
+pub fn pin_object_with_root(root: &CapabilityRetentionRoot, input: PinInput) -> Result<PinOperation> {
+    ensure_store_with_root(root)?;
     let pin_value = pin_value(&input)?;
     let pin = parse_pin(&pin_value)?;
-    write_store_value(&pin_path(root, &pin.pin_ref)?, &pin.value)?;
-    let index = reference_index_for_object(ReferenceIndexForObjectInput {
+    write_store_value_with_root(root, &capability_ref_path(PIN_DIR, &pin.pin_ref)?, &pin.value)?;
+    let index = reference_index_for_object_with_root(ReferenceIndexForObjectInput {
         root,
         object_ref: &pin.object_ref,
         object_kind: &pin.object_kind,
@@ -161,21 +166,33 @@ pub fn pin_object(root: &Path, input: PinInput) -> Result<PinOperation> {
         tombstone_ref: None,
         diagnostics: &diagnostics,
     })?;
-    write_store_value(&receipt_path(root, &receipt.receipt_ref)?, &receipt.value)?;
+    write_store_value_with_root(root, &capability_ref_path(RECEIPT_DIR, &receipt.receipt_ref)?, &receipt.value)?;
     Ok(PinOperation { pin, receipt })
 }
 
 pub fn unpin_object(input: UnpinObjectInput<'_>) -> Result<Receipt> {
-    ensure_store(input.root)?;
+    let root = open_capability_retention_root(input.root)?;
+    unpin_object_with_root(UnpinObjectInput {
+        root: &root,
+        pin_ref: input.pin_ref,
+        requester_ref: input.requester_ref,
+        policy_refs: input.policy_refs,
+        evidence_refs: input.evidence_refs,
+        has_authority: input.has_authority,
+    })
+}
+
+pub fn unpin_object_with_root(input: UnpinObjectInput<'_, CapabilityRetentionRoot>) -> Result<Receipt> {
+    ensure_store_with_root(input.root)?;
     require_ref(input.pin_ref, "pin ref")?;
     require_ref(input.requester_ref, "requester ref")?;
     validate_refs(input.policy_refs, "unpin policy ref")?;
     validate_refs(input.evidence_refs, "unpin evidence ref")?;
-    let pin_file = pin_path(input.root, input.pin_ref)?;
-    let pin_result = read_store_value(&pin_file).and_then(|value| parse_pin(&value));
+    let pin_file = capability_ref_path(PIN_DIR, input.pin_ref)?;
+    let pin_result = read_store_value_with_root(input.root, &pin_file).and_then(|value| parse_pin(&value));
     let (decision, object_ref, object_kind, retention_class, diagnostics) = match pin_result {
         Ok(pin) if input.has_authority => {
-            fs::remove_file(&pin_file).map_err(MoltenError::from)?;
+            input.root.root().remove_file(&pin_file)?;
             ("pass", pin.object_ref, pin.object_kind, pin.retention_class, Vec::new())
         }
         Ok(pin) => ("deny", pin.object_ref, pin.object_kind, pin.retention_class, vec![
@@ -185,7 +202,7 @@ pub fn unpin_object(input: UnpinObjectInput<'_>) -> Result<Receipt> {
             "pin-ref-not-found".to_string(),
         ]),
     };
-    let index = reference_index_for_object(ReferenceIndexForObjectInput {
+    let index = reference_index_for_object_with_root(ReferenceIndexForObjectInput {
         root: input.root,
         object_ref: &object_ref,
         object_kind: &object_kind,
@@ -209,7 +226,11 @@ pub fn unpin_object(input: UnpinObjectInput<'_>) -> Result<Receipt> {
         tombstone_ref: None,
         diagnostics: &diagnostics,
     })?;
-    write_store_value(&receipt_path(input.root, &receipt.receipt_ref)?, &receipt.value)?;
+    write_store_value_with_root(
+        input.root,
+        &capability_ref_path(RECEIPT_DIR, &receipt.receipt_ref)?,
+        &receipt.value,
+    )?;
     Ok(receipt)
 }
 
@@ -266,13 +287,27 @@ pub fn parse_reference_index(value: &IoValue) -> Result<ReferenceIndex> {
 }
 
 pub fn reference_index_for_object(input: ReferenceIndexForObjectInput<'_>) -> Result<ReferenceIndex> {
-    ensure_store(input.root)?;
-    let pins = pins_for_object(input.root, input.object_ref)?;
+    let root = open_capability_retention_root(input.root)?;
+    reference_index_for_object_with_root(ReferenceIndexForObjectInput {
+        root: &root,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retained_refs: input.retained_refs,
+        remote_refs: input.remote_refs,
+        is_complete: input.is_complete,
+    })
+}
+
+pub fn reference_index_for_object_with_root(
+    input: ReferenceIndexForObjectInput<'_, CapabilityRetentionRoot>,
+) -> Result<ReferenceIndex> {
+    ensure_store_with_root(input.root)?;
+    let pins = pins_for_object_with_root(input.root, input.object_ref)?;
     let mut pin_refs = Vec::with_capacity(pins.len());
     for pin in &pins {
         push_bounded(&mut pin_refs, pin.pin_ref.clone(), MAX_RETENTION_REFS, "retention index pin refs")?;
     }
-    let tombstone_refs = tombstone_refs_for_object(input.root, input.object_ref)?;
+    let tombstone_refs = tombstone_refs_for_object_with_root(input.root, input.object_ref)?;
     let value = reference_index_value(&ReferenceIndexInput {
         object_ref: input.object_ref.to_string(),
         object_kind: input.object_kind.to_string(),

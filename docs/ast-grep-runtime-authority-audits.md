@@ -1,6 +1,6 @@
 # ast-grep runtime-authority audits
 
-Molten uses ast-grep as inventory-only structural evidence for runtime authority seams. The profile does not admit authority, prove replay correctness, certify sealed repro bundles, grant UCAN authorization, prove distributed safety, or establish release readiness.
+Molten uses ast-grep as structural evidence for runtime authority seams. Most rules remain inventory-only; the converted local-store adapter rule is blocking within its narrow path scope. The profile does not admit authority, prove replay correctness, certify sealed repro bundles, grant UCAN authorization, prove distributed safety, or establish release readiness.
 
 ## Profile
 
@@ -16,6 +16,7 @@ r[impl aspen.ast_grep_runtime_authority_audits.profile] The `runtime-authority` 
 | `iroh-transport` | `src/iroh/**/*.rs`, `src/node/iroh.rs` |
 | `policy-evidence-gates` | `src/evidence/**/*.rs`, `cairn-policy/**/*.ncl` |
 | `operator-workflow` | `src/operator/**/*.rs`, `docs/production-*.ncl` |
+| `local-store-adapters` | Converted artifact, chunk, retention, dataspace, and exchange adapter pages |
 
 ## Inventory rules
 
@@ -33,6 +34,9 @@ r[impl aspen.ast_grep_runtime_authority_audits.inventory] The initial rules stay
 | `unsafe-block` | unsafe hotspot | inventory |
 | `panic-bypass` | panic hotspot | inventory |
 | `direct-authority-bypass` | direct authority bypass candidate | inventory |
+| `store-ambient-filesystem-call` | ambient child I/O or root reacquisition in converted stores | **blocking** |
+
+r[impl molten.chunk_store.cap_std_regression_gate] The blocking store rule is path-scoped, ignores test fixture trees, and has dedicated positive and negative fixtures. It permits typed root bootstrap/delegation because those shapes do not directly call ambient child APIs. Explicit output materialization remains shell-owned outside the scanned store-page scope.
 
 Rules live under `tools/ast-grep/runtime-authority/rules/`. Positive and negative fixtures live under `tools/ast-grep/runtime-authority/fixtures/`; fixture coverage is required before any rule can be promoted from inventory to warning or blocking posture.
 
@@ -58,6 +62,22 @@ ast-grep scan --rule tools/ast-grep/runtime-authority/rules/ambient-filesystem-c
   --json=compact tools/ast-grep/runtime-authority/fixtures/positive/inventory_candidates.rs
 ast-grep scan --rule tools/ast-grep/runtime-authority/rules/ambient-filesystem-call.yml \
   --json=compact tools/ast-grep/runtime-authority/fixtures/negative/allowed_shell_effects.rs
+
+# Must report blocking findings.
+ast-grep scan --rule tools/ast-grep/runtime-authority/rules/store-ambient-filesystem-call.yml \
+  --json=compact tools/ast-grep/runtime-authority/fixtures/positive/store_ambient_filesystem_calls.rs
+
+# Must report no findings, including the ignored adversarial-test fixture.
+ast-grep scan --rule tools/ast-grep/runtime-authority/rules/store-ambient-filesystem-call.yml \
+  --json=compact \
+  tools/ast-grep/runtime-authority/fixtures/negative/store_capability_shells.rs \
+  tools/ast-grep/runtime-authority/fixtures/negative/tests/adversarial_store_setup.rs
+
+# Must report no findings across converted production adapter pages.
+ast-grep scan --rule tools/ast-grep/runtime-authority/rules/store-ambient-filesystem-call.yml \
+  --json=compact \
+  src/artifacts/parts/mod src/chunk/parts/store src/retention/parts/mod \
+  src/remote/parts/dataspace src/iroh/parts/exchange
 ```
 
 Rust unit tests validate the pure profile, fixture-promotion gate, BLAKE3 identity binding, stale-rule-bundle detection, and evidence-only receipt non-claims.

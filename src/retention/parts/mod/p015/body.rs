@@ -1,5 +1,7 @@
 
-fn execution_gate_parts(input: &GcExecutionGateInput<'_>) -> Result<ExecutionGateParts> {
+fn execution_gate_parts(
+    input: &GcExecutionGateInput<'_, CapabilityRetentionRoot>,
+) -> Result<ExecutionGateParts> {
     let mut parts = ExecutionGateParts::default();
     let Some(apply_ref) = input.apply_ref else {
         push_bounded(
@@ -11,7 +13,7 @@ fn execution_gate_parts(input: &GcExecutionGateInput<'_>) -> Result<ExecutionGat
         return Ok(parts);
     };
     require_ref(apply_ref, "retention GC execution apply ref")?;
-    match read_gc_apply(input.root, apply_ref) {
+    match read_gc_apply_with_root(input.root, apply_ref) {
         Ok(apply) => {
             parts.plan_ref = Some(apply.plan_ref.clone());
             parts.recomputed_plan_ref = Some(apply.recomputed_plan_ref.clone());
@@ -56,7 +58,22 @@ fn execution_gate_parts(input: &GcExecutionGateInput<'_>) -> Result<ExecutionGat
 }
 
 pub fn store_gc_execution_gate(input: GcExecutionGateInput<'_>) -> Result<GcExecutionGate> {
-    ensure_store(input.root)?;
+    let root = open_capability_retention_root(input.root)?;
+    store_gc_execution_gate_with_root(GcExecutionGateInput {
+        root: &root,
+        subsystem: input.subsystem,
+        action: input.action,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        apply_ref: input.apply_ref,
+    })
+}
+
+pub fn store_gc_execution_gate_with_root(
+    input: GcExecutionGateInput<'_, CapabilityRetentionRoot>,
+) -> Result<GcExecutionGate> {
+    ensure_store_with_root(input.root)?;
     validate_name(input.subsystem, "retention GC execution subsystem")?;
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention GC execution object ref")?;
@@ -81,11 +98,18 @@ pub fn store_gc_execution_gate(input: GcExecutionGateInput<'_>) -> Result<GcExec
         diagnostics: &parts.diagnostics,
     })?;
     let gate = parse_gc_execution_gate(&value)?;
-    write_store_value(&gc_execute_path(input.root, &gate.execution_ref)?, &gate.value)?;
+    write_store_value_with_root(
+        input.root,
+        &capability_ref_path(GC_EXECUTE_DIR, &gate.execution_ref)?,
+        &gate.value,
+    )?;
     Ok(gate)
 }
 
-fn execution_gate_apply_diagnostics(input: &GcExecutionGateInput<'_>, apply: &GcApply) -> Result<Vec<String>> {
+fn execution_gate_apply_diagnostics(
+    input: &GcExecutionGateInput<'_, CapabilityRetentionRoot>,
+    apply: &GcApply,
+) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     if apply.decision != "pass" {
         push_bounded(
@@ -126,12 +150,12 @@ fn execution_gate_apply_diagnostics(input: &GcExecutionGateInput<'_>, apply: &Gc
 }
 
 fn execution_gate_receipt_diagnostics(
-    root: &Path,
-    input: &GcExecutionGateInput<'_>,
+    root: &CapabilityRetentionRoot,
+    input: &GcExecutionGateInput<'_, CapabilityRetentionRoot>,
     receipt_ref: &str,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    match read_receipt(root, receipt_ref) {
+    match read_receipt_with_root(root, receipt_ref) {
         Ok(receipt) => {
             if receipt.decision != "pass" {
                 push_bounded(
@@ -165,8 +189,8 @@ fn execution_gate_receipt_diagnostics(
 }
 
 fn execution_gate_tombstone_binding_diagnostics(
-    root: &Path,
-    input: &GcExecutionGateInput<'_>,
+    root: &CapabilityRetentionRoot,
+    input: &GcExecutionGateInput<'_, CapabilityRetentionRoot>,
     apply: &GcApply,
 ) -> Result<Vec<String>> {
     let Some(tombstone_ref) = apply.tombstone_ref.as_ref() else {
@@ -185,13 +209,13 @@ fn execution_gate_tombstone_binding_diagnostics(
 }
 
 fn execution_gate_tombstone_diagnostics(
-    root: &Path,
-    input: &GcExecutionGateInput<'_>,
+    root: &CapabilityRetentionRoot,
+    input: &GcExecutionGateInput<'_, CapabilityRetentionRoot>,
     tombstone_ref: &str,
     receipt_ref: Option<&str>,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    match read_tombstone(root, tombstone_ref) {
+    match read_tombstone_with_root(root, tombstone_ref) {
         Ok(tombstone) => {
             if tombstone.object_ref != input.object_ref
                 || tombstone.object_kind != input.object_kind

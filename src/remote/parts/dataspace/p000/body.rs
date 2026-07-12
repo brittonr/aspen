@@ -1,7 +1,9 @@
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
 
+type LocalStorePath = crate::local_store::LocalStorePath;
 type Path = std::path::Path;
+#[cfg(test)]
 type PathBuf = std::path::PathBuf;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
@@ -15,25 +17,6 @@ const DELIVERY_LOG_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_DELIVE
 const ENVELOPE_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_ENVELOPE_SCHEMA;
 const GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA;
 const TRANSPORT_RECEIPT_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA;
-
-mod fs {
-    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::create_dir_all(path)
-    }
-
-    pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
-        std::fs::read(path)
-    }
-
-    #[cfg(test)]
-    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_dir_all(path)
-    }
-
-    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-        std::fs::write(path, contents)
-    }
-}
 
 fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
     crate::preserves_rail::canonical_bytes(value)

@@ -3,39 +3,12 @@ use crate::bounded::VecSink;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type CompoundClass = preserves::CompoundClass;
 type IoValue = preserves::IOValue;
+type LocalStorePath = crate::local_store::LocalStorePath;
 type MoltenError = crate::error::MoltenError;
 type Path = std::path::Path;
-type PathBuf = std::path::PathBuf;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 type ValueClass = preserves::ValueClass;
-
-mod fs {
-    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::create_dir_all(path)
-    }
-
-    pub(super) fn read_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<std::fs::ReadDir> {
-        std::fs::read_dir(path)
-    }
-
-    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
-        std::fs::read_to_string(path)
-    }
-
-    #[cfg(test)]
-    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_dir_all(path)
-    }
-
-    pub(super) fn remove_file(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_file(path)
-    }
-
-    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-        std::fs::write(path, contents)
-    }
-}
 
 pub const CLASS_EPHEMERAL_CACHE: &str = "ephemeral-cache";
 pub const CLASS_DEBUG_TRACE: &str = "debug-trace";
@@ -99,6 +72,7 @@ const MAX_RETENTION_DIAGNOSTICS: usize = 128;
 const MAX_RETENTION_TEXT_LEN: usize = 1024;
 const RETENTION_GC_LIFECYCLE_DIAGNOSTIC_CAPACITY: usize = 16;
 
+type CapabilityBundleRoot = crate::local_store::ArtifactStoreRoot;
 pub type CapabilityRetentionRoot = crate::local_store::RetentionStoreRoot;
 
 pub fn open_capability_retention_root(root: &Path) -> Result<CapabilityRetentionRoot> {
@@ -188,8 +162,8 @@ pub struct ReferenceIndex {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct UnpinObjectInput<'a> {
-    pub root: &'a Path,
+pub struct UnpinObjectInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub pin_ref: &'a str,
     pub requester_ref: &'a str,
     pub policy_refs: &'a [String],
@@ -198,8 +172,8 @@ pub struct UnpinObjectInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ReferenceIndexForObjectInput<'a> {
-    pub root: &'a Path,
+pub struct ReferenceIndexForObjectInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub object_ref: &'a str,
     pub object_kind: &'a str,
     pub retained_refs: &'a [String],
@@ -208,8 +182,8 @@ pub struct ReferenceIndexForObjectInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvaluationInput<'a> {
-    pub root: &'a Path,
+pub struct EvaluationInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub object_ref: &'a str,
     pub object_kind: &'a str,
     pub retention_class: &'a str,
@@ -240,8 +214,8 @@ pub struct DestructiveEvidence {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct GcPlanInput<'a> {
-    pub root: &'a Path,
+pub struct GcPlanInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub subsystem: &'a str,
     pub object_ref: &'a str,
     pub object_kind: &'a str,
@@ -277,8 +251,8 @@ pub struct GcPlan {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct GcApplyFromPlanInput<'a> {
-    pub root: &'a Path,
+pub struct GcApplyFromPlanInput<'a, Root: ?Sized = Path> {
+    pub root: &'a Root,
     pub plan_ref: &'a str,
 }
 

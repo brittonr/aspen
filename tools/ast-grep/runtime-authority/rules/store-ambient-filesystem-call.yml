@@ -1,0 +1,43 @@
+id: store-ambient-filesystem-call
+language: Rust
+severity: error
+message: Converted local store adapters must use their supplied typed capability root, not ambient filesystem authority.
+metadata:
+  posture: blocking
+  surface: local-store-adapters
+  non_claim: structural-containment-only
+files:
+  - src/artifacts/parts/mod/p*/body.rs
+  - src/chunk/parts/store/p*/body.rs
+  - src/retention/parts/mod/p*/body.rs
+  - src/remote/parts/dataspace/p*/body.rs
+  - src/iroh/parts/exchange/p*/body.rs
+  - tools/ast-grep/runtime-authority/fixtures/positive/store_ambient_filesystem_calls.rs
+  - tools/ast-grep/runtime-authority/fixtures/negative/store_capability_shells.rs
+  - tools/ast-grep/runtime-authority/fixtures/negative/tests/adversarial_store_setup.rs
+ignores:
+  - "**/tests/**"
+  - src/artifacts/parts/mod/p005/body.rs
+rule:
+  any:
+    - pattern: std::fs::read($PATH)
+    - pattern: std::fs::read_to_string($PATH)
+    - pattern: std::fs::write($PATH, $DATA)
+    - pattern: std::fs::read_dir($PATH)
+    - pattern: std::fs::create_dir_all($PATH)
+    - pattern: std::fs::remove_file($PATH)
+    - pattern: std::fs::remove_dir_all($PATH)
+    - pattern: std::fs::rename($FROM, $TO)
+    - pattern: std::fs::canonicalize($PATH)
+    - pattern: fs::read($PATH)
+    - pattern: fs::read_to_string($PATH)
+    - pattern: fs::write($PATH, $DATA)
+    - pattern: fs::read_dir($PATH)
+    - pattern: fs::create_dir_all($PATH)
+    - pattern: fs::remove_file($PATH)
+    - pattern: fs::remove_dir_all($PATH)
+    - pattern: fs::rename($FROM, $TO)
+    - pattern: fs::canonicalize($PATH)
+    - pattern: cap_std::fs::Dir::open_ambient_dir($$$ARGS)
+    - pattern: Dir::open_ambient_dir($$$ARGS)
+    - pattern: $PATH.canonicalize()

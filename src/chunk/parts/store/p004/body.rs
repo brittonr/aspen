@@ -1,7 +1,17 @@
 
 pub fn sync_missing_chunks(source_root: &Path, dest_root: &Path, manifest_ref: &str) -> Result<ChunkStoreSync> {
+    let source_root = open_capability_chunk_root(source_root)?;
+    let dest_root = open_capability_chunk_root(dest_root)?;
+    sync_missing_chunks_with_roots(&source_root, &dest_root, manifest_ref)
+}
+
+pub fn sync_missing_chunks_with_roots(
+    source_root: &CapabilityChunkRoot,
+    dest_root: &CapabilityChunkRoot,
+    manifest_ref: &str,
+) -> Result<ChunkStoreSync> {
     ensure_dirs(dest_root)?;
-    let manifest = read_manifest(source_root, manifest_ref)?;
+    let manifest = read_manifest_with_root(source_root, manifest_ref)?;
     let chunk_refs = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
     if let Some(message) = unsupported_transform_message(&manifest) {
         let receipt_value =
@@ -12,9 +22,10 @@ pub fn sync_missing_chunks(source_root: &Path, dest_root: &Path, manifest_ref: &
         store_receipt(dest_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
-    let manifest_bytes = fs::read(manifest_path(source_root, manifest_ref)?).map_err(MoltenError::from)?;
+    let manifest_bytes = source_root.root().read(&manifest_path(manifest_ref)?)?;
     write_immutable_bytes(
-        &manifest_path(dest_root, manifest_ref)?,
+        dest_root,
+        &manifest_path(manifest_ref)?,
         &manifest_bytes,
         manifest_ref,
         parse_canonical_bytes,
@@ -32,7 +43,7 @@ pub fn sync_missing_chunks(source_root: &Path, dest_root: &Path, manifest_ref: &
         chunk_size,
         missing_before: &scan.missing_before,
     })?;
-    verify_manifest(dest_root, manifest_ref)?;
+    verify_manifest_with_root(dest_root, manifest_ref)?;
     let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
         operation: "remote-sync",
         decision: "pass",
@@ -66,12 +77,12 @@ struct Scan {
     already_available: Vec<String>,
 }
 
-fn scan_refs(dest_root: &Path, manifest: &ChunkManifest, chunk_size: usize) -> Result<Scan> {
+fn scan_refs(dest_root: &CapabilityChunkRoot, manifest: &ChunkManifest, chunk_size: usize) -> Result<Scan> {
     let mut missing_before = Vec::new();
     let mut already_available = Vec::new();
     for chunk in &manifest.chunks {
-        let dest_chunk_path = chunk_path(dest_root, &chunk.chunk_ref)?;
-        if dest_chunk_path.exists() {
+        let dest_chunk_path = chunk_path(&chunk.chunk_ref)?;
+        if dest_root.root().try_exists(&dest_chunk_path)? {
             read_verified_chunk(dest_root, chunk, chunk_size)?;
             push_bounded(
                 &mut already_available,
@@ -95,8 +106,8 @@ fn scan_refs(dest_root: &Path, manifest: &ChunkManifest, chunk_size: usize) -> R
 }
 
 struct CopyInput<'a> {
-    source_root: &'a Path,
-    dest_root: &'a Path,
+    source_root: &'a CapabilityChunkRoot,
+    dest_root: &'a CapabilityChunkRoot,
     manifest: &'a ChunkManifest,
     chunk_size: usize,
     missing_before: &'a [String],
@@ -112,7 +123,7 @@ fn copy_refs(input: CopyInput<'_>) -> Result<Vec<String>> {
             .find(|candidate| &candidate.chunk_ref == chunk_ref)
             .ok_or_else(|| MoltenError::invalid_harness(format!("manifest missing expected chunk {chunk_ref}")))?;
         let bytes = read_verified_chunk(input.source_root, chunk, input.chunk_size)?;
-        fs::write(chunk_path(input.dest_root, &chunk.chunk_ref)?, bytes).map_err(MoltenError::from)?;
+        input.dest_root.root().write(&chunk_path(&chunk.chunk_ref)?, &bytes)?;
         push_bounded(
             &mut fetched_chunks,
             chunk.chunk_ref.clone(),
@@ -131,15 +142,14 @@ fn copy_refs(input: CopyInput<'_>) -> Result<Vec<String>> {
 }
 
 struct HeadInput<'a> {
-    store_root: &'a Path,
-    iroh_root: &'a Path,
+    store_root: &'a CapabilityChunkRoot,
+    iroh_root: &'a CapabilityChunkRoot,
     manifest: &'a ChunkManifest,
     chunk_refs: &'a [String],
 }
 
 fn write_head(input: HeadInput<'_>) -> Result<String> {
-    let manifest_bytes =
-        fs::read(manifest_path(input.store_root, &input.manifest.manifest_ref)?).map_err(MoltenError::from)?;
+    let manifest_bytes = input.store_root.root().read(&manifest_path(&input.manifest.manifest_ref)?)?;
     let manifest_blob_ref = hash_blob_bytes(&manifest_bytes);
     if manifest_blob_ref != input.manifest.manifest_ref {
         let message = format!(
@@ -154,13 +164,18 @@ fn write_head(input: HeadInput<'_>) -> Result<String> {
         store_receipt(input.store_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
-    write_immutable_blob(&iroh_blob_path(input.iroh_root, &manifest_blob_ref)?, &manifest_bytes, &manifest_blob_ref)?;
+    write_immutable_blob(
+        input.iroh_root,
+        &iroh_blob_path(&manifest_blob_ref)?,
+        &manifest_bytes,
+        &manifest_blob_ref,
+    )?;
     Ok(manifest_blob_ref)
 }
 
 struct PartsInput<'a> {
-    store_root: &'a Path,
-    iroh_root: &'a Path,
+    store_root: &'a CapabilityChunkRoot,
+    iroh_root: &'a CapabilityChunkRoot,
     manifest: &'a ChunkManifest,
     chunk_refs: &'a [String],
     chunk_size: usize,
@@ -187,7 +202,7 @@ fn write_parts(input: PartsInput<'_>) -> Result<Vec<IrohChunkBlob>> {
             }
         };
         let blob_ref = hash_blob_bytes(&bytes);
-        write_immutable_blob(&iroh_blob_path(input.iroh_root, &blob_ref)?, &bytes, &blob_ref)?;
+        write_immutable_blob(input.iroh_root, &iroh_blob_path(&blob_ref)?, &bytes, &blob_ref)?;
         push_bounded(
             &mut chunk_blobs,
             IrohChunkBlob {
@@ -203,8 +218,8 @@ fn write_parts(input: PartsInput<'_>) -> Result<Vec<IrohChunkBlob>> {
 }
 
 struct FinishInput<'a> {
-    store_root: &'a Path,
-    iroh_root: &'a Path,
+    store_root: &'a CapabilityChunkRoot,
+    iroh_root: &'a CapabilityChunkRoot,
     node: &'a str,
     manifest: ChunkManifest,
     manifest_blob_ref: String,
@@ -216,7 +231,8 @@ fn finish_pass(input: FinishInput<'_>) -> Result<ChunkStoreIrohPublish> {
     let ticket_value = iroh_ticket_value(&input.manifest.manifest_ref, &input.manifest_blob_ref, &input.chunk_blobs);
     let ticket_ref = canonical_hash(&ticket_value)?;
     write_immutable_bytes(
-        &iroh_ticket_path(input.iroh_root, &input.manifest.manifest_ref)?,
+        input.iroh_root,
+        &iroh_ticket_path(&input.manifest.manifest_ref)?,
         &canonical_bytes(&ticket_value)?,
         &ticket_ref,
         parse_canonical_bytes,
@@ -256,7 +272,11 @@ fn manifest_refs(manifest: &ChunkManifest) -> Vec<String> {
     manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect()
 }
 
-fn claim_manifest(dest_root: &Path, ticket: &str, expected_manifest_ref: Option<&str>) -> Result<String> {
+fn claim_manifest(
+    dest_root: &CapabilityChunkRoot,
+    ticket: &str,
+    expected_manifest_ref: Option<&str>,
+) -> Result<String> {
     let advertised_manifest_ref = match ticket.strip_prefix("iroh-local-chunk:") {
         Some(manifest_ref) => manifest_ref,
         None => {

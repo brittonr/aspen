@@ -5,8 +5,8 @@ struct AdmissionRefsResult {
     remote_refs: Vec<String>,
 }
 
-struct RemoteClearanceRefsInput<'a> {
-    root: &'a Path,
+struct RemoteClearanceRefsInput<'a, Root: ?Sized = Path> {
+    root: &'a Root,
     refs: &'a [String],
     scope: &'a AdmissionScope<'a>,
     required_remote_refs: &'a [String],
@@ -142,17 +142,17 @@ struct CandidateBundleProfileValueInput<'a> {
 }
 
 struct BundleArtifactGroupInput<'a> {
-    root: &'a Path,
-    bundle_dir: &'a Path,
+    root: &'a CapabilityRetentionRoot,
+    bundle_root: &'a CapabilityBundleRoot,
     dir_name: &'a str,
     refs: &'a [String],
-    read: fn(&Path, &str) -> Result<IoValue>,
+    read: fn(&CapabilityRetentionRoot, &str) -> Result<IoValue>,
 }
 
 struct GroupSpec<'a> {
     dir_name: &'static str,
     refs: &'a [String],
-    read: fn(&Path, &str) -> Result<IoValue>,
+    read: fn(&CapabilityRetentionRoot, &str) -> Result<IoValue>,
 }
 
 struct CandidateBundleVerifyValueInput<'a> {
@@ -163,7 +163,7 @@ struct CandidateBundleVerifyValueInput<'a> {
 }
 
 struct BundleVerifyGroupInput<'a> {
-    bundle_dir: &'a Path,
+    bundle_root: &'a CapabilityBundleRoot,
     dir_name: &'a str,
     refs: &'a [String],
     parse: fn(&IoValue) -> Result<()>,
@@ -176,7 +176,7 @@ struct Group<'a> {
 }
 
 struct BundleArtifactGroupScanInput<'a> {
-    group_dir: &'a Path,
+    bundle_root: &'a CapabilityBundleRoot,
     dir_name: &'a str,
     expected_refs: &'a OrderedSet<String>,
 }
@@ -232,7 +232,7 @@ struct GateAdmissions {
 }
 
 struct GateInputs<'a> {
-    input: &'a GcPlanInput<'a>,
+    input: &'a GcPlanInput<'a, CapabilityRetentionRoot>,
     policy: AdmissionRefsResult,
     authority: AdmissionRefsResult,
     supporting: AdmissionRefsResult,
@@ -252,7 +252,7 @@ struct PlanGateBuildInput<'a> {
 }
 
 struct LocalGateInput<'a> {
-    input: &'a GcPlanInput<'a>,
+    input: &'a GcPlanInput<'a, CapabilityRetentionRoot>,
     index: &'a ReferenceIndex,
     has_delete_authority: bool,
     has_remote_gc_clearance: bool,

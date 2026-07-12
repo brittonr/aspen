@@ -1,4 +1,3 @@
-
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
     crate::bounded::ensure_count_at_most(count, maximum, label)
 }
@@ -51,19 +50,19 @@ fn validate_put_bounds(byte_len: usize, chunk_size: usize, policy_ref_count: usi
     Ok(())
 }
 
-fn reconstruct_object(root: &Path, manifest: &ChunkManifest) -> Result<Vec<u8>> {
+fn reconstruct_object(root: &CapabilityChunkRoot, manifest: &ChunkManifest) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     verify_manifest_chunks_into(root, manifest, &mut bytes)?;
     Ok(bytes)
 }
 
-fn verify_manifest_chunks(root: &Path, manifest: &ChunkManifest) -> Result<()> {
+fn verify_manifest_chunks(root: &CapabilityChunkRoot, manifest: &ChunkManifest) -> Result<()> {
     let mut sink = Vec::new();
     verify_manifest_chunks_into(root, manifest, &mut sink)
 }
 
 fn verify_manifest_chunks_into(
-    root: &Path,
+    root: &CapabilityChunkRoot,
     manifest: &ChunkManifest,
     bytes: &mut impl crate::bounded::VecSink<u8>,
 ) -> Result<()> {
@@ -88,9 +87,9 @@ fn verify_manifest_chunks_into(
     Ok(())
 }
 
-fn read_verified_chunk(root: &Path, chunk: &ChunkRef, chunk_size: usize) -> Result<Vec<u8>> {
-    let path = chunk_path(root, &chunk.chunk_ref)?;
-    let bytes = fs::read(&path).map_err(MoltenError::from)?;
+fn read_verified_chunk(root: &CapabilityChunkRoot, chunk: &ChunkRef, chunk_size: usize) -> Result<Vec<u8>> {
+    let path = chunk_path(&chunk.chunk_ref)?;
+    let bytes = root.root().read(&path)?;
     let actual_ref = hash_chunk(&bytes, chunk_size);
     if actual_ref != chunk.chunk_ref {
         return Err(MoltenError::invalid_harness(format!(
@@ -108,8 +107,14 @@ fn read_verified_chunk(root: &Path, chunk: &ChunkRef, chunk_size: usize) -> Resu
     Ok(bytes)
 }
 
-fn verify_raw_chunk_file(path: &Path, chunk_ref: &str, length: u64, chunk_size: usize) -> Result<()> {
-    let bytes = fs::read(path).map_err(MoltenError::from)?;
+fn verify_raw_chunk_file(
+    root: &CapabilityChunkRoot,
+    path: &StorePath,
+    chunk_ref: &str,
+    length: u64,
+    chunk_size: usize,
+) -> Result<()> {
+    let bytes = root.root().read(path)?;
     verify_raw_chunk_bytes(&bytes, chunk_ref, length, chunk_size).map_err(|error| {
         MoltenError::invalid_harness(format!("chunk store content path for {chunk_ref} is invalid: {error}"))
     })
@@ -176,45 +181,55 @@ fn hash_blob_bytes(bytes: &[u8]) -> String {
     content_ref_from_bytes(bytes)
 }
 
-fn ensure_iroh_dirs(root: &Path) -> Result<()> {
-    fs::create_dir_all(root.join("blobs")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("tickets")).map_err(MoltenError::from)
+fn ensure_iroh_dirs(root: &CapabilityChunkRoot) -> Result<()> {
+    root.root().create_dir_all(&store_path("blobs")?)?;
+    root.root().create_dir_all(&store_path("tickets")?)
 }
 
-fn ensure_dirs(root: &Path) -> Result<()> {
-    fs::create_dir_all(root.join("chunks")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("manifests")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("metadata")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("pins").join("manifests")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("pins").join("chunks")).map_err(MoltenError::from)
+fn ensure_dirs(root: &CapabilityChunkRoot) -> Result<()> {
+    root.root().create_dir_all(&store_path("chunks")?)?;
+    root.root().create_dir_all(&store_path("manifests")?)?;
+    root.root().create_dir_all(&store_path("metadata")?)?;
+    root.root().create_dir_all(&store_path("pins/manifests")?)?;
+    root.root().create_dir_all(&store_path("pins/chunks")?)
 }
 
-fn chunk_path(root: &Path, chunk_ref: &str) -> Result<PathBuf> {
+fn chunk_path(chunk_ref: &str) -> Result<StorePath> {
+    store_path("chunks")?.join(&filename_for_ref(chunk_ref)?)
+}
+
+#[cfg(test)]
+fn test_chunk_path(root: &Path, chunk_ref: &str) -> Result<PathBuf> {
     Ok(root.join("chunks").join(filename_for_ref(chunk_ref)?))
 }
 
-fn iroh_blob_path(root: &Path, blob_ref: &str) -> Result<PathBuf> {
-    Ok(root.join("blobs").join(filename_for_ref(blob_ref)?))
+fn iroh_blob_path(blob_ref: &str) -> Result<StorePath> {
+    store_path("blobs")?.join(&filename_for_ref(blob_ref)?)
 }
 
-fn iroh_ticket_path(root: &Path, manifest_ref: &str) -> Result<PathBuf> {
-    Ok(root.join("tickets").join(filename_for_ref(manifest_ref)?))
+fn iroh_ticket_path(manifest_ref: &str) -> Result<StorePath> {
+    store_path("tickets")?.join(&filename_for_ref(manifest_ref)?)
 }
 
-fn manifest_path(root: &Path, manifest_ref: &str) -> Result<PathBuf> {
+fn manifest_path(manifest_ref: &str) -> Result<StorePath> {
+    store_path("manifests")?.join(&filename_for_ref(manifest_ref)?)
+}
+
+#[cfg(test)]
+fn test_manifest_path(root: &Path, manifest_ref: &str) -> Result<PathBuf> {
     Ok(root.join("manifests").join(filename_for_ref(manifest_ref)?))
 }
 
-fn metadata_path(root: &Path, metadata_ref: &str) -> Result<PathBuf> {
-    Ok(root.join("metadata").join(filename_for_ref(metadata_ref)?))
+fn metadata_path(metadata_ref: &str) -> Result<StorePath> {
+    store_path("metadata")?.join(&filename_for_ref(metadata_ref)?)
 }
 
-fn manifest_pin_path(root: &Path, manifest_ref: &str) -> Result<PathBuf> {
-    Ok(root.join("pins").join("manifests").join(filename_for_ref(manifest_ref)?))
+fn manifest_pin_path(manifest_ref: &str) -> Result<StorePath> {
+    store_path("pins/manifests")?.join(&filename_for_ref(manifest_ref)?)
 }
 
-fn chunk_pin_path(root: &Path, chunk_ref: &str) -> Result<PathBuf> {
-    Ok(root.join("pins").join("chunks").join(filename_for_ref(chunk_ref)?))
+fn chunk_pin_path(chunk_ref: &str) -> Result<StorePath> {
+    store_path("pins/chunks")?.join(&filename_for_ref(chunk_ref)?)
 }
 
 fn filename_for_ref(reference: &str) -> Result<String> {
@@ -228,52 +243,59 @@ fn ref_from_filename(filename: &str) -> Option<String> {
     content_ref_from_hex(hex).ok()
 }
 
-fn refs_from_dir(dir: &Path) -> Result<Vec<String>> {
-    if !dir.exists() {
+fn refs_from_dir(root: &CapabilityChunkRoot, dir: &StorePath) -> Result<Vec<String>> {
+    if !root.root().try_exists(dir)? {
         return Ok(Vec::new());
     }
     let mut refs = Vec::new();
-    for entry in fs::read_dir(dir).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        if !entry.file_type().map_err(MoltenError::from)?.is_file() {
-            continue;
+    for entry in root.root().list_entries(dir)? {
+        if entry.kind != StoreEntryKind::File {
+            return Err(MoltenError::invalid_harness(format!(
+                "chunk store directory entry {} must be a regular file, got {:?}",
+                entry.path.display(),
+                entry.kind
+            )));
         }
-        if let Some(reference) = ref_from_filename(&entry.file_name().to_string_lossy()) {
+        if let Some(reference) = ref_from_filename(&entry.name) {
             push_bounded(&mut refs, reference, MAX_CHUNK_STORE_REFS, "chunk store refs from directory")?;
         }
     }
-    refs.sort();
     Ok(refs)
 }
 
-fn pinned_refs(dir: &Path) -> Result<Vec<String>> {
-    if !dir.exists() {
+fn pinned_refs(root: &CapabilityChunkRoot, dir: &StorePath) -> Result<Vec<String>> {
+    if !root.root().try_exists(dir)? {
         return Ok(Vec::new());
     }
     let mut refs = Vec::new();
-    for entry in fs::read_dir(dir).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        if entry.file_type().map_err(MoltenError::from)?.is_file() {
-            push_bounded(
-                &mut refs,
-                fs::read_to_string(entry.path()).map_err(MoltenError::from)?,
-                MAX_CHUNK_STORE_REFS,
-                "chunk store pinned refs",
-            )?;
+    for entry in root.root().list_entries(dir)? {
+        if entry.kind != StoreEntryKind::File {
+            return Err(MoltenError::invalid_harness(format!(
+                "chunk pin entry {} must be a regular file, got {:?}",
+                entry.path.display(),
+                entry.kind
+            )));
         }
+        push_bounded(
+            &mut refs,
+            root.root().read_to_string(&entry.path)?,
+            MAX_CHUNK_STORE_REFS,
+            "chunk store pinned refs",
+        )?;
     }
     refs.sort();
     Ok(refs)
 }
 
 fn write_immutable_bytes(
-    path: &Path,
+    root: &CapabilityChunkRoot,
+    path: &StorePath,
     bytes: &[u8],
     expected_ref: &str,
     parser: fn(&[u8]) -> Result<IoValue>,
 ) -> Result<()> {
-    if path.exists() {
-        let existing = fs::read(path).map_err(MoltenError::from)?;
+    if root.root().try_exists(path)? {
+        let existing = root.root().read(path)?;
         let existing_value = parser(&existing)?;
         let existing_ref = canonical_hash(&existing_value)?;
         if existing_ref != expected_ref {
@@ -282,7 +304,7 @@ fn write_immutable_bytes(
             )));
         }
     } else {
-        fs::write(path, bytes).map_err(MoltenError::from)?;
+        root.root().write(path, bytes)?;
     }
     Ok(())
 }
