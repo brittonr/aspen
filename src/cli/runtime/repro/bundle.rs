@@ -31,40 +31,31 @@ pub(crate) fn export_report(
         }
     };
     let export = (|| -> molten::error::Result<()> {
-        std::fs::create_dir_all(out).map_err(molten::error::MoltenError::from)?;
-        super::io::write_file(&out.join("report.preserves"), &molten::preserves_rail::to_text(exported_report_value)?)?;
-        super::io::write_file(&out.join("suite.preserves"), &molten::preserves_rail::to_text(&suite_value)?)?;
-        super::io::write_file(&out.join("summary.txt"), &molten::harness::report_summary(exported_report_value)?)?;
-        super::io::write_file(&out.join("commands.txt"), REPORT_COMMANDS)?;
-        if let Some(receipt_value) = bundle.receipt_value.as_ref() {
-            super::io::write_file(
-                &out.join("gate-receipt.preserves"),
-                &molten::preserves_rail::to_text(receipt_value)?,
-            )?;
-        }
-        if let Some(value) = bundle.export_profile_value.as_ref() {
-            super::io::write_file(&out.join("export-profile.preserves"), &molten::preserves_rail::to_text(value)?)?;
-        }
-        if let Some(value) = bundle.redaction_transform_manifest_value.as_ref() {
-            super::io::write_file(
-                &out.join("redaction-transform-manifest.preserves"),
-                &molten::preserves_rail::to_text(value)?,
-            )?;
-        }
-        if let Some(value) = bundle.redaction_transform_receipt_value.as_ref() {
-            super::io::write_file(
-                &out.join("redaction-transform-receipt.preserves"),
-                &molten::preserves_rail::to_text(value)?,
-            )?;
-        }
-        if let Some(value) = bundle.private_bundle_profile_value.as_ref() {
-            super::io::write_file(
-                &out.join("private-bundle-profile.preserves"),
-                &molten::preserves_rail::to_text(value)?,
-            )?;
-        }
-        super::io::write_file(&out.join("refs.preserves"), &molten::preserves_rail::to_text(&bundle_value)?)?;
-        Ok(())
+        let mut payloads = vec![
+            materialization_payload("report.preserves", molten::preserves_rail::to_text(exported_report_value)?),
+            materialization_payload("suite.preserves", molten::preserves_rail::to_text(&suite_value)?),
+            materialization_payload("summary.txt", molten::harness::report_summary(exported_report_value)?),
+            materialization_payload("commands.txt", REPORT_COMMANDS),
+            materialization_payload("refs.preserves", molten::preserves_rail::to_text(&bundle_value)?),
+        ];
+        push_optional_payload(&mut payloads, "gate-receipt.preserves", bundle.receipt_value.as_ref())?;
+        push_optional_payload(&mut payloads, "export-profile.preserves", bundle.export_profile_value.as_ref())?;
+        push_optional_payload(
+            &mut payloads,
+            "redaction-transform-manifest.preserves",
+            bundle.redaction_transform_manifest_value.as_ref(),
+        )?;
+        push_optional_payload(
+            &mut payloads,
+            "redaction-transform-receipt.preserves",
+            bundle.redaction_transform_receipt_value.as_ref(),
+        )?;
+        push_optional_payload(
+            &mut payloads,
+            "private-bundle-profile.preserves",
+            bundle.private_bundle_profile_value.as_ref(),
+        )?;
+        materialize_repro_payloads(out, "repro-report-export-v1", &payloads)
     })();
     if let Err(error) = export {
         super::io::write_optional_artifact_failure(failure_out, "export", &error, report_value)?;
@@ -97,18 +88,62 @@ pub(crate) fn export_failure(
         }
     };
     let export = (|| -> molten::error::Result<()> {
-        std::fs::create_dir_all(out).map_err(molten::error::MoltenError::from)?;
-        super::io::write_file(&out.join("failure.preserves"), &molten::preserves_rail::to_text(failure_value)?)?;
-        super::io::write_file(&out.join("summary.txt"), &molten::harness::failure_summary(failure_value)?)?;
-        super::io::write_file(&out.join("commands.txt"), FAILURE_COMMANDS)?;
-        super::io::write_file(&out.join("refs.preserves"), &molten::preserves_rail::to_text(&bundle_value)?)?;
-        Ok(())
+        let payloads = vec![
+            materialization_payload("failure.preserves", molten::preserves_rail::to_text(failure_value)?),
+            materialization_payload("summary.txt", molten::harness::failure_summary(failure_value)?),
+            materialization_payload("commands.txt", FAILURE_COMMANDS),
+            materialization_payload("refs.preserves", molten::preserves_rail::to_text(&bundle_value)?),
+        ];
+        materialize_repro_payloads(out, "repro-failure-export-v1", &payloads)
     })();
     if let Err(error) = export {
         super::io::write_optional_artifact_failure(failure_out, "export", &error, failure_value)?;
         return Err(error);
     }
     println!("failure repro bundle written to {}", out.display());
+    Ok(())
+}
+
+fn materialization_payload(
+    logical_path: &str,
+    contents: impl AsRef<[u8]>,
+) -> molten::materialization::MaterializationPayload {
+    molten::materialization::MaterializationPayload::new(logical_path, contents.as_ref().to_vec())
+}
+
+fn push_optional_payload(
+    payloads: &mut Vec<molten::materialization::MaterializationPayload>,
+    logical_path: &str,
+    value: Option<&preserves::IOValue>,
+) -> molten::error::Result<()> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+    payloads.push(materialization_payload(logical_path, molten::preserves_rail::to_text(value)?));
+    Ok(())
+}
+
+pub(super) fn materialize_repro_payloads(
+    out: &std::path::Path,
+    profile: &str,
+    payloads: &[molten::materialization::MaterializationPayload],
+) -> molten::error::Result<()> {
+    // r[impl molten.filesystem_materialization.root]
+    // r[impl molten.filesystem_materialization.commit]
+    let policy = molten::materialization::MaterializationPolicy::bounded(
+        profile,
+        molten::materialization::ReplacementPolicy::ReplaceRegularFiles,
+    )?;
+    let receipt = molten::materialization::materialize_path(out, &policy, payloads)?;
+    let receipt_policy = molten::materialization::MaterializationPolicy::bounded(
+        "repro-materialization-receipt-v1",
+        molten::materialization::ReplacementPolicy::ReplaceRegularFiles,
+    )?;
+    let receipt_payload = [materialization_payload(
+        "materialization-receipt.preserves",
+        molten::preserves_rail::to_text(&receipt.value)?,
+    )];
+    molten::materialization::materialize_path(out, &receipt_policy, &receipt_payload)?;
     Ok(())
 }
 

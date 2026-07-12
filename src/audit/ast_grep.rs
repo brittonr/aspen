@@ -16,6 +16,10 @@ const TEST_WORKSPACE_POSITIVE_FIXTURE_PATH: &str =
     "tools/ast-grep/runtime-authority/fixtures/positive/test_ambient_temp_workspace.rs";
 const TEST_WORKSPACE_NEGATIVE_FIXTURE_PATH: &str =
     "tools/ast-grep/runtime-authority/fixtures/negative/test_capability_workspace.rs";
+const MATERIALIZATION_POSITIVE_FIXTURE_PATH: &str =
+    "tools/ast-grep/runtime-authority/fixtures/positive/materialization_ambient_output.rs";
+const MATERIALIZATION_NEGATIVE_FIXTURE_PATH: &str =
+    "tools/ast-grep/runtime-authority/fixtures/negative/materialization_capability_shell.rs";
 
 const REQUIRED_SURFACES: &[&str] = &[
     "core-runtime",
@@ -28,6 +32,7 @@ const REQUIRED_SURFACES: &[&str] = &[
     "operator-workflow",
     "local-store-adapters",
     "test-workspace-shells",
+    "filesystem-materializers",
 ];
 
 const REQUIRED_INVENTORY_CATEGORIES: &[&str] = &[
@@ -348,6 +353,12 @@ fn required_surfaces() -> Vec<AuditSurface> {
             "tests/parts/cliharness/p013/body.rs",
             "selected converted unit-test helper pages",
         ]),
+        surface("filesystem-materializers", &[
+            "src/cli/runtime/repro/bundle*.rs",
+            "src/retention/parts/mod/p028/body.rs",
+            "src/cli/ops/dogfood/{archive,io}.rs",
+            "src/operator/parts/dogfood/p008/body.rs",
+        ]),
     ]
 }
 
@@ -376,6 +387,13 @@ fn inventory_rules() -> Vec<AuditRule> {
             "predictable ambient temp roots and broad prefix cleanup in converted test helpers",
             TEST_WORKSPACE_POSITIVE_FIXTURE_PATH,
             TEST_WORKSPACE_NEGATIVE_FIXTURE_PATH,
+        ),
+        blocking_rule(
+            "materialization-ambient-output",
+            "ambient-filesystem",
+            "ambient descendant I/O and generic archive unpack in converted materializers",
+            MATERIALIZATION_POSITIVE_FIXTURE_PATH,
+            MATERIALIZATION_NEGATIVE_FIXTURE_PATH,
         ),
     ]
 }
@@ -407,6 +425,7 @@ fn blocking_rule(
 ) -> AuditRule {
     // r[impl molten.chunk_store.cap_std_regression_gate]
     // r[impl molten.testing.cap_std_regression_gate]
+    // r[impl molten.filesystem_materialization.regression_gate]
     AuditRule {
         id: id.to_string(),
         category: category.to_string(),
@@ -524,6 +543,7 @@ mod tests {
     fn validation_evidence_names_rule_fixtures_and_scan_scope() {
         // r[verify aspen.ast_grep_runtime_authority_audits.validation]
         // r[verify molten.testing.cap_std_regression_gate]
+        // r[verify molten.filesystem_materialization.regression_gate]
         let profile = runtime_authority_profile();
         let surface_ids = profile.surfaces.iter().map(|surface| surface.id.clone()).collect::<Vec<_>>();
         let scope_hash = scan_scope_hash(&surface_ids);
@@ -547,6 +567,13 @@ mod tests {
             .expect("test workspace blocking rule");
         assert_eq!(workspace_rule.positive_fixture.as_deref(), Some(TEST_WORKSPACE_POSITIVE_FIXTURE_PATH));
         assert_eq!(workspace_rule.negative_fixture.as_deref(), Some(TEST_WORKSPACE_NEGATIVE_FIXTURE_PATH));
+        let materialization_rule = profile
+            .rules
+            .iter()
+            .find(|rule| rule.id == "materialization-ambient-output")
+            .expect("materialization blocking rule");
+        assert_eq!(materialization_rule.positive_fixture.as_deref(), Some(MATERIALIZATION_POSITIVE_FIXTURE_PATH));
+        assert_eq!(materialization_rule.negative_fixture.as_deref(), Some(MATERIALIZATION_NEGATIVE_FIXTURE_PATH));
     }
 
     #[test]
@@ -594,6 +621,31 @@ mod tests {
                 surface: "local-store-adapters".to_string(),
                 path: "src/chunk/parts/store/p001/body.rs".to_string(),
                 message: "ambient child read in converted store".to_string(),
+            }],
+        });
+
+        assert!(!receipt.valid());
+        assert_eq!(receipt.decision, RECEIPT_DECISION_INVALID);
+        assert_eq!(receipt.claim_scope, CLAIM_SCOPE_STRUCTURAL_HYGIENE);
+        assert!(receipt.checks.iter().any(|check| check.name == "blocking-findings-absent" && !check.passed));
+    }
+
+    #[test]
+    fn blocking_materialization_finding_invalidates_structural_receipt() {
+        // r[verify molten.filesystem_materialization.regression_gate]
+        let profile = runtime_authority_profile();
+        let rule_bundle_hash = rule_bundle_hash(&profile);
+        let receipt = build_ast_grep_audit_receipt(AstGrepScanInput {
+            profile,
+            ast_grep_version: AST_GREP_VERSION_FIXTURE.to_string(),
+            rule_bundle_hash,
+            scan_scope_hash: SCOPE_REF_FIXTURE.to_string(),
+            evidence_gate_run_ref: RUN_REF_FIXTURE.to_string(),
+            findings: vec![AstGrepFinding {
+                rule_id: "materialization-ambient-output".to_string(),
+                surface: "filesystem-materializers".to_string(),
+                path: "src/cli/runtime/repro/bundle.rs".to_string(),
+                message: "ambient descendant write in converted materializer".to_string(),
             }],
         });
 

@@ -134,6 +134,10 @@ impl LocalStoreRoot {
         self.kind
     }
 
+    pub(crate) fn try_clone_dir(&self) -> Result<cap_std::fs::Dir> {
+        self.dir.try_clone().map_err(MoltenError::from)
+    }
+
     fn open_subdir(&self, kind: LocalStoreKind, path: &LocalStorePath) -> Result<Self> {
         self.create_dir_all(path)?;
         let dir = self.dir.open_dir(path.as_path()).map_err(MoltenError::from)?;

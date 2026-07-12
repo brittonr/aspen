@@ -417,6 +417,34 @@
                     > "$TMPDIR/converted.json"
                   touch "$out"
                 '';
+            materializationAuthorityCheck =
+              pkgs.runCommand "molten-materialization-authority"
+                {
+                  nativeBuildInputs = [ pkgs.ast-grep ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  rule=tools/ast-grep/runtime-authority/rules/materialization-ambient-output.yml
+                  positive=tools/ast-grep/runtime-authority/fixtures/positive/materialization_ambient_output.rs
+                  if ast-grep scan --rule "$rule" --json=compact "$positive" > "$TMPDIR/positive.json"; then
+                    echo "blocking materialization fixture unexpectedly produced no findings" >&2
+                    exit 1
+                  fi
+                  ast-grep scan --rule "$rule" --json=compact \
+                    tools/ast-grep/runtime-authority/fixtures/negative/materialization_capability_shell.rs \
+                    > "$TMPDIR/negative.json"
+                  ast-grep scan --rule "$rule" --json=compact \
+                    src/cli/runtime/repro/bundle.rs \
+                    src/cli/runtime/repro/bundle/unpack.rs \
+                    src/retention/parts/mod/p028/body.rs \
+                    src/cli/ops/dogfood/archive.rs \
+                    src/cli/ops/dogfood/io.rs \
+                    src/operator/parts/dogfood/p008/body.rs \
+                    > "$TMPDIR/converted.json"
+                  touch "$out"
+                '';
           in
           rec {
             # The hermetic nextest check supplies binary metadata for CLI tests
@@ -425,6 +453,7 @@
             clippy = ws.clippy.allWorkspaceMembers;
             cap-std-store-authority = capStdStoreAuthorityCheck;
             cap-std-test-workspaces = capStdTestWorkspaceCheck;
+            materialization-authority = materializationAuthorityCheck;
             nixos-vm-smoke = vmShardCheck "nixos-vm-smoke";
             nixos-vm-live-control = vmShardCheck "nixos-vm-live-control";
             nixos-vm-service-job = vmShardCheck "nixos-vm-service-job";

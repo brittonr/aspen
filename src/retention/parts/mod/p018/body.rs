@@ -241,6 +241,7 @@ pub fn export_candidate_bundle_with_roots(
     if profile == CandidateBundleExportProfile::Diagnostic {
         write_candidate_bundle_redacted_view(bundle_root, &bundle)?;
     }
+    finalize_candidate_bundle_materialization(bundle_root)?;
     Ok(bundle)
 }
 

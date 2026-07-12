@@ -29,6 +29,11 @@ fn read_store_value_with_root(root: &CapabilityRetentionRoot, path: &LocalStoreP
 }
 
 fn bundle_path(path: &str) -> Result<LocalStorePath> {
+    // r[impl molten.filesystem_materialization.archive_members]
+    crate::materialization::MaterializationPath::parse(
+        path,
+        crate::materialization::DEFAULT_MAX_MATERIALIZATION_PATH_BYTES,
+    )?;
     LocalStorePath::parse(path)
 }
 
@@ -37,8 +42,99 @@ fn bundle_artifact_path(directory: &str, reference: &str) -> Result<LocalStorePa
 }
 
 fn write_bundle_value(root: &CapabilityBundleRoot, path: &LocalStorePath, value: &IoValue) -> Result<()> {
-    let text = crate::preserves_rail::to_text(value)?;
-    root.root().write(path, text.as_bytes())
+    // r[impl molten.filesystem_materialization.root]
+    let payload = [crate::materialization::MaterializationPayload::new(
+        bundle_materialization_path(path)?,
+        crate::preserves_rail::to_text(value)?.into_bytes(),
+    )];
+    let policy = candidate_bundle_materialization_policy()?;
+    let plan = crate::materialization::plan_payloads(&policy, &payload)?;
+    let materialization_root =
+        crate::materialization::MaterializationRoot::from_dir(root.root().try_clone_dir()?);
+    materialization_root.materialize(&plan, &payload)?;
+    Ok(())
+}
+
+fn bundle_materialization_path(path: &LocalStorePath) -> Result<String> {
+    let mut components = Vec::new();
+    for component in path.as_path().components() {
+        let std::path::Component::Normal(component) = component else {
+            return Err(MoltenError::invalid_harness("retention bundle path is not normalized"));
+        };
+        let component = component
+            .to_str()
+            .ok_or_else(|| MoltenError::invalid_harness("retention bundle path must be UTF-8"))?;
+        components.push(component);
+    }
+    Ok(components.join("/"))
+}
+
+const CANDIDATE_BUNDLE_MATERIALIZATION_RECEIPT: &str = "materialization-receipt.preserves";
+
+fn finalize_candidate_bundle_materialization(
+    root: &CapabilityBundleRoot,
+) -> Result<crate::materialization::MaterializationReceipt> {
+    // r[impl molten.filesystem_materialization.receipt]
+    let policy = candidate_bundle_materialization_policy()?;
+    let source = crate::materialization::SourceDirectoryRoot::from_dir(root.root().try_clone_dir()?);
+    let paths = source.list_regular_files_recursive(&policy)?;
+    let mut payloads = Vec::with_capacity(paths.len());
+    for path in paths {
+        if path.as_str() == CANDIDATE_BUNDLE_MATERIALIZATION_RECEIPT {
+            continue;
+        }
+        payloads.push(crate::materialization::MaterializationPayload::new(
+            path.as_str(),
+            source.read_path(&path, policy.max_member_bytes)?,
+        ));
+    }
+    let plan = crate::materialization::plan_payloads(&policy, &payloads)?;
+    let destination = crate::materialization::MaterializationRoot::from_dir(root.root().try_clone_dir()?);
+    let receipt = destination.materialize(&plan, &payloads)?;
+    crate::materialization::validate_materialization_receipt(&receipt)?;
+    let receipt_path = bundle_path(CANDIDATE_BUNDLE_MATERIALIZATION_RECEIPT)?;
+    root.root().write(&receipt_path, crate::preserves_rail::to_text(&receipt.value)?.as_bytes())?;
+    let readback = read_bundle_value(root, &receipt_path)?;
+    let parsed = crate::materialization::parse_materialization_receipt(&readback)?;
+    if parsed != receipt {
+        return Err(MoltenError::invalid_harness(
+            "retention candidate materialization receipt changed during publication",
+        ));
+    }
+    Ok(receipt)
+}
+
+fn verify_candidate_bundle_materialization(root: &CapabilityBundleRoot) -> Result<()> {
+    let policy = candidate_bundle_materialization_policy()?;
+    let receipt_path = bundle_path(CANDIDATE_BUNDLE_MATERIALIZATION_RECEIPT)?;
+    let receipt_value = read_bundle_value(root, &receipt_path)?;
+    let receipt = crate::materialization::parse_materialization_receipt(&receipt_value)?;
+    let source = crate::materialization::SourceDirectoryRoot::from_dir(root.root().try_clone_dir()?);
+    let paths = source.list_regular_files_recursive(&policy)?;
+    let mut payloads = Vec::with_capacity(paths.len());
+    for path in paths {
+        if path.as_str() == CANDIDATE_BUNDLE_MATERIALIZATION_RECEIPT {
+            continue;
+        }
+        payloads.push(crate::materialization::MaterializationPayload::new(
+            path.as_str(),
+            source.read_path(&path, policy.max_member_bytes)?,
+        ));
+    }
+    let observed = crate::materialization::plan_payloads(&policy, &payloads)?;
+    if observed.plan_ref != receipt.plan_ref || observed.value != receipt.plan_value {
+        return Err(MoltenError::invalid_harness(
+            "retention candidate members do not match materialization receipt",
+        ));
+    }
+    Ok(())
+}
+
+fn candidate_bundle_materialization_policy() -> Result<crate::materialization::MaterializationPolicy> {
+    crate::materialization::MaterializationPolicy::bounded(
+        "retention-candidate-bundle-v1",
+        crate::materialization::ReplacementPolicy::ReplaceRegularFiles,
+    )
 }
 
 fn read_bundle_value(root: &CapabilityBundleRoot, path: &LocalStorePath) -> Result<IoValue> {

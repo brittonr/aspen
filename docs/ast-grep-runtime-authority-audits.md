@@ -37,10 +37,13 @@ r[impl aspen.ast_grep_runtime_authority_audits.inventory] The initial rules stay
 | `direct-authority-bypass` | direct authority bypass candidate | inventory |
 | `store-ambient-filesystem-call` | ambient child I/O or root reacquisition in converted stores | **blocking** |
 | `test-ambient-temp-workspace` | predictable ambient temporary roots or broad prefix cleanup | **blocking** |
+| `materialization-ambient-output` | ambient descendant I/O or generic archive unpack in converted materializers | **blocking** |
 
 r[impl molten.chunk_store.cap_std_regression_gate] The blocking store rule is path-scoped, ignores test fixture trees, and has dedicated positive and negative fixtures. It permits typed root bootstrap/delegation because those shapes do not directly call ambient child APIs. Explicit output materialization remains shell-owned outside the scanned store-page scope.
 
 r[impl molten.testing.cap_std_regression_gate] The test-workspace rule is limited to helpers migrated to the shared `cap-tempfile` shell. It rejects ambient temporary-root construction and stale-prefix deletion while permitting capability-rooted workspace acquisition and explicit selected-artifact export.
+
+r[impl molten.filesystem_materialization.regression_gate] The materialization rule is scoped to converted repro, retention, and release writers/readers. It blocks ambient descendant calls and generic tar unpacking while permitting explicit capability acquisition and capability-relative staged publication.
 
 Rules live under `tools/ast-grep/runtime-authority/rules/`. Positive and negative fixtures live under `tools/ast-grep/runtime-authority/fixtures/`; fixture coverage is required before any rule can be promoted from inventory to warning or blocking posture.
 
@@ -92,6 +95,16 @@ ast-grep scan --rule tools/ast-grep/runtime-authority/rules/test-ambient-temp-wo
 ast-grep scan --rule tools/ast-grep/runtime-authority/rules/test-ambient-temp-workspace.yml \
   --json=compact \
   tools/ast-grep/runtime-authority/fixtures/negative/test_capability_workspace.rs
+
+# Must report ambient materialization and generic-unpack findings.
+ast-grep scan --rule tools/ast-grep/runtime-authority/rules/materialization-ambient-output.yml \
+  --json=compact \
+  tools/ast-grep/runtime-authority/fixtures/positive/materialization_ambient_output.rs
+
+# Must report no findings for the capability-rooted materialization shell.
+ast-grep scan --rule tools/ast-grep/runtime-authority/rules/materialization-ambient-output.yml \
+  --json=compact \
+  tools/ast-grep/runtime-authority/fixtures/negative/materialization_capability_shell.rs
 ```
 
 Rust unit tests validate the pure profile, fixture-promotion gate, BLAKE3 identity binding, stale-rule-bundle detection, and evidence-only receipt non-claims.

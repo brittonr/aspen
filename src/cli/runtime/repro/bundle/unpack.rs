@@ -127,46 +127,32 @@ fn write(input: Write<'_>) -> Outcome<()> {
         reveal_receipt_values,
         out,
     } = input;
-    std::fs::create_dir_all(out).map_err(Error::from)?;
-    write_preserves(out, "refs.preserves", bundle_value)?;
-    write_preserves(out, "report.preserves", report_value)?;
-    write_preserves(out, "suite.preserves", suite_value)?;
-    write_optional(source, verify_receipt, out)?;
-    write_reveals(out, reveal_receipt_values)?;
-    write_text(out, "summary.txt", &molten::harness::repro_bundle_summary(bundle_value)?)?;
-    write_text(out, "commands.txt", super::REPORT_COMMANDS)?;
-    Ok(())
-}
-
-fn write_optional(source: &Source, verify_receipt: Option<&Value>, out: &Path) -> Outcome<()> {
-    if let Some(value) = source.receipt_value.as_ref() {
-        write_preserves(out, "gate-receipt.preserves", value)?;
-    }
-    if let Some(value) = verify_receipt {
-        write_preserves(out, "verify-receipt.preserves", value)?;
-    }
-    if let Some(value) = source.redaction_transform_receipt_value.as_ref() {
-        write_preserves(out, "redaction-transform-receipt.preserves", value)?;
-    }
-    if let Some(value) = source.redaction_transform_manifest_value.as_ref() {
-        write_preserves(out, "redaction-transform-manifest.preserves", value)?;
-    }
-    Ok(())
-}
-
-fn write_reveals(out: &Path, reveal_receipt_values: &[Value]) -> Outcome<()> {
+    let mut payloads = vec![
+        super::materialization_payload("refs.preserves", molten::preserves_rail::to_text(bundle_value)?),
+        super::materialization_payload("report.preserves", molten::preserves_rail::to_text(report_value)?),
+        super::materialization_payload("suite.preserves", molten::preserves_rail::to_text(suite_value)?),
+        super::materialization_payload("summary.txt", molten::harness::repro_bundle_summary(bundle_value)?),
+        super::materialization_payload("commands.txt", super::REPORT_COMMANDS),
+    ];
+    super::push_optional_payload(&mut payloads, "gate-receipt.preserves", source.receipt_value.as_ref())?;
+    super::push_optional_payload(&mut payloads, "verify-receipt.preserves", verify_receipt)?;
+    super::push_optional_payload(
+        &mut payloads,
+        "redaction-transform-receipt.preserves",
+        source.redaction_transform_receipt_value.as_ref(),
+    )?;
+    super::push_optional_payload(
+        &mut payloads,
+        "redaction-transform-manifest.preserves",
+        source.redaction_transform_manifest_value.as_ref(),
+    )?;
     for (index, receipt) in reveal_receipt_values.iter().enumerate() {
-        write_preserves(out, &format!("reveal-receipt-{index}.preserves"), receipt)?;
+        payloads.push(super::materialization_payload(
+            &format!("reveal-receipt-{index}.preserves"),
+            molten::preserves_rail::to_text(receipt)?,
+        ));
     }
-    Ok(())
-}
-
-fn write_preserves(out: &Path, name: &str, value: &Value) -> Outcome<()> {
-    write_text(out, name, &molten::preserves_rail::to_text(value)?)
-}
-
-fn write_text(out: &Path, name: &str, contents: &str) -> Outcome<()> {
-    super::super::io::write_file(&out.join(name), contents)
+    super::materialize_repro_payloads(out, "repro-unpack-v1", &payloads)
 }
 
 fn check_receipts(encrypted_refs: &[String], receipt_values: &[Value]) -> Outcome<()> {

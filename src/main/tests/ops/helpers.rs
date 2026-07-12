@@ -202,6 +202,6 @@
         context_ref
     }
 
-    fn temp_dir(label: &str) -> crate::test_support::ProcessWorkspace {
+    pub(crate) fn temp_dir(label: &str) -> crate::test_support::ProcessWorkspace {
         crate::test_support::process_workspace(label).expect("create isolated process workspace")
     }

@@ -1,0 +1,61 @@
+id: materialization-ambient-output
+language: Rust
+severity: error
+message: Converted materializers must use logical members and a supplied capability root, not ambient descendant I/O or generic archive unpack.
+metadata:
+  posture: blocking
+  surface: filesystem-materializers
+  non_claim: structural-materialization-containment-only
+files:
+  - src/cli/runtime/repro/bundle.rs
+  - src/cli/runtime/repro/bundle/unpack.rs
+  - src/retention/parts/mod/p028/body.rs
+  - src/cli/ops/dogfood/archive.rs
+  - src/cli/ops/dogfood/io.rs
+  - src/operator/parts/dogfood/p008/body.rs
+  - tools/ast-grep/runtime-authority/fixtures/positive/materialization_ambient_output.rs
+  - tools/ast-grep/runtime-authority/fixtures/negative/materialization_capability_shell.rs
+rule:
+  any:
+    - pattern: std::fs::read($PATH)
+    - pattern: std::fs::read_to_string($PATH)
+    - pattern: std::fs::write($PATH, $DATA)
+    - pattern: std::fs::read_dir($PATH)
+    - pattern: std::fs::create_dir($PATH)
+    - pattern: std::fs::create_dir_all($PATH)
+    - pattern: std::fs::copy($FROM, $TO)
+    - pattern: std::fs::metadata($PATH)
+    - pattern: std::fs::symlink_metadata($PATH)
+    - pattern: std::fs::hard_link($FROM, $TO)
+    - pattern: std::fs::set_permissions($PATH, $PERMISSIONS)
+    - pattern: std::fs::remove_file($PATH)
+    - pattern: std::fs::remove_dir_all($PATH)
+    - pattern: std::fs::rename($FROM, $TO)
+    - pattern: std::fs::canonicalize($PATH)
+    - pattern: std::fs::File::create($PATH)
+    - pattern: std::fs::File::open($PATH)
+    - pattern: std::fs::OpenOptions::new()
+    - pattern: std::fs::File::options()
+    - pattern: fs::read($PATH)
+    - pattern: fs::read_to_string($PATH)
+    - pattern: fs::write($PATH, $DATA)
+    - pattern: fs::read_dir($PATH)
+    - pattern: fs::create_dir($PATH)
+    - pattern: fs::create_dir_all($PATH)
+    - pattern: fs::copy($FROM, $TO)
+    - pattern: fs::metadata($PATH)
+    - pattern: fs::symlink_metadata($PATH)
+    - pattern: fs::hard_link($FROM, $TO)
+    - pattern: fs::set_permissions($PATH, $PERMISSIONS)
+    - pattern: fs::remove_file($PATH)
+    - pattern: fs::remove_dir_all($PATH)
+    - pattern: fs::rename($FROM, $TO)
+    - pattern: fs::canonicalize($PATH)
+    - pattern: fs::File::create($PATH)
+    - pattern: fs::File::open($PATH)
+    - pattern: fs::OpenOptions::new()
+    - pattern: fs::File::options()
+    - pattern: cap_std::fs::Dir::open_ambient_dir($$$ARGS)
+    - pattern: Dir::open_ambient_dir($$$ARGS)
+    - pattern: $PATH.canonicalize()
+    - pattern: $ARCHIVE.unpack($PATH)

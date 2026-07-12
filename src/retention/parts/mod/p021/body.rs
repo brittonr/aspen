@@ -77,11 +77,22 @@ pub fn verify_candidate_bundle(input: CandidateBundleVerifyInput<'_>) -> Result<
 pub fn verify_candidate_bundle_with_root(
     input: CandidateBundleVerifyInput<'_, CapabilityBundleRoot>,
 ) -> Result<CandidateBundleVerify> {
+    let materialization_diagnostic = verify_candidate_bundle_materialization(input.bundle_dir)
+        .err()
+        .map(|error| format!("retention-bundle-materialization-receipt-invalid:{error}"));
     let bundle_value = read_bundle_value(input.bundle_dir, &bundle_path("bundle.preserves")?)?;
     let bundle = parse_candidate_bundle(&bundle_value)?;
     let explain_value = read_bundle_value(input.bundle_dir, &bundle_path("explain.preserves")?)?;
     let explain = parse_candidate_explain(&explain_value)?;
     let mut diagnostics = Vec::new();
+    if let Some(diagnostic) = materialization_diagnostic {
+        push_bounded(
+            &mut diagnostics,
+            diagnostic,
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
     push_bundle_scope_diagnostics(&bundle, &explain, &mut diagnostics)?;
     let expected_refs = candidate_bundle_expected_refs(&bundle)?;
     let expected_ref_set = push_expected_ref_notes(&bundle, &expected_refs, &mut diagnostics)?;

@@ -190,17 +190,24 @@ pub fn release_export_member_names() -> &'static [&'static str] {
 }
 
 fn observe_release_export_members(output_path: &Path) -> Result<Vec<(String, String)>> {
+    // r[impl molten.filesystem_materialization.root]
+    let policy = release_materialization_policy()?;
+    let source = crate::materialization::SourceDirectoryRoot::open_existing(output_path)?;
     let mut members = Vec::new();
     for name in release_export_member_names() {
-        let bytes = std::fs::read(output_path.join(name)).map_err(MoltenError::from)?;
+        let path = crate::materialization::MaterializationPath::parse(name, policy.max_path_bytes)?;
+        let bytes = source.read_path(&path, policy.max_member_bytes)?;
         members.push_limited_value(
             (name.to_string(), release_export_file_ref(name, &bytes)),
             MAX_OPERATOR_REFS,
             "release export members",
         )?;
     }
-    for name in release_export_keyring_member_names(output_path)? {
-        let bytes = std::fs::read(output_path.join(&name)).map_err(MoltenError::from)?;
+    let keyring_path = crate::materialization::MaterializationPath::parse("signed-keyring", policy.max_path_bytes)?;
+    let keyring = source.open_subdir(&keyring_path)?;
+    for relative in keyring.list_regular_files_recursive(&policy)? {
+        let name = format!("signed-keyring/{}", relative.as_str());
+        let bytes = keyring.read_path(&relative, policy.max_member_bytes)?;
         members.push_limited_value(
             (name.clone(), release_export_file_ref(&name, &bytes)),
             MAX_OPERATOR_REFS,
@@ -210,39 +217,20 @@ fn observe_release_export_members(output_path: &Path) -> Result<Vec<(String, Str
     Ok(members)
 }
 
-fn release_export_keyring_member_names(output_path: &Path) -> Result<Vec<String>> {
-    let keyring_path = output_path.join("signed-keyring");
-    let mut names = Vec::with_capacity(MAX_OPERATOR_STEPS);
-    let mut stack = Vec::with_capacity(MAX_OPERATOR_STEPS);
-    stack.push_limited_value(
-        (keyring_path, Path::new("signed-keyring").to_path_buf()),
-        MAX_OPERATOR_REFS,
-        "release export keyring traversal",
-    )?;
-    while let Some((path, relative)) = stack.pop() {
-        for entry in std::fs::read_dir(path).map_err(MoltenError::from)? {
-            let entry = entry.map_err(MoltenError::from)?;
-            let child_path = entry.path();
-            let child_relative = relative.join(entry.file_name());
-            let file_type = entry.file_type().map_err(MoltenError::from)?;
-            if file_type.is_dir() {
-                stack.push_limited_value(
-                    (child_path, child_relative),
-                    MAX_OPERATOR_REFS,
-                    "release export keyring traversal",
-                )?;
-            } else if file_type.is_file() {
-                let name = child_relative.to_string_lossy().replace('\\', "/");
-                names.push_limited_value(name, MAX_OPERATOR_REFS, "release export keyring members")?;
-            }
-        }
-    }
-    names.sort();
-    Ok(names)
+fn read_output_text(output_path: &Path, name: &str) -> Result<String> {
+    let policy = release_materialization_policy()?;
+    let source = crate::materialization::SourceDirectoryRoot::open_existing(output_path)?;
+    let path = crate::materialization::MaterializationPath::parse(name, policy.max_path_bytes)?;
+    let bytes = source.read_path(&path, policy.max_member_bytes)?;
+    String::from_utf8(bytes)
+        .map_err(|error| MoltenError::invalid_harness(format!("release output {name} is not UTF-8: {error}")))
 }
 
-fn read_output_text(output_path: &Path, name: &str) -> Result<String> {
-    std::fs::read_to_string(output_path.join(name)).map_err(MoltenError::from)
+fn release_materialization_policy() -> Result<crate::materialization::MaterializationPolicy> {
+    crate::materialization::MaterializationPolicy::bounded(
+        "operator-release-directory-v1",
+        crate::materialization::ReplacementPolicy::NoReplace,
+    )
 }
 
 fn raw_text_ref(domain: &str, text: &str) -> String {

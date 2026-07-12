@@ -95,6 +95,8 @@ pub mod journal;
 compat_module!(ledger, journal);
 #[path = "local_store.rs"]
 pub mod local_store;
+#[path = "materialization.rs"]
+pub mod materialization;
 #[doc(hidden)]
 #[path = "lifecycle/mod.rs"]
 pub mod phases;

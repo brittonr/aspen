@@ -63,6 +63,67 @@
     }
 
     #[test]
+    fn cli_repro_export_and_unpack_round_trip_materialized_members() {
+        const SUITE: &str = r#"
+<harness-suite-v1 "molten.harness.suite.v1" "materialization-round-trip" 7
+  <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
+  <actor-registry-v1 "molten.harness.actor-registry.v1" [
+    <actor "consumer" "native">
+    <actor "producer" "native">
+  ]>
+  <capabilities-v1 "molten.harness.capabilities.v1" [
+    <grant "consumer" "observe" #f "service.ready">
+    <grant "producer" "assert" #f "service.ready">
+    <grant "producer" "send" "consumer" #f>
+    <grant "producer" "clock" #f #f>
+    <grant "producer" "random" #f #f>
+    <grant "producer" "retract" #f "service.ready">
+  ]>
+  [
+    <observe "consumer" "service.ready">
+    <assert "producer" "service.ready">
+    <send "producer" "consumer" "hello">
+    <clock "producer">
+    <random "producer" 100>
+    <retract "producer" "service.ready">
+  ]>
+"#;
+
+        let dir = temp_dir("repro-materialization-round-trip");
+        let suite = parse_text(SUITE).expect("parse materialization suite");
+        let run = molten::harness::run_suite_value(&suite).expect("run materialization suite");
+        let report = dir.join("report.preserves");
+        write_file(&report, &to_text(&run.report_value).expect("render report")).expect("write report");
+        let bundle = dir.join("bundle");
+        run_repro_command(ReproCommand::Export {
+            report,
+            out: bundle.clone(),
+            profile: "deny-sensitive".to_string(),
+            failure_out: None,
+        })
+        .expect("export repro bundle");
+
+        let unpacked = dir.join("unpacked");
+        write_file(&unpacked.join("summary.txt"), "stale summary").expect("write admitted replacement fixture");
+        run_repro_command(ReproCommand::Unpack {
+            bundle: bundle.join("refs.preserves"),
+            out: unpacked.clone(),
+            reveal_receipts: Vec::new(),
+            failure_out: None,
+        })
+        .expect("unpack repro bundle");
+        assert!(unpacked.join("report.preserves").exists());
+        assert!(unpacked.join("suite.preserves").exists());
+        assert_ne!(fs::read_to_string(unpacked.join("summary.txt")).expect("read summary"), "stale summary");
+        let receipt = read_preserves_file(&unpacked.join("materialization-receipt.preserves"))
+            .expect("read unpack materialization receipt");
+        let receipt = molten::materialization::parse_materialization_receipt(&receipt)
+            .expect("parse unpack materialization receipt");
+        assert!(receipt.valid());
+        assert!(receipt.member_refs.iter().any(|(path, _)| path == "report.preserves"));
+    }
+
+    #[test]
     fn cli_repro_export_accepts_failure_artifact() {
         let dir = temp_dir("failure-repro");
         let failure_artifact = dir.join("input.failure.preserves");
@@ -82,6 +143,17 @@
         assert_eq!(parsed.kind, molten::harness::ReproBundleKind::Failure);
         assert!(out.join("failure.preserves").exists());
         assert!(out.join("commands.txt").exists());
+        let materialization_receipt = read_preserves_file(&out.join("materialization-receipt.preserves"))
+            .expect("read repro materialization receipt");
+        let materialization_receipt = molten::materialization::parse_materialization_receipt(
+            &materialization_receipt,
+        )
+        .expect("parse repro materialization receipt");
+        assert!(materialization_receipt.valid());
+        assert!(materialization_receipt
+            .member_refs
+            .iter()
+            .any(|(path, _)| path == "refs.preserves"));
 
         let verify_failure = dir.join("verify.failure.preserves");
         let verify_error = run_repro_command(ReproCommand::Verify {
