@@ -549,6 +549,31 @@
                   fi
                   touch "$out"
                 '';
+            fabricMembershipPlacementProfileCheck =
+              pkgs.runCommand "molten-fabric-membership-placement-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.nickel
+                    pkgs.diffutils
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=docs/fabric-membership-placement/profile.ncl
+                  generated=docs/fabric-membership-placement/generated/profile.json
+                  nickel export "$profile" --format json > "$TMPDIR/profile.json"
+                  diff -u "$generated" "$TMPDIR/profile.json"
+                  for fixture in docs/fabric-membership-placement/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative membership profile fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  touch "$out"
+                '';
           in
           rec {
             # The hermetic nextest check supplies binary metadata for CLI tests
@@ -561,6 +586,7 @@
             materialization-authority = materializationAuthorityCheck;
             wasm-component-profile = wasmComponentProfileCheck;
             wasm-component-performance-profile = wasmComponentPerformanceProfileCheck;
+            fabric-membership-placement-profile = fabricMembershipPlacementProfileCheck;
             nixos-vm-smoke = vmShardCheck "nixos-vm-smoke";
             nixos-vm-live-control = vmShardCheck "nixos-vm-live-control";
             nixos-vm-service-job = vmShardCheck "nixos-vm-service-job";

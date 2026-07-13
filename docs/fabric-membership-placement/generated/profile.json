@@ -1,0 +1,38 @@
+{
+  "fencing": {
+    "authority_ref": "blake3:3333333333333333333333333333333333333333333333333333333333333333",
+    "effect_port_ref": "blake3:4444444444444444444444444444444444444444444444444444444444444444",
+    "enforcement": "process-local",
+    "profile_ref": "blake3:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "max_node_capacity": {
+    "cpu_millis": 8000,
+    "memory_bytes": 34359738368,
+    "storage_bytes": 274877906944
+  },
+  "max_replicas": 64,
+  "max_role_request": {
+    "cpu_millis": 4000,
+    "memory_bytes": 17179869184,
+    "storage_bytes": 137438953472
+  },
+  "max_search_steps": 100000,
+  "non_claims": [
+    "does-not-prove-consensus",
+    "does-not-provide-global-membership-truth",
+    "does-not-prove-process-failure",
+    "does-not-grant-capability-authority",
+    "does-not-commit-placement",
+    "connectivity-does-not-imply-eligibility",
+    "does-not-prove-service-correctness"
+  ],
+  "schema_id": "molten.fabric.membership-placement-profile.v1",
+  "schema_version": 1,
+  "source": {
+    "authority_strength": "operator-declared",
+    "max_view_age_ticks": 1000,
+    "profile_ref": "blake3:1111111111111111111111111111111111111111111111111111111111111111",
+    "provider_kind": "static"
+  },
+  "source_language": "nickel"
+}
