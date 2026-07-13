@@ -110,6 +110,10 @@ impl NodeStateFile {
         self.unix_mode
     }
 
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
     pub fn read_bounded(self, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
         read_open_file_bounded(self.file, self.size, max_bytes, "observed node state file")
     }

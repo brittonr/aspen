@@ -1,0 +1,8 @@
+{
+  "depends_on": [
+    "fabric-durable-state-ports",
+    "fabric-time-scheduler-runtime",
+    "fabric-transport-session-runtime",
+    "system-extension-service-runtime"
+  ]
+}

@@ -79,6 +79,7 @@ pub mod fabric;
 pub mod fabric_crypto_identity;
 pub mod fabric_durability;
 pub mod fabric_membership;
+pub mod fabric_observability;
 pub mod fabric_time;
 pub mod fabric_transport;
 pub mod system_extension;

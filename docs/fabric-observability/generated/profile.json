@@ -1,0 +1,64 @@
+{
+  "adapter_classes": [
+    "tracing",
+    "prometheus",
+    "opentelemetry",
+    "durable-state-scan",
+    "content-verification",
+    "runtime-counter",
+    "deterministic-simulation"
+  ],
+  "bounds": {
+    "max_descriptors": 256,
+    "max_diagnostics": 128,
+    "max_event_detail_bytes": 512,
+    "max_events": 1024,
+    "max_findings": 256,
+    "max_label_name_bytes": 64,
+    "max_label_value_bytes": 128,
+    "max_labels_per_sample": 16,
+    "max_queued_bytes": 1048576,
+    "max_scan_items": 4096,
+    "max_series": 4096,
+    "max_snapshots": 64,
+    "min_export_interval_ticks": 1
+  },
+  "claim_scopes": [
+    "local-component",
+    "adapter",
+    "system-extension",
+    "cluster",
+    "operator",
+    "release-production"
+  ],
+  "export": {
+    "allow_unbounded_queue": false,
+    "terminal_failures_explicit": true
+  },
+  "integrity": {
+    "read_only_by_default": true,
+    "separate_mutation_authority_required": true
+  },
+  "non_claims": [
+    "observation-does-not-grant-capability-authority",
+    "finding-does-not-grant-repair-authority",
+    "health-does-not-prove-service-correctness",
+    "local-observation-does-not-prove-cluster-truth",
+    "readiness-does-not-prove-release-eligibility",
+    "redaction-does-not-prove-confidentiality",
+    "scan-does-not-prove-completeness-beyond-plan"
+  ],
+  "redaction": {
+    "deny_credentials": true,
+    "deny_payloads": true,
+    "deny_private_paths": true,
+    "deny_raw_tickets": true,
+    "deny_unclassified_sensitive_values": true
+  },
+  "schema_id": "molten.fabric.observability-profile.v1",
+  "schema_version": 1,
+  "scope": {
+    "allow_implicit_promotion": false
+  },
+  "source_language": "nickel"
+}
