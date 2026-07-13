@@ -9,6 +9,7 @@ pub mod dependency;
 pub mod fabric;
 pub mod fabric_durability;
 pub mod fabric_time;
+pub mod fabric_transport;
 pub mod planning;
 pub mod policy;
 pub mod preserves_profile;
