@@ -19,7 +19,8 @@ pub const DEFAULT_CONSENSUS_ENGINE_REGISTRY_LEN: usize = 3;
 pub const INITIAL_CONSENSUS_ENGINE_EPOCH: u64 = 1;
 pub const NEXT_CONSENSUS_ENGINE_EPOCH_STEP: u64 = 1;
 
-const CONSENSUS_ENVIRONMENT_PRODUCTION: &str = "production";
+pub const CONSENSUS_ENVIRONMENT_PRODUCTION: &str = "production";
+pub const CONSENSUS_ENVIRONMENT_MODEL: &str = "model";
 const ENGINE_STATUS_DISABLED: &str = "disabled";
 const ENGINE_DECISION_PASS: &str = "pass";
 const ENGINE_DECISION_DENY: &str = "deny";
@@ -272,6 +273,7 @@ pub fn default_consensus_engine_registry() -> Result<ConsensusEngineRegistry> {
     parse_consensus_engine_registry(&consensus_engine_registry_value(&entries)?)
 }
 
+// r[impl molten.fabric_consistency.production_admission]
 pub fn default_raft_engine_descriptor() -> Result<ConsensusEngineDescriptor> {
     let input = ConsensusEngineDescriptorInput {
         profile_id: CONSENSUS_PROFILE_RAFT,
@@ -292,16 +294,19 @@ pub fn default_raft_engine_descriptor() -> Result<ConsensusEngineDescriptor> {
         ],
         currentness_evidence_classes: vec![CURRENTNESS_CLASS_RAFT_QUORUM_COMMIT, CURRENTNESS_CLASS_READ_INDEX],
         membership_capabilities: vec![MEMBERSHIP_CAPABILITY_JOINT_CONSENSUS, MEMBERSHIP_CAPABILITY_DENY_UNSUPPORTED],
-        production_admission_status: PRODUCTION_STATUS_ADMITTED,
+        production_admission_status: PRODUCTION_STATUS_MODEL_ONLY,
         required_evidence_refs: vec![
-            synthetic_ref("raft-implementation-evidence")?,
-            synthetic_ref("raft-proof-model-evidence")?,
-            synthetic_ref("raft-simulation-evidence")?,
-            synthetic_ref("raft-placement-evidence")?,
-            synthetic_ref("raft-membership-evidence")?,
+            synthetic_ref("raft-pure-transition-model-evidence")?,
+            synthetic_ref("raft-deterministic-simulation-evidence")?,
+            synthetic_ref("raft-placement-model-evidence")?,
+            synthetic_ref("raft-membership-model-evidence")?,
         ],
-        conformance_receipt_refs: vec![synthetic_ref("raft-conformance-receipt")?],
-        caveats: default_consensus_caveats(),
+        conformance_receipt_refs: vec![synthetic_ref("raft-model-conformance-receipt")?],
+        caveats: {
+            let mut caveats = default_consensus_caveats();
+            caveats.push("in-process-model-does-not-prove-live-quorum".to_string());
+            caveats
+        },
     };
     parse_consensus_engine_descriptor(&consensus_engine_descriptor_value(&input)?)
 }
@@ -550,6 +555,8 @@ fn collect_engine_admission_diagnostics(
     if !descriptor.enabled {
         diagnostics.push(format!("consensus engine {} is disabled", descriptor.profile_id));
     }
+    // r[impl molten.consensus.algorithm_profile_manifest]
+    // r[impl molten.fabric_consistency.production_admission]
     if input.requested_environment == CONSENSUS_ENVIRONMENT_PRODUCTION
         && descriptor.production_admission_status != PRODUCTION_STATUS_ADMITTED
     {
@@ -629,11 +636,24 @@ pub fn parse_consensus_engine_admission_receipt(value: &IoValue) -> Result<Conse
 }
 
 pub fn resolve_control_registry_engine(manifest: &RaftGroupManifest) -> Result<ConsensusEngineAdmissionReceipt> {
+    resolve_control_registry_engine_for_environment(manifest, CONSENSUS_ENVIRONMENT_PRODUCTION)
+}
+
+pub fn resolve_control_registry_model_engine(
+    manifest: &RaftGroupManifest,
+) -> Result<ConsensusEngineAdmissionReceipt> {
+    resolve_control_registry_engine_for_environment(manifest, CONSENSUS_ENVIRONMENT_MODEL)
+}
+
+fn resolve_control_registry_engine_for_environment(
+    manifest: &RaftGroupManifest,
+    requested_environment: &str,
+) -> Result<ConsensusEngineAdmissionReceipt> {
     let registry = default_consensus_engine_registry()?;
     admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
         algorithm_profile: manifest.algorithm_profile.clone(),
         profile_version: manifest.admitted_profile_version.clone(),
-        requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
+        requested_environment: requested_environment.to_string(),
         requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
         required_capabilities: vec![
             ENGINE_CAPABILITY_PROPOSAL.to_string(),
@@ -792,12 +812,25 @@ pub fn parse_consensus_engine_receipt(value: &IoValue) -> Result<ConsensusEngine
 pub fn consensus_engine_switchover_receipt(
     input: &ConsensusEngineSwitchoverInput,
 ) -> Result<ConsensusEngineSwitchoverReceipt> {
+    consensus_engine_switchover_receipt_for_environment(input, CONSENSUS_ENVIRONMENT_PRODUCTION)
+}
+
+pub fn consensus_engine_model_switchover_receipt(
+    input: &ConsensusEngineSwitchoverInput,
+) -> Result<ConsensusEngineSwitchoverReceipt> {
+    consensus_engine_switchover_receipt_for_environment(input, CONSENSUS_ENVIRONMENT_MODEL)
+}
+
+fn consensus_engine_switchover_receipt_for_environment(
+    input: &ConsensusEngineSwitchoverInput,
+    requested_environment: &str,
+) -> Result<ConsensusEngineSwitchoverReceipt> {
     validate_switchover_input(input)?;
     let registry = default_consensus_engine_registry()?;
     let target_admission = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
         algorithm_profile: input.target_profile.clone(),
         profile_version: input.target_version.clone(),
-        requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
+        requested_environment: requested_environment.to_string(),
         requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
         required_capabilities: vec![
             ENGINE_CAPABILITY_PROPOSAL.to_string(),

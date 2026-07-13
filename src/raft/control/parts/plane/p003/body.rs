@@ -78,7 +78,7 @@ pub fn control_registry_fixture_manifest_value() -> Result<IoValue> {
 
 pub fn run_control_registry_fixture() -> Result<ControlRegistryRuntime> {
     let manifest_value = control_registry_fixture_manifest_value()?;
-    let mut runtime = new_control_registry_runtime(&manifest_value)?;
+    let mut runtime = new_control_registry_model_runtime(&manifest_value)?;
     let commands = vec![
         control_registry_command_value(&ControlRegistryCommandInput {
             operation: "install-protocol".to_string(),
@@ -117,7 +117,7 @@ pub fn run_control_registry_fixture() -> Result<ControlRegistryRuntime> {
 }
 
 pub fn control_registry_summary(runtime: &ControlRegistryRuntime) -> String {
-    let engine = resolve_control_registry_engine(&runtime.manifest)
+    let engine = resolve_control_registry_model_engine(&runtime.manifest)
         .ok()
         .and_then(|admission| admission.descriptor)
         .map(|descriptor| descriptor.implementation_id)

@@ -17,7 +17,30 @@ pub fn parse_control_registry_state(value: &IoValue) -> Result<ControlRegistrySt
 
 // r[impl molten.consensus.leaderless_profile_boundary]
 // r[impl molten.consensus.runtime_engine_selection]
+// r[impl molten.consensus.algorithm_profile_manifest]
+/// Constructs the legacy deterministic model runtime.
+///
+/// This compatibility entry point is intentionally model-only. Production
+/// callers must use `new_control_registry_production_runtime`, which fails
+/// closed until a live implementation profile has accepted evidence.
 pub fn new_control_registry_runtime(manifest_value: &IoValue) -> Result<ControlRegistryRuntime> {
+    new_control_registry_model_runtime(manifest_value)
+}
+
+pub fn new_control_registry_model_runtime(manifest_value: &IoValue) -> Result<ControlRegistryRuntime> {
+    new_control_registry_runtime_for_environment(manifest_value, CONSENSUS_ENVIRONMENT_MODEL)
+}
+
+pub fn new_control_registry_production_runtime(
+    manifest_value: &IoValue,
+) -> Result<ControlRegistryRuntime> {
+    new_control_registry_runtime_for_environment(manifest_value, CONSENSUS_ENVIRONMENT_PRODUCTION)
+}
+
+fn new_control_registry_runtime_for_environment(
+    manifest_value: &IoValue,
+    environment: &str,
+) -> Result<ControlRegistryRuntime> {
     let manifest = parse_raft_group_manifest(manifest_value)?;
     if manifest.state_machine != CONTROL_REGISTRY_STATE_MACHINE {
         return Err(MoltenError::invalid_harness(format!(
@@ -25,15 +48,23 @@ pub fn new_control_registry_runtime(manifest_value: &IoValue) -> Result<ControlR
             manifest.state_machine
         )));
     }
-    let admission = resolve_control_registry_engine(&manifest)?;
+    let admission = if environment == CONSENSUS_ENVIRONMENT_MODEL {
+        resolve_control_registry_model_engine(&manifest)?
+    } else {
+        resolve_control_registry_engine(&manifest)?
+    };
     if admission.decision != ENGINE_DECISION_PASS {
         return Err(MoltenError::invalid_harness(format!(
-            "consensus profile {} is not admitted for production runtime; status {}; diagnostics {}",
+            "consensus profile {} is not admitted for {environment} runtime; status {}; diagnostics {}",
             manifest.algorithm_profile,
             manifest.production_status,
             admission.diagnostics.join("; ")
         )));
     }
+    initial_control_registry_runtime(manifest)
+}
+
+fn initial_control_registry_runtime(manifest: RaftGroupManifest) -> Result<ControlRegistryRuntime> {
     Ok(ControlRegistryRuntime {
         manifest,
         term: 1,

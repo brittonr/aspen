@@ -717,7 +717,8 @@ mod tests {
         let leaderless_manifest = parse_raft_group_manifest(&leaderless_manifest_value).expect("leaderless parse");
         assert_eq!(leaderless_manifest.algorithm_profile, CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL);
         assert_eq!(leaderless_manifest.production_status, PRODUCTION_STATUS_EXPERIMENTAL);
-        let leaderless_runtime = new_control_registry_runtime(&leaderless_manifest_value).expect_err("leaderless denied");
+        let leaderless_runtime = new_control_registry_production_runtime(&leaderless_manifest_value)
+            .expect_err("leaderless denied");
         assert!(leaderless_runtime.to_string().contains("not admitted for production runtime"));
 
         let unknown_config = ClusterConsensusConfig {
@@ -738,7 +739,7 @@ mod tests {
         let manifest_value = control_registry_fixture_manifest_value().expect("manifest");
         let manifest = parse_raft_group_manifest(&manifest_value).expect("parse manifest");
         assert_eq!(manifest.algorithm_profile, CONSENSUS_PROFILE_RAFT);
-        assert_eq!(manifest.production_status, PRODUCTION_STATUS_ADMITTED);
+        assert_eq!(manifest.production_status, PRODUCTION_STATUS_MODEL_ONLY);
         assert_eq!(manifest.read_consistency_support.len(), EXPECTED_READ_CONSISTENCY_MODE_COUNT);
         assert!(manifest.placement_ref.is_some());
 
@@ -776,7 +777,8 @@ mod tests {
             resource_refs: vec![test_ref("resource")],
         }, &leaderless_profile)
         .expect("leaderless manifest");
-        let leaderless_runtime = new_control_registry_runtime(&leaderless_manifest).expect_err("leaderless denied");
+        let leaderless_runtime = new_control_registry_production_runtime(&leaderless_manifest)
+            .expect_err("leaderless denied");
         assert!(leaderless_runtime.to_string().contains("not admitted for production runtime"));
 
         let claim = consensus_claim_boundary_receipt(&ConsensusClaimBoundaryInput {
@@ -949,23 +951,36 @@ mod tests {
         assert_eq!(crate::ledger::artifact_kind(&registry.value), "consensus-engine-registry");
 
         let required = vec![ENGINE_CAPABILITY_PROPOSAL.to_string(), ENGINE_CAPABILITY_LINEARIZABLE_READ.to_string()];
-        let raft_admission = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
+        let production_admission = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
             algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
             profile_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
             requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
             requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
             required_capabilities: required.clone(),
         })
-        .expect("raft admission");
-        assert_eq!(raft_admission.decision, ENGINE_DECISION_PASS);
-        assert!(raft_admission.descriptor.is_some());
-        assert_eq!(crate::ledger::artifact_kind(&raft_admission.value), "consensus-engine-admission-receipt");
-        let descriptor = raft_admission.descriptor.as_ref().expect("descriptor");
-        assert!(consensus_engine_readback_summary(descriptor).contains("in-process-raft"));
+        .expect("production admission receipt");
+        assert_eq!(production_admission.decision, ENGINE_DECISION_DENY);
+        assert!(production_admission.diagnostics.join(";").contains("not admitted for production runtime"));
+
+        let model_admission = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
+            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
+            profile_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
+            requested_environment: CONSENSUS_ENVIRONMENT_MODEL.to_string(),
+            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            required_capabilities: required.clone(),
+        })
+        .expect("model admission");
+        assert_eq!(model_admission.decision, ENGINE_DECISION_PASS);
+        assert!(model_admission.descriptor.is_some());
+        assert_eq!(crate::ledger::artifact_kind(&model_admission.value), "consensus-engine-admission-receipt");
+        let descriptor = model_admission.descriptor.as_ref().expect("descriptor");
+        assert!(consensus_engine_readback_summary(descriptor).contains("model-only-denied-production"));
 
         let manifest = control_registry_fixture_manifest_value().expect("manifest");
-        let runtime = new_control_registry_runtime(&manifest).expect("runtime selected through registry");
+        let runtime = new_control_registry_model_runtime(&manifest).expect("model runtime selected through registry");
         assert!(control_registry_summary(&runtime).contains("engine=in-process-raft-control-registry-v1"));
+        let production = new_control_registry_production_runtime(&manifest).expect_err("model profile denied in production");
+        assert!(production.to_string().contains("not admitted for production runtime"));
 
         let unknown = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
             algorithm_profile: "unknown-profile".to_string(),
@@ -1052,7 +1067,7 @@ mod tests {
         assert_eq!(normalized_read.engine_epoch, INITIAL_CONSENSUS_ENGINE_EPOCH);
 
         let next_epoch = INITIAL_CONSENSUS_ENGINE_EPOCH.saturating_add(NEXT_CONSENSUS_ENGINE_EPOCH_STEP);
-        let switchover = consensus_engine_switchover_receipt(&ConsensusEngineSwitchoverInput {
+        let switchover_input = ConsensusEngineSwitchoverInput {
             source_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
             source_version: CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL.to_string(),
             target_profile: CONSENSUS_PROFILE_RAFT.to_string(),
@@ -1067,10 +1082,14 @@ mod tests {
             currentness_evidence_refs: vec![normalized_read.receipt_ref.clone()],
             operator_approval_refs: vec![test_ref("operator-approval")],
             rollback_posture: "rollback-supported".to_string(),
-        })
-        .expect("switchover");
+        };
+        let switchover = consensus_engine_model_switchover_receipt(&switchover_input).expect("model switchover");
         assert_eq!(switchover.decision, ENGINE_DECISION_PASS);
         assert_eq!(crate::ledger::artifact_kind(&switchover.value), "consensus-engine-switchover-receipt");
+        let production_switchover =
+            consensus_engine_switchover_receipt(&switchover_input).expect("production switchover denial");
+        assert_eq!(production_switchover.decision, ENGINE_DECISION_DENY);
+        assert!(production_switchover.diagnostics.join(";").contains("target engine admission denied"));
 
         let unsafe_switchover = consensus_engine_switchover_receipt(&ConsensusEngineSwitchoverInput {
             source_profile: CONSENSUS_PROFILE_RAFT.to_string(),

@@ -1,0 +1,11 @@
+{
+  "depends_on": [
+    "fabric-durable-state-ports",
+    "fabric-membership-placement-runtime",
+    "fabric-time-scheduler-runtime",
+    "fabric-transport-session-runtime",
+    "receipt-first-cluster-harness"
+  ],
+  "groups": ["current"],
+  "status": "blocked"
+}

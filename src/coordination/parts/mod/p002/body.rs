@@ -207,7 +207,7 @@ fn parse_coordination_transition(value: &Value<IoValue>) -> Result<ParsedReceipt
 pub fn new_coordination_runtime(manifest_value: &IoValue) -> Result<CoordinationRuntime> {
     let manifest = parse_coordination_service_manifest(manifest_value)?;
     let raft_manifest = crate::raft_control_plane::control_registry_fixture_manifest_value()?;
-    let raft = crate::raft_control_plane::new_control_registry_runtime(&raft_manifest)?;
+    let raft = crate::raft_control_plane::new_control_registry_model_runtime(&raft_manifest)?;
     Ok(CoordinationRuntime {
         manifest,
         raft,

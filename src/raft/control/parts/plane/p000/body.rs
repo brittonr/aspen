@@ -57,6 +57,7 @@ const CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL: &str = "leaderless-quor
 const QUORUM_RULE_MAJORITY_READ_INDEX: &str = "majority-read-index";
 const QUORUM_RULE_LEADERLESS_MAJORITY: &str = "leaderless-majority";
 const PRODUCTION_STATUS_ADMITTED: &str = "admitted-production";
+const PRODUCTION_STATUS_MODEL_ONLY: &str = "model-only-denied-production";
 const PRODUCTION_STATUS_EXPERIMENTAL: &str = "experimental-denied-production";
 const DEFAULT_GROUP_ID: &str = "raft:control";
 const STORE_FILE: &str = "control-registry.redb";

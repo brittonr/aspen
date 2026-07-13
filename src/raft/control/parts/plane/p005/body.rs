@@ -289,14 +289,14 @@ fn default_consensus_caveats() -> Vec<String> {
     ]
 }
 
+// r[impl molten.consensus.scope]
 fn manifest_checks(profile: &ConsensusAlgorithmProfileInput) -> Vec<(&'static str, &'static str)> {
     let profile_check = match profile.algorithm_profile.as_str() {
-        CONSENSUS_PROFILE_RAFT => "pass",
-        CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => "diagnostic",
+        CONSENSUS_PROFILE_RAFT | CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => "diagnostic",
         _ => "fail",
     };
     vec![
-        ("control-plane-only", "pass"),
+        ("explicit-consistency-group", "pass"),
         ("explicit-command-schemas", "pass"),
         ("read-index-default", "pass"),
         ("algorithm-profile-declared", "pass"),
@@ -308,7 +308,7 @@ fn manifest_checks(profile: &ConsensusAlgorithmProfileInput) -> Vec<(&'static st
 
 fn consensus_production_status(profile: &str) -> &'static str {
     match profile {
-        CONSENSUS_PROFILE_RAFT => PRODUCTION_STATUS_ADMITTED,
+        CONSENSUS_PROFILE_RAFT => PRODUCTION_STATUS_MODEL_ONLY,
         CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => PRODUCTION_STATUS_EXPERIMENTAL,
         _ => "unsupported",
     }
