@@ -1,0 +1,11 @@
+{
+  "depends_on": [
+    "fabric-consistency-service-runtime",
+    "fabric-durable-state-ports",
+    "fabric-observability-integrity-runtime",
+    "fabric-time-scheduler-runtime",
+    "fabric-whole-system-simulation"
+  ],
+  "groups": ["current"],
+  "status": "blocked"
+}
