@@ -76,6 +76,7 @@ compat_module!(evidence_chain, lineage);
 pub mod mesh;
 compat_module!(federation, mesh);
 pub mod fabric;
+pub mod fabric_crypto_identity;
 pub mod fabric_durability;
 pub mod fabric_membership;
 pub mod fabric_time;

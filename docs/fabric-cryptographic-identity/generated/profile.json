@@ -1,0 +1,48 @@
+{
+  "algorithm": "ed25519-iroh-v1",
+  "backend": {
+    "backend_ref": "blake3:3333333333333333333333333333333333333333333333333333333333333333",
+    "capability_rooted": true,
+    "class": "capability-file",
+    "owner_only_permissions": true
+  },
+  "domain": {
+    "id": "molten.crypto.signature",
+    "version": "v1"
+  },
+  "entropy": {
+    "source_kind": "os-csprng",
+    "source_ref": "blake3:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "fixture_only": false,
+  "non_claims": [
+    "verified-signature-does-not-grant-capability-authority",
+    "public-identity-does-not-grant-membership",
+    "signature-alone-does-not-prove-provenance",
+    "signature-does-not-prove-payload-correctness",
+    "profile-does-not-guarantee-backend-availability",
+    "profile-does-not-imply-algorithm-agility"
+  ],
+  "production": true,
+  "profile_ref": "blake3:1111111111111111111111111111111111111111111111111111111111111111",
+  "purpose_separation": true,
+  "purposes": [
+    "transport-endpoint",
+    "federation-origin",
+    "delegation",
+    "evidence-signing",
+    "authority"
+  ],
+  "redaction": {
+    "backend_locator": true,
+    "private_bytes": true
+  },
+  "rotation": {
+    "generation_fenced": true,
+    "overlap_verification_only": true,
+    "revocation_required": true
+  },
+  "schema_id": "molten.fabric.crypto-identity-profile.v1",
+  "schema_version": 1,
+  "source_language": "nickel"
+}

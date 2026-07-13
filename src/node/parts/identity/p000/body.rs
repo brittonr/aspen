@@ -24,10 +24,6 @@ mod fs {
         std::fs::metadata(path)
     }
 
-    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
-        std::fs::read_to_string(path)
-    }
-
     #[cfg(test)]
     pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         std::fs::remove_dir_all(path)
@@ -52,7 +48,7 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
 
 const SECRET_FILE: &str = "node-endpoint.secret";
 const ENDPOINT_FILE: &str = "node-endpoint.id";
-const KEY_ALGORITHM: &str = "blake3-local-endpoint-fixture-v1";
+const KEY_ALGORITHM: &str = "ed25519-iroh-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
@@ -299,7 +295,7 @@ struct ResolutionInput<'a> {
     config: &'a Config,
     root: &'a crate::node_state::NodeStateNamespace,
     operation: &'a str,
-    secret: &'a str,
+    secret_record: &'a [u8],
     material: &'a EndpointMaterial,
     backend_ref: &'a str,
     source_metadata_ref: &'a str,
@@ -359,12 +355,13 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
                 .explicit_key
                 .as_deref()
                 .ok_or_else(|| MoltenError::invalid_harness("explicit endpoint key metadata was selected but missing"))?;
-            let material = derive_endpoint_material(explicit_key)?;
+            let secret_record = crate::fabric_crypto_identity::transport_key_record_from_secret_hex(explicit_key)?;
+            let material = derive_endpoint_material(&secret_record, &backend_ref)?;
             finish_resolution(ResolutionInput {
                 config,
                 root,
                 operation: source_decision.key_source_class,
-                secret: explicit_key,
+                secret_record: &secret_record,
                 material: &material,
                 backend_ref: &backend_ref,
                 source_metadata_ref: &source_metadata_ref,
@@ -378,12 +375,13 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
                 .secret_backend_key
                 .as_deref()
                 .ok_or_else(|| MoltenError::invalid_harness("managed endpoint secret backend was selected but missing"))?;
-            let material = derive_endpoint_material(backend_key)?;
+            let secret_record = crate::fabric_crypto_identity::transport_key_record_from_secret_hex(backend_key)?;
+            let material = derive_endpoint_material(&secret_record, &backend_ref)?;
             finish_resolution(ResolutionInput {
                 config,
                 root,
                 operation: source_decision.key_source_class,
-                secret: backend_key,
+                secret_record: &secret_record,
                 material: &material,
                 backend_ref: &backend_ref,
                 source_metadata_ref: &source_metadata_ref,
@@ -393,13 +391,13 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
             })
         }
         IrohSecretSourceDecisionKind::LoadFile => {
-            let secret = read_observed_secret(secret_observation)?;
-            let material = derive_endpoint_material(&secret)?;
+            let secret_record = read_observed_secret(secret_observation)?;
+            let material = derive_endpoint_material(&secret_record, &backend_ref)?;
             finish_resolution(ResolutionInput {
                 config,
                 root,
                 operation: source_decision.key_source_class,
-                secret: &secret,
+                secret_record: &secret_record,
                 material: &material,
                 backend_ref: &backend_ref,
                 source_metadata_ref: &source_metadata_ref,
@@ -409,14 +407,14 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
             })
         }
         IrohSecretSourceDecisionKind::GenerateAndPersist => {
-            let secret = generate_secret(&config.node_id)?;
-            write_secret_restricted(root, &secret_path, &secret)?;
-            let material = derive_endpoint_material(&secret)?;
+            let secret_record = crate::fabric_crypto_identity::generate_transport_key_record();
+            write_secret_restricted(root, &secret_path, &secret_record)?;
+            let material = derive_endpoint_material(&secret_record, &backend_ref)?;
             finish_resolution(ResolutionInput {
                 config,
                 root,
                 operation: source_decision.key_source_class,
-                secret: &secret,
+                secret_record: &secret_record,
                 material: &material,
                 backend_ref: &backend_ref,
                 source_metadata_ref: &source_metadata_ref,

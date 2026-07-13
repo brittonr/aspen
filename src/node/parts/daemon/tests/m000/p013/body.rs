@@ -67,12 +67,15 @@
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
         runtime.block_on(async {
             let (root, identity) = init_send_case();
-            let lookup = iroh::address_lookup::memory::MemoryLookup::new();
-            let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity)))
-                .await
-                .expect("receiver endpoint");
-            let receiver_addr = receiver_endpoint.addr();
             let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
+            let lookup = iroh::address_lookup::memory::MemoryLookup::new();
+            let receiver_endpoint = live_gossip_endpoint(
+                &lookup,
+                Some(stable_live_endpoint_secret(&state_root, &identity).expect("transport secret")),
+            )
+            .await
+            .expect("receiver endpoint");
+            let receiver_addr = receiver_endpoint.addr();
             let ticket =
                 live_ticket_for_bound_endpoint(&state_root, &identity, DEFAULT_CONTROL_INGRESS_TOPIC, &receiver_addr)
                 .expect("live ticket");

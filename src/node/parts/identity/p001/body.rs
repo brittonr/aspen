@@ -84,8 +84,8 @@ fn source_denial_checks(key_source_class: &str) -> Vec<&'static str> {
 }
 
 fn finish_resolution(input: ResolutionInput<'_>) -> Result<Resolution> {
-    if input.secret.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("node endpoint secret must not be empty"));
+    if input.secret_record.is_empty() {
+        return Err(MoltenError::invalid_harness("node endpoint key record must not be empty"));
     }
     let existing_endpoint = match input.root.observe_file(input.endpoint_path)? {
         crate::node_state::NodeStateFileObservation::Missing => None,
@@ -261,34 +261,13 @@ pub struct EndpointMaterial {
     pub secret_ref: String,
 }
 
-fn derive_endpoint_material(secret: &str) -> Result<EndpointMaterial> {
-    let secret = secret.trim();
-    if secret.is_empty() {
-        return Err(MoltenError::invalid_harness("node endpoint secret must not be empty"));
-    }
-    if secret.chars().any(char::is_control) {
-        return Err(MoltenError::invalid_harness("node endpoint secret contains malformed control characters"));
-    }
-    let secret_ref = crate::preserves_rail::content_ref_from_bytes(secret.as_bytes());
-    let mut public_material = b"molten-node-public\0".to_vec();
-    public_material.extend_from_slice(secret.as_bytes());
-    let public_key = crate::preserves_rail::content_ref_from_bytes(&public_material);
-    let mut endpoint_material = b"molten-node-endpoint\0".to_vec();
-    endpoint_material.extend_from_slice(public_key.as_bytes());
-    let endpoint_id = format!("{IROH_ENDPOINT_PREFIX}{}", blake3::hash(&endpoint_material).to_hex());
+fn derive_endpoint_material(secret_record: &[u8], backend_ref: &str) -> Result<EndpointMaterial> {
+    let material = crate::fabric_crypto_identity::transport_endpoint_material(secret_record, backend_ref)?;
     Ok(EndpointMaterial {
-        public_key,
-        endpoint_id,
-        secret_ref,
+        public_key: format!("ed25519:{}", material.public_key),
+        endpoint_id: material.endpoint_id,
+        secret_ref: material.handle_ref,
     })
-}
-
-fn generate_secret(node_id: &str) -> Result<String> {
-    let seed_ref = crate::preserves_rail::canonical_hash(&record("node-identity-generated-secret-seed", vec![
-        record("node-id", vec![string(node_id)]),
-        record("namespace", vec![string(IDENTITY_NAMESPACE_LABEL)]),
-    ]))?;
-    Ok(format!("molten-local-generated:{node_id}:{seed_ref}"))
 }
 
 fn selected_backend_ref(config: &Config, source_class: &str) -> Result<String> {
@@ -369,22 +348,18 @@ fn validate_config(config: &Config) -> Result<()> {
 fn write_secret_restricted(
     root: &crate::node_state::NodeStateNamespace,
     path: &crate::node_state::NodeStatePath,
-    secret: &str,
+    secret_record: &[u8],
 ) -> Result<()> {
-    let bytes = format!("{secret}\n");
-    root.write_restricted(path, bytes.as_bytes(), OWNER_ONLY_SECRET_FILE_MODE)
+    root.write_restricted(path, secret_record, OWNER_ONLY_SECRET_FILE_MODE)
 }
 
-fn read_observed_secret(observation: crate::node_state::NodeStateFileObservation) -> Result<String> {
+fn read_observed_secret(observation: crate::node_state::NodeStateFileObservation) -> Result<Vec<u8>> {
     let crate::node_state::NodeStateFileObservation::Regular(file) = observation else {
         return Err(MoltenError::invalid_harness(
             "persisted endpoint secret changed after source selection",
         ));
     };
-    let bytes = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
-    String::from_utf8(bytes)
-        .map(|secret| secret.trim().to_string())
-        .map_err(|error| MoltenError::invalid_harness(format!("persisted endpoint secret is not UTF-8: {error}")))
+    file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)
 }
 
 fn secret_file_permission_status(

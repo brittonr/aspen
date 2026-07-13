@@ -74,11 +74,17 @@ mod tests {
         let second_identity = second.identity.expect("second identity");
         assert_eq!(first_identity.endpoint_id, second_identity.endpoint_id);
         assert_eq!(second_identity.key_source_class, KEY_SOURCE_PERSISTED_FILE);
-        let secret = fs::read_to_string(dir.join(SECRET_FILE)).expect("read secret");
+        let secret_record = std::fs::read(dir.join(SECRET_FILE)).expect("read secret record");
         let first_receipt_text = crate::preserves_rail::to_text(&first.receipt_value).expect("receipt text");
         let second_receipt_text = crate::preserves_rail::to_text(&second.receipt_value).expect("receipt text");
-        assert!(!first_receipt_text.contains(secret.trim()));
-        assert!(!second_receipt_text.contains(secret.trim()));
+        assert!(!first_receipt_text
+            .as_bytes()
+            .windows(secret_record.len())
+            .any(|window| window == secret_record));
+        assert!(!second_receipt_text
+            .as_bytes()
+            .windows(secret_record.len())
+            .any(|window| window == secret_record));
         assert!(second_receipt_text.contains("restricted-owner-only"));
     }
 
@@ -86,7 +92,7 @@ mod tests {
     fn managed_backend_loads_and_required_backend_denies_without_fallback() {
         let backend_dir = temp_dir("node-identity-backend");
         let mut backend = Config::new("node-backend", &backend_dir);
-        backend.secret_backend_key = Some("managed-backend-secret".to_string());
+        backend.secret_backend_key = Some(explicit_secret("managed-backend-secret"));
         backend.require_secret_backend = true;
         backend.allow_generate = true;
         let resolved = resolve(&backend).expect("managed backend resolve");
@@ -111,22 +117,23 @@ mod tests {
     fn explicit_key_precedes_backends_and_malformed_keys_deny_before_startup() {
         let explicit_dir = temp_dir("node-identity-explicit");
         let mut explicit = Config::new("node-explicit", &explicit_dir);
-        explicit.explicit_key = Some("deployment-secret".to_string());
-        explicit.secret_backend_key = Some("backend-secret".to_string());
+        let deployment_secret = explicit_secret("deployment-secret");
+        explicit.explicit_key = Some(deployment_secret.clone());
+        explicit.secret_backend_key = Some(explicit_secret("backend-secret"));
         explicit.allow_generate = false;
         let resolved = resolve(&explicit).expect("explicit resolve");
         assert_eq!(resolved.identity.expect("explicit identity").key_source_class, KEY_SOURCE_EXPLICIT);
         assert!(
             !crate::preserves_rail::to_text(&resolved.receipt_value)
                 .expect("receipt text")
-                .contains("deployment-secret")
+                .contains(&deployment_secret)
         );
 
         let malformed_dir = temp_dir("node-identity-malformed");
         let mut malformed = Config::new("node-malformed", malformed_dir);
         malformed.explicit_key = Some("bad\nsecret".to_string());
         let error = resolve(&malformed).expect_err("malformed explicit key denies");
-        assert!(error.to_string().contains("control characters"));
+        assert!(error.to_string().contains("lowercase hexadecimal"));
     }
 
     #[test]
@@ -171,10 +178,17 @@ mod tests {
         let config = Config::new("node-a", &dir);
         let first = resolve(&config).expect("first resolve");
         let first_endpoint = first.identity.expect("identity").endpoint_id;
-        fs::write(dir.join(SECRET_FILE), "replacement-secret\n").expect("replace secret");
-        let replacement_endpoint = derive_endpoint_material("replacement-secret")
-            .expect("replacement material")
-            .endpoint_id;
+        let replacement_record = crate::fabric_crypto_identity::transport_key_record_from_secret_hex(
+            &explicit_secret("replacement-secret"),
+        )
+        .expect("replacement record");
+        fs::write(dir.join(SECRET_FILE), &replacement_record).expect("replace secret");
+        let replacement_endpoint = derive_endpoint_material(
+            &replacement_record,
+            &backend_ref(KEY_SOURCE_PERSISTED_FILE).expect("persisted backend"),
+        )
+        .expect("replacement material")
+        .endpoint_id;
 
         let drift = resolve(&config).expect("drift receipt");
         assert!(drift.identity.is_none());
@@ -186,7 +200,13 @@ mod tests {
         stale_rotation.allow_rotation = true;
         stale_rotation.rotation_receipt_ref = Some(admitted_rotation_receipt_ref(
             &first_endpoint,
-            &derive_endpoint_material("other-secret").expect("other material").endpoint_id,
+            &derive_endpoint_material(
+                &crate::fabric_crypto_identity::transport_key_record_from_secret_hex(&explicit_secret("other-secret"))
+                    .expect("other record"),
+                &backend_ref(KEY_SOURCE_PERSISTED_FILE).expect("persisted backend"),
+            )
+            .expect("other material")
+            .endpoint_id,
             &stale_rotation.policy_refs,
         )
         .expect("stale rotation ref"));
@@ -234,7 +254,7 @@ mod tests {
     fn hegel_explicit_resolution_is_deterministic_and_receipts_redact_secret(tc: hegel::TestCase) {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let secret_suffix = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
-        let secret = format!("explicit-secret-{salt}-{secret_suffix}");
+        let secret = explicit_secret(&format!("explicit-secret-{salt}-{secret_suffix}"));
         let mut first_config = Config::new(format!("node-{salt}"), temp_dir("node-identity-hegel-a"));
         first_config.explicit_key = Some(secret.clone());
         first_config.allow_generate = false;
@@ -249,6 +269,10 @@ mod tests {
         );
         assert!(!crate::preserves_rail::to_text(&first.receipt_value).expect("receipt text").contains(&secret));
         assert!(!crate::preserves_rail::to_text(&second.receipt_value).expect("receipt text").contains(&secret));
+    }
+
+    fn explicit_secret(label: &str) -> String {
+        blake3::hash(label.as_bytes()).to_hex().to_string()
     }
 
     fn temp_dir(name: &str) -> std::path::PathBuf {

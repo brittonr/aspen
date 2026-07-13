@@ -79,15 +79,21 @@ async fn receive_first_live_ingress_event(
     ))
 }
 
-fn stable_live_endpoint_secret(identity: &crate::node_identity::Identity) -> iroh::SecretKey {
-    let seed = blake3::hash(
-        format!("molten.node-control.live.endpoint.v1:{}:{}", identity.node_id, identity.endpoint_id).as_bytes(),
-    );
-    iroh::SecretKey::from_bytes(seed.as_bytes())
+fn stable_live_endpoint_secret(
+    state_root: &crate::node_state::NodeStateRoot,
+    identity: &crate::node_identity::Identity,
+) -> Result<iroh::SecretKey> {
+    let identity_namespace = state_root.identity()?;
+    crate::fabric_crypto_identity::load_transport_secret_for_identity(
+        &identity_namespace,
+        &identity.endpoint_id,
+        &identity.secret_ref,
+        &identity.backend_ref,
+    )
 }
 
 fn stable_live_endpoint_id(identity: &crate::node_identity::Identity) -> String {
-    format!("iroh:{}", stable_live_endpoint_secret(identity).public())
+    identity.endpoint_id.clone()
 }
 
 fn live_ticket_address_refs(addr: &iroh::EndpointAddr) -> Vec<String> {

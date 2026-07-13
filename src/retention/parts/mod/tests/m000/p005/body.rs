@@ -40,9 +40,15 @@
         let identity_text = fs::read_to_string(state_root.join("identity.preserves")).expect("node identity file");
         let identity_value = crate::preserves_rail::parse_text(&identity_text).expect("parse node identity file");
         let identity = crate::node_identity::parse_identity(&identity_value).expect("parse node identity");
-        let seed = blake3::hash(
-            format!("molten.node-control.live.endpoint.v1:{}:{}", identity.node_id, identity.endpoint_id).as_bytes(),
-        );
+        let node_state = crate::node_state::NodeStateRoot::open(state_root).expect("open node state root");
+        let identity_namespace = node_state.identity().expect("identity namespace");
+        let transport_secret = crate::fabric_crypto_identity::load_transport_secret_for_identity(
+            &identity_namespace,
+            &identity.endpoint_id,
+            &identity.secret_ref,
+            &identity.backend_ref,
+        )
+        .expect("load admitted transport secret");
         let lookup = iroh::address_lookup::memory::MemoryLookup::new();
         let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
             .relay_mode(iroh::RelayMode::Disabled)
@@ -51,7 +57,7 @@
             .clear_ip_transports()
             .bind_addr((Ipv4Addr::LOCALHOST, 0))
             .expect("live endpoint bind addr")
-            .secret_key(iroh::SecretKey::from_bytes(seed.as_bytes()))
+            .secret_key(transport_secret)
             .bind()
             .await
             .expect("live endpoint bind");

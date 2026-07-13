@@ -8,6 +8,7 @@ pub mod cluster_harness;
 pub mod codec;
 pub mod dependency;
 pub mod fabric;
+pub mod fabric_crypto_identity;
 pub mod fabric_durability;
 pub mod fabric_membership;
 pub mod fabric_time;

@@ -68,7 +68,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
         &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
     )?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
-    let endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
+    let endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&state_root, &identity)?)).await?;
     let bound_endpoint_id = format!("iroh:{}", endpoint.id());
     let live_ticket = live_ticket_for_bound_endpoint(&state_root, &identity, input.topic, &endpoint.addr())?;
     lookup.add_endpoint_info(endpoint.addr());
@@ -188,7 +188,7 @@ async fn loopback_pair(state_root: &crate::node_state::NodeStateRoot, topic: &st
         &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
     )?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
-    let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
+    let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(state_root, &identity)?)).await?;
     let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
     let ticket = live_ticket_for_bound_endpoint(state_root, &identity, topic, &receiver_endpoint.addr())?;
     lookup.add_endpoint_info(receiver_endpoint.addr());
