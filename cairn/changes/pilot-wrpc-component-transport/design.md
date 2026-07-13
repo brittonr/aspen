@@ -71,3 +71,9 @@ The pilot must therefore be an adapter between two explicit representations, not
 - No support for streams/futures in the first profile.
 - No pilot guest compilation, component composition, WASI virtualization, Wizer transformation, or precompilation in Molten.
 - No promotion of OpenTelemetry data into canonical evidence, authority, provenance, or release eligibility.
+
+## Current implementation blocker (2026-07-12)
+
+The required producer handoff does not exist: Mantle has neither an active nor archived wRPC materialization change or bundle for the client/server components, generated bindings, WAC graph, WASI virtualization result, pinned wRPC/WIT/runtime cohort, and exact member identities required by this design. Aspen also has no pinned wRPC runtime dependency or admitted adapter implementation.
+
+Implementing a local guest build, fabricating bundle refs, or relabeling a generic transport fixture as wRPC would violate the materialization requirement and no-local-build boundary. The profile, bridge, and adapter cannot be closed out until Mantle owns and archives the exact bundle contract and the reviewed wRPC cohort/runtime dependency is selected.
