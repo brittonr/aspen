@@ -152,6 +152,13 @@ cargo run -- cluster status --state-root target/cluster
 cargo run -- cluster stop --state-root target/cluster
 ```
 
+For CI and operator review, the receipt-first wrapper runs a checked cluster fixture through independent node processes and writes one content-addressed run directory with child receipts, a canonical parent receipt, drift/cleanup evidence, and an offline verification receipt. Diagnostic logs remain adjuncts and cannot replace canonical evidence. See [`docs/receipt-first-cluster-harness.md`](docs/receipt-first-cluster-harness.md).
+
+```sh
+cargo run -- cluster harness-run --fixture tests/fixtures/cluster-harness/two-node.cluster --state-root target/cluster-harness-state --run-dir target/cluster-harness-run
+cargo run -- cluster harness-verify --run-dir target/cluster-harness-run
+```
+
 The Nix-built flake app is available when the private sibling inputs are supplied explicitly:
 
 ```sh

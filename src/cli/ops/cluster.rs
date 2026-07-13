@@ -6,6 +6,8 @@ pub(crate) enum ClusterCommand {
     Start(ClusterRoot),
     Status(ClusterRoot),
     Stop(ClusterRoot),
+    HarnessRun(ClusterHarnessRun),
+    HarnessVerify(ClusterHarnessVerify),
 }
 
 #[derive(Debug, clap::Args)]
@@ -24,13 +26,87 @@ pub(crate) struct ClusterRoot {
     state_root: std::path::PathBuf,
 }
 
+#[derive(Debug, clap::Args)]
+pub(crate) struct ClusterHarnessRun {
+    #[arg(long)]
+    fixture: std::path::PathBuf,
+    #[arg(long)]
+    state_root: std::path::PathBuf,
+    #[arg(long)]
+    run_dir: std::path::PathBuf,
+    #[arg(long)]
+    node_binary: Option<std::path::PathBuf>,
+    #[arg(long, default_value_t = molten::cluster_harness::DEFAULT_CLUSTER_CHILD_TIMEOUT_MS)]
+    child_timeout_ms: u64,
+    #[arg(long)]
+    force: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub(crate) struct ClusterHarnessVerify {
+    #[arg(long)]
+    run_dir: std::path::PathBuf,
+}
+
 pub(crate) fn run(command: ClusterCommand) -> molten::error::Result<()> {
     match command {
         ClusterCommand::Init(input) => init(input),
         ClusterCommand::Start(input) => start(input),
         ClusterCommand::Status(input) => status(input),
         ClusterCommand::Stop(input) => stop(input),
+        ClusterCommand::HarnessRun(input) => harness_run(input),
+        ClusterCommand::HarnessVerify(input) => harness_verify(input),
     }
+}
+
+// r[impl molten.testing.receipt_first_cluster_harness.cli_receipt_surface]
+fn harness_run(input: ClusterHarnessRun) -> molten::error::Result<()> {
+    let node_binary = input.node_binary.map_or_else(std::env::current_exe, Ok)?;
+    let execution =
+        molten::cluster_harness::execute_cluster_harness(&molten::cluster_harness::ClusterHarnessExecutionInput {
+            fixture_path: input.fixture,
+            state_root: input.state_root,
+            output_directory: input.run_dir,
+            node_binary,
+            child_timeout_ms: input.child_timeout_ms,
+            force: input.force,
+        })?;
+    println!(
+        "cluster harness run decision={} parent={} verification={} run_dir={}",
+        execution.decision,
+        execution.parent_ref,
+        execution.verification_ref,
+        execution.output_directory.display()
+    );
+    if let Some(bundle_ref) = &execution.failure_bundle_ref {
+        println!("cluster harness failure_bundle={bundle_ref} evidence_scope=diagnostic-only");
+    }
+    if execution.decision != "pass" {
+        return Err(molten::error::MoltenError::invalid_harness(format!(
+            "cluster harness run denied: {}",
+            execution.diagnostics.join(",")
+        )));
+    }
+    Ok(())
+}
+
+// r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]
+fn harness_verify(input: ClusterHarnessVerify) -> molten::error::Result<()> {
+    let verification = molten::cluster_harness::verify_cluster_run_directory(&input.run_dir)?;
+    println!(
+        "cluster harness verify decision={} index={} verification={} run_dir={}",
+        verification.decision,
+        verification.index_ref,
+        verification.receipt.verification_ref,
+        input.run_dir.display()
+    );
+    if verification.decision != "pass" {
+        return Err(molten::error::MoltenError::invalid_harness(format!(
+            "cluster harness verification denied: {}",
+            verification.receipt.diagnostics.join(",")
+        )));
+    }
+    Ok(())
 }
 
 fn init(input: ClusterInit) -> molten::error::Result<()> {
