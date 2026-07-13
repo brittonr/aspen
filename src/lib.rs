@@ -75,6 +75,7 @@ compat_module!(evidence_chain, lineage);
 #[path = "federation/mod.rs"]
 pub mod mesh;
 compat_module!(federation, mesh);
+pub mod content_store_adapter;
 pub mod fabric;
 pub mod fabric_crypto_identity;
 pub mod fabric_durability;

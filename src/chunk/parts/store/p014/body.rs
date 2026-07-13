@@ -87,7 +87,7 @@ fn verify_manifest_chunks_into(
     Ok(())
 }
 
-fn read_verified_chunk(root: &CapabilityChunkRoot, chunk: &ChunkRef, chunk_size: usize) -> Result<Vec<u8>> {
+pub(crate) fn read_verified_chunk(root: &CapabilityChunkRoot, chunk: &ChunkRef, chunk_size: usize) -> Result<Vec<u8>> {
     let path = chunk_path(&chunk.chunk_ref)?;
     let bytes = root.root().read(&path)?;
     let actual_ref = hash_chunk(&bytes, chunk_size);
@@ -164,7 +164,7 @@ fn validate_fixed_chunk_lengths(total_len: u64, chunk_size: u64, chunks: &[Chunk
     Ok(())
 }
 
-fn hash_chunk(bytes: &[u8], chunk_size: usize) -> String {
+pub(crate) fn hash_chunk(bytes: &[u8], chunk_size: usize) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"molten.chunk-store.chunk.fixed_v1\0");
     hasher.update(chunk_domain(chunk_size).as_bytes());

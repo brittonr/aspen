@@ -25,6 +25,7 @@ name = "molten"
 path = "src/main.rs"
 
 [dependencies]
+bao-tree = "0.16.0"
 basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", version = "0.1.0" }
 blake3 = "1"
 cap-fs-ext = "3"

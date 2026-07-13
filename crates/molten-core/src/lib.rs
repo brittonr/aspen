@@ -6,6 +6,7 @@
 
 pub mod cluster_harness;
 pub mod codec;
+pub mod content_store_adapter;
 pub mod dependency;
 pub mod fabric;
 pub mod fabric_crypto_identity;

@@ -1,0 +1,201 @@
+{
+  "non_claims": [
+    "backend-hint-is-not-identity",
+    "transport-is-not-import-authority",
+    "protection-is-not-retention-authority",
+    "pin-is-not-read-authority",
+    "unprotect-is-not-delete-authority",
+    "availability-is-not-execution-authority",
+    "verification-is-not-provenance"
+  ],
+  "profiles": {
+    "capability_local": {
+      "backend_hints_are_identity": false,
+      "backend_hints_are_redacted": true,
+      "bounds": {
+        "max_chunk_bytes": 4194304,
+        "max_chunk_count": 1048576,
+        "max_concurrent_operations": 64,
+        "max_deadline_ticks": 600,
+        "max_events": 1048576,
+        "max_memory_bytes": 67108864,
+        "max_queued_bytes": 134217728,
+        "max_range_bytes": 67108864,
+        "max_retries": 3,
+        "max_status_entries": 256,
+        "max_total_bytes": 1073741824
+      },
+      "capabilities": [
+        "streaming-put",
+        "streaming-get",
+        "verified-range",
+        "availability",
+        "import",
+        "export",
+        "protection",
+        "durable-completion"
+      ],
+      "class": "capability-local",
+      "live_network_required": false,
+      "non_claims": [
+        "backend-hint-is-not-identity",
+        "transport-is-not-import-authority",
+        "protection-is-not-retention-authority",
+        "pin-is-not-read-authority",
+        "unprotect-is-not-delete-authority",
+        "availability-is-not-execution-authority",
+        "verification-is-not-provenance"
+      ],
+      "persist_verified_partial_state": true,
+      "pin_grants_read_authority": false,
+      "protection_grants_retention_authority": false,
+      "same_contract_as_live": false,
+      "supported_transforms": [
+        "identity"
+      ],
+      "unprotect_grants_delete_authority": false,
+      "verify_before_exposure": true
+    },
+    "deterministic_simulation": {
+      "backend_hints_are_identity": false,
+      "backend_hints_are_redacted": true,
+      "bounds": {
+        "max_chunk_bytes": 4194304,
+        "max_chunk_count": 1048576,
+        "max_concurrent_operations": 64,
+        "max_deadline_ticks": 600,
+        "max_events": 1048576,
+        "max_memory_bytes": 67108864,
+        "max_queued_bytes": 134217728,
+        "max_range_bytes": 67108864,
+        "max_retries": 3,
+        "max_status_entries": 256,
+        "max_total_bytes": 1073741824
+      },
+      "capabilities": [
+        "streaming-put",
+        "streaming-get",
+        "verified-range",
+        "availability",
+        "import",
+        "export",
+        "protection",
+        "durable-completion"
+      ],
+      "class": "deterministic-simulation",
+      "live_network_required": false,
+      "non_claims": [
+        "backend-hint-is-not-identity",
+        "transport-is-not-import-authority",
+        "protection-is-not-retention-authority",
+        "pin-is-not-read-authority",
+        "unprotect-is-not-delete-authority",
+        "availability-is-not-execution-authority",
+        "verification-is-not-provenance"
+      ],
+      "persist_verified_partial_state": true,
+      "pin_grants_read_authority": false,
+      "protection_grants_retention_authority": false,
+      "same_contract_as_live": true,
+      "supported_transforms": [
+        "identity"
+      ],
+      "unprotect_grants_delete_authority": false,
+      "verify_before_exposure": true
+    },
+    "iroh_blobs": {
+      "backend_hints_are_identity": false,
+      "backend_hints_are_redacted": true,
+      "bounds": {
+        "max_chunk_bytes": 4194304,
+        "max_chunk_count": 1048576,
+        "max_concurrent_operations": 64,
+        "max_deadline_ticks": 600,
+        "max_events": 1048576,
+        "max_memory_bytes": 67108864,
+        "max_queued_bytes": 134217728,
+        "max_range_bytes": 67108864,
+        "max_retries": 3,
+        "max_status_entries": 256,
+        "max_total_bytes": 1073741824
+      },
+      "capabilities": [
+        "streaming-get",
+        "availability",
+        "import",
+        "export",
+        "protection"
+      ],
+      "class": "iroh-blobs",
+      "live_network_required": true,
+      "non_claims": [
+        "backend-hint-is-not-identity",
+        "transport-is-not-import-authority",
+        "protection-is-not-retention-authority",
+        "pin-is-not-read-authority",
+        "unprotect-is-not-delete-authority",
+        "availability-is-not-execution-authority",
+        "verification-is-not-provenance"
+      ],
+      "persist_verified_partial_state": true,
+      "pin_grants_read_authority": false,
+      "protection_grants_retention_authority": false,
+      "same_contract_as_live": false,
+      "supported_transforms": [
+        "identity"
+      ],
+      "unprotect_grants_delete_authority": false,
+      "verify_before_exposure": true
+    },
+    "redb_indexed": {
+      "backend_hints_are_identity": false,
+      "backend_hints_are_redacted": true,
+      "bounds": {
+        "max_chunk_bytes": 4194304,
+        "max_chunk_count": 1048576,
+        "max_concurrent_operations": 64,
+        "max_deadline_ticks": 600,
+        "max_events": 1048576,
+        "max_memory_bytes": 67108864,
+        "max_queued_bytes": 134217728,
+        "max_range_bytes": 67108864,
+        "max_retries": 3,
+        "max_status_entries": 256,
+        "max_total_bytes": 1073741824
+      },
+      "capabilities": [
+        "streaming-put",
+        "streaming-get",
+        "verified-range",
+        "availability",
+        "import",
+        "export",
+        "protection",
+        "durable-completion"
+      ],
+      "class": "redb-indexed",
+      "live_network_required": false,
+      "non_claims": [
+        "backend-hint-is-not-identity",
+        "transport-is-not-import-authority",
+        "protection-is-not-retention-authority",
+        "pin-is-not-read-authority",
+        "unprotect-is-not-delete-authority",
+        "availability-is-not-execution-authority",
+        "verification-is-not-provenance"
+      ],
+      "persist_verified_partial_state": true,
+      "pin_grants_read_authority": false,
+      "protection_grants_retention_authority": false,
+      "same_contract_as_live": false,
+      "supported_transforms": [
+        "identity"
+      ],
+      "unprotect_grants_delete_authority": false,
+      "verify_before_exposure": true
+    }
+  },
+  "schema_id": "molten.content-store-adapter.profile-set.v1",
+  "schema_version": 1,
+  "source_language": "nickel"
+}

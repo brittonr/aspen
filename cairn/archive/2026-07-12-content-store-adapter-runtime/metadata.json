@@ -1,0 +1,8 @@
+{
+  "depends_on": [
+    "complete-cap-std-store-threading",
+    "fabric-cryptographic-identity-adapters",
+    "fabric-durable-state-ports",
+    "fabric-transport-session-runtime"
+  ]
+}
