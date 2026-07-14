@@ -810,6 +810,12 @@ nix flake check
 nix build .#checks.x86_64-linux.verified-node-replication-pilot --no-link -L
 ```
 
+## License
+
+Repository-owned source is licensed under `AGPL-3.0-or-later`; see [LICENSE](LICENSE). Third-party dependencies, vendored manifest snapshots, generated material containing upstream code, and external references retain their original terms; see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+Earlier permissive grants remain valid. The current declaration applies prospectively to project-owned contributions and does not revoke rights already received. Licensing metadata is distribution evidence only: it does not establish contributor authority, legal compliance, runtime correctness, or release eligibility.
+
 ## References
 
 - [`onix-core` kache Nix Rust helpers](../../onix-core/lib/kache-nix-rust.nix) — reference implementation for opt-in Nix-owned kache wrappers around sandboxed Rust builds.

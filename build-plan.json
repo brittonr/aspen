@@ -404,7 +404,7 @@
       "crateBin": [],
       "links": null,
       "description": "Trellis: composable verified-logic building blocks, machine-checked with Verus",
-      "license": "AGPL-3.0-or-later"
+      "license": "MPL-2.0"
     },
     "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0": {
       "crateName": "molten",
@@ -580,7 +580,7 @@
       ],
       "links": null,
       "description": "Molten Rust project",
-      "license": "MIT OR Apache-2.0"
+      "license": "AGPL-3.0-or-later"
     },
     "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
@@ -603,7 +603,7 @@
       ],
       "crateBin": [],
       "links": null,
-      "license": "MIT OR Apache-2.0"
+      "license": "AGPL-3.0-or-later"
     },
     "registry+https://github.com/rust-lang/crates.io-index#addr2line@0.26.1": {
       "crateName": "addr2line",

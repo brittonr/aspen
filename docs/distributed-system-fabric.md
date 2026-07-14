@@ -88,9 +88,11 @@ Canonical identity is the BLAKE3 hash of canonical Preserves bytes. Rust structs
 
 Adapters may implement ports with Iroh, Redb, capability-rooted filesystems, logical-time sources, cryptographic entropy, tracing exporters, deterministic simulators, or later reviewed substrates. An adapter reports effects and failures but does not decide who is authorized or what a workload operation means.
 
-## Licensing and clean-room implementation
+## Project licensing boundary
 
-Molten is licensed `MIT OR Apache-2.0`. Aspen `main` material licensed `AGPL-3.0-or-later` may inform independently stated requirements, threat models, and black-box behavior observations, but its implementation code, comments, and fixtures must not be copied into Molten without an explicit compatible relicensing grant. Clean-room work uses Molten-owned requirements, independently expressed tests, canonical schemas, and upstream dual-licensed dependencies.
+Repository-owned Molten source is licensed under `AGPL-3.0-or-later`; see the root `LICENSE`. Third-party dependencies, vendored manifest snapshots, generated artifacts containing upstream material, and external references retain their original terms and notices; see `THIRD_PARTY_LICENSES.md`.
+
+Earlier permissive grants remain valid. The current declaration applies prospectively to project-owned contributions and does not revoke rights already received. Compatibility remains driven by requirements, protocols, independently authored fixtures, and conformance tests. Reading an external implementation does not transfer its correctness, security, authority, or proof claims.
 
 ## Non-claims
 

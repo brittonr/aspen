@@ -1,0 +1,11 @@
+# kind	path	expected value or marker
+workspace-package-set	Cargo.toml	strict
+package	Cargo.toml	AGPL-3.0-or-later
+package	crates/molten-core/Cargo.toml	AGPL-3.0-or-later
+artifact	LICENSE	GNU AFFERO GENERAL PUBLIC LICENSE
+artifact	THIRD_PARTY_LICENSES/Apache-2.0.txt	Apache License
+artifact	THIRD_PARTY_LICENSES/MIT.txt	MIT License
+artifact	THIRD_PARTY_LICENSES/EPL-2.0.txt	Eclipse Public License - v 2.0
+contains	README.md	Earlier permissive grants remain valid
+contains	docs/distributed-system-fabric.md	Repository-owned Molten source is licensed under `AGPL-3.0-or-later`
+contains	THIRD_PARTY_LICENSES.md	A future version or checksum change MUST be reviewed again
