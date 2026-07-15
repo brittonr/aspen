@@ -1,10 +1,6 @@
-# Project Specification
+# Project Specification Delta
 
-## Purpose
-
-Makes Aspen/Molten release dependencies reproducible, selects canonical standalone Valence, and records an AGPL-allowed distribution profile.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Release dependency source rows are typed
 r[molten.project.reproducible_dependencies.contract] Molten MUST normalize release dependency declarations from repository-owned manifests, Cargo lock data, and Nix source inputs into typed rows containing package identity, source kind, source coordinate, immutable revision, transport policy, and release disposition.

@@ -105,7 +105,7 @@ let ArchiveNonClaims = [
   distribution = {
     license = "AGPL-3.0-or-later",
     source_coordinate = "https://github.com/OnixResearch/aspen.git",
-    source_revision = "62b02a343973d4c2fbbe9ab8a1a479b0058f8487",
+    source_revision = "b470187ab532b7fdf2bc2a9a0a85c1eeb5343ac2",
     notice_artifacts = ["LICENSE", "THIRD_PARTY_LICENSES.md"],
     source_export_artifacts = [
       "Cargo.toml",
