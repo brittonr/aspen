@@ -931,7 +931,30 @@
       "proposal",
       "design",
       "tasks"
-    ]
+    ],
+    "substance": {
+      "dependency_marker_id": "depends",
+      "dependency_target_class": "lifecycle-id",
+      "design_minimum_substantive_lines": 1,
+      "minimum_requirement_blocks": 1,
+      "minimum_substantive_tasks": 1,
+      "normative_tokens": [
+        "MUST",
+        "SHALL",
+        "SHOULD",
+        "MAY"
+      ],
+      "placeholder_tokens": [
+        "cairn_placeholder",
+        "tbd",
+        "describe why",
+        "describe the user-visible",
+        "describe the current state",
+        "implement the change",
+        "verify and archive the change"
+      ],
+      "proposal_minimum_substantive_lines": 1
+    }
   },
   "lifecycle_stages": [
     "proposal",

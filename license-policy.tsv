@@ -2,6 +2,7 @@
 workspace-package-set	Cargo.toml	strict
 package	Cargo.toml	AGPL-3.0-or-later
 package	crates/molten-core/Cargo.toml	AGPL-3.0-or-later
+package	crates/molten-release-policy/Cargo.toml	AGPL-3.0-or-later
 artifact	LICENSE	GNU AFFERO GENERAL PUBLIC LICENSE
 artifact	THIRD_PARTY_LICENSES/Apache-2.0.txt	Apache License
 artifact	THIRD_PARTY_LICENSES/MIT.txt	MIT License

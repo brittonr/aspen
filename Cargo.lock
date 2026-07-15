@@ -363,7 +363,7 @@ dependencies = [
 [[package]]
 name = "basalt"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74"
+source = "git+ssh://git@github.com/OnixResearch/basalt.git?rev=d913dc01e765c9b297df5fcc57dfa06aac39bc74#d913dc01e765c9b297df5fcc57dfa06aac39bc74"
 dependencies = [
  "blake3",
  "serde",
@@ -567,7 +567,7 @@ dependencies = [
 [[package]]
 name = "cairn-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b"
+source = "git+ssh://git@github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b"
 dependencies = [
  "blake3",
  "preserves 4.996.0",
@@ -2160,6 +2160,7 @@ version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
+ "allocator-api2",
  "foldhash 0.2.0",
 ]
 
@@ -2223,7 +2224,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "hegeltest"
 version = "0.14.12"
-source = "git+https://github.com/hegeldev/hegel-rust#ed949b8084595cb467e983747f1089e214965ac6"
+source = "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#ed949b8084595cb467e983747f1089e214965ac6"
 dependencies = [
  "ciborium",
  "crc32fast",
@@ -2240,7 +2241,7 @@ dependencies = [
 [[package]]
 name = "hegeltest-macros"
 version = "0.14.12"
-source = "git+https://github.com/hegeldev/hegel-rust#ed949b8084595cb467e983747f1089e214965ac6"
+source = "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#ed949b8084595cb467e983747f1089e214965ac6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2605,6 +2606,18 @@ name = "id-arena"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
+
+[[package]]
+name = "iddqd"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7cf7e72dd082126bd727c1f8bd2d5229c2780258c0b3c7bc33eaf0f4ea5f0fa"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
+ "hashbrown 0.16.1",
+]
 
 [[package]]
 name = "ident_case"
@@ -3659,6 +3672,17 @@ dependencies = [
 [[package]]
 name = "molten-core"
 version = "0.1.0"
+
+[[package]]
+name = "molten-release-policy"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "molten-core",
+ "serde",
+ "serde_json",
+ "toml",
+]
 
 [[package]]
 name = "n0-error"
@@ -6723,9 +6747,10 @@ dependencies = [
 [[package]]
 name = "valence-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/octet.git#9b6a2065ef9e8e363d81299cf59d74f885926215"
+source = "git+ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#5f1c2ba5072c6f9622fa59b1af20502985f569fd"
 dependencies = [
  "blake3",
+ "iddqd",
  "serde",
  "serde_json",
 ]

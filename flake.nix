@@ -20,20 +20,28 @@
       flake = false;
     };
     basalt-src = {
-      url = "path:../basalt";
+      url = "github:OnixResearch/basalt/d913dc01e765c9b297df5fcc57dfa06aac39bc74";
       flake = false;
     };
     cairn-src = {
-      url = "path:../cairn";
+      url = "github:OnixResearch/cairn/3b4c280b893f2709aebea21fc51a4f9eeba3fe3b";
       flake = false;
     };
-    octet-src = {
-      url = "path:../octet";
+    hegel-src = {
+      url = "github:hegeldev/hegel-rust/ed949b8084595cb467e983747f1089e214965ac6";
+      flake = false;
+    };
+    octet-cutover-src = {
+      url = "github:OnixResearch/octet/4367300e10740ecc99ba4b2171ace561b4787327";
       flake = false;
     };
     octet-toolchain.url = "github:OnixResearch/octet?rev=fc38f59330b626961d166febfdf1a5aa6575460f";
     ucan-src = {
-      url = "path:../ucan";
+      url = "github:OnixResearch/ucan/2aad993027d48ff148028c537cdaf91f6e5285ca";
+      flake = false;
+    };
+    valence-src = {
+      url = "github:OnixResearch/valence/5f1c2ba5072c6f9622fa59b1af20502985f569fd";
       flake = false;
     };
     flake-utils.url = "github:numtide/flake-utils";
@@ -49,9 +57,11 @@
       onix-kache-package-src,
       basalt-src,
       cairn-src,
-      octet-src,
+      hegel-src,
+      octet-cutover-src,
       octet-toolchain,
       ucan-src,
+      valence-src,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -90,10 +100,12 @@
             maybeCleanLocalGitSource basalt-src;
           "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" =
             maybeCleanLocalGitSource cairn-src;
-          "ssh://git@github.com/OnixResearch/octet.git#9b6a2065ef9e8e363d81299cf59d74f885926215" =
-            maybeCleanLocalGitSource octet-src;
           "ssh://git@github.com/OnixResearch/ucan.git#2aad993027d48ff148028c537cdaf91f6e5285ca" =
             maybeCleanLocalGitSource ucan-src;
+          "ssh://git@github.com/OnixResearch/valence.git#5f1c2ba5072c6f9622fa59b1af20502985f569fd" =
+            maybeCleanLocalGitSource valence-src;
+          "https://github.com/hegeldev/hegel-rust#ed949b8084595cb467e983747f1089e214965ac6" =
+            maybeCleanLocalGitSource hegel-src;
         };
         unit2nixPkgsBase = pkgsBase.extend (
           final: prev: {
@@ -176,14 +188,15 @@
             enableKache ? false,
             cacheDir ? kacheCacheDir,
             keySalt ? kacheKeySalt,
+            resolvedJson ? ./build-plan.json,
           }:
           unit2nix.lib.${system}.buildFromUnitGraph {
             pkgs = unit2nixPkgs;
             inherit rustToolchain;
             src = ./.;
-            # Keep the unit graph checked in so package evaluation does not
+            # Keep unit graphs checked in so package evaluation does not
             # depend on unit2nix IFD.
-            resolvedJson = ./build-plan.json;
+            inherit resolvedJson;
             clippyArgs = [
               "-D"
               "warnings"
@@ -200,10 +213,15 @@
           };
 
         ws = mkUnit2nixWorkspace { enableKache = false; };
+        releasePolicyWs = mkUnit2nixWorkspace {
+          enableKache = false;
+          resolvedJson = ./release-policy-build-plan.json;
+        };
         kacheWs = mkUnit2nixWorkspace { enableKache = true; };
         kacheWrappedRust = mkUnit2nixRust { enableKache = true; };
 
         moltenPkg = ws.workspaceMembers."molten".build;
+        releasePolicyPkg = releasePolicyWs.rootCrate.build;
         moltenTestBinaries = (ws.test.workspaceMembers."molten".build).override { buildTests = true; };
         targetTriple = pkgs.stdenv.hostPlatform.rust.rustcTarget;
         rustLibDir = "${rustToolchain}/lib/rustlib/${targetTriple}/lib";
@@ -306,6 +324,7 @@
         packages = {
           default = moltenPkg;
           molten = moltenPkg;
+          molten-release-policy = releasePolicyPkg;
           molten-kache = kacheWs.workspaceMembers."molten".build;
           molten-kache-rust = kacheWrappedRust;
           all = ws.allWorkspaceMembers;
@@ -624,6 +643,35 @@
                   done
                   touch "$out"
                 '';
+            releaseDependencyProfileCheck =
+              pkgs.runCommand "molten-release-dependency-profile"
+                {
+                  nativeBuildInputs = [
+                    releasePolicyPkg
+                    pkgs.nickel
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cp -R $src source
+                  chmod -R u+w source
+                  cd source
+                  molten-release-policy \
+                    --root . \
+                    --evidence-source valence-integrity=${valence-src} \
+                    --evidence-source octet-cutover=${octet-cutover-src} \
+                    > "$out"
+                  nickel export config/release-dependencies/fixtures/positive/exact-pins.ncl \
+                    > "$TMPDIR/release-profile-positive.json"
+                  for fixture in config/release-dependencies/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" > "$TMPDIR/release-profile-negative.json" 2> "$TMPDIR/release-profile-negative.err"; then
+                      echo "negative release dependency fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                '';
             contentStoreAdapterProfileCheck =
               pkgs.runCommand "molten-content-store-adapter-profile"
                 {
@@ -665,6 +713,7 @@
             fabric-cryptographic-identity-profile = fabricCryptographicIdentityProfileCheck;
             fabric-observability-profile = fabricObservabilityProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
+            release-dependency-profile = releaseDependencyProfileCheck;
             nixos-vm-smoke = vmShardCheck "nixos-vm-smoke";
             nixos-vm-live-control = vmShardCheck "nixos-vm-live-control";
             nixos-vm-service-job = vmShardCheck "nixos-vm-service-job";

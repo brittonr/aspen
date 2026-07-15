@@ -3,14 +3,19 @@
     "basalt-src": {
       "flake": false,
       "locked": {
-        "path": "../basalt",
-        "type": "path"
+        "lastModified": 1782891181,
+        "narHash": "sha256-x/BGcEFKy9shtjPEPEkHhx591lB2OXLxKdn2SYxMC4M=",
+        "owner": "OnixResearch",
+        "repo": "basalt",
+        "rev": "d913dc01e765c9b297df5fcc57dfa06aac39bc74",
+        "type": "github"
       },
       "original": {
-        "path": "../basalt",
-        "type": "path"
-      },
-      "parent": []
+        "owner": "OnixResearch",
+        "repo": "basalt",
+        "rev": "d913dc01e765c9b297df5fcc57dfa06aac39bc74",
+        "type": "github"
+      }
     },
     "cairn": {
       "inputs": {
@@ -37,14 +42,19 @@
     "cairn-src": {
       "flake": false,
       "locked": {
-        "path": "../cairn",
-        "type": "path"
+        "lastModified": 1779830727,
+        "narHash": "sha256-F1J1IE0gquK3y0F99MPNQGV9gxwNB8TGNKR9FEgB0nw=",
+        "owner": "OnixResearch",
+        "repo": "cairn",
+        "rev": "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b",
+        "type": "github"
       },
       "original": {
-        "path": "../cairn",
-        "type": "path"
-      },
-      "parent": []
+        "owner": "OnixResearch",
+        "repo": "cairn",
+        "rev": "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b",
+        "type": "github"
+      }
     },
     "cairn_2": {
       "inputs": {
@@ -259,6 +269,23 @@
         "type": "github"
       }
     },
+    "hegel-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779806843,
+        "narHash": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
+        "owner": "hegeldev",
+        "repo": "hegel-rust",
+        "rev": "ed949b8084595cb467e983747f1089e214965ac6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hegeldev",
+        "repo": "hegel-rust",
+        "rev": "ed949b8084595cb467e983747f1089e214965ac6",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1779694939,
@@ -323,17 +350,22 @@
         "type": "github"
       }
     },
-    "octet-src": {
+    "octet-cutover-src": {
       "flake": false,
       "locked": {
-        "path": "../octet",
-        "type": "path"
+        "lastModified": 1784069899,
+        "narHash": "sha256-VHMydvati2aB8U2z3JEh7z+RsjFpmjHSYRpXd3/vhCg=",
+        "owner": "OnixResearch",
+        "repo": "octet",
+        "rev": "4367300e10740ecc99ba4b2171ace561b4787327",
+        "type": "github"
       },
       "original": {
-        "path": "../octet",
-        "type": "path"
-      },
-      "parent": []
+        "owner": "OnixResearch",
+        "repo": "octet",
+        "rev": "4367300e10740ecc99ba4b2171ace561b4787327",
+        "type": "github"
+      }
     },
     "octet-toolchain": {
       "inputs": {
@@ -388,14 +420,16 @@
         "basalt-src": "basalt-src",
         "cairn-src": "cairn-src",
         "flake-utils": "flake-utils",
+        "hegel-src": "hegel-src",
         "nixpkgs": "nixpkgs",
-        "octet-src": "octet-src",
+        "octet-cutover-src": "octet-cutover-src",
         "octet-toolchain": "octet-toolchain",
         "onix-kache-lib": "onix-kache-lib",
         "onix-kache-package-src": "onix-kache-package-src",
         "rust-overlay": "rust-overlay_4",
         "ucan-src": "ucan-src",
-        "unit2nix": "unit2nix"
+        "unit2nix": "unit2nix",
+        "valence-src": "valence-src"
       }
     },
     "rust-overlay": {
@@ -595,14 +629,19 @@
     "ucan-src": {
       "flake": false,
       "locked": {
-        "path": "../ucan",
-        "type": "path"
+        "lastModified": 1782889775,
+        "narHash": "sha256-Z2Vu9xO9eKYXYo7aqqFm6KrNdQ8yG0ozYFZbrEOXB6s=",
+        "owner": "OnixResearch",
+        "repo": "ucan",
+        "rev": "2aad993027d48ff148028c537cdaf91f6e5285ca",
+        "type": "github"
       },
       "original": {
-        "path": "../ucan",
-        "type": "path"
-      },
-      "parent": []
+        "owner": "OnixResearch",
+        "repo": "ucan",
+        "rev": "2aad993027d48ff148028c537cdaf91f6e5285ca",
+        "type": "github"
+      }
     },
     "unit2nix": {
       "inputs": {
@@ -622,6 +661,23 @@
       "original": {
         "owner": "brittonr",
         "repo": "unit2nix",
+        "type": "github"
+      }
+    },
+    "valence-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784063340,
+        "narHash": "sha256-ASWqHCXtUIDerN5vG57TbciTs2q2kHx/dyJI6q0veDk=",
+        "owner": "OnixResearch",
+        "repo": "valence",
+        "rev": "5f1c2ba5072c6f9622fa59b1af20502985f569fd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "OnixResearch",
+        "repo": "valence",
+        "rev": "5f1c2ba5072c6f9622fa59b1af20502985f569fd",
         "type": "github"
       }
     }

@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/molten-core"]
+members = [".", "crates/molten-core", "crates/molten-release-policy"]
 resolver = "3"
 
 [workspace.package]
@@ -26,12 +26,12 @@ path = "src/main.rs"
 
 [dependencies]
 bao-tree = "0.16.0"
-basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", version = "0.1.0" }
+basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "d913dc01e765c9b297df5fcc57dfa06aac39bc74", version = "0.1.0" }
 blake3 = "1"
 cap-fs-ext = "3"
 cap-std = "3"
 molten-core = { path = "crates/molten-core" }
-cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", package = "cairn-core" }
+cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", rev = "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b", package = "cairn-core" }
 clap = { version = "4", features = ["derive"] }
 iroh = "1.0.0"
 iroh-blobs = "0.103.0"
@@ -39,7 +39,7 @@ iroh-docs = "0.101.0"
 iroh-gossip = "0.101.0"
 n0-future = "0.3.2"
 nickel-lang = "2.1.0"
-octet = { git = "ssh://git@github.com/OnixResearch/octet.git", package = "valence-core" }
+valence = { git = "ssh://git@github.com/OnixResearch/valence.git", rev = "5f1c2ba5072c6f9622fa59b1af20502985f569fd", package = "valence-core" }
 preserves = "5.0.0-rc.7"
 preserves-schema = "6.0.0-rc.6"
 redb = "4.1.0"
@@ -62,5 +62,6 @@ zstd = "0.13"
 
 [dev-dependencies]
 cap-tempfile = "3"
-hegeltest = { git = "https://github.com/hegeldev/hegel-rust", features = ["native"] }
+hegeltest = { git = "https://github.com/hegeldev/hegel-rust", rev = "ed949b8084595cb467e983747f1089e214965ac6", features = ["native"] }
+
 wat = "1"

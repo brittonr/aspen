@@ -4,16 +4,19 @@
   "roots": [
     "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
     "molten": "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "675943e4f1f68df1d037b478efb2b07a767e0cd9a20abe9a3a9b9e285c9bfbed",
-  "inputsHash": "6aeddf23752305cb190806193cf3674988ee540cd9fb8ccac68346647bdba58f",
+  "cargoLockHash": "1b25862262a79cca7491c326b65763cc937d552c363a4a858ea4d0df9910a445",
+  "inputsHash": "1190918aa4eefee98039692e6d14549f33e8d4846f3bc307f586933afe58ed02",
   "crates": {
-    "git+https://github.com/hegeldev/hegel-rust#hegeltest-macros@0.14.12": {
+    "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12": {
       "crateName": "hegeltest-macros",
       "version": "0.14.12",
       "edition": "2024",
@@ -55,7 +58,7 @@
       "license": "MIT",
       "repository": "https://github.com/hegeldev/hegel-rust"
     },
-    "git+https://github.com/hegeldev/hegel-rust#hegeltest@0.14.12": {
+    "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest@0.14.12": {
       "crateName": "hegeltest",
       "version": "0.14.12",
       "edition": "2024",
@@ -80,7 +83,7 @@
           "externCrateName": "crc32fast"
         },
         {
-          "packageId": "git+https://github.com/hegeldev/hegel-rust#hegeltest-macros@0.14.12",
+          "packageId": "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12",
           "externCrateName": "hegel_macros"
         },
         {
@@ -127,7 +130,7 @@
       "license": "MIT",
       "repository": "https://github.com/hegeldev/hegel-rust"
     },
-    "git+ssh://git@github.com/OnixResearch/basalt.git#basalt@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/basalt.git?rev=d913dc01e765c9b297df5fcc57dfa06aac39bc74#basalt@0.1.0": {
       "crateName": "basalt",
       "version": "0.1.0",
       "edition": "2024",
@@ -178,7 +181,7 @@
       "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/OnixResearch/basalt"
     },
-    "git+ssh://git@github.com/OnixResearch/cairn.git#cairn-core@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#cairn-core@0.1.0": {
       "crateName": "cairn-core",
       "version": "0.1.0",
       "edition": "2021",
@@ -217,48 +220,6 @@
       "links": null,
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/onixresearch/cairn"
-    },
-    "git+ssh://git@github.com/OnixResearch/octet.git#valence-core@0.1.0": {
-      "crateName": "valence-core",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/octet.git",
-        "rev": "9b6a2065ef9e8e363d81299cf59d74f885926215",
-        "subDir": "crates/valence-core",
-        "sha256": "1d4hzxpv9izqicygrszc5zsn31hc6vmjpk7j3ybmfp16hy40dnjp"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
-          "externCrateName": "serde_json"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Pure Valence evidence core extracted from Octet CLI surfaces",
-      "homepage": "https://github.com/onixresearch/octet",
-      "license": "AGPL-3.0-or-later",
-      "repository": "https://github.com/onixresearch/octet"
     },
     "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#ucan-core@0.1.0": {
       "crateName": "ucan-core",
@@ -404,7 +365,53 @@
       "crateBin": [],
       "links": null,
       "description": "Trellis: composable verified-logic building blocks, machine-checked with Verus",
-      "license": "MPL-2.0"
+      "license": "AGPL-3.0-or-later"
+    },
+    "git+ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#valence-core@0.1.0": {
+      "crateName": "valence-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/valence.git",
+        "rev": "5f1c2ba5072c6f9622fa59b1af20502985f569fd",
+        "subDir": "crates/valence-core",
+        "sha256": "18dzmkw0n9k4xb88x8rf2hkh3wsgi6v2y4i7gcbw0vm97hni3d89"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#iddqd@0.4.5",
+          "externCrateName": "iddqd"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
+          "externCrateName": "serde_json"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Pure Evidence IR core: canonical evidence identity, provenance threading, and non-claim boundary enforcement",
+      "homepage": "https://github.com/OnixResearch/valence",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/OnixResearch/valence"
     },
     "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0": {
       "crateName": "molten",
@@ -422,7 +429,7 @@
           "externCrateName": "bao_tree"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/basalt.git#basalt@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/basalt.git?rev=d913dc01e765c9b297df5fcc57dfa06aac39bc74#basalt@0.1.0",
           "externCrateName": "basalt"
         },
         {
@@ -430,7 +437,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/cairn.git#cairn-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#cairn-core@0.1.0",
           "externCrateName": "cairn"
         },
         {
@@ -522,8 +529,8 @@
           "externCrateName": "tracing"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/octet.git#valence-core@0.1.0",
-          "externCrateName": "octet"
+          "packageId": "git+ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#valence-core@0.1.0",
+          "externCrateName": "valence"
         },
         {
           "packageId": "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#verified-logic@0.2.0",
@@ -557,7 +564,7 @@
           "externCrateName": "cap_tempfile"
         },
         {
-          "packageId": "git+https://github.com/hegeldev/hegel-rust#hegeltest@0.14.12",
+          "packageId": "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest@0.14.12",
           "externCrateName": "hegel"
         },
         {
@@ -593,6 +600,50 @@
       },
       "features": [],
       "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "AGPL-3.0-or-later"
+    },
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0": {
+      "crateName": "molten-release-policy",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "crates/molten-release-policy"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+          "externCrateName": "molten_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@0.9.12+spec-1.1.0",
+          "externCrateName": "toml"
+        }
+      ],
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
@@ -6918,7 +6969,10 @@
       "source": {
         "type": "crates-io"
       },
-      "features": [],
+      "features": [
+        "default",
+        "std"
+      ],
       "dependencies": [],
       "buildDependencies": [],
       "procMacro": false,
@@ -8287,10 +8341,15 @@
         "type": "crates-io"
       },
       "features": [
+        "allocator-api2",
         "default-hasher",
         "inline-more"
       ],
       "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#allocator-api2@0.2.21",
+          "externCrateName": "allocator_api2"
+        },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
           "externCrateName": "foldhash"
@@ -9849,6 +9908,52 @@
       "description": "A simple, id-based arena.",
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/fitzgen/id-arena"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#iddqd@0.4.5": {
+      "crateName": "iddqd",
+      "version": "0.4.5",
+      "edition": "2024",
+      "sha256": "d7cf7e72dd082126bd727c1f8bd2d5229c2780258c0b3c7bc33eaf0f4ea5f0fa",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "allocator-api2",
+        "default",
+        "default-hasher",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#allocator-api2@0.2.21",
+          "externCrateName": "allocator_api2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.2",
+          "externCrateName": "equivalent"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
+          "externCrateName": "foldhash"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.16.1",
+          "externCrateName": "hashbrown"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Maps where keys borrow from values, including bijective and trijective maps.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/oxidecomputer/iddqd"
     },
     "registry+https://github.com/rust-lang/crates.io-index#ident_case@1.0.1": {
       "crateName": "ident_case",

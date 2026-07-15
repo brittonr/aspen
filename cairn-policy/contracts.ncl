@@ -135,6 +135,9 @@ let RuntimeCaptureOrigin = std.contract.from_predicate (fun value =>
   std.is_string value && (value == "boundary_captured" || value == "ingested_telemetry" || value == "wrapper_asserted" || value == "unknown")
 ) in
 let PositiveNumber = Prelude.contracts.PositiveInteger in
+let DependencyTargetClass = Prelude.contract (fun value =>
+  std.is_string value && value == "lifecycle-id"
+) in
 
 {
   Artifact = {
@@ -171,10 +174,22 @@ let PositiveNumber = Prelude.contracts.PositiveInteger in
     promoted | Promoted,
   },
 
+  ArtifactSubstancePolicy = {
+    proposal_minimum_substantive_lines | PositiveNumber,
+    design_minimum_substantive_lines | PositiveNumber,
+    minimum_requirement_blocks | PositiveNumber,
+    minimum_substantive_tasks | PositiveNumber,
+    placeholder_tokens | NonEmptyArray | Array NonEmptyString,
+    normative_tokens | NonEmptyArray | Array NonEmptyString,
+    dependency_marker_id | NonEmptyString,
+    dependency_target_class | DependencyTargetClass,
+  },
+
   GatePolicy = {
     stages | NonEmptyArray | Array Stage,
     ignore_archives | Bool,
     finding | FindingPolicy,
+    substance | ArtifactSubstancePolicy,
   },
 
   ReportContract = {
