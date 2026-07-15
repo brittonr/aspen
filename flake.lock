@@ -212,6 +212,7 @@
       "original": {
         "owner": "numtide",
         "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
         "type": "github"
       }
     },
@@ -297,8 +298,8 @@
       },
       "original": {
         "owner": "NixOS",
-        "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
+        "rev": "f9d8b65950353691ab56561e7c73d2e1063d810b",
         "type": "github"
       }
     },
@@ -391,29 +392,23 @@
         "type": "github"
       }
     },
-    "onix-kache-lib": {
+    "onix-core-src": {
       "flake": false,
       "locked": {
-        "path": "../../onix-core/lib",
-        "type": "path"
+        "lastModified": 1783296811,
+        "narHash": "sha256-SlSpP5CZEdYZlr3KlRjEgYxntcHHb3qWM+F1pbnbJpo=",
+        "ref": "refs/heads/main",
+        "rev": "ae895854eb049ff152d3f1b96cb90a5fa45c3ec6",
+        "shallow": true,
+        "type": "git",
+        "url": "ssh://git@github.com/onixcomputer/onix-core.git"
       },
       "original": {
-        "path": "../../onix-core/lib",
-        "type": "path"
-      },
-      "parent": []
-    },
-    "onix-kache-package-src": {
-      "flake": false,
-      "locked": {
-        "path": "../../onix-core/pkgs/kache",
-        "type": "path"
-      },
-      "original": {
-        "path": "../../onix-core/pkgs/kache",
-        "type": "path"
-      },
-      "parent": []
+        "rev": "ae895854eb049ff152d3f1b96cb90a5fa45c3ec6",
+        "shallow": true,
+        "type": "git",
+        "url": "ssh://git@github.com/onixcomputer/onix-core.git"
+      }
     },
     "root": {
       "inputs": {
@@ -424,8 +419,7 @@
         "nixpkgs": "nixpkgs",
         "octet-cutover-src": "octet-cutover-src",
         "octet-toolchain": "octet-toolchain",
-        "onix-kache-lib": "onix-kache-lib",
-        "onix-kache-package-src": "onix-kache-package-src",
+        "onix-core-src": "onix-core-src",
         "rust-overlay": "rust-overlay_4",
         "ucan-src": "ucan-src",
         "unit2nix": "unit2nix",
@@ -518,6 +512,7 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "rev": "6cddd512fa2bf7231f098d3a2f92f6e4cff71e0a",
         "type": "github"
       }
     },
@@ -661,6 +656,7 @@
       "original": {
         "owner": "brittonr",
         "repo": "unit2nix",
+        "rev": "d4883180de0ce3033b7e4e2ab4216f33134863c5",
         "type": "github"
       }
     },

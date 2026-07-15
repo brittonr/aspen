@@ -171,8 +171,7 @@ nix run \
   --override-input cairn-src path:../cairn \
   --override-input valence-src path:../valence \
   --override-input ucan-src path:../ucan \
-  --override-input onix-kache-lib path:../../onix-core/lib \
-  --override-input onix-kache-package-src path:../../onix-core/pkgs/kache \
+  --override-input onix-core-src path:../../onix-core \
   .#molten -- cluster status --state-root target/cluster
 ```
 
@@ -653,8 +652,7 @@ nix build .#checks.x86_64-linux.nixos-vm-multinode -L \
   --override-input cairn-src path:../cairn \
   --override-input valence-src path:../valence \
   --override-input ucan-src path:../ucan \
-  --override-input onix-kache-lib path:../../onix-core/lib \
-  --override-input onix-kache-package-src path:../../onix-core/pkgs/kache
+  --override-input onix-core-src path:../../onix-core
 ```
 
 `nixos-vm-multinode` is an explicit `testers.runNixOSTest` platform integration check. It starts two headless NixOS VMs with the current Molten package, runs the real node init/start/status/control-loop/stop service path under systemd with isolated `/var/lib/molten` roots, checks VM networking, exercises queued control-request recovery across a service restart, and emits `nixos-vm-topology-v1`, `nixos-vm-node-evidence-v1`, and `nixos-vm-test-run-v1` receipts inside the VM evidence directories. It also emits `prod-soak-evidence-export-v1`, `prod-soak-durability-v1`, `prod-soak-fault-case-v1`, `prod-soak-fault-matrix-v1`, `prod-soak-resource-envelope-v1`, and `prod-soak-run-v1` receipts that bind the production-shaped live workflow child evidence: peer tickets, node-control bundle lifecycle, remote dataspace/service exchange, blob-ref job execution, coordination apply, restart durability, network/transport fault coverage, resource envelope bounds, per-node evidence exports, replay status, logs, and pilot-scope caveats. For an internal pilot, this soak evidence is sufficient to show that the VM topology can coordinate live child receipts across peers, survive the bounded restart path, preserve referenced artifacts, and report pilot resource bounds. It remains out of scope for broad production claims about real WAN transport, sustained SLOs, adversarial security, authority delegation, retention policy, destructive operations, source-gate trust, or fleet-scale resource pressure. It requires working NixOS VM execution support; missing KVM/QEMU support must fail or report unavailable rather than minting pass evidence.

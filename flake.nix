@@ -2,21 +2,17 @@
   description = "molten — Rust project";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/f9d8b65950353691ab56561e7c73d2e1063d810b";
     unit2nix = {
-      url = "github:brittonr/unit2nix";
+      url = "github:brittonr/unit2nix/d4883180de0ce3033b7e4e2ab4216f33134863c5";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     rust-overlay = {
-      url = "github:oxalica/rust-overlay";
+      url = "github:oxalica/rust-overlay/6cddd512fa2bf7231f098d3a2f92f6e4cff71e0a";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    onix-kache-lib = {
-      url = "path:../../onix-core/lib";
-      flake = false;
-    };
-    onix-kache-package-src = {
-      url = "path:../../onix-core/pkgs/kache";
+    onix-core-src = {
+      url = "git+ssh://git@github.com/onixcomputer/onix-core.git?rev=ae895854eb049ff152d3f1b96cb90a5fa45c3ec6&shallow=1";
       flake = false;
     };
     basalt-src = {
@@ -44,7 +40,7 @@
       url = "github:OnixResearch/valence/5f1c2ba5072c6f9622fa59b1af20502985f569fd";
       flake = false;
     };
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";
   };
 
   outputs =
@@ -53,8 +49,7 @@
       unit2nix,
       rust-overlay,
       flake-utils,
-      onix-kache-lib,
-      onix-kache-package-src,
+      onix-core-src,
       basalt-src,
       cairn-src,
       hegel-src,
@@ -150,8 +145,8 @@
 
         kacheCacheDir = "/var/cache/kache-nix";
         kacheKeySalt = "molten-unit2nix-kache-v1";
-        kachePackage = pkgs.callPackage onix-kache-package-src { };
-        kacheLib = import (onix-kache-lib + "/kache-nix-rust.nix") {
+        kachePackage = pkgs.callPackage (onix-core-src + "/pkgs/kache") { };
+        kacheLib = import (onix-core-src + "/lib/kache-nix-rust.nix") {
           lib = pkgs.lib;
           inherit pkgs kachePackage;
         };
@@ -1006,7 +1001,7 @@
                     exec "$@"
                   '';
                 };
-                checkedKacheLib = import (onix-kache-lib + "/kache-nix-rust.nix") {
+                checkedKacheLib = import (onix-core-src + "/lib/kache-nix-rust.nix") {
                   lib = pkgs.lib;
                   inherit pkgs;
                   kachePackage = fakeKache;
