@@ -2,15 +2,55 @@
   "version": 1,
   "workspaceRoot": "/home/brittonr/git/OnixResearch/aspen",
   "roots": [
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "1b25862262a79cca7491c326b65763cc937d552c363a4a858ea4d0df9910a445",
-  "inputsHash": "c82948b553871476ed25122c5ebff6138b1cef40c0792c895cc392ed944de76d",
+  "cargoLockHash": "e9220dfe9ad04cf11f35651bcb6016bc8eb0e2dd93c19be62e9626654efbd6bc",
+  "inputsHash": "5affffe9d343555cd1f714f662276ee2b72430dce96930db82d77cc5a477deb7",
   "crates": {
+    "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0": {
+      "crateName": "artifact-auth-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/artifact-auth.git",
+        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
+        "subDir": "crates/artifact-auth-core",
+        "sha256": "1m8icwyx9j40r6nvb4qh7sxidszj11b9l71rp75lc0gv5dc05pas"
+      },
+      "features": [
+        "default",
+        "serde"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/OnixResearch/artifact-auth"
+    },
     "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
@@ -21,7 +61,12 @@
         "path": "crates/molten-core"
       },
       "features": [],
-      "dependencies": [],
+      "dependencies": [
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0",
+          "externCrateName": "artifact_auth_core"
+        }
+      ],
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
@@ -475,6 +520,7 @@
         "type": "crates-io"
       },
       "features": [
+        "alloc",
         "default",
         "derive",
         "serde_derive",

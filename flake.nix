@@ -19,6 +19,10 @@
       url = "github:OnixResearch/basalt/d913dc01e765c9b297df5fcc57dfa06aac39bc74";
       flake = false;
     };
+    artifact-auth-src = {
+      url = "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa";
+      flake = false;
+    };
     cairn-src = {
       url = "github:OnixResearch/cairn/3b4c280b893f2709aebea21fc51a4f9eeba3fe3b";
       flake = false;
@@ -51,6 +55,7 @@
       flake-utils,
       onix-core-src,
       basalt-src,
+      artifact-auth-src,
       cairn-src,
       hegel-src,
       octet-cutover-src,
@@ -90,7 +95,28 @@
         # cleanSourceWith; callers can pass real local paths with --override-input.
         maybeCleanLocalGitSource =
           src: if pkgs.lib.hasInfix "/../" (toString src) then null else cleanLocalGitSource src;
+        artifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa";
+        artifactAuthCargoDependency =
+          (builtins.fromTOML (builtins.readFile ./crates/molten-core/Cargo.toml)).dependencies.artifact-auth-core;
+        artifactAuthLockPackages = builtins.filter (
+          package: package.name == "artifact-auth-core"
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        artifactAuthExpectedLockSource =
+          "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=${artifactAuthRevision}#${artifactAuthRevision}";
+        artifactAuthWorkspace = builtins.fromTOML (builtins.readFile (artifact-auth-src + "/Cargo.toml"));
+        artifactAuthSource =
+          assert pkgs.lib.assertMsg (
+            artifactAuthCargoDependency.git == "ssh://git@github.com/OnixResearch/artifact-auth.git"
+            && artifactAuthCargoDependency.rev == artifactAuthRevision
+            && artifact-auth-src.rev == artifactAuthRevision
+            && builtins.length artifactAuthLockPackages == 1
+            && (builtins.head artifactAuthLockPackages).source == artifactAuthExpectedLockSource
+            && artifactAuthWorkspace.workspace.package.license == "MIT OR Apache-2.0"
+          ) "Molten artifact-auth Cargo/Nix source identity, uniqueness, or license drifted";
+          artifact-auth-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
+          "ssh://git@github.com/OnixResearch/artifact-auth.git#${artifactAuthRevision}" =
+            maybeCleanLocalGitSource artifactAuthSource;
           "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" =
             maybeCleanLocalGitSource basalt-src;
           "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" =

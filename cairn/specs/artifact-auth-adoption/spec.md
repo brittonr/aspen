@@ -1,3 +1,9 @@
+# Artifact Auth Adoption Specification
+
+## Purpose
+
+Defines the `artifact-auth-adoption` capability.
+
 ## Requirements
 
 ### Requirement: Molten adopts one immutable reviewed source

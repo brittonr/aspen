@@ -101,6 +101,31 @@ fn sign_request(handle: &OpaqueKeyHandle) -> SignRequest {
     }
 }
 
+fn verification_request(profile: &CryptoAdapterProfile, handle: &OpaqueKeyHandle) -> VerificationRequest {
+    let expected_domain = domain(handle.purpose, &handle.public_key_ref);
+    VerificationRequest {
+        operation_id: "verify-operation".to_string(),
+        profile_ref: profile.profile_ref.clone(),
+        expected_domain: expected_domain.clone(),
+        observed: SignatureMetadata {
+            profile_ref: profile.profile_ref.clone(),
+            algorithm: profile.algorithm,
+            purpose: handle.purpose,
+            generation: handle.generation,
+            signer_public_ref: handle.public_key_ref.clone(),
+            domain_ref: test_ref("domain-value"),
+            payload_ref: expected_domain.payload_ref,
+            verifier_context_ref: expected_domain.verifier_context_ref,
+            signature_ref: test_ref("signature"),
+            signature_bytes: ED25519_SIGNATURE_BYTES,
+        },
+        cryptographic_verification_passed: true,
+        signer_currentness: handle.currentness,
+        signer_generation: handle.generation,
+        policy_ref: test_ref("verify-policy"),
+    }
+}
+
 // r[verify molten.crypto_identity.adapter_contract]
 // r[verify molten.crypto_identity.fixture_profile_boundary]
 #[test]
@@ -289,4 +314,203 @@ fn redaction_keeps_public_status_and_denies_private_material() {
     leaking.private_material_present = true;
     let issues = redact_adapter_status(&leaking).expect_err("private material denied");
     assert!(issues.contains(&CryptoIdentityIssue::DiagnosticSecretLeak));
+}
+
+// r[verify molten.artifact_auth_adoption.authority]
+// r[verify molten.artifact_auth_adoption.cutover]
+#[test]
+fn artifact_auth_dual_run_maps_current_identity_without_promoting_authority() {
+    let profile = production_profile();
+    let handle = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Current);
+    let request = verification_request(&profile, &handle);
+    let standalone = standalone_observation(&handle.public_key_ref, true).expect("standalone observation");
+    let report = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &request,
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &handle.currentness_evidence_ref,
+        standalone_cryptographic: standalone,
+    });
+
+    assert_eq!(report.legacy.kind, VerificationDecisionKind::Accept);
+    assert!(report.standalone.as_ref().is_some_and(|decision| decision.passed));
+    assert!(report.compatibility.case_explained);
+    assert!(!report.compatibility.decision_drift);
+    assert!(!report.compatibility.non_claim_drift);
+    assert!(report.compatibility.legacy_authoritative);
+    assert!(!report.compatibility.standalone_authority_admitted);
+    assert!(report.compatibility.rollback_available);
+    assert!(report.opaque_handle_authority_retained);
+    assert!(report.backend_authority_retained);
+    assert!(report.rotation_authority_retained);
+}
+
+// r[verify molten.artifact_auth_adoption.cutover]
+#[test]
+fn artifact_auth_dual_run_classifies_tamper_revocation_and_false_parity() {
+    let profile = production_profile();
+    let current_handle = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Current);
+    let mut tampered = verification_request(&profile, &current_handle);
+    tampered.observed.payload_ref = test_ref("tampered-payload");
+    tampered.cryptographic_verification_passed = false;
+    let rejected = standalone_observation(&current_handle.public_key_ref, false).expect("rejected observation");
+    let report = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &tampered,
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &current_handle.currentness_evidence_ref,
+        standalone_cryptographic: rejected,
+    });
+    assert!(report.compatibility.case_explained);
+    assert!(report.compatibility.mapped_failure_causes.contains(&"payload".to_string()));
+    assert!(report.compatibility.mapped_failure_causes.contains(&"signature".to_string()));
+
+    let standalone_pass = standalone_observation(&current_handle.public_key_ref, true).expect("passing observation");
+    let false_parity = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &tampered,
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &current_handle.currentness_evidence_ref,
+        standalone_cryptographic: standalone_pass,
+    });
+    assert!(false_parity.compatibility.decision_drift);
+    assert!(!false_parity.compatibility.case_explained);
+
+    let revoked_handle = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Revoked);
+    let revoked_request = verification_request(&profile, &revoked_handle);
+    let revoked_crypto = standalone_observation(&revoked_handle.public_key_ref, true).expect("revoked observation");
+    let revoked = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &revoked_request,
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &revoked_handle.currentness_evidence_ref,
+        standalone_cryptographic: revoked_crypto,
+    });
+    assert!(revoked.compatibility.case_explained);
+    assert!(revoked.compatibility.mapped_failure_causes.contains(&"currentness".to_string()));
+}
+
+// r[verify molten.artifact_auth_adoption.authority]
+#[test]
+fn artifact_auth_rejects_lossy_key_mapping_and_keeps_overlap_verification_bounded() {
+    let profile = production_profile();
+    let mut malformed = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Current);
+    malformed.public_key_ref = "label-only-key".to_string();
+    let malformed_request = verification_request(&profile, &malformed);
+    let malformed_crypto = artifact_auth_core::CryptographicObservation {
+        algorithm: artifact_auth_core::ALGORITHM_ED25519.to_string(),
+        key_identity: artifact_auth_core::ArtifactRef {
+            profile: artifact_auth_core::ED25519_PUBLIC_KEY_PROFILE_V1.to_string(),
+            algorithm: artifact_auth_core::ALGORITHM_BLAKE3.to_string(),
+            digest_hex: "0".repeat(artifact_auth_core::DIGEST_HEX_CHARS),
+        },
+        verified: true,
+        failure_code: None,
+    };
+    let malformed_report = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &malformed_request,
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &malformed.currentness_evidence_ref,
+        standalone_cryptographic: malformed_crypto,
+    });
+    assert!(malformed_report.standalone.is_none());
+    assert!(!malformed_report.compatibility.case_explained);
+
+    let overlap_handle = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Overlap);
+    let overlap_request = verification_request(&profile, &overlap_handle);
+    let overlap_crypto = standalone_observation(&overlap_handle.public_key_ref, true).expect("overlap observation");
+    let overlap = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &overlap_request,
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &overlap_handle.currentness_evidence_ref,
+        standalone_cryptographic: overlap_crypto,
+    });
+    assert!(overlap.compatibility.case_explained);
+    assert!(!overlap.compatibility.standalone_authority_admitted);
+    assert!(overlap.authority_boundary.contains("signing"));
+}
+
+// r[verify molten.artifact_auth_adoption.authority]
+// r[verify molten.artifact_auth_adoption.cutover]
+#[test]
+fn artifact_auth_blocks_profile_context_generation_and_key_drift() {
+    let profile = production_profile();
+    let current_handle = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Current);
+
+    let mut wrong_profile = verification_request(&profile, &current_handle);
+    wrong_profile.profile_ref = test_ref("wrong-profile");
+    let wrong_profile_report = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &wrong_profile,
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &current_handle.currentness_evidence_ref,
+        standalone_cryptographic: standalone_observation(&current_handle.public_key_ref, true)
+            .expect("profile observation"),
+    });
+    assert!(wrong_profile_report.compatibility.decision_drift);
+    assert!(!wrong_profile_report.compatibility.case_explained);
+
+    let mut wrong_context = verification_request(&profile, &current_handle);
+    wrong_context.observed.verifier_context_ref = test_ref("wrong-verifier-context");
+    wrong_context.cryptographic_verification_passed = false;
+    let wrong_context_report = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &wrong_context,
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &current_handle.currentness_evidence_ref,
+        standalone_cryptographic: standalone_observation(&current_handle.public_key_ref, false)
+            .expect("context observation"),
+    });
+    assert!(wrong_context_report.compatibility.case_explained);
+    assert!(wrong_context_report.compatibility.mapped_failure_causes.contains(&"verifier-context".to_string()));
+
+    let mut stale_generation = verification_request(&profile, &current_handle);
+    stale_generation.observed.generation = GENERATION_TWO;
+    stale_generation.cryptographic_verification_passed = false;
+    let stale_report = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &stale_generation,
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &current_handle.currentness_evidence_ref,
+        standalone_cryptographic: standalone_observation(&current_handle.public_key_ref, false)
+            .expect("stale observation"),
+    });
+    assert!(stale_report.compatibility.case_explained);
+    assert!(stale_report.compatibility.mapped_failure_causes.contains(&"generation".to_string()));
+
+    let wrong_key_ref = test_ref("wrong-standalone-key");
+    let wrong_key_report = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &verification_request(&profile, &current_handle),
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &current_handle.currentness_evidence_ref,
+        standalone_cryptographic: standalone_observation(&wrong_key_ref, true).expect("wrong-key observation"),
+    });
+    assert!(!wrong_key_report.compatibility.case_explained);
+    assert!(wrong_key_report.compatibility.blockers.contains(&"identity-drift".to_string()));
+
+    let superseded_handle = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Superseded);
+    let superseded_report = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
+        profile: &profile,
+        request: &verification_request(&profile, &superseded_handle),
+        producer_id: "molten-evidence-producer",
+        key_id: "evidence-signing-key",
+        currentness_ref: &superseded_handle.currentness_evidence_ref,
+        standalone_cryptographic: standalone_observation(&superseded_handle.public_key_ref, true)
+            .expect("superseded observation"),
+    });
+    assert!(superseded_report.compatibility.case_explained);
+    assert!(superseded_report.compatibility.mapped_failure_causes.contains(&"currentness".to_string()));
 }

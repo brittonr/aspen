@@ -1,5 +1,22 @@
 {
   "nodes": {
+    "artifact-auth-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784395143,
+        "narHash": "sha256-nEgz2FtVuDesX95yyxidp0vhjxL4INB6Ve8rkpLyJk0=",
+        "ref": "refs/heads/main",
+        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
+        "revCount": 5,
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/artifact-auth.git"
+      },
+      "original": {
+        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/artifact-auth.git"
+      }
+    },
     "basalt-src": {
       "flake": false,
       "locked": {
@@ -412,6 +429,7 @@
     },
     "root": {
       "inputs": {
+        "artifact-auth-src": "artifact-auth-src",
         "basalt-src": "basalt-src",
         "cairn-src": "cairn-src",
         "flake-utils": "flake-utils",

@@ -32,6 +32,20 @@ Rotation is planned by the pure core before the shell writes a replacement key. 
 
 The existing `blake3-local-fixture-v1` evidence and federation signatures remain compatibility fixtures. They are deterministic integrity fixtures, not production cryptographic identities. `blake3-local-fixture-v1`, deterministic entropy, and public-input-derived endpoint material are denied by the production profile and production adapter admission. They must not satisfy production startup, federation-origin, delegation, evidence-signing, or authority gates.
 
+## Standalone artifact-auth compatibility
+
+Molten pins `artifact-auth-core` from `ssh://git@github.com/OnixResearch/artifact-auth.git` at revision `799459346d5416fbd7b9f55840a7371441b55afa`. Cargo and the non-flake Nix input must resolve that same full revision; flake evaluation rejects duplicate lock packages, source mismatch, or a standalone license other than `MIT OR Apache-2.0`. SSH credentials authorize retrieval only.
+
+`fabric_crypto_identity::evaluate_artifact_auth_dual_run` maps an already measured Molten verification request plus a separate `CryptographicObservation` for the exact standalone statement. The legacy `cryptographic_verification_passed` field is never reused as proof of the standalone preimage. The adapter preserves domain, purpose, profile, payload, public-key, verifier-context, generation, and currentness fields while keeping opaque handles, backend class, entropy profile, and rotation transitions as Molten-owned extensions.
+
+Compatibility output classifies the intentionally distinct canonical preimages, full-key identity, decisions, consumer-specific issue taxonomy, mandatory non-claims, and unrelated-failure false parity. `legacy_authoritative` and `rollback_available` remain true; `standalone_authority_admitted` remains false. This adoption therefore rejects runtime authority cutover until a later change supplies shell integration and current operational evidence.
+
+### Update and rollback
+
+To update, review the candidate standalone release and `config/consumers/molten.ncl`, change the exact Cargo and Nix revisions together, regenerate `Cargo.lock` with Cargo and `flake.lock` with Nix, then rerun focused identity tests, strict Clippy/Octet, Cairn validation, and the Nix checks. Never edit either lock manually.
+
+Runtime rollback is immediate: stop supplying a standalone cryptographic observation and continue evaluating the legacy Molten decision. Dependency rollback restores the last reviewed Cargo/Nix declarations as one VCS change, regenerates both locks with their owning tools, and preserves the compatibility evidence explaining the rejection.
+
 ## Claim boundaries
 
-Cryptographic verification establishes only that the supplied key verifies the canonical payload in the declared domain and currentness context. It does not establish membership, capability authority, trust-root selection, policy admission, provenance, release eligibility, or whole-system correctness. Private-key storage safety is bounded to the selected backend and recorded permission checks.
+Cryptographic verification establishes only that the supplied key verifies the canonical payload in the declared domain and currentness context. It does not establish membership, capability authority, trust-root selection, policy admission, provenance, release eligibility, or whole-system correctness. Private-key storage safety is bounded to the selected backend and recorded permission checks. Standalone success additionally does not authorize signing, key generation, storage, rotation, capability/federation decisions, Preserves/Iroh transport, runtime admission, deployment, or release.
