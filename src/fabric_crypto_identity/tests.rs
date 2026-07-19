@@ -376,6 +376,220 @@ fn transport_secret_is_only_resolved_for_current_transport_handle() {
     assert!(revoked.to_string().contains("key is revoked"));
 }
 
+// r[verify molten.artifact_auth_shell.exact_verification]
+// r[verify molten.artifact_auth_shell.evidence]
+// r[verify molten.artifact_auth_shell.authority]
+#[test]
+fn artifact_auth_shell_signs_and_verifies_exact_statement_without_admitting_authority() {
+    let workspace = temp_dir("artifact-auth-shell-positive");
+    let namespace =
+        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+            .expect("secrets namespace");
+    let adapter = adapter(&namespace);
+    let key = adapter
+        .resolve_or_generate(KeyPurpose::EvidenceSigning, &test_ref("generation-policy"), true)
+        .expect("evidence key");
+    let signed_domain =
+        domain(adapter.profile(), KeyPurpose::EvidenceSigning, &key.handle.handle.public_key_ref, "receipt");
+    let legacy_signature =
+        sign_evidence_payload(&adapter, &key.handle.handle, &signed_domain, &test_ref("legacy-sign-policy"))
+            .expect("legacy evidence signature");
+    let request = VerificationRequest {
+        operation_id: "verify-artifact-auth-shell".to_string(),
+        profile_ref: adapter.profile().profile.profile_ref.clone(),
+        expected_domain: signed_domain.domain.clone(),
+        observed: legacy_signature.metadata,
+        cryptographic_verification_passed: true,
+        signer_currentness: KeyCurrentness::Current,
+        signer_generation: key.handle.handle.generation,
+        policy_ref: test_ref("verify-policy"),
+    };
+    let statement = MoltenArtifactAuthStatementInput {
+        profile: &adapter.profile().profile,
+        request: &request,
+        producer_id: "molten",
+        key_id: "evidence-signing-key",
+        currentness_ref: &key.handle.handle.currentness_evidence_ref,
+    };
+    let signed = sign_artifact_auth_for_dual_run(&adapter, &MoltenArtifactAuthShellInput {
+        statement,
+        handle: &key.handle.handle,
+        signing_policy_ref: &test_ref("artifact-auth-sign-policy"),
+    })
+    .expect("exact standalone signature");
+    let report = evaluate_artifact_auth_shell_dual_run(&statement, &signed).expect("exact standalone verification");
+
+    assert!(report.cryptographic_failure_code.is_none());
+    assert_eq!(report.dual_run.legacy.kind, VerificationDecisionKind::Accept);
+    assert!(report.dual_run.standalone.as_ref().is_some_and(|decision| decision.passed));
+    assert!(report.dual_run.compatibility.case_explained);
+    assert!(report.dual_run.compatibility.legacy_authoritative);
+    assert!(!report.dual_run.compatibility.standalone_authority_admitted);
+    assert!(report.dual_run.compatibility.rollback_available);
+    assert_eq!(signed.signature_bytes.len(), artifact_auth_ed25519::ED25519_SIGNATURE_BYTES);
+    assert_eq!(signed.public_key_ref, key.handle.handle.public_key_ref);
+    assert!(signed.signature_hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+
+    let secret_path = crate::node_state::NodeStatePath::parse("crypto-evidence-signing.key").expect("secret path");
+    let secret_record = namespace.read(&secret_path, crate::node_state::MAX_NODE_SECRET_BYTES).expect("secret record");
+    let public_evidence = format!("{signed:?}{report:?}");
+    assert!(!public_evidence.as_bytes().windows(secret_record.len()).any(|window| window == secret_record));
+}
+
+// r[verify molten.artifact_auth_shell.exact_verification]
+// r[verify molten.artifact_auth_shell.evidence]
+// r[verify molten.artifact_auth_shell.authority]
+#[test]
+fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_parity() {
+    const SIGNATURE_TAMPER_MASK: u8 = 1;
+    const MALFORMED_SIGNATURE_BYTES: usize = 1;
+
+    let workspace = temp_dir("artifact-auth-shell-negative");
+    let namespace =
+        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+            .expect("secrets namespace");
+    let adapter = adapter(&namespace);
+    let key = adapter
+        .resolve_or_generate(KeyPurpose::EvidenceSigning, &test_ref("generation-policy"), true)
+        .expect("evidence key");
+    let signed_domain =
+        domain(adapter.profile(), KeyPurpose::EvidenceSigning, &key.handle.handle.public_key_ref, "receipt");
+    let legacy_signature =
+        sign_evidence_payload(&adapter, &key.handle.handle, &signed_domain, &test_ref("legacy-sign-policy"))
+            .expect("legacy evidence signature");
+    let request = VerificationRequest {
+        operation_id: "verify-artifact-auth-shell-negative".to_string(),
+        profile_ref: adapter.profile().profile.profile_ref.clone(),
+        expected_domain: signed_domain.domain.clone(),
+        observed: legacy_signature.metadata,
+        cryptographic_verification_passed: true,
+        signer_currentness: KeyCurrentness::Current,
+        signer_generation: key.handle.handle.generation,
+        policy_ref: test_ref("verify-policy"),
+    };
+    let statement = MoltenArtifactAuthStatementInput {
+        profile: &adapter.profile().profile,
+        request: &request,
+        producer_id: "molten",
+        key_id: "evidence-signing-key",
+        currentness_ref: &key.handle.handle.currentness_evidence_ref,
+    };
+    let signed = sign_artifact_auth_for_dual_run(&adapter, &MoltenArtifactAuthShellInput {
+        statement,
+        handle: &key.handle.handle,
+        signing_policy_ref: &test_ref("artifact-auth-sign-policy"),
+    })
+    .expect("exact standalone signature");
+
+    let mut denied_signing_request = request.clone();
+    denied_signing_request.observed.payload_ref = test_ref("denied-legacy-payload");
+    let denied_signing_statement = MoltenArtifactAuthStatementInput {
+        profile: &adapter.profile().profile,
+        request: &denied_signing_request,
+        producer_id: statement.producer_id,
+        key_id: statement.key_id,
+        currentness_ref: statement.currentness_ref,
+    };
+    let denied_signing = sign_artifact_auth_for_dual_run(&adapter, &MoltenArtifactAuthShellInput {
+        statement: denied_signing_statement,
+        handle: &key.handle.handle,
+        signing_policy_ref: &test_ref("artifact-auth-sign-policy"),
+    })
+    .expect_err("legacy rejection blocks standalone signing");
+    assert!(denied_signing.to_string().contains("requires an accepted legacy observation"));
+
+    let mut tampered_signature = signed.clone();
+    let mut tampered_bytes = tampered_signature.signature_bytes.clone();
+    tampered_bytes[0] ^= SIGNATURE_TAMPER_MASK;
+    tampered_signature.replace_signature_bytes_for_test(tampered_bytes);
+    let tampered =
+        evaluate_artifact_auth_shell_dual_run(&statement, &tampered_signature).expect("tampered signature decision");
+    assert_eq!(tampered.cryptographic_failure_code.as_deref(), Some("ed25519.signature_invalid"));
+    assert!(tampered.dual_run.compatibility.decision_drift);
+    assert!(!tampered.dual_run.compatibility.case_explained);
+    assert!(!tampered.dual_run.compatibility.standalone_authority_admitted);
+
+    let mut wrong_preimage_request = request.clone();
+    wrong_preimage_request.expected_domain.payload_ref = test_ref("different-receipt");
+    wrong_preimage_request.observed.payload_ref = wrong_preimage_request.expected_domain.payload_ref.clone();
+    let wrong_preimage_input = MoltenArtifactAuthStatementInput {
+        profile: &adapter.profile().profile,
+        request: &wrong_preimage_request,
+        producer_id: statement.producer_id,
+        key_id: statement.key_id,
+        currentness_ref: statement.currentness_ref,
+    };
+    let wrong_statement = map_artifact_auth_statement(&wrong_preimage_input).expect("wrong preimage statement");
+    let wrong_statement_bytes =
+        artifact_auth_core::canonical_statement_bytes(&wrong_statement).expect("canonical statement");
+    let mut wrong_preimage_carrier = signed.clone();
+    wrong_preimage_carrier.statement_ref = crate::preserves_rail::content_ref_from_bytes(&wrong_statement_bytes);
+    let wrong_preimage = evaluate_artifact_auth_shell_dual_run(&wrong_preimage_input, &wrong_preimage_carrier)
+        .expect("wrong preimage decision");
+    assert_eq!(wrong_preimage.cryptographic_failure_code.as_deref(), Some("ed25519.signature_invalid"));
+    assert_eq!(wrong_preimage.dual_run.legacy.kind, VerificationDecisionKind::Accept);
+    assert!(wrong_preimage.dual_run.compatibility.decision_drift);
+
+    let mut wrong_key_carrier = signed.clone();
+    wrong_key_carrier.replace_public_key_for_test(iroh::SecretKey::generate().public());
+    let wrong_key = evaluate_artifact_auth_shell_dual_run(&statement, &wrong_key_carrier).expect("wrong key decision");
+    assert_eq!(wrong_key.cryptographic_failure_code.as_deref(), Some("ed25519.signature_invalid"));
+    assert!(!wrong_key.dual_run.compatibility.identity_drift_explained);
+    assert!(wrong_key.dual_run.compatibility.blockers.contains(&"identity-drift".to_string()));
+
+    let mut malformed_carrier = signed.clone();
+    malformed_carrier.replace_signature_bytes_for_test(vec![0_u8; MALFORMED_SIGNATURE_BYTES]);
+    let malformed =
+        evaluate_artifact_auth_shell_dual_run(&statement, &malformed_carrier).expect("malformed signature decision");
+    assert_eq!(malformed.cryptographic_failure_code.as_deref(), Some("ed25519.signature_length"));
+
+    let mut carrier_drift = signed.clone();
+    carrier_drift.signature_ref = test_ref("substituted-signature");
+    let drift =
+        evaluate_artifact_auth_shell_dual_run(&statement, &carrier_drift).expect_err("carrier identity drift denied");
+    assert!(drift.to_string().contains("carrier signature identity mismatch"));
+
+    let mut revoked_request = request.clone();
+    revoked_request.signer_currentness = KeyCurrentness::Revoked;
+    let revoked_input = MoltenArtifactAuthStatementInput {
+        profile: &adapter.profile().profile,
+        request: &revoked_request,
+        producer_id: statement.producer_id,
+        key_id: statement.key_id,
+        currentness_ref: statement.currentness_ref,
+    };
+    let revoked = evaluate_artifact_auth_shell_dual_run(&revoked_input, &signed).expect("revoked decision");
+    assert_eq!(revoked.dual_run.legacy.kind, VerificationDecisionKind::Deny);
+    assert!(revoked.dual_run.standalone.as_ref().is_some_and(|decision| !decision.passed));
+    assert!(revoked.dual_run.compatibility.case_explained);
+    assert!(revoked.dual_run.compatibility.standalone_failure_causes.contains(&"currentness".to_string()));
+
+    let unknown_currentness = MoltenArtifactAuthStatementInput {
+        currentness_ref: "unknown-currentness",
+        ..statement
+    };
+    let unknown = evaluate_artifact_auth_shell_dual_run(&unknown_currentness, &signed)
+        .expect_err("unknown currentness reference denied");
+    assert!(unknown.to_string().contains("currentness_ref:expected-blake3-ref"));
+
+    let mut unrelated_request = request.clone();
+    unrelated_request.observed.payload_ref = test_ref("legacy-unrelated-payload");
+    let unrelated_input = MoltenArtifactAuthStatementInput {
+        profile: &adapter.profile().profile,
+        request: &unrelated_request,
+        producer_id: statement.producer_id,
+        key_id: statement.key_id,
+        currentness_ref: statement.currentness_ref,
+    };
+    let unrelated = evaluate_artifact_auth_shell_dual_run(&unrelated_input, &wrong_key_carrier)
+        .expect("unrelated false parity decision");
+    assert_eq!(unrelated.dual_run.legacy.kind, VerificationDecisionKind::Deny);
+    assert!(unrelated.dual_run.standalone.as_ref().is_some_and(|decision| !decision.passed));
+    assert!(!unrelated.dual_run.compatibility.case_explained);
+    assert!(unrelated.dual_run.compatibility.blockers.contains(&"unrelated-rejection-causes".to_string()));
+    assert!(!unrelated.dual_run.compatibility.standalone_authority_admitted);
+}
+
 fn temp_dir(name: &str) -> std::path::PathBuf {
     crate::test_support::cleanup_stale_molten_temp_dirs();
     static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

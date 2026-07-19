@@ -9,8 +9,8 @@
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "e9220dfe9ad04cf11f35651bcb6016bc8eb0e2dd93c19be62e9626654efbd6bc",
-  "inputsHash": "5affffe9d343555cd1f714f662276ee2b72430dce96930db82d77cc5a477deb7",
+  "cargoLockHash": "e4a442cb06c9f31737e782b72448d79ef8fbb3fcf5a8e590688253b802db9bf2",
+  "inputsHash": "922a89e2d408bce93c5a5ab3992b00b8aa4d3498db0350bd8f488e03ffd882d6",
   "crates": {
     "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0": {
       "crateName": "artifact-auth-core",

@@ -6,6 +6,7 @@ The sparse `vendor/` directory records upstream `Cargo.toml.orig` material rathe
 
 | Paths | Upstream terms recorded by the package or upstream workspace |
 |---|---|
+| Cargo packages `artifact-auth-core` and `artifact-auth-ed25519` from revision `799459346d5416fbd7b9f55840a7371441b55afa` | MIT OR Apache-2.0 |
 | `vendor/datafusion-*` | Apache-2.0; ASF source headers remain authoritative |
 | `vendor/iroh*`, `vendor/portmapper-*`, `vendor/postcard`, `vendor/genawaiter-*` | MIT OR Apache-2.0 (legacy `MIT/Apache-2.0` spelling is equivalent package metadata) |
 | `vendor/madsim-*`, `vendor/swarm-discovery` | Apache-2.0 |

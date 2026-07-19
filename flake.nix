@@ -96,23 +96,40 @@
         maybeCleanLocalGitSource =
           src: if pkgs.lib.hasInfix "/../" (toString src) then null else cleanLocalGitSource src;
         artifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa";
-        artifactAuthCargoDependency =
+        artifactAuthRepository = "ssh://git@github.com/OnixResearch/artifact-auth.git";
+        artifactAuthRootDependencies = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).dependencies;
+        artifactAuthCoreDependency =
           (builtins.fromTOML (builtins.readFile ./crates/molten-core/Cargo.toml)).dependencies.artifact-auth-core;
-        artifactAuthLockPackages = builtins.filter (
-          package: package.name == "artifact-auth-core"
-        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        artifactAuthCargoDependencies = [
+          artifactAuthRootDependencies.artifact-auth-core
+          artifactAuthRootDependencies.artifact-auth-ed25519
+          artifactAuthCoreDependency
+        ];
+        artifactAuthRequiredPackages = [
+          "artifact-auth-core"
+          "artifact-auth-ed25519"
+        ];
         artifactAuthExpectedLockSource =
           "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=${artifactAuthRevision}#${artifactAuthRevision}";
+        artifactAuthLockPackages = builtins.filter (
+          package: (package.source or "") == artifactAuthExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        artifactAuthLockedPackageNames = builtins.map (package: package.name) artifactAuthLockPackages;
         artifactAuthWorkspace = builtins.fromTOML (builtins.readFile (artifact-auth-src + "/Cargo.toml"));
         artifactAuthSource =
           assert pkgs.lib.assertMsg (
-            artifactAuthCargoDependency.git == "ssh://git@github.com/OnixResearch/artifact-auth.git"
-            && artifactAuthCargoDependency.rev == artifactAuthRevision
+            builtins.all (
+              dependency:
+              dependency.git == artifactAuthRepository
+              && dependency.rev == artifactAuthRevision
+            ) artifactAuthCargoDependencies
             && artifact-auth-src.rev == artifactAuthRevision
-            && builtins.length artifactAuthLockPackages == 1
-            && (builtins.head artifactAuthLockPackages).source == artifactAuthExpectedLockSource
+            && builtins.length artifactAuthLockPackages == builtins.length artifactAuthRequiredPackages
+            && builtins.all (
+              packageName: builtins.elem packageName artifactAuthLockedPackageNames
+            ) artifactAuthRequiredPackages
             && artifactAuthWorkspace.workspace.package.license == "MIT OR Apache-2.0"
-          ) "Molten artifact-auth Cargo/Nix source identity, uniqueness, or license drifted";
+          ) "Molten artifact-auth Cargo/Nix source identity, uniqueness, package set, or license drifted";
           artifact-auth-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
           "ssh://git@github.com/OnixResearch/artifact-auth.git#${artifactAuthRevision}" =

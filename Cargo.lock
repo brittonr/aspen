@@ -214,6 +214,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "artifact-auth-ed25519"
+version = "0.1.0"
+source = "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#799459346d5416fbd7b9f55840a7371441b55afa"
+dependencies = [
+ "artifact-auth-core",
+ "blake3",
+ "ed25519-dalek 2.2.0",
+]
+
+[[package]]
 name = "ascii-canvas"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1371,7 +1381,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3640,6 +3650,8 @@ dependencies = [
 name = "molten"
 version = "0.1.0"
 dependencies = [
+ "artifact-auth-core",
+ "artifact-auth-ed25519",
  "bao-tree",
  "basalt",
  "blake3",

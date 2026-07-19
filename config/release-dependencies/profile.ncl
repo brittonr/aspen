@@ -1,4 +1,5 @@
 let Contracts = import "contracts.ncl" in
+let ArtifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa" in
 let ValenceRevision = "5f1c2ba5072c6f9622fa59b1af20502985f569fd" in
 let ArchiveNonClaims = [
   "dependency satisfaction proves presented receipt linkage only",
@@ -8,6 +9,28 @@ let ArchiveNonClaims = [
 {
   schema = "molten.release-dependency-profile.v1",
   dependencies = [
+    {
+      manifest_dependency = "artifact-auth-core",
+      package_name = "artifact-auth-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = "ssh://git@github.com/OnixResearch/artifact-auth.git",
+      immutable_revision = ArtifactAuthRevision,
+      nix_input = "artifact-auth-src",
+      transport_policy = "ssh-pinned-nix-archive",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "artifact-auth-ed25519",
+      package_name = "artifact-auth-ed25519",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = "ssh://git@github.com/OnixResearch/artifact-auth.git",
+      immutable_revision = ArtifactAuthRevision,
+      nix_input = "artifact-auth-src",
+      transport_policy = "ssh-pinned-nix-archive",
+      disposition = "runtime",
+    },
     {
       manifest_dependency = "basalt",
       package_name = "basalt",

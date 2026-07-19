@@ -73,9 +73,19 @@ let DistributionContract = {
   ],
   non_claims | Prelude.contracts.NonEmptyUniqueStringArray,
 } in
+let shared_nix_inputs_are_consistent = fun rows =>
+  std.array.all (fun row =>
+    std.array.all (fun candidate =>
+      row.nix_input != candidate.nix_input
+      || (
+        row.source_coordinate == candidate.source_coordinate
+        && row.immutable_revision == candidate.immutable_revision
+      )
+    ) rows
+  ) rows in
 let profile_invariants = fun profile =>
   Prelude.non_empty_distinct_by (fun row => row.manifest_dependency) profile.dependencies
-  && Prelude.non_empty_distinct_by (fun row => row.nix_input) profile.dependencies
+  && shared_nix_inputs_are_consistent profile.dependencies
   && Prelude.non_empty_distinct_by (fun receipt => receipt.id) profile.archive_receipts
   && std.array.length profile.dependencies <= MaximumDependencyRows
   && std.array.length profile.archive_receipts <= MaximumArchiveReceipts in

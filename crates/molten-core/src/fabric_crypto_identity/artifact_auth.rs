@@ -36,6 +36,15 @@ const ISSUE_CLASS_PARITY: &str = "no-issues";
 const ISSUE_CLASS_MAPPED_REJECTION: &str = "consumer-specific-taxonomy";
 const AUTHORITY_BOUNDARY: &str = "standalone authentication is diagnostic input only; Molten retains key generation, signing, storage, capability, federation, transport, runtime, evidence, deployment, and release authority";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoltenArtifactAuthStatementInput<'a> {
+    pub profile: &'a CryptoAdapterProfile,
+    pub request: &'a VerificationRequest,
+    pub producer_id: &'a str,
+    pub key_id: &'a str,
+    pub currentness_ref: &'a str,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MoltenArtifactAuthObservation<'a> {
     pub profile: &'a CryptoAdapterProfile,
@@ -54,6 +63,7 @@ pub struct MoltenArtifactAuthCompatibility {
     pub decision_drift: bool,
     pub issue_class: String,
     pub mapped_failure_causes: Vec<String>,
+    pub standalone_failure_causes: Vec<String>,
     pub non_claim_drift: bool,
     pub blockers: Vec<String>,
     pub legacy_authoritative: bool,
@@ -95,10 +105,41 @@ pub fn evaluate_artifact_auth_dual_run(observation: &MoltenArtifactAuthObservati
     }
 }
 
+// r[impl molten.artifact_auth_shell.exact_verification]
+/// Map Molten observations to the exact signer-specific standalone statement.
+///
+/// This pure mapping performs no signing or verification and never consumes the
+/// legacy cryptographic decision as standalone proof.
+pub fn map_artifact_auth_statement(
+    input: &MoltenArtifactAuthStatementInput<'_>,
+) -> Result<ArtifactStatement, Vec<String>> {
+    let (_, _, statement) = map_statement_and_policy(input)?;
+    Ok(statement)
+}
+
 fn map_observation(
     observation: &MoltenArtifactAuthObservation<'_>,
 ) -> Result<(AuthenticationPolicy, AuthenticationScope, Vec<SignatureEvidence>), Vec<String>> {
-    let request = observation.request;
+    let input = MoltenArtifactAuthStatementInput {
+        profile: observation.profile,
+        request: observation.request,
+        producer_id: observation.producer_id,
+        key_id: observation.key_id,
+        currentness_ref: observation.currentness_ref,
+    };
+    let (policy, scope, statement) = map_statement_and_policy(&input)?;
+    let evidence = vec![SignatureEvidence {
+        statement,
+        generation: observation.request.observed.generation,
+        cryptographic: observation.standalone_cryptographic.clone(),
+    }];
+    Ok((policy, scope, evidence))
+}
+
+fn map_statement_and_policy(
+    input: &MoltenArtifactAuthStatementInput<'_>,
+) -> Result<(AuthenticationPolicy, AuthenticationScope, ArtifactStatement), Vec<String>> {
+    let request = input.request;
     let key_identity =
         artifact_ref(ED25519_PUBLIC_KEY_PROFILE_V1, &request.observed.signer_public_ref, "observed.signer_public_ref")?;
     let subject = artifact_ref(
@@ -111,14 +152,14 @@ fn map_observation(
         &request.expected_domain.verifier_context_ref,
         "expected_domain.verifier_context_ref",
     )?;
-    let currentness_ref = artifact_ref(MOLTEN_CURRENTNESS_PROFILE, observation.currentness_ref, "currentness_ref")?;
-    if observation.profile.algorithm != CryptoAlgorithm::Ed25519Iroh {
+    let currentness_ref = artifact_ref(MOLTEN_CURRENTNESS_PROFILE, input.currentness_ref, "currentness_ref")?;
+    if input.profile.algorithm != CryptoAlgorithm::Ed25519Iroh {
         return Err(vec!["unsupported-production-algorithm".to_string()]);
     }
     let scope = AuthenticationScope {
         domain: request.expected_domain.domain_id.clone(),
         purpose: request.expected_domain.purpose.as_str().to_string(),
-        profile_id: observation.profile.profile_id.clone(),
+        profile_id: input.profile.profile_id.clone(),
         subject,
         parents: Vec::new(),
         verifier_context,
@@ -126,30 +167,25 @@ fn map_observation(
     let statement = ArtifactStatement {
         schema: STATEMENT_SCHEMA_V1.to_string(),
         scope: scope.clone(),
-        producer_id: observation.producer_id.to_string(),
-        key_id: observation.key_id.to_string(),
+        producer_id: input.producer_id.to_string(),
+        key_id: input.key_id.to_string(),
         key_identity: key_identity.clone(),
     };
     let policy = AuthenticationPolicy {
         schema: POLICY_SCHEMA_V1.to_string(),
-        profile_id: observation.profile.profile_id.clone(),
+        profile_id: input.profile.profile_id.clone(),
         threshold: STANDALONE_THRESHOLD_ONE,
         trusted_keys: vec![TrustedKeyObservation {
-            producer_id: observation.producer_id.to_string(),
-            key_id: observation.key_id.to_string(),
-            key_identity: key_identity.clone(),
+            producer_id: input.producer_id.to_string(),
+            key_id: input.key_id.to_string(),
+            key_identity,
             allowed_purposes: vec![request.expected_domain.purpose.as_str().to_string()],
             generation: request.signer_generation,
             currentness: map_currentness(request.signer_currentness),
             currentness_ref,
         }],
     };
-    let evidence = vec![SignatureEvidence {
-        statement,
-        generation: request.observed.generation,
-        cryptographic: observation.standalone_cryptographic.clone(),
-    }];
-    Ok((policy, scope, evidence))
+    Ok((policy, scope, statement))
 }
 
 fn artifact_ref(profile: &str, value: &str, field: &str) -> Result<ArtifactRef, Vec<String>> {
@@ -179,6 +215,7 @@ fn compare_decisions(
     mut blockers: Vec<String>,
 ) -> MoltenArtifactAuthCompatibility {
     let causes = legacy_failure_causes(observation.profile, observation.request);
+    let standalone_causes = standalone.map_or_else(BTreeSet::new, standalone_failure_causes);
     let legacy_passed = legacy.kind == VerificationDecisionKind::Accept;
     let standalone_passed = standalone.is_some_and(|decision| decision.passed);
     let decision_drift = standalone.is_some() && legacy_passed != standalone_passed;
@@ -190,6 +227,9 @@ fn compare_decisions(
     }
     if !legacy_passed && !standalone_passed && causes.is_empty() {
         blockers.push("unclassified-rejection".to_string());
+    }
+    if !legacy_passed && !standalone_passed && causes.is_disjoint(&standalone_causes) {
+        blockers.push("unrelated-rejection-causes".to_string());
     }
     let identity_drift_explained = observation
         .request
@@ -218,6 +258,7 @@ fn compare_decisions(
         decision_drift,
         issue_class: issue_class.to_string(),
         mapped_failure_causes: causes.into_iter().collect(),
+        standalone_failure_causes: standalone_causes.into_iter().collect(),
         non_claim_drift,
         blockers,
         legacy_authoritative: true,
@@ -229,6 +270,26 @@ fn compare_decisions(
 fn legacy_failure_causes(profile: &CryptoAdapterProfile, request: &VerificationRequest) -> BTreeSet<String> {
     let decision = evaluate_verification(profile, request);
     decision.issues.iter().map(issue_class).map(str::to_string).collect()
+}
+
+fn standalone_failure_causes(decision: &AuthenticationDecision) -> BTreeSet<String> {
+    decision.issues.iter().map(|issue| standalone_issue_class(&issue.code)).collect()
+}
+
+fn standalone_issue_class(issue_code: &str) -> String {
+    if issue_code.contains("crypto") || issue_code.contains("signature") || issue_code.contains("ed25519") {
+        return "signature".to_string();
+    }
+    if issue_code.contains("current") || issue_code.contains("revoked") || issue_code.contains("superseded") {
+        return "currentness".to_string();
+    }
+    if issue_code.contains("generation") {
+        return "generation".to_string();
+    }
+    if issue_code.contains("identity") || issue_code.contains("key") {
+        return "signer-identity".to_string();
+    }
+    "standalone-policy".to_string()
 }
 
 fn issue_class(issue: &CryptoIdentityIssue) -> &'static str {

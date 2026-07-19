@@ -81,6 +81,11 @@ struct KeyRecord {
     secret_key: iroh::SecretKey,
 }
 
+pub(crate) struct ExactArtifactAuthSignature {
+    pub public_key: String,
+    pub signature_bytes: Vec<u8>,
+}
+
 pub struct IrohEd25519FileAdapter<'a> {
     namespace: &'a NodeStateNamespace,
     profile: CanonicalCryptoProfile,
@@ -245,6 +250,41 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         let record = self.load_current_record(requested_handle.purpose)?;
         let signature = record.secret_key.sign(&domain.bytes).to_bytes().to_vec();
         canonical_signature_outcome(&self.profile, &plan, domain, signature)
+    }
+
+    // r[impl molten.artifact_auth_shell.exact_verification]
+    pub(crate) fn sign_artifact_auth_statement(
+        &self,
+        requested_handle: &OpaqueKeyHandle,
+        statement: &artifact_auth_core::ArtifactStatement,
+        policy_ref: &str,
+    ) -> Result<ExactArtifactAuthSignature> {
+        require_blake3_ref("artifact-auth signing policy", policy_ref)?;
+        let current = self.resolve_or_generate(requested_handle.purpose, policy_ref, false)?;
+        require_current_handle(requested_handle, &current.handle.handle)?;
+        if statement.scope.profile_id != self.profile.profile.profile_id {
+            return Err(MoltenError::invalid_harness("artifact-auth statement profile does not match the key profile"));
+        }
+        if statement.scope.purpose != requested_handle.purpose.as_str() {
+            return Err(MoltenError::invalid_harness("artifact-auth statement purpose does not match the key purpose"));
+        }
+        let record = self.load_current_record(requested_handle.purpose)?;
+        let public_key = record.secret_key.public();
+        let key_identity = artifact_auth_ed25519::public_key_identity(public_key.as_bytes());
+        if statement.key_identity != key_identity {
+            return Err(MoltenError::invalid_harness(
+                "artifact-auth statement full-key identity does not match the current key",
+            ));
+        }
+        let statement_bytes = artifact_auth_core::canonical_statement_bytes(statement)
+            .map_err(|_| MoltenError::invalid_harness("artifact-auth statement is not canonicalizable"))?;
+        let signature_bytes = record.secret_key.sign(&statement_bytes).to_bytes().to_vec();
+        debug_assert_eq!(public_key.as_bytes().len(), artifact_auth_ed25519::ED25519_PUBLIC_KEY_BYTES);
+        debug_assert_eq!(signature_bytes.len(), artifact_auth_ed25519::ED25519_SIGNATURE_BYTES);
+        Ok(ExactArtifactAuthSignature {
+            public_key: public_key.to_string(),
+            signature_bytes,
+        })
     }
 
     // r[impl molten.crypto_identity.canonical_signature_binding]
