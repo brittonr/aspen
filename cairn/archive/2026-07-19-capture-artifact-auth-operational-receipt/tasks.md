@@ -8,4 +8,4 @@
 ## Phase 2: Validation
 
 - [x] [parallel] V1 Run focused Cargo, rustfmt, strict Clippy, Octet, and Cairn gates. r[molten.artifact_auth_operational_receipt.replay]
-- [ ] [serial] V2 Run full workspace and Nix gates; sync and archive requirements. r[molten.artifact_auth_operational_receipt.authority]
+- [x] [serial] V2 Run full workspace and Nix gates; sync and archive requirements. r[molten.artifact_auth_operational_receipt.authority]
