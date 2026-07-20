@@ -8,11 +8,27 @@ use molten_core::fabric_crypto_identity::VerificationDecisionKind;
 use molten_core::fabric_crypto_identity::evaluate_artifact_auth_dual_run;
 use molten_core::fabric_crypto_identity::evaluate_verification;
 use molten_core::fabric_crypto_identity::map_artifact_auth_statement;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::IrohEd25519FileAdapter;
 use crate::error::MoltenError;
 use crate::error::Result;
+use crate::node_state::MAX_NODE_STATE_FILE_BYTES;
+use crate::node_state::NodeStateNamespace;
+use crate::node_state::NodeStateNamespaceKind;
+use crate::node_state::NodeStatePath;
 use crate::preserves_rail::content_ref_from_bytes;
+
+mod operational;
+
+pub use operational::MoltenArtifactAuthOperationalReceipt;
+pub use operational::artifact_auth_operational_receipt_path;
+pub use operational::build_artifact_auth_operational_receipt;
+pub use operational::read_artifact_auth_operational_receipt;
+pub use operational::replay_artifact_auth_operational_receipt;
+pub use operational::validate_artifact_auth_operational_receipt;
+pub use operational::write_artifact_auth_operational_receipt;
 
 const HEX_DIGIT_COUNT: usize = 16;
 const HEX_DIGITS: &[u8; HEX_DIGIT_COUNT] = b"0123456789abcdef";
@@ -27,7 +43,8 @@ pub struct MoltenArtifactAuthShellInput<'a> {
     pub signing_policy_ref: &'a str,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SignedArtifactAuthStatement {
     pub statement_ref: String,
     pub public_key: String,

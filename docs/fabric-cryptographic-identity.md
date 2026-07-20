@@ -42,6 +42,14 @@ The shell pilot calls the pure `map_artifact_auth_statement` function, canonical
 
 Compatibility output classifies the intentionally distinct canonical preimages, full-key identity, decisions, consumer-specific issue taxonomy, mandatory non-claims, and unrelated-failure false parity. Real shell verification does not itself admit authority: `legacy_authoritative` and `rollback_available` remain true, while `standalone_authority_admitted` remains false. Key generation/storage/signing permission, currentness, membership, capability, transport, runtime, evidence composition, deployment, lifecycle, and release gates remain Molten-owned. A separate reviewed authority-admission change still requires current operational evidence beyond this pilot.
 
+### Capability-rooted operational receipt
+
+After exact standalone verification passes, Molten can construct a deterministic BLAKE3-bound operational receipt over the statement, full public key, signature, purpose-scoped key handle and generation, currentness evidence, signing-policy reference, dual-run outcome, authority flags, and explicit non-claim. Publication is allowed only through the capability-rooted `Receipts` node-state namespace at `artifact-auth/<statement-digest>.json`; secrets, identity, ledger, or other namespaces are rejected. Existing receipts are immutable, malformed or oversized content fails closed, and readback must match before publication returns.
+
+Replay reopens both node state and the production capability-file adapter, resolves the current purpose-matched key from actual persisted adapter state, and compares its opaque handle, generation, currentness evidence, and signing policy before independently verifying the persisted standalone carrier. Rotation, durable revocation markers, missing key state, wrong namespace, carrier drift, and receipt tampering block replay.
+
+The receipt is operational evidence for local capability-file state only. It grants no membership, capability, federation, transport, storage, lifecycle, signing-policy, deployment, release, or runtime authority. Passing replay preserves `legacy_authoritative = true`, `standalone_authority_admitted = false`, and `rollback_available = true`; cross-consumer parity review remains required before a separate authority-admission change.
+
 ### Update and rollback
 
 To update, review the candidate standalone release and `config/consumers/molten.ncl`, change all exact Cargo and Nix revisions together, regenerate `Cargo.lock` with Cargo and both unit2nix plans with the pinned tool, then rerun focused identity tests, strict Clippy/Octet, Cairn validation, and the Nix checks. Never edit either lock manually.
