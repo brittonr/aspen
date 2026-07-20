@@ -1,0 +1,13 @@
+{
+  "key_generation": 1,
+  "legacy_authoritative": true,
+  "node_receipt_path": "artifact-auth/7877acf0fdc7e8f9a9d1d6133323506d2c493a085246ab4bcd50e6ffe24a7adb.json",
+  "non_claim": "non-production node-state canary evidence does not grant membership, capability, federation, transport, lifecycle, or release authority",
+  "phase": "capture",
+  "receipt_blake3": "blake3:31b380d81cc4f7559d63a775d6012b4fadd8ca8550e5a561bacff6b9f0c8f4de",
+  "result": "pass",
+  "rollback_available": true,
+  "schema": "molten-artifact-auth-canary-summary-v1",
+  "standalone_authority_admitted": false,
+  "statement_ref": "blake3:7877acf0fdc7e8f9a9d1d6133323506d2c493a085246ab4bcd50e6ffe24a7adb"
+}

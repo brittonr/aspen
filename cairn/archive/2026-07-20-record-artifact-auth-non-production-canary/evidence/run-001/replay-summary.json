@@ -1,0 +1,10 @@
+{
+  "legacy_authoritative": true,
+  "phase": "restart-replay",
+  "result": "pass",
+  "rollback_available": true,
+  "schema": "molten-artifact-auth-canary-summary-v1",
+  "standalone_authority_admitted": false,
+  "standalone_passed": true,
+  "statement_ref": "blake3:7877acf0fdc7e8f9a9d1d6133323506d2c493a085246ab4bcd50e6ffe24a7adb"
+}

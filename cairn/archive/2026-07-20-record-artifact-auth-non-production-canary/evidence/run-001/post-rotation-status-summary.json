@@ -1,0 +1,10 @@
+{
+  "current_generation": 2,
+  "handle_changed": true,
+  "phase": "fresh-process-post-rotation-status",
+  "receipt_generation": 1,
+  "result": "pass",
+  "rollback_available": true,
+  "schema": "molten-artifact-auth-canary-summary-v1",
+  "standalone_authority_admitted": false
+}

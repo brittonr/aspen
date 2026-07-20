@@ -1,0 +1,10 @@
+{
+  "error": "invalid harness artifact: artifact-auth operational receipt current key state drifted",
+  "new_generation": 2,
+  "old_generation": 1,
+  "phase": "rotation",
+  "result": "expected-denial",
+  "rollback_available": true,
+  "schema": "molten-artifact-auth-canary-summary-v1",
+  "standalone_authority_admitted": false
+}
