@@ -6,10 +6,10 @@
 
 ## Phase 2: Capability-scoped Iroh shell
 
-- [ ] [serial] Implement a thin long-lived Iroh listener shell that consumes only admitted capability inputs, registers the exact ALPN, publishes a canonical endpoint descriptor, accepts bounded sessions, and delegates all semantic transitions to the pure core. r[molten.fabric_transport.cross_process_listener] r[molten.fabric_transport.cross_process_session]
-- [ ] [serial] Implement the client session shell that imports an exact endpoint descriptor, validates expected bindings before dial, exchanges canonical bounded frames through explicit acknowledgement boundaries, and exposes only canonical events to protocol consumers. r[molten.fabric_transport.cross_process_endpoint] r[molten.fabric_transport.cross_process_session]
+- [x] [serial] Implement a thin long-lived Iroh listener shell that consumes only admitted capability inputs, registers the exact ALPN, publishes a canonical endpoint descriptor, accepts bounded sessions, and delegates all semantic transitions to the pure core. r[molten.fabric_transport.cross_process_listener] r[molten.fabric_transport.cross_process_session]
+- [x] [serial] Implement the client session shell that imports an exact endpoint descriptor, validates expected bindings before dial, exchanges canonical bounded frames through explicit acknowledgement boundaries, and exposes only canonical events to protocol consumers. r[molten.fabric_transport.cross_process_endpoint] r[molten.fabric_transport.cross_process_session]
 - [ ] [parallel] Add cancellation, drain, stale-callback fencing, replacement, timeout, disconnect, malformed-frame, backpressure, partial-write/read, close-failure, and cleanup handling with explicit terminal outcomes and no automatic retry. r[molten.fabric_transport.cross_process_listener] r[molten.fabric_transport.cross_process_session]
-- [ ] [parallel] Add structural guards proving the shell exposes no Iroh/QUIC/socket/executor handles, performs no ambient socket or endpoint discovery, and cannot silently substitute a protocol, profile, endpoint, or simulation path. r[molten.fabric_transport.cross_process_endpoint] r[molten.fabric_transport.cross_process_validation]
+- [x] [parallel] Add structural guards proving the shell exposes no Iroh/QUIC/socket/executor handles, performs no ambient socket or endpoint discovery, and cannot silently substitute a protocol, profile, endpoint, or simulation path. r[molten.fabric_transport.cross_process_endpoint] r[molten.fabric_transport.cross_process_validation]
 
 ## Phase 3: Distinct-process conformance and evidence
 

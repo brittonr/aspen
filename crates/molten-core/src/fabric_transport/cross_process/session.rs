@@ -96,6 +96,7 @@ pub struct CrossProcessSessionState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CrossProcessSessionCommandKind {
     BeginDial,
+    BeginAccept,
     Established,
     QueueFrame,
     FrameSubmitted,
@@ -113,6 +114,7 @@ impl CrossProcessSessionCommandKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::BeginDial => "begin-dial",
+            Self::BeginAccept => "begin-accept",
             Self::Established => "established",
             Self::QueueFrame => "queue-frame",
             Self::FrameSubmitted => "frame-submitted",
@@ -131,6 +133,10 @@ impl CrossProcessSessionCommandKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CrossProcessSessionCommand {
     BeginDial {
+        observed_descriptor_ref: String,
+        callback_generation: u64,
+    },
+    BeginAccept {
         observed_descriptor_ref: String,
         callback_generation: u64,
     },
@@ -171,6 +177,7 @@ impl CrossProcessSessionCommand {
     pub const fn kind(&self) -> CrossProcessSessionCommandKind {
         match self {
             Self::BeginDial { .. } => CrossProcessSessionCommandKind::BeginDial,
+            Self::BeginAccept { .. } => CrossProcessSessionCommandKind::BeginAccept,
             Self::Established { .. } => CrossProcessSessionCommandKind::Established,
             Self::QueueFrame { .. } => CrossProcessSessionCommandKind::QueueFrame,
             Self::FrameSubmitted { .. } => CrossProcessSessionCommandKind::FrameSubmitted,
@@ -190,6 +197,7 @@ impl CrossProcessSessionCommand {
 pub enum SessionShellAction {
     None,
     Dial,
+    Accept,
     DeliverEstablished,
     QueueFrame,
     WriteFrame,
@@ -259,7 +267,25 @@ pub fn apply_cross_process_session_command(
         CrossProcessSessionCommand::BeginDial {
             observed_descriptor_ref,
             callback_generation,
-        } => transition_begin_dial(state, command.kind(), observed_descriptor_ref, *callback_generation),
+        } => transition_begin(
+            state,
+            command.kind(),
+            observed_descriptor_ref,
+            *callback_generation,
+            EndpointParticipantRole::Client,
+            SessionShellAction::Dial,
+        ),
+        CrossProcessSessionCommand::BeginAccept {
+            observed_descriptor_ref,
+            callback_generation,
+        } => transition_begin(
+            state,
+            command.kind(),
+            observed_descriptor_ref,
+            *callback_generation,
+            EndpointParticipantRole::Listener,
+            SessionShellAction::Accept,
+        ),
         CrossProcessSessionCommand::Established {
             observed_peer_context_ref,
             callback_generation,
@@ -294,18 +320,23 @@ pub fn apply_cross_process_session_command(
     }
 }
 
-fn transition_begin_dial(
+fn transition_begin(
     state: &CrossProcessSessionState,
     command: CrossProcessSessionCommandKind,
     observed_descriptor_ref: &str,
     callback_generation: u64,
+    required_role: EndpointParticipantRole,
+    action: SessionShellAction,
 ) -> Result<CrossProcessSessionTransition, Vec<CrossProcessTransportIssue>> {
     require_session_phase(state, command, &[CrossProcessSessionPhase::Planned])?;
     validate_session_callback(state, callback_generation)?;
+    if state.identity.local_role != required_role {
+        return Err(vec![CrossProcessTransportIssue::ParticipantRoleMismatch]);
+    }
     if observed_descriptor_ref != state.identity.descriptor_ref {
         return Err(vec![CrossProcessTransportIssue::EndpointIdentityMismatch]);
     }
-    applied_session(state, CrossProcessSessionPhase::Dialing, SessionShellAction::Dial)
+    applied_session(state, CrossProcessSessionPhase::Dialing, action)
 }
 
 fn transition_established(
@@ -406,6 +437,8 @@ fn transition_receive_frame(
     validate_frame_size(state, payload_bytes)?;
     let mut next = state.clone();
     next.frames_received = checked_increment(state.frames_received).map_err(|issue| vec![issue])?;
+    next.delivery = DeliveryOutcome::Delivered;
+    next.retry = RetryDisposition::NotApplicable;
     Ok(CrossProcessSessionTransition {
         next,
         action: SessionShellAction::DeliverFrame,

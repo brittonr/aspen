@@ -556,6 +556,29 @@ fn session_accounts_queue_submission_acknowledgement_and_cleanup() {
 // r[verify molten.fabric_transport.cross_process_session]
 // r[verify molten.fabric_transport.cross_process_validation]
 #[test]
+fn session_role_binding_denies_client_accept_and_listener_dial_substitution() {
+    let client = plan_cross_process_session(&dial_plan(), SESSION_REF, EndpointParticipantRole::Client)
+        .expect("client session plan");
+    let issues = apply_cross_process_session_command(&client, &CrossProcessSessionCommand::BeginAccept {
+        observed_descriptor_ref: DESCRIPTOR_REF.to_string(),
+        callback_generation: GENERATION,
+    })
+    .expect_err("client role cannot accept");
+    assert!(issues.contains(&CrossProcessTransportIssue::ParticipantRoleMismatch));
+
+    let listener = plan_cross_process_session(&dial_plan(), SESSION_REF, EndpointParticipantRole::Listener)
+        .expect("listener session plan");
+    let issues = apply_cross_process_session_command(&listener, &CrossProcessSessionCommand::BeginDial {
+        observed_descriptor_ref: DESCRIPTOR_REF.to_string(),
+        callback_generation: GENERATION,
+    })
+    .expect_err("listener role cannot dial");
+    assert!(issues.contains(&CrossProcessTransportIssue::ParticipantRoleMismatch));
+}
+
+// r[verify molten.fabric_transport.cross_process_session]
+// r[verify molten.fabric_transport.cross_process_validation]
+#[test]
 fn session_denies_stale_oversized_and_misaccounted_frames_and_preserves_uncertainty() {
     let active = active_session();
     let issues = apply_cross_process_session_command(&active, &CrossProcessSessionCommand::QueueFrame {

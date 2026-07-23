@@ -5,10 +5,12 @@
 
 mod adapters;
 mod canonical;
+mod cross_process;
 
 #[cfg(test)]
 mod tests;
 
 pub use adapters::*;
 pub use canonical::*;
+pub use cross_process::*;
 pub use molten_core::fabric_transport::*;
