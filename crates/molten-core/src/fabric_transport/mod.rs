@@ -3,10 +3,12 @@
 //! This module owns no sockets, executors, clocks, randomness, or simulator
 //! runtime. Adapter shells submit explicit commands and observed adapter facts.
 
+mod cross_process;
 mod transition;
 
 use std::collections::BTreeMap;
 
+pub use cross_process::*;
 pub use transition::*;
 
 use crate::fabric::valid_blake3_ref;
