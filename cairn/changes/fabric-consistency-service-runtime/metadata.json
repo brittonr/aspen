@@ -1,5 +1,6 @@
 {
   "depends_on": [
+    "fabric-cross-process-transport-shell",
     "fabric-durable-state-ports",
     "fabric-membership-placement-runtime",
     "fabric-time-scheduler-runtime",

@@ -29,13 +29,13 @@
 
 ## Blocker
 
-Phases 2–5 remain blocked on a reusable admitted cross-process transport shell. The
-current `IrohTransportAdapter` owns only `live_loopback_frame`, which creates both
+Phases 2–5 remain blocked on `fabric-cross-process-transport-shell`. The current
+`IrohTransportAdapter` owns only `live_loopback_frame`, which creates both
 endpoints inside one process and returns after one echo. It cannot register a
-long-lived listener, publish or consume an endpoint address, connect distinct
+long-lived listener, publish or consume an endpoint descriptor, connect distinct
 node processes, or route consensus protocol frames between supervised replicas.
 Using it for a multi-replica fixture would therefore be same-process simulation,
 which this change explicitly forbids as production evidence. Resume only after
-the transport port has a bounded cross-process listener/session implementation
+that dependency archives a bounded cross-process listener/session implementation
 and distinct-process conformance evidence; do not substitute ambient sockets or
 fabricated quorum receipts.

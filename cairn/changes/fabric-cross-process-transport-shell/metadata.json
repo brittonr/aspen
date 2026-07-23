@@ -1,0 +1,8 @@
+{
+  "depends_on": [
+    "fabric-transport-session-runtime",
+    "iroh-alpn-routing-registry",
+    "receipt-first-cluster-harness",
+    "system-extension-service-runtime"
+  ]
+}

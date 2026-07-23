@@ -66,13 +66,14 @@ is model-only, production construction denies it, and model construction is expl
 Unknown profiles still deny without fallback, and existing non-claim fixtures remain
 in force.
 
-The live-service phases are blocked at the transport shell rather than at the pure
-Raft transition model. `IrohTransportAdapter::live_loopback_frame` creates a server
-and client endpoint in one process for one bounded echo; it exposes no admitted,
-long-lived listener/session API that separate node processes can bind. Consequently
-it cannot produce the distinct-process transport observations required by this
-change. Treating that loopback as a replica network would violate Decisions 4 and 5.
-The blocker is discharged only by a reusable capability-scoped cross-process Iroh
-listener/client shell with distinct endpoint/process evidence, cancellation, bounded
-reads, cleanup, and no ambient socket fallback. Until then, there is no production
-consensus engine available.
+The live-service phases are blocked on `fabric-cross-process-transport-shell`
+rather than on the pure Raft transition model.
+`IrohTransportAdapter::live_loopback_frame` creates a server and client endpoint in
+one process for one bounded echo; it exposes no admitted, long-lived listener/session
+API that separate node processes can bind. Consequently it cannot produce the
+distinct-process transport observations required by this change. Treating that
+loopback as a replica network would violate Decisions 4 and 5. The dependency must
+archive a reusable capability-scoped cross-process Iroh listener/client shell with
+distinct endpoint/process evidence, cancellation, bounded reads, cleanup, and no
+ambient socket fallback. Until then, there is no production consensus engine
+available.
