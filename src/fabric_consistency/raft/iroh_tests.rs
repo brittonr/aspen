@@ -11,6 +11,7 @@ use crate::fabric_transport::ListenerDrainReason;
 use crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS;
 use crate::fabric_transport::cross_process::tests::client_input;
 use crate::fabric_transport::cross_process::tests::listener;
+use crate::fabric_transport::exchange_cross_process_frame;
 
 const NODE_B: &str = "node-b";
 const POSITIVE_TIMEOUT_SECONDS: u64 = 1;
@@ -33,23 +34,55 @@ async fn canonical_raft_envelope_crosses_admitted_iroh_listener() {
         entropy_ref: test_ref("iroh-election-entropy"),
     })
     .expect("election transition");
-    let envelope = sent_envelope_to(&election, NODE_B);
+    let first_envelope = sent_envelope_to(&election, NODE_B);
+    let second_election = apply_replica_event(&election.next, ReplicaEvent::ElectionTimeout {
+        entropy_ref: test_ref("iroh-second-election-entropy"),
+    })
+    .expect("second election transition");
+    let second_envelope = sent_envelope_to(&second_election, NODE_B);
 
     let mut listener = listener().await;
     let endpoint = listener.handoff().clone();
+    let input = client_input(endpoint);
+    let session_ref = input.session_ref.clone();
     let mut peers = BTreeMap::new();
-    peers.insert(NODE_B.to_string(), client_input(endpoint));
+    peers.insert(NODE_B.to_string(), input);
     let timeout = Duration::from_secs(TEST_TIMEOUT_SECONDS);
     let mut transport = IrohReplicaTransportPort::new(peers, timeout).expect("Raft Iroh transport");
-    let refs = replica_transport_refs(&envelope).expect("transport refs");
+    let mut request_refs = Vec::new();
 
-    let send = transport.send(&envelope);
-    let receive = receive_replica_event(&mut listener, &refs.session_ref, &refs.request_ref, timeout);
+    for envelope in [first_envelope, second_envelope] {
+        let refs = replica_transport_refs(&envelope).expect("transport refs");
+        let send = transport.send(&envelope);
+        let receive = receive_replica_event(&mut listener, &session_ref, timeout);
+        let (send, receive) = tokio::join!(send, receive);
+        let acknowledgement_ref = send.expect("sent Raft frame");
+        let received = receive.expect("received Raft frame");
+
+        assert_eq!(acknowledgement_ref, received.transport_evidence.acknowledgement_ref);
+        assert_eq!(received.transport_evidence.request_ref, refs.request_ref);
+        assert_eq!(received.event, ReplicaEvent::Message { envelope });
+        request_refs.push(refs.request_ref);
+    }
+    assert_ne!(request_refs[0], request_refs[1]);
+    listener.drain_and_close(ListenerDrainReason::OperatorRequest).await.expect("listener cleanup");
+}
+
+// r[verify molten.fabric_consistency.live_service_ports]
+#[tokio::test]
+async fn malformed_raft_payload_is_denied_before_transport_acknowledgement() {
+    let mut listener = listener().await;
+    let endpoint = listener.handoff().clone();
+    let input = client_input(endpoint);
+    let session_ref = input.session_ref.clone();
+    let timeout = Duration::from_secs(TEST_TIMEOUT_SECONDS);
+
+    let send = exchange_cross_process_frame(input, b"not-a-canonical-raft-frame", timeout);
+    let receive = receive_replica_event(&mut listener, &session_ref, timeout);
     let (send, receive) = tokio::join!(send, receive);
-    let acknowledgement_ref = send.expect("sent Raft frame");
-    let received = receive.expect("received Raft frame");
 
-    assert_eq!(acknowledgement_ref, received.transport_evidence.acknowledgement_ref);
-    assert_eq!(received.event, ReplicaEvent::Message { envelope });
+    assert!(send.is_err());
+    assert!(receive.is_err());
+    assert_eq!(listener.state().active_sessions, 0);
     listener.drain_and_close(ListenerDrainReason::OperatorRequest).await.expect("listener cleanup");
 }

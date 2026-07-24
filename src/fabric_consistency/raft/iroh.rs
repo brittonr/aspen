@@ -24,7 +24,6 @@ pub struct ReceivedReplicaEvent {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaTransportRefs {
-    pub session_ref: String,
     pub request_ref: String,
 }
 
@@ -63,14 +62,14 @@ impl ReplicaTransportEffects for IrohReplicaTransportPort {
 pub async fn receive_replica_event(
     listener: &mut IrohCrossProcessListener,
     session_ref: &str,
-    request_ref: &str,
     timeout: Duration,
 ) -> Result<ReceivedReplicaEvent> {
-    let received = listener.accept_one_frame(session_ref, request_ref, timeout).await?;
+    let received = listener.accept_one_derived_frame(session_ref, timeout, derive_replica_request_ref).await?;
     let envelope = parse_canonical_replica_message(&received.payload)?;
+    let refs = replica_transport_refs(&envelope)?;
     let payload_bytes = u64::try_from(received.payload.len())
         .map_err(|_| MoltenError::invalid_harness("live Raft received payload length exceeds u64"))?;
-    if received.evidence.request_ref != request_ref || received.evidence.payload_bytes != payload_bytes {
+    if received.evidence.request_ref != refs.request_ref || received.evidence.payload_bytes != payload_bytes {
         return Err(MoltenError::invalid_harness("live Raft received payload shape does not match transport evidence"));
     }
     Ok(ReceivedReplicaEvent {
@@ -80,10 +79,8 @@ pub async fn receive_replica_event(
 }
 
 pub fn replica_transport_refs(envelope: &ReplicaMessageEnvelope) -> Result<ReplicaTransportRefs> {
-    let message = canonical_replica_message(envelope)?;
     Ok(ReplicaTransportRefs {
-        session_ref: session_ref(&message.envelope_ref, &envelope.from, &envelope.to)?,
-        request_ref: message.envelope_ref,
+        request_ref: canonical_replica_message(envelope)?.envelope_ref,
     })
 }
 
@@ -93,22 +90,17 @@ fn prepare_send(
     envelope: &ReplicaMessageEnvelope,
 ) -> Result<(IrohCrossProcessClientInput, CanonicalReplicaMessage, Duration)> {
     let message = canonical_replica_message(envelope)?;
-    let refs = replica_transport_refs(envelope)?;
     let mut input = peers
         .get(&envelope.to)
         .cloned()
         .ok_or_else(|| MoltenError::invalid_harness("live Raft Iroh transport has no admitted endpoint for peer"))?;
-    input.request_ref = refs.request_ref;
-    input.session_ref = refs.session_ref;
+    input.request_ref.clone_from(&message.envelope_ref);
     Ok((input, message, timeout))
 }
 
-fn session_ref(message_ref: &str, from: &str, to: &str) -> Result<String> {
-    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-transport-session-v1", vec![
-        crate::preserves_rail::string(message_ref),
-        crate::preserves_rail::string(from),
-        crate::preserves_rail::string(to),
-    ]))
+fn derive_replica_request_ref(payload: &[u8]) -> Result<String> {
+    let envelope = parse_canonical_replica_message(payload)?;
+    Ok(canonical_replica_message(&envelope)?.envelope_ref)
 }
 
 fn validate_peer_id(peer: &str) -> Result<()> {

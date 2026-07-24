@@ -241,6 +241,22 @@ impl IrohCrossProcessListener {
         timeout: Duration,
     ) -> Result<CrossProcessReceivedFrame> {
         validate_exchange_refs(session_ref, request_ref)?;
+        self.accept_one_derived_frame(session_ref, timeout, |_| Ok(request_ref.to_string())).await
+    }
+
+    // The derivation runs after the bounded read and before acknowledgement, so
+    // malformed protocol payloads cannot obtain delivered-frame evidence.
+    // r[impl molten.fabric_consistency.live_service_ports]
+    pub async fn accept_one_derived_frame<F>(
+        &mut self,
+        session_ref: &str,
+        timeout: Duration,
+        derive_request_ref: F,
+    ) -> Result<CrossProcessReceivedFrame>
+    where
+        F: FnOnce(&[u8]) -> Result<String>,
+    {
+        crate::preserves_rail::validate_content_ref(session_ref)?;
         if !self.state.is_ready() {
             return Err(MoltenError::invalid_harness("cross-process listener is not ready"));
         }
@@ -276,7 +292,7 @@ impl IrohCrossProcessListener {
         .next;
 
         let exchange =
-            run_server_exchange(&connection, &mut session, request_ref, self.protocol.generation, timeout).await;
+            run_server_exchange(&connection, &mut session, derive_request_ref, self.protocol.generation, timeout).await;
         let received = match exchange {
             Ok(exchange) => {
                 let evidence = finalize_successful_session(
@@ -284,7 +300,7 @@ impl IrohCrossProcessListener {
                     EndpointParticipantRole::Listener,
                     &self.endpoint_artifact.descriptor_ref,
                     session_ref,
-                    request_ref,
+                    &exchange.request_ref,
                     &remote_transport_identity_ref,
                     exchange.frame,
                 )?;
@@ -430,16 +446,20 @@ struct ClientNetworkFrame {
 
 struct ServerNetworkFrame {
     frame: NetworkFrame,
+    request_ref: String,
     payload: Vec<u8>,
 }
 
-async fn run_server_exchange(
+async fn run_server_exchange<F>(
     connection: &iroh::endpoint::Connection,
     session: &mut CrossProcessSessionState,
-    request_ref: &str,
+    derive_request_ref: F,
     generation: u64,
     timeout: Duration,
-) -> Result<ServerNetworkFrame> {
+) -> Result<ServerNetworkFrame>
+where
+    F: FnOnce(&[u8]) -> Result<String>,
+{
     let (mut send, mut receive) = tokio::time::timeout(timeout, connection.accept_bi())
         .await
         .map_err(|_| MoltenError::invalid_harness("cross-process stream accept timed out"))?
@@ -453,17 +473,20 @@ async fn run_server_exchange(
     })
     .map_err(|issues| shell_validation_error("cross-process server receive", &issues))?
     .next;
+    let request_ref = derive_request_ref(&payload)?;
+    crate::preserves_rail::validate_content_ref(&request_ref)?;
     write_bounded_frame(&mut send, &payload, session.resources.max_frame_bytes, timeout).await?;
     tokio::time::timeout(timeout, connection.closed())
         .await
         .map_err(|_| MoltenError::invalid_harness("cross-process peer close timed out"))?;
-    let payload_ref = cross_process_frame_ref(request_ref, &payload);
+    let payload_ref = cross_process_frame_ref(&request_ref, &payload);
     Ok(ServerNetworkFrame {
         frame: NetworkFrame {
             acknowledgement_ref: payload_ref.clone(),
             payload_ref,
             payload_bytes,
         },
+        request_ref,
         payload,
     })
 }
