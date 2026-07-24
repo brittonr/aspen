@@ -160,10 +160,14 @@ fn expected(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpointBinding
 }
 
 pub(crate) async fn listener() -> IrohCrossProcessListener {
+    listener_with_secret(LISTENER_SECRET_BYTE).await
+}
+
+pub(crate) async fn listener_with_secret(secret_byte: u8) -> IrohCrossProcessListener {
     IrohCrossProcessListener::bind(IrohCrossProcessListenerInput {
         profile: profile(),
         protocol: protocol(),
-        capability: capability(LISTENER_SECRET_BYTE, LISTENER_CAPABILITY_REF),
+        capability: capability(secret_byte, LISTENER_CAPABILITY_REF),
         bind_addr: bind_addr(),
         listener_identity_ref: LISTENER_REF.to_string(),
         expected_peer_context_ref: PEER_CONTEXT_REF.to_string(),

@@ -16,7 +16,7 @@ struct RecordingBatchHandler {
 }
 
 impl CommittedBatchHandler for RecordingBatchHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> Result<String> {
         self.calls += 1;
         if self.fail {
             return Err(MoltenError::invalid_harness("injected application failure"));
@@ -24,7 +24,7 @@ impl CommittedBatchHandler for RecordingBatchHandler {
         Ok(test_ref("application-snapshot-handler-evidence"))
     }
 
-    fn apply_batch(&mut self, _entries: &[ReplicatedEntry]) -> Result<String> {
+    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> Result<String> {
         self.calls += 1;
         if self.fail {
             return Err(MoltenError::invalid_harness("injected application failure"));

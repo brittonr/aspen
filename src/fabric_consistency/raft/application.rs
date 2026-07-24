@@ -4,10 +4,23 @@ use super::*;
 use crate::error::MoltenError;
 use crate::error::Result;
 
-pub trait CommittedBatchHandler {
-    fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationCommand {
+    pub request_ref: String,
+    pub command_ref: String,
+    pub command_schema_ref: String,
+}
 
-    fn apply_batch(&mut self, entries: &[ReplicatedEntry]) -> Result<String>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationSnapshotRestore {
+    pub snapshot_ref: String,
+    pub application_state_ref: String,
+}
+
+pub trait CommittedBatchHandler {
+    fn restore_snapshot(&mut self, snapshot: &ApplicationSnapshotRestore) -> Result<String>;
+
+    fn apply_batch(&mut self, commands: &[ApplicationCommand]) -> Result<String>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,7 +68,10 @@ impl<H: CommittedBatchHandler> AdmittedReplicaApplicationPort<H> {
 impl<H: CommittedBatchHandler> ReplicaApplicationEffects for AdmittedReplicaApplicationPort<H> {
     fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String> {
         validate_application_snapshot(&self.config, self.last_applied_index, snapshot)?;
-        let handler_evidence_ref = self.handler.restore_snapshot(snapshot)?;
+        let handler_evidence_ref = self.handler.restore_snapshot(&ApplicationSnapshotRestore {
+            snapshot_ref: snapshot.snapshot_ref.clone(),
+            application_state_ref: snapshot.application_state_ref.clone(),
+        })?;
         crate::preserves_rail::validate_content_ref(&handler_evidence_ref)?;
         let receipt_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
             "raft-application-snapshot-restore-v1",
@@ -75,7 +91,15 @@ impl<H: CommittedBatchHandler> ReplicaApplicationEffects for AdmittedReplicaAppl
 
     fn apply_committed(&mut self, entries: &[ReplicatedEntry]) -> Result<String> {
         let plan = plan_application_batch(self.last_applied_index, &self.config.command_schema_refs, entries)?;
-        let handler_evidence_ref = self.handler.apply_batch(entries)?;
+        let commands = entries
+            .iter()
+            .map(|entry| ApplicationCommand {
+                request_ref: entry.request_ref.clone(),
+                command_ref: entry.command_ref.clone(),
+                command_schema_ref: entry.command_schema_ref.clone(),
+            })
+            .collect::<Vec<_>>();
+        let handler_evidence_ref = self.handler.apply_batch(&commands)?;
         crate::preserves_rail::validate_content_ref(&handler_evidence_ref)?;
         let receipt_ref = application_receipt_ref(&self.config, &plan, entries, &handler_evidence_ref)?;
         self.last_applied_index = plan.last_index;

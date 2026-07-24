@@ -24,8 +24,8 @@ const EXPECTED_SINGLE_LOG_ENTRY: usize = 1;
 const STALE_EPOCH_STEP: u64 = 1;
 const NEXT_INDEX_AFTER_FIRST_ENTRY: u64 = 2;
 pub(super) const NODE_A: &str = "node-a";
-const NODE_B: &str = "node-b";
-const NODE_C: &str = "node-c";
+pub(super) const NODE_B: &str = "node-b";
+pub(super) const NODE_C: &str = "node-c";
 
 pub(super) fn test_ref(label: &str) -> String {
     crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("fabric-consistency-live-test-ref", vec![

@@ -415,11 +415,11 @@ impl ReplicaTimeEffects for ServiceTimePort {
 struct ServiceApplicationHandler;
 
 impl CommittedBatchHandler for ServiceApplicationHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> Result<String> {
         Ok(test_ref("service-application-snapshot-handler"))
     }
 
-    fn apply_batch(&mut self, _entries: &[ReplicatedEntry]) -> Result<String> {
+    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> Result<String> {
         Ok(test_ref("service-application-handler"))
     }
 }

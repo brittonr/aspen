@@ -35,6 +35,8 @@ mod executor_tests;
 #[cfg(test)]
 mod iroh_tests;
 #[cfg(test)]
+mod live_cluster;
+#[cfg(test)]
 mod port_tests;
 #[cfg(test)]
 mod tests;

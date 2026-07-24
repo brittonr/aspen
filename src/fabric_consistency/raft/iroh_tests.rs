@@ -34,11 +34,11 @@ const ASSEMBLY_STARTUP_OBSERVATIONS: usize = 2;
 struct AssemblyApplicationHandler;
 
 impl CommittedBatchHandler for AssemblyApplicationHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> Result<String> {
         Ok(test_ref("assembled-application-snapshot-evidence"))
     }
 
-    fn apply_batch(&mut self, _entries: &[ReplicatedEntry]) -> Result<String> {
+    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> Result<String> {
         Ok(test_ref("assembled-application-evidence"))
     }
 }
