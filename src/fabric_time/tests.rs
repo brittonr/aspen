@@ -60,6 +60,10 @@ fn simulation_profile() -> CanonicalTimeProfile {
         .expect("simulation profile")
 }
 
+pub(crate) fn live_profile() -> CanonicalTimeProfile {
+    canonical_admit_time_profile(&descriptor(TimeProfileKind::Live, "test-live", HASH_B)).expect("live profile")
+}
+
 fn one_shot(profile: &AdmittedTimeProfile, generation: u64) -> TimerScheduleRequest {
     TimerScheduleRequest {
         profile_ref: profile.profile_ref.clone(),

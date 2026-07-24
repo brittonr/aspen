@@ -3,7 +3,7 @@ mod canonical;
 mod fixture;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use adapters::*;
 pub use canonical::*;
