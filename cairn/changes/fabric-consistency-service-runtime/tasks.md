@@ -6,9 +6,9 @@
 
 ## Phase 2: Extension-facing consistency port
 
-- [ ] [serial] Add canonical group create or attach, propose, read, snapshot, recover, configuration, health, drain, and status commands and outcomes for system extensions. r[molten.fabric_consistency.extension_port]
-- [ ] [parallel] Bind every group and operation to extension/service generation, application state-machine manifest, engine profile, membership/config epoch, placement, fencing, resources, policy, and non-claims. r[molten.fabric_consistency.group_isolation]
-- [ ] [parallel] Add positive group fixtures and negative cross-extension, stale-generation, stale-epoch, unsupported-read, unsupported-config, and over-resource fixtures. r[molten.fabric_consistency.extension_port] r[molten.fabric_consistency.group_isolation]
+- [x] [serial] Add canonical group create or attach, propose, read, snapshot, recover, configuration, health, drain, and status commands and outcomes for system extensions. r[molten.fabric_consistency.extension_port]
+- [x] [parallel] Bind every group and operation to extension/service generation, application state-machine manifest, engine profile, membership/config epoch, placement, fencing, resources, policy, and non-claims. r[molten.fabric_consistency.group_isolation]
+- [x] [parallel] Add positive group fixtures and negative cross-extension, stale-generation, stale-epoch, unsupported-read, unsupported-config, and over-resource fixtures. r[molten.fabric_consistency.extension_port] r[molten.fabric_consistency.group_isolation]
 
 ## Phase 3: Live engine service shell
 
@@ -27,15 +27,10 @@
 - [ ] [serial] Run shared engine conformance, deterministic simulation, multi-process live, failure, recovery, fencing, extension-isolation, policy, resource, non-claim, and model-profile denial tests. r[molten.fabric_consistency.final_validation]
 - [ ] [serial] Run Cairn validation and proposal, design, and tasks gates before sync and archive. r[molten.fabric_consistency.final_validation]
 
-## Blocker
+## Dependency status
 
-Phases 2–5 remain blocked on `fabric-cross-process-transport-shell`. The current
-`IrohTransportAdapter` owns only `live_loopback_frame`, which creates both
-endpoints inside one process and returns after one echo. It cannot register a
-long-lived listener, publish or consume an endpoint descriptor, connect distinct
-node processes, or route consensus protocol frames between supervised replicas.
-Using it for a multi-replica fixture would therefore be same-process simulation,
-which this change explicitly forbids as production evidence. Resume only after
-that dependency archives a bounded cross-process listener/session implementation
-and distinct-process conformance evidence; do not substitute ambient sockets or
-fabricated quorum receipts.
+`fabric-cross-process-transport-shell` is archived and the extension-facing pure
+consistency port is complete. Phases 3–5 are now unblocked. Production admission
+remains denied until the live service, distinct-replica quorum/recovery evidence,
+and operator workflows pass; the archived transport evidence proves connectivity
+and bounded cleanup only, not consensus correctness or durability.

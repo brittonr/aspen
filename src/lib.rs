@@ -77,6 +77,7 @@ pub mod mesh;
 compat_module!(federation, mesh);
 pub mod content_store_adapter;
 pub mod fabric;
+pub mod fabric_consistency;
 pub mod fabric_crypto_identity;
 pub mod fabric_durability;
 pub mod fabric_membership;

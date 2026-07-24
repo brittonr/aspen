@@ -59,21 +59,24 @@ The fabric changes provide the ports needed to close that gap. This change uses 
 - Evidence checks can accidentally become part of every heartbeat. Pre-admit sessions/resources and aggregate protocol telemetry.
 - A passing small-cluster fixture can be overread as broad production readiness. Bind production admission to exact environment, failure model, scale envelope, and evidence refs.
 
-## Implementation status and bounded blocker
+## Implementation status and dependency resolution
 
 The unsafe pre-existing claim has been corrected: `in-process-raft-control-registry-v1`
 is model-only, production construction denies it, and model construction is explicit.
 Unknown profiles still deny without fallback, and existing non-claim fixtures remain
 in force.
 
-The live-service phases are blocked on `fabric-cross-process-transport-shell`
-rather than on the pure Raft transition model.
-`IrohTransportAdapter::live_loopback_frame` creates a server and client endpoint in
-one process for one bounded echo; it exposes no admitted, long-lived listener/session
-API that separate node processes can bind. Consequently it cannot produce the
-distinct-process transport observations required by this change. Treating that
-loopback as a replica network would violate Decisions 4 and 5. The dependency must
-archive a reusable capability-scoped cross-process Iroh listener/client shell with
-distinct endpoint/process evidence, cancellation, bounded reads, cleanup, and no
-ambient socket fallback. Until then, there is no production consensus engine
-available.
+`fabric-cross-process-transport-shell` is archived with a reusable capability-scoped
+Iroh listener/client shell, parent-observed distinct-process evidence, bounded reads,
+cancellation, cleanup, and no ambient socket fallback. The extension-facing pure port
+now binds every operation to the exact group, owner, service generation, application
+manifest, engine profiles, membership/configuration, placement, fencing, resources,
+policy, and authority inputs. It admits only declared read/configuration modes,
+normalizes opaque outcomes, and applies lifecycle/configuration changes only after a
+matching successful outcome.
+
+This resolves the transport dependency and unblocks the live-service phases. It does
+not itself provide a production consensus engine: live Raft still requires admitted
+durable log/snapshot effects, timers, membership and placement, distinct replica
+processes, quorum behavior, crash recovery, and the declared distributed evidence
+matrix.
