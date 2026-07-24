@@ -23,18 +23,18 @@ const EXPECTED_INITIAL_EFFECT_COUNT: usize = 2;
 const EXPECTED_SINGLE_LOG_ENTRY: usize = 1;
 const STALE_EPOCH_STEP: u64 = 1;
 const NEXT_INDEX_AFTER_FIRST_ENTRY: u64 = 2;
-const NODE_A: &str = "node-a";
+pub(super) const NODE_A: &str = "node-a";
 const NODE_B: &str = "node-b";
 const NODE_C: &str = "node-c";
 
-fn test_ref(label: &str) -> String {
+pub(super) fn test_ref(label: &str) -> String {
     crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("fabric-consistency-live-test-ref", vec![
         crate::preserves_rail::string(label),
     ]))
     .expect("test ref")
 }
 
-fn active_group() -> crate::fabric_consistency::ConsistencyGroupBinding {
+pub(super) fn active_group() -> crate::fabric_consistency::ConsistencyGroupBinding {
     let declared = canonical_consistency_group_binding(ConsistencyGroupBindingInput {
         group_id: "group:live-raft".to_string(),
         extension_id: "extension-live-raft".to_string(),
@@ -253,7 +253,7 @@ fn live_replica_start_denies_duplicate_membership_and_unsafe_timer_bounds() {
     assert!(unsafe_timer.to_string().contains("heartbeat < election minimum"));
 }
 
-fn started_state(group: &crate::fabric_consistency::ConsistencyGroupBinding, node_id: &str) -> ReplicaState {
+pub(super) fn started_state(group: &crate::fabric_consistency::ConsistencyGroupBinding, node_id: &str) -> ReplicaState {
     plan_live_replica_start(ReplicaStartInput {
         node_id: node_id.to_string(),
         membership: membership(group),
@@ -276,7 +276,7 @@ fn sent_envelope_to(transition: &ReplicaTransition, recipient: &str) -> ReplicaM
         .expect("sent Raft envelope")
 }
 
-fn elect_node_a() -> (ReplicaState, ReplicaState) {
+pub(super) fn elect_node_a() -> (ReplicaState, ReplicaState) {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);
     let node_b = started_state(&group, NODE_B);
