@@ -265,7 +265,7 @@ pub(super) fn started_state(group: &crate::fabric_consistency::ConsistencyGroupB
     .state
 }
 
-fn sent_envelope_to(transition: &ReplicaTransition, recipient: &str) -> ReplicaMessageEnvelope {
+pub(super) fn sent_envelope_to(transition: &ReplicaTransition, recipient: &str) -> ReplicaMessageEnvelope {
     transition
         .effects
         .iter()

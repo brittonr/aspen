@@ -9,4 +9,4 @@ pub use effect_port::*;
 pub use iroh_shell::*;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

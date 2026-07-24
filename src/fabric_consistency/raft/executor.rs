@@ -1,5 +1,10 @@
+use std::future::Future;
+use std::pin::Pin;
+
 use super::*;
 use crate::error::Result;
+
+pub type ReplicaTransportFuture<'a> = Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
 use crate::fabric_consistency::ConsistencyReadMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,7 +80,7 @@ pub trait ReplicaDurabilityEffects {
 }
 
 pub trait ReplicaTransportEffects {
-    fn send(&mut self, envelope: &ReplicaMessageEnvelope) -> Result<String>;
+    fn send<'a>(&'a mut self, envelope: &'a ReplicaMessageEnvelope) -> ReplicaTransportFuture<'a>;
 }
 
 pub trait ReplicaTimeEffects {
@@ -125,7 +130,7 @@ impl<T> LiveReplicaEffectPorts for T where T: ReplicaDurabilityEffects
 }
 
 // r[impl molten.fabric_consistency.live_service_ports]
-pub fn execute_replica_event<P: LiveReplicaEffectPorts>(
+pub async fn execute_replica_event<P: LiveReplicaEffectPorts>(
     state: &ReplicaState,
     event: ReplicaEvent,
     ports: &mut P,
@@ -139,10 +144,10 @@ pub fn execute_replica_event<P: LiveReplicaEffectPorts>(
             };
         }
     };
-    execute_planned_transition(state, planned, ports)
+    execute_planned_transition(state, planned, ports).await
 }
 
-fn execute_planned_transition<P: LiveReplicaEffectPorts>(
+async fn execute_planned_transition<P: LiveReplicaEffectPorts>(
     retained: &ReplicaState,
     planned: ReplicaTransition,
     ports: &mut P,
@@ -150,7 +155,7 @@ fn execute_planned_transition<P: LiveReplicaEffectPorts>(
     let mut completed = Vec::with_capacity(planned.effects.len());
     for (index, effect) in planned.effects.iter().enumerate() {
         let kind = effect_kind(effect);
-        let evidence_ref = match execute_effect(ports, effect) {
+        let evidence_ref = match execute_effect(ports, effect).await {
             Ok(reference) => reference,
             Err(error) => {
                 return ReplicaExecutionOutcome::Failed(Box::new(FailedReplicaTransition {
@@ -195,13 +200,13 @@ fn execute_planned_transition<P: LiveReplicaEffectPorts>(
     })
 }
 
-fn execute_effect<P: LiveReplicaEffectPorts>(ports: &mut P, effect: &ReplicaEffect) -> Result<String> {
+async fn execute_effect<P: LiveReplicaEffectPorts>(ports: &mut P, effect: &ReplicaEffect) -> Result<String> {
     match effect {
         ReplicaEffect::PersistHardState { term, voted_for } => ports.persist_hard_state(*term, voted_for.as_deref()),
         ReplicaEffect::PersistEntries { truncate_from, entries } => ports.persist_entries(*truncate_from, entries),
         ReplicaEffect::FlushLog { through_index } => ports.flush_log(*through_index),
         ReplicaEffect::PersistSnapshot { snapshot } => ports.persist_snapshot(snapshot),
-        ReplicaEffect::Send { envelope } => ports.send(envelope),
+        ReplicaEffect::Send { envelope } => ports.send(envelope).await,
         ReplicaEffect::ArmElectionTimer { entropy_ref } => ports.arm_election_timer(entropy_ref),
         ReplicaEffect::ArmHeartbeatTimer => ports.arm_heartbeat_timer(),
         ReplicaEffect::ApplyCommitted { entries } => ports.apply_committed(entries),

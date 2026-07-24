@@ -32,7 +32,7 @@ const GENERATION: u64 = 1;
 const VALID_FROM_TICK: u64 = 1;
 const VALID_UNTIL_TICK: u64 = 100;
 const OBSERVED_TICK: u64 = 10;
-const TEST_TIMEOUT_SECONDS: u64 = 10;
+pub(crate) const TEST_TIMEOUT_SECONDS: u64 = 10;
 const ACCEPT_TIMEOUT_MILLISECONDS: u64 = 25;
 const LISTENER_SECRET_BYTE: u8 = 7;
 const CLIENT_SECRET_BYTE: u8 = 9;
@@ -159,7 +159,7 @@ fn expected(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpointBinding
     }
 }
 
-async fn listener() -> IrohCrossProcessListener {
+pub(crate) async fn listener() -> IrohCrossProcessListener {
     IrohCrossProcessListener::bind(IrohCrossProcessListenerInput {
         profile: profile(),
         protocol: protocol(),
@@ -177,7 +177,7 @@ async fn listener() -> IrohCrossProcessListener {
     .expect("cross-process listener")
 }
 
-fn client_input(endpoint: CanonicalCrossProcessEndpoint) -> IrohCrossProcessClientInput {
+pub(crate) fn client_input(endpoint: CanonicalCrossProcessEndpoint) -> IrohCrossProcessClientInput {
     IrohCrossProcessClientInput {
         profile: profile(),
         protocol: protocol(),

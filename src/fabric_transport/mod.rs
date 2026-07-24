@@ -5,7 +5,7 @@
 
 mod adapters;
 mod canonical;
-mod cross_process;
+pub(crate) mod cross_process;
 
 #[cfg(test)]
 mod tests;

@@ -43,8 +43,8 @@ impl ReplicaDurabilityEffects for RecordingPorts {
 }
 
 impl ReplicaTransportEffects for RecordingPorts {
-    fn send(&mut self, _envelope: &ReplicaMessageEnvelope) -> Result<String> {
-        self.record(ReplicaEffectKind::Send)
+    fn send<'a>(&'a mut self, _envelope: &'a ReplicaMessageEnvelope) -> ReplicaTransportFuture<'a> {
+        Box::pin(async move { self.record(ReplicaEffectKind::Send) })
     }
 }
 
@@ -90,8 +90,8 @@ impl ReplicaControlEffects for RecordingPorts {
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]
-#[test]
-fn effect_shell_executes_election_effects_in_declared_order() {
+#[tokio::test]
+async fn effect_shell_executes_election_effects_in_declared_order() {
     let group = active_group();
     let state = started_state(&group, NODE_A);
     let mut ports = RecordingPorts::default();
@@ -101,7 +101,8 @@ fn effect_shell_executes_election_effects_in_declared_order() {
             entropy_ref: test_ref("shell-election-entropy"),
         },
         &mut ports,
-    );
+    )
+    .await;
     let ReplicaExecutionOutcome::Applied(applied) = outcome else {
         panic!("expected applied election effects");
     };
@@ -118,8 +119,8 @@ fn effect_shell_executes_election_effects_in_declared_order() {
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]
-#[test]
-fn effect_shell_stops_before_transport_when_log_flush_fails() {
+#[tokio::test]
+async fn effect_shell_stops_before_transport_when_log_flush_fails() {
     let (leader, _follower) = elect_node_a();
     let mut ports = RecordingPorts {
         executed: Vec::new(),
@@ -133,7 +134,8 @@ fn effect_shell_stops_before_transport_when_log_flush_fails() {
             command_schema_ref: test_ref("shell-failure-schema"),
         },
         &mut ports,
-    );
+    )
+    .await;
     let ReplicaExecutionOutcome::Failed(failed) = outcome else {
         panic!("expected failed proposal effects");
     };
