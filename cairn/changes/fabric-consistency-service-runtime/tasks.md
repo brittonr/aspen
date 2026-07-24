@@ -13,6 +13,7 @@
 ## Phase 3: Live engine service shell
 
 - [ ] [serial] Connect consensus engine instances to admitted transport, durable-log, snapshot, time, entropy, membership, placement, fencing, supervision, and resource ports. r[molten.fabric_consistency.live_service_ports]
+  - Progress: the pure startup plan and thin host projection now require the exact active group, canonical group integrity, running service generation, admitted policy cohort, static membership, timer/resource bounds, and canonical transport/durable-log/snapshot/time/entropy/membership/placement bindings. Startup remains production-denied; executing the returned durability, timer, and transport effects is still required before this task can close.
 - [ ] [serial] Implement the first live Raft service profile with protocol registration, elections, replication, commit, reads, snapshots, recovery, and bounded static membership before admitting wider transitions. r[molten.fabric_consistency.live_raft]
 - [ ] [parallel] Preserve pure application state machines and prevent engine internals from entering extension state identity or semantics. r[molten.fabric_consistency.group_isolation]
 

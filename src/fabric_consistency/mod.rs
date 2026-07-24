@@ -1,14 +1,17 @@
 mod binding;
 mod canonical;
 mod lifecycle;
+mod live_service;
 mod operation;
 mod outcome;
 mod planner;
+pub mod raft;
 
 pub use binding::ConsistencyGroupBinding;
 pub use binding::ConsistencyGroupBindingInput;
 pub use binding::canonical_consistency_group_binding;
 pub use lifecycle::apply_consistency_outcome;
+pub use live_service::plan_live_replica_start_for_host;
 pub use operation::ConfigurationTransition;
 pub use operation::ConsistencyOperation;
 pub use operation::ConsistencyPlanDecision;
