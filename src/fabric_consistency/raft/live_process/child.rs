@@ -76,6 +76,7 @@ async fn run_leader(
     let mut proposal_started = false;
     let mut read_started = false;
     let mut snapshot_started = false;
+    let mut quorum_loss_started = false;
     for _step in 0..EVENT_LOOP_LIMIT {
         if run_directory.join(STOP_FILE).is_file() {
             return Ok(());
@@ -98,7 +99,12 @@ async fn run_leader(
             begin_snapshot_catch_up(node).await?;
             snapshot_started = true;
         }
-        if snapshot_started && node.service.state().match_index.get(NODE_C) == Some(&INITIAL_LOG_INDEX) {
+        if snapshot_started
+            && !quorum_loss_started
+            && node.service.state().match_index.get(NODE_C) == Some(&INITIAL_LOG_INDEX)
+        {
+            begin_quorum_loss(node, run_directory).await?;
+            quorum_loss_started = true;
             write_signal(&run_directory.join(LEADER_DONE_FILE), "leader-done")?;
         }
     }
@@ -122,6 +128,27 @@ async fn begin_read(node: &mut live_cluster::LiveNode) -> Result<()> {
         node.service
             .handle_event(ReplicaEvent::Read {
                 request_ref: super::super::tests::test_ref("distinct-process-read"),
+                mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
+            })
+            .await,
+    )
+}
+
+async fn begin_quorum_loss(node: &mut live_cluster::LiveNode, run_directory: &Path) -> Result<()> {
+    write_signal(&run_directory.join(PARTITION_FILE), "partition")?;
+    require_applied(
+        node.service
+            .handle_event(ReplicaEvent::Propose {
+                request_ref: super::super::tests::test_ref(QUORUM_LOSS_REQUEST_LABEL),
+                command_ref: super::super::tests::test_ref("distinct-process-quorum-loss-command"),
+                command_schema_ref: super::super::tests::test_ref("live-cluster-command-schema"),
+            })
+            .await,
+    )?;
+    require_applied(
+        node.service
+            .handle_event(ReplicaEvent::Read {
+                request_ref: super::super::tests::test_ref("distinct-process-quorum-loss-read"),
                 mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
             })
             .await,
@@ -152,6 +179,9 @@ async fn run_follower(
         let Some(event) = poll_event(ingress).await? else {
             continue;
         };
+        if run_directory.join(PARTITION_FILE).is_file() {
+            continue;
+        }
         if lag_until_snapshot && should_drop_before_snapshot(node.service.state(), &event.event) {
             continue;
         }
@@ -221,6 +251,9 @@ fn receipt_from_node(node_id: &str, endpoint_identity: &str, node: &live_cluster
             .map_err(|_| MoltenError::invalid_harness("pending read count overflow"))?,
         snapshot_ref: state.snapshot.as_ref().map_or_else(String::new, |snapshot| snapshot.snapshot_ref.clone()),
         request_completed: state.completed_requests.contains_key(&super::super::tests::test_ref(REQUEST_LABEL)),
+        quorum_loss_request_uncommitted: !state
+            .completed_requests
+            .contains_key(&super::super::tests::test_ref(QUORUM_LOSS_REQUEST_LABEL)),
         application_applied: application.applied_request_refs.contains(&super::super::tests::test_ref(REQUEST_LABEL)),
         application_restored: application.restored_application_state_ref
             == Some(super::super::tests::test_ref(APPLICATION_STATE_LABEL)),
@@ -248,6 +281,7 @@ fn receipt_value(receipt: &ProcessReceipt) -> IOValue {
         crate::preserves_rail::u64_value(receipt.pending_read_count),
         crate::preserves_rail::string(&receipt.snapshot_ref),
         crate::preserves_rail::bool_value(receipt.request_completed),
+        crate::preserves_rail::bool_value(receipt.quorum_loss_request_uncommitted),
         crate::preserves_rail::bool_value(receipt.application_applied),
         crate::preserves_rail::bool_value(receipt.application_restored),
         crate::preserves_rail::u64_value(receipt.durable_record_count),

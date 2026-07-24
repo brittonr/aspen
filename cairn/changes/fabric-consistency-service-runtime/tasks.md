@@ -23,6 +23,7 @@
 ## Phase 4: Distributed evidence and operations
 
 - [ ] [serial] Add multi-process fixtures for quorum formation, commit, quorum-backed read, partition, quorum loss, crash/restart, snapshot catch-up, and stale-leader fencing using distinct endpoints and durable namespaces. r[molten.fabric_consistency.production_admission]
+  - Progress: the three-process fixture proves distinct process/endpoint/root quorum formation, commit, majority read-index, deliberate follower lag, durable snapshot catch-up, and clean cancellation. It then partitions both followers at the protocol-delivery boundary and verifies that a flushed second proposal remains uncommitted and a second linearizable read remains pending without majority evidence. Crash/restart and stale-leader fencing remain open.
 - [ ] [parallel] Add bounded group admission, configuration, selected commit, read-currentness, snapshot, recovery, failure, and aggregate health evidence without per-heartbeat receipts. r[molten.fabric_consistency.evidence_granularity]
 - [ ] [parallel] Add operator readback and bounded create, inspect, drain, snapshot, recover, and remove workflows with dry-run preflights. r[molten.fabric_consistency.operator_readback]
 

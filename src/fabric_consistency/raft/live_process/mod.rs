@@ -22,14 +22,16 @@ const CHILD_TEST_FILTER: &str = "fabric_consistency::raft::live_process::distinc
 const CHILD_TIMEOUT_SECONDS: u64 = 30;
 const FILE_POLL_MILLISECONDS: u64 = 10;
 const FILE_POLL_LIMIT: usize = 3_000;
-const RECEIPT_FIELD_COUNT: usize = 16;
+const RECEIPT_FIELD_COUNT: usize = 17;
 const MAX_HARNESS_FILE_BYTES: u64 = 1_048_576;
 const RECEIPT_SCHEMA: &str = "molten.fabric-consistency.distinct-process-participant.v1";
 const START_FILE: &str = "start.preserves";
 const STOP_FILE: &str = "stop.preserves";
 const LEADER_DONE_FILE: &str = "leader-done.preserves";
+const PARTITION_FILE: &str = "partition.preserves";
 const REQUEST_LABEL: &str = "distinct-process-request";
 const APPLICATION_STATE_LABEL: &str = "distinct-process-application-state";
+const QUORUM_LOSS_REQUEST_LABEL: &str = "distinct-process-quorum-loss-request";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProcessReceipt {
@@ -44,6 +46,7 @@ struct ProcessReceipt {
     pending_read_count: u64,
     snapshot_ref: String,
     request_completed: bool,
+    quorum_loss_request_uncommitted: bool,
     application_applied: bool,
     application_restored: bool,
     durable_record_count: u64,
@@ -195,11 +198,12 @@ fn parse_receipt(value: &IOValue) -> Result<ProcessReceipt> {
         pending_read_count: canonical::required_u64(&fields[8], "receipt pending reads")?,
         snapshot_ref: canonical::required_string(&fields[9], "receipt snapshot")?,
         request_completed: canonical::required_bool(&fields[10], "receipt completed request")?,
-        application_applied: canonical::required_bool(&fields[11], "receipt application apply")?,
-        application_restored: canonical::required_bool(&fields[12], "receipt application restore")?,
-        durable_record_count: canonical::required_u64(&fields[13], "receipt durable records")?,
-        durable_snapshot_count: canonical::required_u64(&fields[14], "receipt durable snapshots")?,
-        clean_shutdown: canonical::required_bool(&fields[15], "receipt clean shutdown")?,
+        quorum_loss_request_uncommitted: canonical::required_bool(&fields[11], "receipt quorum-loss request")?,
+        application_applied: canonical::required_bool(&fields[12], "receipt application apply")?,
+        application_restored: canonical::required_bool(&fields[13], "receipt application restore")?,
+        durable_record_count: canonical::required_u64(&fields[14], "receipt durable records")?,
+        durable_snapshot_count: canonical::required_u64(&fields[15], "receipt durable snapshots")?,
+        clean_shutdown: canonical::required_bool(&fields[16], "receipt clean shutdown")?,
     })
 }
 
@@ -222,8 +226,9 @@ fn assert_distinct_process_receipts(receipts: &[ProcessReceipt; STATIC_VOTER_COU
     assert_eq!(leader.commit_index, INITIAL_LOG_INDEX);
     assert_eq!(leader.last_applied, INITIAL_LOG_INDEX);
     assert_eq!(leader.quorum_term, leader.term);
-    assert_eq!(leader.pending_read_count, 0);
+    assert_eq!(leader.pending_read_count, 1);
     assert!(leader.request_completed);
+    assert!(leader.quorum_loss_request_uncommitted);
     assert!(leader.application_applied);
     assert!(leader.durable_record_count > 0);
     let follower = &receipts[1];
