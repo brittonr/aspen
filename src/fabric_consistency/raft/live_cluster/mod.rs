@@ -140,6 +140,12 @@ async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
     assert_eq!(health.status, "healthy");
     assert!(!health.production_admitted);
     crate::preserves_rail::validate_content_ref(&health.evidence_ref).expect("aggregate health ref");
+    let readback = crate::fabric_consistency::live_replica_operator_readback(&group, &node_a.service)
+        .expect("live operator readback");
+    assert_eq!(readback.commit_index, INITIAL_LOG_INDEX);
+    assert!(!readback.production_admitted);
+    assert!(readback.selected_evidence_refs.len() <= crate::fabric_consistency::MAX_OPERATOR_EVIDENCE_REFS);
+    crate::preserves_rail::validate_content_ref(&readback.readback_ref).expect("live operator readback ref");
     assert!(!node_a.service.ports().durability.adapter().state().durable_log.is_empty());
     assert!(!node_b.service.ports().durability.adapter().state().durable_log.is_empty());
     let node_c_snapshot_ref = &node_c.service.state().snapshot.as_ref().expect("node C snapshot").snapshot_ref;
