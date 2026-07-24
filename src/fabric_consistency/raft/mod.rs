@@ -1,18 +1,26 @@
 mod admission;
+mod application;
 mod canonical;
+mod control;
 mod durability;
 mod executor;
 mod iroh;
 mod model;
+mod ports;
+mod service;
 mod time;
 mod transition;
 
 pub use admission::*;
+pub use application::*;
 pub use canonical::*;
+pub use control::*;
 pub use durability::*;
 pub use executor::*;
 pub use iroh::*;
 pub use model::*;
+pub use ports::*;
+pub use service::*;
 pub use time::*;
 pub use transition::*;
 
@@ -24,6 +32,8 @@ mod durability_tests;
 mod executor_tests;
 #[cfg(test)]
 mod iroh_tests;
+#[cfg(test)]
+mod port_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

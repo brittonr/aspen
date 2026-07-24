@@ -20,7 +20,7 @@ pub(super) struct MessageTransition {
 pub fn apply_replica_event(state: &ReplicaState, event: ReplicaEvent) -> Result<ReplicaTransition> {
     validation::validate_replica_state(state)?;
     let transition = match event {
-        ReplicaEvent::ElectionTimeout { entropy_ref } => election::handle_election_timeout(state, entropy_ref)?,
+        ReplicaEvent::ElectionTimeout { timer_ref } => election::handle_election_timeout(state, timer_ref)?,
         ReplicaEvent::HeartbeatTimeout => election::handle_heartbeat_timeout(state)?,
         ReplicaEvent::Message { envelope } => handle_message(state, envelope)?,
         ReplicaEvent::Propose {
@@ -125,6 +125,17 @@ fn observe_higher_term(transition: &mut MessageTransition, term: u64) {
 }
 
 fn finish_message_transition(mut transition: MessageTransition) -> Result<ReplicaTransition> {
+    let current_timer_ref = election_timer_ref(
+        &transition.next.profile.group_binding_ref,
+        &transition.next.node_id,
+        transition.next.profile.service_generation,
+        transition.next.current_term,
+        transition.next.election_timer_sequence,
+    )?;
+    if transition.next.active_election_timer_ref != current_timer_ref {
+        let timer_effect = support::arm_election_timer(&mut transition.next)?;
+        transition.effects.push(timer_effect);
+    }
     if transition.persist_hard_state {
         transition.effects.insert(0, ReplicaEffect::PersistHardState {
             term: transition.next.current_term,

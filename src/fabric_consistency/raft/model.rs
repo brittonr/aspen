@@ -12,6 +12,8 @@ pub const INITIAL_TERM: u64 = 0;
 pub const INITIAL_COMMIT_INDEX: u64 = 0;
 pub const NEXT_TERM_STEP: u64 = 1;
 pub const NEXT_LOG_INDEX_STEP: u64 = 1;
+pub const INITIAL_ELECTION_TIMER_SEQUENCE: u64 = 1;
+pub const NEXT_ELECTION_TIMER_SEQUENCE_STEP: u64 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplicaRole {
@@ -178,7 +180,7 @@ pub struct ReplicaMessageEnvelope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplicaEvent {
     ElectionTimeout {
-        entropy_ref: String,
+        timer_ref: String,
     },
     HeartbeatTimeout,
     Message {
@@ -257,7 +259,7 @@ pub enum ReplicaEffect {
         envelope: ReplicaMessageEnvelope,
     },
     ArmElectionTimer {
-        entropy_ref: String,
+        timer_ref: String,
     },
     ArmHeartbeatTimer,
     ApplyCommitted {
@@ -287,6 +289,8 @@ pub struct ReplicaState {
     pub role: ReplicaRole,
     pub lifecycle: ReplicaLifecycle,
     pub current_term: u64,
+    pub election_timer_sequence: u64,
+    pub active_election_timer_ref: String,
     pub voted_for: Option<String>,
     pub leader_id: Option<String>,
     pub log: Vec<ReplicatedEntry>,
@@ -310,4 +314,20 @@ pub struct SnapshotPlan {
     pub snapshot: ReplicaSnapshot,
     pub compact_through: u64,
     pub retained_entries: Vec<ReplicatedEntry>,
+}
+
+pub(crate) fn election_timer_ref(
+    group_binding_ref: &str,
+    node_id: &str,
+    service_generation: u64,
+    term: u64,
+    sequence: u64,
+) -> crate::error::Result<String> {
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-election-timer-v1", vec![
+        crate::preserves_rail::string(group_binding_ref),
+        crate::preserves_rail::string(node_id),
+        crate::preserves_rail::u64_value(service_generation),
+        crate::preserves_rail::u64_value(term),
+        crate::preserves_rail::u64_value(sequence),
+    ]))
 }

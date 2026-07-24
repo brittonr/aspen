@@ -174,25 +174,29 @@ impl TokioReplicaTimePort<OperatingSystemEntropySource> {
 }
 
 impl<S: CryptographicEntropySource> ReplicaTimeEffects for TokioReplicaTimePort<S> {
-    fn arm_election_timer(&mut self, entropy_ref: &str) -> Result<String> {
-        if entropy_ref != self.entropy_binding_ref {
-            return Err(MoltenError::invalid_harness("live Raft election timer entropy binding mismatch"));
-        }
+    fn arm_election_timer(&mut self, timer_ref: &str) -> Result<String> {
+        crate::preserves_rail::validate_content_ref(timer_ref)?;
         let (delay_ticks, entropy_evidence_ref) = self.election_delay()?;
         let timer_evidence_ref = self.timer_evidence(delay_ticks, self.next_timer_sequence)?;
         let duration = self.duration(delay_ticks)?;
         abort(&mut self.election_handle);
         let sender = self.sender.clone();
-        let event_entropy_ref = entropy_evidence_ref.clone();
+        let event_timer_ref = timer_ref.to_string();
         self.election_handle = Some(tokio::spawn(async move {
             tokio::time::sleep(duration).await;
             let _closed_event = sender
                 .send(ReplicaEvent::ElectionTimeout {
-                    entropy_ref: event_entropy_ref,
+                    timer_ref: event_timer_ref,
                 })
                 .err();
         }));
-        combined_timer_ref("election", &timer_evidence_ref, Some(&entropy_evidence_ref))
+        combined_timer_ref(
+            "election",
+            &timer_evidence_ref,
+            Some(timer_ref),
+            &self.entropy_binding_ref,
+            Some(&entropy_evidence_ref),
+        )
     }
 
     fn arm_heartbeat_timer(&mut self) -> Result<String> {
@@ -204,7 +208,7 @@ impl<S: CryptographicEntropySource> ReplicaTimeEffects for TokioReplicaTimePort<
             tokio::time::sleep(duration).await;
             let _closed_event = sender.send(ReplicaEvent::HeartbeatTimeout).err();
         }));
-        combined_timer_ref("heartbeat", &timer_evidence_ref, None)
+        combined_timer_ref("heartbeat", &timer_evidence_ref, None, &self.entropy_binding_ref, None)
     }
 }
 
@@ -244,14 +248,27 @@ fn abort(handle: &mut Option<tokio::task::JoinHandle<()>>) {
     }
 }
 
-fn combined_timer_ref(kind: &str, timer_ref: &str, entropy_ref: Option<&str>) -> Result<String> {
-    let entropy = entropy_ref.map_or_else(
-        || crate::preserves_rail::record("none", Vec::new()),
-        |reference| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(reference)]),
-    );
+fn combined_timer_ref(
+    kind: &str,
+    time_plan_ref: &str,
+    protocol_timer_ref: Option<&str>,
+    entropy_binding_ref: &str,
+    entropy_evidence_ref: Option<&str>,
+) -> Result<String> {
+    let protocol_timer = optional_ref(protocol_timer_ref);
+    let entropy_evidence = optional_ref(entropy_evidence_ref);
     crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-timer-arm-v1", vec![
         crate::preserves_rail::string(kind),
-        crate::preserves_rail::string(timer_ref),
-        entropy,
+        crate::preserves_rail::string(time_plan_ref),
+        protocol_timer,
+        crate::preserves_rail::string(entropy_binding_ref),
+        entropy_evidence,
     ]))
+}
+
+fn optional_ref(reference: Option<&str>) -> preserves::IOValue {
+    reference.map_or_else(
+        || crate::preserves_rail::record("none", Vec::new()),
+        |value| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(value)]),
+    )
 }

@@ -15,7 +15,7 @@ fn canonical_raft_vote_and_append_envelopes_roundtrip_exactly() {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
-        entropy_ref: test_ref("canonical-election-entropy"),
+        timer_ref: node_a.active_election_timer_ref.clone(),
     })
     .expect("election transition");
     let vote = sent_envelope_to(&election, NODE_B);
@@ -38,7 +38,7 @@ fn canonical_raft_decoder_rejects_trailing_bytes_and_sender_substitution() {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
-        entropy_ref: test_ref("canonical-negative-entropy"),
+        timer_ref: node_a.active_election_timer_ref.clone(),
     })
     .expect("negative election transition");
     let envelope = sent_envelope_to(&election, NODE_B);

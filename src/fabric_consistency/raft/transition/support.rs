@@ -2,6 +2,23 @@ use super::*;
 use crate::error::MoltenError;
 use crate::error::Result;
 
+pub(super) fn arm_election_timer(state: &mut ReplicaState) -> Result<ReplicaEffect> {
+    let sequence = state
+        .election_timer_sequence
+        .checked_add(NEXT_ELECTION_TIMER_SEQUENCE_STEP)
+        .ok_or_else(|| MoltenError::invalid_harness("Raft election timer sequence overflow"))?;
+    let timer_ref = election_timer_ref(
+        &state.profile.group_binding_ref,
+        &state.node_id,
+        state.profile.service_generation,
+        state.current_term,
+        sequence,
+    )?;
+    state.election_timer_sequence = sequence;
+    state.active_election_timer_ref.clone_from(&timer_ref);
+    Ok(ReplicaEffect::ArmElectionTimer { timer_ref })
+}
+
 pub(super) fn append_effects_for_all(state: &ReplicaState) -> Result<Vec<ReplicaEffect>> {
     peers(state).into_iter().map(|peer| append_effect_for(state, peer)).collect()
 }

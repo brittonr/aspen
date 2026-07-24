@@ -64,8 +64,27 @@ pub(super) fn validate_replica_state(state: &ReplicaState) -> Result<()> {
         return Err(MoltenError::invalid_harness("Raft applied or committed index exceeds the local log"));
     }
     validate_role(state)?;
+    validate_election_timer(state)?;
     if state.voted_for.as_ref().is_some_and(|voter| !state.membership.voters.contains(voter)) {
         return Err(MoltenError::invalid_harness("Raft vote target is outside admitted membership"));
+    }
+    Ok(())
+}
+
+fn validate_election_timer(state: &ReplicaState) -> Result<()> {
+    if state.election_timer_sequence == 0 {
+        return Err(MoltenError::invalid_harness("Raft election timer sequence must be positive"));
+    }
+    validate_content_ref(&state.active_election_timer_ref, "Raft active election timer ref")?;
+    let expected = election_timer_ref(
+        &state.profile.group_binding_ref,
+        &state.node_id,
+        state.profile.service_generation,
+        state.current_term,
+        state.election_timer_sequence,
+    )?;
+    if state.active_election_timer_ref != expected {
+        return Err(MoltenError::invalid_harness("Raft active election timer ref does not match state"));
     }
     Ok(())
 }

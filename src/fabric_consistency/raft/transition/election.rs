@@ -17,9 +17,12 @@ pub(super) struct VoteResponseInput {
     pub is_granted: bool,
 }
 
-pub(super) fn handle_election_timeout(state: &ReplicaState, entropy_ref: String) -> Result<ReplicaTransition> {
+pub(super) fn handle_election_timeout(state: &ReplicaState, timer_ref: String) -> Result<ReplicaTransition> {
     validation::ensure_running(state)?;
-    validation::validate_content_ref(&entropy_ref, "Raft election entropy ref")?;
+    validation::validate_content_ref(&timer_ref, "Raft election timer ref")?;
+    if timer_ref != state.active_election_timer_ref {
+        return Err(MoltenError::invalid_harness("stale Raft election timer cannot activate protocol effects"));
+    }
     if state.role == ReplicaRole::Leader {
         return Err(MoltenError::invalid_harness("leader cannot process a follower election timeout"));
     }
@@ -53,7 +56,7 @@ pub(super) fn handle_election_timeout(state: &ReplicaState, entropy_ref: String)
             fencing_epoch: next.profile.fencing_epoch,
         }));
     }
-    effects.push(ReplicaEffect::ArmElectionTimer { entropy_ref });
+    effects.push(support::arm_election_timer(&mut next)?);
     finish_transition(next, effects)
 }
 
@@ -97,9 +100,8 @@ pub(super) fn handle_request_vote(transition: &mut MessageTransition, input: Vot
         support::vote_response(&transition.next, is_granted),
     ));
     if is_granted {
-        transition.effects.push(ReplicaEffect::ArmElectionTimer {
-            entropy_ref: transition.next.profile.entropy_profile_ref.clone(),
-        });
+        let timer_effect = support::arm_election_timer(&mut transition.next)?;
+        transition.effects.push(timer_effect);
     }
     Ok(())
 }

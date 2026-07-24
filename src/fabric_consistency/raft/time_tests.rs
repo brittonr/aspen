@@ -35,16 +35,20 @@ async fn tokio_replica_time_port_delivers_entropy_bound_election_and_heartbeat_e
     let (mut port, mut receiver) =
         time_port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
 
-    let election_evidence = port.arm_election_timer(&entropy_binding_ref()).expect("election timer");
+    let timer_ref = test_ref("election-timer-token");
+    let election_evidence = port.arm_election_timer(&timer_ref).expect("election timer");
     assert!(election_evidence.starts_with("blake3:"));
     let election_event = tokio::time::timeout(Duration::from_millis(EVENT_TIMEOUT_MILLISECONDS), receiver.recv())
         .await
         .expect("bounded election wait")
         .expect("election event");
-    let ReplicaEvent::ElectionTimeout { entropy_ref } = election_event else {
+    let ReplicaEvent::ElectionTimeout {
+        timer_ref: delivered_timer_ref,
+    } = election_event
+    else {
         panic!("expected election timeout");
     };
-    assert!(entropy_ref.starts_with("blake3:"));
+    assert_eq!(delivered_timer_ref, timer_ref);
 
     let heartbeat_evidence = port.arm_heartbeat_timer().expect("heartbeat timer");
     assert!(heartbeat_evidence.starts_with("blake3:"));
@@ -61,13 +65,16 @@ async fn rearming_election_timer_cancels_the_superseded_delivery() {
     let (mut port, mut receiver) =
         time_port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
 
-    port.arm_election_timer(&entropy_binding_ref()).expect("first timer");
-    port.arm_election_timer(&entropy_binding_ref()).expect("replacement timer");
+    port.arm_election_timer(&test_ref("superseded-timer-token")).expect("first timer");
+    let replacement_timer_ref = test_ref("replacement-timer-token");
+    port.arm_election_timer(&replacement_timer_ref).expect("replacement timer");
     let delivered = tokio::time::timeout(Duration::from_millis(EVENT_TIMEOUT_MILLISECONDS), receiver.recv())
         .await
         .expect("bounded replacement wait")
         .expect("replacement event");
-    assert!(matches!(delivered, ReplicaEvent::ElectionTimeout { .. }));
+    assert_eq!(delivered, ReplicaEvent::ElectionTimeout {
+        timer_ref: replacement_timer_ref,
+    });
     tokio::time::sleep(Duration::from_millis(EVENT_QUIET_MILLISECONDS)).await;
     assert!(receiver.try_recv().is_err());
 }
@@ -82,13 +89,11 @@ fn tokio_replica_time_port_denies_unsafe_timer_bounds_before_activation() {
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
-async fn tokio_replica_time_port_denies_mismatched_entropy_binding_without_delivery() {
+async fn tokio_replica_time_port_denies_malformed_timer_token_without_delivery() {
     let (mut port, mut receiver) =
         time_port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
-    let error = port
-        .arm_election_timer(&test_ref("mismatched-entropy-binding"))
-        .expect_err("mismatched binding must deny");
-    assert!(error.to_string().contains("entropy binding mismatch"));
+    let error = port.arm_election_timer("malformed-timer-token").expect_err("malformed timer token must deny");
+    assert!(error.to_string().contains("content ref"), "unexpected error: {error}");
     assert!(receiver.try_recv().is_err());
 }
 

@@ -84,7 +84,7 @@ pub trait ReplicaTransportEffects {
 }
 
 pub trait ReplicaTimeEffects {
-    fn arm_election_timer(&mut self, entropy_ref: &str) -> Result<String>;
+    fn arm_election_timer(&mut self, timer_ref: &str) -> Result<String>;
 
     fn arm_heartbeat_timer(&mut self) -> Result<String>;
 }
@@ -127,6 +127,22 @@ impl<T> LiveReplicaEffectPorts for T where T: ReplicaDurabilityEffects
         + ReplicaApplicationEffects
         + ReplicaControlEffects
 {
+}
+
+// r[impl molten.fabric_consistency.live_service_ports]
+pub async fn execute_scoped_replica_start<P: LiveReplicaEffectPorts>(
+    plan: &ReplicaStartPlan,
+    ports: &mut P,
+) -> ReplicaExecutionOutcome {
+    execute_planned_transition(
+        &plan.state,
+        ReplicaTransition {
+            next: plan.state.clone(),
+            effects: plan.initial_effects.clone(),
+        },
+        ports,
+    )
+    .await
 }
 
 // r[impl molten.fabric_consistency.live_service_ports]
@@ -207,7 +223,7 @@ async fn execute_effect<P: LiveReplicaEffectPorts>(ports: &mut P, effect: &Repli
         ReplicaEffect::FlushLog { through_index } => ports.flush_log(*through_index),
         ReplicaEffect::PersistSnapshot { snapshot } => ports.persist_snapshot(snapshot),
         ReplicaEffect::Send { envelope } => ports.send(envelope).await,
-        ReplicaEffect::ArmElectionTimer { entropy_ref } => ports.arm_election_timer(entropy_ref),
+        ReplicaEffect::ArmElectionTimer { timer_ref } => ports.arm_election_timer(timer_ref),
         ReplicaEffect::ArmHeartbeatTimer => ports.arm_heartbeat_timer(),
         ReplicaEffect::ApplyCommitted { entries } => ports.apply_committed(entries),
         ReplicaEffect::ProposalOutcome {

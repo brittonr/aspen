@@ -5,7 +5,6 @@ use super::tests::NODE_A;
 use super::tests::active_group;
 use super::tests::sent_envelope_to;
 use super::tests::started_state;
-use super::tests::test_ref;
 use super::*;
 use crate::fabric_transport::ListenerDrainReason;
 use crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS;
@@ -31,12 +30,12 @@ async fn canonical_raft_envelope_crosses_admitted_iroh_listener() {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
-        entropy_ref: test_ref("iroh-election-entropy"),
+        timer_ref: node_a.active_election_timer_ref.clone(),
     })
     .expect("election transition");
     let first_envelope = sent_envelope_to(&election, NODE_B);
     let second_election = apply_replica_event(&election.next, ReplicaEvent::ElectionTimeout {
-        entropy_ref: test_ref("iroh-second-election-entropy"),
+        timer_ref: election.next.active_election_timer_ref.clone(),
     })
     .expect("second election transition");
     let second_envelope = sent_envelope_to(&second_election, NODE_B);

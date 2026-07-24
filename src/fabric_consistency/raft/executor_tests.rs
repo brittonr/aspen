@@ -49,7 +49,7 @@ impl ReplicaTransportEffects for RecordingPorts {
 }
 
 impl ReplicaTimeEffects for RecordingPorts {
-    fn arm_election_timer(&mut self, _entropy_ref: &str) -> Result<String> {
+    fn arm_election_timer(&mut self, _timer_ref: &str) -> Result<String> {
         self.record(ReplicaEffectKind::ArmElectionTimer)
     }
 
@@ -98,7 +98,7 @@ async fn effect_shell_executes_election_effects_in_declared_order() {
     let outcome = execute_replica_event(
         &state,
         ReplicaEvent::ElectionTimeout {
-            entropy_ref: test_ref("shell-election-entropy"),
+            timer_ref: state.active_election_timer_ref.clone(),
         },
         &mut ports,
     )

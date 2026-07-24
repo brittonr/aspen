@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::INITIAL_COMMIT_INDEX;
+use super::INITIAL_ELECTION_TIMER_SEQUENCE;
 use super::INITIAL_TERM;
 use super::MAX_REPLICA_EFFECTS;
 use super::MAX_REPLICA_LOG_ENTRIES;
@@ -12,6 +13,7 @@ use super::ReplicaRole;
 use super::ReplicaState;
 use super::STATIC_VOTER_COUNT;
 use super::StaticMembership;
+use super::election_timer_ref;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::fabric_consistency::ConsistencyGroupBinding;
@@ -65,6 +67,8 @@ pub(crate) struct ReplicaStartInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaStartPlan {
     pub state: ReplicaState,
+    pub service_id: String,
+    pub application_manifest_ref: String,
     pub initial_effects: Vec<ReplicaEffect>,
     pub port_binding_refs: Vec<String>,
     pub production_admitted: bool,
@@ -77,10 +81,14 @@ pub(crate) fn plan_live_replica_start(input: ReplicaStartInput) -> Result<Replic
     let membership = validate_membership(&input.group, &input.node_id, input.membership)?;
     let port_bindings = validate_port_bindings(input.port_bindings)?;
     let port_binding_refs = port_bindings.into_iter().map(|binding| binding.binding_ref).collect();
-    let initial_effects = initial_effects(&input.profile)?;
-    let state = initial_state(input.group, input.node_id, membership, input.profile);
+    let service_id = input.group.service_id.clone();
+    let application_manifest_ref = input.group.application_manifest_ref.clone();
+    let state = initial_state(input.group, input.node_id, membership, input.profile)?;
+    let initial_effects = initial_effects(&state)?;
     Ok(ReplicaStartPlan {
         state,
+        service_id,
+        application_manifest_ref,
         initial_effects,
         port_binding_refs,
         production_admitted: false,
@@ -243,17 +251,17 @@ fn validate_port_bindings(mut bindings: Vec<ReplicaPortBinding>) -> Result<Vec<R
     Ok(bindings)
 }
 
-fn initial_effects(profile: &ReplicaProfile) -> Result<Vec<ReplicaEffect>> {
+fn initial_effects(state: &ReplicaState) -> Result<Vec<ReplicaEffect>> {
     let effects = vec![
         ReplicaEffect::PersistHardState {
             term: INITIAL_TERM,
             voted_for: None,
         },
         ReplicaEffect::ArmElectionTimer {
-            entropy_ref: profile.entropy_profile_ref.clone(),
+            timer_ref: state.active_election_timer_ref.clone(),
         },
     ];
-    if effects.len() > profile.max_effects_per_step {
+    if effects.len() > state.profile.max_effects_per_step {
         return Err(MoltenError::invalid_harness("live Raft startup exceeds its admitted effect bound"));
     }
     Ok(effects)
@@ -264,15 +272,24 @@ fn initial_state(
     node_id: String,
     membership: StaticMembership,
     profile: ReplicaProfile,
-) -> ReplicaState {
+) -> Result<ReplicaState> {
     debug_assert_eq!(profile.group_binding_ref, group.binding_ref);
-    ReplicaState {
+    let active_election_timer_ref = election_timer_ref(
+        &profile.group_binding_ref,
+        &node_id,
+        profile.service_generation,
+        INITIAL_TERM,
+        INITIAL_ELECTION_TIMER_SEQUENCE,
+    )?;
+    Ok(ReplicaState {
         profile,
         node_id,
         membership,
         role: ReplicaRole::Follower,
         lifecycle: ReplicaLifecycle::Running,
         current_term: INITIAL_TERM,
+        election_timer_sequence: INITIAL_ELECTION_TIMER_SEQUENCE,
+        active_election_timer_ref,
         voted_for: None,
         leader_id: None,
         log: Vec::new(),
@@ -283,7 +300,7 @@ fn initial_state(
         next_index: Default::default(),
         match_index: Default::default(),
         quorum_confirmed_term: None,
-    }
+    })
 }
 
 fn validate_identifier(value: &str, label: &str) -> Result<()> {

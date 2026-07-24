@@ -281,7 +281,7 @@ pub(super) fn elect_node_a() -> (ReplicaState, ReplicaState) {
     let node_a = started_state(&group, NODE_A);
     let node_b = started_state(&group, NODE_B);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
-        entropy_ref: test_ref("election-entropy"),
+        timer_ref: node_a.active_election_timer_ref.clone(),
     })
     .expect("node A election");
     let vote_request = sent_envelope_to(&election, NODE_B);
@@ -386,12 +386,30 @@ fn live_raft_minority_and_duplicate_proposals_cannot_advance_commit() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
+fn live_raft_denies_superseded_election_timer_before_protocol_effects() {
+    let group = active_group();
+    let node_a = started_state(&group, NODE_A);
+    let superseded_timer_ref = node_a.active_election_timer_ref.clone();
+    let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
+        timer_ref: superseded_timer_ref.clone(),
+    })
+    .expect("current election timer");
+
+    let error = apply_replica_event(&election.next, ReplicaEvent::ElectionTimeout {
+        timer_ref: superseded_timer_ref,
+    })
+    .expect_err("superseded timer must deny");
+    assert!(error.to_string().contains("stale Raft election timer"));
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[test]
 fn live_raft_denies_stale_epoch_messages_without_state_mutation() {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);
     let node_b = started_state(&group, NODE_B);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
-        entropy_ref: test_ref("stale-election-entropy"),
+        timer_ref: node_a.active_election_timer_ref.clone(),
     })
     .expect("election request");
     let mut stale = sent_envelope_to(&election, NODE_B);

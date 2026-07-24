@@ -45,7 +45,7 @@ pub(super) fn handle_append_entries(transition: &mut MessageTransition, input: A
             input.prev_log_index,
             support::last_log_index(&transition.next),
         )?;
-        arm_election_timer(transition);
+        arm_election_timer(transition)?;
         return Ok(());
     }
 
@@ -55,7 +55,7 @@ pub(super) fn handle_append_entries(transition: &mut MessageTransition, input: A
     push_log_effects(transition, truncate_from, appended);
     apply_leader_commit(transition, input.leader_commit.min(acknowledged_index));
     push_append_response(transition, &input.from, true, input.prev_log_index, acknowledged_index)?;
-    arm_election_timer(transition);
+    arm_election_timer(transition)?;
     Ok(())
 }
 
@@ -111,10 +111,10 @@ fn push_append_response(
     Ok(())
 }
 
-fn arm_election_timer(transition: &mut MessageTransition) {
-    transition.effects.push(ReplicaEffect::ArmElectionTimer {
-        entropy_ref: transition.next.profile.entropy_profile_ref.clone(),
-    });
+fn arm_election_timer(transition: &mut MessageTransition) -> Result<()> {
+    let timer_effect = support::arm_election_timer(&mut transition.next)?;
+    transition.effects.push(timer_effect);
+    Ok(())
 }
 
 fn apply_successful_response(transition: &mut MessageTransition, input: AppendResponseInput) -> Result<()> {
