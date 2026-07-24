@@ -37,6 +37,32 @@ impl RedbReplicaDurabilityPort {
         &self.snapshot_store_ref
     }
 
+    pub fn plan_recovery(&self, start_plan: ReplicaStartPlan) -> Result<ReplicaRecoveryPlan> {
+        if !self.adapter.state().buffered_log.is_empty() {
+            return Err(MoltenError::invalid_harness(
+                "live Raft recovery denies while buffered durability records remain",
+            ));
+        }
+        let latest_snapshot_ref = self
+            .adapter
+            .state()
+            .snapshots
+            .values()
+            .max_by(|left, right| {
+                (left.covered_log_sequence, &left.snapshot_ref).cmp(&(right.covered_log_sequence, &right.snapshot_ref))
+            })
+            .map(|snapshot| snapshot.snapshot_ref.clone());
+        let snapshot_bytes = latest_snapshot_ref
+            .as_deref()
+            .map(|snapshot_ref| {
+                self.adapter
+                    .load_snapshot_bytes(snapshot_ref, self.adapter.state().descriptor.generation)
+                    .map(|(_restore, bytes)| bytes)
+            })
+            .transpose()?;
+        plan_replica_recovery(start_plan, &self.adapter.state().durable_log, snapshot_bytes.as_deref())
+    }
+
     fn append_value(&mut self, value: preserves::IOValue, durability: DurabilityLevel) -> Result<String> {
         let bytes = crate::preserves_rail::canonical_bytes(&value)?;
         let value_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
@@ -93,7 +119,22 @@ impl ReplicaDurabilityEffects for RedbReplicaDurabilityPort {
         Ok(self.adapter.flush(generation, DurabilityLevel::MachineLoss)?.transition_ref)
     }
 
+    fn persist_commit(&mut self, through_index: u64) -> Result<String> {
+        if through_index == INITIAL_COMMIT_INDEX {
+            return Err(MoltenError::invalid_harness("live Raft commit boundary must be positive"));
+        }
+        self.append_value(
+            crate::preserves_rail::record("raft-commit-boundary-v1", vec![crate::preserves_rail::u64_value(
+                through_index,
+            )]),
+            DurabilityLevel::MachineLoss,
+        )
+    }
+
     fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String> {
+        if snapshot.snapshot_ref != snapshot_ref(snapshot)? {
+            return Err(MoltenError::invalid_harness("live Raft snapshot identity mismatch before persistence"));
+        }
         let value = snapshot_value(snapshot);
         let bytes = crate::preserves_rail::canonical_bytes(&value)?;
         let content_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
@@ -133,5 +174,17 @@ fn snapshot_value(snapshot: &ReplicaSnapshot) -> preserves::IOValue {
         crate::preserves_rail::u64_value(snapshot.last_included_index),
         crate::preserves_rail::u64_value(snapshot.last_included_term),
         crate::preserves_rail::string(&snapshot.application_state_ref),
+        crate::preserves_rail::sequence(
+            snapshot
+                .completed_requests
+                .iter()
+                .map(|(request_ref, index)| {
+                    crate::preserves_rail::record("completed-request", vec![
+                        crate::preserves_rail::string(request_ref),
+                        crate::preserves_rail::u64_value(*index),
+                    ])
+                })
+                .collect(),
+        ),
     ])
 }

@@ -58,15 +58,67 @@ pub(super) fn validate_replica_state(state: &ReplicaState) -> Result<()> {
     if state.log.len() > state.profile.max_log_entries {
         return Err(MoltenError::invalid_harness("Raft state exceeds its admitted log bound"));
     }
+    validate_snapshot(state)?;
     validate_log(state)?;
     let last = support::last_log_index(state);
     if state.last_applied > state.commit_index || state.commit_index > last {
         return Err(MoltenError::invalid_harness("Raft applied or committed index exceeds the local log"));
     }
     validate_role(state)?;
+    validate_completed_requests(state)?;
     validate_election_timer(state)?;
     if state.voted_for.as_ref().is_some_and(|voter| !state.membership.voters.contains(voter)) {
         return Err(MoltenError::invalid_harness("Raft vote target is outside admitted membership"));
+    }
+    Ok(())
+}
+
+fn validate_completed_requests(state: &ReplicaState) -> Result<()> {
+    for (request_ref, index) in &state.completed_requests {
+        validate_content_ref(request_ref, "Raft completed request ref")?;
+        if *index == INITIAL_COMMIT_INDEX || *index > state.commit_index {
+            return Err(MoltenError::invalid_harness("Raft completed request index is outside the committed range"));
+        }
+    }
+    for entry in state.log.iter().filter(|entry| entry.index <= state.commit_index) {
+        if state.completed_requests.get(&entry.request_ref) != Some(&entry.index) {
+            return Err(MoltenError::invalid_harness("Raft committed log entry is absent from idempotency state"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_snapshot(state: &ReplicaState) -> Result<()> {
+    let Some(snapshot) = &state.snapshot else {
+        return Ok(());
+    };
+    for (reference, label) in [
+        (&snapshot.snapshot_ref, "Raft snapshot ref"),
+        (&snapshot.group_binding_ref, "Raft snapshot group ref"),
+        (&snapshot.membership_ref, "Raft snapshot membership ref"),
+        (&snapshot.application_state_ref, "Raft snapshot application state ref"),
+    ] {
+        validate_content_ref(reference, label)?;
+    }
+    if snapshot.group_binding_ref != state.profile.group_binding_ref
+        || snapshot.membership_ref != state.membership.membership_ref
+        || snapshot.config_epoch != state.membership.config_epoch
+        || snapshot.fencing_epoch != state.profile.fencing_epoch
+        || snapshot.snapshot_ref != snapshot_ref(snapshot)?
+    {
+        return Err(MoltenError::invalid_harness("Raft snapshot binding or identity mismatch"));
+    }
+    for (request_ref, index) in &snapshot.completed_requests {
+        validate_content_ref(request_ref, "Raft snapshot completed request ref")?;
+        if *index == INITIAL_COMMIT_INDEX || *index > snapshot.last_included_index {
+            return Err(MoltenError::invalid_harness("Raft snapshot completed request index is out of range"));
+        }
+        if state.completed_requests.get(request_ref) != Some(index) {
+            return Err(MoltenError::invalid_harness("Raft snapshot idempotency state is not retained locally"));
+        }
+    }
+    if snapshot.last_included_index == INITIAL_COMMIT_INDEX || snapshot.last_included_index > state.commit_index {
+        return Err(MoltenError::invalid_harness("Raft snapshot boundary must be positive and no newer than commit"));
     }
     Ok(())
 }

@@ -204,7 +204,7 @@ fn parse_append_entries(fields: &[Value<IOValue>]) -> Result<RaftMessage> {
     })
 }
 
-fn parse_entry(value: &Value<IOValue>) -> Result<ReplicatedEntry> {
+pub(super) fn parse_entry(value: &Value<IOValue>) -> Result<ReplicatedEntry> {
     let fields = required_record(value, "raft-replicated-entry-v1", ENTRY_ARITY)?;
     if required_string(&fields[0], "Raft entry schema")? != RAFT_REPLICATED_ENTRY_SCHEMA {
         return Err(MoltenError::invalid_harness("unsupported canonical Raft entry schema"));
@@ -279,21 +279,21 @@ fn validate_message_entries(message: &RaftMessage) -> Result<()> {
     Ok(())
 }
 
-fn required_record(value: &Value<IOValue>, label: &str, arity: usize) -> Result<Vec<Value<IOValue>>> {
+pub(super) fn required_record(value: &Value<IOValue>, label: &str, arity: usize) -> Result<Vec<Value<IOValue>>> {
     let fields = value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected canonical {label} record")))?;
     Ok(fields.iter().collect())
 }
 
-fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+pub(super) fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
 }
 
-fn required_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+pub(super) fn required_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?

@@ -16,6 +16,14 @@ struct RecordingBatchHandler {
 }
 
 impl CommittedBatchHandler for RecordingBatchHandler {
+    fn restore_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+        self.calls += 1;
+        if self.fail {
+            return Err(MoltenError::invalid_harness("injected application failure"));
+        }
+        Ok(test_ref("application-snapshot-handler-evidence"))
+    }
+
     fn apply_batch(&mut self, _entries: &[ReplicatedEntry]) -> Result<String> {
         self.calls += 1;
         if self.fail {
@@ -36,6 +44,34 @@ fn application_port_applies_one_contiguous_admitted_batch() {
     let receipt_ref = port.apply_committed(&entries).expect("committed batch");
     assert!(receipt_ref.starts_with("blake3:"));
     assert_eq!(port.last_applied_index(), SECOND_INDEX);
+    assert_eq!(port.handler().calls, 1);
+}
+
+// r[verify molten.fabric_consistency.live_service_ports]
+#[test]
+fn application_port_restores_bound_snapshot_once() {
+    let schema_ref = test_ref("snapshot-command-schema");
+    let handler = RecordingBatchHandler::default();
+    let mut port = application_port(schema_ref, handler).expect("application port");
+    let mut snapshot = ReplicaSnapshot {
+        snapshot_ref: String::new(),
+        group_binding_ref: test_ref("application-group"),
+        membership_ref: test_ref("application-snapshot-membership"),
+        config_epoch: SERVICE_GENERATION,
+        fencing_epoch: SERVICE_GENERATION,
+        last_included_index: FIRST_INDEX,
+        last_included_term: SERVICE_GENERATION,
+        application_state_ref: test_ref("application-snapshot-state"),
+        completed_requests: std::collections::BTreeMap::from([(test_ref("application-snapshot-request"), FIRST_INDEX)]),
+    };
+    snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("snapshot identity");
+
+    let receipt = port.restore_snapshot(&snapshot).expect("application snapshot restore");
+    assert!(receipt.starts_with("blake3:"));
+    assert_eq!(port.last_applied_index(), FIRST_INDEX);
+    assert_eq!(port.handler().calls, 1);
+    let duplicate = port.restore_snapshot(&snapshot).expect_err("duplicate snapshot must deny");
+    assert!(duplicate.to_string().contains("stale or duplicated"));
     assert_eq!(port.handler().calls, 1);
 }
 
@@ -100,6 +136,7 @@ fn application_port(
 ) -> Result<AdmittedReplicaApplicationPort<RecordingBatchHandler>> {
     AdmittedReplicaApplicationPort::new(
         ReplicaApplicationConfig {
+            group_binding_ref: test_ref("application-group"),
             application_manifest_ref: test_ref("application-manifest"),
             handler_ref: test_ref("application-handler"),
             command_schema_refs: BTreeSet::from([schema_ref]),

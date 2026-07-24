@@ -1,6 +1,7 @@
 use super::tests::NODE_A;
 use super::tests::active_group;
 use super::tests::elect_node_a;
+use super::tests::sent_envelope_to;
 use super::tests::started_state;
 use super::tests::test_ref;
 use super::*;
@@ -37,6 +38,10 @@ impl ReplicaDurabilityEffects for RecordingPorts {
         self.record(ReplicaEffectKind::FlushLog)
     }
 
+    fn persist_commit(&mut self, _through_index: u64) -> Result<String> {
+        self.record(ReplicaEffectKind::PersistCommit)
+    }
+
     fn persist_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
         self.record(ReplicaEffectKind::PersistSnapshot)
     }
@@ -59,6 +64,10 @@ impl ReplicaTimeEffects for RecordingPorts {
 }
 
 impl ReplicaApplicationEffects for RecordingPorts {
+    fn restore_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+        self.record(ReplicaEffectKind::RestoreApplicationSnapshot)
+    }
+
     fn apply_committed(&mut self, _entries: &[ReplicatedEntry]) -> Result<String> {
         self.record(ReplicaEffectKind::ApplyCommitted)
     }
@@ -146,4 +155,33 @@ async fn effect_shell_stops_before_transport_when_log_flush_fails() {
     assert_eq!(failed.completed.len(), 1);
     assert_eq!(ports.executed, vec![ReplicaEffectKind::PersistEntries, ReplicaEffectKind::FlushLog]);
     assert!(!ports.executed.contains(&ReplicaEffectKind::Send));
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[tokio::test]
+async fn durable_commit_failure_prevents_application_and_state_publication() {
+    let (leader, follower) = elect_node_a();
+    let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
+        request_ref: test_ref("commit-failure-request"),
+        command_ref: test_ref("commit-failure-command"),
+        command_schema_ref: test_ref("commit-failure-schema"),
+    })
+    .expect("proposal plan");
+    let append = sent_envelope_to(&proposal, &follower.node_id);
+    let replicated =
+        apply_replica_event(&follower, ReplicaEvent::Message { envelope: append }).expect("follower replication");
+    let response = sent_envelope_to(&replicated, &leader.node_id);
+    let mut ports = RecordingPorts {
+        executed: Vec::new(),
+        fail_on: Some(ReplicaEffectKind::PersistCommit),
+    };
+
+    let outcome = execute_replica_event(&proposal.next, ReplicaEvent::Message { envelope: response }, &mut ports).await;
+    let ReplicaExecutionOutcome::Failed(failed) = outcome else {
+        panic!("expected durable commit failure");
+    };
+    assert_eq!(failed.failed_kind, ReplicaEffectKind::PersistCommit);
+    assert_eq!(failed.retained.commit_index, INITIAL_COMMIT_INDEX);
+    assert_eq!(ports.executed, vec![ReplicaEffectKind::PersistCommit]);
+    assert!(!ports.executed.contains(&ReplicaEffectKind::ApplyCommitted));
 }

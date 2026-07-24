@@ -13,6 +13,9 @@ pub(super) fn handle_proposal(
     validation::validate_content_ref(&request_ref, "Raft proposal request ref")?;
     validation::validate_content_ref(&command_ref, "Raft proposal command ref")?;
     validation::validate_content_ref(&command_schema_ref, "Raft proposal command schema ref")?;
+    if let Some(committed_index) = state.completed_requests.get(&request_ref).copied() {
+        return proposal_outcome(state, request_ref, ProposalDisposition::Committed, Some(committed_index));
+    }
     if let Some(existing) = state.log.iter().find(|entry| entry.request_ref == request_ref) {
         return duplicate_proposal_transition(state, request_ref, existing);
     }
@@ -42,6 +45,32 @@ pub(super) fn handle_read(
         disposition,
         observed_index: state.last_applied,
     }])
+}
+
+pub(super) fn handle_create_snapshot(state: &ReplicaState, application_state_ref: String) -> Result<ReplicaTransition> {
+    validation::ensure_running(state)?;
+    validation::validate_content_ref(&application_state_ref, "Raft snapshot application state ref")?;
+    if state.last_applied == INITIAL_COMMIT_INDEX {
+        return Err(MoltenError::invalid_harness("Raft snapshot requires a committed application boundary"));
+    }
+    let last_included_term = support::term_at(state, state.last_applied)
+        .ok_or_else(|| MoltenError::invalid_harness("Raft snapshot boundary term is absent"))?;
+    let mut snapshot = ReplicaSnapshot {
+        snapshot_ref: String::new(),
+        group_binding_ref: state.profile.group_binding_ref.clone(),
+        membership_ref: state.membership.membership_ref.clone(),
+        config_epoch: state.membership.config_epoch,
+        fencing_epoch: state.profile.fencing_epoch,
+        last_included_index: state.last_applied,
+        last_included_term,
+        application_state_ref,
+        completed_requests: state.completed_requests.clone(),
+    };
+    snapshot.snapshot_ref = snapshot_ref(&snapshot)?;
+    let mut next = state.clone();
+    next.log.retain(|entry| entry.index > snapshot.last_included_index);
+    next.snapshot = Some(snapshot.clone());
+    finish_transition(next, vec![ReplicaEffect::PersistSnapshot { snapshot }])
 }
 
 pub(super) fn handle_begin_drain(state: &ReplicaState) -> Result<ReplicaTransition> {

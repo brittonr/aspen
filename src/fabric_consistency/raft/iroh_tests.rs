@@ -34,6 +34,10 @@ const ASSEMBLY_STARTUP_OBSERVATIONS: usize = 2;
 struct AssemblyApplicationHandler;
 
 impl CommittedBatchHandler for AssemblyApplicationHandler {
+    fn restore_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+        Ok(test_ref("assembled-application-snapshot-evidence"))
+    }
+
     fn apply_batch(&mut self, _entries: &[ReplicatedEntry]) -> Result<String> {
         Ok(test_ref("assembled-application-evidence"))
     }
@@ -98,6 +102,7 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
     .expect("assembled time port");
     let application = AdmittedReplicaApplicationPort::new(
         ReplicaApplicationConfig {
+            group_binding_ref: group.binding_ref.clone(),
             application_manifest_ref: application_manifest_ref.clone(),
             handler_ref: test_ref("assembled-application-handler"),
             command_schema_refs: BTreeSet::from([test_ref("assembled-command-schema")]),
@@ -129,6 +134,7 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
     let identity = ReplicaRuntimePortIdentity {
         service_id: service_id.clone(),
         service_generation: ASSEMBLY_GENERATION,
+        group_binding_ref: group.binding_ref.clone(),
         application_manifest_ref: application_manifest_ref.clone(),
         protocol_ref,
         durable_log_ref,

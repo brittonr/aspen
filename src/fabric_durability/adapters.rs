@@ -155,6 +155,14 @@ impl RedbDurableStateAdapter {
     }
 
     pub fn restore_snapshot(&self, snapshot_ref: &str, target_generation: u64) -> Result<SnapshotRestorePlan> {
+        Ok(self.load_snapshot_bytes(snapshot_ref, target_generation)?.0)
+    }
+
+    pub fn load_snapshot_bytes(
+        &self,
+        snapshot_ref: &str,
+        target_generation: u64,
+    ) -> Result<(SnapshotRestorePlan, Vec<u8>)> {
         let snapshot = self
             .state
             .snapshots
@@ -163,8 +171,9 @@ impl RedbDurableStateAdapter {
         let relative = format!("{SNAPSHOT_DIRECTORY}/{}.bin", snapshot_file_stem(&snapshot.content_ref)?);
         let bytes = self.root.root().read(&LocalStorePath::parse(&relative)?)?;
         let actual_ref = blake3_ref(&bytes);
-        plan_snapshot_restore(&self.state, snapshot_ref, target_generation, &actual_ref)
-            .map_err(|issues| adapter_validation_error("snapshot restore", &issues))
+        let plan = plan_snapshot_restore(&self.state, snapshot_ref, target_generation, &actual_ref)
+            .map_err(|issues| adapter_validation_error("snapshot restore", &issues))?;
+        Ok((plan, bytes))
     }
 
     // r[impl molten.fabric_durability.effect_transaction]

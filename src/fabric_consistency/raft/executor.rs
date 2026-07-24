@@ -12,10 +12,12 @@ pub enum ReplicaEffectKind {
     PersistHardState,
     PersistEntries,
     FlushLog,
+    PersistCommit,
     PersistSnapshot,
     Send,
     ArmElectionTimer,
     ArmHeartbeatTimer,
+    RestoreApplicationSnapshot,
     ApplyCommitted,
     ProposalOutcome,
     ReadOutcome,
@@ -28,10 +30,12 @@ impl ReplicaEffectKind {
             Self::PersistHardState => "persist-hard-state",
             Self::PersistEntries => "persist-entries",
             Self::FlushLog => "flush-log",
+            Self::PersistCommit => "persist-commit",
             Self::PersistSnapshot => "persist-snapshot",
             Self::Send => "send",
             Self::ArmElectionTimer => "arm-election-timer",
             Self::ArmHeartbeatTimer => "arm-heartbeat-timer",
+            Self::RestoreApplicationSnapshot => "restore-application-snapshot",
             Self::ApplyCommitted => "apply-committed",
             Self::ProposalOutcome => "proposal-outcome",
             Self::ReadOutcome => "read-outcome",
@@ -76,6 +80,8 @@ pub trait ReplicaDurabilityEffects {
 
     fn flush_log(&mut self, through_index: u64) -> Result<String>;
 
+    fn persist_commit(&mut self, through_index: u64) -> Result<String>;
+
     fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String>;
 }
 
@@ -90,6 +96,8 @@ pub trait ReplicaTimeEffects {
 }
 
 pub trait ReplicaApplicationEffects {
+    fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String>;
+
     fn apply_committed(&mut self, entries: &[ReplicatedEntry]) -> Result<String>;
 }
 
@@ -221,10 +229,12 @@ async fn execute_effect<P: LiveReplicaEffectPorts>(ports: &mut P, effect: &Repli
         ReplicaEffect::PersistHardState { term, voted_for } => ports.persist_hard_state(*term, voted_for.as_deref()),
         ReplicaEffect::PersistEntries { truncate_from, entries } => ports.persist_entries(*truncate_from, entries),
         ReplicaEffect::FlushLog { through_index } => ports.flush_log(*through_index),
+        ReplicaEffect::PersistCommit { through_index } => ports.persist_commit(*through_index),
         ReplicaEffect::PersistSnapshot { snapshot } => ports.persist_snapshot(snapshot),
         ReplicaEffect::Send { envelope } => ports.send(envelope).await,
         ReplicaEffect::ArmElectionTimer { timer_ref } => ports.arm_election_timer(timer_ref),
         ReplicaEffect::ArmHeartbeatTimer => ports.arm_heartbeat_timer(),
+        ReplicaEffect::RestoreApplicationSnapshot { snapshot } => ports.restore_snapshot(snapshot),
         ReplicaEffect::ApplyCommitted { entries } => ports.apply_committed(entries),
         ReplicaEffect::ProposalOutcome {
             request_ref,
@@ -246,10 +256,12 @@ fn effect_kind(effect: &ReplicaEffect) -> ReplicaEffectKind {
         ReplicaEffect::PersistHardState { .. } => ReplicaEffectKind::PersistHardState,
         ReplicaEffect::PersistEntries { .. } => ReplicaEffectKind::PersistEntries,
         ReplicaEffect::FlushLog { .. } => ReplicaEffectKind::FlushLog,
+        ReplicaEffect::PersistCommit { .. } => ReplicaEffectKind::PersistCommit,
         ReplicaEffect::PersistSnapshot { .. } => ReplicaEffectKind::PersistSnapshot,
         ReplicaEffect::Send { .. } => ReplicaEffectKind::Send,
         ReplicaEffect::ArmElectionTimer { .. } => ReplicaEffectKind::ArmElectionTimer,
         ReplicaEffect::ArmHeartbeatTimer => ReplicaEffectKind::ArmHeartbeatTimer,
+        ReplicaEffect::RestoreApplicationSnapshot { .. } => ReplicaEffectKind::RestoreApplicationSnapshot,
         ReplicaEffect::ApplyCommitted { .. } => ReplicaEffectKind::ApplyCommitted,
         ReplicaEffect::ProposalOutcome { .. } => ReplicaEffectKind::ProposalOutcome,
         ReplicaEffect::ReadOutcome { .. } => ReplicaEffectKind::ReadOutcome,

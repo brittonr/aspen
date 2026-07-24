@@ -372,6 +372,10 @@ impl ReplicaDurabilityEffects for ServiceDurabilityPort {
         Ok(test_ref("service-flush"))
     }
 
+    fn persist_commit(&mut self, _through_index: u64) -> Result<String> {
+        Ok(test_ref("service-commit"))
+    }
+
     fn persist_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
         Ok(test_ref("service-snapshot"))
     }
@@ -411,6 +415,10 @@ impl ReplicaTimeEffects for ServiceTimePort {
 struct ServiceApplicationHandler;
 
 impl CommittedBatchHandler for ServiceApplicationHandler {
+    fn restore_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+        Ok(test_ref("service-application-snapshot-handler"))
+    }
+
     fn apply_batch(&mut self, _entries: &[ReplicatedEntry]) -> Result<String> {
         Ok(test_ref("service-application-handler"))
     }
@@ -442,6 +450,7 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
     let (control_sender, _control_receiver) = tokio::sync::mpsc::unbounded_channel();
     let application = AdmittedReplicaApplicationPort::new(
         ReplicaApplicationConfig {
+            group_binding_ref: group.binding_ref.clone(),
             application_manifest_ref: group.application_manifest_ref.clone(),
             handler_ref: test_ref("service-application-binding"),
             command_schema_refs: BTreeSet::from([test_ref("service-command-schema")]),
@@ -505,6 +514,7 @@ fn runtime_identity(plan: &ReplicaStartPlan) -> ReplicaRuntimePortIdentity {
     ReplicaRuntimePortIdentity {
         service_id: plan.service_id.clone(),
         service_generation: plan.state.profile.service_generation,
+        group_binding_ref: plan.state.profile.group_binding_ref.clone(),
         application_manifest_ref: plan.application_manifest_ref.clone(),
         protocol_ref: plan.state.profile.protocol_ref.clone(),
         durable_log_ref: plan.state.profile.durable_log_ref.clone(),

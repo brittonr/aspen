@@ -98,6 +98,7 @@ pub struct ReplicaSnapshot {
     pub last_included_index: u64,
     pub last_included_term: u64,
     pub application_state_ref: String,
+    pub completed_requests: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -195,6 +196,9 @@ pub enum ReplicaEvent {
         request_ref: String,
         mode: ConsistencyReadMode,
     },
+    CreateSnapshot {
+        application_state_ref: String,
+    },
     BeginDrain,
     Stop,
 }
@@ -252,6 +256,9 @@ pub enum ReplicaEffect {
     FlushLog {
         through_index: u64,
     },
+    PersistCommit {
+        through_index: u64,
+    },
     PersistSnapshot {
         snapshot: ReplicaSnapshot,
     },
@@ -262,6 +269,9 @@ pub enum ReplicaEffect {
         timer_ref: String,
     },
     ArmHeartbeatTimer,
+    RestoreApplicationSnapshot {
+        snapshot: ReplicaSnapshot,
+    },
     ApplyCommitted {
         entries: Vec<ReplicatedEntry>,
     },
@@ -297,6 +307,7 @@ pub struct ReplicaState {
     pub commit_index: u64,
     pub last_applied: u64,
     pub snapshot: Option<ReplicaSnapshot>,
+    pub completed_requests: BTreeMap<String, u64>,
     pub votes_received: BTreeSet<String>,
     pub next_index: BTreeMap<String, u64>,
     pub match_index: BTreeMap<String, u64>,
@@ -314,6 +325,30 @@ pub struct SnapshotPlan {
     pub snapshot: ReplicaSnapshot,
     pub compact_through: u64,
     pub retained_entries: Vec<ReplicatedEntry>,
+}
+
+pub(crate) fn snapshot_ref(snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-replica-snapshot-identity-v1", vec![
+        crate::preserves_rail::string(&snapshot.group_binding_ref),
+        crate::preserves_rail::string(&snapshot.membership_ref),
+        crate::preserves_rail::u64_value(snapshot.config_epoch),
+        crate::preserves_rail::u64_value(snapshot.fencing_epoch),
+        crate::preserves_rail::u64_value(snapshot.last_included_index),
+        crate::preserves_rail::u64_value(snapshot.last_included_term),
+        crate::preserves_rail::string(&snapshot.application_state_ref),
+        crate::preserves_rail::sequence(
+            snapshot
+                .completed_requests
+                .iter()
+                .map(|(request_ref, index)| {
+                    crate::preserves_rail::record("completed-request", vec![
+                        crate::preserves_rail::string(request_ref),
+                        crate::preserves_rail::u64_value(*index),
+                    ])
+                })
+                .collect(),
+        ),
+    ]))
 }
 
 pub(crate) fn election_timer_ref(

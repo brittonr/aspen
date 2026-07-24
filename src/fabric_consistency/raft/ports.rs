@@ -8,6 +8,7 @@ use crate::error::Result;
 pub struct ReplicaRuntimePortIdentity {
     pub service_id: String,
     pub service_generation: u64,
+    pub group_binding_ref: String,
     pub application_manifest_ref: String,
     pub protocol_ref: String,
     pub durable_log_ref: String,
@@ -75,6 +76,7 @@ fn validate_runtime_identity(identity: &ReplicaRuntimePortIdentity) -> Result<()
         ));
     }
     for reference in [
+        &identity.group_binding_ref,
         &identity.application_manifest_ref,
         &identity.protocol_ref,
         &identity.durable_log_ref,
@@ -112,6 +114,7 @@ pub fn validate_replica_runtime_identity_for_start(
     let state = &plan.state;
     let exact = identity.service_id == plan.service_id
         && identity.service_generation == state.profile.service_generation
+        && identity.group_binding_ref == state.profile.group_binding_ref
         && identity.application_manifest_ref == plan.application_manifest_ref
         && identity.protocol_ref == state.profile.protocol_ref
         && identity.durable_log_ref == state.profile.durable_log_ref
@@ -175,6 +178,7 @@ where
         && identity.timer_profile_ref == time.timer_profile_ref()
         && identity.entropy_profile_ref == time.entropy_binding_ref()
         && identity.service_generation == time.service_generation()
+        && identity.group_binding_ref == application.group_binding_ref()
         && identity.application_manifest_ref == application.application_manifest_ref()
         && identity.service_id == control.service_id()
         && identity.service_generation == control.service_generation()
@@ -200,6 +204,10 @@ impl<D: ReplicaDurabilityEffects, N, T, A, C> ReplicaDurabilityEffects for Repli
         self.durability.flush_log(through_index)
     }
 
+    fn persist_commit(&mut self, through_index: u64) -> Result<String> {
+        self.durability.persist_commit(through_index)
+    }
+
     fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String> {
         self.durability.persist_snapshot(snapshot)
     }
@@ -222,6 +230,10 @@ impl<D, N, T: ReplicaTimeEffects, A, C> ReplicaTimeEffects for ReplicaPortBundle
 }
 
 impl<D, N, T, A: ReplicaApplicationEffects, C> ReplicaApplicationEffects for ReplicaPortBundle<D, N, T, A, C> {
+    fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String> {
+        self.application.restore_snapshot(snapshot)
+    }
+
     fn apply_committed(&mut self, entries: &[ReplicatedEntry]) -> Result<String> {
         self.application.apply_committed(entries)
     }

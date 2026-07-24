@@ -164,6 +164,10 @@ fn apply_leader_commit(transition: &mut MessageTransition, leader_commit: u64) {
     let entries = support::entries_in_range(&transition.next, transition.next.commit_index, next_commit);
     transition.next.commit_index = next_commit;
     transition.next.last_applied = next_commit;
+    record_completed_requests(&mut transition.next, &entries);
+    transition.effects.push(ReplicaEffect::PersistCommit {
+        through_index: next_commit,
+    });
     if !entries.is_empty() {
         transition.effects.push(ReplicaEffect::ApplyCommitted { entries });
     }
@@ -177,6 +181,10 @@ fn advance_leader_commit(transition: &mut MessageTransition) {
     let entries = support::entries_in_range(&transition.next, transition.next.commit_index, next_commit);
     transition.next.commit_index = next_commit;
     transition.next.last_applied = next_commit;
+    record_completed_requests(&mut transition.next, &entries);
+    transition.effects.push(ReplicaEffect::PersistCommit {
+        through_index: next_commit,
+    });
     transition.effects.push(ReplicaEffect::ApplyCommitted {
         entries: entries.clone(),
     });
@@ -185,6 +193,12 @@ fn advance_leader_commit(transition: &mut MessageTransition) {
         disposition: ProposalDisposition::Committed,
         committed_index: Some(entry.index),
     }));
+}
+
+fn record_completed_requests(state: &mut ReplicaState, entries: &[ReplicatedEntry]) {
+    for entry in entries {
+        state.completed_requests.insert(entry.request_ref.clone(), entry.index);
+    }
 }
 
 fn highest_quorum_index(state: &ReplicaState) -> u64 {

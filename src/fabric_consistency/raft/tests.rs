@@ -386,6 +386,51 @@ fn live_raft_minority_and_duplicate_proposals_cannot_advance_commit() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
+fn live_raft_snapshot_compacts_only_through_committed_application_state() {
+    let committed = committed_leader();
+    let snapshot = apply_replica_event(&committed, ReplicaEvent::CreateSnapshot {
+        application_state_ref: test_ref("snapshot-application-state"),
+    })
+    .expect("snapshot transition");
+    let stored = snapshot.next.snapshot.as_ref().expect("snapshot state");
+
+    assert_eq!(stored.last_included_index, committed.last_applied);
+    assert_eq!(stored.snapshot_ref, snapshot_ref(stored).expect("snapshot identity"));
+    assert!(snapshot.next.log.iter().all(|entry| entry.index > stored.last_included_index));
+    assert!(matches!(snapshot.effects.as_slice(), [ReplicaEffect::PersistSnapshot { .. }]));
+    let completed_request_ref = stored.completed_requests.keys().next().expect("completed request retained").clone();
+    let duplicate = apply_replica_event(&snapshot.next, ReplicaEvent::Propose {
+        request_ref: completed_request_ref,
+        command_ref: test_ref("snapshot-duplicate-command"),
+        command_schema_ref: test_ref("snapshot-duplicate-schema"),
+    })
+    .expect("compacted duplicate outcome");
+    assert!(matches!(duplicate.effects.as_slice(), [ReplicaEffect::ProposalOutcome {
+        disposition: ProposalDisposition::Committed,
+        committed_index: Some(INITIAL_LOG_INDEX),
+        ..
+    }]));
+
+    let group = active_group();
+    let empty = started_state(&group, NODE_A);
+    let empty_error = apply_replica_event(&empty, ReplicaEvent::CreateSnapshot {
+        application_state_ref: test_ref("empty-snapshot-application-state"),
+    })
+    .expect_err("uncommitted snapshot must deny");
+    assert!(empty_error.to_string().contains("committed application boundary"));
+
+    let mut tampered = snapshot.next;
+    tampered.snapshot.as_mut().expect("snapshot").application_state_ref = test_ref("tampered-application-state");
+    let tamper_error = apply_replica_event(&tampered, ReplicaEvent::Read {
+        request_ref: test_ref("tampered-snapshot-read"),
+        mode: crate::fabric_consistency::ConsistencyReadMode::LocalStale,
+    })
+    .expect_err("tampered snapshot must deny before read");
+    assert!(tamper_error.to_string().contains("snapshot binding or identity mismatch"));
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[test]
 fn live_raft_denies_superseded_election_timer_before_protocol_effects() {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);

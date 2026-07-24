@@ -5,11 +5,14 @@ use crate::error::MoltenError;
 use crate::error::Result;
 
 pub trait CommittedBatchHandler {
+    fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String>;
+
     fn apply_batch(&mut self, entries: &[ReplicatedEntry]) -> Result<String>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaApplicationConfig {
+    pub group_binding_ref: String,
     pub application_manifest_ref: String,
     pub handler_ref: String,
     pub command_schema_refs: BTreeSet<String>,
@@ -36,6 +39,10 @@ impl<H: CommittedBatchHandler> AdmittedReplicaApplicationPort<H> {
         self.last_applied_index
     }
 
+    pub fn group_binding_ref(&self) -> &str {
+        &self.config.group_binding_ref
+    }
+
     pub fn application_manifest_ref(&self) -> &str {
         &self.config.application_manifest_ref
     }
@@ -46,6 +53,26 @@ impl<H: CommittedBatchHandler> AdmittedReplicaApplicationPort<H> {
 }
 
 impl<H: CommittedBatchHandler> ReplicaApplicationEffects for AdmittedReplicaApplicationPort<H> {
+    fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String> {
+        validate_application_snapshot(&self.config, self.last_applied_index, snapshot)?;
+        let handler_evidence_ref = self.handler.restore_snapshot(snapshot)?;
+        crate::preserves_rail::validate_content_ref(&handler_evidence_ref)?;
+        let receipt_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
+            "raft-application-snapshot-restore-v1",
+            vec![
+                crate::preserves_rail::string(&self.config.group_binding_ref),
+                crate::preserves_rail::string(&self.config.application_manifest_ref),
+                crate::preserves_rail::string(&self.config.handler_ref),
+                crate::preserves_rail::string(&snapshot.snapshot_ref),
+                crate::preserves_rail::u64_value(snapshot.last_included_index),
+                crate::preserves_rail::string(&snapshot.application_state_ref),
+                crate::preserves_rail::string(&handler_evidence_ref),
+            ],
+        ))?;
+        self.last_applied_index = snapshot.last_included_index;
+        Ok(receipt_ref)
+    }
+
     fn apply_committed(&mut self, entries: &[ReplicatedEntry]) -> Result<String> {
         let plan = plan_application_batch(self.last_applied_index, &self.config.command_schema_refs, entries)?;
         let handler_evidence_ref = self.handler.apply_batch(entries)?;
@@ -63,6 +90,7 @@ struct ApplicationBatchPlan {
 }
 
 fn validate_application_config(config: &ReplicaApplicationConfig) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(&config.group_binding_ref)?;
     crate::preserves_rail::validate_content_ref(&config.application_manifest_ref)?;
     crate::preserves_rail::validate_content_ref(&config.handler_ref)?;
     if config.command_schema_refs.is_empty() {
@@ -72,6 +100,28 @@ fn validate_application_config(config: &ReplicaApplicationConfig) -> Result<()> 
     }
     for schema_ref in &config.command_schema_refs {
         crate::preserves_rail::validate_content_ref(schema_ref)?;
+    }
+    Ok(())
+}
+
+fn validate_application_snapshot(
+    config: &ReplicaApplicationConfig,
+    last_applied_index: u64,
+    snapshot: &ReplicaSnapshot,
+) -> Result<()> {
+    for reference in [
+        &snapshot.snapshot_ref,
+        &snapshot.group_binding_ref,
+        &snapshot.membership_ref,
+        &snapshot.application_state_ref,
+    ] {
+        crate::preserves_rail::validate_content_ref(reference)?;
+    }
+    if snapshot.group_binding_ref != config.group_binding_ref || snapshot.snapshot_ref != snapshot_ref(snapshot)? {
+        return Err(MoltenError::invalid_harness("live Raft application snapshot identity mismatch"));
+    }
+    if snapshot.last_included_index <= last_applied_index {
+        return Err(MoltenError::invalid_harness("live Raft application snapshot is stale or duplicated"));
     }
     Ok(())
 }

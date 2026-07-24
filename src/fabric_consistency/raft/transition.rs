@@ -29,6 +29,9 @@ pub fn apply_replica_event(state: &ReplicaState, event: ReplicaEvent) -> Result<
             command_schema_ref,
         } => client::handle_proposal(state, request_ref, command_ref, command_schema_ref)?,
         ReplicaEvent::Read { request_ref, mode } => client::handle_read(state, request_ref, mode)?,
+        ReplicaEvent::CreateSnapshot { application_state_ref } => {
+            client::handle_create_snapshot(state, application_state_ref)?
+        }
         ReplicaEvent::BeginDrain => client::handle_begin_drain(state)?,
         ReplicaEvent::Stop => client::handle_stop(state)?,
     };
@@ -147,4 +150,8 @@ fn finish_message_transition(mut transition: MessageTransition) -> Result<Replic
 
 pub(super) fn finish_transition(next: ReplicaState, effects: Vec<ReplicaEffect>) -> Result<ReplicaTransition> {
     Ok(ReplicaTransition { next, effects })
+}
+
+pub(super) fn validate_recovered_replica_state(state: &ReplicaState) -> Result<()> {
+    validation::validate_replica_state(state)
 }

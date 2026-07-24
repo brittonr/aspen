@@ -296,6 +296,7 @@ fn initial_state(
         commit_index: INITIAL_COMMIT_INDEX,
         last_applied: INITIAL_COMMIT_INDEX,
         snapshot: None,
+        completed_requests: Default::default(),
         votes_received: BTreeSet::new(),
         next_index: Default::default(),
         match_index: Default::default(),
