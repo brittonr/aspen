@@ -113,6 +113,8 @@ fn operator_readback_is_bounded_and_rejects_substituted_group_identity() {
             term: INITIAL_CONSISTENCY_EPOCH,
             index: INITIAL_CONSISTENCY_EPOCH,
             source_ref: test_ref(&format!("operator-source-{offset}")),
+            quorum_evidence_ref: None,
+            quorum_members: Vec::new(),
             evidence_ref: test_ref(&format!("operator-evidence-{offset}")),
         })
         .collect::<Vec<_>>();

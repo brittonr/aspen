@@ -1,10 +1,47 @@
 mod health;
 
+use std::collections::BTreeSet;
+
 use super::*;
 use crate::error::MoltenError;
 use crate::error::Result;
 
 pub const MAX_REPLICA_EVIDENCE_RECORDS: usize = 1_024;
+const MAX_QUORUM_MEMBER_IDENTIFIER_BYTES: usize = 256;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplicaQuorumEvidenceBoundary {
+    Commit,
+    ReadCurrentness,
+}
+
+impl ReplicaQuorumEvidenceBoundary {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Commit => "commit",
+            Self::ReadCurrentness => "read-currentness",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaQuorumEvidence {
+    pub boundary: ReplicaQuorumEvidenceBoundary,
+    pub group_binding_ref: String,
+    pub membership_ref: String,
+    pub config_epoch: u64,
+    pub term: u64,
+    pub index: u64,
+    pub admitted_voters: Vec<String>,
+    pub acknowledgement_members: Vec<String>,
+    pub source_ref: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedReplicaQuorumEvidence {
+    pub acknowledgement_members: Vec<String>,
+    pub evidence_ref: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ReplicaEvidenceKind {
@@ -38,7 +75,87 @@ pub struct ReplicaEvidenceRecord {
     pub term: u64,
     pub index: u64,
     pub source_ref: String,
+    pub quorum_evidence_ref: Option<String>,
+    pub quorum_members: Vec<String>,
     pub evidence_ref: String,
+}
+
+// r[impl molten.fabric_consistency.final_validation]
+pub fn validate_replica_quorum_evidence(evidence: &ReplicaQuorumEvidence) -> Result<ValidatedReplicaQuorumEvidence> {
+    crate::preserves_rail::validate_content_ref(&evidence.group_binding_ref)?;
+    crate::preserves_rail::validate_content_ref(&evidence.membership_ref)?;
+    crate::preserves_rail::validate_content_ref(&evidence.source_ref)?;
+    let (admitted, acknowledgement_members) = validated_quorum_member_sets(evidence)?;
+    let evidence_ref = quorum_evidence_ref(evidence, &admitted, &acknowledgement_members)?;
+    Ok(ValidatedReplicaQuorumEvidence {
+        acknowledgement_members,
+        evidence_ref,
+    })
+}
+
+fn validated_quorum_member_sets(evidence: &ReplicaQuorumEvidence) -> Result<(BTreeSet<String>, Vec<String>)> {
+    if evidence.admitted_voters.len() != STATIC_VOTER_COUNT {
+        return Err(MoltenError::invalid_harness("Raft quorum evidence does not bind the exact static voter count"));
+    }
+    let admitted = unique_quorum_members(
+        &evidence.admitted_voters,
+        "admitted voter",
+        "Raft quorum evidence contains duplicate admitted voters",
+    )?;
+    let acknowledgements = unique_quorum_members(
+        &evidence.acknowledgement_members,
+        "acknowledgement member",
+        "Raft quorum evidence contains duplicate acknowledgements",
+    )?;
+    require_admitted_majority(&admitted, &acknowledgements)?;
+    Ok((admitted, acknowledgements.into_iter().collect()))
+}
+
+fn unique_quorum_members(members: &[String], label: &str, duplicate_diagnostic: &str) -> Result<BTreeSet<String>> {
+    for member in members {
+        if member.is_empty() || member.len() > MAX_QUORUM_MEMBER_IDENTIFIER_BYTES {
+            return Err(MoltenError::invalid_harness(format!(
+                "Raft quorum evidence {label} is empty or exceeds its byte bound"
+            )));
+        }
+    }
+    let unique = members.iter().cloned().collect::<BTreeSet<_>>();
+    if unique.len() != members.len() {
+        return Err(MoltenError::invalid_harness(duplicate_diagnostic));
+    }
+    Ok(unique)
+}
+
+fn require_admitted_majority(admitted: &BTreeSet<String>, acknowledgements: &BTreeSet<String>) -> Result<()> {
+    if acknowledgements.iter().any(|member| !admitted.contains(member)) {
+        return Err(MoltenError::invalid_harness(
+            "Raft quorum evidence contains an acknowledgement outside admitted membership",
+        ));
+    }
+    if acknowledgements.len() < STATIC_QUORUM_COUNT {
+        return Err(MoltenError::invalid_harness(
+            "Raft quorum evidence lacks the required distinct admitted acknowledgements",
+        ));
+    }
+    Ok(())
+}
+
+fn quorum_evidence_ref(
+    evidence: &ReplicaQuorumEvidence,
+    admitted: &BTreeSet<String>,
+    acknowledgement_members: &[String],
+) -> Result<String> {
+    crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-quorum-evidence-v1", vec![
+        crate::preserves_rail::string(evidence.boundary.as_str()),
+        crate::preserves_rail::string(&evidence.group_binding_ref),
+        crate::preserves_rail::string(&evidence.membership_ref),
+        crate::preserves_rail::u64_value(evidence.config_epoch),
+        crate::preserves_rail::u64_value(evidence.term),
+        crate::preserves_rail::u64_value(evidence.index),
+        crate::preserves_rail::sequence(admitted.iter().map(crate::preserves_rail::string).collect()),
+        crate::preserves_rail::sequence(acknowledgement_members.iter().map(crate::preserves_rail::string).collect()),
+        crate::preserves_rail::string(&evidence.source_ref),
+    ]))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,7 +257,7 @@ impl ReplicaEvidenceLedger {
     ) -> Result<()> {
         let records_before = self.records.len();
         match outcome {
-            ReplicaExecutionOutcome::Applied(executed) => self.observe_applied(before, executed)?,
+            ReplicaExecutionOutcome::Applied(executed) => self.observe_applied(before, event, executed)?,
             ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
                 self.record_failure(before, "denied", diagnostic)?;
             }
@@ -169,23 +286,24 @@ impl ReplicaEvidenceLedger {
         health::aggregate(self, state, production_admitted)
     }
 
-    fn observe_applied(&mut self, before: &ReplicaState, executed: &ExecutedReplicaTransition) -> Result<()> {
-        if executed.next.commit_index > before.commit_index {
-            self.record_from_observation(
+    fn observe_applied(
+        &mut self,
+        before: &ReplicaState,
+        event: &ReplicaEvent,
+        executed: &ExecutedReplicaTransition,
+    ) -> Result<()> {
+        if executed.next.commit_index > before.commit_index && executed.next.role == ReplicaRole::Leader {
+            let source_ref = required_observation_ref(&executed.observations, ReplicaEffectKind::PersistCommit)?;
+            let quorum = commit_quorum_evidence(&executed.next, source_ref.clone())?;
+            self.record_with_quorum(
                 ReplicaEvidenceKind::Commit,
-                &executed.next,
-                &executed.observations,
-                ReplicaEffectKind::PersistCommit,
+                executed.next.current_term,
+                executed.next.commit_index,
+                source_ref,
+                Some(quorum),
             )?;
         }
-        if executed.observations.iter().any(|item| item.kind == ReplicaEffectKind::ReadOutcome) {
-            self.record_from_observation(
-                ReplicaEvidenceKind::ReadCurrentness,
-                &executed.next,
-                &executed.observations,
-                ReplicaEffectKind::ReadOutcome,
-            )?;
-        }
+        self.record_read_currentness(before, event, executed)?;
         if executed.next.snapshot != before.snapshot {
             let source_ref = executed
                 .next
@@ -204,19 +322,25 @@ impl ReplicaEvidenceLedger {
         Ok(())
     }
 
-    fn record_from_observation(
+    fn record_read_currentness(
         &mut self,
-        kind: ReplicaEvidenceKind,
-        state: &ReplicaState,
-        observations: &[ReplicaEffectObservation],
-        observation_kind: ReplicaEffectKind,
+        before: &ReplicaState,
+        event: &ReplicaEvent,
+        executed: &ExecutedReplicaTransition,
     ) -> Result<()> {
-        let source_ref = observations
-            .iter()
-            .find(|observation| observation.kind == observation_kind)
-            .map(|observation| observation.evidence_ref.clone())
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft selected evidence lacks its effect observation"))?;
-        self.record(kind, state.current_term, state.last_applied, source_ref)
+        let Some(source_ref) = observation_ref(&executed.observations, ReplicaEffectKind::ReadOutcome) else {
+            return Ok(());
+        };
+        let Some((read_index, quorum)) = read_quorum_evidence(before, event, source_ref.clone())? else {
+            return Ok(());
+        };
+        self.record_with_quorum(
+            ReplicaEvidenceKind::ReadCurrentness,
+            executed.next.current_term,
+            read_index,
+            source_ref,
+            Some(quorum),
+        )
     }
 
     fn record_failure(&mut self, state: &ReplicaState, class: &str, diagnostic: &str) -> Result<()> {
@@ -229,14 +353,31 @@ impl ReplicaEvidenceLedger {
     }
 
     fn record(&mut self, kind: ReplicaEvidenceKind, term: u64, index: u64, source_ref: String) -> Result<()> {
+        self.record_with_quorum(kind, term, index, source_ref, None)
+    }
+
+    fn record_with_quorum(
+        &mut self,
+        kind: ReplicaEvidenceKind,
+        term: u64,
+        index: u64,
+        source_ref: String,
+        quorum: Option<ValidatedReplicaQuorumEvidence>,
+    ) -> Result<()> {
         crate::preserves_rail::validate_content_ref(&source_ref)?;
         if self.records.len() == self.capacity {
             self.saturated = true;
             return Ok(());
         }
         let sequence = self.next_sequence;
+        let quorum_evidence_ref = quorum.as_ref().map(|evidence| evidence.evidence_ref.clone());
+        let quorum_members = quorum.map_or_else(Vec::new, |evidence| evidence.acknowledgement_members);
+        let quorum_value = quorum_evidence_ref.as_deref().map_or_else(
+            || crate::preserves_rail::record("none", Vec::new()),
+            |reference| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(reference)]),
+        );
         let evidence_ref =
-            crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-selected-evidence-v1", vec![
+            crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-selected-evidence-v2", vec![
                 crate::preserves_rail::string(&self.group_binding_ref),
                 crate::preserves_rail::u64_value(self.service_generation),
                 crate::preserves_rail::string(&self.node_id),
@@ -245,6 +386,8 @@ impl ReplicaEvidenceLedger {
                 crate::preserves_rail::u64_value(term),
                 crate::preserves_rail::u64_value(index),
                 crate::preserves_rail::string(&source_ref),
+                quorum_value,
+                crate::preserves_rail::sequence(quorum_members.iter().map(crate::preserves_rail::string).collect()),
             ]))?;
         self.records.push(ReplicaEvidenceRecord {
             sequence,
@@ -252,6 +395,8 @@ impl ReplicaEvidenceLedger {
             term,
             index,
             source_ref,
+            quorum_evidence_ref,
+            quorum_members,
             evidence_ref,
         });
         self.next_sequence = self
@@ -260,4 +405,77 @@ impl ReplicaEvidenceLedger {
             .ok_or_else(|| MoltenError::invalid_harness("live Raft evidence sequence overflow"))?;
         Ok(())
     }
+}
+
+fn observation_ref(observations: &[ReplicaEffectObservation], kind: ReplicaEffectKind) -> Option<String> {
+    observations
+        .iter()
+        .find(|observation| observation.kind == kind)
+        .map(|observation| observation.evidence_ref.clone())
+}
+
+fn required_observation_ref(observations: &[ReplicaEffectObservation], kind: ReplicaEffectKind) -> Result<String> {
+    observation_ref(observations, kind)
+        .ok_or_else(|| MoltenError::invalid_harness("live Raft selected evidence lacks its effect observation"))
+}
+
+fn commit_quorum_evidence(state: &ReplicaState, source_ref: String) -> Result<ValidatedReplicaQuorumEvidence> {
+    let acknowledgement_members = state
+        .membership
+        .voters
+        .iter()
+        .filter(|voter| {
+            voter.as_str() == state.node_id
+                || state.match_index.get(voter.as_str()).copied().unwrap_or(INITIAL_COMMIT_INDEX) >= state.commit_index
+        })
+        .cloned()
+        .collect();
+    validate_replica_quorum_evidence(&ReplicaQuorumEvidence {
+        boundary: ReplicaQuorumEvidenceBoundary::Commit,
+        group_binding_ref: state.profile.group_binding_ref.clone(),
+        membership_ref: state.membership.membership_ref.clone(),
+        config_epoch: state.membership.config_epoch,
+        term: state.current_term,
+        index: state.commit_index,
+        admitted_voters: state.membership.voters.clone(),
+        acknowledgement_members,
+        source_ref,
+    })
+}
+
+fn read_quorum_evidence(
+    before: &ReplicaState,
+    event: &ReplicaEvent,
+    source_ref: String,
+) -> Result<Option<(u64, ValidatedReplicaQuorumEvidence)>> {
+    let ReplicaEvent::Message { envelope } = event else {
+        return Ok(None);
+    };
+    let RaftMessage::ReadAcknowledgement {
+        term,
+        follower_id,
+        request_ref,
+        ..
+    } = &envelope.message
+    else {
+        return Ok(None);
+    };
+    let pending = before
+        .pending_reads
+        .get(request_ref)
+        .ok_or_else(|| MoltenError::invalid_harness("read-currentness evidence lost its pending read"))?;
+    let mut acknowledgement_members = pending.acknowledgements.iter().cloned().collect::<Vec<_>>();
+    acknowledgement_members.push(follower_id.clone());
+    let validated = validate_replica_quorum_evidence(&ReplicaQuorumEvidence {
+        boundary: ReplicaQuorumEvidenceBoundary::ReadCurrentness,
+        group_binding_ref: before.profile.group_binding_ref.clone(),
+        membership_ref: before.membership.membership_ref.clone(),
+        config_epoch: before.membership.config_epoch,
+        term: *term,
+        index: pending.required_index,
+        admitted_voters: before.membership.voters.clone(),
+        acknowledgement_members,
+        source_ref,
+    })?;
+    Ok(Some((pending.required_index, validated)))
 }

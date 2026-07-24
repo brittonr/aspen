@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use crate::fabric_consistency::ConsistencyReadMode;
 
 pub const STATIC_VOTER_COUNT: usize = 3;
+pub const STATIC_QUORUM_COUNT: usize = 2;
 pub const MAX_REPLICA_LOG_ENTRIES: usize = 4_096;
 pub const MAX_REPLICA_MESSAGE_ENTRIES: usize = 128;
 pub const MAX_REPLICA_EFFECTS: usize = 256;

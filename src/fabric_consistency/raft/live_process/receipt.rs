@@ -1,3 +1,5 @@
+use preserves::ValueImpl as _;
+
 use super::*;
 use crate::fabric_consistency::raft::live_cluster;
 
@@ -21,6 +23,13 @@ pub(super) struct ProcessReceipt {
     pub(super) durable_snapshot_count: u64,
     pub(super) clean_shutdown: bool,
     pub(super) recovery_ref: String,
+    pub(super) group_binding_ref: String,
+    pub(super) membership_ref: String,
+    pub(super) config_epoch: u64,
+    pub(super) admitted_voters: Vec<String>,
+    pub(super) commit_effect_ref: String,
+    pub(super) commit_quorum_ref: String,
+    pub(super) commit_quorum_members: Vec<String>,
 }
 
 pub(super) fn receipt_path(run_directory: &Path, node_id: &str) -> PathBuf {
@@ -73,7 +82,24 @@ pub(super) fn parse_receipt(value: &IOValue) -> Result<ProcessReceipt> {
         durable_snapshot_count: canonical::required_u64(&fields[15], "receipt durable snapshots")?,
         clean_shutdown: canonical::required_bool(&fields[16], "receipt clean shutdown")?,
         recovery_ref: canonical::required_string(&fields[17], "receipt recovery ref")?,
+        group_binding_ref: canonical::required_string(&fields[18], "receipt group binding")?,
+        membership_ref: canonical::required_string(&fields[19], "receipt membership")?,
+        config_epoch: canonical::required_u64(&fields[20], "receipt configuration epoch")?,
+        admitted_voters: parse_member_sequence(&fields[21], "receipt admitted voters")?,
+        commit_effect_ref: canonical::required_string(&fields[22], "receipt commit effect")?,
+        commit_quorum_ref: canonical::required_string(&fields[23], "receipt commit quorum")?,
+        commit_quorum_members: parse_member_sequence(&fields[24], "receipt commit quorum members")?,
     })
+}
+
+fn parse_member_sequence(value: &preserves::Value<IOValue>, label: &str) -> Result<Vec<std::string::String>> {
+    let members = value
+        .collect_sequence()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+    if members.len() > STATIC_VOTER_COUNT {
+        return Err(MoltenError::invalid_harness(format!("{label} exceeds the static voter bound")));
+    }
+    members.iter().map(|member| canonical::required_string(&member, label)).collect()
 }
 
 fn parse_role(value: &preserves::Value<IOValue>) -> Result<ReplicaRole> {
@@ -92,6 +118,11 @@ pub(super) fn receipt_from_node(
     let state = node.service.state();
     let application = node.service.ports().application.handler();
     let durability = node.service.ports().durability.adapter().state();
+    let commit_evidence =
+        node.service.evidence().records().iter().find(|record| record.kind == ReplicaEvidenceKind::Commit);
+    let commit_effect_ref = commit_evidence.map_or_else(String::new, |record| record.source_ref.clone());
+    let commit_quorum_ref = commit_evidence.and_then(|record| record.quorum_evidence_ref.clone()).unwrap_or_default();
+    let commit_quorum_members = commit_evidence.map_or_else(Vec::new, |record| record.quorum_members.clone());
     Ok(ProcessReceipt {
         node_id: node_id.to_string(),
         process_id: u64::from(std::process::id()),
@@ -117,6 +148,13 @@ pub(super) fn receipt_from_node(
             .map_err(|_| MoltenError::invalid_harness("durable snapshot count overflow"))?,
         clean_shutdown: false,
         recovery_ref: node.recovery_ref.clone().unwrap_or_default(),
+        group_binding_ref: state.profile.group_binding_ref.clone(),
+        membership_ref: state.membership.membership_ref.clone(),
+        config_epoch: state.membership.config_epoch,
+        admitted_voters: state.membership.voters.clone(),
+        commit_effect_ref,
+        commit_quorum_ref,
+        commit_quorum_members,
     })
 }
 
@@ -143,7 +181,19 @@ pub(super) fn receipt_value(receipt: &ProcessReceipt) -> IOValue {
         crate::preserves_rail::u64_value(receipt.durable_snapshot_count),
         crate::preserves_rail::bool_value(receipt.clean_shutdown),
         crate::preserves_rail::string(&receipt.recovery_ref),
+        crate::preserves_rail::string(&receipt.group_binding_ref),
+        crate::preserves_rail::string(&receipt.membership_ref),
+        crate::preserves_rail::u64_value(receipt.config_epoch),
+        member_sequence_value(&receipt.admitted_voters),
+        crate::preserves_rail::string(&receipt.commit_effect_ref),
+        crate::preserves_rail::string(&receipt.commit_quorum_ref),
+        member_sequence_value(&receipt.commit_quorum_members),
     ])
+}
+
+fn member_sequence_value(members: &[std::string::String]) -> IOValue {
+    let values = members.iter().map(|member| crate::preserves_rail::string(member.as_str())).collect();
+    crate::preserves_rail::sequence(values)
 }
 
 pub(super) fn assert_active_process_receipts(receipts: &[ProcessReceipt; STATIC_VOTER_COUNT]) {
@@ -160,6 +210,8 @@ pub(super) fn assert_active_process_receipts(receipts: &[ProcessReceipt; STATIC_
     assert!(leader.quorum_loss_request_uncommitted);
     assert!(leader.application_applied);
     assert!(leader.durable_record_count > 0);
+    let quorum_ref = validate_process_commit_quorum(leader).expect("offline process commit quorum evidence");
+    assert_eq!(quorum_ref, leader.commit_quorum_ref);
     assert_eq!(receipts[1].commit_index, INITIAL_LOG_INDEX);
     assert!(receipts[1].application_applied);
     assert_eq!(receipts[2].commit_index, INITIAL_LOG_INDEX);
@@ -188,6 +240,24 @@ pub(super) fn assert_recovery_receipts(receipts: &[ProcessReceipt; STATIC_VOTER_
     assert!(receipts[2].application_restored);
     assert_eq!(receipts[0].durable_snapshot_count, 1);
     assert_eq!(receipts[2].durable_snapshot_count, 1);
+}
+
+pub(super) fn validate_process_commit_quorum(receipt: &ProcessReceipt) -> Result<String> {
+    let validated = validate_replica_quorum_evidence(&ReplicaQuorumEvidence {
+        boundary: ReplicaQuorumEvidenceBoundary::Commit,
+        group_binding_ref: receipt.group_binding_ref.clone(),
+        membership_ref: receipt.membership_ref.clone(),
+        config_epoch: receipt.config_epoch,
+        term: receipt.term,
+        index: receipt.commit_index,
+        admitted_voters: receipt.admitted_voters.clone(),
+        acknowledgement_members: receipt.commit_quorum_members.clone(),
+        source_ref: receipt.commit_effect_ref.clone(),
+    })?;
+    if validated.evidence_ref != receipt.commit_quorum_ref {
+        return Err(MoltenError::invalid_harness("distinct-process commit quorum evidence binding mismatch"));
+    }
+    Ok(validated.evidence_ref)
 }
 
 fn assert_distinct_identity(receipts: &[ProcessReceipt; STATIC_VOTER_COUNT]) {

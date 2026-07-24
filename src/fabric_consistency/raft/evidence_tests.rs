@@ -1,4 +1,6 @@
 use super::tests::NODE_A;
+use super::tests::NODE_B;
+use super::tests::NODE_C;
 use super::tests::active_group;
 use super::tests::started_state;
 use super::tests::test_ref;
@@ -30,14 +32,18 @@ fn selected_evidence_records_milestones_and_suppresses_heartbeat_receipts() {
     assert_eq!(ledger.records().len(), STARTUP_EVIDENCE_COUNT);
     assert_eq!(ledger.suppressed_heartbeat_count(), 1);
 
-    let mut committed = state.clone();
+    let mut leader = state.clone();
+    leader.role = ReplicaRole::Leader;
+    leader.current_term = INITIAL_LOG_INDEX;
+    leader.match_index.insert(NODE_B.to_string(), INITIAL_LOG_INDEX);
+    let mut committed = leader.clone();
     committed.commit_index = INITIAL_LOG_INDEX;
     committed.last_applied = INITIAL_LOG_INDEX;
     ledger
         .observe(
-            &state,
+            &leader,
             &ReplicaEvent::Message {
-                envelope: vote_envelope(&state),
+                envelope: vote_envelope(&leader),
             },
             &ReplicaExecutionOutcome::Applied(ExecutedReplicaTransition {
                 next: committed.clone(),
@@ -45,11 +51,19 @@ fn selected_evidence_records_milestones_and_suppresses_heartbeat_receipts() {
             }),
         )
         .expect("selected commit evidence");
+    let request_ref = test_ref("selected-read-request");
+    let mut read_pending = committed.clone();
+    read_pending.pending_reads.insert(request_ref.clone(), PendingReplicaRead {
+        request_ref: request_ref.clone(),
+        term: committed.current_term,
+        required_index: committed.commit_index,
+        acknowledgements: std::collections::BTreeSet::from([NODE_A.to_string()]),
+    });
     ledger
         .observe(
-            &committed,
+            &read_pending,
             &ReplicaEvent::Message {
-                envelope: vote_envelope(&committed),
+                envelope: read_acknowledgement_envelope(&read_pending, &request_ref),
             },
             &ReplicaExecutionOutcome::Applied(ExecutedReplicaTransition {
                 next: committed.clone(),
@@ -57,13 +71,48 @@ fn selected_evidence_records_milestones_and_suppresses_heartbeat_receipts() {
             }),
         )
         .expect("selected read evidence");
-    assert!(ledger.records().iter().any(|record| record.kind == ReplicaEvidenceKind::Commit));
-    assert!(ledger.records().iter().any(|record| record.kind == ReplicaEvidenceKind::ReadCurrentness));
+    let commit = ledger
+        .records()
+        .iter()
+        .find(|record| record.kind == ReplicaEvidenceKind::Commit)
+        .expect("commit evidence");
+    assert!(commit.quorum_evidence_ref.is_some());
+    assert_eq!(commit.quorum_members, vec![NODE_A.to_string(), NODE_B.to_string()]);
+    let read = ledger
+        .records()
+        .iter()
+        .find(|record| record.kind == ReplicaEvidenceKind::ReadCurrentness)
+        .expect("read evidence");
+    assert!(read.quorum_evidence_ref.is_some());
+    assert_eq!(read.quorum_members, vec![NODE_A.to_string(), NODE_B.to_string()]);
 
     let health = ledger.aggregate_health(&committed, false).expect("aggregate health");
     assert_eq!(health.status, "healthy");
     assert!(!health.production_admitted);
     crate::preserves_rail::validate_content_ref(&health.evidence_ref).expect("health evidence ref");
+}
+
+// r[verify molten.fabric_consistency.final_validation]
+#[test]
+fn offline_quorum_validation_accepts_distinct_admitted_majority_and_rejects_false_quorum() {
+    let valid = quorum_evidence(vec![NODE_A.to_string(), NODE_B.to_string()]);
+    let accepted = validate_replica_quorum_evidence(&valid).expect("distinct admitted quorum");
+    assert_eq!(accepted.acknowledgement_members, vec![NODE_A.to_string(), NODE_B.to_string()]);
+
+    let mut duplicate = valid.clone();
+    duplicate.acknowledgement_members = vec![NODE_A.to_string(), NODE_A.to_string()];
+    let duplicate_error = validate_replica_quorum_evidence(&duplicate).expect_err("duplicate voter must deny");
+    assert!(duplicate_error.to_string().contains("duplicate acknowledgements"));
+
+    let mut minority = valid.clone();
+    minority.acknowledgement_members = vec![NODE_A.to_string()];
+    let minority_error = validate_replica_quorum_evidence(&minority).expect_err("minority must deny");
+    assert!(minority_error.to_string().contains("required distinct admitted acknowledgements"));
+
+    let mut outsider = valid;
+    outsider.acknowledgement_members = vec![NODE_A.to_string(), "node-outside-membership".to_string()];
+    let outsider_error = validate_replica_quorum_evidence(&outsider).expect_err("outsider must deny");
+    assert!(outsider_error.to_string().contains("outside admitted membership"));
 }
 
 // r[verify molten.fabric_consistency.evidence_granularity]
@@ -144,14 +193,44 @@ fn vote_envelope(state: &ReplicaState) -> ReplicaMessageEnvelope {
     ReplicaMessageEnvelope {
         group_binding_ref: state.profile.group_binding_ref.clone(),
         service_generation: state.profile.service_generation,
-        from: "node-b".to_string(),
+        from: NODE_B.to_string(),
         to: NODE_A.to_string(),
         message: RaftMessage::VoteResponse {
             term: INITIAL_LOG_INDEX,
-            voter_id: "node-b".to_string(),
+            voter_id: NODE_B.to_string(),
             granted: true,
             config_epoch: state.membership.config_epoch,
             fencing_epoch: state.profile.fencing_epoch,
         },
+    }
+}
+
+fn read_acknowledgement_envelope(state: &ReplicaState, request_ref: &str) -> ReplicaMessageEnvelope {
+    ReplicaMessageEnvelope {
+        group_binding_ref: state.profile.group_binding_ref.clone(),
+        service_generation: state.profile.service_generation,
+        from: NODE_B.to_string(),
+        to: NODE_A.to_string(),
+        message: RaftMessage::ReadAcknowledgement {
+            term: state.current_term,
+            follower_id: NODE_B.to_string(),
+            request_ref: request_ref.to_string(),
+            config_epoch: state.membership.config_epoch,
+            fencing_epoch: state.profile.fencing_epoch,
+        },
+    }
+}
+
+fn quorum_evidence(acknowledgement_members: Vec<String>) -> ReplicaQuorumEvidence {
+    ReplicaQuorumEvidence {
+        boundary: ReplicaQuorumEvidenceBoundary::Commit,
+        group_binding_ref: test_ref("quorum-group"),
+        membership_ref: test_ref("quorum-membership"),
+        config_epoch: INITIAL_LOG_INDEX,
+        term: INITIAL_LOG_INDEX,
+        index: INITIAL_LOG_INDEX,
+        admitted_voters: vec![NODE_A.to_string(), NODE_B.to_string(), NODE_C.to_string()],
+        acknowledgement_members,
+        source_ref: test_ref("quorum-source"),
     }
 }

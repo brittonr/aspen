@@ -10,8 +10,6 @@ mod validation;
 use super::*;
 use crate::error::Result;
 
-pub(super) const STATIC_QUORUM_COUNT: usize = (STATIC_VOTER_COUNT / 2) + 1;
-
 pub(super) struct MessageTransition {
     pub next: ReplicaState,
     pub effects: Vec<ReplicaEffect>,

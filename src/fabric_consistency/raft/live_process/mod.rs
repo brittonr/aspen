@@ -27,9 +27,9 @@ const CHILD_TEST_FILTER: &str = "fabric_consistency::raft::live_process::distinc
 const CHILD_TIMEOUT_SECONDS: u64 = 30;
 const FILE_POLL_MILLISECONDS: u64 = 10;
 const FILE_POLL_LIMIT: usize = 3_000;
-const RECEIPT_FIELD_COUNT: usize = 18;
+const RECEIPT_FIELD_COUNT: usize = 25;
 const MAX_HARNESS_FILE_BYTES: u64 = 1_048_576;
-const RECEIPT_SCHEMA: &str = "molten.fabric-consistency.distinct-process-participant.v1";
+const RECEIPT_SCHEMA: &str = "molten.fabric-consistency.distinct-process-participant.v2";
 const START_FILE: &str = "start.preserves";
 const STOP_FILE: &str = "stop.preserves";
 const LEADER_DONE_FILE: &str = "leader-done.preserves";
@@ -93,6 +93,11 @@ fn three_process_live_raft_elects_commits_reads_and_catches_up() {
     wait_for_nodes(&run_directory, "checkpoint").expect("active checkpoint receipts");
     let active_receipts = read_checkpoint_receipts(&run_directory);
     assert_active_process_receipts(&active_receipts);
+    let mut false_quorum = active_receipts[0].clone();
+    false_quorum.commit_quorum_members = vec![NODE_A.to_string(), NODE_A.to_string()];
+    let false_quorum_error =
+        validate_process_commit_quorum(&false_quorum).expect_err("duplicate process quorum evidence must deny");
+    assert!(false_quorum_error.to_string().contains("duplicate acknowledgements"));
     for child in &mut children {
         child.crash().expect("injected child crash");
     }
