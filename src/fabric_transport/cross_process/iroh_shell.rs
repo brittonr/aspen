@@ -14,6 +14,7 @@ const CLIENT_CLOSE_REASON: &[u8] = b"cross-process-client-complete";
 const FRAME_DOMAIN: &str = "molten.fabric.transport.cross-process-frame.v1";
 const CLEANUP_DOMAIN: &str = "molten.fabric.transport.cross-process-cleanup.v1";
 
+#[derive(Clone)]
 pub struct IrohEndpointCapability {
     secret_key: iroh::SecretKey,
     capability_ref: String,
@@ -58,7 +59,7 @@ pub struct IrohCrossProcessListenerInput {
     pub observed_tick: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IrohCrossProcessClientInput {
     pub profile: CanonicalTransportProfile,
     pub protocol: ProtocolDescriptor,
@@ -93,6 +94,7 @@ pub struct CrossProcessListenerCleanup {
     pub listener_identity_ref: String,
     pub descriptor_ref: String,
     pub generation: u64,
+    pub drain_reason: ListenerDrainReason,
     pub terminal_class: ListenerTerminalClass,
     pub cleanup_evidence_ref: String,
 }
@@ -300,6 +302,7 @@ impl IrohCrossProcessListener {
             listener_identity_ref: self.state.identity.listener_identity_ref.clone(),
             descriptor_ref: self.endpoint_artifact.descriptor_ref.clone(),
             generation: self.protocol.generation,
+            drain_reason: reason,
             terminal_class: self.state.terminal_class.unwrap_or(ListenerTerminalClass::Clean),
             cleanup_evidence_ref,
         })
@@ -367,7 +370,7 @@ pub async fn exchange_cross_process_frame(
             return Err(error);
         }
     };
-    finalize_successful_session(
+    let mut evidence = finalize_successful_session(
         session,
         EndpointParticipantRole::Client,
         &input.endpoint.descriptor_ref,
@@ -375,7 +378,10 @@ pub async fn exchange_cross_process_frame(
         &input.request_ref,
         &exchange.remote_transport_identity_ref,
         exchange.frame,
-    )
+    )?;
+    evidence.cleanup_evidence_ref =
+        cleanup_ref(&evidence.cleanup_evidence_ref, &input.endpoint.descriptor_ref, input.protocol.generation);
+    Ok(evidence)
 }
 
 struct NetworkFrame {
@@ -413,7 +419,7 @@ async fn run_server_exchange(
     tokio::time::timeout(timeout, connection.closed())
         .await
         .map_err(|_| MoltenError::invalid_harness("cross-process peer close timed out"))?;
-    let payload_ref = frame_ref(request_ref, &payload);
+    let payload_ref = cross_process_frame_ref(request_ref, &payload);
     Ok(NetworkFrame {
         acknowledgement_ref: payload_ref.clone(),
         payload_ref,
@@ -473,7 +479,7 @@ async fn run_client_exchange(
     .map_err(|issues| shell_validation_error("cross-process acknowledgement", &issues))?
     .next;
     connection.close(IROH_CLOSE_CODE.into(), CLIENT_CLOSE_REASON);
-    let payload_ref = frame_ref(request_ref, payload);
+    let payload_ref = cross_process_frame_ref(request_ref, payload);
     Ok(ClientNetworkFrame {
         frame: NetworkFrame {
             acknowledgement_ref: payload_ref.clone(),
@@ -738,7 +744,7 @@ fn dial_plan_from_descriptor(descriptor: &CrossProcessEndpointDescriptor) -> End
     }
 }
 
-fn frame_ref(request_ref: &str, payload: &[u8]) -> String {
+pub fn cross_process_frame_ref(request_ref: &str, payload: &[u8]) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(FRAME_DOMAIN.as_bytes());
     hasher.update(request_ref.as_bytes());

@@ -305,16 +305,16 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
     pub fn adapter(&self) -> &A {
         &self.adapter
     }
-}
 
-// r[impl molten.fabric_transport.port_contract]
-// r[impl molten.fabric_transport.session_streams]
-impl<A: TransportCommandShell> crate::system_extension::FabricEffectPort for RegisteredTransportEffectPort<A> {
-    fn route(
+    pub(crate) fn adapter_mut(&mut self) -> &mut A {
+        &mut self.adapter
+    }
+
+    pub(crate) fn execute_effect(
         &mut self,
         binding: &crate::fabric::CanonicalFabricPortBinding,
         effect: &crate::system_extension::TypedEffectRequest,
-    ) -> std::result::Result<crate::system_extension::PortEffectOutput, String> {
+    ) -> std::result::Result<(TransportCommand, CanonicalTransportTransition), String> {
         if binding.binding.key.port_id != FABRIC_TRANSPORT_PORT_ID
             || binding.binding.key.version != FABRIC_TRANSPORT_PORT_VERSION
         {
@@ -344,6 +344,19 @@ impl<A: TransportCommandShell> crate::system_extension::FabricEffectPort for Reg
             return Err("transport effect generation does not match its registered command".to_string());
         }
         let transition = self.adapter.execute_command(&command).map_err(|error| error.to_string())?;
+        Ok((command, transition))
+    }
+}
+
+// r[impl molten.fabric_transport.port_contract]
+// r[impl molten.fabric_transport.session_streams]
+impl<A: TransportCommandShell> crate::system_extension::FabricEffectPort for RegisteredTransportEffectPort<A> {
+    fn route(
+        &mut self,
+        binding: &crate::fabric::CanonicalFabricPortBinding,
+        effect: &crate::system_extension::TypedEffectRequest,
+    ) -> std::result::Result<crate::system_extension::PortEffectOutput, String> {
+        let (_command, transition) = self.execute_effect(binding, effect)?;
         Ok(crate::system_extension::PortEffectOutput {
             output_schema_ref: effect.output_schema_ref.clone(),
             output_ref: transition.transition_ref,

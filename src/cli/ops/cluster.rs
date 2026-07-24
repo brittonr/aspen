@@ -8,6 +8,12 @@ pub(crate) enum ClusterCommand {
     Stop(ClusterRoot),
     HarnessRun(ClusterHarnessRun),
     HarnessVerify(ClusterHarnessVerify),
+    FabricTransportRun(FabricTransportRun),
+    FabricTransportVerify(FabricTransportVerify),
+    #[command(name = "fabric-transport-listener-child", hide = true)]
+    FabricTransportListenerChild(FabricTransportChild),
+    #[command(name = "fabric-transport-client-child", hide = true)]
+    FabricTransportClientChild(FabricTransportChild),
 }
 
 #[derive(Debug, clap::Args)]
@@ -48,6 +54,30 @@ pub(crate) struct ClusterHarnessVerify {
     run_dir: std::path::PathBuf,
 }
 
+#[derive(Debug, clap::Args)]
+pub(crate) struct FabricTransportRun {
+    #[arg(long)]
+    run_dir: std::path::PathBuf,
+    #[arg(long)]
+    process_binary: Option<std::path::PathBuf>,
+    #[arg(long, default_value_t = molten::cluster_harness::DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS)]
+    child_timeout_ms: u64,
+    #[arg(long)]
+    force: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub(crate) struct FabricTransportVerify {
+    #[arg(long)]
+    run_dir: std::path::PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub(crate) struct FabricTransportChild {
+    #[arg(long)]
+    run_dir: std::path::PathBuf,
+}
+
 pub(crate) fn run(command: ClusterCommand) -> molten::error::Result<()> {
     match command {
         ClusterCommand::Init(input) => init(input),
@@ -56,6 +86,14 @@ pub(crate) fn run(command: ClusterCommand) -> molten::error::Result<()> {
         ClusterCommand::Stop(input) => stop(input),
         ClusterCommand::HarnessRun(input) => harness_run(input),
         ClusterCommand::HarnessVerify(input) => harness_verify(input),
+        ClusterCommand::FabricTransportRun(input) => fabric_transport_run(input),
+        ClusterCommand::FabricTransportVerify(input) => fabric_transport_verify(input),
+        ClusterCommand::FabricTransportListenerChild(input) => {
+            molten::cluster_harness::run_distinct_process_listener_child(&input.run_dir)
+        }
+        ClusterCommand::FabricTransportClientChild(input) => {
+            molten::cluster_harness::run_distinct_process_client_child(&input.run_dir)
+        }
     }
 }
 
@@ -104,6 +142,52 @@ fn harness_verify(input: ClusterHarnessVerify) -> molten::error::Result<()> {
         return Err(molten::error::MoltenError::invalid_harness(format!(
             "cluster harness verification denied: {}",
             verification.receipt.diagnostics.join(",")
+        )));
+    }
+    Ok(())
+}
+
+// r[impl molten.fabric_transport.distinct_process_evidence]
+fn fabric_transport_run(input: FabricTransportRun) -> molten::error::Result<()> {
+    let process_binary = input.process_binary.map_or_else(std::env::current_exe, Ok)?;
+    let execution = molten::cluster_harness::execute_distinct_process_transport_run(
+        &molten::cluster_harness::DistinctProcessTransportRunInput {
+            run_directory: input.run_dir,
+            process_binary,
+            child_timeout_ms: input.child_timeout_ms,
+            force: input.force,
+        },
+    )?;
+    println!(
+        "fabric transport distinct-process run decision={} parent={} verification={} run_dir={}",
+        execution.decision,
+        execution.parent_ref,
+        execution.verification_ref,
+        execution.run_directory.display()
+    );
+    if execution.decision != "pass" {
+        return Err(molten::error::MoltenError::invalid_harness(format!(
+            "fabric transport distinct-process run denied: {}",
+            execution.diagnostics.join(",")
+        )));
+    }
+    Ok(())
+}
+
+// r[impl molten.fabric_transport.distinct_process_evidence]
+fn fabric_transport_verify(input: FabricTransportVerify) -> molten::error::Result<()> {
+    let verification = molten::cluster_harness::verify_distinct_process_transport_run(&input.run_dir)?;
+    println!(
+        "fabric transport distinct-process verify decision={} parent={} verification={} run_dir={}",
+        verification.decision,
+        verification.parent_ref,
+        verification.verification_ref,
+        input.run_dir.display()
+    );
+    if verification.decision != "pass" {
+        return Err(molten::error::MoltenError::invalid_harness(format!(
+            "fabric transport distinct-process verification denied: {}",
+            verification.diagnostics.join(",")
         )));
     }
     Ok(())

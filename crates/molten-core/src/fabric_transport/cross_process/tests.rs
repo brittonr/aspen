@@ -624,3 +624,91 @@ fn session_denies_stale_oversized_and_misaccounted_frames_and_preserves_uncertai
     assert_eq!(failed.retry, RetryDisposition::UnsafeWithoutReconciliation);
     assert_eq!(failed.automatic_retry_count, 0);
 }
+
+fn participant(role: EndpointParticipantRole, invocation_ref: &str) -> DistinctProcessParticipantEvidence {
+    DistinctProcessParticipantEvidence {
+        role,
+        invocation_ref: invocation_ref.to_string(),
+        parent_start_ref: PROFILE_REF.to_string(),
+        terminal_ref: SESSION_REF.to_string(),
+        cleanup_ref: CLEANUP_REF.to_string(),
+        descriptor_ref: DESCRIPTOR_REF.to_string(),
+        profile_id: profile().profile_id,
+        protocol_id: protocol().protocol_id,
+        alpn: protocol().alpn,
+        service_id: protocol().service_id,
+        generation: GENERATION,
+        request_ref: AUTHORITY_REF.to_string(),
+        payload_ref: VALIDITY_COHORT_REF.to_string(),
+        acknowledgement_ref: VALIDITY_COHORT_REF.to_string(),
+        parent_observed_start: true,
+        parent_observed_terminal: true,
+        parent_observed_exit: true,
+        automatic_retry_count: 0,
+    }
+}
+
+fn distinct_process_evidence() -> DistinctProcessTransportEvidenceInput {
+    DistinctProcessTransportEvidenceInput {
+        listener: participant(EndpointParticipantRole::Listener, LISTENER_REF),
+        client: participant(EndpointParticipantRole::Client, LOCATOR_COHORT_REF),
+        handoff_ref: PEER_CONTEXT_REF.to_string(),
+        child_handles_distinct: true,
+        handoff_observed_before_client_start: true,
+        cleanup_succeeded: true,
+        same_process_loopback: false,
+        child_only_separation_claim: false,
+        default_readback_redacted: true,
+        payloads_excluded: true,
+        accepted_sessions: 1,
+        max_sessions: SESSION_LIMIT,
+        exchanged_bytes: FRAME_BYTES,
+        max_frame_bytes: FRAME_LIMIT,
+    }
+}
+
+// r[verify molten.fabric_transport.distinct_process_evidence]
+// r[verify molten.fabric_transport.cross_process_validation]
+#[test]
+fn matching_parent_observed_distinct_process_evidence_is_admitted() {
+    let assessment = assess_distinct_process_transport_evidence(&distinct_process_evidence());
+    assert!(assessment.admitted);
+    assert!(assessment.issues.is_empty());
+}
+
+// r[verify molten.fabric_transport.distinct_process_evidence]
+// r[verify molten.fabric_transport.cross_process_validation]
+#[test]
+fn same_process_child_only_stale_and_unclean_claims_are_denied() {
+    let mut evidence = distinct_process_evidence();
+    evidence.client.invocation_ref = evidence.listener.invocation_ref.clone();
+    evidence.client.generation = REPLACEMENT_GENERATION;
+    evidence.client.parent_observed_start = false;
+    evidence.listener.parent_observed_exit = false;
+    evidence.child_handles_distinct = false;
+    evidence.handoff_observed_before_client_start = false;
+    evidence.cleanup_succeeded = false;
+    evidence.same_process_loopback = true;
+    evidence.child_only_separation_claim = true;
+    evidence.default_readback_redacted = false;
+    evidence.payloads_excluded = false;
+    evidence.client.automatic_retry_count = 1;
+    let assessment = assess_distinct_process_transport_evidence(&evidence);
+    assert!(!assessment.admitted);
+    for expected in [
+        DistinctProcessEvidenceIssue::DuplicateInvocation,
+        DistinctProcessEvidenceIssue::GenerationMismatch,
+        DistinctProcessEvidenceIssue::ParentStartMissing,
+        DistinctProcessEvidenceIssue::ParentExitMissing,
+        DistinctProcessEvidenceIssue::ChildHandlesNotDistinct,
+        DistinctProcessEvidenceIssue::HandoffOrderInvalid,
+        DistinctProcessEvidenceIssue::CleanupFailed,
+        DistinctProcessEvidenceIssue::SameProcessLoopbackInsufficient,
+        DistinctProcessEvidenceIssue::ChildOnlyClaimInsufficient,
+        DistinctProcessEvidenceIssue::DefaultReadbackLeaksLocators,
+        DistinctProcessEvidenceIssue::PayloadEvidenceLeak,
+        DistinctProcessEvidenceIssue::AutomaticRetryObserved,
+    ] {
+        assert!(assessment.issues.contains(&expected), "missing issue {expected:?}");
+    }
+}

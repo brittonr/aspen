@@ -7,10 +7,12 @@
 use super::*;
 
 mod endpoint;
+mod evidence;
 mod listener;
 mod session;
 
 pub use endpoint::*;
+pub use evidence::*;
 pub use listener::*;
 pub use session::*;
 

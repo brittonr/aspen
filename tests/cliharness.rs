@@ -21,3 +21,4 @@ include!("parts/cliharness/p016/body.rs");
 include!("parts/cliharness/p017/body.rs");
 // r[impl molten.testing.receipt_first_cluster_harness.cli_receipt_surface]
 include!("parts/cliharness/p018/body.rs");
+include!("parts/cliharness/p019/body.rs");
