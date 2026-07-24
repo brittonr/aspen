@@ -15,6 +15,10 @@ const REQUEST_VOTE_ARITY: usize = 6;
 const VOTE_RESPONSE_ARITY: usize = 5;
 const APPEND_ENTRIES_ARITY: usize = 8;
 const APPEND_RESPONSE_ARITY: usize = 8;
+const READ_PROBE_ARITY: usize = 6;
+const READ_ACKNOWLEDGEMENT_ARITY: usize = 5;
+const INSTALL_SNAPSHOT_ARITY: usize = 5;
+const SNAPSHOT_RESPONSE_ARITY: usize = 6;
 const MAX_WIRE_IDENTIFIER_BYTES: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +69,21 @@ pub fn parse_canonical_replica_message(bytes: &[u8]) -> Result<ReplicaMessageEnv
 
 fn message_value(message: &RaftMessage) -> IOValue {
     match message {
+        message @ (RaftMessage::RequestVote { .. } | RaftMessage::VoteResponse { .. }) => vote_message_value(message),
+        message @ (RaftMessage::AppendEntries { .. } | RaftMessage::AppendResponse { .. }) => {
+            append_message_value(message)
+        }
+        message @ (RaftMessage::ReadProbe { .. } | RaftMessage::ReadAcknowledgement { .. }) => {
+            read_message_value(message)
+        }
+        message @ (RaftMessage::InstallSnapshot { .. } | RaftMessage::SnapshotResponse { .. }) => {
+            snapshot_message_value(message)
+        }
+    }
+}
+
+fn vote_message_value(message: &RaftMessage) -> IOValue {
+    match message {
         RaftMessage::RequestVote {
             term,
             candidate_id,
@@ -93,6 +112,12 @@ fn message_value(message: &RaftMessage) -> IOValue {
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
+        _ => unreachable!("vote encoding admitted a non-vote message"),
+    }
+}
+
+fn append_message_value(message: &RaftMessage) -> IOValue {
+    match message {
         RaftMessage::AppendEntries {
             term,
             leader_id,
@@ -131,6 +156,75 @@ fn message_value(message: &RaftMessage) -> IOValue {
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
+        _ => unreachable!("append encoding admitted a non-append message"),
+    }
+}
+
+fn read_message_value(message: &RaftMessage) -> IOValue {
+    match message {
+        RaftMessage::ReadProbe {
+            term,
+            leader_id,
+            request_ref,
+            required_index,
+            config_epoch,
+            fencing_epoch,
+        } => crate::preserves_rail::record("read-probe", vec![
+            crate::preserves_rail::u64_value(*term),
+            crate::preserves_rail::string(leader_id),
+            crate::preserves_rail::string(request_ref),
+            crate::preserves_rail::u64_value(*required_index),
+            crate::preserves_rail::u64_value(*config_epoch),
+            crate::preserves_rail::u64_value(*fencing_epoch),
+        ]),
+        RaftMessage::ReadAcknowledgement {
+            term,
+            follower_id,
+            request_ref,
+            config_epoch,
+            fencing_epoch,
+        } => crate::preserves_rail::record("read-acknowledgement", vec![
+            crate::preserves_rail::u64_value(*term),
+            crate::preserves_rail::string(follower_id),
+            crate::preserves_rail::string(request_ref),
+            crate::preserves_rail::u64_value(*config_epoch),
+            crate::preserves_rail::u64_value(*fencing_epoch),
+        ]),
+        _ => unreachable!("read encoding admitted a non-read message"),
+    }
+}
+
+fn snapshot_message_value(message: &RaftMessage) -> IOValue {
+    match message {
+        RaftMessage::InstallSnapshot {
+            term,
+            leader_id,
+            snapshot,
+            config_epoch,
+            fencing_epoch,
+        } => crate::preserves_rail::record("install-snapshot", vec![
+            crate::preserves_rail::u64_value(*term),
+            crate::preserves_rail::string(leader_id),
+            super::durability::snapshot_value(snapshot),
+            crate::preserves_rail::u64_value(*config_epoch),
+            crate::preserves_rail::u64_value(*fencing_epoch),
+        ]),
+        RaftMessage::SnapshotResponse {
+            term,
+            follower_id,
+            snapshot_index,
+            accepted,
+            config_epoch,
+            fencing_epoch,
+        } => crate::preserves_rail::record("snapshot-response", vec![
+            crate::preserves_rail::u64_value(*term),
+            crate::preserves_rail::string(follower_id),
+            crate::preserves_rail::u64_value(*snapshot_index),
+            crate::preserves_rail::bool_value(*accepted),
+            crate::preserves_rail::u64_value(*config_epoch),
+            crate::preserves_rail::u64_value(*fencing_epoch),
+        ]),
+        _ => unreachable!("snapshot encoding admitted a non-snapshot message"),
     }
 }
 
@@ -179,6 +273,46 @@ fn parse_message(value: &Value<IOValue>) -> Result<RaftMessage> {
             conflict_index: required_u64(&fields[5], "Raft append response conflict index")?,
             config_epoch: required_u64(&fields[6], "Raft append response config epoch")?,
             fencing_epoch: required_u64(&fields[7], "Raft append response fencing epoch")?,
+        });
+    }
+    if let Some(fields) = value.collect_simple_record("read-probe", Some(READ_PROBE_ARITY)) {
+        return Ok(RaftMessage::ReadProbe {
+            term: required_u64(&fields[0], "Raft read probe term")?,
+            leader_id: required_string(&fields[1], "Raft read probe leader")?,
+            request_ref: required_string(&fields[2], "Raft read probe request ref")?,
+            required_index: required_u64(&fields[3], "Raft read probe required index")?,
+            config_epoch: required_u64(&fields[4], "Raft read probe config epoch")?,
+            fencing_epoch: required_u64(&fields[5], "Raft read probe fencing epoch")?,
+        });
+    }
+    if let Some(fields) = value.collect_simple_record("read-acknowledgement", Some(READ_ACKNOWLEDGEMENT_ARITY)) {
+        return Ok(RaftMessage::ReadAcknowledgement {
+            term: required_u64(&fields[0], "Raft read acknowledgement term")?,
+            follower_id: required_string(&fields[1], "Raft read acknowledgement follower")?,
+            request_ref: required_string(&fields[2], "Raft read acknowledgement request ref")?,
+            config_epoch: required_u64(&fields[3], "Raft read acknowledgement config epoch")?,
+            fencing_epoch: required_u64(&fields[4], "Raft read acknowledgement fencing epoch")?,
+        });
+    }
+    if let Some(fields) = value.collect_simple_record("install-snapshot", Some(INSTALL_SNAPSHOT_ARITY)) {
+        let snapshot_value: &IOValue = (&fields[2]).into();
+        let snapshot_bytes = crate::preserves_rail::canonical_bytes(snapshot_value)?;
+        return Ok(RaftMessage::InstallSnapshot {
+            term: required_u64(&fields[0], "Raft install snapshot term")?,
+            leader_id: required_string(&fields[1], "Raft install snapshot leader")?,
+            snapshot: Box::new(super::recovery::parse_snapshot(&snapshot_bytes)?),
+            config_epoch: required_u64(&fields[3], "Raft install snapshot config epoch")?,
+            fencing_epoch: required_u64(&fields[4], "Raft install snapshot fencing epoch")?,
+        });
+    }
+    if let Some(fields) = value.collect_simple_record("snapshot-response", Some(SNAPSHOT_RESPONSE_ARITY)) {
+        return Ok(RaftMessage::SnapshotResponse {
+            term: required_u64(&fields[0], "Raft snapshot response term")?,
+            follower_id: required_string(&fields[1], "Raft snapshot response follower")?,
+            snapshot_index: required_u64(&fields[2], "Raft snapshot response index")?,
+            accepted: required_bool(&fields[3], "Raft snapshot response decision")?,
+            config_epoch: required_u64(&fields[4], "Raft snapshot response config epoch")?,
+            fencing_epoch: required_u64(&fields[5], "Raft snapshot response fencing epoch")?,
         });
     }
     Err(MoltenError::invalid_harness("unsupported canonical Raft message variant"))
@@ -240,8 +374,12 @@ fn validate_embedded_sender(envelope: &ReplicaMessageEnvelope) -> Result<()> {
     let embedded = match &envelope.message {
         RaftMessage::RequestVote { candidate_id, .. } => candidate_id,
         RaftMessage::VoteResponse { voter_id, .. } => voter_id,
-        RaftMessage::AppendEntries { leader_id, .. } => leader_id,
-        RaftMessage::AppendResponse { follower_id, .. } => follower_id,
+        RaftMessage::AppendEntries { leader_id, .. }
+        | RaftMessage::ReadProbe { leader_id, .. }
+        | RaftMessage::InstallSnapshot { leader_id, .. } => leader_id,
+        RaftMessage::AppendResponse { follower_id, .. }
+        | RaftMessage::ReadAcknowledgement { follower_id, .. }
+        | RaftMessage::SnapshotResponse { follower_id, .. } => follower_id,
     };
     if embedded != &envelope.from {
         return Err(MoltenError::invalid_harness("Raft wire sender does not match the embedded sender"));
@@ -250,6 +388,13 @@ fn validate_embedded_sender(envelope: &ReplicaMessageEnvelope) -> Result<()> {
 }
 
 fn validate_message_entries(message: &RaftMessage) -> Result<()> {
+    match message {
+        RaftMessage::ReadProbe { request_ref, .. } | RaftMessage::ReadAcknowledgement { request_ref, .. } => {
+            return crate::preserves_rail::validate_content_ref(request_ref);
+        }
+        RaftMessage::InstallSnapshot { snapshot, .. } => return validate_wire_snapshot(snapshot),
+        _ => {}
+    }
     let RaftMessage::AppendEntries {
         term,
         prev_log_index,
@@ -275,6 +420,31 @@ fn validate_message_entries(message: &RaftMessage) -> Result<()> {
         expected = expected
             .checked_add(NEXT_LOG_INDEX_STEP)
             .ok_or_else(|| MoltenError::invalid_harness("Raft wire entry index overflow"))?;
+    }
+    Ok(())
+}
+
+fn validate_wire_snapshot(snapshot: &ReplicaSnapshot) -> Result<()> {
+    for reference in [
+        &snapshot.snapshot_ref,
+        &snapshot.group_binding_ref,
+        &snapshot.membership_ref,
+        &snapshot.application_state_ref,
+    ] {
+        crate::preserves_rail::validate_content_ref(reference)?;
+    }
+    if snapshot.snapshot_ref != snapshot_ref(snapshot)?
+        || snapshot.last_included_index == INITIAL_COMMIT_INDEX
+        || snapshot.last_included_term == INITIAL_TERM
+        || snapshot.completed_requests.len() > MAX_REPLICA_LOG_ENTRIES
+    {
+        return Err(MoltenError::invalid_harness("Raft wire snapshot identity or boundary is invalid"));
+    }
+    for (request_ref, index) in &snapshot.completed_requests {
+        crate::preserves_rail::validate_content_ref(request_ref)?;
+        if *index == INITIAL_COMMIT_INDEX || *index > snapshot.last_included_index {
+            return Err(MoltenError::invalid_harness("Raft wire snapshot request index is invalid"));
+        }
     }
     Ok(())
 }

@@ -7,6 +7,7 @@ pub const STATIC_VOTER_COUNT: usize = 3;
 pub const MAX_REPLICA_LOG_ENTRIES: usize = 4_096;
 pub const MAX_REPLICA_MESSAGE_ENTRIES: usize = 128;
 pub const MAX_REPLICA_EFFECTS: usize = 256;
+pub const MAX_PENDING_REPLICA_READS: usize = 128;
 pub const INITIAL_LOG_INDEX: u64 = 1;
 pub const INITIAL_TERM: u64 = 0;
 pub const INITIAL_COMMIT_INDEX: u64 = 0;
@@ -138,6 +139,36 @@ pub enum RaftMessage {
         config_epoch: u64,
         fencing_epoch: u64,
     },
+    ReadProbe {
+        term: u64,
+        leader_id: String,
+        request_ref: String,
+        required_index: u64,
+        config_epoch: u64,
+        fencing_epoch: u64,
+    },
+    ReadAcknowledgement {
+        term: u64,
+        follower_id: String,
+        request_ref: String,
+        config_epoch: u64,
+        fencing_epoch: u64,
+    },
+    InstallSnapshot {
+        term: u64,
+        leader_id: String,
+        snapshot: Box<ReplicaSnapshot>,
+        config_epoch: u64,
+        fencing_epoch: u64,
+    },
+    SnapshotResponse {
+        term: u64,
+        follower_id: String,
+        snapshot_index: u64,
+        accepted: bool,
+        config_epoch: u64,
+        fencing_epoch: u64,
+    },
 }
 
 impl RaftMessage {
@@ -146,7 +177,11 @@ impl RaftMessage {
             Self::RequestVote { term, .. }
             | Self::VoteResponse { term, .. }
             | Self::AppendEntries { term, .. }
-            | Self::AppendResponse { term, .. } => *term,
+            | Self::AppendResponse { term, .. }
+            | Self::ReadProbe { term, .. }
+            | Self::ReadAcknowledgement { term, .. }
+            | Self::InstallSnapshot { term, .. }
+            | Self::SnapshotResponse { term, .. } => *term,
         }
     }
 
@@ -155,7 +190,11 @@ impl RaftMessage {
             Self::RequestVote { config_epoch, .. }
             | Self::VoteResponse { config_epoch, .. }
             | Self::AppendEntries { config_epoch, .. }
-            | Self::AppendResponse { config_epoch, .. } => *config_epoch,
+            | Self::AppendResponse { config_epoch, .. }
+            | Self::ReadProbe { config_epoch, .. }
+            | Self::ReadAcknowledgement { config_epoch, .. }
+            | Self::InstallSnapshot { config_epoch, .. }
+            | Self::SnapshotResponse { config_epoch, .. } => *config_epoch,
         }
     }
 
@@ -164,9 +203,21 @@ impl RaftMessage {
             Self::RequestVote { fencing_epoch, .. }
             | Self::VoteResponse { fencing_epoch, .. }
             | Self::AppendEntries { fencing_epoch, .. }
-            | Self::AppendResponse { fencing_epoch, .. } => *fencing_epoch,
+            | Self::AppendResponse { fencing_epoch, .. }
+            | Self::ReadProbe { fencing_epoch, .. }
+            | Self::ReadAcknowledgement { fencing_epoch, .. }
+            | Self::InstallSnapshot { fencing_epoch, .. }
+            | Self::SnapshotResponse { fencing_epoch, .. } => *fencing_epoch,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingReplicaRead {
+    pub request_ref: String,
+    pub term: u64,
+    pub required_index: u64,
+    pub acknowledgements: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -308,6 +359,7 @@ pub struct ReplicaState {
     pub last_applied: u64,
     pub snapshot: Option<ReplicaSnapshot>,
     pub completed_requests: BTreeMap<String, u64>,
+    pub pending_reads: BTreeMap<String, PendingReplicaRead>,
     pub votes_received: BTreeSet<String>,
     pub next_index: BTreeMap<String, u64>,
     pub match_index: BTreeMap<String, u64>,

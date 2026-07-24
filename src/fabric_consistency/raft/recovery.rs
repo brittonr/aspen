@@ -113,6 +113,7 @@ fn reset_recovery_state(initial: &ReplicaState) -> Result<ReplicaState> {
     state.last_applied = INITIAL_COMMIT_INDEX;
     state.snapshot = None;
     state.completed_requests.clear();
+    state.pending_reads.clear();
     state.votes_received.clear();
     state.next_index.clear();
     state.match_index.clear();
@@ -216,7 +217,7 @@ fn optional_string(value: &Value<IOValue>) -> Result<Option<String>> {
     Ok(Some(canonical::required_string(&fields[0], "optional recovered voter")?))
 }
 
-fn parse_snapshot(bytes: &[u8]) -> Result<ReplicaSnapshot> {
+pub(super) fn parse_snapshot(bytes: &[u8]) -> Result<ReplicaSnapshot> {
     let decoded = crate::preserves_rail::strict_canonical_decode(bytes)?;
     let fields = canonical::required_record(&decoded.value, "raft-replica-snapshot-v1", SNAPSHOT_ARITY)?;
     let snapshot = ReplicaSnapshot {

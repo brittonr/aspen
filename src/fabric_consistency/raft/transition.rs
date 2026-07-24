@@ -1,6 +1,9 @@
 mod client;
 mod election;
+mod message;
+mod read;
 mod replication;
+mod snapshot;
 mod support;
 mod validation;
 
@@ -49,66 +52,7 @@ fn handle_message(state: &ReplicaState, envelope: ReplicaMessageEnvelope) -> Res
         persist_hard_state: false,
     };
     observe_higher_term(&mut transition, message.term());
-    match message {
-        RaftMessage::RequestVote {
-            term,
-            candidate_id,
-            last_log_index,
-            last_log_term,
-            ..
-        } => election::handle_request_vote(&mut transition, election::VoteRequestInput {
-            from: envelope.from,
-            term,
-            candidate_id,
-            last_log_index,
-            last_log_term,
-        })?,
-        RaftMessage::VoteResponse {
-            term,
-            voter_id,
-            granted,
-            ..
-        } => election::handle_vote_response(&mut transition, election::VoteResponseInput {
-            from: envelope.from,
-            term,
-            voter_id,
-            is_granted: granted,
-        })?,
-        RaftMessage::AppendEntries {
-            term,
-            leader_id,
-            prev_log_index,
-            prev_log_term,
-            entries,
-            leader_commit,
-            ..
-        } => replication::handle_append_entries(&mut transition, replication::AppendEntriesInput {
-            from: envelope.from,
-            term,
-            leader_id,
-            prev_log_index,
-            prev_log_term,
-            entries,
-            leader_commit,
-        })?,
-        RaftMessage::AppendResponse {
-            term,
-            follower_id,
-            success,
-            request_prev_log_index,
-            match_index,
-            conflict_index,
-            ..
-        } => replication::handle_append_response(&mut transition, replication::AppendResponseInput {
-            from: envelope.from,
-            term,
-            follower_id,
-            is_success: success,
-            request_prev_log_index,
-            match_index,
-            conflict_index,
-        })?,
-    }
+    message::dispatch(&mut transition, envelope.from, message)?;
     finish_message_transition(transition)
 }
 
@@ -123,6 +67,7 @@ fn observe_higher_term(transition: &mut MessageTransition, term: u64) {
     transition.next.votes_received.clear();
     transition.next.next_index.clear();
     transition.next.match_index.clear();
+    transition.next.pending_reads.clear();
     transition.next.quorum_confirmed_term = None;
     transition.persist_hard_state = true;
 }

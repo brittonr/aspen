@@ -79,6 +79,7 @@ fn become_follower(transition: &mut MessageTransition, leader_id: String) {
     transition.next.votes_received.clear();
     transition.next.next_index.clear();
     transition.next.match_index.clear();
+    transition.next.pending_reads.clear();
     transition.next.quorum_confirmed_term = None;
 }
 

@@ -48,7 +48,8 @@ pub(super) fn validate_message_envelope(state: &ReplicaState, envelope: &Replica
     {
         return Err(MoltenError::invalid_harness("Raft message uses a stale configuration or fencing epoch"));
     }
-    validate_message_sender(envelope)
+    validate_message_sender(envelope)?;
+    validate_message_request_ref(&envelope.message)
 }
 
 pub(super) fn validate_replica_state(state: &ReplicaState) -> Result<()> {
@@ -66,6 +67,7 @@ pub(super) fn validate_replica_state(state: &ReplicaState) -> Result<()> {
     }
     validate_role(state)?;
     validate_completed_requests(state)?;
+    validate_pending_reads(state)?;
     validate_election_timer(state)?;
     if state.voted_for.as_ref().is_some_and(|voter| !state.membership.voters.contains(voter)) {
         return Err(MoltenError::invalid_harness("Raft vote target is outside admitted membership"));
@@ -83,6 +85,27 @@ fn validate_completed_requests(state: &ReplicaState) -> Result<()> {
     for entry in state.log.iter().filter(|entry| entry.index <= state.commit_index) {
         if state.completed_requests.get(&entry.request_ref) != Some(&entry.index) {
             return Err(MoltenError::invalid_harness("Raft committed log entry is absent from idempotency state"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_pending_reads(state: &ReplicaState) -> Result<()> {
+    if state.pending_reads.len() > MAX_PENDING_REPLICA_READS {
+        return Err(MoltenError::invalid_harness("Raft pending reads exceed their static bound"));
+    }
+    if !state.pending_reads.is_empty() && state.role != ReplicaRole::Leader {
+        return Err(MoltenError::invalid_harness("only a Raft leader may retain pending reads"));
+    }
+    for (request_ref, pending) in &state.pending_reads {
+        validate_content_ref(request_ref, "Raft pending read ref")?;
+        if request_ref != &pending.request_ref
+            || pending.term != state.current_term
+            || pending.required_index > state.commit_index
+            || !pending.acknowledgements.contains(&state.node_id)
+            || pending.acknowledgements.iter().any(|node_id| !state.membership.voters.contains(node_id))
+        {
+            return Err(MoltenError::invalid_harness("Raft pending read state is inconsistent"));
         }
     }
     Ok(())
@@ -191,13 +214,29 @@ fn validate_message_sender(envelope: &ReplicaMessageEnvelope) -> Result<()> {
     let embedded_sender = match &envelope.message {
         RaftMessage::RequestVote { candidate_id, .. } => candidate_id,
         RaftMessage::VoteResponse { voter_id, .. } => voter_id,
-        RaftMessage::AppendEntries { leader_id, .. } => leader_id,
-        RaftMessage::AppendResponse { follower_id, .. } => follower_id,
+        RaftMessage::AppendEntries { leader_id, .. }
+        | RaftMessage::ReadProbe { leader_id, .. }
+        | RaftMessage::InstallSnapshot { leader_id, .. } => leader_id,
+        RaftMessage::AppendResponse { follower_id, .. }
+        | RaftMessage::ReadAcknowledgement { follower_id, .. }
+        | RaftMessage::SnapshotResponse { follower_id, .. } => follower_id,
     };
     if embedded_sender != &envelope.from {
         return Err(MoltenError::invalid_harness("Raft message sender does not match its canonical envelope"));
     }
     Ok(())
+}
+
+fn validate_message_request_ref(message: &RaftMessage) -> Result<()> {
+    match message {
+        RaftMessage::ReadProbe { request_ref, .. } | RaftMessage::ReadAcknowledgement { request_ref, .. } => {
+            validate_content_ref(request_ref, "Raft read request ref")
+        }
+        RaftMessage::InstallSnapshot { snapshot, .. } => {
+            validate_content_ref(&snapshot.snapshot_ref, "Raft installed snapshot ref")
+        }
+        _ => Ok(()),
+    }
 }
 
 fn validate_log(state: &ReplicaState) -> Result<()> {

@@ -25,6 +25,17 @@ pub(super) fn append_effects_for_all(state: &ReplicaState) -> Result<Vec<Replica
 
 pub(super) fn append_effect_for(state: &ReplicaState, peer: String) -> Result<ReplicaEffect> {
     let next_index = state.next_index.get(&peer).copied().unwrap_or(INITIAL_LOG_INDEX);
+    if let Some(snapshot) = &state.snapshot
+        && next_index <= snapshot.last_included_index
+    {
+        return Ok(send_effect(state, peer, RaftMessage::InstallSnapshot {
+            term: state.current_term,
+            leader_id: state.node_id.clone(),
+            snapshot: Box::new(snapshot.clone()),
+            config_epoch: state.membership.config_epoch,
+            fencing_epoch: state.profile.fencing_epoch,
+        }));
+    }
     let prev_log_index = next_index
         .checked_sub(NEXT_LOG_INDEX_STEP)
         .ok_or_else(|| MoltenError::invalid_harness("Raft next index is below the initial log index"))?;

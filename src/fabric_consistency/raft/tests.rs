@@ -296,7 +296,7 @@ pub(super) fn elect_node_a() -> (ReplicaState, ReplicaState) {
     (leader.next, vote.next)
 }
 
-fn committed_leader() -> ReplicaState {
+pub(super) fn committed_leader() -> ReplicaState {
     let (leader, follower) = elect_node_a();
     let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
         request_ref: test_ref("committed-helper-request"),
@@ -431,6 +431,59 @@ fn live_raft_snapshot_compacts_only_through_committed_application_state() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
+fn live_raft_installs_bound_snapshots_before_acknowledging_catch_up() {
+    let leader = committed_leader();
+    let snapshot = apply_replica_event(&leader, ReplicaEvent::CreateSnapshot {
+        application_state_ref: test_ref("catch-up-application-state"),
+    })
+    .expect("leader snapshot");
+    let heartbeat = apply_replica_event(&snapshot.next, ReplicaEvent::HeartbeatTimeout).expect("snapshot heartbeat");
+    let install = sent_envelope_to(&heartbeat, NODE_C);
+    assert!(matches!(&install.message, RaftMessage::InstallSnapshot { .. }));
+
+    let follower = started_state(&active_group(), NODE_C);
+    let mut tampered = install.clone();
+    match &mut tampered.message {
+        RaftMessage::InstallSnapshot { snapshot, .. } => {
+            snapshot.application_state_ref = test_ref("tampered-catch-up-state");
+        }
+        other => panic!("expected install snapshot, got {other:?}"),
+    }
+    let error = apply_replica_event(&follower, ReplicaEvent::Message { envelope: tampered })
+        .expect_err("tampered snapshot must deny");
+    assert!(error.to_string().contains("identity mismatch"));
+
+    let installed =
+        apply_replica_event(&follower, ReplicaEvent::Message { envelope: install }).expect("follower snapshot install");
+    assert_eq!(installed.next.commit_index, INITIAL_LOG_INDEX);
+    assert_eq!(installed.next.last_applied, INITIAL_LOG_INDEX);
+    let persist_position = installed
+        .effects
+        .iter()
+        .position(|effect| matches!(effect, ReplicaEffect::PersistSnapshot { .. }))
+        .expect("snapshot persistence");
+    let restore_position = installed
+        .effects
+        .iter()
+        .position(|effect| matches!(effect, ReplicaEffect::RestoreApplicationSnapshot { .. }))
+        .expect("application restore");
+    let send_position = installed
+        .effects
+        .iter()
+        .position(|effect| matches!(effect, ReplicaEffect::Send { .. }))
+        .expect("snapshot acknowledgement");
+    assert!(persist_position < restore_position);
+    assert!(restore_position < send_position);
+
+    let response = sent_envelope_to(&installed, NODE_A);
+    let accepted = apply_replica_event(&snapshot.next, ReplicaEvent::Message { envelope: response })
+        .expect("leader snapshot acknowledgement");
+    assert_eq!(accepted.next.match_index.get(NODE_C), Some(&INITIAL_LOG_INDEX));
+    assert_eq!(accepted.next.next_index.get(NODE_C), Some(&NEXT_INDEX_AFTER_FIRST_ENTRY));
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[test]
 fn live_raft_denies_superseded_election_timer_before_protocol_effects() {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);
@@ -473,25 +526,49 @@ fn live_raft_denies_stale_epoch_messages_without_state_mutation() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn live_raft_keeps_linearizable_reads_retryable_without_a_read_barrier() {
+fn live_raft_completes_linearizable_reads_only_after_a_current_term_majority() {
     let (leader, follower) = elect_node_a();
-    let linearizable = apply_replica_event(&leader, ReplicaEvent::Read {
-        request_ref: test_ref("linearizable-read"),
+    let request_ref = test_ref("linearizable-read");
+    let pending = apply_replica_event(&leader, ReplicaEvent::Read {
+        request_ref: request_ref.clone(),
         mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
     })
-    .expect("linearizable read outcome");
-    assert!(linearizable.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome {
-        disposition: ReadDisposition::Retryable,
-        ..
-    })));
+    .expect("linearizable read probe");
+    assert!(pending.next.pending_reads.contains_key(&request_ref));
+    assert!(!pending.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome { .. })));
 
-    let local = apply_replica_event(&follower, ReplicaEvent::Read {
-        request_ref: test_ref("local-read"),
-        mode: crate::fabric_consistency::ConsistencyReadMode::LocalStale,
+    let probe = sent_envelope_to(&pending, NODE_B);
+    let acknowledged = apply_replica_event(&follower, ReplicaEvent::Message { envelope: probe })
+        .expect("follower read acknowledgement");
+    let acknowledgement = sent_envelope_to(&acknowledged, NODE_A);
+    let mut unrelated = acknowledgement.clone();
+    match &mut unrelated.message {
+        RaftMessage::ReadAcknowledgement { request_ref, .. } => *request_ref = test_ref("unrelated-read"),
+        other => panic!("expected read acknowledgement, got {other:?}"),
+    }
+    let ignored = apply_replica_event(&pending.next, ReplicaEvent::Message { envelope: unrelated })
+        .expect("unrelated acknowledgement ignored");
+    assert!(ignored.next.pending_reads.contains_key(&request_ref));
+    assert!(ignored.effects.is_empty());
+
+    let completed = apply_replica_event(&pending.next, ReplicaEvent::Message {
+        envelope: acknowledgement,
     })
-    .expect("local stale read outcome");
-    assert!(local.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome {
-        disposition: ReadDisposition::Local,
+    .expect("majority read outcome");
+    assert!(completed.next.pending_reads.is_empty());
+    assert!(completed.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome {
+        request_ref: completed_ref,
+        disposition: ReadDisposition::Current,
+        ..
+    } if completed_ref == &request_ref)));
+
+    let follower_read = apply_replica_event(&acknowledged.next, ReplicaEvent::Read {
+        request_ref: test_ref("follower-linearizable-read"),
+        mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
+    })
+    .expect("follower read retry");
+    assert!(follower_read.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome {
+        disposition: ReadDisposition::Retryable,
         ..
     })));
 }

@@ -39,10 +39,12 @@ const LIVE_TERM: u64 = 1;
 #[derive(Debug, Default)]
 struct LiveApplicationHandler {
     applied_request_refs: Vec<String>,
+    restored_application_state_ref: Option<String>,
 }
 
 impl CommittedBatchHandler for LiveApplicationHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> Result<String> {
+    fn restore_snapshot(&mut self, snapshot: &ApplicationSnapshotRestore) -> Result<String> {
+        self.restored_application_state_ref = Some(snapshot.application_state_ref.clone());
         Ok(test_ref("live-cluster-snapshot-restore"))
     }
 
@@ -59,12 +61,13 @@ struct LiveNode {
     service: LiveService,
     listener: IrohCrossProcessListener,
     session_ref: String,
+    _workspace: crate::test_support::ProcessWorkspace,
     _control_receiver: tokio::sync::mpsc::UnboundedReceiver<ReplicaControlObservation>,
 }
 
 // r[verify molten.fabric_consistency.live_raft]
 #[tokio::test]
-async fn three_endpoint_live_services_elect_replicate_commit_and_apply() {
+async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
     let group = active_group();
     let listener_a = listener_with_secret(NODE_A_SECRET_BYTE).await;
     let listener_b = listener_with_secret(NODE_B_SECRET_BYTE).await;
@@ -91,17 +94,35 @@ async fn three_endpoint_live_services_elect_replicate_commit_and_apply() {
     workflow::replicate_request(&mut node_a, &mut node_b, &mut node_c, &request_ref)
         .await
         .expect("live replication");
+    workflow::quorum_read(&mut node_a, &mut node_b, &mut node_c, &test_ref("live-cluster-linearizable-read"))
+        .await
+        .expect("live quorum read");
+    let application_state_ref = test_ref("live-cluster-application-state");
+    workflow::snapshot_catch_up(&mut node_a, &mut node_b, &mut node_c, &application_state_ref)
+        .await
+        .expect("live snapshot catch-up");
 
     assert_eq!(node_a.service.state().role, ReplicaRole::Leader);
     assert_eq!(node_a.service.state().current_term, LIVE_TERM);
     assert_eq!(node_a.service.state().commit_index, INITIAL_LOG_INDEX);
     assert_eq!(node_b.service.state().commit_index, INITIAL_LOG_INDEX);
+    assert!(node_a.service.state().pending_reads.is_empty());
+    assert_eq!(node_a.service.state().quorum_confirmed_term, Some(LIVE_TERM));
     assert_eq!(node_a.service.state().completed_requests.get(&request_ref), Some(&INITIAL_LOG_INDEX));
     assert_eq!(node_b.service.state().completed_requests.get(&request_ref), Some(&INITIAL_LOG_INDEX));
+    assert_eq!(node_c.service.state().commit_index, INITIAL_LOG_INDEX);
+    assert_eq!(node_c.service.state().last_applied, INITIAL_LOG_INDEX);
+    assert_eq!(node_c.service.state().completed_requests.get(&request_ref), Some(&INITIAL_LOG_INDEX));
+    assert_eq!(
+        node_c.service.ports().application.handler().restored_application_state_ref,
+        Some(application_state_ref)
+    );
     assert_eq!(node_a.service.ports().application.handler().applied_request_refs, vec![request_ref.clone()]);
     assert_eq!(node_b.service.ports().application.handler().applied_request_refs, vec![request_ref]);
     assert!(!node_a.service.ports().durability.adapter().state().durable_log.is_empty());
     assert!(!node_b.service.ports().durability.adapter().state().durable_log.is_empty());
+    let node_c_snapshot_ref = &node_c.service.state().snapshot.as_ref().expect("node C snapshot").snapshot_ref;
+    assert!(node_c.service.ports().durability.adapter().state().snapshots.contains_key(node_c_snapshot_ref));
 
     setup::close_node(node_a).await;
     setup::close_node(node_b).await;

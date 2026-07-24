@@ -164,7 +164,7 @@ fn entry_value(entry: &ReplicatedEntry) -> preserves::IOValue {
     ])
 }
 
-fn snapshot_value(snapshot: &ReplicaSnapshot) -> preserves::IOValue {
+pub(super) fn snapshot_value(snapshot: &ReplicaSnapshot) -> preserves::IOValue {
     crate::preserves_rail::record("raft-replica-snapshot-v1", vec![
         crate::preserves_rail::string(&snapshot.snapshot_ref),
         crate::preserves_rail::string(&snapshot.group_binding_ref),

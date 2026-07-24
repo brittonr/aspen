@@ -35,16 +35,58 @@ pub(super) fn handle_read(
 ) -> Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_content_ref(&request_ref, "Raft read request ref")?;
-    let disposition = match mode {
-        ConsistencyReadMode::LocalStale => ReadDisposition::Local,
-        ConsistencyReadMode::Linearizable | ConsistencyReadMode::Lease => ReadDisposition::Retryable,
-    };
+    match mode {
+        ConsistencyReadMode::LocalStale => read_outcome(state, request_ref, mode, ReadDisposition::Local),
+        ConsistencyReadMode::Lease => read_outcome(state, request_ref, mode, ReadDisposition::Retryable),
+        ConsistencyReadMode::Linearizable if state.role != ReplicaRole::Leader => {
+            read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
+        }
+        ConsistencyReadMode::Linearizable if state.pending_reads.contains_key(&request_ref) => {
+            read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
+        }
+        ConsistencyReadMode::Linearizable if state.pending_reads.len() >= MAX_PENDING_REPLICA_READS => {
+            read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
+        }
+        ConsistencyReadMode::Linearizable => begin_linearizable_read(state, request_ref),
+    }
+}
+
+fn read_outcome(
+    state: &ReplicaState,
+    request_ref: String,
+    mode: ConsistencyReadMode,
+    disposition: ReadDisposition,
+) -> Result<ReplicaTransition> {
     finish_transition(state.clone(), vec![ReplicaEffect::ReadOutcome {
         request_ref,
         mode,
         disposition,
         observed_index: state.last_applied,
     }])
+}
+
+fn begin_linearizable_read(state: &ReplicaState, request_ref: String) -> Result<ReplicaTransition> {
+    let mut next = state.clone();
+    next.pending_reads.insert(request_ref.clone(), PendingReplicaRead {
+        request_ref: request_ref.clone(),
+        term: state.current_term,
+        required_index: state.commit_index,
+        acknowledgements: std::collections::BTreeSet::from([state.node_id.clone()]),
+    });
+    let effects = support::peers(&next)
+        .into_iter()
+        .map(|peer| {
+            support::send_effect(&next, peer, RaftMessage::ReadProbe {
+                term: next.current_term,
+                leader_id: next.node_id.clone(),
+                request_ref: request_ref.clone(),
+                required_index: next.commit_index,
+                config_epoch: next.membership.config_epoch,
+                fencing_epoch: next.profile.fencing_epoch,
+            })
+        })
+        .collect();
+    finish_transition(next, effects)
 }
 
 pub(super) fn handle_create_snapshot(state: &ReplicaState, application_state_ref: String) -> Result<ReplicaTransition> {
@@ -77,6 +119,7 @@ pub(super) fn handle_begin_drain(state: &ReplicaState) -> Result<ReplicaTransiti
     validation::ensure_running(state)?;
     let mut next = state.clone();
     next.lifecycle = ReplicaLifecycle::Draining;
+    next.pending_reads.clear();
     finish_transition(next, vec![ReplicaEffect::LifecycleChanged {
         lifecycle: ReplicaLifecycle::Draining,
     }])
@@ -90,6 +133,7 @@ pub(super) fn handle_stop(state: &ReplicaState) -> Result<ReplicaTransition> {
     next.lifecycle = ReplicaLifecycle::Stopped;
     next.role = ReplicaRole::Follower;
     next.leader_id = None;
+    next.pending_reads.clear();
     next.quorum_confirmed_term = None;
     finish_transition(next, vec![ReplicaEffect::LifecycleChanged {
         lifecycle: ReplicaLifecycle::Stopped,

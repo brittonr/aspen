@@ -59,6 +59,89 @@ pub(super) async fn replicate_request(
     replicate_commit_notice(node_a, node_b, node_c).await
 }
 
+pub(super) async fn quorum_read(
+    node_a: &mut LiveNode,
+    node_b: &mut LiveNode,
+    node_c: &mut LiveNode,
+    request_ref: &str,
+) -> Result<()> {
+    let session_b = node_b.session_ref.clone();
+    let session_c = node_c.session_ref.clone();
+    let read = node_a.service.handle_event(ReplicaEvent::Read {
+        request_ref: request_ref.to_string(),
+        mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
+    });
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, live_timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let (read, probe_b, probe_c) = tokio::join!(read, receive_b, receive_c);
+    require_applied(read)?;
+    let probe_b = probe_b?;
+    let _probe_c = probe_c?;
+
+    let session_a = node_a.session_ref.clone();
+    let acknowledge = node_b.service.handle_event(probe_b.event);
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, live_timeout());
+    let (acknowledge, response) = tokio::join!(acknowledge, receive_a);
+    require_applied(acknowledge)?;
+    let outcome = node_a.service.handle_event(response?.event).await;
+    match outcome {
+        ReplicaExecutionOutcome::Applied(applied)
+            if applied.observations.iter().any(|observation| observation.kind == ReplicaEffectKind::ReadOutcome) =>
+        {
+            Ok(())
+        }
+        applied @ ReplicaExecutionOutcome::Applied(_) => Err(crate::error::MoltenError::invalid_harness(format!(
+            "live cluster quorum read produced no current outcome: {applied:?}"
+        ))),
+        other => require_applied(other),
+    }
+}
+
+pub(super) async fn snapshot_catch_up(
+    node_a: &mut LiveNode,
+    node_b: &mut LiveNode,
+    node_c: &mut LiveNode,
+    application_state_ref: &str,
+) -> Result<()> {
+    require_applied(
+        node_a
+            .service
+            .handle_event(ReplicaEvent::CreateSnapshot {
+                application_state_ref: application_state_ref.to_string(),
+            })
+            .await,
+    )?;
+    let session_b = node_b.session_ref.clone();
+    let session_c = node_c.session_ref.clone();
+    let heartbeat = node_a.service.handle_event(ReplicaEvent::HeartbeatTimeout);
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, live_timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let (heartbeat, append_b, snapshot_c) = tokio::join!(heartbeat, receive_b, receive_c);
+    require_applied(heartbeat)?;
+    let _append_b = append_b?;
+    let snapshot_c = snapshot_c?;
+    assert!(matches!(&snapshot_c.event, ReplicaEvent::Message {
+        envelope: ReplicaMessageEnvelope {
+            message: RaftMessage::InstallSnapshot { .. },
+            ..
+        }
+    }));
+
+    let session_a = node_a.session_ref.clone();
+    let install = node_c.service.handle_event(snapshot_c.event);
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, live_timeout());
+    let (install, response) = tokio::join!(install, receive_a);
+    require_applied(install)?;
+
+    let session_c = node_c.session_ref.clone();
+    let accept = node_a.service.handle_event(response?.event);
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let (accept, suffix) = tokio::join!(accept, receive_c);
+    require_applied(accept)?;
+    let _suffix = suffix?;
+    Ok(())
+}
+
 async fn replicate_commit_notice(node_a: &mut LiveNode, node_b: &mut LiveNode, node_c: &mut LiveNode) -> Result<()> {
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();

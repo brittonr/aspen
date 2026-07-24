@@ -29,7 +29,7 @@ pub(super) async fn build_node(
     let identity = runtime_identity(group, &state, fabric_binding_refs.clone());
     let plan = start_plan(group, state, fabric_binding_refs);
     let (transport, session_ref) = transport_for(node_id, endpoints, protocol_ref)?;
-    let durability = durability_for(node_id, durable_log_ref, snapshot_store_ref)?;
+    let (durability, workspace) = durability_for(node_id, durable_log_ref, snapshot_store_ref)?;
     let (time, inbox) = time_for(group, node_id, timer, entropy_profile_ref)?;
     let application = application_for(group)?;
     let (control, control_receiver) = control_for(group, supervision_ref)?;
@@ -39,6 +39,7 @@ pub(super) async fn build_node(
         service,
         listener,
         session_ref,
+        _workspace: workspace,
         _control_receiver: control_receiver,
     })
 }
@@ -128,7 +129,7 @@ fn durability_for(
     node_id: &str,
     durable_log_ref: String,
     snapshot_store_ref: String,
-) -> Result<RedbReplicaDurabilityPort> {
+) -> Result<(RedbReplicaDurabilityPort, crate::test_support::ProcessWorkspace)> {
     let root = crate::test_support::process_workspace(&format!("live-cluster-{node_id}"))?;
     let mut namespace = descriptor();
     namespace.adapter_id = format!("live-cluster-{node_id}-adapter");
@@ -136,7 +137,8 @@ fn durability_for(
     namespace.atomicity_domain.adapter_id.clone_from(&namespace.adapter_id);
     namespace.atomicity_domain.namespace_id.clone_from(&namespace.namespace_id);
     let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), namespace)?;
-    RedbReplicaDurabilityPort::new(adapter, durable_log_ref, snapshot_store_ref)
+    let port = RedbReplicaDurabilityPort::new(adapter, durable_log_ref, snapshot_store_ref)?;
+    Ok((port, root))
 }
 
 fn time_for(
@@ -199,6 +201,7 @@ pub(super) async fn close_node(node: LiveNode) {
         service,
         listener,
         session_ref: _,
+        _workspace: _,
         _control_receiver: _,
     } = node;
     drop(service);

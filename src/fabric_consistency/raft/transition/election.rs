@@ -37,6 +37,7 @@ pub(super) fn handle_election_timeout(state: &ReplicaState, timer_ref: String) -
     next.leader_id = None;
     next.votes_received.clear();
     next.votes_received.insert(next.node_id.clone());
+    next.pending_reads.clear();
     next.next_index.clear();
     next.match_index.clear();
     next.quorum_confirmed_term = None;
@@ -92,6 +93,7 @@ pub(super) fn handle_request_vote(transition: &mut MessageTransition, input: Vot
         transition.next.role = ReplicaRole::Follower;
         transition.next.leader_id = None;
         transition.next.votes_received.clear();
+        transition.next.pending_reads.clear();
         transition.next.quorum_confirmed_term = None;
     }
     transition.effects.push(support::send_effect(

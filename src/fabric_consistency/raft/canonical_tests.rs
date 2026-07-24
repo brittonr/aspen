@@ -1,5 +1,7 @@
 use super::tests::NODE_A;
+use super::tests::NODE_C;
 use super::tests::active_group;
+use super::tests::committed_leader;
 use super::tests::elect_node_a;
 use super::tests::sent_envelope_to;
 use super::tests::started_state;
@@ -21,7 +23,7 @@ fn canonical_raft_vote_and_append_envelopes_roundtrip_exactly() {
     let vote = sent_envelope_to(&election, NODE_B);
     assert_roundtrip(&vote);
 
-    let (leader, _follower) = elect_node_a();
+    let (leader, follower) = elect_node_a();
     let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
         request_ref: test_ref("canonical-proposal-request"),
         command_ref: test_ref("canonical-proposal-command"),
@@ -30,6 +32,29 @@ fn canonical_raft_vote_and_append_envelopes_roundtrip_exactly() {
     .expect("proposal transition");
     let append = sent_envelope_to(&proposal, NODE_B);
     assert_roundtrip(&append);
+
+    let read = apply_replica_event(&leader, ReplicaEvent::Read {
+        request_ref: test_ref("canonical-read-request"),
+        mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
+    })
+    .expect("read transition");
+    let probe = sent_envelope_to(&read, NODE_B);
+    assert_roundtrip(&probe);
+    let acknowledgement =
+        apply_replica_event(&follower, ReplicaEvent::Message { envelope: probe }).expect("read acknowledgement");
+    assert_roundtrip(&sent_envelope_to(&acknowledgement, NODE_A));
+
+    let committed = committed_leader();
+    let snapshot = apply_replica_event(&committed, ReplicaEvent::CreateSnapshot {
+        application_state_ref: test_ref("canonical-snapshot-state"),
+    })
+    .expect("canonical snapshot");
+    let heartbeat = apply_replica_event(&snapshot.next, ReplicaEvent::HeartbeatTimeout).expect("snapshot heartbeat");
+    let install = sent_envelope_to(&heartbeat, NODE_C);
+    assert_roundtrip(&install);
+    let installed = apply_replica_event(&started_state(&group, NODE_C), ReplicaEvent::Message { envelope: install })
+        .expect("canonical snapshot install");
+    assert_roundtrip(&sent_envelope_to(&installed, NODE_A));
 }
 
 // r[verify molten.fabric_consistency.live_raft]
