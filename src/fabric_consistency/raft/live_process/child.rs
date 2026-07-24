@@ -9,9 +9,6 @@ const NODE_A_SECRET_BYTE: u8 = 41;
 const NODE_B_SECRET_BYTE: u8 = 43;
 const NODE_C_SECRET_BYTE: u8 = 47;
 const EVENT_POLL_MILLISECONDS: u64 = 100;
-const EVENT_LOOP_LIMIT: usize = 1_200;
-const INGRESS_EVENT_CAPACITY: usize = 32;
-const INGRESS_DELIVERY_LIMIT: u64 = 1_024;
 
 pub(super) async fn run(node_id: String, run_directory: PathBuf, mode: ChildMode) -> Result<()> {
     let listener = listener_with_secret(secret_byte(&node_id)?).await;
@@ -36,7 +33,7 @@ pub(super) async fn run(node_id: String, run_directory: PathBuf, mode: ChildMode
         }
     };
     if mode == ChildMode::Recover {
-        return finish_recovered_node(node_id, endpoint_identity, node, &run_directory).await;
+        return super::recovered::run(node_id, endpoint_identity, node, &run_directory).await;
     }
     run_fresh_node(node_id, endpoint_identity, node, &run_directory).await
 }
@@ -62,10 +59,10 @@ async fn run_fresh_node(
         run_follower(&mut node, &mut ingress, run_directory, &endpoint_identity, node_id == NODE_C).await?;
     }
     node.listener = Some(ingress.shutdown().await?);
-    finish_recovered_node(node_id, endpoint_identity, node, run_directory).await
+    finish_node(node_id, endpoint_identity, node, run_directory).await
 }
 
-async fn finish_recovered_node(
+pub(super) async fn finish_node(
     node_id: String,
     endpoint_identity: String,
     node: live_cluster::LiveNode,
@@ -255,7 +252,7 @@ fn write_checkpoint_if_requested(
     write_value(&output, &receipt_value(&receipt))
 }
 
-async fn poll_event(ingress: &mut IrohReplicaIngressPump) -> Result<Option<ReceivedReplicaEvent>> {
+pub(super) async fn poll_event(ingress: &mut IrohReplicaIngressPump) -> Result<Option<ReceivedReplicaEvent>> {
     tokio::select! {
         result = ingress.next() => result.map(Some),
         () = tokio::time::sleep(Duration::from_millis(EVENT_POLL_MILLISECONDS)) => Ok(None),
@@ -267,7 +264,7 @@ fn has_read_outcome(outcome: &ReplicaExecutionOutcome) -> bool {
         if applied.observations.iter().any(|observation| observation.kind == ReplicaEffectKind::ReadOutcome))
 }
 
-fn require_applied(outcome: ReplicaExecutionOutcome) -> Result<()> {
+pub(super) fn require_applied(outcome: ReplicaExecutionOutcome) -> Result<()> {
     match outcome {
         ReplicaExecutionOutcome::Applied(_) => Ok(()),
         ReplicaExecutionOutcome::Denied { diagnostic, .. } => {

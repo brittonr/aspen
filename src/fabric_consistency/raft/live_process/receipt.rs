@@ -171,7 +171,7 @@ pub(super) fn assert_recovery_receipts(receipts: &[ProcessReceipt; STATIC_VOTER_
     assert_distinct_identity(receipts);
     for receipt in receipts {
         assert!(receipt.clean_shutdown);
-        assert_eq!(receipt.role, ReplicaRole::Follower);
+        assert_eq!(receipt.term, RECOVERED_LEADER_TERM);
         assert_eq!(receipt.commit_index, INITIAL_LOG_INDEX);
         assert_eq!(receipt.last_applied, INITIAL_LOG_INDEX);
         assert_eq!(receipt.pending_read_count, 0);
@@ -179,6 +179,10 @@ pub(super) fn assert_recovery_receipts(receipts: &[ProcessReceipt; STATIC_VOTER_
         assert!(receipt.quorum_loss_request_uncommitted);
         crate::preserves_rail::validate_content_ref(&receipt.recovery_ref).expect("recovery receipt ref");
     }
+    assert_eq!(receipts[0].role, ReplicaRole::Follower);
+    assert_eq!(receipts[1].role, ReplicaRole::Leader);
+    assert_eq!(receipts[1].quorum_term, RECOVERED_LEADER_TERM);
+    assert_eq!(receipts[2].role, ReplicaRole::Follower);
     assert!(receipts[0].application_restored);
     assert!(receipts[1].application_applied);
     assert!(receipts[2].application_restored);

@@ -16,8 +16,9 @@ use crate::fabric_transport::CanonicalCrossProcessEndpoint;
 mod child;
 mod process;
 mod receipt;
+mod recovered;
 
-pub(super) use receipt::*;
+use receipt::*;
 
 const CHILD_NODE_ENV: &str = "MOLTEN_LIVE_RAFT_CHILD_NODE";
 const CHILD_RUN_DIRECTORY_ENV: &str = "MOLTEN_LIVE_RAFT_RUN_DIRECTORY";
@@ -34,9 +35,17 @@ const STOP_FILE: &str = "stop.preserves";
 const LEADER_DONE_FILE: &str = "leader-done.preserves";
 const PARTITION_FILE: &str = "partition.preserves";
 const CHECKPOINT_FILE: &str = "checkpoint.preserves";
+const RESTART_START_FILE: &str = "restart-start.preserves";
+const RECOVERED_LEADER_FILE: &str = "recovered-leader.preserves";
+const STALE_FENCED_FILE: &str = "stale-fenced.preserves";
 const REQUEST_LABEL: &str = "distinct-process-request";
 const APPLICATION_STATE_LABEL: &str = "distinct-process-application-state";
 const QUORUM_LOSS_REQUEST_LABEL: &str = "distinct-process-quorum-loss-request";
+const STALE_LEADER_TERM: u64 = 1;
+const RECOVERED_LEADER_TERM: u64 = 2;
+const EVENT_LOOP_LIMIT: usize = 1_200;
+const INGRESS_EVENT_CAPACITY: usize = 32;
+const INGRESS_DELIVERY_LIMIT: u64 = 1_024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ChildMode {
@@ -97,6 +106,10 @@ fn three_process_live_raft_elects_commits_reads_and_catches_up() {
     let recovered_process_ids = recovered.iter().map(process::ChildGuard::id).collect::<BTreeSet<_>>();
     assert_eq!(recovered_process_ids.len(), STATIC_VOTER_COUNT);
     assert!(child_process_ids.is_disjoint(&recovered_process_ids));
+    wait_for_nodes(&run_directory, "ready").expect("recovered child readiness");
+    write_signal(&run_directory.join(RESTART_START_FILE), "restart-start").expect("restart election signal");
+    wait_for_file(&run_directory.join(STALE_FENCED_FILE)).expect("stale leader fencing");
+    write_signal(&run_directory.join(STOP_FILE), "stop").expect("recovered stop signal");
     if let Err(error) = wait_for_nodes(&run_directory, "terminal") {
         panic!("recovery receipts: {error}\n{}", child_diagnostics(&run_directory));
     }
@@ -201,7 +214,16 @@ fn durability_path(run_directory: &Path, node_id: &str) -> PathBuf {
 }
 
 fn clear_phase_files(run_directory: &Path) -> Result<()> {
-    for name in [START_FILE, STOP_FILE, LEADER_DONE_FILE, PARTITION_FILE, CHECKPOINT_FILE] {
+    for name in [
+        START_FILE,
+        STOP_FILE,
+        LEADER_DONE_FILE,
+        PARTITION_FILE,
+        CHECKPOINT_FILE,
+        RESTART_START_FILE,
+        RECOVERED_LEADER_FILE,
+        STALE_FENCED_FILE,
+    ] {
         remove_file_if_present(&run_directory.join(name))?;
     }
     for node_id in [NODE_A, NODE_B, NODE_C] {
