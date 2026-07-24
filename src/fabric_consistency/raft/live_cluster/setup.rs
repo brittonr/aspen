@@ -1,10 +1,50 @@
 use super::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NodeStartupMode {
+    Fresh,
+    Recover,
+}
+
 pub(in crate::fabric_consistency::raft) async fn build_node(
     group: &crate::fabric_consistency::ConsistencyGroupBinding,
     node_id: &str,
     listener: IrohCrossProcessListener,
     endpoints: &BTreeMap<String, CanonicalCrossProcessEndpoint>,
+) -> Result<LiveNode> {
+    let root = crate::test_support::process_workspace(&format!("live-cluster-{node_id}"))?;
+    let root_owner = root.clone();
+    build_node_with_root(group, node_id, listener, endpoints, &root, Some(root_owner), NodeStartupMode::Fresh).await
+}
+
+pub(in crate::fabric_consistency::raft) async fn build_node_at_root(
+    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    node_id: &str,
+    listener: IrohCrossProcessListener,
+    endpoints: &BTreeMap<String, CanonicalCrossProcessEndpoint>,
+    durability_root: &std::path::Path,
+) -> Result<LiveNode> {
+    build_node_with_root(group, node_id, listener, endpoints, durability_root, None, NodeStartupMode::Fresh).await
+}
+
+pub(in crate::fabric_consistency::raft) async fn recover_node_at_root(
+    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    node_id: &str,
+    listener: IrohCrossProcessListener,
+    endpoints: &BTreeMap<String, CanonicalCrossProcessEndpoint>,
+    durability_root: &std::path::Path,
+) -> Result<LiveNode> {
+    build_node_with_root(group, node_id, listener, endpoints, durability_root, None, NodeStartupMode::Recover).await
+}
+
+async fn build_node_with_root(
+    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    node_id: &str,
+    listener: IrohCrossProcessListener,
+    endpoints: &BTreeMap<String, CanonicalCrossProcessEndpoint>,
+    durability_root: &std::path::Path,
+    workspace: Option<crate::test_support::ProcessWorkspace>,
+    startup_mode: NodeStartupMode,
 ) -> Result<LiveNode> {
     let protocol_ref = test_ref("live-cluster-protocol");
     let timer = live_profile().profile;
@@ -27,9 +67,16 @@ pub(in crate::fabric_consistency::raft) async fn build_node(
         &supervision_ref,
     );
     let identity = runtime_identity(group, &state, fabric_binding_refs.clone());
-    let plan = start_plan(group, state, fabric_binding_refs);
+    let mut plan = start_plan(group, state, fabric_binding_refs);
     let (transport, session_ref) = transport_for(node_id, endpoints, protocol_ref)?;
-    let (durability, workspace) = durability_for(node_id, durable_log_ref, snapshot_store_ref)?;
+    let durability = durability_for_root(node_id, durable_log_ref, snapshot_store_ref, durability_root)?;
+    let recovery_ref = if startup_mode == NodeStartupMode::Recover {
+        let recovery = durability.plan_recovery(plan)?;
+        plan = recovery.start_plan;
+        Some(recovery.recovery_ref)
+    } else {
+        None
+    };
     let (time, inbox) = time_for(group, node_id, timer, entropy_profile_ref)?;
     let application = application_for(group)?;
     let (control, control_receiver) = control_for(group, supervision_ref)?;
@@ -39,6 +86,7 @@ pub(in crate::fabric_consistency::raft) async fn build_node(
         service,
         listener: Some(listener),
         session_ref,
+        recovery_ref,
         _workspace: workspace,
         _control_receiver: control_receiver,
     })
@@ -125,20 +173,19 @@ fn transport_for(
     Ok((IrohReplicaTransportPort::new(protocol_ref, peers, live_timeout())?, session_ref))
 }
 
-fn durability_for(
+fn durability_for_root(
     node_id: &str,
     durable_log_ref: String,
     snapshot_store_ref: String,
-) -> Result<(RedbReplicaDurabilityPort, crate::test_support::ProcessWorkspace)> {
-    let root = crate::test_support::process_workspace(&format!("live-cluster-{node_id}"))?;
+    root: &std::path::Path,
+) -> Result<RedbReplicaDurabilityPort> {
     let mut namespace = descriptor();
     namespace.adapter_id = format!("live-cluster-{node_id}-adapter");
     namespace.namespace_id = format!("live-cluster-{node_id}-namespace");
     namespace.atomicity_domain.adapter_id.clone_from(&namespace.adapter_id);
     namespace.atomicity_domain.namespace_id.clone_from(&namespace.namespace_id);
-    let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), namespace)?;
-    let port = RedbReplicaDurabilityPort::new(adapter, durable_log_ref, snapshot_store_ref)?;
-    Ok((port, root))
+    let adapter = RedbDurableStateAdapter::open(root, profile(DurableAdapterKind::LiveRedb), namespace)?;
+    RedbReplicaDurabilityPort::new(adapter, durable_log_ref, snapshot_store_ref)
 }
 
 fn time_for(
@@ -201,6 +248,7 @@ pub(in crate::fabric_consistency::raft) async fn close_node(node: LiveNode) {
         service,
         listener,
         session_ref: _,
+        recovery_ref: _,
         _workspace: _,
         _control_receiver: _,
     } = node;

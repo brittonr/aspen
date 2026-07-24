@@ -16,7 +16,7 @@ pub(super) struct ChildGuard {
 }
 
 impl ChildGuard {
-    pub(super) fn spawn(executable: &Path, run_directory: &Path, node_id: &str) -> Result<Self> {
+    pub(super) fn spawn(executable: &Path, run_directory: &Path, node_id: &str, mode: ChildMode) -> Result<Self> {
         let log_path = run_directory.join(format!("{node_id}-child.log"));
         let stdout = File::create(log_path).map_err(MoltenError::from)?;
         let stderr = stdout.try_clone().map_err(MoltenError::from)?;
@@ -24,6 +24,7 @@ impl ChildGuard {
             .args(["--exact", CHILD_TEST_FILTER, "--nocapture"])
             .env(CHILD_NODE_ENV, node_id)
             .env(CHILD_RUN_DIRECTORY_ENV, run_directory)
+            .env(CHILD_MODE_ENV, mode.as_str())
             .stdout(Stdio::from(stdout))
             .stderr(Stdio::from(stderr))
             .spawn()
@@ -33,6 +34,13 @@ impl ChildGuard {
 
     pub(super) fn id(&self) -> u32 {
         self.child.id()
+    }
+
+    pub(super) fn crash(&mut self) -> Result<()> {
+        self.child.kill().map_err(MoltenError::from)?;
+        let _status = self.child.wait().map_err(MoltenError::from)?;
+        self.finished = true;
+        Ok(())
     }
 
     pub(super) fn wait_success(&mut self, timeout: Duration) -> Result<()> {

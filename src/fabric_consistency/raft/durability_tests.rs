@@ -13,6 +13,7 @@ const ENTRY_INDEX: u64 = 1;
 const SECOND_ENTRY_INDEX: u64 = 2;
 const EXPECTED_DURABLE_RECORDS: usize = 3;
 const EXPECTED_RECOVERY_EFFECTS: usize = 3;
+const EXPECTED_SNAPSHOT_ONLY_RECOVERY_EFFECTS: usize = 2;
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
@@ -52,6 +53,46 @@ fn redb_replica_port_makes_hard_state_and_flushed_entries_durable() {
     let snapshot_evidence = port.persist_snapshot(&snapshot).expect("durable snapshot");
     assert!(snapshot_evidence.starts_with("blake3:"));
     assert!(port.adapter().state().snapshots.contains_key(&snapshot.snapshot_ref));
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[test]
+fn durable_installed_snapshot_establishes_its_recovery_commit_boundary() {
+    let root = crate::test_support::process_workspace("live-raft-installed-snapshot-recovery").expect("workspace");
+    let group = active_group();
+    let initial = started_state(&group, NODE_A);
+    let durable_log_ref = test_ref("installed-snapshot-durable-log");
+    let snapshot_store_ref = test_ref("installed-snapshot-store");
+    let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
+        .expect("Redb adapter");
+    let mut port = RedbReplicaDurabilityPort::new(adapter, durable_log_ref.clone(), snapshot_store_ref.clone())
+        .expect("Redb replica durability port");
+    port.persist_hard_state(TERM, None).expect("snapshot hard state");
+    let mut snapshot = ReplicaSnapshot {
+        snapshot_ref: String::new(),
+        group_binding_ref: initial.profile.group_binding_ref.clone(),
+        membership_ref: initial.membership.membership_ref.clone(),
+        config_epoch: initial.membership.config_epoch,
+        fencing_epoch: initial.profile.fencing_epoch,
+        last_included_index: ENTRY_INDEX,
+        last_included_term: TERM,
+        application_state_ref: test_ref("installed-snapshot-application-state"),
+        completed_requests: Default::default(),
+    };
+    snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("installed snapshot identity");
+    port.persist_snapshot(&snapshot).expect("machine-loss snapshot");
+    drop(port);
+
+    let reopened = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
+        .expect("reopened Redb adapter");
+    let reopened = RedbReplicaDurabilityPort::new(reopened, durable_log_ref, snapshot_store_ref)
+        .expect("reopened replica durability port");
+    let recovery = reopened.plan_recovery(recovery_start_plan(&group, initial)).expect("snapshot-only recovery");
+    assert_eq!(recovery.durable_commit_index, ENTRY_INDEX);
+    assert_eq!(recovery.start_plan.state.commit_index, ENTRY_INDEX);
+    assert_eq!(recovery.start_plan.state.last_applied, ENTRY_INDEX);
+    assert_eq!(recovery.start_plan.state.snapshot.as_ref(), Some(&snapshot));
+    assert_eq!(recovery.start_plan.initial_effects.len(), EXPECTED_SNAPSHOT_ONLY_RECOVERY_EFFECTS);
 }
 
 // r[verify molten.fabric_consistency.live_raft]

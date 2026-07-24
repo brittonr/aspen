@@ -25,8 +25,9 @@ use crate::fabric_transport::cross_process::tests::listener_with_secret;
 mod setup;
 mod workflow;
 
-pub(super) use setup::build_node;
+pub(super) use setup::build_node_at_root;
 pub(super) use setup::close_node;
+pub(super) use setup::recover_node_at_root;
 
 const NODE_A_SECRET_BYTE: u8 = 17;
 const NODE_B_SECRET_BYTE: u8 = 19;
@@ -64,7 +65,8 @@ pub(super) struct LiveNode {
     pub(super) service: LiveService,
     pub(super) listener: Option<IrohCrossProcessListener>,
     pub(super) session_ref: String,
-    _workspace: crate::test_support::ProcessWorkspace,
+    pub(super) recovery_ref: Option<String>,
+    _workspace: Option<crate::test_support::ProcessWorkspace>,
     _control_receiver: tokio::sync::mpsc::UnboundedReceiver<ReplicaControlObservation>,
 }
 

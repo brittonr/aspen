@@ -45,6 +45,9 @@ pub fn plan_replica_recovery(
         durable_record_refs.push(record.value_ref.clone());
     }
     let snapshot = snapshot_bytes.map(parse_snapshot).transpose()?;
+    if let Some(snapshot) = &snapshot {
+        durable_commit_index = durable_commit_index.max(snapshot.last_included_index);
+    }
     install_recovery_snapshot(&mut state, durable_commit_index, snapshot)?;
     if durable_commit_index > support_last_log_index(&state) {
         return Err(MoltenError::invalid_harness("live Raft recovery commit boundary exceeds durable log"));

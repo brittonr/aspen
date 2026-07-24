@@ -13,7 +13,7 @@ const EVENT_LOOP_LIMIT: usize = 1_200;
 const INGRESS_EVENT_CAPACITY: usize = 32;
 const INGRESS_DELIVERY_LIMIT: u64 = 1_024;
 
-pub(super) async fn run(node_id: String, run_directory: PathBuf) -> Result<()> {
+pub(super) async fn run(node_id: String, run_directory: PathBuf, mode: ChildMode) -> Result<()> {
     let listener = listener_with_secret(secret_byte(&node_id)?).await;
     write_value(&endpoint_path(&run_directory, &node_id), &listener.handoff().value)?;
     wait_for_nodes(&run_directory, "endpoint")?;
@@ -25,7 +25,28 @@ pub(super) async fn run(node_id: String, run_directory: PathBuf) -> Result<()> {
         .public_endpoint_identity
         .clone();
     let group = super::super::tests::active_group();
-    let mut node = live_cluster::build_node(&group, &node_id, listener, &endpoints).await?;
+    let durability_root = durability_path(&run_directory, &node_id);
+    std::fs::create_dir_all(&durability_root).map_err(MoltenError::from)?;
+    let node = match mode {
+        ChildMode::Fresh => {
+            live_cluster::build_node_at_root(&group, &node_id, listener, &endpoints, &durability_root).await?
+        }
+        ChildMode::Recover => {
+            live_cluster::recover_node_at_root(&group, &node_id, listener, &endpoints, &durability_root).await?
+        }
+    };
+    if mode == ChildMode::Recover {
+        return finish_recovered_node(node_id, endpoint_identity, node, &run_directory).await;
+    }
+    run_fresh_node(node_id, endpoint_identity, node, &run_directory).await
+}
+
+async fn run_fresh_node(
+    node_id: String,
+    endpoint_identity: String,
+    mut node: live_cluster::LiveNode,
+    run_directory: &Path,
+) -> Result<()> {
     let listener = node.listener.take().ok_or_else(|| MoltenError::invalid_harness("child live listener is absent"))?;
     let mut ingress = IrohReplicaIngressPump::spawn(listener, IrohReplicaIngressConfig {
         session_ref: node.session_ref.clone(),
@@ -36,15 +57,24 @@ pub(super) async fn run(node_id: String, run_directory: PathBuf) -> Result<()> {
     write_signal(&run_directory.join(format!("{node_id}-ready.preserves")), "ready")?;
     if node_id == NODE_A {
         wait_for_file(&run_directory.join(START_FILE))?;
-        run_leader(&mut node, &mut ingress, &run_directory).await?;
+        run_leader(&mut node, &mut ingress, run_directory, &endpoint_identity).await?;
     } else {
-        run_follower(&mut node, &mut ingress, &run_directory, node_id == NODE_C).await?;
+        run_follower(&mut node, &mut ingress, run_directory, &endpoint_identity, node_id == NODE_C).await?;
     }
     node.listener = Some(ingress.shutdown().await?);
+    finish_recovered_node(node_id, endpoint_identity, node, run_directory).await
+}
+
+async fn finish_recovered_node(
+    node_id: String,
+    endpoint_identity: String,
+    node: live_cluster::LiveNode,
+    run_directory: &Path,
+) -> Result<()> {
     let mut receipt = receipt_from_node(&node_id, &endpoint_identity, &node)?;
     live_cluster::close_node(node).await;
     receipt.clean_shutdown = true;
-    write_value(&receipt_path(&run_directory, &node_id), &receipt_value(&receipt))
+    write_value(&receipt_path(run_directory, &node_id), &receipt_value(&receipt))
 }
 
 fn secret_byte(node_id: &str) -> Result<u8> {
@@ -70,6 +100,7 @@ async fn run_leader(
     node: &mut live_cluster::LiveNode,
     ingress: &mut IrohReplicaIngressPump,
     run_directory: &Path,
+    endpoint_identity: &str,
 ) -> Result<()> {
     let timer_ref = node.service.state().active_election_timer_ref.clone();
     require_applied(node.service.handle_event(ReplicaEvent::ElectionTimeout { timer_ref }).await)?;
@@ -81,6 +112,7 @@ async fn run_leader(
         if run_directory.join(STOP_FILE).is_file() {
             return Ok(());
         }
+        write_checkpoint_if_requested(run_directory, endpoint_identity, node)?;
         let Some(event) = poll_event(ingress).await? else {
             continue;
         };
@@ -170,12 +202,14 @@ async fn run_follower(
     node: &mut live_cluster::LiveNode,
     ingress: &mut IrohReplicaIngressPump,
     run_directory: &Path,
+    endpoint_identity: &str,
     lag_until_snapshot: bool,
 ) -> Result<()> {
     for _step in 0..EVENT_LOOP_LIMIT {
         if run_directory.join(STOP_FILE).is_file() {
             return Ok(());
         }
+        write_checkpoint_if_requested(run_directory, endpoint_identity, node)?;
         let Some(event) = poll_event(ingress).await? else {
             continue;
         };
@@ -208,6 +242,19 @@ fn should_drop_before_snapshot(state: &ReplicaState, event: &ReplicaEvent) -> bo
         })
 }
 
+fn write_checkpoint_if_requested(
+    run_directory: &Path,
+    endpoint_identity: &str,
+    node: &live_cluster::LiveNode,
+) -> Result<()> {
+    let output = checkpoint_path(run_directory, &node.service.state().node_id);
+    if !run_directory.join(CHECKPOINT_FILE).is_file() || output.is_file() {
+        return Ok(());
+    }
+    let receipt = receipt_from_node(&node.service.state().node_id, endpoint_identity, node)?;
+    write_value(&output, &receipt_value(&receipt))
+}
+
 async fn poll_event(ingress: &mut IrohReplicaIngressPump) -> Result<Option<ReceivedReplicaEvent>> {
     tokio::select! {
         result = ingress.next() => result.map(Some),
@@ -232,60 +279,4 @@ fn require_applied(outcome: ReplicaExecutionOutcome) -> Result<()> {
             failed.diagnostic
         ))),
     }
-}
-
-fn receipt_from_node(node_id: &str, endpoint_identity: &str, node: &live_cluster::LiveNode) -> Result<ProcessReceipt> {
-    let state = node.service.state();
-    let application = node.service.ports().application.handler();
-    let durability = node.service.ports().durability.adapter().state();
-    Ok(ProcessReceipt {
-        node_id: node_id.to_string(),
-        process_id: u64::from(std::process::id()),
-        endpoint_identity: endpoint_identity.to_string(),
-        role: state.role,
-        term: state.current_term,
-        commit_index: state.commit_index,
-        last_applied: state.last_applied,
-        quorum_term: state.quorum_confirmed_term.unwrap_or(INITIAL_TERM),
-        pending_read_count: u64::try_from(state.pending_reads.len())
-            .map_err(|_| MoltenError::invalid_harness("pending read count overflow"))?,
-        snapshot_ref: state.snapshot.as_ref().map_or_else(String::new, |snapshot| snapshot.snapshot_ref.clone()),
-        request_completed: state.completed_requests.contains_key(&super::super::tests::test_ref(REQUEST_LABEL)),
-        quorum_loss_request_uncommitted: !state
-            .completed_requests
-            .contains_key(&super::super::tests::test_ref(QUORUM_LOSS_REQUEST_LABEL)),
-        application_applied: application.applied_request_refs.contains(&super::super::tests::test_ref(REQUEST_LABEL)),
-        application_restored: application.restored_application_state_ref
-            == Some(super::super::tests::test_ref(APPLICATION_STATE_LABEL)),
-        durable_record_count: u64::try_from(durability.durable_log.len())
-            .map_err(|_| MoltenError::invalid_harness("durable record count overflow"))?,
-        durable_snapshot_count: u64::try_from(durability.snapshots.len())
-            .map_err(|_| MoltenError::invalid_harness("durable snapshot count overflow"))?,
-        clean_shutdown: false,
-    })
-}
-
-fn receipt_value(receipt: &ProcessReceipt) -> IOValue {
-    crate::preserves_rail::record(RECEIPT_SCHEMA, vec![
-        crate::preserves_rail::string(&receipt.node_id),
-        crate::preserves_rail::u64_value(receipt.process_id),
-        crate::preserves_rail::string(&receipt.endpoint_identity),
-        crate::preserves_rail::string(match receipt.role {
-            ReplicaRole::Leader => "leader",
-            _ => "follower",
-        }),
-        crate::preserves_rail::u64_value(receipt.term),
-        crate::preserves_rail::u64_value(receipt.commit_index),
-        crate::preserves_rail::u64_value(receipt.last_applied),
-        crate::preserves_rail::u64_value(receipt.quorum_term),
-        crate::preserves_rail::u64_value(receipt.pending_read_count),
-        crate::preserves_rail::string(&receipt.snapshot_ref),
-        crate::preserves_rail::bool_value(receipt.request_completed),
-        crate::preserves_rail::bool_value(receipt.quorum_loss_request_uncommitted),
-        crate::preserves_rail::bool_value(receipt.application_applied),
-        crate::preserves_rail::bool_value(receipt.application_restored),
-        crate::preserves_rail::u64_value(receipt.durable_record_count),
-        crate::preserves_rail::u64_value(receipt.durable_snapshot_count),
-        crate::preserves_rail::bool_value(receipt.clean_shutdown),
-    ])
 }

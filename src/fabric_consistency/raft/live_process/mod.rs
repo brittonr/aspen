@@ -15,52 +15,51 @@ use crate::fabric_transport::CanonicalCrossProcessEndpoint;
 
 mod child;
 mod process;
+mod receipt;
+
+pub(super) use receipt::*;
 
 const CHILD_NODE_ENV: &str = "MOLTEN_LIVE_RAFT_CHILD_NODE";
 const CHILD_RUN_DIRECTORY_ENV: &str = "MOLTEN_LIVE_RAFT_RUN_DIRECTORY";
+const CHILD_MODE_ENV: &str = "MOLTEN_LIVE_RAFT_CHILD_MODE";
 const CHILD_TEST_FILTER: &str = "fabric_consistency::raft::live_process::distinct_process_replica_child";
 const CHILD_TIMEOUT_SECONDS: u64 = 30;
 const FILE_POLL_MILLISECONDS: u64 = 10;
 const FILE_POLL_LIMIT: usize = 3_000;
-const RECEIPT_FIELD_COUNT: usize = 17;
+const RECEIPT_FIELD_COUNT: usize = 18;
 const MAX_HARNESS_FILE_BYTES: u64 = 1_048_576;
 const RECEIPT_SCHEMA: &str = "molten.fabric-consistency.distinct-process-participant.v1";
 const START_FILE: &str = "start.preserves";
 const STOP_FILE: &str = "stop.preserves";
 const LEADER_DONE_FILE: &str = "leader-done.preserves";
 const PARTITION_FILE: &str = "partition.preserves";
+const CHECKPOINT_FILE: &str = "checkpoint.preserves";
 const REQUEST_LABEL: &str = "distinct-process-request";
 const APPLICATION_STATE_LABEL: &str = "distinct-process-application-state";
 const QUORUM_LOSS_REQUEST_LABEL: &str = "distinct-process-quorum-loss-request";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ProcessReceipt {
-    node_id: String,
-    process_id: u64,
-    endpoint_identity: String,
-    role: ReplicaRole,
-    term: u64,
-    commit_index: u64,
-    last_applied: u64,
-    quorum_term: u64,
-    pending_read_count: u64,
-    snapshot_ref: String,
-    request_completed: bool,
-    quorum_loss_request_uncommitted: bool,
-    application_applied: bool,
-    application_restored: bool,
-    durable_record_count: u64,
-    durable_snapshot_count: u64,
-    clean_shutdown: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChildMode {
+    Fresh,
+    Recover,
+}
+
+impl ChildMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Fresh => "fresh",
+            Self::Recover => "recover",
+        }
+    }
 }
 
 #[test]
 fn distinct_process_replica_child() {
-    let Some((node_id, run_directory)) = child_invocation_from_environment().expect("child invocation") else {
+    let Some((node_id, run_directory, mode)) = child_invocation_from_environment().expect("child invocation") else {
         return;
     };
     let runtime = tokio::runtime::Runtime::new().expect("child Tokio runtime");
-    runtime.block_on(child::run(node_id, run_directory)).expect("distinct-process replica child");
+    runtime.block_on(child::run(node_id, run_directory, mode)).expect("distinct-process replica child");
 }
 
 // r[verify molten.fabric_consistency.live_raft]
@@ -70,40 +69,42 @@ fn three_process_live_raft_elects_commits_reads_and_catches_up() {
     let run_directory = workspace.to_path_buf();
     let executable = std::env::current_exe().expect("current test executable");
     let mut children = [
-        process::ChildGuard::spawn(&executable, &run_directory, NODE_A).expect("node A child"),
-        process::ChildGuard::spawn(&executable, &run_directory, NODE_B).expect("node B child"),
-        process::ChildGuard::spawn(&executable, &run_directory, NODE_C).expect("node C child"),
+        process::ChildGuard::spawn(&executable, &run_directory, NODE_A, ChildMode::Fresh).expect("node A child"),
+        process::ChildGuard::spawn(&executable, &run_directory, NODE_B, ChildMode::Fresh).expect("node B child"),
+        process::ChildGuard::spawn(&executable, &run_directory, NODE_C, ChildMode::Fresh).expect("node C child"),
     ];
     let child_process_ids = children.iter().map(process::ChildGuard::id).collect::<BTreeSet<_>>();
     assert_eq!(child_process_ids.len(), STATIC_VOTER_COUNT);
     wait_for_nodes(&run_directory, "ready").expect("child readiness");
     write_signal(&run_directory.join(START_FILE), "start").expect("start signal");
     if let Err(error) = wait_for_file(&run_directory.join(LEADER_DONE_FILE)) {
-        let diagnostics = [NODE_A, NODE_B, NODE_C]
-            .into_iter()
-            .map(|node_id| {
-                let log_path = run_directory.join(format!("{node_id}-child.log"));
-                let log = match std::fs::read_to_string(&log_path) {
-                    Ok(log) => log,
-                    Err(read_error) => format!("log read failed: {read_error}"),
-                };
-                format!("{node_id} child log:\n{log}")
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        panic!("leader completion: {error}\n{diagnostics}");
+        panic!("leader completion: {error}\n{}", child_diagnostics(&run_directory));
     }
-    write_signal(&run_directory.join(STOP_FILE), "stop").expect("stop signal");
+    write_signal(&run_directory.join(CHECKPOINT_FILE), "checkpoint").expect("checkpoint signal");
+    wait_for_nodes(&run_directory, "checkpoint").expect("active checkpoint receipts");
+    let active_receipts = read_checkpoint_receipts(&run_directory);
+    assert_active_process_receipts(&active_receipts);
     for child in &mut children {
-        child.wait_success(Duration::from_secs(CHILD_TIMEOUT_SECONDS)).expect("clean child exit");
+        child.crash().expect("injected child crash");
     }
+    clear_phase_files(&run_directory).expect("restart phase cleanup");
 
-    let receipts = [
-        read_receipt(&receipt_path(&run_directory, NODE_A)).expect("node A receipt"),
-        read_receipt(&receipt_path(&run_directory, NODE_B)).expect("node B receipt"),
-        read_receipt(&receipt_path(&run_directory, NODE_C)).expect("node C receipt"),
+    let mut recovered = [
+        process::ChildGuard::spawn(&executable, &run_directory, NODE_A, ChildMode::Recover).expect("recovered node A"),
+        process::ChildGuard::spawn(&executable, &run_directory, NODE_B, ChildMode::Recover).expect("recovered node B"),
+        process::ChildGuard::spawn(&executable, &run_directory, NODE_C, ChildMode::Recover).expect("recovered node C"),
     ];
-    assert_distinct_process_receipts(&receipts);
+    let recovered_process_ids = recovered.iter().map(process::ChildGuard::id).collect::<BTreeSet<_>>();
+    assert_eq!(recovered_process_ids.len(), STATIC_VOTER_COUNT);
+    assert!(child_process_ids.is_disjoint(&recovered_process_ids));
+    if let Err(error) = wait_for_nodes(&run_directory, "terminal") {
+        panic!("recovery receipts: {error}\n{}", child_diagnostics(&run_directory));
+    }
+    for child in &mut recovered {
+        child.wait_success(Duration::from_secs(CHILD_TIMEOUT_SECONDS)).expect("clean recovered child exit");
+    }
+    let recovery_receipts = read_terminal_receipts(&run_directory);
+    assert_recovery_receipts(&recovery_receipts);
 }
 
 #[test]
@@ -113,7 +114,7 @@ fn distinct_process_receipt_parser_rejects_wrong_schema() {
     assert!(error.to_string().contains("participant receipt"));
 }
 
-fn child_invocation_from_environment() -> Result<Option<(String, PathBuf)>> {
+fn child_invocation_from_environment() -> Result<Option<(String, PathBuf, ChildMode)>> {
     let Some(node_id) = std::env::var_os(CHILD_NODE_ENV) else {
         return Ok(None);
     };
@@ -125,7 +126,27 @@ fn child_invocation_from_environment() -> Result<Option<(String, PathBuf)>> {
     if ![NODE_A, NODE_B, NODE_C].contains(&node_id.as_str()) {
         return Err(MoltenError::invalid_harness("live Raft child node is outside static membership"));
     }
-    Ok(Some((node_id, PathBuf::from(run_directory))))
+    let mode = match std::env::var(CHILD_MODE_ENV).as_deref() {
+        Ok("fresh") => ChildMode::Fresh,
+        Ok("recover") => ChildMode::Recover,
+        _ => return Err(MoltenError::invalid_harness("live Raft child mode is absent or invalid")),
+    };
+    Ok(Some((node_id, PathBuf::from(run_directory), mode)))
+}
+
+fn child_diagnostics(run_directory: &Path) -> String {
+    [NODE_A, NODE_B, NODE_C]
+        .into_iter()
+        .map(|node_id| {
+            let log_path = run_directory.join(format!("{node_id}-child.log"));
+            let log = match std::fs::read_to_string(log_path) {
+                Ok(log) => log,
+                Err(error) => format!("log read failed: {error}"),
+            };
+            format!("{node_id} child log:\n{log}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn wait_for_nodes(run_directory: &Path, suffix: &str) -> Result<()> {
@@ -175,67 +196,31 @@ fn endpoint_path(run_directory: &Path, node_id: &str) -> PathBuf {
     run_directory.join(format!("{node_id}-endpoint.preserves"))
 }
 
-fn receipt_path(run_directory: &Path, node_id: &str) -> PathBuf {
-    run_directory.join(format!("{node_id}-terminal.preserves"))
+fn durability_path(run_directory: &Path, node_id: &str) -> PathBuf {
+    run_directory.join(format!("{node_id}-durability"))
 }
 
-fn read_receipt(path: &Path) -> Result<ProcessReceipt> {
-    parse_receipt(&read_value(path)?)
-}
-
-fn parse_receipt(value: &IOValue) -> Result<ProcessReceipt> {
-    let fields = canonical::required_record(value, RECEIPT_SCHEMA, RECEIPT_FIELD_COUNT)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid participant receipt: {error}")))?;
-    Ok(ProcessReceipt {
-        node_id: canonical::required_string(&fields[0], "receipt node")?,
-        process_id: canonical::required_u64(&fields[1], "receipt process")?,
-        endpoint_identity: canonical::required_string(&fields[2], "receipt endpoint")?,
-        role: parse_role(&fields[3])?,
-        term: canonical::required_u64(&fields[4], "receipt term")?,
-        commit_index: canonical::required_u64(&fields[5], "receipt commit")?,
-        last_applied: canonical::required_u64(&fields[6], "receipt applied")?,
-        quorum_term: canonical::required_u64(&fields[7], "receipt quorum term")?,
-        pending_read_count: canonical::required_u64(&fields[8], "receipt pending reads")?,
-        snapshot_ref: canonical::required_string(&fields[9], "receipt snapshot")?,
-        request_completed: canonical::required_bool(&fields[10], "receipt completed request")?,
-        quorum_loss_request_uncommitted: canonical::required_bool(&fields[11], "receipt quorum-loss request")?,
-        application_applied: canonical::required_bool(&fields[12], "receipt application apply")?,
-        application_restored: canonical::required_bool(&fields[13], "receipt application restore")?,
-        durable_record_count: canonical::required_u64(&fields[14], "receipt durable records")?,
-        durable_snapshot_count: canonical::required_u64(&fields[15], "receipt durable snapshots")?,
-        clean_shutdown: canonical::required_bool(&fields[16], "receipt clean shutdown")?,
-    })
-}
-
-fn parse_role(value: &preserves::Value<IOValue>) -> Result<ReplicaRole> {
-    match canonical::required_string(value, "receipt role")?.as_str() {
-        "leader" => Ok(ReplicaRole::Leader),
-        "follower" => Ok(ReplicaRole::Follower),
-        _ => Err(MoltenError::invalid_harness("participant receipt has an invalid role")),
+fn clear_phase_files(run_directory: &Path) -> Result<()> {
+    for name in [START_FILE, STOP_FILE, LEADER_DONE_FILE, PARTITION_FILE, CHECKPOINT_FILE] {
+        remove_file_if_present(&run_directory.join(name))?;
     }
+    for node_id in [NODE_A, NODE_B, NODE_C] {
+        for path in [
+            endpoint_path(run_directory, node_id),
+            run_directory.join(format!("{node_id}-ready.preserves")),
+            checkpoint_path(run_directory, node_id),
+            receipt_path(run_directory, node_id),
+        ] {
+            remove_file_if_present(&path)?;
+        }
+    }
+    Ok(())
 }
 
-fn assert_distinct_process_receipts(receipts: &[ProcessReceipt; STATIC_VOTER_COUNT]) {
-    let process_ids = receipts.iter().map(|receipt| receipt.process_id).collect::<BTreeSet<_>>();
-    let endpoint_ids = receipts.iter().map(|receipt| &receipt.endpoint_identity).collect::<BTreeSet<_>>();
-    assert_eq!(process_ids.len(), STATIC_VOTER_COUNT);
-    assert_eq!(endpoint_ids.len(), STATIC_VOTER_COUNT);
-    assert!(receipts.iter().all(|receipt| receipt.clean_shutdown));
-    let leader = &receipts[0];
-    assert_eq!(leader.role, ReplicaRole::Leader);
-    assert_eq!(leader.commit_index, INITIAL_LOG_INDEX);
-    assert_eq!(leader.last_applied, INITIAL_LOG_INDEX);
-    assert_eq!(leader.quorum_term, leader.term);
-    assert_eq!(leader.pending_read_count, 1);
-    assert!(leader.request_completed);
-    assert!(leader.quorum_loss_request_uncommitted);
-    assert!(leader.application_applied);
-    assert!(leader.durable_record_count > 0);
-    let follower = &receipts[1];
-    assert_eq!(follower.commit_index, INITIAL_LOG_INDEX);
-    assert!(follower.application_applied);
-    let caught_up = &receipts[2];
-    assert_eq!(caught_up.commit_index, INITIAL_LOG_INDEX);
-    assert!(caught_up.application_restored);
-    assert_eq!(caught_up.durable_snapshot_count, 1);
+fn remove_file_if_present(path: &Path) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(MoltenError::from(error)),
+    }
 }
