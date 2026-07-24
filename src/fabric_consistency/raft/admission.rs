@@ -32,7 +32,7 @@ pub const LIVE_RAFT_ALGORITHM_PROFILE: &str = "raft";
 pub const LIVE_RAFT_IMPLEMENTATION_PROFILE: &str = "live-raft-static-v1";
 
 const REQUIRED_REPLICA_PORT_COUNT: usize = 7;
-const INITIAL_REPLICA_EFFECT_COUNT: usize = 2;
+const MINIMUM_LIVE_REPLICA_STEP_EFFECTS: usize = 6;
 const MAX_REPLICA_IDENTIFIER_BYTES: usize = 256;
 
 pub(crate) const REQUIRED_REPLICA_PORTS: [(&str, &str); REQUIRED_REPLICA_PORT_COUNT] = [
@@ -181,9 +181,10 @@ fn validate_profile(profile: &ReplicaProfile) -> Result<()> {
     if profile.max_message_entries == 0 || profile.max_message_entries > MAX_REPLICA_MESSAGE_ENTRIES {
         return Err(MoltenError::invalid_harness("live Raft message-entry bound is outside the admitted range"));
     }
-    if profile.max_effects_per_step < INITIAL_REPLICA_EFFECT_COUNT || profile.max_effects_per_step > MAX_REPLICA_EFFECTS
+    if profile.max_effects_per_step < MINIMUM_LIVE_REPLICA_STEP_EFFECTS
+        || profile.max_effects_per_step > MAX_REPLICA_EFFECTS
     {
-        return Err(MoltenError::invalid_harness("live Raft effect bound cannot admit startup effects"));
+        return Err(MoltenError::invalid_harness("live Raft effect bound cannot admit a complete static-replica step"));
     }
     Ok(())
 }

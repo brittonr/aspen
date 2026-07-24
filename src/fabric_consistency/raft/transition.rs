@@ -1,0 +1,139 @@
+mod client;
+mod election;
+mod replication;
+mod support;
+mod validation;
+
+use super::*;
+use crate::error::Result;
+
+pub(super) const STATIC_QUORUM_COUNT: usize = (STATIC_VOTER_COUNT / 2) + 1;
+
+pub(super) struct MessageTransition {
+    pub next: ReplicaState,
+    pub effects: Vec<ReplicaEffect>,
+    pub persist_hard_state: bool,
+}
+
+// r[impl molten.fabric_consistency.live_raft]
+// r[impl molten.fabric_consistency.group_isolation]
+pub fn apply_replica_event(state: &ReplicaState, event: ReplicaEvent) -> Result<ReplicaTransition> {
+    validation::validate_replica_state(state)?;
+    let transition = match event {
+        ReplicaEvent::ElectionTimeout { entropy_ref } => election::handle_election_timeout(state, entropy_ref)?,
+        ReplicaEvent::HeartbeatTimeout => election::handle_heartbeat_timeout(state)?,
+        ReplicaEvent::Message { envelope } => handle_message(state, envelope)?,
+        ReplicaEvent::Propose {
+            request_ref,
+            command_ref,
+            command_schema_ref,
+        } => client::handle_proposal(state, request_ref, command_ref, command_schema_ref)?,
+        ReplicaEvent::Read { request_ref, mode } => client::handle_read(state, request_ref, mode)?,
+        ReplicaEvent::BeginDrain => client::handle_begin_drain(state)?,
+        ReplicaEvent::Stop => client::handle_stop(state)?,
+    };
+    validation::validate_transition(&transition)?;
+    Ok(transition)
+}
+
+fn handle_message(state: &ReplicaState, envelope: ReplicaMessageEnvelope) -> Result<ReplicaTransition> {
+    validation::ensure_running(state)?;
+    validation::validate_message_envelope(state, &envelope)?;
+    let message = envelope.message;
+    let mut transition = MessageTransition {
+        next: state.clone(),
+        effects: Vec::new(),
+        persist_hard_state: false,
+    };
+    observe_higher_term(&mut transition, message.term());
+    match message {
+        RaftMessage::RequestVote {
+            term,
+            candidate_id,
+            last_log_index,
+            last_log_term,
+            ..
+        } => election::handle_request_vote(&mut transition, election::VoteRequestInput {
+            from: envelope.from,
+            term,
+            candidate_id,
+            last_log_index,
+            last_log_term,
+        })?,
+        RaftMessage::VoteResponse {
+            term,
+            voter_id,
+            granted,
+            ..
+        } => election::handle_vote_response(&mut transition, election::VoteResponseInput {
+            from: envelope.from,
+            term,
+            voter_id,
+            is_granted: granted,
+        })?,
+        RaftMessage::AppendEntries {
+            term,
+            leader_id,
+            prev_log_index,
+            prev_log_term,
+            entries,
+            leader_commit,
+            ..
+        } => replication::handle_append_entries(&mut transition, replication::AppendEntriesInput {
+            from: envelope.from,
+            term,
+            leader_id,
+            prev_log_index,
+            prev_log_term,
+            entries,
+            leader_commit,
+        })?,
+        RaftMessage::AppendResponse {
+            term,
+            follower_id,
+            success,
+            request_prev_log_index,
+            match_index,
+            conflict_index,
+            ..
+        } => replication::handle_append_response(&mut transition, replication::AppendResponseInput {
+            from: envelope.from,
+            term,
+            follower_id,
+            is_success: success,
+            request_prev_log_index,
+            match_index,
+            conflict_index,
+        })?,
+    }
+    finish_message_transition(transition)
+}
+
+fn observe_higher_term(transition: &mut MessageTransition, term: u64) {
+    if term <= transition.next.current_term {
+        return;
+    }
+    transition.next.current_term = term;
+    transition.next.voted_for = None;
+    transition.next.role = ReplicaRole::Follower;
+    transition.next.leader_id = None;
+    transition.next.votes_received.clear();
+    transition.next.next_index.clear();
+    transition.next.match_index.clear();
+    transition.next.quorum_confirmed_term = None;
+    transition.persist_hard_state = true;
+}
+
+fn finish_message_transition(mut transition: MessageTransition) -> Result<ReplicaTransition> {
+    if transition.persist_hard_state {
+        transition.effects.insert(0, ReplicaEffect::PersistHardState {
+            term: transition.next.current_term,
+            voted_for: transition.next.voted_for.clone(),
+        });
+    }
+    finish_transition(transition.next, transition.effects)
+}
+
+pub(super) fn finish_transition(next: ReplicaState, effects: Vec<ReplicaEffect>) -> Result<ReplicaTransition> {
+    Ok(ReplicaTransition { next, effects })
+}

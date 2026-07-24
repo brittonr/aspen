@@ -20,6 +20,9 @@ const COMMAND_BYTE_LIMIT: u64 = 4_096;
 const IN_FLIGHT_LIMIT: u32 = 8;
 const EFFECT_LIMIT: usize = 16;
 const EXPECTED_INITIAL_EFFECT_COUNT: usize = 2;
+const EXPECTED_SINGLE_LOG_ENTRY: usize = 1;
+const STALE_EPOCH_STEP: u64 = 1;
+const NEXT_INDEX_AFTER_FIRST_ENTRY: u64 = 2;
 const NODE_A: &str = "node-a";
 const NODE_B: &str = "node-b";
 const NODE_C: &str = "node-c";
@@ -248,4 +251,213 @@ fn live_replica_start_denies_duplicate_membership_and_unsafe_timer_bounds() {
     })
     .expect_err("unsafe election bounds must deny");
     assert!(unsafe_timer.to_string().contains("heartbeat < election minimum"));
+}
+
+fn started_state(group: &crate::fabric_consistency::ConsistencyGroupBinding, node_id: &str) -> ReplicaState {
+    plan_live_replica_start(ReplicaStartInput {
+        node_id: node_id.to_string(),
+        membership: membership(group),
+        profile: profile(group),
+        port_bindings: port_bindings(),
+        group: group.clone(),
+    })
+    .expect("started replica")
+    .state
+}
+
+fn sent_envelope_to(transition: &ReplicaTransition, recipient: &str) -> ReplicaMessageEnvelope {
+    transition
+        .effects
+        .iter()
+        .find_map(|effect| match effect {
+            ReplicaEffect::Send { envelope } if envelope.to == recipient => Some(envelope.clone()),
+            _ => None,
+        })
+        .expect("sent Raft envelope")
+}
+
+fn elect_node_a() -> (ReplicaState, ReplicaState) {
+    let group = active_group();
+    let node_a = started_state(&group, NODE_A);
+    let node_b = started_state(&group, NODE_B);
+    let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
+        entropy_ref: test_ref("election-entropy"),
+    })
+    .expect("node A election");
+    let vote_request = sent_envelope_to(&election, NODE_B);
+    let vote =
+        apply_replica_event(&node_b, ReplicaEvent::Message { envelope: vote_request }).expect("node B vote response");
+    let vote_response = sent_envelope_to(&vote, NODE_A);
+    let leader = apply_replica_event(&election.next, ReplicaEvent::Message {
+        envelope: vote_response,
+    })
+    .expect("node A leadership");
+    assert_eq!(leader.next.role, ReplicaRole::Leader);
+    (leader.next, vote.next)
+}
+
+fn committed_leader() -> ReplicaState {
+    let (leader, follower) = elect_node_a();
+    let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
+        request_ref: test_ref("committed-helper-request"),
+        command_ref: test_ref("committed-helper-command"),
+        command_schema_ref: test_ref("committed-helper-schema"),
+    })
+    .expect("helper proposal");
+    let append = sent_envelope_to(&proposal, NODE_B);
+    let replicated =
+        apply_replica_event(&follower, ReplicaEvent::Message { envelope: append }).expect("helper follower append");
+    let response = sent_envelope_to(&replicated, NODE_A);
+    apply_replica_event(&proposal.next, ReplicaEvent::Message { envelope: response })
+        .expect("helper majority commit")
+        .next
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[test]
+fn live_raft_majority_replication_commits_and_applies_in_effect_order() {
+    let (leader, follower) = elect_node_a();
+    let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
+        request_ref: test_ref("proposal-request"),
+        command_ref: test_ref("proposal-command"),
+        command_schema_ref: test_ref("proposal-schema"),
+    })
+    .expect("leader proposal");
+    assert_eq!(proposal.next.commit_index, INITIAL_COMMIT_INDEX);
+    assert!(matches!(proposal.effects.first(), Some(ReplicaEffect::PersistEntries { .. })));
+    assert!(matches!(proposal.effects.get(1), Some(ReplicaEffect::FlushLog { .. })));
+
+    let append = sent_envelope_to(&proposal, NODE_B);
+    let replicated =
+        apply_replica_event(&follower, ReplicaEvent::Message { envelope: append }).expect("follower append");
+    let append_response = sent_envelope_to(&replicated, NODE_A);
+    let committed = apply_replica_event(&proposal.next, ReplicaEvent::Message {
+        envelope: append_response,
+    })
+    .expect("leader majority commit");
+
+    assert_eq!(committed.next.commit_index, INITIAL_LOG_INDEX);
+    assert_eq!(committed.next.last_applied, INITIAL_LOG_INDEX);
+    assert!(committed.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ApplyCommitted { .. })));
+    assert!(committed.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ProposalOutcome {
+        disposition: ProposalDisposition::Committed,
+        committed_index: Some(INITIAL_LOG_INDEX),
+        ..
+    })));
+
+    let heartbeat = apply_replica_event(&committed.next, ReplicaEvent::HeartbeatTimeout).expect("commit heartbeat");
+    let commit_notice = sent_envelope_to(&heartbeat, NODE_B);
+    let follower_commit = apply_replica_event(&replicated.next, ReplicaEvent::Message {
+        envelope: commit_notice,
+    })
+    .expect("follower commit application");
+    assert_eq!(follower_commit.next.commit_index, INITIAL_LOG_INDEX);
+    assert!(follower_commit.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ApplyCommitted { .. })));
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[test]
+fn live_raft_minority_and_duplicate_proposals_cannot_advance_commit() {
+    let (leader, _follower) = elect_node_a();
+    let request_ref = test_ref("minority-request");
+    let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
+        request_ref: request_ref.clone(),
+        command_ref: test_ref("minority-command"),
+        command_schema_ref: test_ref("minority-schema"),
+    })
+    .expect("minority proposal");
+    assert_eq!(proposal.next.commit_index, INITIAL_COMMIT_INDEX);
+    assert_eq!(proposal.next.log.len(), EXPECTED_SINGLE_LOG_ENTRY);
+
+    let duplicate = apply_replica_event(&proposal.next, ReplicaEvent::Propose {
+        request_ref,
+        command_ref: test_ref("minority-command"),
+        command_schema_ref: test_ref("minority-schema"),
+    })
+    .expect("duplicate proposal outcome");
+    assert_eq!(duplicate.next.commit_index, INITIAL_COMMIT_INDEX);
+    assert_eq!(duplicate.next.log.len(), EXPECTED_SINGLE_LOG_ENTRY);
+    assert!(duplicate.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ProposalOutcome {
+        disposition: ProposalDisposition::Retryable,
+        committed_index: None,
+        ..
+    })));
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[test]
+fn live_raft_denies_stale_epoch_messages_without_state_mutation() {
+    let group = active_group();
+    let node_a = started_state(&group, NODE_A);
+    let node_b = started_state(&group, NODE_B);
+    let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
+        entropy_ref: test_ref("stale-election-entropy"),
+    })
+    .expect("election request");
+    let mut stale = sent_envelope_to(&election, NODE_B);
+    match &mut stale.message {
+        RaftMessage::RequestVote { config_epoch, .. } => {
+            *config_epoch += STALE_EPOCH_STEP;
+        }
+        other => panic!("expected request vote, got {other:?}"),
+    }
+    let before = node_b.clone();
+    let error = apply_replica_event(&node_b, ReplicaEvent::Message { envelope: stale })
+        .expect_err("stale config epoch must deny");
+    assert!(error.to_string().contains("stale configuration or fencing epoch"));
+    assert_eq!(node_b, before);
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[test]
+fn live_raft_keeps_linearizable_reads_retryable_without_a_read_barrier() {
+    let (leader, follower) = elect_node_a();
+    let linearizable = apply_replica_event(&leader, ReplicaEvent::Read {
+        request_ref: test_ref("linearizable-read"),
+        mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
+    })
+    .expect("linearizable read outcome");
+    assert!(linearizable.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome {
+        disposition: ReadDisposition::Retryable,
+        ..
+    })));
+
+    let local = apply_replica_event(&follower, ReplicaEvent::Read {
+        request_ref: test_ref("local-read"),
+        mode: crate::fabric_consistency::ConsistencyReadMode::LocalStale,
+    })
+    .expect("local stale read outcome");
+    assert!(local.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome {
+        disposition: ReadDisposition::Local,
+        ..
+    })));
+}
+
+// r[verify molten.fabric_consistency.live_raft]
+#[test]
+fn live_raft_ignores_out_of_order_append_failure_after_success() {
+    let leader = committed_leader();
+    assert_eq!(leader.next_index.get(NODE_B), Some(&NEXT_INDEX_AFTER_FIRST_ENTRY));
+    let stale_failure = ReplicaMessageEnvelope {
+        group_binding_ref: leader.profile.group_binding_ref.clone(),
+        service_generation: leader.profile.service_generation,
+        from: NODE_B.to_string(),
+        to: NODE_A.to_string(),
+        message: RaftMessage::AppendResponse {
+            term: leader.current_term,
+            follower_id: NODE_B.to_string(),
+            success: false,
+            request_prev_log_index: INITIAL_COMMIT_INDEX,
+            match_index: INITIAL_COMMIT_INDEX,
+            conflict_index: INITIAL_LOG_INDEX,
+            config_epoch: leader.membership.config_epoch,
+            fencing_epoch: leader.profile.fencing_epoch,
+        },
+    };
+    let after = apply_replica_event(&leader, ReplicaEvent::Message {
+        envelope: stale_failure,
+    })
+    .expect("stale append failure ignored");
+    assert_eq!(after.next.next_index.get(NODE_B), Some(&NEXT_INDEX_AFTER_FIRST_ENTRY));
+    assert!(after.effects.is_empty());
 }

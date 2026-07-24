@@ -129,6 +129,7 @@ pub enum RaftMessage {
         term: u64,
         follower_id: String,
         success: bool,
+        request_prev_log_index: u64,
         match_index: u64,
         conflict_index: u64,
         config_epoch: u64,
@@ -145,6 +146,33 @@ impl RaftMessage {
             | Self::AppendResponse { term, .. } => *term,
         }
     }
+
+    pub const fn config_epoch(&self) -> u64 {
+        match self {
+            Self::RequestVote { config_epoch, .. }
+            | Self::VoteResponse { config_epoch, .. }
+            | Self::AppendEntries { config_epoch, .. }
+            | Self::AppendResponse { config_epoch, .. } => *config_epoch,
+        }
+    }
+
+    pub const fn fencing_epoch(&self) -> u64 {
+        match self {
+            Self::RequestVote { fencing_epoch, .. }
+            | Self::VoteResponse { fencing_epoch, .. }
+            | Self::AppendEntries { fencing_epoch, .. }
+            | Self::AppendResponse { fencing_epoch, .. } => *fencing_epoch,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaMessageEnvelope {
+    pub group_binding_ref: String,
+    pub service_generation: u64,
+    pub from: String,
+    pub to: String,
+    pub message: RaftMessage,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,8 +182,7 @@ pub enum ReplicaEvent {
     },
     HeartbeatTimeout,
     Message {
-        from: String,
-        message: RaftMessage,
+        envelope: ReplicaMessageEnvelope,
     },
     Propose {
         request_ref: String,
@@ -227,8 +254,7 @@ pub enum ReplicaEffect {
         snapshot: ReplicaSnapshot,
     },
     Send {
-        to: String,
-        message: RaftMessage,
+        envelope: ReplicaMessageEnvelope,
     },
     ArmElectionTimer {
         entropy_ref: String,
