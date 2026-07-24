@@ -124,6 +124,22 @@ async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
     );
     assert_eq!(node_a.service.ports().application.handler().applied_request_refs, vec![request_ref.clone()]);
     assert_eq!(node_b.service.ports().application.handler().applied_request_refs, vec![request_ref]);
+    let selected_evidence =
+        node_a.service.evidence().records().iter().map(|record| record.kind).collect::<BTreeSet<_>>();
+    for kind in [
+        ReplicaEvidenceKind::GroupAdmission,
+        ReplicaEvidenceKind::Configuration,
+        ReplicaEvidenceKind::Commit,
+        ReplicaEvidenceKind::ReadCurrentness,
+        ReplicaEvidenceKind::Snapshot,
+    ] {
+        assert!(selected_evidence.contains(&kind));
+    }
+    assert!(node_a.service.evidence().suppressed_heartbeat_count() > 0);
+    let health = node_a.service.aggregate_health_evidence().expect("aggregate health evidence");
+    assert_eq!(health.status, "healthy");
+    assert!(!health.production_admitted);
+    crate::preserves_rail::validate_content_ref(&health.evidence_ref).expect("aggregate health ref");
     assert!(!node_a.service.ports().durability.adapter().state().durable_log.is_empty());
     assert!(!node_b.service.ports().durability.adapter().state().durable_log.is_empty());
     let node_c_snapshot_ref = &node_c.service.state().snapshot.as_ref().expect("node C snapshot").snapshot_ref;

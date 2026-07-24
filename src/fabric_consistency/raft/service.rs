@@ -17,6 +17,7 @@ pub struct ScopedLiveReplicaService<P: BoundLiveReplicaEffectPorts> {
     ports: P,
     inbox: tokio::sync::mpsc::UnboundedReceiver<ReplicaEvent>,
     startup_observations: Vec<ReplicaEffectObservation>,
+    evidence: ReplicaEvidenceLedger,
     production_admitted: bool,
 }
 
@@ -27,6 +28,7 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplicaService<P> {
         inbox: tokio::sync::mpsc::UnboundedReceiver<ReplicaEvent>,
     ) -> Result<Self> {
         ports.validate_start(&plan)?;
+        let evidence = ReplicaEvidenceLedger::new(&plan)?;
         let startup = execute_scoped_replica_start(&plan, &mut ports).await;
         let (state, startup_observations) = match startup {
             ReplicaExecutionOutcome::Applied(executed) => (executed.next, executed.observations),
@@ -46,6 +48,7 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplicaService<P> {
             ports,
             inbox,
             startup_observations,
+            evidence,
             production_admitted: plan.production_admitted,
         })
     }
@@ -70,10 +73,23 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplicaService<P> {
         self.production_admitted
     }
 
+    pub const fn evidence(&self) -> &ReplicaEvidenceLedger {
+        &self.evidence
+    }
+
+    pub fn aggregate_health_evidence(&self) -> Result<ReplicaAggregateHealthEvidence> {
+        self.evidence.aggregate_health(&self.state, self.production_admitted)
+    }
+
     pub async fn handle_event(&mut self, event: ReplicaEvent) -> ReplicaExecutionOutcome {
+        let before = self.state.clone();
+        let evidence_event = event.clone();
         let outcome = execute_replica_event(&self.state, event, &mut self.ports).await;
         if let ReplicaExecutionOutcome::Applied(executed) = &outcome {
             self.state.clone_from(&executed.next);
+        }
+        if let Err(error) = self.evidence.observe(&before, &evidence_event, &outcome) {
+            self.evidence.note_internal_error(error.to_string());
         }
         outcome
     }

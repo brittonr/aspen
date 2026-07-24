@@ -3,6 +3,7 @@ mod application;
 mod canonical;
 mod control;
 mod durability;
+mod evidence;
 mod executor;
 mod iroh;
 mod model;
@@ -17,6 +18,7 @@ pub use application::*;
 pub use canonical::*;
 pub use control::*;
 pub use durability::*;
+pub use evidence::*;
 pub use executor::*;
 pub use iroh::*;
 pub use model::*;
@@ -30,6 +32,8 @@ pub use transition::*;
 mod canonical_tests;
 #[cfg(test)]
 mod durability_tests;
+#[cfg(test)]
+mod evidence_tests;
 #[cfg(test)]
 mod executor_tests;
 #[cfg(test)]
