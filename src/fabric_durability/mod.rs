@@ -8,7 +8,7 @@ mod adapters;
 mod canonical;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use adapters::*;
 pub use canonical::*;

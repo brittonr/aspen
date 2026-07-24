@@ -16,7 +16,7 @@ const FIRST_SEQUENCE: u64 = 0;
 const EXPECTED_DURABILITY_PORT_COUNT: usize = 4;
 const SIMULATED_DELAY_TICKS: u64 = 3;
 
-fn profile(kind: DurableAdapterKind) -> CanonicalDurableProfile {
+pub(crate) fn profile(kind: DurableAdapterKind) -> CanonicalDurableProfile {
     canonical_durable_profile(&DurableStateProfile {
         schema: DURABLE_STATE_PROFILE_SCHEMA.to_string(),
         profile_id: kind.as_str().to_string(),
@@ -40,7 +40,7 @@ fn profile(kind: DurableAdapterKind) -> CanonicalDurableProfile {
     .expect("canonical durability profile")
 }
 
-fn descriptor() -> DurableNamespaceDescriptor {
+pub(crate) fn descriptor() -> DurableNamespaceDescriptor {
     DurableNamespaceDescriptor {
         schema: DURABLE_STATE_NAMESPACE_SCHEMA.to_string(),
         profile_ref: PROFILE_DECLARATION_REF.to_string(),
