@@ -96,6 +96,18 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
         })
     }
 
+    pub fn timer_profile_ref(&self) -> &str {
+        &self.profile.profile_ref
+    }
+
+    pub fn entropy_binding_ref(&self) -> &str {
+        &self.entropy_binding_ref
+    }
+
+    pub const fn service_generation(&self) -> u64 {
+        self.generation
+    }
+
     pub fn cancel_all(&mut self) {
         abort(&mut self.election_handle);
         abort(&mut self.heartbeat_handle);

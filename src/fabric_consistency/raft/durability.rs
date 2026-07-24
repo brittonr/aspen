@@ -10,15 +10,31 @@ use crate::fabric_durability::SnapshotRequest;
 #[derive(Debug)]
 pub struct RedbReplicaDurabilityPort {
     adapter: RedbDurableStateAdapter,
+    durable_log_ref: String,
+    snapshot_store_ref: String,
 }
 
 impl RedbReplicaDurabilityPort {
-    pub const fn new(adapter: RedbDurableStateAdapter) -> Self {
-        Self { adapter }
+    pub fn new(adapter: RedbDurableStateAdapter, durable_log_ref: String, snapshot_store_ref: String) -> Result<Self> {
+        crate::preserves_rail::validate_content_ref(&durable_log_ref)?;
+        crate::preserves_rail::validate_content_ref(&snapshot_store_ref)?;
+        Ok(Self {
+            adapter,
+            durable_log_ref,
+            snapshot_store_ref,
+        })
     }
 
     pub const fn adapter(&self) -> &RedbDurableStateAdapter {
         &self.adapter
+    }
+
+    pub fn durable_log_ref(&self) -> &str {
+        &self.durable_log_ref
+    }
+
+    pub fn snapshot_store_ref(&self) -> &str {
+        &self.snapshot_store_ref
     }
 
     fn append_value(&mut self, value: preserves::IOValue, durability: DurabilityLevel) -> Result<String> {

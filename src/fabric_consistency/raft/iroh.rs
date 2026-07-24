@@ -12,6 +12,7 @@ use crate::fabric_transport::exchange_cross_process_frame;
 
 #[derive(Debug)]
 pub struct IrohReplicaTransportPort {
+    protocol_ref: String,
     peers: BTreeMap<String, IrohCrossProcessClientInput>,
     timeout: Duration,
 }
@@ -28,7 +29,12 @@ pub struct ReplicaTransportRefs {
 }
 
 impl IrohReplicaTransportPort {
-    pub fn new(peers: BTreeMap<String, IrohCrossProcessClientInput>, timeout: Duration) -> Result<Self> {
+    pub fn new(
+        protocol_ref: String,
+        peers: BTreeMap<String, IrohCrossProcessClientInput>,
+        timeout: Duration,
+    ) -> Result<Self> {
+        crate::preserves_rail::validate_content_ref(&protocol_ref)?;
         if peers.is_empty() {
             return Err(MoltenError::invalid_harness("live Raft Iroh transport requires at least one admitted peer"));
         }
@@ -38,7 +44,15 @@ impl IrohReplicaTransportPort {
         for peer in peers.keys() {
             validate_peer_id(peer)?;
         }
-        Ok(Self { peers, timeout })
+        Ok(Self {
+            protocol_ref,
+            peers,
+            timeout,
+        })
+    }
+
+    pub fn protocol_ref(&self) -> &str {
+        &self.protocol_ref
     }
 }
 

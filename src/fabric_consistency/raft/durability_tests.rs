@@ -15,7 +15,9 @@ fn redb_replica_port_makes_hard_state_and_flushed_entries_durable() {
     let root = crate::test_support::process_workspace("live-raft-redb-port").expect("workspace");
     let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
         .expect("Redb adapter");
-    let mut port = RedbReplicaDurabilityPort::new(adapter);
+    let mut port =
+        RedbReplicaDurabilityPort::new(adapter, test_ref("Redb-durable-log"), test_ref("Redb-snapshot-store"))
+            .expect("Redb replica durability port");
 
     let hard_state = port.persist_hard_state(TERM, Some("node-a")).expect("hard state");
     assert!(hard_state.starts_with("blake3:"));
@@ -51,7 +53,12 @@ fn redb_replica_port_rejects_over_bound_entry_batch_without_mutation() {
     let root = crate::test_support::process_workspace("live-raft-redb-over-bound").expect("workspace");
     let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
         .expect("Redb adapter");
-    let mut port = RedbReplicaDurabilityPort::new(adapter);
+    let mut port = RedbReplicaDurabilityPort::new(
+        adapter,
+        test_ref("Redb-negative-durable-log"),
+        test_ref("Redb-negative-snapshot-store"),
+    )
+    .expect("Redb replica durability port");
     let entries = (0..MAX_REPLICA_MESSAGE_ENTRIES)
         .map(|offset| {
             let index = u64::try_from(offset + 1).expect("bounded entry index");

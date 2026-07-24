@@ -51,6 +51,14 @@ impl ChannelReplicaControlPort {
         &self.config.supervision_ref
     }
 
+    pub fn service_id(&self) -> &str {
+        &self.config.service_id
+    }
+
+    pub const fn service_generation(&self) -> u64 {
+        self.config.service_generation
+    }
+
     fn publish(&self, kind: ReplicaControlObservationKind) -> Result<String> {
         let receipt_ref = control_receipt_ref(&self.config, &kind)?;
         self.sender

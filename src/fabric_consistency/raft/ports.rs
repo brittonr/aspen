@@ -133,6 +133,60 @@ pub fn validate_replica_runtime_identity_for_start(
     Ok(())
 }
 
+pub type ConcreteReplicaPortBundle<S, H> = ReplicaPortBundle<
+    RedbReplicaDurabilityPort,
+    IrohReplicaTransportPort,
+    TokioReplicaTimePort<S>,
+    AdmittedReplicaApplicationPort<H>,
+    ChannelReplicaControlPort,
+>;
+
+pub fn assemble_scoped_concrete_replica_ports<S, H>(
+    identity: ReplicaRuntimePortIdentity,
+    durability: RedbReplicaDurabilityPort,
+    transport: IrohReplicaTransportPort,
+    time: TokioReplicaTimePort<S>,
+    application: AdmittedReplicaApplicationPort<H>,
+    control: ChannelReplicaControlPort,
+) -> Result<ConcreteReplicaPortBundle<S, H>>
+where
+    S: crate::fabric_time::CryptographicEntropySource,
+    H: CommittedBatchHandler,
+{
+    validate_concrete_replica_port_identity(&identity, &durability, &transport, &time, &application, &control)?;
+    ReplicaPortBundle::new(identity, durability, transport, time, application, control)
+}
+
+pub fn validate_concrete_replica_port_identity<S, H>(
+    identity: &ReplicaRuntimePortIdentity,
+    durability: &RedbReplicaDurabilityPort,
+    transport: &IrohReplicaTransportPort,
+    time: &TokioReplicaTimePort<S>,
+    application: &AdmittedReplicaApplicationPort<H>,
+    control: &ChannelReplicaControlPort,
+) -> Result<()>
+where
+    S: crate::fabric_time::CryptographicEntropySource,
+    H: CommittedBatchHandler,
+{
+    let exact = identity.durable_log_ref == durability.durable_log_ref()
+        && identity.snapshot_store_ref == durability.snapshot_store_ref()
+        && identity.protocol_ref == transport.protocol_ref()
+        && identity.timer_profile_ref == time.timer_profile_ref()
+        && identity.entropy_profile_ref == time.entropy_binding_ref()
+        && identity.service_generation == time.service_generation()
+        && identity.application_manifest_ref == application.application_manifest_ref()
+        && identity.service_id == control.service_id()
+        && identity.service_generation == control.service_generation()
+        && identity.supervision_ref == control.supervision_ref();
+    if !exact {
+        return Err(MoltenError::invalid_harness(
+            "live Raft concrete adapter identity does not match the runtime port cohort",
+        ));
+    }
+    Ok(())
+}
+
 impl<D: ReplicaDurabilityEffects, N, T, A, C> ReplicaDurabilityEffects for ReplicaPortBundle<D, N, T, A, C> {
     fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> Result<String> {
         self.durability.persist_hard_state(term, voted_for)
