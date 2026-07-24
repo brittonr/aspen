@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) async fn build_node(
+pub(in crate::fabric_consistency::raft) async fn build_node(
     group: &crate::fabric_consistency::ConsistencyGroupBinding,
     node_id: &str,
     listener: IrohCrossProcessListener,
@@ -37,7 +37,7 @@ pub(super) async fn build_node(
     let service = ScopedLiveReplicaService::start(plan, ports, inbox).await?;
     Ok(LiveNode {
         service,
-        listener,
+        listener: Some(listener),
         session_ref,
         _workspace: workspace,
         _control_receiver: control_receiver,
@@ -196,7 +196,7 @@ fn control_for(
     Ok((port, receiver))
 }
 
-pub(super) async fn close_node(node: LiveNode) {
+pub(in crate::fabric_consistency::raft) async fn close_node(node: LiveNode) {
     let LiveNode {
         service,
         listener,
@@ -205,5 +205,9 @@ pub(super) async fn close_node(node: LiveNode) {
         _control_receiver: _,
     } = node;
     drop(service);
-    listener.drain_and_close(ListenerDrainReason::OperatorRequest).await.expect("live listener cleanup");
+    listener
+        .expect("live node listener")
+        .drain_and_close(ListenerDrainReason::OperatorRequest)
+        .await
+        .expect("live listener cleanup");
 }

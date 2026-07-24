@@ -470,7 +470,7 @@ pub(super) fn required_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
-fn required_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
+pub(super) fn required_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
     value.as_boolean().ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
 }
 

@@ -29,6 +29,8 @@ const ASSEMBLY_ELECTION_MAX_TICKS: u64 = 3;
 const ASSEMBLY_TICK_MILLISECONDS: u64 = 1;
 const ASSEMBLY_FABRIC_BINDING_COUNT: usize = 7;
 const ASSEMBLY_STARTUP_OBSERVATIONS: usize = 2;
+const INGRESS_TEST_CAPACITY: usize = 4;
+const INGRESS_TEST_DELIVERY_LIMIT: u64 = 4;
 
 #[derive(Debug, Default)]
 struct AssemblyApplicationHandler;
@@ -53,6 +55,40 @@ fn raft_iroh_transport_denies_empty_peer_registry() {
     )
     .expect_err("empty peer registry must deny");
     assert!(error.to_string().contains("at least one admitted peer"));
+}
+
+// r[verify molten.fabric_consistency.live_service_ports]
+#[test]
+fn ingress_config_admits_bounded_values_and_denies_zero_capacity() {
+    let valid = IrohReplicaIngressConfig {
+        session_ref: test_ref("ingress-session"),
+        accept_timeout: Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
+        event_capacity: INGRESS_TEST_CAPACITY,
+        delivery_limit: INGRESS_TEST_DELIVERY_LIMIT,
+    };
+    assert!(super::iroh::validate_ingress_config(&valid).is_ok());
+    let mut invalid = valid;
+    invalid.event_capacity = 0;
+    let error = super::iroh::validate_ingress_config(&invalid).expect_err("zero ingress capacity must deny");
+    assert!(error.to_string().contains("capacity"));
+}
+
+// r[verify molten.fabric_consistency.live_service_ports]
+#[tokio::test]
+async fn ingress_shutdown_cancels_accept_and_returns_the_listener() {
+    let listener = listener().await;
+    let pump = IrohReplicaIngressPump::spawn(listener, IrohReplicaIngressConfig {
+        session_ref: test_ref("ingress-cancellation-session"),
+        accept_timeout: Duration::from_secs(TEST_TIMEOUT_SECONDS),
+        event_capacity: INGRESS_TEST_CAPACITY,
+        delivery_limit: INGRESS_TEST_DELIVERY_LIMIT,
+    })
+    .expect("ingress pump");
+    let listener = pump.shutdown().await.expect("cancelled ingress listener");
+    listener
+        .drain_and_close(ListenerDrainReason::OperatorRequest)
+        .await
+        .expect("ingress listener cleanup");
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]

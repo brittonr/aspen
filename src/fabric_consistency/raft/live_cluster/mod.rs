@@ -25,6 +25,9 @@ use crate::fabric_transport::cross_process::tests::listener_with_secret;
 mod setup;
 mod workflow;
 
+pub(super) use setup::build_node;
+pub(super) use setup::close_node;
+
 const NODE_A_SECRET_BYTE: u8 = 17;
 const NODE_B_SECRET_BYTE: u8 = 19;
 const NODE_C_SECRET_BYTE: u8 = 23;
@@ -37,9 +40,9 @@ const LIVE_FABRIC_BINDING_COUNT: usize = 7;
 const LIVE_TERM: u64 = 1;
 
 #[derive(Debug, Default)]
-struct LiveApplicationHandler {
-    applied_request_refs: Vec<String>,
-    restored_application_state_ref: Option<String>,
+pub(super) struct LiveApplicationHandler {
+    pub(super) applied_request_refs: Vec<String>,
+    pub(super) restored_application_state_ref: Option<String>,
 }
 
 impl CommittedBatchHandler for LiveApplicationHandler {
@@ -57,10 +60,10 @@ impl CommittedBatchHandler for LiveApplicationHandler {
 type LivePorts = ConcreteReplicaPortBundle<OperatingSystemEntropySource, LiveApplicationHandler>;
 type LiveService = ScopedLiveReplicaService<LivePorts>;
 
-struct LiveNode {
-    service: LiveService,
-    listener: IrohCrossProcessListener,
-    session_ref: String,
+pub(super) struct LiveNode {
+    pub(super) service: LiveService,
+    pub(super) listener: Option<IrohCrossProcessListener>,
+    pub(super) session_ref: String,
     _workspace: crate::test_support::ProcessWorkspace,
     _control_receiver: tokio::sync::mpsc::UnboundedReceiver<ReplicaControlObservation>,
 }
