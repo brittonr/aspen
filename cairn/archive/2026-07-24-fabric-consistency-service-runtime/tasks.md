@@ -31,8 +31,10 @@
 
 ## Phase 5: Validation
 
-- [ ] [serial] Run shared engine conformance, deterministic simulation, multi-process live, failure, recovery, fencing, extension-isolation, policy, resource, non-claim, and model-profile denial tests. r[molten.fabric_consistency.final_validation]
-- [ ] [serial] Run Cairn validation and proposal, design, and tasks gates before sync and archive. r[molten.fabric_consistency.final_validation]
+- [x] [serial] Run shared engine conformance, deterministic simulation, multi-process live, failure, recovery, fencing, extension-isolation, policy, resource, non-claim, and model-profile denial tests. r[molten.fabric_consistency.final_validation]
+  - Evidence: deterministic Nextest passed 1,242 tests and the distributed-simulation profile passed 67. The focused 63-test consistency rail includes the distinct-process quorum/failure/recovery fixture and positive/negative offline quorum-evidence validation. Formatting and Clippy pass. `validation.md` records the exact checks, strict Octet denial receipt, and the still-false production-admission boundary.
+- [x] [serial] Run Cairn validation and proposal, design, and tasks gates before sync and archive. r[molten.fabric_consistency.final_validation]
+  - Evidence: strict Cairn validation plus proposal, design, and tasks gates passed with 14 substantive tasks and no malformed dependency markers before sync.
 
 ## Dependency status
 
