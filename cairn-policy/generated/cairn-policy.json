@@ -2591,6 +2591,38 @@
             "source_kind": "accepted_specs"
           }
         ]
+      },
+      {
+        "evidence_sources": [
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "crates/molten-core/src/fabric_transport",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "src/fabric_transport",
+            "source_kind": "rust_source"
+          }
+        ],
+        "id": "fabric-transport",
+        "marker_verbs": [
+          "impl",
+          "verify"
+        ],
+        "requirement_sources": [
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs/fabric-transport/spec.md",
+            "source_kind": "accepted_specs"
+          }
+        ]
       }
     ]
   },

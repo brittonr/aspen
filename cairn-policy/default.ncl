@@ -102,19 +102,32 @@ let RuntimeEvidenceMaxSummaryBytes = 256 in
 
   traceability_policy = {
     default_profile = "cairn-default",
-    profiles = [{
-      id = "cairn-default",
-      requirement_sources = [
-        { root = "cairn/specs", source_kind = "accepted_specs", extensions = ["md"] },
-      ],
-      evidence_sources = [
-        { root = "src", source_kind = "rust_source", extensions = ["rs"] },
-        { root = "tests", source_kind = "rust_source", extensions = ["rs"] },
-        { root = "docs", source_kind = "nickel_source", extensions = ["ncl"] },
-        { root = "scripts", source_kind = "tool_source", extensions = ["rs", "sh"] },
-      ],
-      marker_verbs = ["impl", "verify", "depends", "related"],
-    }],
+    profiles = [
+      {
+        id = "cairn-default",
+        requirement_sources = [
+          { root = "cairn/specs", source_kind = "accepted_specs", extensions = ["md"] },
+        ],
+        evidence_sources = [
+          { root = "src", source_kind = "rust_source", extensions = ["rs"] },
+          { root = "tests", source_kind = "rust_source", extensions = ["rs"] },
+          { root = "docs", source_kind = "nickel_source", extensions = ["ncl"] },
+          { root = "scripts", source_kind = "tool_source", extensions = ["rs", "sh"] },
+        ],
+        marker_verbs = ["impl", "verify", "depends", "related"],
+      },
+      {
+        id = "fabric-transport",
+        requirement_sources = [
+          { root = "cairn/specs/fabric-transport/spec.md", source_kind = "accepted_specs", extensions = ["md"] },
+        ],
+        evidence_sources = [
+          { root = "crates/molten-core/src/fabric_transport", source_kind = "rust_source", extensions = ["rs"] },
+          { root = "src/fabric_transport", source_kind = "rust_source", extensions = ["rs"] },
+        ],
+        marker_verbs = ["impl", "verify"],
+      },
+    ],
   },
 
   stack_provenance_gate = {
