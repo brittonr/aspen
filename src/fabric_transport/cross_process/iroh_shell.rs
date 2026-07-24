@@ -89,6 +89,23 @@ pub struct CrossProcessFrameEvidence {
     pub cleanup_evidence_ref: String,
 }
 
+pub struct CrossProcessReceivedFrame {
+    pub payload: Vec<u8>,
+    pub evidence: CrossProcessFrameEvidence,
+}
+
+impl fmt::Debug for CrossProcessReceivedFrame {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CrossProcessReceivedFrame")
+            .field("payload_ref", &self.evidence.payload_ref)
+            .field("payload_bytes", &self.evidence.payload_bytes)
+            .field("evidence", &self.evidence)
+            .field("payload", &"redacted")
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrossProcessListenerCleanup {
     pub listener_identity_ref: String,
@@ -213,6 +230,16 @@ impl IrohCrossProcessListener {
         request_ref: &str,
         timeout: Duration,
     ) -> Result<CrossProcessFrameEvidence> {
+        Ok(self.accept_one_frame(session_ref, request_ref, timeout).await?.evidence)
+    }
+
+    // r[impl molten.fabric_consistency.live_service_ports]
+    pub async fn accept_one_frame(
+        &mut self,
+        session_ref: &str,
+        request_ref: &str,
+        timeout: Duration,
+    ) -> Result<CrossProcessReceivedFrame> {
         validate_exchange_refs(session_ref, request_ref)?;
         if !self.state.is_ready() {
             return Err(MoltenError::invalid_harness("cross-process listener is not ready"));
@@ -250,16 +277,22 @@ impl IrohCrossProcessListener {
 
         let exchange =
             run_server_exchange(&connection, &mut session, request_ref, self.protocol.generation, timeout).await;
-        let evidence = match exchange {
-            Ok(exchange) => finalize_successful_session(
-                session,
-                EndpointParticipantRole::Listener,
-                &self.endpoint_artifact.descriptor_ref,
-                session_ref,
-                request_ref,
-                &remote_transport_identity_ref,
-                exchange,
-            )?,
+        let received = match exchange {
+            Ok(exchange) => {
+                let evidence = finalize_successful_session(
+                    session,
+                    EndpointParticipantRole::Listener,
+                    &self.endpoint_artifact.descriptor_ref,
+                    session_ref,
+                    request_ref,
+                    &remote_transport_identity_ref,
+                    exchange.frame,
+                )?;
+                CrossProcessReceivedFrame {
+                    payload: exchange.payload,
+                    evidence,
+                }
+            }
             Err(error) => {
                 let _failed = finalize_failed_session(session, SessionTerminalClass::AdapterFailure)?;
                 self.finish_listener_session()?;
@@ -267,7 +300,7 @@ impl IrohCrossProcessListener {
             }
         };
         self.finish_listener_session()?;
-        Ok(evidence)
+        Ok(received)
     }
 
     // r[impl molten.fabric_transport.cross_process_listener]
@@ -395,13 +428,18 @@ struct ClientNetworkFrame {
     remote_transport_identity_ref: String,
 }
 
+struct ServerNetworkFrame {
+    frame: NetworkFrame,
+    payload: Vec<u8>,
+}
+
 async fn run_server_exchange(
     connection: &iroh::endpoint::Connection,
     session: &mut CrossProcessSessionState,
     request_ref: &str,
     generation: u64,
     timeout: Duration,
-) -> Result<NetworkFrame> {
+) -> Result<ServerNetworkFrame> {
     let (mut send, mut receive) = tokio::time::timeout(timeout, connection.accept_bi())
         .await
         .map_err(|_| MoltenError::invalid_harness("cross-process stream accept timed out"))?
@@ -420,10 +458,13 @@ async fn run_server_exchange(
         .await
         .map_err(|_| MoltenError::invalid_harness("cross-process peer close timed out"))?;
     let payload_ref = cross_process_frame_ref(request_ref, &payload);
-    Ok(NetworkFrame {
-        acknowledgement_ref: payload_ref.clone(),
-        payload_ref,
-        payload_bytes,
+    Ok(ServerNetworkFrame {
+        frame: NetworkFrame {
+            acknowledgement_ref: payload_ref.clone(),
+            payload_ref,
+            payload_bytes,
+        },
+        payload,
     })
 }
 

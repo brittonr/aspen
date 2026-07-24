@@ -280,11 +280,15 @@ async fn live_listener_and_client_exchange_one_bounded_frame_and_clean_up() {
     assert_eq!(listener.admission(), EndpointAdmissionState::fully_active());
     let endpoint = listener.handoff().clone();
     let timeout = Duration::from_secs(TEST_TIMEOUT_SECONDS);
-    let server = listener.accept_one(SESSION_REF, REQUEST_REF, timeout);
+    let server = listener.accept_one_frame(SESSION_REF, REQUEST_REF, timeout);
     let client = exchange_cross_process_frame(client_input(endpoint), PAYLOAD, timeout);
     let (server, client) = tokio::join!(server, client);
-    let server = server.expect("server exchange");
+    let received = server.expect("server exchange");
     let client = client.expect("client exchange");
+    assert_eq!(received.payload, PAYLOAD);
+    let received_debug = format!("{received:?}");
+    assert!(!received_debug.contains(std::str::from_utf8(PAYLOAD).expect("UTF-8 payload")));
+    let server = received.evidence;
 
     assert_eq!(server.role, EndpointParticipantRole::Listener);
     assert_eq!(client.role, EndpointParticipantRole::Client);
