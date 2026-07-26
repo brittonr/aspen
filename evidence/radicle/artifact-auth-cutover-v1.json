@@ -17,7 +17,7 @@
     "root_manifest_blake3": "89cba6df445c212d0014c201b62d26e684575fcf64134f867b0c9034110817df"
   },
   "evidence": [
-    "cairn/changes/consume-artifact-auth-from-radicle/evidence/source-cutover-2026-07-25.md",
+    "cairn/archive/2026-07-25-consume-artifact-auth-from-radicle/evidence/source-cutover-2026-07-25.md",
     "evidence/radicle/artifact-auth-cutover-v1.json",
     "artifact-auth:evidence/radicle/publication-v1.json",
     "onix-core:evidence/radicle/source-admission-v1.json",
@@ -35,7 +35,7 @@
     "release_policy_github_source": false
   },
   "nix": {
-    "flake_blake3": "9cb6cc344d3998e4901e1d9c01b10da93de063a4983626588c5852324175d2d1",
+    "flake_blake3": "92289d8001d76609a48ebf9281a43d1222b15be145190acddf553701c4fa6796",
     "lock_blake3": "7bff28c24abdd3bbee845b57a08ec6e991295d2643f678af4f49d3d06a2dee4c",
     "locked_rev": "799459346d5416fbd7b9f55840a7371441b55afa",
     "locked_url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git",

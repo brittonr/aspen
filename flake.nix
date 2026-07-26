@@ -844,7 +844,7 @@
                   fi
                   for plan in build-plan.json release-policy-build-plan.json; do
                     if jq -e --arg forbidden "$forbidden_source" \
-                      '[.crates | to_entries[] | select((.key | contains($forbidden)) or (.value.source.url | contains($forbidden)))] | length > 0' \
+                      '[.crates | to_entries[] | select((.key | contains($forbidden)) or ((.value.source.url // "") | contains($forbidden)))] | length > 0' \
                       "$plan" >/dev/null; then
                       echo "generated plan retains executable artifact-auth GitHub source: $plan" >&2
                       exit 1
