@@ -1,17 +1,99 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/aspen",
+  "workspaceRoot": "/tmp/aspen-artifact-auth-radicle",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0"
+    "path+file:///tmp/aspen-artifact-auth-radicle#molten@0.1.0",
+    "path+file:///tmp/aspen-artifact-auth-radicle#molten@0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0"
+    "molten": "path+file:///tmp/aspen-artifact-auth-radicle#molten@0.1.0",
+    "molten-core": "path+file:///tmp/aspen-artifact-auth-radicle/crates/molten-core#0.1.0"
   },
-  "cargoLockHash": "e4a442cb06c9f31737e782b72448d79ef8fbb3fcf5a8e590688253b802db9bf2",
-  "inputsHash": "6c06b4cccc08f915778a4a6c239d6c610fb9d5928602af25a080a1346f8385d9",
+  "cargoLockHash": "3649f4e617d91331ece28b53d859483f3b4b7778248d3158a8249025db667faa",
+  "inputsHash": "58292c3843bdf2dd94a9f8bbb741156d855cd7a6aea2537ea51df359f87c07f3",
   "crates": {
+    "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0": {
+      "crateName": "artifact-auth-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git",
+        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
+        "subDir": "crates/artifact-auth-core",
+        "sha256": "1m8icwyx9j40r6nvb4qh7sxidszj11b9l71rp75lc0gv5dc05pas"
+      },
+      "features": [
+        "default",
+        "serde"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/OnixResearch/artifact-auth"
+    },
+    "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-ed25519@0.1.0": {
+      "crateName": "artifact-auth-ed25519",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git",
+        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
+        "subDir": "crates/artifact-auth-ed25519",
+        "sha256": "1m8icwyx9j40r6nvb4qh7sxidszj11b9l71rp75lc0gv5dc05pas"
+      },
+      "features": [
+        "default",
+        "serde"
+      ],
+      "dependencies": [
+        {
+          "packageId": "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0",
+          "externCrateName": "artifact_auth_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
+          "externCrateName": "ed25519_dalek"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/OnixResearch/artifact-auth"
+    },
     "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12": {
       "crateName": "hegeltest-macros",
       "version": "0.14.12",
@@ -125,88 +207,6 @@
       "homepage": "http://hegel.dev",
       "license": "MIT",
       "repository": "https://github.com/hegeldev/hegel-rust"
-    },
-    "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0": {
-      "crateName": "artifact-auth-core",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/artifact-auth.git",
-        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
-        "subDir": "crates/artifact-auth-core",
-        "sha256": "1m8icwyx9j40r6nvb4qh7sxidszj11b9l71rp75lc0gv5dc05pas"
-      },
-      "features": [
-        "default",
-        "serde"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/OnixResearch/artifact-auth"
-    },
-    "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-ed25519@0.1.0": {
-      "crateName": "artifact-auth-ed25519",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/artifact-auth.git",
-        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
-        "subDir": "crates/artifact-auth-ed25519",
-        "sha256": "1m8icwyx9j40r6nvb4qh7sxidszj11b9l71rp75lc0gv5dc05pas"
-      },
-      "features": [
-        "default",
-        "serde"
-      ],
-      "dependencies": [
-        {
-          "packageId": "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0",
-          "externCrateName": "artifact_auth_core"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
-          "externCrateName": "ed25519_dalek"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/OnixResearch/artifact-auth"
     },
     "git+ssh://git@github.com/OnixResearch/basalt.git?rev=d913dc01e765c9b297df5fcc57dfa06aac39bc74#basalt@0.1.0": {
       "crateName": "basalt",
@@ -491,7 +491,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0": {
+    "path+file:///tmp/aspen-artifact-auth-radicle#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -503,11 +503,11 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0",
+          "packageId": "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0",
           "externCrateName": "artifact_auth_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-ed25519@0.1.0",
+          "packageId": "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-ed25519@0.1.0",
           "externCrateName": "artifact_auth_ed25519"
         },
         {
@@ -555,7 +555,7 @@
           "externCrateName": "iroh_gossip"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+          "packageId": "path+file:///tmp/aspen-artifact-auth-radicle/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -675,7 +675,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0": {
+    "path+file:///tmp/aspen-artifact-auth-radicle/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -687,7 +687,7 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0",
+          "packageId": "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0",
           "externCrateName": "artifact_auth_core"
         }
       ],

@@ -9,12 +9,12 @@
         "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
         "revCount": 5,
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/artifact-auth.git"
+        "url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git"
       },
       "original": {
         "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/artifact-auth.git"
+        "url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git"
       }
     },
     "basalt-src": {

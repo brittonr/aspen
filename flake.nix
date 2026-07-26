@@ -20,7 +20,7 @@
       flake = false;
     };
     artifact-auth-src = {
-      url = "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa";
+      url = "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa";
       flake = false;
     };
     cairn-src = {
@@ -96,10 +96,11 @@
         maybeCleanLocalGitSource =
           src: if pkgs.lib.hasInfix "/../" (toString src) then null else cleanLocalGitSource src;
         artifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa";
-        artifactAuthRepository = "ssh://git@github.com/OnixResearch/artifact-auth.git";
+        artifactAuthRepository = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git";
         artifactAuthRootDependencies = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).dependencies;
         artifactAuthCoreDependency =
-          (builtins.fromTOML (builtins.readFile ./crates/molten-core/Cargo.toml)).dependencies.artifact-auth-core;
+          (builtins.fromTOML (builtins.readFile ./crates/molten-core/Cargo.toml))
+          .dependencies.artifact-auth-core;
         artifactAuthCargoDependencies = [
           artifactAuthRootDependencies.artifact-auth-core
           artifactAuthRootDependencies.artifact-auth-ed25519
@@ -109,8 +110,7 @@
           "artifact-auth-core"
           "artifact-auth-ed25519"
         ];
-        artifactAuthExpectedLockSource =
-          "git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=${artifactAuthRevision}#${artifactAuthRevision}";
+        artifactAuthExpectedLockSource = "git+${artifactAuthRepository}?rev=${artifactAuthRevision}#${artifactAuthRevision}";
         artifactAuthLockPackages = builtins.filter (
           package: (package.source or "") == artifactAuthExpectedLockSource
         ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
@@ -119,9 +119,7 @@
         artifactAuthSource =
           assert pkgs.lib.assertMsg (
             builtins.all (
-              dependency:
-              dependency.git == artifactAuthRepository
-              && dependency.rev == artifactAuthRevision
+              dependency: dependency.git == artifactAuthRepository && dependency.rev == artifactAuthRevision
             ) artifactAuthCargoDependencies
             && artifact-auth-src.rev == artifactAuthRevision
             && builtins.length artifactAuthLockPackages == builtins.length artifactAuthRequiredPackages
@@ -132,8 +130,7 @@
           ) "Molten artifact-auth Cargo/Nix source identity, uniqueness, package set, or license drifted";
           artifact-auth-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
-          "ssh://git@github.com/OnixResearch/artifact-auth.git#${artifactAuthRevision}" =
-            maybeCleanLocalGitSource artifactAuthSource;
+          "${artifactAuthRepository}#${artifactAuthRevision}" = maybeCleanLocalGitSource artifactAuthSource;
           "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" =
             maybeCleanLocalGitSource basalt-src;
           "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" =
@@ -752,6 +749,111 @@
             fabric-observability-profile = fabricObservabilityProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
             release-dependency-profile = releaseDependencyProfileCheck;
+
+            # r[verify molten.artifact_auth_adoption.radicle_transport]
+            # r[verify molten.artifact_auth_adoption.radicle_agreement]
+            # r[verify molten.artifact_auth_adoption.radicle_fallback]
+            # r[verify molten.artifact_auth_adoption.radicle_evidence]
+            artifact-auth-radicle-cutover =
+              pkgs.runCommand "molten-artifact-auth-radicle-cutover"
+                {
+                  nativeBuildInputs = [
+                    pkgs.b3sum
+                    pkgs.jq
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = ./.;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+
+                  nickel typecheck evidence/radicle/artifact-auth-cutover-v1.ncl
+                  nickel typecheck lib/artifact-auth-cutover-receipt.ncl
+                  nickel export --format json tests/artifact-auth-cutover.ncl > "$TMPDIR/tests.json"
+                  grep -Fq '"tests": true' "$TMPDIR/tests.json"
+
+                  nickel export --format json evidence/radicle/artifact-auth-cutover-v1.ncl > "$TMPDIR/cutover.json"
+                  jq --sort-keys . "$TMPDIR/cutover.json" > "$TMPDIR/cutover.normalized.json"
+                  jq --sort-keys . evidence/radicle/artifact-auth-cutover-v1.json > "$TMPDIR/evidence.normalized.json"
+                  diff --unified "$TMPDIR/cutover.normalized.json" "$TMPDIR/evidence.normalized.json"
+
+                  receipt_hash="$(b3sum evidence/radicle/artifact-auth-cutover-v1.json | cut -d ' ' -f 1)"
+                  expected_receipt_hash="$(tr -d '\n' < evidence/radicle/artifact-auth-cutover-v1.blake3)"
+                  test "$receipt_hash" = "$expected_receipt_hash"
+
+                  for binding in \
+                    'cargo.root_manifest_blake3:Cargo.toml' \
+                    'cargo.core_manifest_blake3:crates/molten-core/Cargo.toml' \
+                    'cargo.lock_blake3:Cargo.lock' \
+                    'nix.flake_blake3:flake.nix' \
+                    'nix.lock_blake3:flake.lock' \
+                    'release_policy.contracts_blake3:config/release-dependencies/contracts.ncl' \
+                    'release_policy.profile_blake3:config/release-dependencies/profile.ncl' \
+                    'unit2nix.default_plan_blake3:build-plan.json' \
+                    'unit2nix.release_plan_blake3:release-policy-build-plan.json'; do
+                    field="''${binding%%:*}"
+                    path="''${binding#*:}"
+                    expected="$(jq -r ".$field" evidence/radicle/artifact-auth-cutover-v1.json)"
+                    actual="$(b3sum "$path" | cut -d ' ' -f 1)"
+                    test "$actual" = "$expected"
+                  done
+
+                  source_url='https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git'
+                  source_rev='799459346d5416fbd7b9f55840a7371441b55afa'
+                  source_nar_hash='sha256-nEgz2FtVuDesX95yyxidp0vhjxL4INB6Ve8rkpLyJk0='
+                  jq -e \
+                    --arg url "$source_url" \
+                    --arg rev "$source_rev" \
+                    --arg nar_hash "$source_nar_hash" \
+                    '.nodes["artifact-auth-src"] as $source
+                     | $source.locked.url == $url
+                     and $source.original.url == $url
+                     and $source.locked.rev == $rev
+                     and $source.original.rev == $rev
+                     and $source.locked.narHash == $nar_hash' \
+                    flake.lock >/dev/null
+
+                  nickel export --format json config/release-dependencies/profile.ncl > "$TMPDIR/release-profile.json"
+                  expected_profile_rows=2
+                  test "$(jq --arg url "$source_url" --arg rev "$source_rev" \
+                    '[.dependencies[] | select(.package_name == "artifact-auth-core" or .package_name == "artifact-auth-ed25519") | select(.source_coordinate == $url and .immutable_revision == $rev and .transport_policy == "https")] | length' \
+                    "$TMPDIR/release-profile.json")" = "$expected_profile_rows"
+
+                  expected_default_packages=2
+                  expected_release_packages=1
+                  for plan_binding in \
+                    "build-plan.json:$expected_default_packages" \
+                    "release-policy-build-plan.json:$expected_release_packages"; do
+                    plan="''${plan_binding%%:*}"
+                    expected_count="''${plan_binding#*:}"
+                    actual_count="$(jq --arg url "$source_url" --arg rev "$source_rev" \
+                      '[.crates[] | select((.crateName == "artifact-auth-core" or .crateName == "artifact-auth-ed25519") and .source.url == $url and .source.rev == $rev)] | length' \
+                      "$plan")"
+                    test "$actual_count" = "$expected_count"
+                  done
+
+                  github_host='github.com'
+                  forbidden_source="$github_host/OnixResearch/artifact-auth"
+                  if rg -F "$forbidden_source" \
+                    Cargo.toml crates/molten-core/Cargo.toml Cargo.lock \
+                    flake.nix flake.lock config/release-dependencies/profile.ncl; then
+                    echo 'executable artifact-auth GitHub fallback remains' >&2
+                    exit 1
+                  fi
+                  for plan in build-plan.json release-policy-build-plan.json; do
+                    if jq -e --arg forbidden "$forbidden_source" \
+                      '[.crates | to_entries[] | select((.key | contains($forbidden)) or (.value.source.url | contains($forbidden)))] | length > 0' \
+                      "$plan" >/dev/null; then
+                      echo "generated plan retains executable artifact-auth GitHub source: $plan" >&2
+                      exit 1
+                    fi
+                  done
+
+                  touch "$out"
+                '';
+
             nixos-vm-smoke = vmShardCheck "nixos-vm-smoke";
             nixos-vm-live-control = vmShardCheck "nixos-vm-live-control";
             nixos-vm-service-job = vmShardCheck "nixos-vm-service-job";

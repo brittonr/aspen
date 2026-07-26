@@ -8,4 +8,4 @@ license.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/artifact-auth.git", rev = "799459346d5416fbd7b9f55840a7371441b55afa", version = "0.1.0" }
+artifact-auth-core = { git = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git", rev = "799459346d5416fbd7b9f55840a7371441b55afa", version = "0.1.0" }

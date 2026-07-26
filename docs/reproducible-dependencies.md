@@ -4,8 +4,9 @@ Molten release dependency identity is authored in the typed Nickel profile at
 [`config/release-dependencies/profile.ncl`](../config/release-dependencies/profile.ncl).
 The profile binds each direct Git dependency to its package identity, reviewed
 source coordinate, immutable revision, Nix input, release disposition, and
-transport policy. Authenticated OnixResearch Cargo sources use exact SSH pins
-paired with immutable GitHub archive inputs for sandboxed Nix builds.
+transport policy. The accepted artifact-auth compatibility source uses exact
+Radicle HTTPS pins; remaining OnixResearch Cargo sources retain their reviewed
+SSH pins and immutable GitHub archive inputs for sandboxed Nix builds.
 
 The `molten-release-policy` shell reads the Nickel export, `Cargo.toml`,
 `Cargo.lock`, `flake.lock`, configured archive evidence, and distribution
@@ -55,8 +56,8 @@ provides Molten's canonical Valence semantics.
 6. Regenerate `build-plan.json` with the repository's pinned unit2nix tool.
 7. Run positive and negative focused checks, then `nix flake check`.
 
-Floating branches, tags without immutable commits, SSH-only release sources,
-manifest/lock/Nix drift, duplicate canonical package identity, stale archive
+Floating branches, tags without immutable commits, unreviewed SSH-only release
+sources, manifest/lock/Nix drift, duplicate canonical package identity, stale archive
 bytes, and missing configured distribution evidence fail closed.
 
 ## AGPL distribution profile

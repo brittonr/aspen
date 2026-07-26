@@ -13,7 +13,7 @@ let HttpsSource = Prelude.contract (fun value =>
   std.is_string value && std.string.is_match "^https://[A-Za-z0-9._/-]+$" value
 ) in
 let GitSource = Prelude.contract (fun value =>
-  std.is_string value && std.string.is_match "^(https://|ssh://git@)github.com/[A-Za-z0-9._/-]+$" value
+  std.is_string value && std.string.is_match "^(https://[A-Za-z0-9._-]+|ssh://git@github.com)/[A-Za-z0-9._/-]+$" value
 ) in
 let SafeRelativePath = Prelude.contract (fun value =>
   std.is_string value
