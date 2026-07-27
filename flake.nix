@@ -291,6 +291,13 @@
               # verus_prettyplease declares links="prettyplease-verus02" but
               # vendors its implementation; no native libraries are required.
               verus_prettyplease = attrs: { };
+              # kamacite-core includes governed adapter and Wasm fixtures from
+              # the producer workspace root. Keep that full immutable source
+              # while compiling from the crate subdirectory.
+              kamacite-core = attrs: {
+                src = kamaciteSource;
+                sourceRoot = "source/crates/kamacite-core";
+              };
             };
           };
 
