@@ -40,6 +40,7 @@ use super::UnitResolution;
 use super::UnitResolutionInput;
 use super::root_class;
 
+// r[impl molten.artifacts.live_binding.core_adoption]
 pub fn validate_source_pins(observation: &SourcePinObservation) -> SourcePinReport {
     let artifact_binding_exact = observation.artifact_binding_source == super::ARTIFACT_BINDING_SOURCE
         && observation.artifact_binding_revision == super::ARTIFACT_BINDING_REVISION;

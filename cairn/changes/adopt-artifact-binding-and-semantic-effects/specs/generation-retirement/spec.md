@@ -4,7 +4,7 @@
 
 Add complete-root generation reachability, explainable retirement, and conservative deployment diagnostics around Molten runtime generations.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Every retirement-relevant runtime holder registers a root
 

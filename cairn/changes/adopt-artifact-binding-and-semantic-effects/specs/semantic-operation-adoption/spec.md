@@ -4,7 +4,7 @@
 
 Bind Molten effect admission and replay to exact Kamacite semantic operation identities so behavior drift cannot match by name or shape.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Effect surfaces bind semantic operation identities
 

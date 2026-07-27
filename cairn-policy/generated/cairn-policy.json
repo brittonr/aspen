@@ -2623,6 +2623,68 @@
             "source_kind": "accepted_specs"
           }
         ]
+      },
+      {
+        "evidence_sources": [
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "crates/molten-core/src/live_binding",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "src/live_binding_adoption.rs",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "docs/live-artifact-binding-and-semantic-effects.md",
+            "source_kind": "tool_source"
+          },
+          {
+            "extensions": [
+              "preserves"
+            ],
+            "root": "schemas/preserves-boundaries",
+            "source_kind": "tool_source"
+          }
+        ],
+        "id": "adopt-artifact-binding-and-semantic-effects",
+        "marker_verbs": [
+          "impl",
+          "verify",
+          "depends",
+          "related"
+        ],
+        "requirement_sources": [
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs/live-artifact-binding",
+            "source_kind": "accepted_specs"
+          },
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs/semantic-operation-adoption",
+            "source_kind": "accepted_specs"
+          },
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs/generation-retirement",
+            "source_kind": "accepted_specs"
+          }
+        ]
       }
     ]
   },

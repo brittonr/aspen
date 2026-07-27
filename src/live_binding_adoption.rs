@@ -16,6 +16,21 @@ pub const SEMANTIC_OPERATION_BINDING_SCHEMA: &str = "molten.effects.semantic-ope
 
 const ADOPTION_ARTIFACT_ARITY: usize = 3;
 const FIELD_ARITY: usize = 2;
+const SEMANTIC_SURFACE_NAMES: [&str; molten_core::live_binding::SEMANTIC_SURFACE_COUNT] = [
+    "manifest",
+    "handler-binding",
+    "handle",
+    "request",
+    "response",
+    "effect-log",
+    "adapter-import",
+    "remote-execution",
+    "runtime-receipt",
+    "replay-identity",
+    "evaluation-cache-key",
+    "job",
+    "upgrade-check",
+];
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AdoptionArtifactKind {
@@ -147,6 +162,40 @@ pub fn build_adoption_artifact(
     })
 }
 
+fn semantic_identity_text(identity: &kamacite_core::Identity) -> String {
+    format!("{}:{}:{}", identity.domain, identity.algorithm, identity.hex.as_str())
+}
+
+// r[impl molten.effects.semantic_operation_identity]
+// r[impl molten.effects.semantic_handler_matching]
+pub fn build_strict_semantic_operation_binding(
+    declared_operation: &kamacite_core::Identity,
+    surfaces: &molten_core::live_binding::SemanticSurfaceBindings,
+) -> Result<AdoptionArtifact> {
+    molten_core::live_binding::validate_semantic_surfaces(declared_operation, surfaces).map_err(|error| {
+        MoltenError::invalid_harness(format!("strict semantic operation binding denied: {error:?}"))
+    })?;
+    let mut fields = Vec::with_capacity(molten_core::live_binding::SEMANTIC_SURFACE_COUNT + 1);
+    fields.push(CanonicalField {
+        name: "declared-operation".to_string(),
+        value: semantic_identity_text(declared_operation),
+    });
+    for (name, identity) in SEMANTIC_SURFACE_NAMES.iter().zip(surfaces.identities()) {
+        fields.push(CanonicalField {
+            name: (*name).to_string(),
+            value: semantic_identity_text(identity),
+        });
+    }
+    build_adoption_artifact(
+        AdoptionArtifactKind::SemanticOperationBinding,
+        &fields,
+        &molten_core::live_binding::SEMANTIC_NON_CLAIMS
+            .iter()
+            .map(|claim| (*claim).to_string())
+            .collect::<Vec<_>>(),
+    )
+}
+
 fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
     value
         .as_string()
@@ -263,6 +312,41 @@ mod tests {
             assert_eq!(parsed.artifact_ref, built.artifact_ref);
             assert_eq!(parsed.fields, built.fields);
         }
+    }
+
+    fn semantic_surfaces(identity: &kamacite_core::Identity) -> molten_core::live_binding::SemanticSurfaceBindings {
+        molten_core::live_binding::SemanticSurfaceBindings {
+            manifest: identity.clone(),
+            handler_binding: identity.clone(),
+            handle: identity.clone(),
+            request: identity.clone(),
+            response: identity.clone(),
+            effect_log: identity.clone(),
+            adapter_import: identity.clone(),
+            remote_execution: identity.clone(),
+            runtime_receipt: identity.clone(),
+            replay_identity: identity.clone(),
+            evaluation_cache_key: identity.clone(),
+            job: identity.clone(),
+            upgrade_check: identity.clone(),
+        }
+    }
+
+    #[test]
+    fn strict_semantic_binding_is_canonical_and_rejects_drift() {
+        let operation =
+            kamacite_core::compute_identity(kamacite_core::IdentityDomain::EffectOperation, b"strict-operation");
+        let exact = semantic_surfaces(&operation);
+        let artifact =
+            build_strict_semantic_operation_binding(&operation, &exact).expect("build strict semantic binding");
+        let parsed = parse_adoption_artifact(AdoptionArtifactKind::SemanticOperationBinding, &artifact.value)
+            .expect("parse strict semantic binding");
+        assert_eq!(parsed.artifact_ref, artifact.artifact_ref);
+
+        let mut drifted = exact;
+        drifted.handler_binding =
+            kamacite_core::compute_identity(kamacite_core::IdentityDomain::EffectOperation, b"drifted-operation");
+        assert!(build_strict_semantic_operation_binding(&operation, &drifted).is_err());
     }
 
     #[test]
