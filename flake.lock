@@ -17,6 +17,23 @@
         "url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git"
       }
     },
+    "artifact-binding-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785173333,
+        "narHash": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU=",
+        "owner": "OnixResearch",
+        "repo": "onix-artifact",
+        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "OnixResearch",
+        "repo": "onix-artifact",
+        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "type": "github"
+      }
+    },
     "basalt-src": {
       "flake": false,
       "locked": {
@@ -304,6 +321,23 @@
         "type": "github"
       }
     },
+    "kamacite-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785176269,
+        "narHash": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc=",
+        "owner": "OnixResearch",
+        "repo": "kamacite",
+        "rev": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
+        "type": "github"
+      },
+      "original": {
+        "owner": "OnixResearch",
+        "repo": "kamacite",
+        "rev": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1779694939,
@@ -430,10 +464,12 @@
     "root": {
       "inputs": {
         "artifact-auth-src": "artifact-auth-src",
+        "artifact-binding-src": "artifact-binding-src",
         "basalt-src": "basalt-src",
         "cairn-src": "cairn-src",
         "flake-utils": "flake-utils",
         "hegel-src": "hegel-src",
+        "kamacite-src": "kamacite-src",
         "nixpkgs": "nixpkgs",
         "octet-cutover-src": "octet-cutover-src",
         "octet-toolchain": "octet-toolchain",

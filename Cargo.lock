@@ -224,6 +224,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "artifact-binding-core"
+version = "0.1.0"
+source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d880ddf4c2967f4c024b489b5c0022bf1"
+
+[[package]]
 name = "ascii-canvas"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3308,6 +3313,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kamacite-core"
+version = "0.1.0"
+source = "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#d76fe4abe543724d8fc0ac4b362187caf2e27622"
+dependencies = [
+ "blake3",
+ "preserves 5.0.0-rc.7",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "keccak"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3652,6 +3668,7 @@ version = "0.1.0"
 dependencies = [
  "artifact-auth-core",
  "artifact-auth-ed25519",
+ "artifact-binding-core",
  "bao-tree",
  "basalt",
  "blake3",
@@ -3665,6 +3682,7 @@ dependencies = [
  "iroh-blobs",
  "iroh-docs",
  "iroh-gossip",
+ "kamacite-core",
  "molten-core",
  "n0-future",
  "nickel-lang",
@@ -3695,6 +3713,8 @@ name = "molten-core"
 version = "0.1.0"
 dependencies = [
  "artifact-auth-core",
+ "artifact-binding-core",
+ "kamacite-core",
 ]
 
 [[package]]
@@ -4724,6 +4744,8 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "regex",
+ "serde",
+ "serde_bytes",
 ]
 
 [[package]]
@@ -5537,6 +5559,7 @@ version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
 dependencies = [
+ "indexmap 2.14.0",
  "itoa",
  "memchr",
  "serde",

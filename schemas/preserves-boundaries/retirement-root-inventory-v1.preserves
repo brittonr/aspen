@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "retirement-root-inventory">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "retirement-root-inventory-v1">
+  <schema-id "molten.retirement.root-inventory.v1">
+  <arity 3>>

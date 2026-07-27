@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "binding-snapshot">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "binding-snapshot-v1">
+  <schema-id "molten.binding.snapshot.v1">
+  <arity 3>>

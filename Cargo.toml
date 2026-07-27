@@ -27,6 +27,7 @@ path = "src/main.rs"
 [dependencies]
 artifact-auth-core = { git = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git", rev = "799459346d5416fbd7b9f55840a7371441b55afa", version = "0.1.0" }
 artifact-auth-ed25519 = { git = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git", rev = "799459346d5416fbd7b9f55840a7371441b55afa", version = "0.1.0" }
+artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 bao-tree = "0.16.0"
 basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "d913dc01e765c9b297df5fcc57dfa06aac39bc74", version = "0.1.0" }
 blake3 = "1"
@@ -39,6 +40,7 @@ iroh = "1.0.0"
 iroh-blobs = "0.103.0"
 iroh-docs = "0.101.0"
 iroh-gossip = "0.101.0"
+kamacite-core = { git = "ssh://git@github.com/OnixResearch/kamacite.git", rev = "d76fe4abe543724d8fc0ac4b362187caf2e27622", version = "0.1.0" }
 n0-future = "0.3.2"
 nickel-lang = "2.1.0"
 valence = { git = "ssh://git@github.com/OnixResearch/valence.git", rev = "5f1c2ba5072c6f9622fa59b1af20502985f569fd", package = "valence-core" }

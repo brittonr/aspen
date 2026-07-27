@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "generation-attribution">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "generation-attribution-v1">
+  <schema-id "molten.retirement.generation-attribution.v1">
+  <arity 3>>

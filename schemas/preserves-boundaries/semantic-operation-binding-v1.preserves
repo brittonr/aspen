@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "semantic-operation-binding">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "semantic-operation-binding-v1">
+  <schema-id "molten.effects.semantic-operation-binding.v1">
+  <arity 3>>

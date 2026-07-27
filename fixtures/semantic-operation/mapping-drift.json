@@ -1,0 +1,10 @@
+{
+  "schema": "molten.semantic-operation-mapping.v1",
+  "kamacite_revision": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
+  "operation_hex": "e89d7b8bf84b4c9c8564ec745109dcef80838bc99ca887edbbfd0d78e72e952b",
+  "surface_hexes": [
+    "e89d7b8bf84b4c9c8564ec745109dcef80838bc99ca887edbbfd0d78e72e952b",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  ],
+  "expected": "deny"
+}

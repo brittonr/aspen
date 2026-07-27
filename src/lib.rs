@@ -105,6 +105,7 @@ compat_module!(job_dag, workload);
 #[path = "ledger/mod.rs"]
 pub mod journal;
 compat_module!(ledger, journal);
+pub mod live_binding_adoption;
 #[path = "local_store.rs"]
 pub mod local_store;
 #[path = "materialization.rs"]

@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "deploy-diagnostic">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "deploy-diagnostic-v1">
+  <schema-id "molten.retirement.deploy-diagnostic.v1">
+  <arity 3>>

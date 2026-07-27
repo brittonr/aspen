@@ -15,6 +15,7 @@ pub mod fabric_membership;
 pub mod fabric_observability;
 pub mod fabric_time;
 pub mod fabric_transport;
+pub mod live_binding;
 pub mod planning;
 pub mod policy;
 pub mod preserves_profile;
