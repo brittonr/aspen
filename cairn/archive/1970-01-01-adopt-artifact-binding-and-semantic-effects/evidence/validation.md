@@ -50,7 +50,7 @@ The focused traceability profile covers 14 of 14 requirements. Its receipt is `5
 
 Task 990 passed `nix flake check -L` on `x86_64-linux`. Nix reported `all checks passed`, including full nextest, source agreement, unit2nix, dogfood, release evidence, and promotion checks. Other systems were omitted as incompatible by the flake.
 
-The archive receipt is recorded after the archive command completes.
+Archive execution passed with receipt `7c18a42f906907118940080375ee1fb48305020fb7d363171dd19b74d6aea8b6`.
 
 ## Publication blocker
 
