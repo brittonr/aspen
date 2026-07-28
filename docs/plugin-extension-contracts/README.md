@@ -1,9 +1,17 @@
 # Plugin extension contracts
 
-`contract.ncl` is the typed Nickel authoring contract for human-maintained plugin extension definitions. `storage.ncl` is the positive fixture; negative fixtures named `storage-invalid-*`, `storage-malformed-ref.ncl`, `storage-empty-evidence.ncl`, `storage-duplicate-descriptor.ncl`, and `storage-missing-schema.ncl` each target one field-domain or cross-field invariant before runtime admission.
+`contract.ncl` is the typed Nickel contract for human-maintained plugin extension definitions.
 
-`grant.ncl` is the typed Nickel authoring contract for `plugin-capability-grant-v1` fixtures. `storage.grant.ncl` and `storage-revoked.grant.ncl` are valid grants; negative fixtures named `storage-*.grant.ncl` cover missing proofs, malformed refs, over-delegation, inverted validity windows, missing revocation evidence, and empty evidence refs.
+`storage.ncl` is the positive fixture. Each `storage-invalid-*` fixture tests one field or cross-field invariant before runtime admission.
 
-`envelope.ncl` defines the standard export metadata envelope for plugin contract and grant review evidence. `storage.contract-envelope.ncl` and `storage.grant-envelope.ncl` are the positive envelope exports, checked into `generated/` as drift-gated JSON. `storage-envelope-*.ncl` fixtures reject missing, stale, or unsupported metadata.
+`grant.ncl` is the typed Nickel contract for `plugin-capability-grant-v1` fixtures.
 
-The runtime consumes checked-in canonical Preserves evidence (`*.contract.preserves` and `*.grant.preserves`) and does not execute Nickel or envelope metadata as authority. Regenerate/check exports in the dev shell, then keep the generated JSON and Preserves exports under review before Rust validation consumes them.
+`storage.grant.ncl` and `storage-revoked.grant.ncl` are valid grants. Negative `storage-*.grant.ncl` fixtures cover invalid proof, delegation, validity, revocation, and evidence fields.
+
+`envelope.ncl` defines the export metadata envelope for contract and grant review evidence.
+
+The positive envelope exports are checked into `generated/` as drift-gated JSON. `storage-envelope-*.ncl` fixtures reject missing, stale, or unsupported metadata.
+
+The runtime consumes checked-in canonical Preserves evidence. It does not execute Nickel or treat envelope metadata as authority.
+
+Regenerate and check exports in the development shell. Review the generated JSON and Preserves exports before Rust validation consumes them.
