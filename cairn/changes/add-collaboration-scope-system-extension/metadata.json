@@ -1,0 +1,11 @@
+{
+  "depends_on": [
+    "fabric-consistency-service-runtime",
+    "fabric-durable-state-ports",
+    "fabric-whole-system-simulation",
+    "system-extension-service-runtime",
+    "type-authority-and-artifact-references"
+  ],
+  "groups": ["current"],
+  "status": "blocked"
+}
