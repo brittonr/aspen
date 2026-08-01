@@ -127,6 +127,21 @@ let RuntimeEvidenceMaxSummaryBytes = 256 in
         ],
         marker_verbs = ["impl", "verify"],
       },
+      {
+        id = "adopt-artifact-binding-and-semantic-effects",
+        requirement_sources = [
+          { root = "cairn/specs/live-artifact-binding", source_kind = "accepted_specs", extensions = ["md"] },
+          { root = "cairn/specs/semantic-operation-adoption", source_kind = "accepted_specs", extensions = ["md"] },
+          { root = "cairn/specs/generation-retirement", source_kind = "accepted_specs", extensions = ["md"] },
+        ],
+        evidence_sources = [
+          { root = "crates/molten-core/src/live_binding", source_kind = "rust_source", extensions = ["rs"] },
+          { root = "src/live_binding_adoption.rs", source_kind = "rust_source", extensions = ["rs"] },
+          { root = "docs/live-artifact-binding-and-semantic-effects.md", source_kind = "tool_source", extensions = ["md"] },
+          { root = "schemas/preserves-boundaries", source_kind = "tool_source", extensions = ["preserves"] },
+        ],
+        marker_verbs = ["impl", "verify", "depends", "related"],
+      },
     ],
   },
 

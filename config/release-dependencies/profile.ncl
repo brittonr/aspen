@@ -1,5 +1,7 @@
 let Contracts = import "contracts.ncl" in
 let ArtifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa" in
+let ArtifactBindingRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
+let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
 let ValenceRevision = "5f1c2ba5072c6f9622fa59b1af20502985f569fd" in
 let ArchiveNonClaims = [
   "dependency satisfaction proves presented receipt linkage only",
@@ -29,6 +31,28 @@ let ArchiveNonClaims = [
       immutable_revision = ArtifactAuthRevision,
       nix_input = "artifact-auth-src",
       transport_policy = "https",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "artifact-binding-core",
+      package_name = "artifact-binding-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = "ssh://git@github.com/OnixResearch/onix-artifact.git",
+      immutable_revision = ArtifactBindingRevision,
+      nix_input = "artifact-binding-src",
+      transport_policy = "ssh-pinned-nix-archive",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "kamacite-core",
+      package_name = "kamacite-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = "ssh://git@github.com/OnixResearch/kamacite.git",
+      immutable_revision = KamaciteRevision,
+      nix_input = "kamacite-src",
+      transport_policy = "ssh-pinned-nix-archive",
       disposition = "runtime",
     },
     {

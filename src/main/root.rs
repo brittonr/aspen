@@ -64,6 +64,9 @@ pub(crate) fn run() -> molten::error::Result<()> {
         Some(command::Top::Peer { command }) => crate::cli_peer::run(command),
         Some(command::Top::Runtime { command }) => run_runtime_command(command),
         Some(command::Top::FabricTime { command }) => crate::cli_fabric_time::run_fabric_time_command(command),
+        Some(command::Top::FabricSimulation { command }) => {
+            crate::cli_fabric_simulation::run_fabric_simulation_command(command)
+        }
         Some(command::Top::SystemExtension { command }) => {
             crate::cli_system_extension::run_system_extension_command(command)
         }

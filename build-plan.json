@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "workspaceRoot": "/tmp/aspen-artifact-auth-radicle",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.pi/worktrees/aspen-binding-semantic",
   "roots": [
-    "path+file:///tmp/aspen-artifact-auth-radicle#molten@0.1.0",
-    "path+file:///tmp/aspen-artifact-auth-radicle#molten@0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.pi/worktrees/aspen-binding-semantic#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.pi/worktrees/aspen-binding-semantic#molten@0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///tmp/aspen-artifact-auth-radicle#molten@0.1.0",
-    "molten-core": "path+file:///tmp/aspen-artifact-auth-radicle/crates/molten-core#0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/.pi/worktrees/aspen-binding-semantic#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.pi/worktrees/aspen-binding-semantic/crates/molten-core#0.1.0"
   },
-  "cargoLockHash": "3649f4e617d91331ece28b53d859483f3b4b7778248d3158a8249025db667faa",
-  "inputsHash": "58292c3843bdf2dd94a9f8bbb741156d855cd7a6aea2537ea51df359f87c07f3",
+  "cargoLockHash": "d0ae6a2407f4ea9d23ccfbd74bc9b325f8ee4fc4e3f2ed3f7362c95de39057a2",
+  "inputsHash": "36b254817c0e250a9878e8377d087275a332c9c9a64ef50f6692d044bf66af44",
   "crates": {
     "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0": {
       "crateName": "artifact-auth-core",
@@ -299,6 +299,78 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/onixresearch/cairn"
     },
+    "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": {
+      "crateName": "kamacite-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/kamacite.git",
+        "rev": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
+        "subDir": "crates/kamacite-core",
+        "sha256": "1anzvp35635m3nscyb3nddr29h4n9q8dm95kbbhfbxcjhpa1zfk2"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#preserves@5.0.0-rc.7",
+          "externCrateName": "preserves"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
+          "externCrateName": "serde_json"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/OnixResearch/kamacite"
+    },
+    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-binding-core@0.1.0": {
+      "crateName": "artifact-binding-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git",
+        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "subDir": "crates/artifact-binding-core",
+        "sha256": "1k7vqakwvjg83s6s38bvm7cv0r53n6chcy49dm2gc8a9iaha992y"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Pure versioned binding, resolution, reachability, and retirement mechanics",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/OnixResearch/onix-artifact"
+    },
     "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#ucan-core@0.1.0": {
       "crateName": "ucan-core",
       "version": "0.1.0",
@@ -491,7 +563,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///tmp/aspen-artifact-auth-radicle#molten@0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.pi/worktrees/aspen-binding-semantic#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -509,6 +581,10 @@
         {
           "packageId": "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-ed25519@0.1.0",
           "externCrateName": "artifact_auth_ed25519"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-binding-core@0.1.0",
+          "externCrateName": "artifact_binding_core"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#bao-tree@0.16.0",
@@ -555,7 +631,11 @@
           "externCrateName": "iroh_gossip"
         },
         {
-          "packageId": "path+file:///tmp/aspen-artifact-auth-radicle/crates/molten-core#0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",
+          "externCrateName": "kamacite_core"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.pi/worktrees/aspen-binding-semantic/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -675,7 +755,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///tmp/aspen-artifact-auth-radicle/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.pi/worktrees/aspen-binding-semantic/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -689,6 +769,14 @@
         {
           "packageId": "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa#artifact-auth-core@0.1.0",
           "externCrateName": "artifact_auth_core"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-binding-core@0.1.0",
+          "externCrateName": "artifact_binding_core"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",
+          "externCrateName": "kamacite_core"
         }
       ],
       "buildDependencies": [],
@@ -16707,7 +16795,9 @@
       "source": {
         "type": "crates-io"
       },
-      "features": [],
+      "features": [
+        "serde"
+      ],
       "dependencies": [
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#base64@0.13.1",
@@ -16736,6 +16826,14 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex@1.12.3",
           "externCrateName": "regex"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_bytes@0.11.19",
+          "externCrateName": "serde_bytes"
         }
       ],
       "buildDependencies": [],
@@ -19346,6 +19444,8 @@
       },
       "features": [
         "default",
+        "indexmap",
+        "preserve_order",
         "std"
       ],
       "dependencies": [
@@ -19364,6 +19464,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21",
           "externCrateName": "zmij"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+          "externCrateName": "indexmap"
         }
       ],
       "buildDependencies": [],

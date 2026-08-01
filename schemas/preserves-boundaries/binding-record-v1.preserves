@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "binding-record">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "binding-record-v1">
+  <schema-id "molten.binding.record.v1">
+  <arity 3>>

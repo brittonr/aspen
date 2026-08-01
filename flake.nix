@@ -23,6 +23,14 @@
       url = "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa";
       flake = false;
     };
+    artifact-binding-src = {
+      url = "github:OnixResearch/onix-artifact/c932138d880ddf4c2967f4c024b489b5c0022bf1";
+      flake = false;
+    };
+    kamacite-src = {
+      url = "github:OnixResearch/kamacite/d76fe4abe543724d8fc0ac4b362187caf2e27622";
+      flake = false;
+    };
     cairn-src = {
       url = "github:OnixResearch/cairn/3b4c280b893f2709aebea21fc51a4f9eeba3fe3b";
       flake = false;
@@ -56,6 +64,8 @@
       onix-core-src,
       basalt-src,
       artifact-auth-src,
+      artifact-binding-src,
+      kamacite-src,
       cairn-src,
       hegel-src,
       octet-cutover-src,
@@ -129,8 +139,45 @@
             && artifactAuthWorkspace.workspace.package.license == "MIT OR Apache-2.0"
           ) "Molten artifact-auth Cargo/Nix source identity, uniqueness, package set, or license drifted";
           artifact-auth-src;
+        artifactBindingRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
+        artifactBindingRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
+        kamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622";
+        kamaciteRepository = "ssh://git@github.com/OnixResearch/kamacite.git";
+        moltenCoreDependencies =
+          (builtins.fromTOML (builtins.readFile ./crates/molten-core/Cargo.toml)).dependencies;
+        artifactBindingCargoDependencies = [
+          artifactAuthRootDependencies.artifact-binding-core
+          moltenCoreDependencies.artifact-binding-core
+        ];
+        kamaciteCargoDependencies = [
+          artifactAuthRootDependencies.kamacite-core
+          moltenCoreDependencies.kamacite-core
+        ];
+        artifactBindingSource =
+          assert pkgs.lib.assertMsg (
+            builtins.all (
+              dependency:
+                dependency.git == artifactBindingRepository
+                && dependency.rev == artifactBindingRevision
+            ) artifactBindingCargoDependencies
+            && artifact-binding-src.rev == artifactBindingRevision
+          ) "Molten artifact-binding Cargo/Nix source identity drifted";
+          artifact-binding-src;
+        kamaciteSource =
+          assert pkgs.lib.assertMsg (
+            builtins.all (
+              dependency:
+                dependency.git == kamaciteRepository
+                && dependency.rev == kamaciteRevision
+            ) kamaciteCargoDependencies
+            && kamacite-src.rev == kamaciteRevision
+          ) "Molten Kamacite Cargo/Nix source identity drifted";
+          kamacite-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
           "${artifactAuthRepository}#${artifactAuthRevision}" = maybeCleanLocalGitSource artifactAuthSource;
+          "${artifactBindingRepository}#${artifactBindingRevision}" =
+            maybeCleanLocalGitSource artifactBindingSource;
+          "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;
           "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" =
             maybeCleanLocalGitSource basalt-src;
           "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" =
@@ -244,6 +291,13 @@
               # verus_prettyplease declares links="prettyplease-verus02" but
               # vendors its implementation; no native libraries are required.
               verus_prettyplease = attrs: { };
+              # kamacite-core includes governed adapter and Wasm fixtures from
+              # the producer workspace root. Keep that full immutable source
+              # while compiling from the crate subdirectory.
+              kamacite-core = attrs: {
+                src = kamaciteSource;
+                sourceRoot = "source/crates/kamacite-core";
+              };
             };
           };
 

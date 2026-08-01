@@ -197,6 +197,10 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         self.usage
     }
 
+    pub fn executor(&self) -> &E {
+        &self.executor
+    }
+
     pub fn evidence(&self) -> &[HostEvidence] {
         &self.evidence
     }

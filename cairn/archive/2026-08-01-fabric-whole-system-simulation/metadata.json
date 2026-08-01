@@ -8,6 +8,5 @@
     "receipt-first-cluster-harness",
     "system-extension-service-runtime"
   ],
-  "groups": ["current"],
-  "status": "blocked"
+  "groups": ["current"]
 }
