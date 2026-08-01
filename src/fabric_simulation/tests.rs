@@ -104,21 +104,25 @@ fn differential_is_contract_scoped_and_simulation_cannot_promote_itself_to_live(
         fault_ref: Some(fixture.world.admitted.manifest.fault_plan_ref.clone()),
         operator_ref: None,
     };
-    let promotion = evaluate_claim_promotion(
+    let promotion = canonical_claim_promotion(
         SimulationClaimProfile::DeterministicWholeSystem,
         SimulationClaimProfile::MultiProcessLive,
         &evidence,
-    );
+    )
+    .expect("canonical claim promotion decision");
     let text = crate::preserves_rail::to_text(&fixture.differential.value).expect("differential text");
+    let promotion_text = crate::preserves_rail::to_text(&promotion.value).expect("promotion text");
 
     assert!(fixture.differential.equivalent);
     assert_ne!(fixture.differential.simulation_profile_ref, fixture.differential.live_profile_ref);
     assert!(text.contains("no-live-production-equivalence-claim"));
-    assert!(!promotion.admitted);
-    assert!(promotion.missing_evidence.contains(&"profile-specific-evidence"));
-    assert!(promotion.missing_evidence.contains(&"environment-evidence"));
-    assert!(promotion.missing_evidence.contains(&"lifecycle-evidence"));
-    assert!(promotion.missing_evidence.contains(&"operator-evidence"));
+    assert!(!promotion.decision.admitted);
+    assert!(promotion.decision_ref.starts_with("blake3:"));
+    assert!(promotion.decision.missing_evidence.contains(&"profile-specific-evidence"));
+    assert!(promotion.decision.missing_evidence.contains(&"environment-evidence"));
+    assert!(promotion.decision.missing_evidence.contains(&"lifecycle-evidence"));
+    assert!(promotion.decision.missing_evidence.contains(&"operator-evidence"));
+    assert!(promotion_text.contains("stronger-profile-cannot-use-simulation-label"));
 }
 
 // r[verify molten.fabric_simulation.operator_workflow]

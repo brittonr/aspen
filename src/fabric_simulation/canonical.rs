@@ -95,6 +95,14 @@ pub struct CanonicalSimulationShrink {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanonicalClaimPromotion {
+    pub decision_ref: String,
+    pub current: SimulationClaimProfile,
+    pub decision: ClaimPromotionDecision,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimulationRunReadback {
     pub decision: String,
     pub profile: String,
@@ -302,6 +310,35 @@ pub fn canonical_simulation_differential(
         shared_contract_ref: shared_contract_ref.to_string(),
         equivalent,
         normalized_difference_refs,
+        value,
+    })
+}
+
+// r[impl molten.fabric_simulation.claim_ladder]
+pub fn canonical_claim_promotion(
+    current: SimulationClaimProfile,
+    target: SimulationClaimProfile,
+    evidence: &ClaimEvidence,
+) -> Result<CanonicalClaimPromotion> {
+    let decision = evaluate_claim_promotion(current, target, evidence);
+    let value = record("fabric-simulation-claim-profile-v1", vec![
+        string(FABRIC_SIMULATION_CLAIM_SCHEMA),
+        field("current-profile", string(current.as_str())),
+        field("target-profile", string(target.as_str())),
+        field("evidence-profile", string(evidence.profile.as_str())),
+        field("admitted", bool_value(decision.admitted)),
+        field("missing-evidence", strings_value(decision.missing_evidence.iter().copied())),
+        checks(&[
+            "profile-specific-evidence-required",
+            "stronger-profile-cannot-use-simulation-label",
+            "decision-does-not-grant-runtime-authority",
+        ]),
+    ]);
+    let decision_ref = canonical_hash(&value)?;
+    Ok(CanonicalClaimPromotion {
+        decision_ref,
+        current,
+        decision,
         value,
     })
 }
