@@ -177,6 +177,11 @@ mod fabric_time_port;
 mod cli_fabric_time {
     pub(crate) use super::fabric_time_port::*;
 }
+#[path = "cli/runtime/fabric_simulation.rs"]
+mod fabric_simulation_port;
+mod cli_fabric_simulation {
+    pub(crate) use super::fabric_simulation_port::*;
+}
 #[path = "cli/runtime/system_extension.rs"]
 mod system_extension_port;
 mod cli_system_extension {
