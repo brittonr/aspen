@@ -817,6 +817,7 @@ Earlier permissive grants remain valid. The current declaration applies prospect
 
 ## References
 
+- [PsychoLlama/ambient](https://github.com/PsychoLlama/ambient) — design reference for immutable content-addressed implementations, explicit one-snapshot late binding, runtime-owned state roots, semantic handler keys, and generation retirement tracing. Molten retains its own Preserves identity, receiver-side authority and policy admission, resource limits, evidence, retention, and distributed-runtime semantics; it does not adopt Ambient's language, VM, mobile-code model, or unauthenticated deployment posture.
 - [`onix-core` kache Nix Rust helpers](../../onix-core/lib/kache-nix-rust.nix) — reference implementation for opt-in Nix-owned kache wrappers around sandboxed Rust builds.
 - [`verus-lang/verified-node-replication`](https://github.com/verus-lang/verified-node-replication) — pinned local multicore/NUMA compatibility pilot only; it is not network replication or consensus, current verifier compatibility is blocked, and upstream trusted boundaries do not transfer proof authority.
 - [`verus-lang/verus`](https://github.com/verus-lang/verus) — exact current and historical verifier source identities for the pilot; verifier execution is bounded evidence, not a tool-soundness or Molten-correctness claim.
