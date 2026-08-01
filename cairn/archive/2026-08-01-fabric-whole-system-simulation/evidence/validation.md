@@ -148,4 +148,22 @@ Repository validation returned `valid: true` with no issues.
 Tracey receipt `65e1b62c699cc2e1f627bd9341d24d2c10686b9375d9386592022fe2a02d2a97` contains no missing or dangling `molten.fabric_simulation.*` requirement.
 Repository-wide Tracey coverage still fails for unrelated accepted requirements and one unrelated dangling marker.
 
-Archive execution and post-archive validation remain pending.
+## Archive and post-archive validation
+
+Pueue task `7423` produced an unblocked archive plan.
+Dry-run plan: `991f89ef191a6680b76174931e4822bcdd81ceeff5a50c97bebed6053b53efeb`.
+
+Pueue task `7425` archived the change at `cairn/archive/2026-08-01-fabric-whole-system-simulation/`.
+
+- Execution plan: `3a7b2748b9954df43589075f616df594c4ee29df895237825e66350cedaa1a44`.
+- Mutation manifest: `336eea79bae12a157ca63a64ceaf7635014729b9aaa22ff328c1bafa2cf4d3f4`.
+- Receipt: `367dbb3348107f57f92d45c5c03e69925a41b8c86a91fa87ce7de7d2d833f6e5`.
+
+Pueue task `7426` ran post-archive repository validation, Tracey coverage, and change listing.
+
+- Validation returned `valid: true` with no issues or substance issues.
+- Tracey receipt remained `65e1b62c699cc2e1f627bd9341d24d2c10686b9375d9386592022fe2a02d2a97`.
+- No `molten.fabric_simulation.*` requirement is missing or dangling.
+- The repository-wide Tracey result remains a non-claim because of unrelated existing coverage gaps.
+- The active change is absent and the archive is present.
+- Eight active Cairn changes remain in Aspen.
