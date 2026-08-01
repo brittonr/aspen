@@ -132,4 +132,20 @@ Pueue task `7379` ran the final pre-sync Cairn validation and gates.
 - Tasks receipt: `8394f88de0a3a4dd17dfdc77db0edad10b7d267cfba944006a16d26270b882d4`.
 - Task state: 18 completed; 0 incomplete.
 
-Sync, post-sync coverage, archive, and post-archive validation remain pending.
+## Accepted-spec sync
+
+Pueue task `7391` produced an unblocked sync plan.
+The plan added all fourteen simulation requirements to `cairn/specs/fabric-simulation/spec.md`.
+
+Pueue task `7401` executed the sync.
+
+- Execution plan: `223fa2b58f4aa76ec80e02babf2bbdd0e8c3594112b30b5e234eb134e5fa2847`.
+- Mutation manifest: `7c6efea8d3bc83a444f27d171fda458ce4a07ef09ad219c554f7878cce9b96b9`.
+- Receipt: `3f7a9bdeef5c0e9d82548b01e8fadf064c8c62d88f67668269943d27342df38b`.
+
+Pueue task `7410` ran post-sync repository validation and Tracey coverage after adding the configured trace anchors.
+Repository validation returned `valid: true` with no issues.
+Tracey receipt `65e1b62c699cc2e1f627bd9341d24d2c10686b9375d9386592022fe2a02d2a97` contains no missing or dangling `molten.fabric_simulation.*` requirement.
+Repository-wide Tracey coverage still fails for unrelated accepted requirements and one unrelated dangling marker.
+
+Archive execution and post-archive validation remain pending.
