@@ -6,4 +6,4 @@
 - [x] [parallel] Add pure positive and negative source admission for repository, revision, workspace membership, consumer graph, policy, plan, license, NAR, and source-byte drift. r[molten.artifact_auth_adoption.radicle_transport] r[molten.artifact_auth_adoption.radicle_fallback]
 - [x] [parallel] Add typed migration evidence and update source documentation with historical-source and rollback boundaries. r[molten.artifact_auth_adoption.radicle_evidence]
 - [x] [serial] Run focused Cargo, Nickel, Nix, formatting, Clippy, and Cairn checks without changing Rust implementation behavior. r[molten.artifact_auth_adoption.radicle_behavior]
-- [ ] [serial] Sync the accepted specification and archive only after all source and validation evidence agrees. r[molten.artifact_auth_adoption.radicle_evidence]
+- [x] [serial] Sync the accepted specification and archive only after all source and validation evidence agrees. r[molten.artifact_auth_adoption.radicle_evidence]

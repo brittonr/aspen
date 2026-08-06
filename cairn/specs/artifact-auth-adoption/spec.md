@@ -8,13 +8,13 @@ Defines the `artifact-auth-adoption` capability.
 
 ### Requirement: Molten adopts one immutable reviewed source
 
-r[molten.artifact_auth_adoption.source] Molten MUST consume one immutable reviewed `artifact-auth` revision with aligned Cargo and Nix identities and MUST bind the Molten mapping profile and checked projection from that same revision before implementation or cutover.
+r[molten.artifact_auth_adoption.source] Molten MUST consume its authentication and binding packages from one immutable reviewed `OnixResearch/onix-artifact` revision. Cargo, Nix, policy, plan, workspace, license, and consumer identities MUST agree.
 
-#### Scenario: Source identity is admissible
+#### Scenario: Unified source identity is admissible
 
-- GIVEN Cargo, Nix, the mapping profile, and its checked projection resolve revision `799459346d5416fbd7b9f55840a7371441b55afa`
+- GIVEN Cargo and Nix resolve revision `c932138d880ddf4c2967f4c024b489b5c0022bf1`
 - WHEN Molten evaluates dependency admission
-- THEN it SHALL reject floating, duplicate, mismatched, sibling-path, product-dependent, or license-incompatible source selections.
+- THEN it SHALL accept the two authentication packages and binding package while rejecting floating, duplicate, mixed, local, widened, or incompatible sources.
 
 ### Requirement: Molten retains runtime and authority semantics
 
@@ -36,82 +36,82 @@ r[molten.artifact_auth_adoption.cutover] Molten MUST dual-run legacy and standal
 - WHEN Molten evaluates cutover admission
 - THEN the legacy path SHALL remain authoritative and the exact blocker SHALL be recorded without weakening runtime or authority gates.
 
-### Requirement: Radicle-backed source transport r[molten.artifact_auth_adoption.radicle_transport]
+### Requirement: Unified Artifact workspace source transport r[molten.artifact_auth_adoption.radicle_transport]
 
-Molten MUST consume the accepted public artifact-auth RID through the upload-pack-only Radicle HTTPS adapter at exact revision `799459346d5416fbd7b9f55840a7371441b55afa`.
+Molten MUST consume the three packages from the immutable unified Artifact repository. It MUST retain the predecessor Radicle identity as historical evidence only.
 
-#### Scenario: Exact public source is admitted
+#### Scenario: Exact unified source is admitted
 
-- GIVEN an accepted publication receipt, RID, URL, commit, and source archive identity
-- WHEN Molten evaluates dependency source admission
-- THEN all identities MUST agree before the source is used.
+- GIVEN the repository, revision, Nix NAR hash, workspace members, and source entry identities agree
+- WHEN Molten evaluates the dependency source
+- THEN it MAY use the source without admitting transfer mechanics or Artifact-owned authority.
 
-#### Scenario: Unaccepted source is rejected
+#### Scenario: Mixed or widened source is rejected
 
-- GIVEN a different RID, URL, commit, visibility, or archive identity
+- GIVEN a different repository, revision, NAR hash, package set, source identity, or executable predecessor dependency
 - WHEN source admission runs
 - THEN the dependency MUST be rejected.
 
 ### Requirement: Cargo, Nix, policy, and build-plan agreement r[molten.artifact_auth_adoption.radicle_agreement]
 
-Cargo manifests, `Cargo.lock`, `flake.nix`, `flake.lock`, the release-dependency profile, and generated unit2nix plans MUST identify the same Radicle HTTPS repository and reviewed Git revision while preserving the locked Nix content identity and package graph.
+Cargo manifests, `Cargo.lock`, `flake.nix`, `flake.lock`, the release profile, and both unit2nix plans MUST identify one Artifact repository and revision. The consumer graph MUST include only authentication and binding packages from that source.
 
 #### Scenario: Owning tools preserve identity
 
-- GIVEN regenerated Cargo and Nix locks plus both pinned unit2nix plans
+- GIVEN Cargo, Nix, and unit2nix regenerated their artifacts
 - WHEN agreement validation runs
-- THEN both artifact-auth packages, the exact revision, public URL, expected Nix content hash, policy rows, and plan source records MUST match.
+- THEN all three packages, the revision, repository, Nix content identity, policy rows, and plan sources MUST match.
 
 #### Scenario: Generated identity drift fails closed
 
-- GIVEN a stale GitHub source, mismatched revision, duplicate or missing package, changed Nix content hash, or stale build plan
+- GIVEN a predecessor, mixed, local, mismatched, duplicate, missing, widened, or stale generated source
 - WHEN agreement validation runs
 - THEN validation MUST fail.
 
 ### Requirement: Behavioral parity checks r[molten.artifact_auth_adoption.radicle_behavior]
 
-The transport cutover MUST preserve existing Molten and artifact-auth behavior under focused core, shell, operational receipt, replay, formatting, and source-admission checks.
+The source migration MUST preserve existing Molten authentication and binding behavior under focused positive and negative checks without Rust implementation changes.
 
-#### Scenario: Existing positive and negative behavior passes
+#### Scenario: Existing behavior passes
 
-- GIVEN the Radicle-backed source at the reviewed commit
-- WHEN focused identity suites run
-- THEN existing acceptance and rejection behavior MUST pass without Rust implementation changes.
+- GIVEN the unified source at the reviewed revision
+- WHEN focused identity and binding suites run
+- THEN existing acceptance and rejection behavior MUST pass.
 
 #### Scenario: Behavioral drift blocks acceptance
 
-- GIVEN any changed fixture result, feature graph, package version, or authority boundary
+- GIVEN a changed fixture result, feature graph, package version, source entry point, or authority boundary
 - WHEN parity is evaluated
-- THEN the cutover MUST NOT be accepted.
+- THEN the migration MUST not be accepted.
 
-### Requirement: No executable GitHub fallback r[molten.artifact_auth_adoption.radicle_fallback]
+### Requirement: No mixed or automatic source fallback r[molten.artifact_auth_adoption.radicle_fallback]
 
-Molten MUST NOT retain an executable GitHub source fallback for artifact-auth.
+Molten MUST use only the admitted unified source in manifests, locks, policy, and generated plans. It MUST NOT automatically select the predecessor repository, a sibling path, or a floating source.
 
-#### Scenario: Radicle source is unavailable
+#### Scenario: Unified source is unavailable
 
-- GIVEN the admitted Radicle HTTPS source cannot serve the exact object
+- GIVEN the admitted source cannot serve the exact object
 - WHEN dependency resolution runs
-- THEN resolution MUST fail visibly rather than selecting GitHub.
+- THEN resolution MUST fail visibly.
 
-#### Scenario: Historical documentation remains bounded
+#### Scenario: Historical evidence remains bounded
 
-- GIVEN documentation or immutable package metadata names historical GitHub provenance
-- WHEN fallback validation runs
-- THEN those records MAY remain while executable manifests, locks, policies, and generated plans contain no artifact-auth GitHub source.
+- GIVEN documentation and archived receipts name predecessor sources
+- WHEN active-source validation runs
+- THEN historical evidence MAY remain while executable inputs use only the unified source.
 
-### Requirement: Typed Radicle cutover evidence r[molten.artifact_auth_adoption.radicle_evidence]
+### Requirement: Typed source migration evidence r[molten.artifact_auth_adoption.radicle_evidence]
 
-Molten MUST emit typed Nickel/JSON evidence with a BLAKE3 sidecar binding publication, source, locks, policy, build plans, test observations, rollback boundary, and non-claims.
+Molten MUST emit typed Nickel and JSON evidence with a BLAKE3 sidecar. The evidence MUST bind source and consumer sets, source-byte identity, policy, plans, checks, rollback, and non-claims.
 
-#### Scenario: Complete cutover evidence passes
+#### Scenario: Complete migration evidence passes
 
-- GIVEN matching publication, source, lock, policy, plan, and test observations
+- GIVEN matching source, lock, policy, plan, parity, and check observations
 - WHEN receipt validation runs
 - THEN it MUST accept deterministically.
 
 #### Scenario: Missing linkage or overclaim fails
 
-- GIVEN missing publication linkage, drifted generated identity, missing negative evidence, or weakened non-claims
+- GIVEN source drift, package widening, stale plans, missing negative evidence, automatic rollback, absolute evidence paths, or weakened non-claims
 - WHEN receipt validation runs
 - THEN it MUST fail closed.
