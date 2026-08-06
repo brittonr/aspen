@@ -1,10 +1,4 @@
-# Artifact Auth Adoption Specification
-
-## Purpose
-
-Defines the `artifact-auth-adoption` capability.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Molten adopts one immutable reviewed source
 
@@ -15,26 +9,6 @@ r[molten.artifact_auth_adoption.source] Molten MUST consume its authentication a
 - GIVEN Cargo and Nix resolve revision `c932138d880ddf4c2967f4c024b489b5c0022bf1`
 - WHEN Molten evaluates dependency admission
 - THEN it SHALL accept the two authentication packages and binding package while rejecting floating, duplicate, mixed, local, widened, or incompatible sources.
-
-### Requirement: Molten retains runtime and authority semantics
-
-r[molten.artifact_auth_adoption.authority] Molten MUST retain entropy, key generation/storage/signing, opaque handles, rotation writes, capability and federation authority, Preserves/Iroh transport, runtime policy, and evidence composition while treating standalone authentication as one bounded input.
-
-#### Scenario: Authentication passes without runtime authority
-
-- GIVEN a standalone signature and policy decision passes
-- WHEN membership, capability, transport, runtime, deployment, or release admission runs
-- THEN Molten MUST still require its product-owned checks and MUST NOT promote standalone success into product authority.
-
-### Requirement: Cutover requires explained dual-run evidence
-
-r[molten.artifact_auth_adoption.cutover] Molten MUST dual-run legacy and standalone paths over identical observations, classify every preimage, identity, decision, issue, and non-claim difference, reject unrelated-failure false parity, and preserve a bounded legacy rollback until standalone authority is explicitly admitted.
-
-#### Scenario: Unexplained drift blocks cutover
-
-- GIVEN any unexplained compatibility, currentness, or source-identity difference
-- WHEN Molten evaluates cutover admission
-- THEN the legacy path SHALL remain authoritative and the exact blocker SHALL be recorded without weakening runtime or authority gates.
 
 ### Requirement: Unified Artifact workspace source transport r[molten.artifact_auth_adoption.radicle_transport]
 

@@ -2,7 +2,7 @@
 
 Molten consumes two reviewed producer revisions:
 
-- `artifact-binding-core` from `OnixResearch/onix-artifact` revision `c932138d880ddf4c2967f4c024b489b5c0022bf1`;
+- the selected authentication and binding packages from `OnixResearch/onix-artifact` revision `c932138d880ddf4c2967f4c024b489b5c0022bf1`;
 - `kamacite-core` from `OnixResearch/kamacite` revision `d76fe4abe543724d8fc0ac4b362187caf2e27622`.
 
 Cargo, Nix, the Cargo and Nix locks, the release-dependency profile, and generated unit2nix plans must identify these revisions. Sibling path overrides are for explicit development only. They are not release evidence.

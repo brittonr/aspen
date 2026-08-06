@@ -1,37 +1,20 @@
 {
   "nodes": {
-    "artifact-auth-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1784395143,
-        "narHash": "sha256-nEgz2FtVuDesX95yyxidp0vhjxL4INB6Ve8rkpLyJk0=",
-        "ref": "refs/heads/main",
-        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
-        "revCount": 5,
-        "type": "git",
-        "url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git"
-      },
-      "original": {
-        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
-        "type": "git",
-        "url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git"
-      }
-    },
-    "artifact-binding-src": {
+    "artifact-src": {
       "flake": false,
       "locked": {
         "lastModified": 1785173333,
         "narHash": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU=",
-        "owner": "OnixResearch",
-        "repo": "onix-artifact",
+        "ref": "refs/heads/main",
         "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
-        "type": "github"
+        "revCount": 17,
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
       },
       "original": {
-        "owner": "OnixResearch",
-        "repo": "onix-artifact",
         "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
-        "type": "github"
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
       }
     },
     "basalt-src": {
@@ -463,8 +446,7 @@
     },
     "root": {
       "inputs": {
-        "artifact-auth-src": "artifact-auth-src",
-        "artifact-binding-src": "artifact-binding-src",
+        "artifact-src": "artifact-src",
         "basalt-src": "basalt-src",
         "cairn-src": "cairn-src",
         "flake-utils": "flake-utils",
