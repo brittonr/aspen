@@ -1,13 +1,13 @@
 let Contracts = import "contracts.ncl" in
-let ArtifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa" in
-let ArtifactBindingRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
+let ArtifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
 let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
 let ValenceRevision = "5f1c2ba5072c6f9622fa59b1af20502985f569fd" in
 let ArchiveNonClaims = [
   "dependency satisfaction proves presented receipt linkage only",
   "dependency satisfaction does not prove upstream correctness or remote trust",
   "dependency satisfaction does not prove downstream integration correctness or release eligibility",
-] in
+]
+in
 {
   schema = "molten.release-dependency-profile.v1",
   dependencies = [
@@ -16,10 +16,10 @@ let ArchiveNonClaims = [
       package_name = "artifact-auth-core",
       package_version = "0.1.0",
       source_kind = "git",
-      source_coordinate = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git",
-      immutable_revision = ArtifactAuthRevision,
-      nix_input = "artifact-auth-src",
-      transport_policy = "https",
+      source_coordinate = "ssh://git@github.com/OnixResearch/onix-artifact.git",
+      immutable_revision = ArtifactRevision,
+      nix_input = "artifact-src",
+      transport_policy = "ssh-pinned-nix-archive",
       disposition = "runtime",
     },
     {
@@ -27,10 +27,10 @@ let ArchiveNonClaims = [
       package_name = "artifact-auth-ed25519",
       package_version = "0.1.0",
       source_kind = "git",
-      source_coordinate = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git",
-      immutable_revision = ArtifactAuthRevision,
-      nix_input = "artifact-auth-src",
-      transport_policy = "https",
+      source_coordinate = "ssh://git@github.com/OnixResearch/onix-artifact.git",
+      immutable_revision = ArtifactRevision,
+      nix_input = "artifact-src",
+      transport_policy = "ssh-pinned-nix-archive",
       disposition = "runtime",
     },
     {
@@ -39,8 +39,8 @@ let ArchiveNonClaims = [
       package_version = "0.1.0",
       source_kind = "git",
       source_coordinate = "ssh://git@github.com/OnixResearch/onix-artifact.git",
-      immutable_revision = ArtifactBindingRevision,
-      nix_input = "artifact-binding-src",
+      immutable_revision = ArtifactRevision,
+      nix_input = "artifact-src",
       transport_policy = "ssh-pinned-nix-archive",
       disposition = "runtime",
     },
@@ -123,10 +123,12 @@ let ArchiveNonClaims = [
       nix_input = "valence-src",
       archive_path = "cairn/archive/2026-07-12-harden-preserves-integrity-boundaries",
       status = "archived",
-      evidence_files = [{
-        relative_path = "cairn/archive/2026-07-12-harden-preserves-integrity-boundaries/tasks.md",
-        blake3 = "3abda77b5931c5ef6dcdde504f71dfce06f95d1d6c43f087cd35f8816147f7e2",
-      }],
+      evidence_files = [
+        {
+          relative_path = "cairn/archive/2026-07-12-harden-preserves-integrity-boundaries/tasks.md",
+          blake3 = "3abda77b5931c5ef6dcdde504f71dfce06f95d1d6c43f087cd35f8816147f7e2",
+        }
+      ],
       non_claims = ArchiveNonClaims,
     },
     {

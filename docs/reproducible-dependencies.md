@@ -4,9 +4,9 @@ Molten release dependency identity is authored in the typed Nickel profile at
 [`config/release-dependencies/profile.ncl`](../config/release-dependencies/profile.ncl).
 The profile binds each direct Git dependency to its package identity, reviewed
 source coordinate, immutable revision, Nix input, release disposition, and
-transport policy. The accepted artifact-auth compatibility source uses exact
-Radicle HTTPS pins; remaining OnixResearch Cargo sources retain their reviewed
-SSH pins and immutable GitHub archive inputs for sandboxed Nix builds.
+transport policy. The Artifact packages use one exact SSH Git pin and one non-flake Nix input.
+Other OnixResearch Cargo sources retain their reviewed SSH pins and immutable
+GitHub archive inputs for sandboxed Nix builds.
 
 The `molten-release-policy` shell reads the Nickel export, `Cargo.toml`,
 `Cargo.lock`, `flake.lock`, configured archive evidence, and distribution

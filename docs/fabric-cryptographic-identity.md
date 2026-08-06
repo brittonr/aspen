@@ -34,7 +34,7 @@ The existing `blake3-local-fixture-v1` evidence and federation signatures remain
 
 ## Standalone artifact-auth compatibility
 
-Molten pins `artifact-auth-core` and `artifact-auth-ed25519` from the governed public Radicle HTTPS source `https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git` at revision `799459346d5416fbd7b9f55840a7371441b55afa`. Cargo, the non-flake Nix input, release dependency policy, and generated unit2nix plans must resolve that same full revision; flake evaluation rejects duplicate lock packages, source mismatch, or a standalone license other than `MIT OR Apache-2.0`. There is no executable GitHub fallback.
+Molten pins `artifact-auth-core`, `artifact-auth-ed25519`, and `artifact-binding-core` from `OnixResearch/onix-artifact` revision `c932138d880ddf4c2967f4c024b489b5c0022bf1`. Cargo, one non-flake Nix input, the release profile, and both unit2nix plans must resolve that revision. Flake evaluation checks the four-package source workspace and limits Molten's consumer graph to the three selected packages. The predecessor Radicle source remains historical evidence only.
 
 `fabric_crypto_identity::evaluate_artifact_auth_dual_run` maps an already measured Molten verification request plus a separate `CryptographicObservation` for the exact standalone statement. The legacy `cryptographic_verification_passed` field is never reused as proof of the standalone preimage. The adapter preserves domain, purpose, profile, payload, public-key, verifier-context, generation, and currentness fields while keeping opaque handles, backend class, entropy profile, and rotation transitions as Molten-owned extensions.
 

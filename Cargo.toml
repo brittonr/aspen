@@ -25,8 +25,8 @@ name = "molten"
 path = "src/main.rs"
 
 [dependencies]
-artifact-auth-core = { git = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git", rev = "799459346d5416fbd7b9f55840a7371441b55afa", version = "0.1.0" }
-artifact-auth-ed25519 = { git = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git", rev = "799459346d5416fbd7b9f55840a7371441b55afa", version = "0.1.0" }
+artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
+artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 bao-tree = "0.16.0"
 basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "d913dc01e765c9b297df5fcc57dfa06aac39bc74", version = "0.1.0" }

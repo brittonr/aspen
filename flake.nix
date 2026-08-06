@@ -19,12 +19,8 @@
       url = "github:OnixResearch/basalt/d913dc01e765c9b297df5fcc57dfa06aac39bc74";
       flake = false;
     };
-    artifact-auth-src = {
-      url = "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa";
-      flake = false;
-    };
-    artifact-binding-src = {
-      url = "github:OnixResearch/onix-artifact/c932138d880ddf4c2967f4c024b489b5c0022bf1";
+    artifact-src = {
+      url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
       flake = false;
     };
     kamacite-src = {
@@ -63,8 +59,7 @@
       flake-utils,
       onix-core-src,
       basalt-src,
-      artifact-auth-src,
-      artifact-binding-src,
+      artifact-src,
       kamacite-src,
       cairn-src,
       hegel-src,
@@ -105,78 +100,66 @@
         # cleanSourceWith; callers can pass real local paths with --override-input.
         maybeCleanLocalGitSource =
           src: if pkgs.lib.hasInfix "/../" (toString src) then null else cleanLocalGitSource src;
-        artifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa";
-        artifactAuthRepository = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git";
-        artifactAuthRootDependencies = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).dependencies;
-        artifactAuthCoreDependency =
-          (builtins.fromTOML (builtins.readFile ./crates/molten-core/Cargo.toml))
-          .dependencies.artifact-auth-core;
-        artifactAuthCargoDependencies = [
-          artifactAuthRootDependencies.artifact-auth-core
-          artifactAuthRootDependencies.artifact-auth-ed25519
-          artifactAuthCoreDependency
-        ];
-        artifactAuthRequiredPackages = [
-          "artifact-auth-core"
-          "artifact-auth-ed25519"
-        ];
-        artifactAuthExpectedLockSource = "git+${artifactAuthRepository}?rev=${artifactAuthRevision}#${artifactAuthRevision}";
-        artifactAuthLockPackages = builtins.filter (
-          package: (package.source or "") == artifactAuthExpectedLockSource
-        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
-        artifactAuthLockedPackageNames = builtins.map (package: package.name) artifactAuthLockPackages;
-        artifactAuthWorkspace = builtins.fromTOML (builtins.readFile (artifact-auth-src + "/Cargo.toml"));
-        artifactAuthSource =
-          assert pkgs.lib.assertMsg (
-            builtins.all (
-              dependency: dependency.git == artifactAuthRepository && dependency.rev == artifactAuthRevision
-            ) artifactAuthCargoDependencies
-            && artifact-auth-src.rev == artifactAuthRevision
-            && builtins.length artifactAuthLockPackages == builtins.length artifactAuthRequiredPackages
-            && builtins.all (
-              packageName: builtins.elem packageName artifactAuthLockedPackageNames
-            ) artifactAuthRequiredPackages
-            && artifactAuthWorkspace.workspace.package.license == "MIT OR Apache-2.0"
-          ) "Molten artifact-auth Cargo/Nix source identity, uniqueness, package set, or license drifted";
-          artifact-auth-src;
-        artifactBindingRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
-        artifactBindingRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
-        kamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622";
-        kamaciteRepository = "ssh://git@github.com/OnixResearch/kamacite.git";
+        artifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
+        artifactRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
+        artifactRootDependencies = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).dependencies;
         moltenCoreDependencies =
           (builtins.fromTOML (builtins.readFile ./crates/molten-core/Cargo.toml)).dependencies;
-        artifactBindingCargoDependencies = [
-          artifactAuthRootDependencies.artifact-binding-core
+        artifactCargoDependencies = [
+          artifactRootDependencies.artifact-auth-core
+          artifactRootDependencies.artifact-auth-ed25519
+          artifactRootDependencies.artifact-binding-core
+          moltenCoreDependencies.artifact-auth-core
           moltenCoreDependencies.artifact-binding-core
         ];
-        kamaciteCargoDependencies = [
-          artifactAuthRootDependencies.kamacite-core
-          moltenCoreDependencies.kamacite-core
+        artifactRequiredPackages = [
+          "artifact-auth-core"
+          "artifact-auth-ed25519"
+          "artifact-binding-core"
         ];
-        artifactBindingSource =
+        artifactSourceExpectedMembers = [
+          "crates/artifact-auth-core"
+          "crates/artifact-auth-ed25519"
+          "crates/artifact-binding-core"
+          "crates/artifact-transfer-core"
+        ];
+        artifactExpectedLockSource = "git+${artifactRepository}?rev=${artifactRevision}#${artifactRevision}";
+        artifactLockPackages = builtins.filter (
+          package: (package.source or "") == artifactExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        artifactLockedPackageNames = builtins.map (package: package.name) artifactLockPackages;
+        artifactWorkspace = builtins.fromTOML (builtins.readFile (artifact-src + "/Cargo.toml"));
+        artifactSource =
           assert pkgs.lib.assertMsg (
             builtins.all (
-              dependency:
-                dependency.git == artifactBindingRepository
-                && dependency.rev == artifactBindingRevision
-            ) artifactBindingCargoDependencies
-            && artifact-binding-src.rev == artifactBindingRevision
-          ) "Molten artifact-binding Cargo/Nix source identity drifted";
-          artifact-binding-src;
+              dependency: dependency.git == artifactRepository && dependency.rev == artifactRevision
+            ) artifactCargoDependencies
+            && artifact-src.rev == artifactRevision
+            &&
+              builtins.sort builtins.lessThan artifactLockedPackageNames
+              == builtins.sort builtins.lessThan artifactRequiredPackages
+            &&
+              builtins.sort builtins.lessThan artifactWorkspace.workspace.members
+              == builtins.sort builtins.lessThan artifactSourceExpectedMembers
+            && artifactWorkspace.workspace.package.license == "MIT OR Apache-2.0"
+          ) "Molten Artifact Cargo/Nix source identity, package set, workspace, or license drifted";
+          artifact-src;
+        kamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622";
+        kamaciteRepository = "ssh://git@github.com/OnixResearch/kamacite.git";
+        kamaciteCargoDependencies = [
+          artifactRootDependencies.kamacite-core
+          moltenCoreDependencies.kamacite-core
+        ];
         kamaciteSource =
           assert pkgs.lib.assertMsg (
             builtins.all (
-              dependency:
-                dependency.git == kamaciteRepository
-                && dependency.rev == kamaciteRevision
+              dependency: dependency.git == kamaciteRepository && dependency.rev == kamaciteRevision
             ) kamaciteCargoDependencies
             && kamacite-src.rev == kamaciteRevision
           ) "Molten Kamacite Cargo/Nix source identity drifted";
           kamacite-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
-          "${artifactAuthRepository}#${artifactAuthRevision}" = maybeCleanLocalGitSource artifactAuthSource;
-          "${artifactBindingRepository}#${artifactBindingRevision}" =
-            maybeCleanLocalGitSource artifactBindingSource;
+          "${artifactRepository}#${artifactRevision}" = maybeCleanLocalGitSource artifactSource;
           "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;
           "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" =
             maybeCleanLocalGitSource basalt-src;
@@ -837,31 +820,26 @@
                   expected_receipt_hash="$(tr -d '\n' < evidence/radicle/artifact-auth-cutover-v1.blake3)"
                   test "$receipt_hash" = "$expected_receipt_hash"
 
-                  for binding in \
-                    'cargo.root_manifest_blake3:Cargo.toml' \
-                    'cargo.core_manifest_blake3:crates/molten-core/Cargo.toml' \
-                    'cargo.lock_blake3:Cargo.lock' \
-                    'nix.flake_blake3:flake.nix' \
-                    'nix.lock_blake3:flake.lock' \
-                    'release_policy.contracts_blake3:config/release-dependencies/contracts.ncl' \
-                    'release_policy.profile_blake3:config/release-dependencies/profile.ncl' \
-                    'unit2nix.default_plan_blake3:build-plan.json' \
-                    'unit2nix.release_plan_blake3:release-policy-build-plan.json'; do
-                    field="''${binding%%:*}"
-                    path="''${binding#*:}"
-                    expected="$(jq -r ".$field" evidence/radicle/artifact-auth-cutover-v1.json)"
-                    actual="$(b3sum "$path" | cut -d ' ' -f 1)"
-                    test "$actual" = "$expected"
-                  done
+                  nickel typecheck evidence/source/artifact-workspace-migration-v1.ncl
+                  nickel typecheck lib/artifact-source-migration-receipt.ncl
+                  nickel export --format json tests/artifact-source-migration.ncl > "$TMPDIR/migration-tests.json"
+                  grep -Fq '"tests": true' "$TMPDIR/migration-tests.json"
+                  nickel export --format json evidence/source/artifact-workspace-migration-v1.ncl > "$TMPDIR/migration.json"
+                  jq --sort-keys . "$TMPDIR/migration.json" > "$TMPDIR/migration.normalized.json"
+                  jq --sort-keys . evidence/source/artifact-workspace-migration-v1.json > "$TMPDIR/migration-evidence.normalized.json"
+                  diff --unified "$TMPDIR/migration.normalized.json" "$TMPDIR/migration-evidence.normalized.json"
+                  migration_hash="$(b3sum evidence/source/artifact-workspace-migration-v1.json | cut -d ' ' -f 1)"
+                  expected_migration_hash="$(tr -d '\n' < evidence/source/artifact-workspace-migration-v1.blake3)"
+                  test "$migration_hash" = "$expected_migration_hash"
 
-                  source_url='https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git'
-                  source_rev='799459346d5416fbd7b9f55840a7371441b55afa'
-                  source_nar_hash='sha256-nEgz2FtVuDesX95yyxidp0vhjxL4INB6Ve8rkpLyJk0='
+                  source_url='ssh://git@github.com/OnixResearch/onix-artifact.git'
+                  source_rev='c932138d880ddf4c2967f4c024b489b5c0022bf1'
+                  source_nar_hash='sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU='
                   jq -e \
                     --arg url "$source_url" \
                     --arg rev "$source_rev" \
                     --arg nar_hash "$source_nar_hash" \
-                    '.nodes["artifact-auth-src"] as $source
+                    '.nodes["artifact-src"] as $source
                      | $source.locked.url == $url
                      and $source.original.url == $url
                      and $source.locked.rev == $rev
@@ -870,39 +848,44 @@
                     flake.lock >/dev/null
 
                   nickel export --format json config/release-dependencies/profile.ncl > "$TMPDIR/release-profile.json"
-                  expected_profile_rows=2
+                  expected_profile_rows=3
                   test "$(jq --arg url "$source_url" --arg rev "$source_rev" \
-                    '[.dependencies[] | select(.package_name == "artifact-auth-core" or .package_name == "artifact-auth-ed25519") | select(.source_coordinate == $url and .immutable_revision == $rev and .transport_policy == "https")] | length' \
+                    '[.dependencies[] | select(.package_name == "artifact-auth-core" or .package_name == "artifact-auth-ed25519" or .package_name == "artifact-binding-core") | select(.source_coordinate == $url and .immutable_revision == $rev and .nix_input == "artifact-src" and .transport_policy == "ssh-pinned-nix-archive")] | length' \
                     "$TMPDIR/release-profile.json")" = "$expected_profile_rows"
 
-                  expected_default_packages=2
-                  expected_release_packages=1
+                  expected_default_packages=3
+                  expected_release_packages=2
                   for plan_binding in \
                     "build-plan.json:$expected_default_packages" \
                     "release-policy-build-plan.json:$expected_release_packages"; do
                     plan="''${plan_binding%%:*}"
                     expected_count="''${plan_binding#*:}"
                     actual_count="$(jq --arg url "$source_url" --arg rev "$source_rev" \
-                      '[.crates[] | select((.crateName == "artifact-auth-core" or .crateName == "artifact-auth-ed25519") and .source.url == $url and .source.rev == $rev)] | length' \
+                      '[.crates[] | select((.crateName == "artifact-auth-core" or .crateName == "artifact-auth-ed25519" or .crateName == "artifact-binding-core") and .source.url == $url and .source.rev == $rev)] | length' \
                       "$plan")"
                     test "$actual_count" = "$expected_count"
                   done
 
+                  radicle_host='git.onix.computer'
+                  radicle_rid='z4JGYYW7WsesXUq7MXVdx16Fawu2f'
                   github_host='github.com'
-                  forbidden_source="$github_host/OnixResearch/artifact-auth"
-                  if rg -F "$forbidden_source" \
-                    Cargo.toml crates/molten-core/Cargo.toml Cargo.lock \
-                    flake.nix flake.lock config/release-dependencies/profile.ncl; then
-                    echo 'executable artifact-auth GitHub fallback remains' >&2
-                    exit 1
-                  fi
-                  for plan in build-plan.json release-policy-build-plan.json; do
-                    if jq -e --arg forbidden "$forbidden_source" \
-                      '[.crates | to_entries[] | select((.key | contains($forbidden)) or ((.value.source.url // "") | contains($forbidden)))] | length > 0' \
-                      "$plan" >/dev/null; then
-                      echo "generated plan retains executable artifact-auth GitHub source: $plan" >&2
+                  for forbidden_source in \
+                    "$radicle_host/$radicle_rid" \
+                    "$github_host/OnixResearch/artifact-auth"; do
+                    if rg -F "$forbidden_source" \
+                      Cargo.toml crates/molten-core/Cargo.toml Cargo.lock \
+                      flake.nix flake.lock config/release-dependencies/profile.ncl; then
+                      echo "executable predecessor source remains: $forbidden_source" >&2
                       exit 1
                     fi
+                    for plan in build-plan.json release-policy-build-plan.json; do
+                      if jq -e --arg forbidden "$forbidden_source" \
+                        '[.crates | to_entries[] | select((.key | contains($forbidden)) or ((.value.source.url // "") | contains($forbidden)))] | length > 0' \
+                        "$plan" >/dev/null; then
+                        echo "generated plan retains predecessor source: $plan" >&2
+                        exit 1
+                      fi
+                    done
                   done
 
                   touch "$out"
