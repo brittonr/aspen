@@ -11,7 +11,7 @@
 - [ ] [serial] Define nominal scope, subject, membership, resource-binding, audience, request, operation, policy, decision, snapshot, and receipt references with bounded validation. r[molten.collaboration_scope.nominal_model]
 - [ ] [depends:nominal-model] Implement pure scope creation and membership add, remove, expiry, and duplicate-operation transitions with monotonic membership epochs. r[molten.collaboration_scope.membership_currentness]
 - [ ] [depends:nominal-model] Implement one-owner resource binding and explicit consistency-serialized scope-move transitions. r[molten.collaboration_scope.resource_binding]
-- [ ] [depends:membership-currentness,resource-binding] Implement effective-audience intersection over current membership, scope policy, resource policy, and organization-floor facts. r[molten.collaboration_scope.effective_audience]
+- [ ] [depends:membership-currentness] [depends:resource-binding] Implement effective-audience intersection over current membership, scope policy, resource policy, and organization-floor facts. r[molten.collaboration_scope.effective_audience]
 - [ ] [depends:resource-binding] Implement separate `resource/share` admission and deny inference from read, use, ancestry, or prior delivery. r[molten.collaboration_scope.nontransitive_sharing]
 - [ ] [depends:effective-audience] Implement exact snapshot binding, currentness validation, safe diagnostics, and deterministic BLAKE3 receipt payloads. r[molten.collaboration_scope.authority_snapshot] r[molten.collaboration_scope.safe_projection]
 
