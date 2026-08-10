@@ -86,7 +86,7 @@
 
     #[test]
     fn three_node_quorum_gate_denies_missing_quorum_duplicate_and_log_only_claims() {
-        // r[verify molten.testing.multinode.three_node_membership_negatives]
+        // r[verify molten.testing.multinode.three_node_vm_membership_negatives]
         // r[verify molten.testing.three_node_quorum_vm.negatives]
         let mut input = three_node_input();
         input.quorum_refs = Vec::new();
