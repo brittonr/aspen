@@ -4,7 +4,7 @@ Molten treats ChoRus as prior art for Rust choreography ergonomics only. The aut
 
 ## Boundary
 
-The facade core added for `r[molten.choreography.chorus_design_reference]` and related requirements is pure and Sans-IO:
+The facade core added for `r[related molten.choreography.chorus_design_reference]` and related requirements is pure and Sans-IO:
 
 - `generate_protocol_facade_receipt` accepts a protocol install receipt, generator ref, and artifact ref, then emits a deterministic facade-generation receipt.
 - `evaluate_protocol_facade_transition` evaluates send, receive, branch, and offer operations against projected endpoint state and returns descriptors, next state, receipt inputs, diagnostics, and non-effect transition evidence.

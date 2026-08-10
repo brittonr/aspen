@@ -15,4 +15,4 @@ A passing adapter report means:
 A passing adapter report does **not** grant runtime authority, release authority, transport trust, storage trust, UCAN authority, deployment approval, or permission to bypass subsystem gates. Downstream migration should first consume adapter reports as compatibility evidence, then separately require the existing subsystem authority, policy, provenance, source-gate, resource, release, and lifecycle receipts.
 
 Implementation: `crates/molten-core/src/stack.rs` (`validate_valence_stack_adapter`).
-Requirements: `r[molten.evidence.valence_stack_adapter.contract]`, `r[molten.evidence.valence_stack_adapter.validation]`, and `r[molten.evidence.valence_stack_adapter.docs]`.
+Requirements: `r[related molten.evidence.valence_stack_adapter.contract]`, `r[related molten.evidence.valence_stack_adapter.validation]`, and `r[related molten.evidence.valence_stack_adapter.docs]`.

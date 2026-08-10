@@ -206,6 +206,7 @@
 
     #[test]
     fn facade_dependency_boundary_rejects_chorus_import_drift() {
+        // r[verify molten.choreography.chorus_design_reference]
         let clean = protocol_facade_dependency_boundary_diagnostics(
             include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")),
             include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.lock")),

@@ -1,0 +1,61 @@
+{
+  "baseline": {
+    "blake3": "334360f765acce463b56573883443a93a0b6764c01e82b36b90594c31d854ff0",
+    "entries": 1979,
+    "path": "evidence/tracey/inherited-debt-baseline.txt"
+  },
+  "classes": {
+    "accepted_implementation_unestablished": 1979,
+    "implemented_missing_marker": 0,
+    "obsolete_or_invalid": 0,
+    "renamed_or_replaced": 0
+  },
+  "classification_base_revision": "264294ba091b2e9d1c777bc6728cc64a1ce876c7",
+  "identity_repairs": [
+    {
+      "accepted_specification": "cairn/specs/explicit-effect-handle-scoping/spec.md",
+      "new_requirement_id": "molten.effects.handle_scope_property_tests",
+      "old_requirement_id": "molten.effects.property_tests",
+      "preserved_archives": [
+        "cairn/archive/2026-06-12-explicit-effect-handle-scoping",
+        "cairn/archive/2026-06-13-unison-effect-handlers"
+      ]
+    }
+  ],
+  "inventory": {
+    "blake3": "d841aaa7b54e36c40a6c4dfd5f743f180ea319ee05380a65786a56115fa95849",
+    "entries": 1979,
+    "path": "evidence/tracey/inherited-debt-classification.tsv",
+    "source_area_groups": 112,
+    "specification_groups": 35,
+    "summary_blake3": "c04ade25d44ea7add725c723a1cd124afc128ef6a53547edd64e37b3fda43277",
+    "summary_path": "evidence/tracey/inherited-debt-classification.md"
+  },
+  "non_claims": [
+    "implementation-established-for-unmapped-entries",
+    "replacement-established-for-unmapped-entries",
+    "obsolescence-established-for-unmapped-entries",
+    "invalidity-established-for-unmapped-entries",
+    "behavioral-correctness",
+    "release-readiness"
+  ],
+  "observed_date": "2026-08-10",
+  "resolved_links": [
+    {
+      "implementation_path": "src/protocol/parts/session/p009/body.rs",
+      "requirement_id": "molten.choreography.chorus_design_reference",
+      "verification_path": "src/protocol/parts/session/tests/m000/p002/body.rs"
+    },
+    {
+      "implementation_path": "crates/molten-core/src/stack.rs",
+      "requirement_id": "molten.evidence.valence_stack_adapter.docs",
+      "verification_path": "crates/molten-core/src/stack.rs"
+    },
+    {
+      "implementation_path": "src/testing/traceability/parts/p002/body.rs",
+      "requirement_id": "molten.testing.receipt_driven_traceability.coverage_derivation",
+      "verification_path": "src/testing/traceability/parts/tests/p001/body.rs"
+    }
+  ],
+  "schema": "molten.inherited-tracey-debt-classification.v1"
+}

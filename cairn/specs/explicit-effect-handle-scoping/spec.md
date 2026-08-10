@@ -64,4 +64,4 @@ r[molten.effects.adapter_integration] The system MUST Integrate handles with sto
 r[molten.effects.negative_security_tests] The system MUST Add denial tests for missing handles, stale handles, escaped handles, revoked handles, wrong operation, wrong scope, wrong authority/resource refs, and handle-only authority attempts.
 
 ### Requirement: System MUST Add Hegel properties for same-kind disambiguation, introduction-before-use, monotonic attenuation, replay stability, and no-side-effect-before-handle-denial
-r[molten.effects.property_tests] The system MUST Add Hegel properties for same-kind disambiguation, introduction-before-use, monotonic attenuation, replay stability, and no-side-effect-before-handle-denial.
+r[molten.effects.handle_scope_property_tests] The system MUST Add Hegel properties for same-kind disambiguation, introduction-before-use, monotonic attenuation, replay stability, and no-side-effect-before-handle-denial.

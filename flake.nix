@@ -772,6 +772,7 @@
                   done
                   touch "$out"
                 '';
+            # r[verify molten.project.inherited_tracey_classification.verified_repair]
             inheritedTraceyDebtCheck =
               pkgs.runCommand "molten-inherited-tracey-debt"
                 {
@@ -788,20 +789,61 @@
                   set -euo pipefail
                   cd "$src"
                   guard_source=tools/tracey/inherited_debt_guard.rs
+                  classifier_source=tools/tracey/inherited_debt_classifier.rs
                   baseline=evidence/tracey/inherited-debt-baseline.txt
                   metadata=evidence/tracey/inherited-debt-baseline.ncl
                   generated=evidence/tracey/inherited-debt-baseline.json
+                  classification=evidence/tracey/inherited-debt-classification.tsv
+                  classification_summary=evidence/tracey/inherited-debt-classification.md
+                  classification_metadata=evidence/tracey/inherited-debt-classification.ncl
+                  classification_generated=evidence/tracey/inherited-debt-classification.json
 
                   rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
                   "$TMPDIR/guard-tests"
                   rustc --edition=2024 "$guard_source" -o "$TMPDIR/guard"
                   "$TMPDIR/guard" --root . --baseline "$baseline"
 
+                  rustc --edition=2024 --test "$classifier_source" -o "$TMPDIR/classifier-tests"
+                  "$TMPDIR/classifier-tests"
+                  rustc --edition=2024 "$classifier_source" -o "$TMPDIR/classifier"
+                  "$TMPDIR/classifier" \
+                    --root . \
+                    --baseline "$baseline" \
+                    --output "$TMPDIR/classification.tsv" \
+                    --summary-output "$TMPDIR/classification.md"
+                  diff -u "$classification" "$TMPDIR/classification.tsv"
+                  diff -u "$classification_summary" "$TMPDIR/classification.md"
+
                   nickel typecheck "$metadata"
                   nickel export "$metadata" --format json > "$TMPDIR/baseline.json"
                   diff -u "$generated" "$TMPDIR/baseline.json"
                   baseline_blake3="$(b3sum "$baseline" | cut -d ' ' -f 1)"
                   grep -Fq "\"uncovered_list_blake3\": \"$baseline_blake3\"" "$generated"
+
+                  nickel typecheck "$classification_metadata"
+                  nickel export "$classification_metadata" --format json > "$TMPDIR/classification.json"
+                  diff -u "$classification_generated" "$TMPDIR/classification.json"
+                  classification_blake3="$(b3sum "$classification" | cut -d ' ' -f 1)"
+                  grep -Fq "\"blake3\": \"$classification_blake3\"" "$classification_generated"
+                  classification_summary_blake3="$(b3sum "$classification_summary" | cut -d ' ' -f 1)"
+                  grep -Fq "\"summary_blake3\": \"$classification_summary_blake3\"" "$classification_generated"
+
+                  for repaired in \
+                    molten.choreography.chorus_design_reference \
+                    molten.evidence.valence_stack_adapter.docs \
+                    molten.testing.receipt_driven_traceability.coverage_derivation
+                  do
+                    if grep -Fxq "$repaired" "$baseline"; then
+                      echo "verified repair remains in inherited debt baseline: $repaired" >&2
+                      exit 1
+                    fi
+                  done
+                  grep -Fq 'r[impl molten.choreography.chorus_design_reference]' src/protocol/parts/session/p009/body.rs
+                  grep -Fq 'r[verify molten.choreography.chorus_design_reference]' src/protocol/parts/session/tests/m000/p002/body.rs
+                  grep -Fq 'r[impl molten.evidence.valence_stack_adapter.docs]' crates/molten-core/src/stack.rs
+                  grep -Fq 'r[verify molten.evidence.valence_stack_adapter.docs]' crates/molten-core/src/stack.rs
+                  grep -Fq 'r[impl molten.testing.receipt_driven_traceability.coverage_derivation]' src/testing/traceability/parts/p002/body.rs
+                  grep -Fq 'r[verify molten.testing.receipt_driven_traceability.coverage_derivation]' src/testing/traceability/parts/tests/p001/body.rs
                   touch "$out"
                 '';
           in

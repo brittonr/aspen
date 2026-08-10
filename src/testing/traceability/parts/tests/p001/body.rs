@@ -1,5 +1,6 @@
     #[test]
     fn verification_run_receipts_derive_receipt_backed_coverage() {
+        // r[verify molten.testing.receipt_driven_traceability.coverage_derivation]
         let positive = build_verification_run_receipt(&receipt_input(REQUIREMENT_ID, "positive", "positive", 0))
             .expect("positive receipt");
         let negative = build_verification_run_receipt(&receipt_input(REQUIREMENT_ID, "negative", "negative", 1))

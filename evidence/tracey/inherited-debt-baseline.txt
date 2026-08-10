@@ -96,7 +96,6 @@ molten.catalog_mcp.response_dto
 molten.catalog_mcp.short_id_expansion
 molten.choreography.branching
 molten.choreography.cairn_receipts
-molten.choreography.chorus_design_reference
 molten.choreography.compiler
 molten.choreography.dataspace_observability
 molten.choreography.endpoint_projection
@@ -354,6 +353,7 @@ molten.effects.handle_cleanup_gc
 molten.effects.handle_not_authority
 molten.effects.handle_replay_identity
 molten.effects.handle_schema
+molten.effects.handle_scope_property_tests
 molten.effects.handler_binding_schema
 molten.effects.handler_profile_admission
 molten.effects.handler_profiles
@@ -513,7 +513,6 @@ molten.evidence.stack_adapters.ports.core
 molten.evidence.stack_adapters.ports.shell
 molten.evidence.stack_adapters.validation
 molten.evidence.stack_adapters.validation.fixtures
-molten.evidence.valence_stack_adapter.docs
 molten.evidence.valence_stack_adapter.final_validation
 molten.evidence.valence_stack_adapter.pure_core
 molten.evidence.valence_stack_adapter.pure_core.shell
@@ -1815,7 +1814,6 @@ molten.testing.proof_obligations.hegel_properties
 molten.testing.proof_obligations.manifest
 molten.testing.proof_obligations.operator_summary
 molten.testing.proof_obligations.traceability
-molten.testing.receipt_driven_traceability.coverage_derivation
 molten.testing.receipt_driven_traceability.docs
 molten.testing.receipt_driven_traceability.hegel_properties
 molten.testing.receipt_driven_traceability.nix_gate

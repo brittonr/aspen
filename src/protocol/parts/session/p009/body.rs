@@ -292,6 +292,7 @@ pub fn evaluate_protocol_facade_payload_access(
     })
 }
 
+// r[impl molten.choreography.chorus_design_reference]
 pub fn protocol_facade_dependency_boundary_diagnostics(cargo_manifest: &str, cargo_lock: &str) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(PROTOCOL_FACADE_FORBIDDEN_DEPENDENCY_MARKERS.len());
     for marker in PROTOCOL_FACADE_FORBIDDEN_DEPENDENCY_MARKERS {

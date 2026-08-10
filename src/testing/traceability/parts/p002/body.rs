@@ -39,6 +39,7 @@ pub fn parse_verification_run_receipt(value: &IoValue) -> Result<VerificationRun
     })
 }
 
+// r[impl molten.testing.receipt_driven_traceability.coverage_derivation]
 pub fn coverage_from_verification_receipts(sources: &[ReceiptCoverageSource]) -> Result<Vec<CoverageInput>> {
     let mut coverage = OrderedMap::<String, CoverageInput>::new();
     for source in sources {

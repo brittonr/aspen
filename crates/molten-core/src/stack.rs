@@ -99,6 +99,7 @@ const STACK_SCHEMA_SUFFIX: &str = ".v1";
 const STACK_MEMBER_SCHEMA: &str = "molten.stack-evidence.member.v1";
 const EVIDENCE_ONLY_NON_CLAIM: &str = "evidence-only";
 const OVERBROAD_AUTHORITY_CLAIM: &str = "grants authority";
+// r[impl molten.evidence.valence_stack_adapter.docs]
 const VALENCE_ADAPTER_SUPPORTED_CLAIM: &str =
     "role/schema/ref compatibility and evidence-only non-claim conformance only";
 const VALENCE_ADAPTER_NON_CLAIM: &str = "evidence-only: Molten/Valence stack adapter proves role/schema/ref compatibility only; does not grant runtime authority, release authority, transport trust, storage trust, UCAN authority, or permission to bypass subsystem gates";
@@ -539,6 +540,7 @@ mod tests {
 
     #[test]
     fn valence_stack_adapter_rejects_duplicate_rows_missing_non_claims_and_overclaims() {
+        // r[verify molten.evidence.valence_stack_adapter.docs]
         // r[verify molten.evidence.valence_stack_adapter.fixtures.negative]
         let mut members = complete_adapter_members();
         members[BASALT_MEMBER_INDEX].non_claims = &[EVIDENCE_ONLY];
