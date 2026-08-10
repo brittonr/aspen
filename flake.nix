@@ -293,6 +293,8 @@
         kacheWrappedRust = mkUnit2nixRust { enableKache = true; };
 
         moltenPkg = ws.workspaceMembers."molten".build;
+        moltenNodeHostPkg = ws.workspaceMembers."molten-node-host".build;
+        moltenNodeHostTests = ws.test.workspaceMembers."molten-node-host".build;
         releasePolicyPkg = releasePolicyWs.rootCrate.build;
         moltenTestBinaries = (ws.test.workspaceMembers."molten".build).override { buildTests = true; };
         targetTriple = pkgs.stdenv.hostPlatform.rust.rustcTarget;
@@ -396,6 +398,7 @@
         packages = {
           default = moltenPkg;
           molten = moltenPkg;
+          molten-node-host = moltenNodeHostPkg;
           molten-release-policy = releasePolicyPkg;
           molten-kache = kacheWs.workspaceMembers."molten".build;
           molten-kache-rust = kacheWrappedRust;
@@ -495,7 +498,7 @@
                   ast-grep scan --rule "$rule" --json=compact \
                     src/test/support.rs \
                     src/main/tests/ops/helpers.rs \
-                    src/local_store.rs \
+                    src/local_store_tests.rs \
                     src/chunk/parts/store/tests/m000/p002/body.rs \
                     src/retention/parts/mod/tests/m000/p000/body.rs \
                     src/remote/parts/dataspace/tests/m000/p001/body.rs \
@@ -774,6 +777,7 @@
             # The hermetic nextest check supplies binary metadata for CLI tests
             # using CARGO_BIN_EXE_molten; the raw unit2nix libtest runner does not.
             molten = nextest;
+            molten-node-host = moltenNodeHostTests;
             clippy = ws.clippy.allWorkspaceMembers;
             cap-std-store-authority = capStdStoreAuthorityCheck;
             cap-std-test-workspaces = capStdTestWorkspaceCheck;

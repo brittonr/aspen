@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-unified-artifact",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-unified-artifact/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-unified-artifact/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-unified-artifact/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-unified-artifact/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "7969903b58fb2bd0a96eba030da8059a516d0e0a2c405df68e2fbe6a75d312c5",
-  "inputsHash": "f6e252757b61978dcbc7683806605ff91158c1c1431b5a30f1bee2f51dff0f9b",
+  "cargoLockHash": "4c259d5abf426ea23c000e9081afdddf8dd3483d4cbbccf91a22aa1ea4a14a91",
+  "inputsHash": "a95d59584275ac43c77794ef99253478abf123e868420a92b3912f1077965c80",
   "crates": {
     "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": {
       "crateName": "kamacite-core",
@@ -22,7 +22,7 @@
         "url": "ssh://git@github.com/OnixResearch/kamacite.git",
         "rev": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
         "subDir": "crates/kamacite-core",
-        "sha256": "0jbc98bk54r6hy84giw272ihd11n03yya89pha15xpk6a81la2mg"
+        "sha256": "0h4g0x83xzmi8sh4z51qbyawpwx4rf1xsc7l7khf2c23ly3wp0pw"
       },
       "features": [],
       "dependencies": [
@@ -123,7 +123,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-unified-artifact/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -159,7 +159,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-unified-artifact/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -175,7 +175,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-unified-artifact/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

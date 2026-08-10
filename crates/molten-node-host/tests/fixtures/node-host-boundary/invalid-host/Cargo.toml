@@ -1,0 +1,12 @@
+[package]
+name = "molten-node-host-invalid-fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+cap-std = "3"
+clap = "4"
+molten = { path = "../../../../.." }
+molten-release-policy = { path = "../../../../../molten-release-policy" }
+molten-core = { path = "../../../../../molten-core" }

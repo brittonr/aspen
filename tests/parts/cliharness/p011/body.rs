@@ -133,12 +133,12 @@ fn current_octet_hashes() -> (String, String) {
     ];
     let config_payload = serde_json::json!({
         "files": files,
-        "effective_scope_args": ["-p", "molten"],
+        "effective_scope_args": ["-p", "molten", "-p", "molten-node-host"],
         "effective_cargo_check_args": ["--all-targets"],
     });
     let config_hash = b3_full_hash(&config_payload.to_string());
     let profile_payload = serde_json::json!({
-        "scope_args": ["-p", "molten"],
+        "scope_args": ["-p", "molten", "-p", "molten-node-host"],
         "cargo_check_args": ["--all-targets"],
         "output_format": "human",
         "config_hash": config_hash,

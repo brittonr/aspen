@@ -1,0 +1,10 @@
+[package]
+name = "molten-node-host-positive-fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+cap-fs-ext = "3"
+cap-std = "3"
+molten-core = { path = "../../../../../molten-core" }

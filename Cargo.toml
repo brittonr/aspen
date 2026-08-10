@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/molten-core", "crates/molten-release-policy"]
+members = [".", "crates/molten-core", "crates/molten-node-host", "crates/molten-release-policy"]
 resolver = "3"
 
 [workspace.package]
@@ -7,7 +7,7 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [workspace.metadata.octet]
-default_scope = ["-p", "molten"]
+default_scope = ["-p", "molten", "-p", "molten-node-host"]
 cargo_check_args = ["--all-targets"]
 
 [package]
@@ -34,6 +34,7 @@ blake3 = "1"
 cap-fs-ext = "3"
 cap-std = "3"
 molten-core = { path = "crates/molten-core" }
+molten-node-host = { path = "crates/molten-node-host" }
 cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", rev = "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b", package = "cairn-core" }
 clap = { version = "4", features = ["derive"] }
 iroh = "1.0.0"

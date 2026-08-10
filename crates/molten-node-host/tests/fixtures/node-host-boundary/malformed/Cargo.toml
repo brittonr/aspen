@@ -1,0 +1,5 @@
+[package
+name = "molten-node-host-malformed-fixture"
+
+[dependencies]
+molten-core = { path = "../../../../../molten-core"

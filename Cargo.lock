@@ -3684,6 +3684,7 @@ dependencies = [
  "iroh-gossip",
  "kamacite-core",
  "molten-core",
+ "molten-node-host",
  "n0-future",
  "nickel-lang",
  "preserves 5.0.0-rc.7",
@@ -3715,6 +3716,17 @@ dependencies = [
  "artifact-auth-core",
  "artifact-binding-core",
  "kamacite-core",
+]
+
+[[package]]
+name = "molten-node-host"
+version = "0.1.0"
+dependencies = [
+ "cap-fs-ext",
+ "cap-std",
+ "cap-tempfile",
+ "molten-core",
+ "toml",
 ]
 
 [[package]]

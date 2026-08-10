@@ -10,7 +10,7 @@ The detailed primitive, adapter, system-extension, workload, port-registry, refe
 
 ## Fabric ownership
 
-Pure primitives own deterministic validation, transitions, plans, bounds, and canonical identity inputs. Adapters perform capability-rooted filesystem, storage, transport, time, entropy, process, or telemetry effects without defining authority or workload semantics. Optional system extensions own long-lived distributed-service protocols and policies behind exact manifest and fabric-port admission. Applications consume admitted services without inheriting adapter or system-extension authority.
+Pure primitives own deterministic validation, transitions, plans, bounds, and canonical identity inputs. The internal `molten-node-host` crate owns capability-rooted node state and typed local-store effects while excluding CLI, release policy, and workload semantics. Adapters perform capability-rooted filesystem, storage, transport, time, entropy, process, or telemetry effects without defining authority or workload semantics. Optional system extensions own long-lived distributed-service protocols and policies behind exact manifest and fabric-port admission. Applications consume admitted services without inheriting adapter or system-extension authority.
 
 Canonical values are Preserves records identified with BLAKE3. Rust structure layout, debug text, backend handles, transport identity, clocks, randomness, and ambient process state are never canonical authority. Port resolution rejects unknown, duplicate, disabled, incompatible, over-authorizing, or silently substituted implementations.
 
@@ -66,9 +66,9 @@ Observe patterns           near/far refs, promises      protocol + control plane
                      |
                      v
 +-------------------------------------------------------------+
-| adapters                                                     |
-| local runtime, Iroh gossip/blobs/docs, Wasmtime/WASI, Steel, |
-| Redb store, tracing, CLI                                     |
+| adapters and molten-node-host                                |
+| node state, typed local stores, local runtime, Iroh, Redb,   |
+| Wasmtime/WASI, Steel, tracing, and CLI                       |
 +-------------------------------------------------------------+
 ```
 

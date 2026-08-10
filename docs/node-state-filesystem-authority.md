@@ -2,6 +2,12 @@
 
 Molten treats an operator-selected node state directory as one explicit filesystem authority. The host path is accepted only by public CLI or daemon shells; reusable lifecycle, control, ingress, identity, and target-job logic receives `NodeStateRoot` or a narrower derived view.
 
+## Crate ownership
+
+`crates/molten-node-host` owns the shared error type, `NodeStateRoot`, derived node namespaces, typed local-store roots, and their capability filesystem effects. The root `molten` crate re-exports these exact definitions through `molten::error`, `molten::node_state`, and `molten::local_store`.
+
+CLI parsing, operator presentation, daemon orchestration, service semantics, workload semantics, NixOS validation, test harness orchestration, and release policy remain outside `molten-node-host`. This first extraction does not claim that the complete daemon moved.
+
 ## Authority boundary
 
 r[impl molten.node.cap_std_state_root] `NodeStateRoot::open` and `NodeStateRoot::open_existing` are the reviewed ambient bootstrap operations. The root owns an open `cap_std::fs::Dir`, and clones retain that authority rather than reopening the host path. Renaming or replacing the bootstrap pathname therefore does not redirect later descendant operations.
@@ -29,7 +35,7 @@ r[impl molten.node.cap_std_request_lifecycle] Pending requests are represented b
 
 ## Async and nested-store authority
 
-r[impl molten.node.cap_std_async_authority] Live listeners, senders, ingress delivery, service loops, supervisor work, and target-side job execution carry the open root across async boundaries. Inner functions do not accept a host root path. Artifact, ledger, chunk, and delivery-idempotency adapters receive capability-derived store roots; Redb files are opened through those roots.
+r[impl molten.node.cap_std_async_authority] Live listeners, senders, ingress delivery, service loops, supervisor work, and target-side job execution carry the `molten-node-host` open root across async boundaries. Inner functions do not accept a host root path. Artifact, ledger, chunk, and delivery-idempotency adapters receive capability-derived store roots; Redb files are opened through those roots.
 
 Node job execution reads the admitted DAG and recomputes its closure through the registry capability. Inline stages remain pure, and chunk source/materialization effects use the chunk capability. Typed-storage job stages fail closed until supplied with a capability-aware typed-storage adapter; they are never redirected through an ambient descendant path.
 
