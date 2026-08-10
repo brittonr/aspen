@@ -1,0 +1,117 @@
+{
+  "accepted_specification": "cairn/specs/runtime-spine/spec.md",
+  "base_revision": "4dd9081da8137c10abcd2fac225d982db1d5d0a8",
+  "baseline_after": 1965,
+  "baseline_before": 1979,
+  "non_claims": [
+    "complete-runtime-spine-coverage",
+    "all-preserves-trust-boundaries-use-strict-decode",
+    "behavioral-correctness-beyond-listed-tests",
+    "release-readiness",
+    "whole-system-correctness"
+  ],
+  "observed_date": "2026-08-10",
+  "repairs": [
+    {
+      "evidence_scope": "negative field-domain and duplicate-value validation",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_boundary_field_contracts.field_contract_denials",
+      "source_area": "preserves_boundary_field_contracts",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "typed boundary field validation",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_boundary_field_contracts.field_contracts",
+      "source_area": "preserves_boundary_field_contracts",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "noncanonical and tampered packed-byte denial",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_canonical_bytes.noncanonical_denial",
+      "source_area": "preserves_canonical_bytes",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "canonical packed-byte decode and identity",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_canonical_bytes.strict_decode",
+      "source_area": "preserves_canonical_bytes",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "shared checks builder, parser, and required-check denial",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_rail_toolkit.check_sets",
+      "source_area": "preserves_rail_toolkit",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "wrong label, arity, type, ref, and check-shape denial",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_rail_toolkit.negative_shapes",
+      "source_area": "preserves_rail_toolkit",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "shared simple-record, string, ref, optional-ref, and sequence helpers",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_rail_toolkit.parser_builders",
+      "source_area": "preserves_rail_toolkit",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "pure deterministic schema validation",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_schema_boundaries.schema_adapter",
+      "source_area": "preserves_schema_boundaries",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "versioned schema artifact and canonical schema ref",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_schema_boundaries.schema_artifacts",
+      "source_area": "preserves_schema_boundaries",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "wrong label, field, type, checks, version, and ref denial",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_schema_boundaries.schema_denials",
+      "source_area": "preserves_schema_boundaries",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "structural ambient job-token denial before job admission",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_value_inspection.ambient_token_denial",
+      "source_area": "preserves_value_inspection",
+      "verification_path": "src/job/parts/dag/tests/m000/p004/body.rs"
+    },
+    {
+      "evidence_scope": "nested sensitive record and symbol detection",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_value_inspection.marker_detection",
+      "source_area": "preserves_value_inspection",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "nested structural content-ref lookup",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_value_inspection.ref_retention",
+      "source_area": "preserves_value_inspection",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    },
+    {
+      "evidence_scope": "bounded structural traversal without rendered-text inference",
+      "implementation_path": "src/preserves/parts/rail/p001/body.rs",
+      "requirement_id": "molten.preserves_value_inspection.structural_scan",
+      "source_area": "preserves_value_inspection",
+      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+    }
+  ],
+  "runtime_spine_after": 428,
+  "runtime_spine_before": 442,
+  "schema": "molten.runtime-spine-tracey-direct-repairs.v1"
+}

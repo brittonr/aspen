@@ -1,5 +1,5 @@
 {
-  "baseline_origin_revision": "264294ba091b2e9d1c777bc6728cc64a1ce876c7",
+  "baseline_origin_revision": "4dd9081da8137c10abcd2fac225d982db1d5d0a8",
   "dangling": 0,
   "evidence_roots": [
     "src",
@@ -18,12 +18,12 @@
     "whole-system-correctness"
   ],
   "observed_date": "2026-08-10",
-  "referenced": 509,
+  "referenced": 527,
   "requirement_root": "cairn/specs",
-  "requirements": 2488,
+  "requirements": 2492,
   "scanner": "tools/tracey/inherited_debt_guard.rs",
   "schema": "molten.inherited-tracey-debt-baseline.v1",
-  "uncovered": 1979,
+  "uncovered": 1965,
   "uncovered_list": "evidence/tracey/inherited-debt-baseline.txt",
-  "uncovered_list_blake3": "334360f765acce463b56573883443a93a0b6764c01e82b36b90594c31d854ff0"
+  "uncovered_list_blake3": "8683b2bbb290700478d6729709b76a1c462e39e8617f03b978625ce458384b76"
 }

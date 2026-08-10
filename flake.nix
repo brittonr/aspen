@@ -773,6 +773,10 @@
                   touch "$out"
                 '';
             # r[verify molten.project.inherited_tracey_classification.verified_repair]
+            # r[verify molten.project.runtime_spine_tracey.direct_repairs]
+            # r[verify molten.project.runtime_spine_tracey.exact_manifest]
+            # r[impl molten.project.runtime_spine_tracey.growth_denial]
+            # r[verify molten.project.runtime_spine_tracey.non_claims]
             inheritedTraceyDebtCheck =
               pkgs.runCommand "molten-inherited-tracey-debt"
                 {
@@ -782,6 +786,7 @@
                     pkgs.diffutils
                     pkgs.b3sum
                     pkgs.gnugrep
+                    pkgs.jq
                   ];
                   src = sourceForConfigChecks;
                 }
@@ -797,6 +802,9 @@
                   classification_summary=evidence/tracey/inherited-debt-classification.md
                   classification_metadata=evidence/tracey/inherited-debt-classification.ncl
                   classification_generated=evidence/tracey/inherited-debt-classification.json
+                  runtime_spine_repairs=evidence/tracey/runtime-spine-direct-repairs.ncl
+                  runtime_spine_repairs_generated=evidence/tracey/runtime-spine-direct-repairs.json
+                  expected_runtime_spine_repair_count=14
 
                   rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
                   "$TMPDIR/guard-tests"
@@ -827,6 +835,25 @@
                   grep -Fq "\"blake3\": \"$classification_blake3\"" "$classification_generated"
                   classification_summary_blake3="$(b3sum "$classification_summary" | cut -d ' ' -f 1)"
                   grep -Fq "\"summary_blake3\": \"$classification_summary_blake3\"" "$classification_generated"
+
+                  nickel typecheck "$runtime_spine_repairs"
+                  nickel export "$runtime_spine_repairs" --format json > "$TMPDIR/runtime-spine-repairs.json"
+                  diff -u "$runtime_spine_repairs_generated" "$TMPDIR/runtime-spine-repairs.json"
+                  repair_count="$(jq '.repairs | length' "$runtime_spine_repairs_generated")"
+                  test "$repair_count" -eq "$expected_runtime_spine_repair_count"
+                  unique_repair_count="$(jq -r '.repairs[].requirement_id' "$runtime_spine_repairs_generated" | sort -u | wc -l)"
+                  test "$unique_repair_count" -eq "$expected_runtime_spine_repair_count"
+                  jq -r '.repairs[] | [.requirement_id, .implementation_path, .verification_path] | @tsv' \
+                    "$runtime_spine_repairs_generated" \
+                    | while IFS="$(printf '\t')" read -r requirement_id implementation_path verification_path
+                  do
+                    if grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "runtime-spine repair remains in inherited debt baseline: $requirement_id" >&2
+                      exit 1
+                    fi
+                    grep -Fq "r[impl $requirement_id]" "$implementation_path"
+                    grep -Fq "r[verify $requirement_id]" "$verification_path"
+                  done
 
                   for repaired in \
                     molten.choreography.chorus_design_reference \

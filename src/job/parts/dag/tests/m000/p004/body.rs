@@ -268,6 +268,7 @@
 
     #[test]
     fn raw_closure_config_denies_before_execution() {
+        // r[verify molten.preserves_value_inspection.ambient_token_denial]
         let source = test_node_value(
             "source",
             "source",

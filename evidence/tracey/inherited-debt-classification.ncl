@@ -37,6 +37,7 @@ let ClassificationMetadata = {
     obsolete_or_invalid | Number,
   },
   resolved_links | Array ResolvedLink,
+  direct_repair_manifests | Array String,
   identity_repairs | Array IdentityRepair,
   non_claims | Array String,
 }
@@ -44,23 +45,23 @@ in
 let metadata | ClassificationMetadata = {
   schema = "molten.inherited-tracey-debt-classification.v1",
   observed_date = "2026-08-10",
-  classification_base_revision = "264294ba091b2e9d1c777bc6728cc64a1ce876c7",
+  classification_base_revision = "4dd9081da8137c10abcd2fac225d982db1d5d0a8",
   baseline = {
     path = "evidence/tracey/inherited-debt-baseline.txt",
-    blake3 = "334360f765acce463b56573883443a93a0b6764c01e82b36b90594c31d854ff0",
-    entries = 1979,
+    blake3 = "8683b2bbb290700478d6729709b76a1c462e39e8617f03b978625ce458384b76",
+    entries = 1965,
   },
   inventory = {
     path = "evidence/tracey/inherited-debt-classification.tsv",
-    blake3 = "d841aaa7b54e36c40a6c4dfd5f743f180ea319ee05380a65786a56115fa95849",
+    blake3 = "c4bd27dc9f2db14c0d7ebd3f4de2737181594842f7ffa82b7ebe8b521878d8a7",
     summary_path = "evidence/tracey/inherited-debt-classification.md",
-    summary_blake3 = "c04ade25d44ea7add725c723a1cd124afc128ef6a53547edd64e37b3fda43277",
-    entries = 1979,
+    summary_blake3 = "d2645c091da454748bbd849ebf195ef46437117e2d05489425dd6d112e4eeade",
+    entries = 1965,
     specification_groups = 35,
-    source_area_groups = 112,
+    source_area_groups = 111,
   },
   classes = {
-    accepted_implementation_unestablished = 1979,
+    accepted_implementation_unestablished = 1965,
     implemented_missing_marker = 0,
     renamed_or_replaced = 0,
     obsolete_or_invalid = 0,
@@ -81,6 +82,9 @@ let metadata | ClassificationMetadata = {
       implementation_path = "src/testing/traceability/parts/p002/body.rs",
       verification_path = "src/testing/traceability/parts/tests/p001/body.rs",
     },
+  ],
+  direct_repair_manifests = [
+    "evidence/tracey/runtime-spine-direct-repairs.ncl",
   ],
   identity_repairs = [
     {

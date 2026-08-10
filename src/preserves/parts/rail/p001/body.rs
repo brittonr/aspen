@@ -256,6 +256,8 @@ pub struct StrictCanonicalDecode {
     pub value_ref: ContentRef,
 }
 
+// r[impl molten.preserves_canonical_bytes.strict_decode]
+// r[impl molten.preserves_canonical_bytes.noncanonical_denial]
 pub fn strict_canonical_decode(bytes: &[u8]) -> Result<StrictCanonicalDecode> {
     let value = preserves::read_iovalue_packed(bytes, false).map_err(|error| MoltenError::Preserves(error.to_string()))?;
     let canonical = canonical_bytes(&value)?;
@@ -521,6 +523,8 @@ pub struct ParsedCheck {
     pub status: String,
 }
 
+// r[impl molten.preserves_rail_toolkit.parser_builders]
+// r[impl molten.preserves_rail_toolkit.negative_shapes]
 pub fn simple_record_fields<'a>(
     value: &'a IoValue,
     label: &str,
@@ -625,6 +629,7 @@ pub fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
+// r[impl molten.preserves_rail_toolkit.check_sets]
 pub fn checks_value(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
@@ -885,6 +890,7 @@ pub const OPERATOR_RELEASE_EVIDENCE_BUNDLE_BOUNDARY_SCHEMA: BoundarySchemaSpec =
     fields: OPERATOR_RELEASE_EVIDENCE_BUNDLE_BOUNDARY_FIELDS,
 };
 
+// r[impl molten.preserves_schema_boundaries.schema_artifacts]
 pub fn boundary_schema_artifact_value(spec: &BoundarySchemaSpec) -> Result<IoValue> {
     let arity = u64::try_from(spec.arity()).map_err(|error| {
         MoltenError::invalid_harness(format!("boundary schema arity cannot convert to u64: {error}"))
@@ -994,6 +1000,8 @@ fn boundary_field_constraints(kind: BoundaryFieldKind) -> &'static [&'static str
     }
 }
 
+// r[impl molten.preserves_schema_boundaries.schema_adapter]
+// r[impl molten.preserves_schema_boundaries.schema_denials]
 pub fn validate_boundary_schema(value: &IoValue, spec: &BoundarySchemaSpec) -> Result<BoundarySchemaValidation> {
     let schema_ref = boundary_schema_ref(spec)?;
     let value_ref = canonical_content_ref(value)?;
@@ -1076,6 +1084,8 @@ fn boundary_typed_value_ref(spec: &BoundarySchemaSpec, decoded_value_ref: &str) 
     ]))
 }
 
+// r[impl molten.preserves_boundary_field_contracts.field_contracts]
+// r[impl molten.preserves_boundary_field_contracts.field_contract_denials]
 fn validate_boundary_field(
     value: &Value<IoValue>,
     field_spec: &BoundaryFieldSpec,
@@ -1701,6 +1711,7 @@ struct StructuralScanState {
     limits: StructuralInspectionLimits,
 }
 
+// r[impl molten.preserves_value_inspection.structural_scan]
 pub fn find_structural_match<F>(
     value: &IoValue,
     scope: StructuralInspectionScope,
@@ -1735,14 +1746,17 @@ pub fn find_named_structural_marker(value: &IoValue, markers: &[&str]) -> Result
     })
 }
 
+// r[impl molten.preserves_value_inspection.marker_detection]
 pub fn find_sensitive_structural_marker(value: &IoValue) -> Result<Option<StructuralMatch>> {
     find_named_structural_marker(value, SENSITIVE_STRUCTURAL_MARKERS)
 }
 
+// r[impl molten.preserves_value_inspection.ambient_token_denial]
 pub fn find_ambient_job_token(value: &IoValue) -> Result<Option<StructuralMatch>> {
     find_named_structural_marker(value, AMBIENT_JOB_TOKENS)
 }
 
+// r[impl molten.preserves_value_inspection.ref_retention]
 pub fn find_structural_content_ref(value: &IoValue, target_ref: &str) -> Result<Option<StructuralMatch>> {
     let target = ContentRef::parse(target_ref)?;
     find_structural_match(value, StructuralInspectionScope::content_refs(), |kind, token| {
@@ -1883,6 +1897,7 @@ mod tests {
 
     #[test]
     fn strict_canonical_decode_accepts_molten_canonical_bytes() {
+        // r[verify molten.preserves_canonical_bytes.strict_decode]
         let value = super::parse_text("<strict-decode-fixture [#t 42]>").expect("parse fixture");
         let bytes = super::canonical_bytes(&value).expect("canonical bytes");
         let decoded = super::strict_canonical_decode(&bytes).expect("strict decode");
@@ -1893,6 +1908,7 @@ mod tests {
 
     #[test]
     fn strict_canonical_decode_rejects_annotated_trailing_truncated_and_tampered_bytes() {
+        // r[verify molten.preserves_canonical_bytes.noncanonical_denial]
         let annotated_error = super::strict_canonical_decode(ANNOTATED_ONE_PACKED)
             .expect_err("annotations are parseable but not canonical without annotations");
         assert!(annotated_error.to_string().contains("strict canonical Preserves decode failed"));
@@ -2117,6 +2133,8 @@ mod tests {
 
     #[test]
     fn boundary_schema_adapter_accepts_valid_versioned_records_for_all_adopted_families() {
+        // r[verify molten.preserves_schema_boundaries.schema_adapter]
+        // r[verify molten.preserves_boundary_field_contracts.field_contracts]
         for spec in boundary_schema_specs() {
             let value = boundary_schema_fixture(spec);
             let validation = super::validate_boundary_schema(&value, spec).expect("schema validation");
@@ -2132,6 +2150,7 @@ mod tests {
 
     #[test]
     fn boundary_codec_report_binds_strict_decode_schema_and_typed_refs() {
+        // r[verify molten.preserves_schema_boundaries.schema_artifacts]
         // r[verify molten.preserves_boundary_codegen.typed_codecs]
         // r[verify molten.preserves_boundary_codegen.strict_decode]
         // r[verify molten.preserves_boundary_codegen.schema_ref_evidence]
@@ -2170,6 +2189,7 @@ mod tests {
 
     #[test]
     fn boundary_schema_adapter_denies_malformed_records_for_all_adopted_families() {
+        // r[verify molten.preserves_schema_boundaries.schema_denials]
         for spec in boundary_schema_specs() {
             let fixture = boundary_schema_fixture(spec);
             let fields = boundary_fixture_fields(&fixture, spec);
@@ -2256,6 +2276,7 @@ mod tests {
 
     #[test]
     fn boundary_field_contracts_reject_invalid_domains_and_duplicates() {
+        // r[verify molten.preserves_boundary_field_contracts.field_contract_denials]
         let plugin_spec = &super::PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_SCHEMA;
         let decision_index = boundary_field_index(plugin_spec, |field| field.label == "decision");
         let bad_decision = boundary_fixture_with_field(
@@ -2320,6 +2341,8 @@ mod tests {
 
     #[test]
     fn structural_scan_detects_nested_markers_without_scanning_rendered_strings() {
+        // r[verify molten.preserves_value_inspection.structural_scan]
+        // r[verify molten.preserves_value_inspection.marker_detection]
         let nested = super::record("outer", vec![
             super::sequence(vec![super::record("secret", vec![super::string("payload")])]),
             super::string("<credential \"looks rendered but is inert\">"),
@@ -2341,6 +2364,7 @@ mod tests {
 
     #[test]
     fn structural_scan_finds_nested_content_refs() {
+        // r[verify molten.preserves_value_inspection.ref_retention]
         let target = super::content_ref_from_bytes(b"structural-content-ref-target");
         let value = super::record("outer", vec![
             super::sequence(vec![super::record("metadata", vec![super::string(&target)])]),
@@ -2389,6 +2413,9 @@ mod tests {
 
     #[test]
     fn parser_toolkit_rejects_malformed_shapes_and_checks() {
+        // r[verify molten.preserves_rail_toolkit.parser_builders]
+        // r[verify molten.preserves_rail_toolkit.check_sets]
+        // r[verify molten.preserves_rail_toolkit.negative_shapes]
         const MAX_REFS: usize = 4;
         let wrong_label = super::record("wrong", Vec::new());
         assert!(super::simple_record_fields(&wrong_label, "expected", 0).is_err());

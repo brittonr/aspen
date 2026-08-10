@@ -6,7 +6,7 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 
 | Count | Specification |
 | ---: | --- |
-| 442 | `cairn/specs/runtime-spine/spec.md` |
+| 428 | `cairn/specs/runtime-spine/spec.md` |
 | 310 | `cairn/specs/testing-harness/spec.md` |
 | 196 | `cairn/specs/evidence-gates/spec.md` |
 | 66 | `cairn/specs/project/spec.md` |
@@ -139,11 +139,7 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 4 | `plugin_capability_grants` |
 | 4 | `plugin_host_lifecycle` |
 | 4 | `plugin_lifecycle_state_proof` |
-| 4 | `preserves_boundary_field_contracts` |
 | 4 | `preserves_content_ref` |
-| 4 | `preserves_rail_toolkit` |
-| 4 | `preserves_schema_boundaries` |
-| 4 | `preserves_value_inspection` |
 | 4 | `prod_release_candidate` |
 | 4 | `sam_service_supervision_cleanup` |
 | 4 | `trellis_protocol_session` |
@@ -151,10 +147,13 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 3 | `delivery_idempotency_ux` |
 | 3 | `operator_dogfood_node_workflow` |
 | 3 | `plugin_contract_hardening` |
-| 3 | `preserves_canonical_bytes` |
 | 3 | `runtime` |
 | 3 | `sam_service_demand_runtime` |
 | 3 | `sam_service_records_ledger` |
 | 3 | `sam_service_supervision` |
 | 2 | `iroh_experiments` |
+| 2 | `preserves_boundary_field_contracts` |
 | 1 | `claim_authority` |
+| 1 | `preserves_canonical_bytes` |
+| 1 | `preserves_rail_toolkit` |
+| 1 | `preserves_schema_boundaries` |
