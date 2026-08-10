@@ -772,6 +772,38 @@
                   done
                   touch "$out"
                 '';
+            inheritedTraceyDebtCheck =
+              pkgs.runCommand "molten-inherited-tracey-debt"
+                {
+                  nativeBuildInputs = [
+                    rustToolchain
+                    pkgs.nickel
+                    pkgs.diffutils
+                    pkgs.b3sum
+                    pkgs.gnugrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  guard_source=tools/tracey/inherited_debt_guard.rs
+                  baseline=evidence/tracey/inherited-debt-baseline.txt
+                  metadata=evidence/tracey/inherited-debt-baseline.ncl
+                  generated=evidence/tracey/inherited-debt-baseline.json
+
+                  rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
+                  "$TMPDIR/guard-tests"
+                  rustc --edition=2024 "$guard_source" -o "$TMPDIR/guard"
+                  "$TMPDIR/guard" --root . --baseline "$baseline"
+
+                  nickel typecheck "$metadata"
+                  nickel export "$metadata" --format json > "$TMPDIR/baseline.json"
+                  diff -u "$generated" "$TMPDIR/baseline.json"
+                  baseline_blake3="$(b3sum "$baseline" | cut -d ' ' -f 1)"
+                  grep -Fq "\"uncovered_list_blake3\": \"$baseline_blake3\"" "$generated"
+                  touch "$out"
+                '';
           in
           rec {
             # The hermetic nextest check supplies binary metadata for CLI tests
@@ -789,10 +821,13 @@
             fabric-cryptographic-identity-profile = fabricCryptographicIdentityProfileCheck;
             fabric-observability-profile = fabricObservabilityProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
+            inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;
 
+            # r[verify molten.artifact_auth_adoption.source]
             # r[verify molten.artifact_auth_adoption.radicle_transport]
             # r[verify molten.artifact_auth_adoption.radicle_agreement]
+            # r[verify molten.artifact_auth_adoption.radicle_behavior]
             # r[verify molten.artifact_auth_adoption.radicle_fallback]
             # r[verify molten.artifact_auth_adoption.radicle_evidence]
             artifact-auth-radicle-cutover =

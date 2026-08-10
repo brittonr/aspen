@@ -72,7 +72,8 @@ r[molten.node_replication_pilot.final_validation] Positive and negative profile 
 - THEN the change MAY complete with a deterministic blocker receipt
 - AND MUST NOT synthesize runtime adoption or benchmark success.
 
-### Requirement: The compatibility probe consumes Octet toolchain packages [r[molten.node_replication_pilot.octet_toolchain_consumption]]
+### Requirement: The compatibility probe consumes Octet toolchain packages
+r[molten.node_replication_pilot.octet_toolchain_consumption]
 
 The node-replication compatibility probe MUST consume its Verus profile and production verifier package from an exact published Octet revision. The pilot MUST NOT independently reconstruct the production verifier or its Rust toolchain from copied release metadata. The decision evidence MUST bind the Octet revision, profile artifact identity, and verifier package output.
 

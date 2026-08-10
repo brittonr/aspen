@@ -36,7 +36,8 @@ r[molten.artifact_auth_adoption.cutover] Molten MUST dual-run legacy and standal
 - WHEN Molten evaluates cutover admission
 - THEN the legacy path SHALL remain authoritative and the exact blocker SHALL be recorded without weakening runtime or authority gates.
 
-### Requirement: Unified Artifact workspace source transport r[molten.artifact_auth_adoption.radicle_transport]
+### Requirement: Unified Artifact workspace source transport
+r[molten.artifact_auth_adoption.radicle_transport]
 
 Molten MUST consume the three packages from the immutable unified Artifact repository. It MUST retain the predecessor Radicle identity as historical evidence only.
 
@@ -52,7 +53,8 @@ Molten MUST consume the three packages from the immutable unified Artifact repos
 - WHEN source admission runs
 - THEN the dependency MUST be rejected.
 
-### Requirement: Cargo, Nix, policy, and build-plan agreement r[molten.artifact_auth_adoption.radicle_agreement]
+### Requirement: Cargo, Nix, policy, and build-plan agreement
+r[molten.artifact_auth_adoption.radicle_agreement]
 
 Cargo manifests, `Cargo.lock`, `flake.nix`, `flake.lock`, the release profile, and both unit2nix plans MUST identify one Artifact repository and revision. The consumer graph MUST include only authentication and binding packages from that source.
 
@@ -68,7 +70,8 @@ Cargo manifests, `Cargo.lock`, `flake.nix`, `flake.lock`, the release profile, a
 - WHEN agreement validation runs
 - THEN validation MUST fail.
 
-### Requirement: Behavioral parity checks r[molten.artifact_auth_adoption.radicle_behavior]
+### Requirement: Behavioral parity checks
+r[molten.artifact_auth_adoption.radicle_behavior]
 
 The source migration MUST preserve existing Molten authentication and binding behavior under focused positive and negative checks without Rust implementation changes.
 
@@ -84,7 +87,8 @@ The source migration MUST preserve existing Molten authentication and binding be
 - WHEN parity is evaluated
 - THEN the migration MUST not be accepted.
 
-### Requirement: No mixed or automatic source fallback r[molten.artifact_auth_adoption.radicle_fallback]
+### Requirement: No mixed or automatic source fallback
+r[molten.artifact_auth_adoption.radicle_fallback]
 
 Molten MUST use only the admitted unified source in manifests, locks, policy, and generated plans. It MUST NOT automatically select the predecessor repository, a sibling path, or a floating source.
 
@@ -100,7 +104,8 @@ Molten MUST use only the admitted unified source in manifests, locks, policy, an
 - WHEN active-source validation runs
 - THEN historical evidence MAY remain while executable inputs use only the unified source.
 
-### Requirement: Typed source migration evidence r[molten.artifact_auth_adoption.radicle_evidence]
+### Requirement: Typed source migration evidence
+r[molten.artifact_auth_adoption.radicle_evidence]
 
 Molten MUST emit typed Nickel and JSON evidence with a BLAKE3 sidecar. The evidence MUST bind source and consumer sets, source-byte identity, policy, plans, checks, rollback, and non-claims.
 
