@@ -828,6 +828,22 @@
                   runtime_spine_sam_repairs=evidence/tracey/runtime-spine-sam-direct-repairs.ncl
                   runtime_spine_sam_repairs_generated=evidence/tracey/runtime-spine-sam-direct-repairs.json
                   expected_runtime_spine_sam_repair_count=13
+                  # r[impl molten.project.runtime_spine_content_refs_tracey.direct_repairs]
+                  # r[verify molten.project.runtime_spine_content_refs_tracey.direct_repairs]
+                  # r[impl molten.project.runtime_spine_content_refs_tracey.exact_manifest]
+                  # r[verify molten.project.runtime_spine_content_refs_tracey.exact_manifest]
+                  # r[impl molten.project.runtime_spine_content_refs_tracey.growth_denial]
+                  # r[verify molten.project.runtime_spine_content_refs_tracey.growth_denial]
+                  # r[impl molten.project.runtime_spine_content_refs_tracey.non_claims]
+                  # r[verify molten.project.runtime_spine_content_refs_tracey.non_claims]
+                  # r[impl molten.runtime_spine.canonical_content_refs.cleanup_tests]
+                  # r[verify molten.runtime_spine.canonical_content_refs.cleanup_tests]
+                  # r[verify molten.runtime_spine.canonical_content_refs.migration]
+                  runtime_spine_content_refs_repairs=evidence/tracey/runtime-spine-content-refs-direct-repairs.ncl
+                  runtime_spine_content_refs_repairs_generated=evidence/tracey/runtime-spine-content-refs-direct-repairs.json
+                  expected_runtime_spine_content_refs_candidate_count=12
+                  expected_runtime_spine_content_refs_repair_count=10
+                  expected_runtime_spine_content_refs_rejected_count=2
 
                   rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
                   "$TMPDIR/guard-tests"
@@ -930,6 +946,47 @@
                     fi
                     grep -Fq "r[impl $requirement_id]" "$implementation_path"
                     grep -Fq "r[verify $requirement_id]" "$verification_path"
+                  done
+
+                  nickel typecheck "$runtime_spine_content_refs_repairs"
+                  nickel export "$runtime_spine_content_refs_repairs" --format json \
+                    > "$TMPDIR/runtime-spine-content-refs-repairs.json"
+                  diff -u \
+                    "$runtime_spine_content_refs_repairs_generated" \
+                    "$TMPDIR/runtime-spine-content-refs-repairs.json"
+                  content_refs_candidate_count="$(jq '.candidate_count' "$runtime_spine_content_refs_repairs_generated")"
+                  test "$content_refs_candidate_count" -eq "$expected_runtime_spine_content_refs_candidate_count"
+                  content_refs_repair_count="$(jq '.repairs | length' "$runtime_spine_content_refs_repairs_generated")"
+                  test "$content_refs_repair_count" -eq "$expected_runtime_spine_content_refs_repair_count"
+                  unique_content_refs_repair_count="$(jq -r '.repairs[].requirement_id' \
+                    "$runtime_spine_content_refs_repairs_generated" | sort -u | wc -l)"
+                  test "$unique_content_refs_repair_count" -eq "$expected_runtime_spine_content_refs_repair_count"
+                  content_refs_rejected_count="$(jq '.rejected_candidates | length' \
+                    "$runtime_spine_content_refs_repairs_generated")"
+                  test "$content_refs_rejected_count" -eq "$expected_runtime_spine_content_refs_rejected_count"
+                  unique_content_refs_rejected_count="$(jq -r '.rejected_candidates[].requirement_id' \
+                    "$runtime_spine_content_refs_repairs_generated" | sort -u | wc -l)"
+                  test "$unique_content_refs_rejected_count" -eq "$expected_runtime_spine_content_refs_rejected_count"
+                  jq -r '.repairs[] | [.requirement_id, .implementation_path, .verification_path] | @tsv' \
+                    "$runtime_spine_content_refs_repairs_generated" \
+                    | while IFS="$(printf '\t')" read -r requirement_id implementation_path verification_path
+                  do
+                    if grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "runtime-spine content-ref repair remains in inherited debt baseline: $requirement_id" >&2
+                      exit 1
+                    fi
+                    grep -Fq "r[impl $requirement_id]" "$implementation_path"
+                    grep -Fq "r[verify $requirement_id]" "$verification_path"
+                  done
+                  jq -r '.rejected_candidates[] | [.requirement_id, .counterexample_path] | @tsv' \
+                    "$runtime_spine_content_refs_repairs_generated" \
+                    | while IFS="$(printf '\t')" read -r requirement_id counterexample_path
+                  do
+                    if ! grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "rejected runtime-spine content-ref candidate left inherited debt: $requirement_id" >&2
+                      exit 1
+                    fi
+                    test -f "$counterexample_path"
                   done
 
                   for repaired in \

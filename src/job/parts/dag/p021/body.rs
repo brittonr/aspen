@@ -270,6 +270,7 @@ fn validate_node_id(id: &str) -> Result<()> {
     }
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
     crate::preserves_rail::validate_content_ref(value_ref).map_err(|error| {

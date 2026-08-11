@@ -64,6 +64,7 @@ fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }

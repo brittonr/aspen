@@ -299,6 +299,7 @@ fn validate_read_consistency_mode(value: &str) -> Result<()> {
     }
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn validate_ref(value: &str, label: &str) -> Result<()> {
     validate_non_empty(value, label)?;
     validate_content_ref(value).map_err(|error| {

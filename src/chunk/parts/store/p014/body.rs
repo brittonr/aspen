@@ -238,6 +238,7 @@ fn filename_for_ref(reference: &str) -> Result<String> {
     Ok(format!("blake3_{hex}.bin"))
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.filename_readback]
 fn ref_from_filename(filename: &str) -> Option<String> {
     let hex = filename.strip_prefix("blake3_").and_then(|value| value.strip_suffix(".bin"))?;
     content_ref_from_hex(hex).ok()

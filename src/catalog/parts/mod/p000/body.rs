@@ -36,6 +36,7 @@ fn to_text(value: &IoValue) -> Result<String> {
     crate::preserves_rail::to_text(value)
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }

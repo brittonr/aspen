@@ -22,6 +22,7 @@
 
     #[test]
     fn rejects_malformed_and_missing_content_refs_before_path_use() {
+        // r[verify molten.runtime_spine.canonical_content_refs.negative_tests]
         let root = temp_dir("ledger-ref-shape");
         ensure_dirs(&root).expect("ledger dirs");
         for invalid in [
@@ -41,6 +42,7 @@
 
     #[test]
     fn read_detects_tampered_materialized_bytes() {
+        // r[verify molten.runtime_spine.canonical_content_refs.materialized_readback]
         let root = temp_dir("ledger-tampered-bytes");
         let artifact = crate::preserves_rail::parse_text("<example \"original\">").expect("parse original");
         let imported = import_artifact(&root, &artifact).expect("import original");

@@ -157,6 +157,7 @@
 
     #[test]
     fn control_request_and_receipt_bind_authority_resource_and_subreceipts() {
+        // r[verify molten.runtime_spine.canonical_content_refs.node_control]
         let target_ref = test_ref("target");
         let payload_ref = test_ref("payload");
         let authority_refs = vec![test_ref("authority")];
@@ -217,6 +218,7 @@
 
     #[test]
     fn control_denial_is_canonical_when_authority_or_resource_evidence_is_missing() {
+        // r[verify molten.runtime_spine.canonical_content_refs.not_trust]
         let payload_ref = test_ref("payload");
         let request_value = control_request_value(&ControlRequestValueInput {
             operation: "gate",

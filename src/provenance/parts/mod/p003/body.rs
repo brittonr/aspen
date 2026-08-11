@@ -85,6 +85,7 @@ fn ensure_ref_bound(len: usize, max: usize, context: &str) -> Result<()> {
     }
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn validate_ref(value: &str, context: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value).map_err(|error| {
         MoltenError::invalid_harness(format!("invalid {context}: expected canonical content ref: {error}"))

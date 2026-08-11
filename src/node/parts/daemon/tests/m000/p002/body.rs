@@ -43,6 +43,8 @@
 
     #[test]
     fn control_ingress_denies_tampered_materialized_envelope_ref() {
+        // r[verify molten.runtime_spine.canonical_content_refs.node_control]
+        // r[verify molten.runtime_spine.canonical_content_refs.negative_tests]
         let pair = materialized_ingress_pair();
         publish_control_ingress(&ControlIngressPublishInput {
             state_root: &pair.root,

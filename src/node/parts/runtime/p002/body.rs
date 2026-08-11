@@ -45,6 +45,8 @@ pub fn node_startup_receipt_value(input: &StartupReceiptValueInput<'_>) -> Resul
     ]))
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.node_control]
+// r[impl molten.runtime_spine.canonical_content_refs.not_trust]
 pub fn control_request_value(input: &ControlRequestValueInput<'_>) -> Result<IoValue> {
     validate_control_operation(input.operation)?;
     if let Some(target_ref) = input.target_ref {

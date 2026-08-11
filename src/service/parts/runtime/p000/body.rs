@@ -26,6 +26,7 @@ fn string(value: impl AsRef<str>) -> preserves::IOValue {
     crate::preserves_rail::string(value)
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn validate_content_ref(value: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
 }

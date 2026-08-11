@@ -69,6 +69,7 @@ pub fn parse_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressE
     if expected_operation.operation_ref != operation_ref {
         return Err(MoltenError::invalid_harness("node control ingress operation ref mismatch"));
     }
+    // r[impl molten.runtime_spine.canonical_content_refs.node_control]
     Ok(ControlIngressEnvelope {
         envelope_ref: crate::preserves_rail::canonical_hash(value)?,
         transport,

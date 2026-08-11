@@ -274,6 +274,7 @@ fn filename_for_ref(artifact_ref: &str) -> crate::error::Result<String> {
     Ok(format!("blake3_{hex}.bin"))
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.filename_readback]
 fn ref_from_filename(filename: &str) -> Option<String> {
     let hex = filename.strip_prefix("blake3_").and_then(|value| value.strip_suffix(".bin"))?;
     crate::preserves_rail::content_ref_from_hex(hex).ok()

@@ -123,6 +123,7 @@ pub fn read_artifact(root: &std::path::Path, artifact_ref: &str) -> crate::error
     read_artifact_with_root(&root, artifact_ref)
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.materialized_readback]
 pub fn read_artifact_with_root(
     root: &CapabilityLedgerRoot,
     artifact_ref: &str,

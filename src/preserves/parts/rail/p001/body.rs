@@ -122,6 +122,8 @@ pub const HASH_ALGORITHM: &str = "blake3-preserves-packed-v1";
 const BLAKE3_REF_PREFIX: &str = "blake3:";
 const BLAKE3_HEX_LEN: usize = 64;
 
+// r[impl molten.runtime_spine.canonical_content_refs.shape]
+// r[impl molten.runtime_spine.canonical_content_refs.negative_tests]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ContentRef(String);
 
@@ -219,6 +221,7 @@ pub fn content_ref_hex(value: &str) -> Result<&str> {
     Ok(hex)
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.filename_readback]
 pub fn content_ref_from_hex(hex: &str) -> Result<String> {
     let reference = format!("{BLAKE3_REF_PREFIX}{hex}");
     validate_content_ref_hex(&reference, hex)?;
@@ -2451,6 +2454,10 @@ mod tests {
 
     #[test]
     fn content_ref_parser_rejects_non_canonical_shapes() {
+        // r[verify molten.runtime_spine.canonical_content_refs.shape]
+        // r[verify molten.runtime_spine.canonical_content_refs.filename_readback]
+        // r[verify molten.runtime_spine.canonical_content_refs.scoped_aliases]
+        // r[verify molten.runtime_spine.canonical_content_refs.negative_tests]
         let valid = "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         super::validate_content_ref(valid).expect("valid ref");
         let parsed = super::ContentRef::parse(valid).expect("parsed ref");
@@ -2470,10 +2477,24 @@ mod tests {
             "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
             "blake3:0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
             "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "b3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
             "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde/",
         ] {
             assert!(super::validate_content_ref(invalid).is_err(), "invalid ref accepted: {invalid}");
+        }
+
+        for invalid_hex in [
+            "",
+            "fixture",
+            "0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde/",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
+        ] {
+            assert!(
+                super::content_ref_from_hex(invalid_hex).is_err(),
+                "invalid filename digest accepted: {invalid_hex}"
+            );
         }
     }
 

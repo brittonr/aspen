@@ -94,6 +94,7 @@ fn bytes_ref(bytes: &[u8]) -> String {
     content_ref_from_bytes(bytes)
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.scoped_aliases]
 fn b3_ref_from_bytes(bytes: &[u8]) -> Result<String> {
     let reference = content_ref_from_bytes(bytes);
     Ok(format!("b3:{}", content_ref_hex(&reference)?))

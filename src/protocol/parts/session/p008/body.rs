@@ -269,6 +269,7 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
     Ok(())
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn require_ref(reference: &str, label: &str) -> Result<()> {
     validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))

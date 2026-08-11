@@ -30,6 +30,7 @@ fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.runtime_values]
 #[derive(Clone)]
 pub struct RuntimeValue {
     value: IoValue,

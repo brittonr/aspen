@@ -87,6 +87,7 @@ impl RuntimeEffect {
     }
 }
 
+// r[impl molten.runtime_spine.canonical_content_refs.runtime_values]
 impl RuntimeEvent {
     pub fn to_value(&self) -> IoValue {
         match self {

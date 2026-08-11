@@ -95,6 +95,7 @@
 
     #[hegel::test(test_cases = 16)]
     fn hegel_mixed_turn_commit_and_rollback_trace_preserves_transition_laws(tc: TestCase) {
+        // r[verify molten.runtime_spine.canonical_content_refs.runtime_values]
         // r[verify molten.runtime_state_machine_proof.turn_commit_delta]
         // r[verify molten.runtime_state_machine_proof.turn_rollback_no_mutation]
         // r[verify molten.runtime_state_machine_proof.turn_predicate_receipts]
