@@ -161,6 +161,8 @@ pub fn parse_suite(value: &preserves::IOValue) -> Result<Suite> {
     })
 }
 
+// r[impl molten.sam_service_supervision.spec.demand_start]
+// r[impl molten.sam_service_demand_runtime.spec.admitted_demand_start]
 pub fn run_suite_value(value: &preserves::IOValue) -> Result<Run> {
     let suite = parse_suite(value)?;
     run_suite(&suite)

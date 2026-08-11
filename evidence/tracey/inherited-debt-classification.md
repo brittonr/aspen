@@ -6,7 +6,7 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 
 | Count | Specification |
 | ---: | --- |
-| 419 | `cairn/specs/runtime-spine/spec.md` |
+| 406 | `cairn/specs/runtime-spine/spec.md` |
 | 310 | `cairn/specs/testing-harness/spec.md` |
 | 196 | `cairn/specs/evidence-gates/spec.md` |
 | 66 | `cairn/specs/project/spec.md` |
@@ -140,7 +140,6 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 4 | `plugin_lifecycle_state_proof` |
 | 4 | `preserves_content_ref` |
 | 4 | `prod_release_candidate` |
-| 4 | `sam_service_supervision_cleanup` |
 | 4 | `trellis_protocol_session` |
 | 3 | `blob_ref_jobs` |
 | 3 | `dataspace_delivery_idempotency` |
@@ -148,9 +147,6 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 3 | `operator_dogfood_node_workflow` |
 | 3 | `plugin_contract_hardening` |
 | 3 | `runtime` |
-| 3 | `sam_service_demand_runtime` |
-| 3 | `sam_service_records_ledger` |
-| 3 | `sam_service_supervision` |
 | 2 | `iroh_experiments` |
 | 2 | `preserves_boundary_field_contracts` |
 | 1 | `claim_authority` |

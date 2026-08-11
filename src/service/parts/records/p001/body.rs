@@ -32,6 +32,7 @@ pub enum ServiceRecord {
     CleanupReceipt(ServiceCleanupReceipt),
 }
 
+// r[impl molten.sam_service_records_ledger.spec.explicit_boundaries]
 pub fn service_manifest_value(input: &ServiceManifestInput) -> Result<IoValue> {
     validate_manifest_input(input)?;
     Ok(record("service-manifest-v1", vec![

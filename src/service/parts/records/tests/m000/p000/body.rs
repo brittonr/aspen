@@ -47,6 +47,7 @@
     }
 
     #[test]
+    // r[verify molten.sam_service_records_ledger.spec.explicit_boundaries]
     fn service_manifest_requires_explicit_boundaries() {
         let mut input = manifest_input();
         input.policy_refs.clear();

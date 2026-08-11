@@ -262,6 +262,7 @@ fn readiness_assertion_value(
     ]))
 }
 
+// r[impl molten.sam_service_demand_runtime.spec.owned_assertion_replay]
 fn replay_identity_value(
     evidence: &EvidenceInput,
     demand: &crate::service_records::ServiceDemand,

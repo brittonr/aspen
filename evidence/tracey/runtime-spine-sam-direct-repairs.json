@@ -1,0 +1,113 @@
+{
+  "accepted_specification": "cairn/specs/runtime-spine/spec.md",
+  "base_revision": "80fbe0a87ef7b8248b90ef4357eed152fe2cc037",
+  "baseline_after": 1943,
+  "baseline_before": 1956,
+  "candidate_count": 13,
+  "non_claims": [
+    "complete-runtime-spine-coverage",
+    "ambient-service-authority",
+    "operating-system-parentage-as-supervision",
+    "retention-policy-bypass",
+    "release-readiness",
+    "whole-system-correctness"
+  ],
+  "observed_date": "2026-08-10",
+  "rejected_candidates": [],
+  "repairs": [
+    {
+      "evidence_scope": "canonical demand startup after explicit authority, policy, resource, effect-profile, and source-gate admission",
+      "implementation_path": "src/service/parts/runtime/p001/body.rs",
+      "requirement_id": "molten.sam_service_demand_runtime.spec.admitted_demand_start",
+      "source_area": "sam_service_demand_runtime",
+      "verification_path": "src/service/parts/runtime/p004/body.rs"
+    },
+    {
+      "evidence_scope": "bounded deterministic dependency ordering with missing-dependency waits and cycle denial",
+      "implementation_path": "src/service/parts/runtime/p003/body.rs",
+      "requirement_id": "molten.sam_service_demand_runtime.spec.dependency_resolution",
+      "source_area": "sam_service_demand_runtime",
+      "verification_path": "src/service/parts/runtime/p004/body.rs"
+    },
+    {
+      "evidence_scope": "service-owned status and readiness artifacts bound to canonical replay identities",
+      "implementation_path": "src/service/parts/runtime/p002/body.rs",
+      "requirement_id": "molten.sam_service_demand_runtime.spec.owned_assertion_replay",
+      "source_area": "sam_service_demand_runtime",
+      "verification_path": "src/service/parts/runtime/p004/body.rs"
+    },
+    {
+      "evidence_scope": "typed canonical service records, stable BLAKE3 references, parsers, and ledger classification",
+      "implementation_path": "src/service/parts/records/p002/body.rs",
+      "requirement_id": "molten.sam_service_records_ledger.spec.canonical_records",
+      "source_area": "sam_service_records_ledger",
+      "verification_path": "src/service/parts/records/tests/m000/p001/body.rs"
+    },
+    {
+      "evidence_scope": "classified service artifacts with redacted summaries that cannot substitute for canonical evidence",
+      "implementation_path": "src/service/parts/records/p002/body.rs",
+      "requirement_id": "molten.sam_service_records_ledger.spec.catalog_redaction",
+      "source_area": "sam_service_records_ledger",
+      "verification_path": "src/service/parts/records/tests/m000/p001/body.rs"
+    },
+    {
+      "evidence_scope": "service manifests require explicit owner authority, policy, resource, and effect-profile refs",
+      "implementation_path": "src/service/parts/records/p001/body.rs",
+      "requirement_id": "molten.sam_service_records_ledger.spec.explicit_boundaries",
+      "source_area": "sam_service_records_ledger",
+      "verification_path": "src/service/parts/records/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "termination and revocation cleanup retracts indexed service-owned state and emits canonical receipts",
+      "implementation_path": "src/service/parts/supervision/p003/body.rs",
+      "requirement_id": "molten.sam_service_supervision.spec.cleanup",
+      "source_area": "sam_service_supervision",
+      "verification_path": "src/service/parts/supervision/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "matching demand starts only after explicit startup evidence passes and emits no readiness on denial",
+      "implementation_path": "src/service/parts/runtime/p001/body.rs",
+      "requirement_id": "molten.sam_service_supervision.spec.demand_start",
+      "source_area": "sam_service_supervision",
+      "verification_path": "src/service/parts/runtime/p004/body.rs"
+    },
+    {
+      "evidence_scope": "canonical logical links, monitor notifications, restart decisions, failure propagation, and deterministic replay",
+      "implementation_path": "src/service/parts/supervision/p001/body.rs",
+      "requirement_id": "molten.sam_service_supervision.spec.supervision",
+      "source_area": "sam_service_supervision",
+      "verification_path": "src/service/parts/supervision/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "restart decisions bind policy, authority, resource, logical budget, lifecycle refs, and bounded denial",
+      "implementation_path": "src/service/parts/supervision/p003/body.rs",
+      "requirement_id": "molten.sam_service_supervision_cleanup.spec.bounded_restart",
+      "source_area": "sam_service_supervision_cleanup",
+      "verification_path": "src/service/parts/supervision/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "cleanup receipts bind lifecycle, ownership, revocation, retraction, resource, and retention inputs for replay",
+      "implementation_path": "src/service/parts/supervision/p003/body.rs",
+      "requirement_id": "molten.sam_service_supervision_cleanup.spec.cleanup_replay_retention",
+      "source_area": "sam_service_supervision_cleanup",
+      "verification_path": "src/service/parts/supervision/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "logical supervision records and receipts reject OS parentage as pass evidence",
+      "implementation_path": "src/service/parts/supervision/p001/body.rs",
+      "requirement_id": "molten.sam_service_supervision_cleanup.spec.logical_supervision",
+      "source_area": "sam_service_supervision_cleanup",
+      "verification_path": "src/service/parts/supervision/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "owned assertions, observers, live refs, exposed refs, and pending effects retract while foreign claims deny",
+      "implementation_path": "src/service/parts/supervision/p003/body.rs",
+      "requirement_id": "molten.sam_service_supervision_cleanup.spec.owned_cleanup",
+      "source_area": "sam_service_supervision_cleanup",
+      "verification_path": "src/service/parts/supervision/tests/m000/p000/body.rs"
+    }
+  ],
+  "runtime_spine_after": 406,
+  "runtime_spine_before": 419,
+  "schema": "molten.runtime-spine-sam-tracey-direct-repairs.v1"
+}

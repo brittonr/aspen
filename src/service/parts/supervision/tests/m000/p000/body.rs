@@ -42,6 +42,8 @@
     }
 
     #[test]
+    // r[verify molten.sam_service_supervision.spec.supervision]
+    // r[verify molten.sam_service_supervision_cleanup.spec.logical_supervision]
     fn failure_notifies_monitors_and_restart_passes() {
         let suite_value = supervision_fixture_suite_value().expect("fixture suite");
         let run = run_service_supervision_suite_value(&suite_value).expect("run supervision");
@@ -65,6 +67,7 @@
     }
 
     #[test]
+    // r[verify molten.sam_service_supervision_cleanup.spec.bounded_restart]
     fn restart_budget_exhausted_cleans_and_publishes_final_status() {
         let suite_value = suite_with_attempt(2);
         let run = run_service_supervision_suite_value(&suite_value).expect("run supervision");
@@ -79,6 +82,9 @@
     }
 
     #[test]
+    // r[verify molten.sam_service_supervision.spec.cleanup]
+    // r[verify molten.sam_service_supervision_cleanup.spec.owned_cleanup]
+    // r[verify molten.sam_service_supervision_cleanup.spec.cleanup_replay_retention]
     fn revocation_retracts_owned_state_and_binds_retention() {
         let mut suite = parse_service_supervision_suite(&supervision_fixture_suite_value().expect("fixture suite"))
             .expect("parse fixture suite");

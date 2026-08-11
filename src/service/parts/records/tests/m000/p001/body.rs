@@ -1,5 +1,6 @@
 
     #[test]
+    // r[verify molten.sam_service_records_ledger.spec.canonical_records]
     fn service_record_variants_roundtrip() {
         assert_variants(&case());
     }
@@ -30,6 +31,7 @@
     }
 
     #[test]
+    // r[verify molten.sam_service_records_ledger.spec.catalog_redaction]
     fn service_summary_redacts_secret_markers_and_is_not_parseable_evidence() {
         let lifecycle = parse_text(
             "<service-lifecycle-receipt-v1 \"molten.service.lifecycle-receipt.v1\" \

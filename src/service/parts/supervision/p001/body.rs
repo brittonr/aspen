@@ -1,4 +1,6 @@
 
+// r[impl molten.sam_service_supervision.spec.supervision]
+// r[impl molten.sam_service_supervision_cleanup.spec.logical_supervision]
 pub fn run_service_supervision_suite(suite: &ServiceSupervisionSuite) -> Result<ServiceSupervisionRun> {
     let mut monitors = suite
         .monitors

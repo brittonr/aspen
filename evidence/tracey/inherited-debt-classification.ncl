@@ -48,20 +48,20 @@ let metadata | ClassificationMetadata = {
   classification_base_revision = "53f8f700f6fbd8facac379fcf50a7d4fe42b4a6c",
   baseline = {
     path = "evidence/tracey/inherited-debt-baseline.txt",
-    blake3 = "4c94630b1513724d666a0d43a02156a2d125d23e942c8388bc3eab032b5633e4",
-    entries = 1956,
+    blake3 = "ae2115f20d7b1c21c8b5c451570b739b458ca981ef8f454aa04bced8b55deb56",
+    entries = 1943,
   },
   inventory = {
     path = "evidence/tracey/inherited-debt-classification.tsv",
-    blake3 = "9b1b0497dfc7e03a151f613cefe49e041d848fdd457168d39e69e8b4973e1099",
+    blake3 = "1fa4a3ad215952b2c91105e5f5515c33f39492dfa2a15425a40b0841327ed285",
     summary_path = "evidence/tracey/inherited-debt-classification.md",
-    summary_blake3 = "ce3b90d95ab16b5ee177e93d4dc39917a23abd07ceab03d87c11c8b11bbdb8e5",
-    entries = 1956,
+    summary_blake3 = "bf54482eae8d6aedda47052fec017400416011b6a4a168d3572eab858aa53f00",
+    entries = 1943,
     specification_groups = 35,
-    source_area_groups = 111,
+    source_area_groups = 107,
   },
   classes = {
-    accepted_implementation_unestablished = 1956,
+    accepted_implementation_unestablished = 1943,
     implemented_missing_marker = 0,
     renamed_or_replaced = 0,
     obsolete_or_invalid = 0,
@@ -86,6 +86,7 @@ let metadata | ClassificationMetadata = {
   direct_repair_manifests = [
     "evidence/tracey/runtime-spine-direct-repairs.ncl",
     "evidence/tracey/runtime-spine-job-dag-direct-repairs.ncl",
+    "evidence/tracey/runtime-spine-sam-direct-repairs.ncl",
   ],
   identity_repairs = [
     {

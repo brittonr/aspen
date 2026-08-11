@@ -71,6 +71,8 @@ mod tests {
     }
 
     #[test]
+    // r[verify molten.sam_service_supervision.spec.demand_start]
+    // r[verify molten.sam_service_demand_runtime.spec.admitted_demand_start]
     fn two_service_demand_starts_dependency_then_frontend() {
         let suite_value = two_service_suite_value().expect("two service suite");
         let run = run_suite_value(&suite_value).expect("run services");
@@ -141,6 +143,7 @@ mod tests {
     }
 
     #[test]
+    // r[verify molten.sam_service_demand_runtime.spec.dependency_resolution]
     fn dependency_cycle_denies_without_readiness() {
         let frontend = manifest("svc:frontend", vec!["svc:backend".to_string()]);
         let backend = manifest("svc:backend", vec!["svc:frontend".to_string()]);
@@ -186,6 +189,7 @@ mod tests {
     }
 
     #[test]
+    // r[verify molten.sam_service_demand_runtime.spec.owned_assertion_replay]
     fn replay_detects_changed_dependency_identity() {
         let suite_value = two_service_suite_value().expect("two service suite");
         let run = run_suite_value(&suite_value).expect("run services");

@@ -817,6 +817,17 @@
                   runtime_spine_job_dag_repairs_generated=evidence/tracey/runtime-spine-job-dag-direct-repairs.json
                   expected_runtime_spine_job_dag_repair_count=9
                   expected_runtime_spine_job_dag_rejected_count=3
+                  # r[impl molten.project.runtime_spine_sam_tracey.direct_repairs]
+                  # r[verify molten.project.runtime_spine_sam_tracey.direct_repairs]
+                  # r[impl molten.project.runtime_spine_sam_tracey.exact_manifest]
+                  # r[verify molten.project.runtime_spine_sam_tracey.exact_manifest]
+                  # r[impl molten.project.runtime_spine_sam_tracey.growth_denial]
+                  # r[verify molten.project.runtime_spine_sam_tracey.growth_denial]
+                  # r[impl molten.project.runtime_spine_sam_tracey.non_claims]
+                  # r[verify molten.project.runtime_spine_sam_tracey.non_claims]
+                  runtime_spine_sam_repairs=evidence/tracey/runtime-spine-sam-direct-repairs.ncl
+                  runtime_spine_sam_repairs_generated=evidence/tracey/runtime-spine-sam-direct-repairs.json
+                  expected_runtime_spine_sam_repair_count=13
 
                   rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
                   "$TMPDIR/guard-tests"
@@ -896,6 +907,29 @@
                       echo "rejected runtime-spine job-DAG candidate left inherited debt: $requirement_id" >&2
                       exit 1
                     fi
+                  done
+
+                  nickel typecheck "$runtime_spine_sam_repairs"
+                  nickel export "$runtime_spine_sam_repairs" --format json > "$TMPDIR/runtime-spine-sam-repairs.json"
+                  diff -u "$runtime_spine_sam_repairs_generated" "$TMPDIR/runtime-spine-sam-repairs.json"
+                  sam_repair_count="$(jq '.repairs | length' "$runtime_spine_sam_repairs_generated")"
+                  test "$sam_repair_count" -eq "$expected_runtime_spine_sam_repair_count"
+                  unique_sam_repair_count="$(jq -r '.repairs[].requirement_id' "$runtime_spine_sam_repairs_generated" | sort -u | wc -l)"
+                  test "$unique_sam_repair_count" -eq "$expected_runtime_spine_sam_repair_count"
+                  candidate_sam_count="$(jq '.candidate_count' "$runtime_spine_sam_repairs_generated")"
+                  test "$candidate_sam_count" -eq "$expected_runtime_spine_sam_repair_count"
+                  rejected_sam_count="$(jq '.rejected_candidates | length' "$runtime_spine_sam_repairs_generated")"
+                  test "$rejected_sam_count" -eq 0
+                  jq -r '.repairs[] | [.requirement_id, .implementation_path, .verification_path] | @tsv' \
+                    "$runtime_spine_sam_repairs_generated" \
+                    | while IFS="$(printf '\t')" read -r requirement_id implementation_path verification_path
+                  do
+                    if grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "runtime-spine SAM repair remains in inherited debt baseline: $requirement_id" >&2
+                      exit 1
+                    fi
+                    grep -Fq "r[impl $requirement_id]" "$implementation_path"
+                    grep -Fq "r[verify $requirement_id]" "$verification_path"
                   done
 
                   for repaired in \

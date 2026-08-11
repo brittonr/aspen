@@ -63,6 +63,7 @@ fn manifest_ref_mismatch(
     demand.manifest_ref.as_ref().is_some_and(|manifest_ref| manifest_ref != &manifest.manifest_ref)
 }
 
+// r[impl molten.sam_service_demand_runtime.spec.dependency_resolution]
 fn dependency_cycle_exists(manifests: &OrderedMap<String, crate::service_records::ServiceManifest>) -> Result<bool> {
     for service_id in manifests.keys() {
         let mut stack = manifests.get(service_id).map(|manifest| manifest.dependencies.clone()).unwrap_or_default();

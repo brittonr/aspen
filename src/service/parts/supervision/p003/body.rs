@@ -18,6 +18,7 @@ fn failure_lifecycle_receipt(
     })
 }
 
+// r[impl molten.sam_service_supervision_cleanup.spec.bounded_restart]
 fn evaluate_restart(suite: &ServiceSupervisionSuite) -> Result<RestartEvaluation> {
     let is_authority_present = !suite.evidence.authority_refs.is_empty();
     let is_resource_present = !suite.evidence.resource_refs.is_empty();
@@ -114,6 +115,8 @@ fn scheduled_demands(suite: &ServiceSupervisionSuite, restart: &RestartEvaluatio
     Ok(vec![demand])
 }
 
+// r[impl molten.sam_service_supervision.spec.cleanup]
+// r[impl molten.sam_service_supervision_cleanup.spec.owned_cleanup]
 fn evaluate_cleanup(
     suite: &ServiceSupervisionSuite,
     restart: &RestartEvaluation,
@@ -240,6 +243,7 @@ fn retraction_value(suite: &ServiceSupervisionSuite, target: &CleanupTarget) -> 
     ]))
 }
 
+// r[impl molten.sam_service_supervision_cleanup.spec.cleanup_replay_retention]
 fn retention_input_value(
     suite: &ServiceSupervisionSuite,
     cleanup_receipt_ref: &str,

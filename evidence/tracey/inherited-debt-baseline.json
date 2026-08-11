@@ -18,12 +18,12 @@
     "whole-system-correctness"
   ],
   "observed_date": "2026-08-10",
-  "referenced": 536,
+  "referenced": 557,
   "requirement_root": "cairn/specs",
-  "requirements": 2492,
+  "requirements": 2500,
   "scanner": "tools/tracey/inherited_debt_guard.rs",
   "schema": "molten.inherited-tracey-debt-baseline.v1",
-  "uncovered": 1956,
+  "uncovered": 1943,
   "uncovered_list": "evidence/tracey/inherited-debt-baseline.txt",
-  "uncovered_list_blake3": "4c94630b1513724d666a0d43a02156a2d125d23e942c8388bc3eab032b5633e4"
+  "uncovered_list_blake3": "ae2115f20d7b1c21c8b5c451570b739b458ca981ef8f454aa04bced8b55deb56"
 }

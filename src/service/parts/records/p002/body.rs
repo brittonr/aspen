@@ -138,6 +138,7 @@ pub fn parse_service_cleanup_receipt(value: &IoValue) -> Result<ServiceCleanupRe
     Ok(receipt)
 }
 
+// r[impl molten.sam_service_records_ledger.spec.canonical_records]
 pub fn parse_service_record(value: &IoValue) -> Result<ServiceRecord> {
     if value.collect_simple_record("service-manifest-v1", Some(11)).is_some() {
         return parse_service_manifest(value).map(ServiceRecord::Manifest);
@@ -172,6 +173,7 @@ pub fn parse_service_record(value: &IoValue) -> Result<ServiceRecord> {
     Err(MoltenError::invalid_harness("unknown service record schema"))
 }
 
+// r[impl molten.sam_service_records_ledger.spec.catalog_redaction]
 pub fn service_summary(value: &IoValue) -> Result<String> {
     let has_sensitive_marker = is_sensitive_marker_present(value)?;
     let redaction = if has_sensitive_marker { " redacted=true" } else { "" };
