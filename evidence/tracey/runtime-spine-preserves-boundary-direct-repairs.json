@@ -1,0 +1,87 @@
+{
+  "accepted_specification": "cairn/specs/runtime-spine/spec.md",
+  "base_revision": "9842cc6453a00ed943a866549bb4307c8502d575",
+  "baseline_after": 1924,
+  "baseline_before": 1933,
+  "candidate_count": 9,
+  "non_claims": [
+    "transport-liveness",
+    "actor-authority-correctness",
+    "replay-completeness",
+    "valence-evidence-ir-acceptance",
+    "universal-adapter-separation",
+    "complete-runtime-spine-coverage",
+    "release-readiness",
+    "whole-system-correctness"
+  ],
+  "observed_date": "2026-08-10",
+  "rejected_candidates": [],
+  "repairs": [
+    {
+      "evidence_scope": "typed rows record all required ownership, identity, consumer, DTO, canonical-byte, and non-claim fields for five admitted families",
+      "implementation_path": "docs/preserves-boundary-profile/contracts.ncl",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.contract",
+      "source_area": "runtime_spine",
+      "verification_path": "docs/preserves-boundary-profile/valid.ncl"
+    },
+    {
+      "evidence_scope": "the modularity guide bounds profile success to canonical boundary identity and adapter placement",
+      "implementation_path": "docs/modularity-boundaries.md",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.docs",
+      "source_area": "runtime_spine",
+      "verification_path": "flake.nix"
+    },
+    {
+      "evidence_scope": "the guide explicitly denies transport liveness, actor authority correctness, replay completeness, and Valence Evidence IR acceptance",
+      "implementation_path": "docs/modularity-boundaries.md",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.docs.non_claims",
+      "source_area": "runtime_spine",
+      "verification_path": "flake.nix"
+    },
+    {
+      "evidence_scope": "focused Rust and Nickel checks plus formatting, Tiger Style, Octet, Cairn, and full Nix validation run before archive",
+      "implementation_path": "flake.nix",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.final_validation",
+      "source_area": "runtime_spine",
+      "verification_path": "cairn/archive/1970-01-01-repair-runtime-spine-preserves-boundary-tracey/evidence/validation.md"
+    },
+    {
+      "evidence_scope": "repository validation exports the valid profile and requires every invalid fixture to fail",
+      "implementation_path": "flake.nix",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.final_validation.fixtures",
+      "source_area": "runtime_spine",
+      "verification_path": "cairn/archive/1970-01-01-repair-runtime-spine-preserves-boundary-tracey/evidence/validation.md"
+    },
+    {
+      "evidence_scope": "Nickel and Rust negatives cover non-canonical bytes, missing labels, stale refs, unsupported consumers, missing non-claims, and raw core coupling",
+      "implementation_path": "docs/preserves-boundary-profile/non-canonical.ncl",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.fixtures.negative",
+      "source_area": "runtime_spine",
+      "verification_path": "flake.nix"
+    },
+    {
+      "evidence_scope": "the valid fixture covers canonical node-control, ticket, workflow-bundle, receipt, and evidence-envelope measurements",
+      "implementation_path": "docs/preserves-boundary-profile/valid.ncl",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.fixtures.positive",
+      "source_area": "runtime_spine",
+      "verification_path": "flake.nix"
+    },
+    {
+      "evidence_scope": "the pure deterministic core validates typed measurements and produces explicit issue values without IO",
+      "implementation_path": "crates/molten-core/src/preserves_profile.rs",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.validation",
+      "source_area": "runtime_spine",
+      "verification_path": "crates/molten-core/src/preserves_profile.rs"
+    },
+    {
+      "evidence_scope": "adapter-only rows reject supplied raw-Preserves core-coupling facts and molten-core has no Preserves dependency or import",
+      "implementation_path": "crates/molten-core/src/preserves_profile.rs",
+      "requirement_id": "molten.runtime_spine.preserves_boundary_profile.validation.core_coupling",
+      "source_area": "runtime_spine",
+      "verification_path": "docs/preserves-boundary-profile/raw-core-coupling.ncl"
+    }
+  ],
+  "runtime_spine_after": 387,
+  "runtime_spine_before": 396,
+  "schema": "molten.runtime-spine-preserves-boundary-tracey-direct-repairs.v1"
+}

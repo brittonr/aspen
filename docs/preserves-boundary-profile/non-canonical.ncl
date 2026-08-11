@@ -1,3 +1,4 @@
+# r[impl molten.runtime_spine.preserves_boundary_profile.fixtures.negative]
 let Contracts = import "contracts.ncl" in
 let Base = import "valid.ncl" in
 Base & {

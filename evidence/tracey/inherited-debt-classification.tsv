@@ -1463,15 +1463,6 @@ cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestabl
 cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.portable_encrypted_storage
 cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.portable_encrypted_storage.encrypted
 cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.portable_encrypted_storage.network_independent
-cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_boundary_profile.contract
-cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_boundary_profile.docs
-cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_boundary_profile.docs.non_claims
-cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_boundary_profile.final_validation
-cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_boundary_profile.final_validation.fixtures
-cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_boundary_profile.fixtures.negative
-cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_boundary_profile.fixtures.positive
-cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_boundary_profile.validation
-cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_boundary_profile.validation.core_coupling
 cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_comms
 cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_comms.dataspace
 cairn/specs/runtime-spine/spec.md	runtime_spine	accepted-implementation-unestablished	molten.runtime_spine.preserves_comms.large_payload

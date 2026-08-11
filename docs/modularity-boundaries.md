@@ -80,6 +80,9 @@ Ownership split for the chunk store:
 
 ## Preserves boundary adoption profile
 
+<!-- r[impl molten.runtime_spine.preserves_boundary_profile.docs] -->
+<!-- r[impl molten.runtime_spine.preserves_boundary_profile.docs.non_claims] -->
+
 The Preserves adoption profile lives under `docs/preserves-boundary-profile/`. It records artifact family, schema label, canonical-byte requirement, BLAKE3 identity field, adapter owner, core DTO boundary, allowed consumers, and non-claims for node control envelopes, tickets, workflow bundles, receipts, and evidence envelopes. `molten_core::preserves_profile::validate_preserves_boundary_profile` is the pure in-memory validator; shells remain responsible for measuring artifact bytes and refs.
 
 Valid fixtures cover canonical node control, ticket, workflow bundle, receipt, and evidence envelope measurements. Negative fixtures fail closed for non-canonical bytes, missing schema labels, stale BLAKE3 refs, and raw-Preserves core coupling. Profile success proves canonical boundary identity and adapter placement only; it does not prove transport liveness, actor authority correctness, replay completeness, or Valence Evidence IR acceptance.

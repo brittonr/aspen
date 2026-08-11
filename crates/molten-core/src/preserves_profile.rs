@@ -1,3 +1,5 @@
+// r[impl molten.runtime_spine.preserves_boundary_profile.validation]
+// r[impl molten.runtime_spine.preserves_boundary_profile.validation.core_coupling]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreservesBoundaryRow<'a> {
     pub artifact_family: &'a str,
@@ -154,6 +156,7 @@ mod tests {
 
     const PROFILE_ROW_COUNT: usize = 5;
 
+    // r[verify molten.runtime_spine.preserves_boundary_profile.validation]
     #[test]
     fn preserves_profile_accepts_canonical_boundary_artifacts() {
         let rows = rows();

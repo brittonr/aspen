@@ -1,3 +1,5 @@
+# r[verify molten.runtime_spine.preserves_boundary_profile.contract]
+# r[impl molten.runtime_spine.preserves_boundary_profile.fixtures.positive]
 let Contracts = import "contracts.ncl" in
 let Ref = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in
 let NonClaim = "canonical-boundary-identity-only: this profile does not prove transport liveness, actor authority correctness, replay completeness, or Valence Evidence IR acceptance" in

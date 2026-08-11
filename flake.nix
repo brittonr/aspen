@@ -844,6 +844,17 @@
                   expected_runtime_spine_content_refs_candidate_count=12
                   expected_runtime_spine_content_refs_repair_count=10
                   expected_runtime_spine_content_refs_rejected_count=2
+                  # r[impl molten.project.runtime_spine_preserves_boundary_tracey.direct_repairs]
+                  # r[verify molten.project.runtime_spine_preserves_boundary_tracey.direct_repairs]
+                  # r[impl molten.project.runtime_spine_preserves_boundary_tracey.exact_manifest]
+                  # r[verify molten.project.runtime_spine_preserves_boundary_tracey.exact_manifest]
+                  # r[impl molten.project.runtime_spine_preserves_boundary_tracey.growth_denial]
+                  # r[verify molten.project.runtime_spine_preserves_boundary_tracey.growth_denial]
+                  # r[impl molten.project.runtime_spine_preserves_boundary_tracey.non_claims]
+                  # r[verify molten.project.runtime_spine_preserves_boundary_tracey.non_claims]
+                  runtime_spine_preserves_boundary_repairs=evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.ncl
+                  runtime_spine_preserves_boundary_repairs_generated=evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json
+                  expected_runtime_spine_preserves_boundary_candidate_count=9
 
                   rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
                   "$TMPDIR/guard-tests"
@@ -987,6 +998,39 @@
                       exit 1
                     fi
                     test -f "$counterexample_path"
+                  done
+
+                  nickel typecheck "$runtime_spine_preserves_boundary_repairs"
+                  nickel export "$runtime_spine_preserves_boundary_repairs" --format json \
+                    > "$TMPDIR/runtime-spine-preserves-boundary-repairs.json"
+                  diff -u \
+                    "$runtime_spine_preserves_boundary_repairs_generated" \
+                    "$TMPDIR/runtime-spine-preserves-boundary-repairs.json"
+                  preserves_boundary_candidate_count="$(jq '.candidate_count' \
+                    "$runtime_spine_preserves_boundary_repairs_generated")"
+                  test "$preserves_boundary_candidate_count" -eq \
+                    "$expected_runtime_spine_preserves_boundary_candidate_count"
+                  preserves_boundary_repair_count="$(jq '.repairs | length' \
+                    "$runtime_spine_preserves_boundary_repairs_generated")"
+                  test "$preserves_boundary_repair_count" -eq \
+                    "$expected_runtime_spine_preserves_boundary_candidate_count"
+                  unique_preserves_boundary_repair_count="$(jq -r '.repairs[].requirement_id' \
+                    "$runtime_spine_preserves_boundary_repairs_generated" | sort -u | wc -l)"
+                  test "$unique_preserves_boundary_repair_count" -eq \
+                    "$expected_runtime_spine_preserves_boundary_candidate_count"
+                  preserves_boundary_rejected_count="$(jq '.rejected_candidates | length' \
+                    "$runtime_spine_preserves_boundary_repairs_generated")"
+                  test "$preserves_boundary_rejected_count" -eq 0
+                  jq -r '.repairs[] | [.requirement_id, .implementation_path, .verification_path] | @tsv' \
+                    "$runtime_spine_preserves_boundary_repairs_generated" \
+                    | while IFS="$(printf '\t')" read -r requirement_id implementation_path verification_path
+                  do
+                    if grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "runtime-spine Preserves boundary repair remains in inherited debt baseline: $requirement_id" >&2
+                      exit 1
+                    fi
+                    grep -Fq "r[impl $requirement_id]" "$implementation_path"
+                    grep -Fq "r[verify $requirement_id]" "$verification_path"
                   done
 
                   for repaired in \
@@ -1372,6 +1416,25 @@
                   for fixture in docs/production-profile-fixtures/negative/*.ncl; do
                     negative_fixture "production-$(basename "$fixture" .ncl)" "$fixture"
                   done
+                  # r[impl molten.runtime_spine.preserves_boundary_profile.final_validation]
+                  # r[impl molten.runtime_spine.preserves_boundary_profile.final_validation.fixtures]
+                  # r[verify molten.runtime_spine.preserves_boundary_profile.docs]
+                  # r[verify molten.runtime_spine.preserves_boundary_profile.docs.non_claims]
+                  # r[verify molten.runtime_spine.preserves_boundary_profile.fixtures.positive]
+                  # r[verify molten.runtime_spine.preserves_boundary_profile.fixtures.negative]
+                  positive_fixture preserves-boundary-profile-valid docs/preserves-boundary-profile/valid.ncl
+                  for fixture in \
+                    docs/preserves-boundary-profile/non-canonical.ncl \
+                    docs/preserves-boundary-profile/missing-schema-label.ncl \
+                    docs/preserves-boundary-profile/stale-ref.ncl \
+                    docs/preserves-boundary-profile/raw-core-coupling.ncl
+                  do
+                    negative_fixture "preserves-boundary-$(basename "$fixture" .ncl)" "$fixture"
+                  done
+                  grep -Fq 'Profile success proves canonical boundary identity and adapter placement only' \
+                    docs/modularity-boundaries.md
+                  grep -Fq 'it does not prove transport liveness, actor authority correctness, replay completeness, or Valence Evidence IR acceptance' \
+                    docs/modularity-boundaries.md
                   positive_fixture peer-profile-valid docs/peer-profile-fixtures/valid.ncl
                   for fixture in docs/peer-profile-fixtures/negative/*.ncl; do
                     negative_fixture "peer-$(basename "$fixture" .ncl)" "$fixture"

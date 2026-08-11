@@ -1,3 +1,4 @@
+# r[impl molten.runtime_spine.preserves_boundary_profile.contract]
 let Prelude = import "../nickel-contract-prelude.ncl" in
 let Schema = "molten.preserves-boundary-profile.v1" in
 let Families = ["node-control-envelope", "ticket", "workflow-bundle", "receipt", "evidence-envelope"] in
