@@ -45,23 +45,23 @@ in
 let metadata | ClassificationMetadata = {
   schema = "molten.inherited-tracey-debt-classification.v1",
   observed_date = "2026-08-10",
-  classification_base_revision = "4dd9081da8137c10abcd2fac225d982db1d5d0a8",
+  classification_base_revision = "53f8f700f6fbd8facac379fcf50a7d4fe42b4a6c",
   baseline = {
     path = "evidence/tracey/inherited-debt-baseline.txt",
-    blake3 = "8683b2bbb290700478d6729709b76a1c462e39e8617f03b978625ce458384b76",
-    entries = 1965,
+    blake3 = "4c94630b1513724d666a0d43a02156a2d125d23e942c8388bc3eab032b5633e4",
+    entries = 1956,
   },
   inventory = {
     path = "evidence/tracey/inherited-debt-classification.tsv",
-    blake3 = "c4bd27dc9f2db14c0d7ebd3f4de2737181594842f7ffa82b7ebe8b521878d8a7",
+    blake3 = "9b1b0497dfc7e03a151f613cefe49e041d848fdd457168d39e69e8b4973e1099",
     summary_path = "evidence/tracey/inherited-debt-classification.md",
-    summary_blake3 = "d2645c091da454748bbd849ebf195ef46437117e2d05489425dd6d112e4eeade",
-    entries = 1965,
+    summary_blake3 = "ce3b90d95ab16b5ee177e93d4dc39917a23abd07ceab03d87c11c8b11bbdb8e5",
+    entries = 1956,
     specification_groups = 35,
     source_area_groups = 111,
   },
   classes = {
-    accepted_implementation_unestablished = 1965,
+    accepted_implementation_unestablished = 1956,
     implemented_missing_marker = 0,
     renamed_or_replaced = 0,
     obsolete_or_invalid = 0,
@@ -85,6 +85,7 @@ let metadata | ClassificationMetadata = {
   ],
   direct_repair_manifests = [
     "evidence/tracey/runtime-spine-direct-repairs.ncl",
+    "evidence/tracey/runtime-spine-job-dag-direct-repairs.ncl",
   ],
   identity_repairs = [
     {

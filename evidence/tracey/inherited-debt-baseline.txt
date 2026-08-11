@@ -40,17 +40,8 @@ molten.authority.revocation_model
 molten.authority.revocation_tests
 molten.authority.rotation_tests
 molten.authority.storage_remote_catalog
-molten.blob_ref_jobs.content_verification
 molten.blob_ref_jobs.job_dag_integration
-molten.blob_ref_jobs.local_tests
-molten.blob_ref_jobs.local_worker
-molten.blob_ref_jobs.no_inline_large_bytes
-molten.blob_ref_jobs.payload_model
-molten.blob_ref_jobs.property_tests
-molten.blob_ref_jobs.provenance_policy
-molten.blob_ref_jobs.receipts
 molten.blob_ref_jobs.replay_integration
-molten.blob_ref_jobs.retention_pins
 molten.blob_ref_jobs.status_assertions
 molten.boundary_schema_contract_identity.compatibility_note
 molten.boundary_schema_contract_identity.full_contract_ref

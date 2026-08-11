@@ -805,6 +805,18 @@
                   runtime_spine_repairs=evidence/tracey/runtime-spine-direct-repairs.ncl
                   runtime_spine_repairs_generated=evidence/tracey/runtime-spine-direct-repairs.json
                   expected_runtime_spine_repair_count=14
+                  # r[impl molten.project.runtime_spine_job_dag_tracey.direct_repairs]
+                  # r[verify molten.project.runtime_spine_job_dag_tracey.direct_repairs]
+                  # r[impl molten.project.runtime_spine_job_dag_tracey.exact_manifest]
+                  # r[verify molten.project.runtime_spine_job_dag_tracey.exact_manifest]
+                  # r[impl molten.project.runtime_spine_job_dag_tracey.growth_denial]
+                  # r[verify molten.project.runtime_spine_job_dag_tracey.growth_denial]
+                  # r[impl molten.project.runtime_spine_job_dag_tracey.non_claims]
+                  # r[verify molten.project.runtime_spine_job_dag_tracey.non_claims]
+                  runtime_spine_job_dag_repairs=evidence/tracey/runtime-spine-job-dag-direct-repairs.ncl
+                  runtime_spine_job_dag_repairs_generated=evidence/tracey/runtime-spine-job-dag-direct-repairs.json
+                  expected_runtime_spine_job_dag_repair_count=9
+                  expected_runtime_spine_job_dag_rejected_count=3
 
                   rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
                   "$TMPDIR/guard-tests"
@@ -853,6 +865,37 @@
                     fi
                     grep -Fq "r[impl $requirement_id]" "$implementation_path"
                     grep -Fq "r[verify $requirement_id]" "$verification_path"
+                  done
+
+                  nickel typecheck "$runtime_spine_job_dag_repairs"
+                  nickel export "$runtime_spine_job_dag_repairs" --format json > "$TMPDIR/runtime-spine-job-dag-repairs.json"
+                  diff -u "$runtime_spine_job_dag_repairs_generated" "$TMPDIR/runtime-spine-job-dag-repairs.json"
+                  job_dag_repair_count="$(jq '.repairs | length' "$runtime_spine_job_dag_repairs_generated")"
+                  test "$job_dag_repair_count" -eq "$expected_runtime_spine_job_dag_repair_count"
+                  unique_job_dag_repair_count="$(jq -r '.repairs[].requirement_id' "$runtime_spine_job_dag_repairs_generated" | sort -u | wc -l)"
+                  test "$unique_job_dag_repair_count" -eq "$expected_runtime_spine_job_dag_repair_count"
+                  rejected_job_dag_count="$(jq '.rejected_candidates | length' "$runtime_spine_job_dag_repairs_generated")"
+                  test "$rejected_job_dag_count" -eq "$expected_runtime_spine_job_dag_rejected_count"
+                  unique_rejected_job_dag_count="$(jq -r '.rejected_candidates[]' "$runtime_spine_job_dag_repairs_generated" | sort -u | wc -l)"
+                  test "$unique_rejected_job_dag_count" -eq "$expected_runtime_spine_job_dag_rejected_count"
+                  jq -r '.repairs[] | [.requirement_id, .implementation_path, .verification_path] | @tsv' \
+                    "$runtime_spine_job_dag_repairs_generated" \
+                    | while IFS="$(printf '\t')" read -r requirement_id implementation_path verification_path
+                  do
+                    if grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "runtime-spine job-DAG repair remains in inherited debt baseline: $requirement_id" >&2
+                      exit 1
+                    fi
+                    grep -Fq "r[impl $requirement_id]" "$implementation_path"
+                    grep -Fq "r[verify $requirement_id]" "$verification_path"
+                  done
+                  jq -r '.rejected_candidates[]' "$runtime_spine_job_dag_repairs_generated" \
+                    | while IFS= read -r requirement_id
+                  do
+                    if ! grep -Fxq "$requirement_id" "$baseline"; then
+                      echo "rejected runtime-spine job-DAG candidate left inherited debt: $requirement_id" >&2
+                      exit 1
+                    fi
                   done
 
                   for repaired in \

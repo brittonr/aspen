@@ -1179,17 +1179,8 @@ cairn/specs/runtime-patterns/spec.md	haskell_patterns	accepted-implementation-un
 cairn/specs/runtime-patterns/spec.md	haskell_patterns	accepted-implementation-unestablished	molten.haskell_patterns.transactional_turns
 cairn/specs/runtime-patterns/spec.md	haskell_patterns	accepted-implementation-unestablished	molten.haskell_patterns.typed_protocol_state
 cairn/specs/runtime-patterns/spec.md	prod_soak	accepted-implementation-unestablished	molten.prod_soak.network_diagnostics_observability
-cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.content_verification
 cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.job_dag_integration
-cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.local_tests
-cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.local_worker
-cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.no_inline_large_bytes
-cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.payload_model
-cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.property_tests
-cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.provenance_policy
-cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.receipts
 cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.replay_integration
-cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.retention_pins
 cairn/specs/runtime-spine/spec.md	blob_ref_jobs	accepted-implementation-unestablished	molten.blob_ref_jobs.status_assertions
 cairn/specs/runtime-spine/spec.md	boundary_schema_contract_identity	accepted-implementation-unestablished	molten.boundary_schema_contract_identity.compatibility_note
 cairn/specs/runtime-spine/spec.md	boundary_schema_contract_identity	accepted-implementation-unestablished	molten.boundary_schema_contract_identity.full_contract_ref

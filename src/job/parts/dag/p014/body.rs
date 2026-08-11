@@ -1,4 +1,5 @@
 
+// r[impl molten.blob_ref_jobs.receipts]
 fn blob_ref_job_receipt_value(input: BlobRefReceiptValueInput<'_>) -> Result<IoValue> {
     validate_worker_decision(input.decision)?;
     validate_refs(input.status_refs, "job ref receipt status ref")?;
@@ -69,6 +70,7 @@ fn blob_ref_job_receipt_value(input: BlobRefReceiptValueInput<'_>) -> Result<IoV
     ]))
 }
 
+// r[impl molten.blob_ref_jobs.content_verification]
 fn fetch_blob_ref_job_content(
     chunk_root: &FilePath,
     content: &JobContentRef,

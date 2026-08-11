@@ -88,6 +88,7 @@ fn validate_blob_ref_state(state: &str) -> Result<()> {
     }
 }
 
+// r[impl molten.blob_ref_jobs.no_inline_large_bytes]
 fn reject_blob_ref_job_inline_tokens(value: &IoValue) -> Result<()> {
     let text = crate::preserves_rail::to_text(value)?;
     for token in ["inline-bytes", "inline-executable", "inline-dataset"] {

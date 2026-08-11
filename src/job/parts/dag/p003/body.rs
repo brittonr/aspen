@@ -137,6 +137,7 @@ pub fn job_content_ref_value(content: &JobContentRef) -> Result<IoValue> {
     ]))
 }
 
+// r[impl molten.blob_ref_jobs.payload_model]
 pub fn job_ref_submission_value(input: BlobRefJobSubmissionValueInput<'_>) -> Result<IoValue> {
     validate_blob_ref_submission_input(&input)?;
     let input_values = input.inputs.iter().map(job_content_ref_value).collect::<Result<Vec<_>>>()?;
@@ -206,6 +207,10 @@ pub fn parse_job_ref_submission_value(value: &IoValue) -> Result<BlobRefJobSubmi
     Ok(submission)
 }
 
+// r[impl molten.blob_ref_jobs.local_worker]
+// r[impl molten.blob_ref_jobs.retention_pins]
+// r[impl molten.blob_ref_jobs.local_tests]
+// r[impl molten.blob_ref_jobs.property_tests]
 pub fn execute_blob_ref_job(input: BlobRefJobExecuteInput<'_>) -> Result<BlobRefJobExecution> {
     let submission = parse_job_ref_submission_value(input.submission_value)?;
     let (preflight, mut diagnostics) = preflight(&submission)?;

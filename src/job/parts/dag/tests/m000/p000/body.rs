@@ -89,6 +89,13 @@
     }
 
     #[test]
+    // r[verify molten.blob_ref_jobs.payload_model]
+    // r[verify molten.blob_ref_jobs.local_worker]
+    // r[verify molten.blob_ref_jobs.content_verification]
+    // r[verify molten.blob_ref_jobs.provenance_policy]
+    // r[verify molten.blob_ref_jobs.retention_pins]
+    // r[verify molten.blob_ref_jobs.receipts]
+    // r[verify molten.blob_ref_jobs.local_tests]
     fn blob_ref_job_submission_worker_verifies_and_outputs_manifest() {
         let root = temp_dir("job-ref-worker");
         let chunks = root.join("chunks");
@@ -237,6 +244,7 @@
     }
 
     #[test]
+    // r[verify molten.blob_ref_jobs.no_inline_large_bytes]
     fn blob_ref_job_submission_rejects_inline_large_bytes() {
         let operation_id = local_ref("job-ref-operation", "inline").expect("operation id");
         let authority_ref = local_ref("job-ref-authority", "inline").expect("authority ref");

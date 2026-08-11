@@ -77,6 +77,7 @@
     }
 
     #[hegel::test(test_cases = 4)]
+    // r[verify molten.blob_ref_jobs.property_tests]
     fn hegel_blob_ref_submission_rejects_inline_tokens_and_records_pin_lifecycle(tc: hegel::TestCase) {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(10_000));
         let token_selector = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(2));

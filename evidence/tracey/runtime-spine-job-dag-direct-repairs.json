@@ -1,0 +1,89 @@
+{
+  "accepted_specification": "cairn/specs/runtime-spine/spec.md",
+  "base_revision": "53f8f700f6fbd8facac379fcf50a7d4fe42b4a6c",
+  "baseline_after": 1956,
+  "baseline_before": 1965,
+  "candidate_count": 12,
+  "non_claims": [
+    "blob-ref-replay-identity",
+    "complete-blob-ref-status-transition-coverage",
+    "true-job-dag-integration",
+    "complete-runtime-spine-coverage",
+    "release-readiness",
+    "whole-system-correctness"
+  ],
+  "observed_date": "2026-08-10",
+  "rejected_candidates": [
+    "molten.blob_ref_jobs.job_dag_integration",
+    "molten.blob_ref_jobs.replay_integration",
+    "molten.blob_ref_jobs.status_assertions"
+  ],
+  "repairs": [
+    {
+      "evidence_scope": "manifest read and verification before handler execution with missing-content denial",
+      "implementation_path": "src/job/parts/dag/p014/body.rs",
+      "requirement_id": "molten.blob_ref_jobs.content_verification",
+      "source_area": "blob_ref_jobs",
+      "verification_path": "src/job/parts/dag/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "positive local submit-fetch-verify-run-complete test and negative pre-run denial tests",
+      "implementation_path": "src/job/parts/dag/p003/body.rs",
+      "requirement_id": "molten.blob_ref_jobs.local_tests",
+      "source_area": "blob_ref_jobs",
+      "verification_path": "src/job/parts/dag/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "deterministic local fetch-verify-handler-output worker path",
+      "implementation_path": "src/job/parts/dag/p003/body.rs",
+      "requirement_id": "molten.blob_ref_jobs.local_worker",
+      "source_area": "blob_ref_jobs",
+      "verification_path": "src/job/parts/dag/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "inline executable, input, and dataset token denial before execution",
+      "implementation_path": "src/job/parts/dag/p021/body.rs",
+      "requirement_id": "molten.blob_ref_jobs.no_inline_large_bytes",
+      "source_area": "blob_ref_jobs",
+      "verification_path": "src/job/parts/dag/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "canonical content-ref-only job submission artifact",
+      "implementation_path": "src/job/parts/dag/p003/body.rs",
+      "requirement_id": "molten.blob_ref_jobs.payload_model",
+      "source_area": "blob_ref_jobs",
+      "verification_path": "src/job/parts/dag/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "bounded Hegel inline-token denial, verification-before-run, pin, and cleanup coverage",
+      "implementation_path": "src/job/parts/dag/p003/body.rs",
+      "requirement_id": "molten.blob_ref_jobs.property_tests",
+      "source_area": "blob_ref_jobs",
+      "verification_path": "src/job/parts/dag/tests/m000/p004/body.rs"
+    },
+    {
+      "evidence_scope": "explicit policy, provenance, and effect refs required for passing execution evidence",
+      "implementation_path": "src/job/parts/dag/p013/body.rs",
+      "requirement_id": "molten.blob_ref_jobs.provenance_policy",
+      "source_area": "blob_ref_jobs",
+      "verification_path": "src/job/parts/dag/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "canonical pass and deny receipts bind submission, fetch, verification, pins, cleanup, and outputs",
+      "implementation_path": "src/job/parts/dag/p014/body.rs",
+      "requirement_id": "molten.blob_ref_jobs.receipts",
+      "source_area": "blob_ref_jobs",
+      "verification_path": "src/job/parts/dag/tests/m000/p000/body.rs"
+    },
+    {
+      "evidence_scope": "active content pinning and cleanup receipt orchestration",
+      "implementation_path": "src/job/parts/dag/p003/body.rs",
+      "requirement_id": "molten.blob_ref_jobs.retention_pins",
+      "source_area": "blob_ref_jobs",
+      "verification_path": "src/job/parts/dag/tests/m000/p000/body.rs"
+    }
+  ],
+  "runtime_spine_after": 419,
+  "runtime_spine_before": 428,
+  "schema": "molten.runtime-spine-job-dag-tracey-direct-repairs.v1"
+}

@@ -1,4 +1,5 @@
 
+// r[impl molten.blob_ref_jobs.provenance_policy]
 fn preflight(submission: &BlobRefJobSubmission) -> Result<(Preflight, Vec<String>)> {
     let preflight = Preflight {
         has_policy: !submission.policy_refs.is_empty(),
