@@ -5463,7 +5463,7 @@ dependencies = [
 [[package]]
 name = "schema-identity-conformance"
 version = "0.1.0"
-source = "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=df211c1e797f120e1ceb79177152fe85f069c6c4#df211c1e797f120e1ceb79177152fe85f069c6c4"
+source = "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#2562c8aa38a034061f9af9f3e17280494a5b8de2"
 dependencies = [
  "schema-identity-core",
  "serde",
@@ -5473,7 +5473,7 @@ dependencies = [
 [[package]]
 name = "schema-identity-core"
 version = "0.1.0"
-source = "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=df211c1e797f120e1ceb79177152fe85f069c6c4#df211c1e797f120e1ceb79177152fe85f069c6c4"
+source = "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#2562c8aa38a034061f9af9f3e17280494a5b8de2"
 dependencies = [
  "content-identity-core",
 ]

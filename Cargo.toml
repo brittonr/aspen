@@ -50,7 +50,7 @@ preserves-schema = "6.0.0-rc.6"
 redb = "4.1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-schema-identity-core = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "df211c1e797f120e1ceb79177152fe85f069c6c4" }
+schema-identity-core = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "2562c8aa38a034061f9af9f3e17280494a5b8de2" }
 snafu = "0.8"
 steel-core = "0.8.2"
 tar = "0.4"
@@ -68,7 +68,7 @@ zstd = "0.13"
 
 [dev-dependencies]
 cap-tempfile = "3"
-schema-identity-conformance = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "df211c1e797f120e1ceb79177152fe85f069c6c4" }
+schema-identity-conformance = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "2562c8aa38a034061f9af9f3e17280494a5b8de2" }
 hegeltest = { git = "https://github.com/hegeldev/hegel-rust", rev = "ed949b8084595cb467e983747f1089e214965ac6", features = ["native"] }
 
 wat = "1"

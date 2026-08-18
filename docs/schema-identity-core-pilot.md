@@ -1,6 +1,6 @@
 # Schema identity core pilot
 
-Aspen pins `schema-identity-core` and its conformance cohort from `rad:z6gGpUJtzdVBCCtZTzh4cV1skv4H` at `df211c1e797f120e1ceb79177152fe85f069c6c4`.
+Aspen pins `schema-identity-core` and its conformance cohort from `rad:z6gGpUJtzdVBCCtZTzh4cV1skv4H` at `2562c8aa38a034061f9af9f3e17280494a5b8de2`.
 
 `src/schema_identity_core_pilot.rs` maps explicit Aspen owner, lineage, and stable member facts into the product-neutral graph descriptor. It matches the published nominal vector and rejects owner crossing by identity separation.
 
