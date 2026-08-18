@@ -1,6 +1,6 @@
 # Schema Migration Core pilot
 
-Molten pins Schema Migration Core revision `3f7b4315c8e1d07726446f1e53ba45bc091c5275` through its canonical Radicle adapter.
+Molten pins Schema Migration Core revision `4fe90e130f2871cf69a6febcdc70785adca98aea` through its canonical Radicle adapter.
 
 The pilot computes the shared deterministic plan identity and runs a negative unknown-fixture case. It executes no recipe, migration, file, process, storage, transaction, or runtime effect.
 

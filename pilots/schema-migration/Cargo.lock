@@ -128,7 +128,7 @@ dependencies = [
 [[package]]
 name = "schema-migration-conformance"
 version = "0.1.0"
-source = "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=3f7b4315c8e1d07726446f1e53ba45bc091c5275#3f7b4315c8e1d07726446f1e53ba45bc091c5275"
+source = "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#4fe90e130f2871cf69a6febcdc70785adca98aea"
 dependencies = [
  "schema-identity-core",
  "schema-migration-core",
@@ -139,7 +139,7 @@ dependencies = [
 [[package]]
 name = "schema-migration-core"
 version = "0.1.0"
-source = "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=3f7b4315c8e1d07726446f1e53ba45bc091c5275#3f7b4315c8e1d07726446f1e53ba45bc091c5275"
+source = "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#4fe90e130f2871cf69a6febcdc70785adca98aea"
 dependencies = [
  "content-identity-core",
  "schema-identity-core",

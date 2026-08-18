@@ -49,7 +49,7 @@
       flake = false;
     };
     schema-migration-core-src = {
-      url = "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=3f7b4315c8e1d07726446f1e53ba45bc091c5275";
+      url = "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea";
       flake = false;
     };
     flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";

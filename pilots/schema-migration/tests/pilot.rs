@@ -17,7 +17,7 @@ fn molten_rejects_unknown_planning_fixtures() {
 fn cargo_and_nix_source_declarations_match() {
     let source = include_str!("../source.ncl");
     let flake = include_str!("../../../flake.nix");
-    let revision = "3f7b4315c8e1d07726446f1e53ba45bc091c5275";
+    let revision = "4fe90e130f2871cf69a6febcdc70785adca98aea";
     assert_eq!(source.matches(revision).count(), 1);
     assert_eq!(source.matches("= Revision").count(), 3);
     assert!(!source.contains("../schema-migration-core"));

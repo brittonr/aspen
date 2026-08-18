@@ -9,4 +9,4 @@ publish = false
 [workspace]
 
 [dependencies]
-schema-migration-conformance = { git = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git", rev = "3f7b4315c8e1d07726446f1e53ba45bc091c5275" }
+schema-migration-conformance = { git = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git", rev = "4fe90e130f2871cf69a6febcdc70785adca98aea" }

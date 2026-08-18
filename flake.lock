@@ -556,16 +556,16 @@
     "schema-migration-core-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1787080226,
-        "narHash": "sha256-MZB1FOvO9wcFllaKNtfWb/qDuzsBxfV9RkxJ6Ua0AO0=",
+        "lastModified": 1787081632,
+        "narHash": "sha256-AnWxKYQTgvQwzLPMyiGmUroVNVuLos6ThjP0cGRiCcs=",
         "ref": "refs/heads/main",
-        "rev": "3f7b4315c8e1d07726446f1e53ba45bc091c5275",
-        "revCount": 2,
+        "rev": "4fe90e130f2871cf69a6febcdc70785adca98aea",
+        "revCount": 3,
         "type": "git",
         "url": "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git"
       },
       "original": {
-        "rev": "3f7b4315c8e1d07726446f1e53ba45bc091c5275",
+        "rev": "4fe90e130f2871cf69a6febcdc70785adca98aea",
         "type": "git",
         "url": "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git"
       }
