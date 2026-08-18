@@ -48,6 +48,10 @@
       url = "github:OnixResearch/valence/5f1c2ba5072c6f9622fa59b1af20502985f569fd";
       flake = false;
     };
+    schema-migration-core-src = {
+      url = "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=3f7b4315c8e1d07726446f1e53ba45bc091c5275";
+      flake = false;
+    };
     flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";
   };
 

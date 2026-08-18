@@ -1,0 +1,12 @@
+[package]
+name = "molten-schema-migration-pilot"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95.0"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace]
+
+[dependencies]
+schema-migration-conformance = { git = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git", rev = "3f7b4315c8e1d07726446f1e53ba45bc091c5275" }
