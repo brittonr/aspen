@@ -949,6 +949,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
+name = "content-identity-core"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#7f55597b5dc879b7601856e8d7fd0dbacaa2a498"
+dependencies = [
+ "blake3",
+ "serde",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3690,6 +3699,8 @@ dependencies = [
  "preserves 5.0.0-rc.7",
  "preserves-schema",
  "redb 4.1.0",
+ "schema-identity-conformance",
+ "schema-identity-core",
  "serde",
  "serde_json",
  "snafu",
@@ -5447,6 +5458,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91c1b7e4904c873ef0710c1f407dde2e6287de2bebc1bbbf7d430bb7cbffd939"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "schema-identity-conformance"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=df211c1e797f120e1ceb79177152fe85f069c6c4#df211c1e797f120e1ceb79177152fe85f069c6c4"
+dependencies = [
+ "schema-identity-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "schema-identity-core"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=df211c1e797f120e1ceb79177152fe85f069c6c4#df211c1e797f120e1ceb79177152fe85f069c6c4"
+dependencies = [
+ "content-identity-core",
 ]
 
 [[package]]

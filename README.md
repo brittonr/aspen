@@ -145,6 +145,10 @@ Cairn roadmap status: active production-readiness changes live under `cairn/chan
 - `operator-dogfood-retention-gc-workflow`
 - `operator-dogfood-release-evidence-bundle`
 
+## Schema identity core pilot
+
+Molten runs a bounded adapter pilot against the published `schema-identity-core` cohort. See [`docs/schema-identity-core-pilot.md`](docs/schema-identity-core-pilot.md).
+
 ## Node runtime daemon
 
 The cluster convenience wrapper initializes and controls per-node state roots while preserving the same node receipts. For source-tree development, run it through Cargo or an already-built Cargo binary; `nix develop` provides tools but does not install a freshly built `molten` binary by itself. Re-running `cluster init` over an existing cluster manifest or node lifecycle state fails closed; pass `--force` only when you intentionally want to remove the planned node roots and write fresh lifecycle evidence.

@@ -240,6 +240,7 @@ compat_module!(runtime, engine);
 #[path = "schema/identity.rs"]
 pub mod descriptor;
 compat_module!(schema_identity, descriptor);
+pub mod schema_identity_core_pilot;
 #[doc(hidden)]
 #[path = "secrets/mod.rs"]
 pub mod vault;
