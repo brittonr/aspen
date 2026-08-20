@@ -98,8 +98,16 @@ fn valid_blake3_ref(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use preserves_admission_core::ErrorClass;
+    use preserves_admission_core::ProfileId;
+    use preserves_admission_core::Syntax;
+    use preserves_admission_core::admit;
+    use preserves_admission_core::select_profile;
+
     use super::*;
 
+    const ADMISSION_VALID_TEXT: &[u8] = b"<molten-pilot \"ok\">";
+    const ADMISSION_TRAILING_TEXT: &[u8] = b"<molten-pilot \"ok\"> #t";
     const NODE_CONTROL: &str = "node-control-envelope";
     const TICKET: &str = "ticket";
     const WORKFLOW_BUNDLE: &str = "workflow-bundle";
@@ -199,6 +207,16 @@ mod tests {
         assert!(issues.contains(&PreservesBoundaryIssue::MissingSchemaLabel(TICKET.to_string())));
         assert!(issues.contains(&PreservesBoundaryIssue::StaleBlake3Ref(WORKFLOW_BUNDLE.to_string())));
         assert!(issues.contains(&PreservesBoundaryIssue::RawPreservesCoreCoupling(RECEIPT.to_string())));
+    }
+
+    #[test]
+    fn shared_admission_profile_accepts_one_value_and_rejects_trailing_input() {
+        let profile = select_profile(ProfileId::KamaciteCompatibleV1);
+        let admitted = admit(ADMISSION_VALID_TEXT, Syntax::Text, profile);
+        let trailing = admit(ADMISSION_TRAILING_TEXT, Syntax::Text, profile);
+
+        assert!(admitted.is_ok());
+        assert_eq!(trailing.map_err(|error| error.class()), Err(ErrorClass::TrailingInput));
     }
 
     #[test]

@@ -11,3 +11,6 @@ path = "src/lib.rs"
 artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 kamacite-core = { git = "ssh://git@github.com/OnixResearch/kamacite.git", rev = "d76fe4abe543724d8fc0ac4b362187caf2e27622", version = "0.1.0" }
+
+[dev-dependencies]
+preserves-admission-core = { git = "rad://z2q3DgJ91DiVKgeVBonAHp2SG6qkP", rev = "3333de4a486d55cfc00675d6a4d10cfe5598d9ec" }

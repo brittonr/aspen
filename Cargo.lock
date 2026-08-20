@@ -3727,6 +3727,7 @@ dependencies = [
  "artifact-auth-core",
  "artifact-binding-core",
  "kamacite-core",
+ "preserves-admission-core",
 ]
 
 [[package]]
@@ -4769,6 +4770,15 @@ dependencies = [
  "regex",
  "serde",
  "serde_bytes",
+]
+
+[[package]]
+name = "preserves-admission-core"
+version = "0.1.0"
+source = "git+rad://z2q3DgJ91DiVKgeVBonAHp2SG6qkP?rev=3333de4a486d55cfc00675d6a4d10cfe5598d9ec#3333de4a486d55cfc00675d6a4d10cfe5598d9ec"
+dependencies = [
+ "blake3",
+ "preserves 5.0.0-rc.7",
 ]
 
 [[package]]
