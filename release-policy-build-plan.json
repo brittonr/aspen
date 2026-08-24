@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host",
+  "workspaceRoot": "/home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "4c259d5abf426ea23c000e9081afdddf8dd3483d4cbbccf91a22aa1ea4a14a91",
-  "inputsHash": "a95d59584275ac43c77794ef99253478abf123e868420a92b3912f1077965c80",
+  "cargoLockHash": "374c30f3707eba16e4515d6e5ce3d0bbbe36570736760b9c626f535522369403",
+  "inputsHash": "e1b9091a3286c04c33500b4ed59a5d6a86a4bd311c4f1df74850441c3feaf35d",
   "crates": {
     "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": {
       "crateName": "kamacite-core",
@@ -22,7 +22,7 @@
         "url": "ssh://git@github.com/OnixResearch/kamacite.git",
         "rev": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
         "subDir": "crates/kamacite-core",
-        "sha256": "0h4g0x83xzmi8sh4z51qbyawpwx4rf1xsc7l7khf2c23ly3wp0pw"
+        "sha256": "1cnyx4n0a2sfbkax5h1j6wd232akkaab1x7ygcc3x3d75ak0791r"
       },
       "features": [],
       "dependencies": [
@@ -123,7 +123,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -143,6 +143,10 @@
           "externCrateName": "artifact_binding_core"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
           "packageId": "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",
           "externCrateName": "kamacite_core"
         }
@@ -159,7 +163,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -175,7 +179,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -199,12 +203,7 @@
       "libCrateTypes": [
         "lib"
       ],
-      "crateBin": [
-        {
-          "name": "molten-release-policy",
-          "path": "src/main.rs"
-        }
-      ],
+      "crateBin": [],
       "links": null,
       "license": "AGPL-3.0-or-later"
     },

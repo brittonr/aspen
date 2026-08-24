@@ -4,7 +4,7 @@
 
 Record a durable-store-coordinated ownership design contract for Aspen, using a single compare-and-swap lease instead of a membership protocol or consensus service.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Ownership is a single CAS lease [r[aspen.cas.contract]]
 
@@ -26,24 +26,28 @@ In the durable-store-coordinated mode, ownership transfer MUST be a single compa
 
 ### Requirement: The core decides from supplied values [r[aspen.cas.decision]]
 
-The pure core MUST return acquire or reject from a supplied owner, claimant, and epoch pair. It MUST read no store, clock, or network.
+The pure core MUST return acquire or reject from supplied current, expected, and proposed leases. It MUST read no store, clock, or network.
 
-#### Scenario: Owner matches and epoch advances
+#### Scenario: Expected lease matches and proposed epoch advances
 
-- GIVEN the claimed new owner matches the current owner and the epoch advances
+- GIVEN the expected owner and epoch match the current lease
+- AND the proposed epoch advances under the replaceable-node posture
 - WHEN the core decides
 - THEN the disposition MUST be acquire
+- AND the proposed owner and epoch MUST become the resulting lease
 
-#### Scenario: Owner or epoch does not match
+#### Scenario: Owner, epoch, or membership posture does not match
 
-- GIVEN the claimant does not match the owner or the epoch is stale
+- GIVEN the expected lease is stale, the proposed epoch does not advance, or fixed membership is required
 - WHEN the core decides
 - THEN the disposition MUST be reject
 - AND ownership MUST stay unchanged
 
 ### Requirement: Decisions do not prove runtime correctness [r[aspen.cas.boundary]]
 
-A CAS lease decision MUST NOT be presented as proof of runtime correctness, data integrity, or release readiness.
+A CAS lease decision MUST NOT prove runtime correctness, data integrity, or release readiness. A related CAS-arbiter reference MUST be bounded and non-parity.
+
+The reference MUST NOT impose a consensus or vendor requirement.
 
 #### Scenario: Decision is over-claimed
 
@@ -51,6 +55,13 @@ A CAS lease decision MUST NOT be presented as proof of runtime correctness, data
 - WHEN boundary verification runs
 - THEN that claim MUST fail verification
 - AND the runtime and consumer boundaries MUST remain explicit
+
+#### Scenario: Reference is treated as requirement
+
+- GIVEN the WalTier pattern lacks a non-parity label or becomes a consensus mandate
+- WHEN boundary verification runs
+- THEN verification MUST fail
+- AND the mechanism MUST stay an explicit extension-port option
 
 ### Requirement: Failure coverage remains explicit [r[aspen.cas.verification]]
 

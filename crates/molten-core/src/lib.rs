@@ -34,6 +34,13 @@ pub mod prelude {
     pub use crate::dependency::ImportFact;
     pub use crate::dependency::Layer;
     pub use crate::dependency::validate_dependency_boundaries;
+    pub use crate::fabric_durability::ownership::CasLease;
+    pub use crate::fabric_durability::ownership::CasLeaseDecision;
+    pub use crate::fabric_durability::ownership::CasLeaseDecisionInput;
+    pub use crate::fabric_durability::ownership::CasLeaseDisposition;
+    pub use crate::fabric_durability::ownership::CasLeaseRejection;
+    pub use crate::fabric_durability::ownership::MembershipPosture;
+    pub use crate::fabric_durability::ownership::decide_cas_lease;
     pub use crate::planning::AdmissionInputs;
     pub use crate::planning::BoundaryDecision;
     pub use crate::planning::EffectKind;

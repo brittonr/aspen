@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host",
+  "workspaceRoot": "/home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host#molten@0.1.0"
+    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824#molten@0.1.0",
+    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824#molten@0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-node-host#0.1.0"
+    "molten": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-node-host#0.1.0"
   },
-  "cargoLockHash": "4c259d5abf426ea23c000e9081afdddf8dd3483d4cbbccf91a22aa1ea4a14a91",
-  "inputsHash": "29be039aeadeec7eb8e807cceab8fb6b732618b655f7ba13bbaeff36c0a9be72",
+  "cargoLockHash": "374c30f3707eba16e4515d6e5ce3d0bbbe36570736760b9c626f535522369403",
+  "inputsHash": "1680e65b6b5afdfd63769e4b8547f542e973c12fcdadd32e650acc5bd2480fb9",
   "crates": {
     "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12": {
       "crateName": "hegeltest-macros",
@@ -127,6 +127,116 @@
       "license": "MIT",
       "repository": "https://github.com/hegeldev/hegel-rust"
     },
+    "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-conformance@0.1.0": {
+      "crateName": "schema-identity-conformance",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git",
+        "rev": "2562c8aa38a034061f9af9f3e17280494a5b8de2",
+        "subDir": "crates/schema-identity-conformance",
+        "sha256": "1ybc6ybsgc7cigw1jnhijjlnm93wg17jmwvqbx2hq5rjmvq4dwg8"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-core@0.1.0",
+          "externCrateName": "schema_identity_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
+          "externCrateName": "serde_json"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Portable schema identity compatibility vectors",
+      "license": "MIT",
+      "repository": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git"
+    },
+    "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-core@0.1.0": {
+      "crateName": "schema-identity-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git",
+        "rev": "2562c8aa38a034061f9af9f3e17280494a5b8de2",
+        "subDir": "crates/schema-identity-core",
+        "sha256": "1ybc6ybsgc7cigw1jnhijjlnm93wg17jmwvqbx2hq5rjmvq4dwg8"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "git+https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#content-identity-core@0.1.0",
+          "externCrateName": "content_identity_core"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Product-neutral schema lineage, exact identity, and compatibility decisions",
+      "license": "MIT",
+      "repository": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git"
+    },
+    "git+https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#content-identity-core@0.1.0": {
+      "crateName": "content-identity-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git",
+        "rev": "7f55597b5dc879b7601856e8d7fd0dbacaa2a498",
+        "sha256": "17m4k90vb33604kdy0mfd8hqy0246k2byhd6mjw00d6k626m04i0"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Product-neutral BLAKE3 identity framing based on Lattice encoding",
+      "license": "MIT",
+      "repository": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git"
+    },
     "git+ssh://git@github.com/OnixResearch/basalt.git?rev=d913dc01e765c9b297df5fcc57dfa06aac39bc74#basalt@0.1.0": {
       "crateName": "basalt",
       "version": "0.1.0",
@@ -228,7 +338,7 @@
         "url": "ssh://git@github.com/OnixResearch/kamacite.git",
         "rev": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
         "subDir": "crates/kamacite-core",
-        "sha256": "0h4g0x83xzmi8sh4z51qbyawpwx4rf1xsc7l7khf2c23ly3wp0pw"
+        "sha256": "1cnyx4n0a2sfbkax5h1j6wd232akkaab1x7ygcc3x3d75ak0791r"
       },
       "features": [],
       "dependencies": [
@@ -564,7 +674,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host#molten@0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -636,11 +746,11 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -662,6 +772,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redb@4.1.0",
           "externCrateName": "redb"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-core@0.1.0",
+          "externCrateName": "schema_identity_core"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
@@ -739,6 +853,10 @@
           "externCrateName": "hegel"
         },
         {
+          "packageId": "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-conformance@0.1.0",
+          "externCrateName": "schema_identity_conformance"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#wat@1.250.0",
           "externCrateName": "wat"
         }
@@ -760,7 +878,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -780,6 +898,10 @@
           "externCrateName": "artifact_binding_core"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
           "packageId": "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",
           "externCrateName": "kamacite_core"
         }
@@ -796,7 +918,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -816,7 +938,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/molten-extract-node-host/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],

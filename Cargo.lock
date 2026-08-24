@@ -3726,6 +3726,7 @@ version = "0.1.0"
 dependencies = [
  "artifact-auth-core",
  "artifact-binding-core",
+ "blake3",
  "kamacite-core",
 ]
 

@@ -3,6 +3,8 @@
 //! This module owns no filesystem, Redb, clock, process, or network effects.
 //! Adapter shells persist only transitions admitted by these functions.
 
+pub mod ownership;
+
 mod transition;
 
 use std::collections::BTreeMap;

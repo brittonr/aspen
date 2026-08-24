@@ -11,10 +11,12 @@ In the durable-store-coordinated mode, ownership of an entity is a compare-and-s
 
 The core accepts these values:
 
-1. the current lease owner;
-2. the claimed new owner;
-3. the current epoch;
-4. the claimed new epoch.
+1. the current lease owner and epoch;
+2. the expected lease owner and epoch;
+3. the proposed lease owner and epoch;
+4. the declared replaceable-node membership posture.
+
+The expected lease is the compare side of the operation. The proposed lease is the swap side.
 
 The core returns an ownership decision from these supplied values. It reads no store, clock, or network.
 
@@ -22,10 +24,10 @@ The core returns an ownership decision from these supplied values. It reads no s
 
 The pure core returns one of two decisions:
 
-- `Acquire` — the claimed owner matches the current owner and the epoch advances.
-- `Reject` — the lease does not match, and ownership does not change.
+- `Acquire` — the expected lease matches the current lease, the proposed epoch advances, and nodes are replaceable.
+- `Reject` — the owner, epoch, or membership posture does not match the contract, and ownership does not change.
 
-A node that loses a lease cannot damage the state. A spare acquires a released lease only when normal traffic reaches it.
+A node that loses a lease cannot damage the state. A spare acquires a released lease only through a matching expected lease and advanced epoch.
 
 ## Output
 
@@ -47,6 +49,12 @@ The shell and consumers own the durable dataspace, transport, and evidence. This
 ## Reference
 
 The Celld ownership model (CAS lease, replaceable nodes, bucket as source of truth) is a bounded reference input. It is a comparison source, not an Aspen requirement, parity claim, or equivalence claim.
+
+WalTier (MIT, `danthegoodman1/waltier`) is a related bounded reference. It uses conditional object-store writes to order a per-resource log.
+
+WalTier does not use consensus, leases, or leader election. It is not an Aspen requirement, parity claim, or equivalence claim.
+
+WalTier uses S3. Molten uses Iroh and Redb. Only the arbitration pattern transfers.
 
 ## Verification
 
