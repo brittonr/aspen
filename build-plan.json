@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824",
+  "workspaceRoot": "/home/brittonr/git-worktrees/aspen-nickel-117-20260824",
   "roots": [
-    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824#molten@0.1.0",
-    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824#molten@0.1.0"
+    "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824#molten@0.1.0",
+    "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824#molten@0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-node-host#0.1.0"
+    "molten": "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-node-host#0.1.0"
   },
-  "cargoLockHash": "374c30f3707eba16e4515d6e5ce3d0bbbe36570736760b9c626f535522369403",
-  "inputsHash": "1680e65b6b5afdfd63769e4b8547f542e973c12fcdadd32e650acc5bd2480fb9",
+  "cargoLockHash": "5318f8813d165a238774b0a8fbe3c6a81d18b6203a1cbf1c710840e02f042dc6",
+  "inputsHash": "960ea472cecd3582874d9a41e9e8a06e37973fe241f0264a4e3a8eb8da98dd2c",
   "crates": {
     "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12": {
       "crateName": "hegeltest-macros",
@@ -674,7 +674,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824#molten@0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -746,11 +746,11 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -758,7 +758,7 @@
           "externCrateName": "n0_future"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang@2.1.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang@2.2.0",
           "externCrateName": "nickel_lang"
         },
         {
@@ -878,7 +878,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -918,7 +918,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -938,7 +938,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-object-store-cas-coordinator-20260824/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -5597,7 +5597,7 @@
           "externCrateName": "data_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@1.0.109",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
           "externCrateName": "syn"
         }
       ],
@@ -14397,11 +14397,11 @@
       "license": "MIT",
       "repository": "https://github.com/mbrubeck/rust-debug-unreachable"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-core@0.17.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-core@0.18.0": {
       "crateName": "nickel-lang-core",
-      "version": "0.17.0",
+      "version": "0.18.0",
       "edition": "2024",
-      "sha256": "81ec3efee570877109c89bd23e5a44ff7b4a60f1d3c6394945a2520ebda84117",
+      "sha256": "692d8a2ba34c633bc37e704dc94f4ca33edaa8fbf6d08efdcadb81db333ccdb6",
       "source": {
         "type": "crates-io"
       },
@@ -14460,11 +14460,11 @@
           "externCrateName": "md5"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-parser@0.2.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-parser@0.3.0",
           "externCrateName": "nickel_lang_parser"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-vector@0.1.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-vector@0.2.0",
           "externCrateName": "nickel_lang_vector"
         },
         {
@@ -14567,11 +14567,11 @@
       "license": "MIT",
       "repository": "https://github.com/tweag/nickel"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-parser@0.2.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-parser@0.3.0": {
       "crateName": "nickel-lang-parser",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "edition": "2024",
-      "sha256": "5f405189a72d136913a3ec470a27def520e93784b611578c2e4f3dd909b3fc75",
+      "sha256": "d7aaf73e60b66ef4fffc969b0e4e419a15a029525f9b53f2f5cc0ca41bbe17ff",
       "source": {
         "type": "crates-io"
       },
@@ -14606,7 +14606,7 @@
           "externCrateName": "malachite"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-vector@0.1.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-vector@0.2.0",
           "externCrateName": "nickel_lang_vector"
         },
         {
@@ -14669,11 +14669,11 @@
       "license": "MIT",
       "repository": "https://github.com/tweag/nickel"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-vector@0.1.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-vector@0.2.0": {
       "crateName": "nickel-lang-vector",
-      "version": "0.1.0",
-      "edition": "2021",
-      "sha256": "870c323d81061fc47db4aa7346f6f3492f3e4bb8bd5dd8b7c85ac9d0c9709f0c",
+      "version": "0.2.0",
+      "edition": "2024",
+      "sha256": "36f243832286908d8873add24a905d6732ffabd6cfb2bf74cb18d667e892e279",
       "source": {
         "type": "crates-io"
       },
@@ -14706,11 +14706,11 @@
       "license": "MIT",
       "repository": "https://github.com/tweag/nickel"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#nickel-lang@2.1.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#nickel-lang@2.2.0": {
       "crateName": "nickel-lang",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "edition": "2024",
-      "sha256": "82d415d53c6e5ebf0adaaeda633bc9ca1a30e97e143595fde604713d6a878a95",
+      "sha256": "5242161492409bbb82716f52e7af9c7d4ce8423d3b31d648fa818518c4d82295",
       "source": {
         "type": "crates-io"
       },
@@ -14729,11 +14729,11 @@
           "externCrateName": "malachite"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-core@0.17.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-core@0.18.0",
           "externCrateName": "nickel_lang_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-vector@0.1.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nickel-lang-vector@0.2.0",
           "externCrateName": "nickel_lang_vector"
         },
         {

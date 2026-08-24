@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/f9d8b65950353691ab56561e7c73d2e1063d810b";
+    nickel-cli.url = "github:tweag/nickel/1320a983e6c3d1e2fb53dd2464b084b4903b1426";
     unit2nix = {
       url = "github:brittonr/unit2nix/d4883180de0ce3033b7e4e2ab4216f33134863c5";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -58,6 +59,7 @@
   outputs =
     {
       nixpkgs,
+      nickel-cli,
       unit2nix,
       rust-overlay,
       flake-utils,
@@ -81,7 +83,8 @@
           overlays = [ (import rust-overlay) ];
         };
 
-        pkgs = pkgsBase;
+        nickelPackage = nickel-cli.packages.${system}.default;
+        pkgs = pkgsBase // { nickel = nickelPackage; };
 
         localSourceExcludedBaseNames = [
           ".direnv"
@@ -1334,6 +1337,46 @@
                     echo "negative traceability fixture unexpectedly passed" >&2
                     exit 1
                   fi
+                '';
+
+            nickel-toolchain-cohort =
+              pkgs.runCommand "molten-nickel-toolchain-cohort"
+                {
+                  nativeBuildInputs = [
+                    pkgs.nickel
+                    pkgs.jq
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel --version | tee "$TMPDIR/nickel-version.txt"
+                  grep -Fq 'nickel 1.17.0 (rev 1320a98)' "$TMPDIR/nickel-version.txt"
+                  rg -U 'name = "nickel-lang"\nversion = "2.2.0"' Cargo.lock
+                  rg -U 'name = "nickel-lang-core"\nversion = "0.18.0"' Cargo.lock
+                  rg -U 'name = "nickel-lang-parser"\nversion = "0.3.0"' Cargo.lock
+                  rg -U 'name = "nickel-lang-vector"\nversion = "0.2.0"' Cargo.lock
+                  jq -e '.nodes."nickel-cli".locked.rev == "1320a983e6c3d1e2fb53dd2464b084b4903b1426"' flake.lock >/dev/null
+                  nickel export docs/production-node-profile.ncl > "$TMPDIR/production-profile.json"
+                  for fixture in \
+                    docs/production-profile-fixtures/negative/malformed-ref.ncl \
+                    docs/production-profile-fixtures/negative/fractional-limit.ncl \
+                    docs/production-profile-fixtures/negative/unsupported-metadata.ncl \
+                    docs/production-profile-fixtures/negative/missing-required-adapter.ncl
+                  do
+                    if nickel export "$fixture" > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative Nickel cohort fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  printf '%s\n' 'import "missing-cohort-import.ncl"' > "$TMPDIR/missing-import.ncl"
+                  if nickel export "$TMPDIR/missing-import.ncl" > "$TMPDIR/missing-import.json" 2> "$TMPDIR/missing-import.err"; then
+                    echo 'missing Nickel import unexpectedly exported' >&2
+                    exit 1
+                  fi
+                  touch "$out"
                 '';
 
             production-profile-fixtures =

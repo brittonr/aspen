@@ -1395,7 +1395,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -3956,9 +3956,9 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nickel-lang"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82d415d53c6e5ebf0adaaeda633bc9ca1a30e97e143595fde604713d6a878a95"
+checksum = "5242161492409bbb82716f52e7af9c7d4ce8423d3b31d648fa818518c4d82295"
 dependencies = [
  "codespan-reporting 0.13.1",
  "indexmap 2.14.0",
@@ -3973,9 +3973,9 @@ dependencies = [
 
 [[package]]
 name = "nickel-lang-core"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81ec3efee570877109c89bd23e5a44ff7b4a60f1d3c6394945a2520ebda84117"
+checksum = "692d8a2ba34c633bc37e704dc94f4ca33edaa8fbf6d08efdcadb81db333ccdb6"
 dependencies = [
  "base64 0.22.1",
  "bumpalo",
@@ -4016,9 +4016,9 @@ dependencies = [
 
 [[package]]
 name = "nickel-lang-parser"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f405189a72d136913a3ec470a27def520e93784b611578c2e4f3dd909b3fc75"
+checksum = "d7aaf73e60b66ef4fffc969b0e4e419a15a029525f9b53f2f5cc0ca41bbe17ff"
 dependencies = [
  "bumpalo",
  "codespan",
@@ -4042,9 +4042,9 @@ dependencies = [
 
 [[package]]
 name = "nickel-lang-vector"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "870c323d81061fc47db4aa7346f6f3492f3e4bb8bd5dd8b7c85ac9d0c9709f0c"
+checksum = "36f243832286908d8873add24a905d6732ffabd6cfb2bf74cb18d667e892e279"
 dependencies = [
  "imbl-sized-chunks",
  "serde",
