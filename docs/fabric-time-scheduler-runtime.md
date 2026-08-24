@@ -51,7 +51,25 @@ The live and virtual adapters supply observations to the same timer core. They d
 
 The scheduler tracks generation-bound runnable ids through ready, running, blocked, completed, and cancelled states. Wake, choose, yield, block, complete, cancellation, and generation cleanup are explicit transitions. Queue depth, total runnables, and concurrent selections are bounded.
 
-Deterministic profiles order by admitted FIFO or priority/FIFO policy and record every choice. Recorded-choice profiles require an eligible recorded choice during replay. A fairness claim exists only when the selected profile includes a finite fairness bound; otherwise canonical evidence preserves `does-not-prove-fairness`. Bounded fairness promotes the longest-waiting overdue runnable before ordinary priority ordering.
+Deterministic profiles order by admitted FIFO or priority/FIFO policy and record every choice. Recorded-choice profiles require an eligible recorded choice during replay. A fairness claim exists only when the selected profile includes a finite fairness bound. Otherwise, canonical evidence preserves `does-not-prove-fairness`. Bounded fairness promotes the longest-waiting overdue runnable before ordinary priority ordering.
+
+## Scheduler capacity activation
+
+The capacity core derives one plan from the admitted profile and active generation.
+The plan binds runnable, queue, and concurrency slots with checked conversion and arithmetic.
+It adds no second capacity configuration.
+
+The live shell reserves storage for runnable states and queue keys before activation.
+An allocation error denies activation without a smaller scheduler or hidden fallback.
+The owned reservations use the concrete Rust slot types for this implementation cohort.
+They do not replace canonical Preserves state or make Rust layout authoritative.
+
+Steady-state accounting rejects a stale generation, wrong profile, wrong plan, released capacity, underflow, overflow, or physical exhaustion.
+The shell does not widen either reservation after activation.
+Existing scheduler ordering, fairness, replay, cleanup, and overload decisions remain authoritative.
+
+Capacity observations bind the plan, profile, generation, usage, high-water values, exhaustion count, and release state.
+These observations do not prove global latency, fairness, liveness, host memory stability, or whole-runtime zero allocation.
 
 ## Entropy
 

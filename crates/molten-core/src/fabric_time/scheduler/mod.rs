@@ -1,3 +1,5 @@
+pub mod capacity;
+
 use super::AdmittedTimeProfile;
 use super::valid_time_id;
 

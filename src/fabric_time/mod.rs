@@ -1,3 +1,5 @@
+pub mod capacity;
+
 mod adapters;
 mod canonical;
 mod fixture;
