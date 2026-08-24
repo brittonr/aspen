@@ -185,6 +185,8 @@ impl LocalAdapter {
     }
 }
 
+pub mod cache;
+
 mod state;
 mod syndicate;
 pub use state::RuntimeRecordedEffectTransition;

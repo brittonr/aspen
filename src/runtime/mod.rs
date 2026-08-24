@@ -2,7 +2,7 @@
 mod actor_cell;
 #[path = "turn/mod.rs"]
 pub(crate) mod cycle;
-mod dataspace;
+pub mod dataspace;
 mod execution;
 #[path = "boundary/error.rs"]
 mod fault;
