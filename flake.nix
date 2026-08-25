@@ -1376,6 +1376,47 @@
                   fi
                 '';
 
+            fabric-port-boundaries =
+              pkgs.runCommand "molten-fabric-port-boundaries"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  adapters=(
+                    src/fabric_membership/adapters.rs
+                    src/fabric_time/adapters.rs
+                    src/fabric_transport/adapters.rs
+                    src/fabric_durability/adapters.rs
+                  )
+                  ports=(
+                    src/fabric_membership/ports.rs
+                    src/fabric_time/ports.rs
+                    src/fabric_transport/ports.rs
+                    src/fabric_durability/ports.rs
+                  )
+
+                  if rg -n 'pub trait ' "''${adapters[@]}"; then
+                    echo "maintained adapter module owns an application port" >&2
+                    exit 1
+                  fi
+                  if rg -n 'Result<[^>]*, *String>' "''${ports[@]}"; then
+                    echo "maintained fabric port returns a raw string failure" >&2
+                    exit 1
+                  fi
+                  if rg -n --glob '!**/tests.rs' --glob '!**/*_tests.rs' 'std::fs::|std::env::|std::process::|SystemTime::now|Instant::now|std::thread::sleep|iroh::Endpoint|redb::Database' crates/molten-core/src; then
+                    echo "pure fabric core contains a host effect" >&2
+                    exit 1
+                  fi
+                  if rg -n --glob '!**/tests.rs' --glob '!**/*_tests.rs' 'LiveClockAdapter::new|OperatingSystemEntropySource::default|IrohTransportAdapter::new|RedbDurableStateAdapter::' crates/molten-core/src; then
+                    echo "pure fabric core constructs a concrete adapter" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
+
             consensus-fastpath-model-profile =
               pkgs.runCommand "molten-consensus-fastpath-model-profile"
                 {

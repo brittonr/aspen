@@ -1,18 +1,23 @@
-use std::collections::BTreeMap;
+// r[impl molten.modularity.fabric_boundary.adapters]
 use std::time::Duration;
 
 use super::*;
 use crate::error::MoltenError;
 use crate::error::Result;
+#[allow(
+    tigerstyle::non_trait_imports,
+    reason = "transport mechanisms implement the application-owned typed port contract"
+)]
+use crate::fabric::FabricPortError;
+#[allow(
+    tigerstyle::non_trait_imports,
+    reason = "transport mechanisms implement the application-owned typed port contract"
+)]
+use crate::fabric::FabricPortResult;
 
 const LIVE_LOOPBACK_TIMEOUT_SECONDS: u64 = 10;
 const IROH_CLOSE_CODE: u8 = 0;
 const IROH_CLOSE_REASON: &[u8] = b"fabric-transport-loopback-complete";
-
-pub trait TransportCommandShell {
-    fn profile_id(&self) -> &str;
-    fn execute_command(&mut self, command: &TransportCommand) -> Result<CanonicalTransportTransition>;
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimulatedTransportFault {
@@ -137,8 +142,8 @@ impl TransportCommandShell for DeterministicTransportAdapter {
         &self.profile.profile.profile_id
     }
 
-    fn execute_command(&mut self, command: &TransportCommand) -> Result<CanonicalTransportTransition> {
-        self.execute(command)
+    fn execute_command(&mut self, command: &TransportCommand) -> FabricPortResult<CanonicalTransportTransition> {
+        self.execute(command).map_err(|error| FabricPortError::transport(error.to_string()))
     }
 }
 
@@ -269,98 +274,8 @@ impl TransportCommandShell for IrohTransportAdapter {
         &self.profile.profile.profile_id
     }
 
-    fn execute_command(&mut self, command: &TransportCommand) -> Result<CanonicalTransportTransition> {
-        self.execute(command)
-    }
-}
-
-pub struct RegisteredTransportEffectPort<A: TransportCommandShell> {
-    adapter: A,
-    context: ExtensionTransportContext,
-    profile: CanonicalTransportProfile,
-    requests: BTreeMap<String, TransportCommand>,
-}
-
-impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
-    pub fn new(adapter: A, context: ExtensionTransportContext, profile: CanonicalTransportProfile) -> Result<Self> {
-        if adapter.profile_id() != profile.profile.profile_id {
-            return Err(MoltenError::invalid_harness("registered transport adapter profile mismatch"));
-        }
-        Ok(Self {
-            adapter,
-            context,
-            profile,
-            requests: BTreeMap::new(),
-        })
-    }
-
-    pub fn register(&mut self, request_ref: String, command: TransportCommand) -> Result<()> {
-        crate::preserves_rail::validate_content_ref(&request_ref)?;
-        if self.requests.insert(request_ref.clone(), command).is_some() {
-            return Err(MoltenError::invalid_harness(format!("transport request {request_ref} is already registered")));
-        }
-        Ok(())
-    }
-
-    pub fn adapter(&self) -> &A {
-        &self.adapter
-    }
-
-    pub(crate) fn adapter_mut(&mut self) -> &mut A {
-        &mut self.adapter
-    }
-
-    pub(crate) fn execute_effect(
-        &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
-        effect: &crate::system_extension::TypedEffectRequest,
-    ) -> std::result::Result<(TransportCommand, CanonicalTransportTransition), String> {
-        if binding.binding.key.port_id != FABRIC_TRANSPORT_PORT_ID
-            || binding.binding.key.version != FABRIC_TRANSPORT_PORT_VERSION
-        {
-            return Err("transport effect routed through the wrong fabric port".to_string());
-        }
-        if binding.binding.implementation_profile != self.adapter.profile_id() {
-            return Err("transport effect profile substitution denied".to_string());
-        }
-        match &effect.target {
-            crate::system_extension::EffectTarget::FabricPort(key) if key == &binding.binding.key => {}
-            crate::system_extension::EffectTarget::FabricPort(_) => {
-                return Err("transport effect target does not match its bound port".to_string());
-            }
-            crate::system_extension::EffectTarget::Ambient(_) => {
-                return Err("ambient effect cannot route through a transport port".to_string());
-            }
-        }
-        let command = self
-            .requests
-            .get(&effect.request_ref)
-            .cloned()
-            .ok_or_else(|| "transport effect request is not registered".to_string())?;
-        self.context
-            .admit_command(&self.profile, &command, effect.accounted_bytes)
-            .map_err(|error| error.to_string())?;
-        if effect.generation != command.generation() {
-            return Err("transport effect generation does not match its registered command".to_string());
-        }
-        let transition = self.adapter.execute_command(&command).map_err(|error| error.to_string())?;
-        Ok((command, transition))
-    }
-}
-
-// r[impl molten.fabric_transport.port_contract]
-// r[impl molten.fabric_transport.session_streams]
-impl<A: TransportCommandShell> crate::system_extension::FabricEffectPort for RegisteredTransportEffectPort<A> {
-    fn route(
-        &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
-        effect: &crate::system_extension::TypedEffectRequest,
-    ) -> std::result::Result<crate::system_extension::PortEffectOutput, String> {
-        let (_command, transition) = self.execute_effect(binding, effect)?;
-        Ok(crate::system_extension::PortEffectOutput {
-            output_schema_ref: effect.output_schema_ref.clone(),
-            output_ref: transition.transition_ref,
-        })
+    fn execute_command(&mut self, command: &TransportCommand) -> FabricPortResult<CanonicalTransportTransition> {
+        self.execute(command).map_err(|error| FabricPortError::transport(error.to_string()))
     }
 }
 

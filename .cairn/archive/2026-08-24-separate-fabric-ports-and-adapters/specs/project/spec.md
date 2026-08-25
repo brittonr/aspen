@@ -2,9 +2,11 @@
 
 ## ADDED Requirements
 
-### Requirement: Fabric boundary ownership is explicit
+### Requirement: The selected fabric boundary has an inventory
 
 r[molten.modularity.fabric_boundary.inventory] Molten MUST inventory selected fabric contracts, implementations, effects, policy decisions, orchestration, construction sites, and error types.
+
+### Requirement: Fabric boundary ownership is explicit
 
 r[molten.modularity.fabric_boundary.ownership] Each selected item MUST have one owner as pure core logic, application port, application shell, adapter, composition root, or rejected abstraction.
 
@@ -95,8 +97,6 @@ r[molten.modularity.fabric_boundary.enforcement.construction]
 
 r[molten.modularity.fabric_boundary.compatibility] Boundary migration MUST preserve supported canonical Preserves values, transition refs, receipt meanings, and live or simulation behavior.
 
-r[molten.modularity.fabric_boundary.validation] Tests MUST pair accepted core, shell, and adapter behavior with rejected and malformed behavior.
-
 #### Scenario: Canonical transition and receipt fixtures remain stable
 
 r[molten.modularity.fabric_boundary.compatibility.fixtures]
@@ -104,11 +104,19 @@ r[molten.modularity.fabric_boundary.compatibility.fixtures]
 - WHEN the migrated path receives equal explicit inputs and observations
 - THEN canonical values and refs MUST remain equal unless a separate versioned change approves a difference.
 
+### Requirement: Fabric validation pairs accepted and rejected behavior
+
+r[molten.modularity.fabric_boundary.validation] Tests MUST pair accepted core, shell, and adapter behavior with rejected and malformed behavior.
+
 ### Requirement: Architecture enforcement remains active
 
 r[molten.modularity.fabric_boundary.enforcement] Maintained checks MUST reject adapter-owned ports, raw string port errors, host effects in core scopes, duplicated policy, and concrete adapter construction outside composition roots.
 
+### Requirement: Fabric boundary documentation names each owner
+
 r[molten.modularity.fabric_boundary.docs] Documentation MUST name core, shell, port, adapter, composition, evidence, and authority ownership.
+
+### Requirement: Final checks preserve fabric non-claims
 
 r[molten.modularity.fabric_boundary.final_checks] Closeout evidence MUST preserve existing transport, durability, timing, entropy, authority, and release non-claims.
 

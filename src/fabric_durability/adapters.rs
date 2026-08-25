@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+// r[impl molten.modularity.fabric_boundary.adapters]
 use std::path::Path;
 
 use redb::ReadableDatabase;
@@ -7,6 +7,16 @@ use redb::ReadableTable;
 use super::*;
 use crate::error::MoltenError;
 use crate::error::Result;
+#[allow(
+    tigerstyle::non_trait_imports,
+    reason = "durability mechanisms implement the application-owned typed port contract"
+)]
+use crate::fabric::FabricPortError;
+#[allow(
+    tigerstyle::non_trait_imports,
+    reason = "durability mechanisms implement the application-owned typed port contract"
+)]
+use crate::fabric::FabricPortResult;
 use crate::local_store::DurableStoreRoot;
 use crate::local_store::LocalStorePath;
 
@@ -400,66 +410,13 @@ impl SimulatedDurableStateAdapter {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DurablePortCommand {
-    Append(AppendRequest),
-    Flush {
-        generation: u64,
-        durability: DurabilityLevel,
-    },
-    Truncate {
-        generation: u64,
-        retain_from_sequence: u64,
-        authority_ref: Option<String>,
-    },
-    AtomicBatch(AtomicBatchRequest),
-    Snapshot {
-        request: SnapshotRequest,
-        bytes: Vec<u8>,
-    },
-    Effect(EffectTransactionCommand),
-}
-
-impl DurablePortCommand {
-    pub const fn port_id(&self) -> &'static str {
-        match self {
-            Self::Append(_) | Self::Flush { .. } | Self::Truncate { .. } => FABRIC_DURABLE_LOG_PORT_ID,
-            Self::AtomicBatch(_) => FABRIC_ORDERED_STORE_PORT_ID,
-            Self::Snapshot { .. } => FABRIC_SNAPSHOT_PORT_ID,
-            Self::Effect(_) => FABRIC_EFFECT_TRANSACTION_PORT_ID,
-        }
-    }
-
-    pub const fn generation(&self) -> u64 {
-        match self {
-            Self::Append(request) => request.generation,
-            Self::Flush { generation, .. } | Self::Truncate { generation, .. } => *generation,
-            Self::AtomicBatch(request) => request.generation,
-            Self::Snapshot { request, .. } => request.generation,
-            Self::Effect(command) => match command {
-                EffectTransactionCommand::Reserve { generation, .. }
-                | EffectTransactionCommand::Commit { generation, .. }
-                | EffectTransactionCommand::Abort { generation, .. }
-                | EffectTransactionCommand::Expire { generation, .. }
-                | EffectTransactionCommand::MarkUncertain { generation, .. }
-                | EffectTransactionCommand::Reconcile { generation, .. } => *generation,
-            },
-        }
-    }
-}
-
-pub trait DurableCommandShell {
-    fn profile_id(&self) -> &str;
-    fn execute_command(&mut self, command: &DurablePortCommand) -> Result<CanonicalDurableTransition>;
-}
-
 impl DurableCommandShell for RedbDurableStateAdapter {
     fn profile_id(&self) -> &str {
         &self.profile.profile.profile_id
     }
 
-    fn execute_command(&mut self, command: &DurablePortCommand) -> Result<CanonicalDurableTransition> {
-        match command {
+    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<CanonicalDurableTransition> {
+        let result = match command {
             DurablePortCommand::Append(request) => self.append(request),
             DurablePortCommand::Flush { generation, durability } => self.flush(*generation, *durability),
             DurablePortCommand::Truncate {
@@ -470,7 +427,8 @@ impl DurableCommandShell for RedbDurableStateAdapter {
             DurablePortCommand::AtomicBatch(request) => self.apply_batch(request),
             DurablePortCommand::Snapshot { request, bytes } => self.create_snapshot(request, bytes),
             DurablePortCommand::Effect(command) => self.apply_effect(command),
-        }
+        };
+        result.map_err(|error| FabricPortError::storage(error.to_string()))
     }
 }
 
@@ -479,8 +437,8 @@ impl DurableCommandShell for SimulatedDurableStateAdapter {
         &self.profile.profile.profile_id
     }
 
-    fn execute_command(&mut self, command: &DurablePortCommand) -> Result<CanonicalDurableTransition> {
-        match command {
+    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<CanonicalDurableTransition> {
+        let result = match command {
             DurablePortCommand::Append(request) => self.append(request, None),
             DurablePortCommand::Flush { generation, durability } => self.flush(*generation, *durability),
             DurablePortCommand::Truncate {
@@ -491,71 +449,8 @@ impl DurableCommandShell for SimulatedDurableStateAdapter {
             DurablePortCommand::AtomicBatch(request) => self.apply_batch(request, None),
             DurablePortCommand::Snapshot { request, .. } => self.create_snapshot(request),
             DurablePortCommand::Effect(command) => self.apply_effect(command),
-        }
-    }
-}
-
-pub struct RegisteredDurableEffectPort<A: DurableCommandShell> {
-    adapter: A,
-    requests: BTreeMap<String, DurablePortCommand>,
-}
-
-impl<A: DurableCommandShell> RegisteredDurableEffectPort<A> {
-    pub fn new(adapter: A) -> Self {
-        Self {
-            adapter,
-            requests: BTreeMap::new(),
-        }
-    }
-
-    pub fn register(&mut self, request_ref: String, command: DurablePortCommand) -> Result<()> {
-        crate::preserves_rail::validate_content_ref(&request_ref)?;
-        if self.requests.insert(request_ref.clone(), command).is_some() {
-            return Err(MoltenError::invalid_harness(format!("durable request {request_ref} is already registered")));
-        }
-        Ok(())
-    }
-
-    pub fn adapter(&self) -> &A {
-        &self.adapter
-    }
-}
-
-// r[impl molten.fabric_durability.port_contracts]
-impl<A: DurableCommandShell> crate::system_extension::FabricEffectPort for RegisteredDurableEffectPort<A> {
-    fn route(
-        &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
-        effect: &crate::system_extension::TypedEffectRequest,
-    ) -> std::result::Result<crate::system_extension::PortEffectOutput, String> {
-        if binding.binding.implementation_profile != self.adapter.profile_id() {
-            return Err("durable effect profile substitution denied".to_string());
-        }
-        match &effect.target {
-            crate::system_extension::EffectTarget::FabricPort(key) if key == &binding.binding.key => {}
-            crate::system_extension::EffectTarget::FabricPort(_) => {
-                return Err("durable effect target does not match its bound port".to_string());
-            }
-            crate::system_extension::EffectTarget::Ambient(_) => {
-                return Err("ambient effect cannot route through a durable port".to_string());
-            }
-        }
-        let command = self
-            .requests
-            .get(&effect.request_ref)
-            .cloned()
-            .ok_or_else(|| "durable effect request is not registered".to_string())?;
-        if binding.binding.key.port_id != command.port_id() {
-            return Err("durable effect command does not match its bound port".to_string());
-        }
-        if effect.generation != command.generation() {
-            return Err("durable effect generation does not match its registered command".to_string());
-        }
-        let transition = self.adapter.execute_command(&command).map_err(|error| error.to_string())?;
-        Ok(crate::system_extension::PortEffectOutput {
-            output_schema_ref: effect.output_schema_ref.clone(),
-            output_ref: transition.transition_ref,
-        })
+        };
+        result.map_err(|error| FabricPortError::storage(error.to_string()))
     }
 }
 

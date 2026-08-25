@@ -6,6 +6,16 @@ use crate::error::Result;
 use crate::fabric::ExtensionTier;
 use crate::fabric::ExtensionTierRequest;
 use crate::fabric::FabricPortClass;
+#[allow(
+    tigerstyle::non_trait_imports,
+    reason = "the simulation shell implements the application-owned typed effect-port boundary"
+)]
+use crate::fabric::FabricPortError;
+#[allow(
+    tigerstyle::non_trait_imports,
+    reason = "the simulation shell implements the application-owned typed effect-port boundary"
+)]
+use crate::fabric::FabricPortResult;
 use crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE;
 use crate::fabric::ReferenceSystemKind;
 use crate::fabric::canonical_extension_tier_admission;
@@ -126,40 +136,40 @@ impl FabricEffectPort for DeterministicSimulationPortRouter {
         &mut self,
         binding: &crate::fabric::CanonicalFabricPortBinding,
         effect: &TypedEffectRequest,
-    ) -> std::result::Result<PortEffectOutput, String> {
+    ) -> FabricPortResult<PortEffectOutput> {
         let profile = self
             .profiles
             .get(&binding.binding.key.port_id)
             .cloned()
-            .ok_or_else(|| "simulation effect used an unknown port profile".to_string())?;
+            .ok_or_else(|| FabricPortError::malformed("simulation effect used an unknown port profile"))?;
         if binding.binding.key.version != profile.version
             || binding.binding.class != profile.class
             || binding.binding.implementation_profile != profile.implementation_profile
         {
-            return Err("simulation effect profile substitution denied".to_string());
+            return Err(FabricPortError::malformed("simulation effect profile substitution denied"));
         }
         if !profile.deterministic {
-            return Err("simulation effect cannot route through a live adapter".to_string());
+            return Err(FabricPortError::capability("simulation effect cannot route through a live adapter"));
         }
         let target_matches = matches!(
             &effect.target,
             crate::system_extension::EffectTarget::FabricPort(key) if key == &binding.binding.key
         );
         if !target_matches {
-            return Err("simulation effect target does not match its canonical binding".to_string());
+            return Err(FabricPortError::malformed("simulation effect target does not match its canonical binding"));
         }
         let active_fault = self.active_fault(&profile).cloned();
         let fault_cost = active_fault.as_ref().map_or(0, |fault| fault.resource_cost);
         let increment = effect
             .accounted_bytes
             .checked_add(fault_cost)
-            .ok_or_else(|| "simulation resource increment overflow".to_string())?;
+            .ok_or_else(|| FabricPortError::malformed("simulation resource increment overflow"))?;
         let next_units = self
             .resource_units
             .checked_add(increment)
-            .ok_or_else(|| "simulation resource counter overflow".to_string())?;
+            .ok_or_else(|| FabricPortError::malformed("simulation resource counter overflow"))?;
         if next_units > self.max_resource_units {
-            return Err("simulation resource envelope exhausted".to_string());
+            return Err(FabricPortError::capability("simulation resource envelope exhausted"));
         }
         let output_material = format!(
             "{}:{}:{}:{}:{}",
@@ -178,7 +188,7 @@ impl FabricEffectPort for DeterministicSimulationPortRouter {
             output_ref: &output_ref,
             fault: active_fault.map(|fault| fault.kind),
         })
-        .map_err(|error| error.to_string())?;
+        .map_err(FabricPortError::from)?;
         self.resource_units = next_units;
         self.events.push(event);
         Ok(PortEffectOutput {

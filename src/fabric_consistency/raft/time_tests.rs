@@ -3,6 +3,7 @@ use std::time::Duration;
 use super::tests::test_ref;
 use super::*;
 use crate::error::Result;
+use crate::fabric::FabricPortResult;
 use crate::fabric_time::CryptographicEntropySource;
 use crate::fabric_time::tests::live_profile;
 
@@ -23,7 +24,7 @@ impl CryptographicEntropySource for FixedEntropySource {
         "fixed-live-raft-test-source"
     }
 
-    fn fill_secret(&mut self, output: &mut [u8]) -> Result<()> {
+    fn fill_secret(&mut self, output: &mut [u8]) -> FabricPortResult<()> {
         output.fill(0);
         Ok(())
     }

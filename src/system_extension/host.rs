@@ -68,7 +68,7 @@ pub trait FabricEffectPort {
         &mut self,
         binding: &crate::fabric::CanonicalFabricPortBinding,
         effect: &TypedEffectRequest,
-    ) -> std::result::Result<PortEffectOutput, String>;
+    ) -> crate::fabric::FabricPortResult<PortEffectOutput>;
 }
 
 impl<T: SystemExtensionExecutor + ?Sized> SystemExtensionExecutor for Box<T> {

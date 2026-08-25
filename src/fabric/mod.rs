@@ -4,7 +4,16 @@
 //! assigns canonical Preserves schemas and BLAKE3 refs without performing I/O;
 //! adapter shells decide whether and where admitted artifacts are persisted.
 
+#[cfg(test)]
+mod audit;
+mod port;
+
 pub use molten_core::fabric::*;
+#[allow(
+    tigerstyle::non_trait_imports,
+    reason = "fabric application modules share one typed external capability error vocabulary"
+)]
+pub use port::*;
 use preserves::IOValue;
 
 use crate::error::MoltenError;

@@ -101,9 +101,11 @@ impl RegisteredCrossProcessTransportEffectPort {
         &mut self,
         binding: &crate::fabric::CanonicalFabricPortBinding,
         effect: &crate::system_extension::TypedEffectRequest,
-    ) -> std::result::Result<crate::system_extension::PortEffectOutput, String> {
+    ) -> crate::fabric::FabricPortResult<crate::system_extension::PortEffectOutput> {
         if self.routed_requests.contains(&effect.request_ref) {
-            return Err("cross-process transport effect request replay denied".to_string());
+            return Err(crate::fabric::FabricPortError::malformed(
+                "cross-process transport effect request replay denied",
+            ));
         }
         let (command, submitted) = self.control.execute_effect(binding, effect)?;
         self.routed_requests.insert(effect.request_ref.clone());
@@ -139,7 +141,8 @@ impl RegisteredCrossProcessTransportEffectPort {
                     &operation_id,
                     &session_id,
                     TransportFailureClass::AdapterFailure,
-                )?;
+                )
+                .map_err(crate::fabric::FabricPortError::transport)?;
                 return Ok(effect_output(effect, failed.transition_ref));
             }
         };
@@ -150,33 +153,29 @@ impl RegisteredCrossProcessTransportEffectPort {
                 &operation_id,
                 &session_id,
                 TransportFailureClass::MalformedInput,
-            )?;
+            )
+            .map_err(crate::fabric::FabricPortError::transport)?;
             return Ok(effect_output(effect, failed.transition_ref));
         }
-        let acknowledged = self
-            .control
-            .adapter_mut()
-            .execute_command(&TransportCommand::AcknowledgeFrame {
-                operation_id,
-                session_id,
-                stream_id,
-                payload_bytes,
-            })
-            .map_err(|error| error.to_string())?;
+        let acknowledged = self.control.adapter_mut().execute_command(&TransportCommand::AcknowledgeFrame {
+            operation_id,
+            session_id,
+            stream_id,
+            payload_bytes,
+        })?;
         Ok(effect_output(effect, acknowledged.transition_ref))
     }
 
-    fn remove_payload(&mut self, request_ref: &str) -> std::result::Result<Vec<u8>, String> {
-        let payload = self
-            .payloads
-            .remove(request_ref)
-            .ok_or_else(|| "cross-process transport effect payload is not registered".to_string())?;
-        let payload_bytes =
-            u64::try_from(payload.len()).map_err(|_| "queued payload size does not fit u64".to_string())?;
+    fn remove_payload(&mut self, request_ref: &str) -> crate::fabric::FabricPortResult<Vec<u8>> {
+        let payload = self.payloads.remove(request_ref).ok_or_else(|| {
+            crate::fabric::FabricPortError::malformed("cross-process transport effect payload is not registered")
+        })?;
+        let payload_bytes = u64::try_from(payload.len())
+            .map_err(|_| crate::fabric::FabricPortError::malformed("queued payload size does not fit u64"))?;
         self.queued_payload_bytes = self
             .queued_payload_bytes
             .checked_sub(payload_bytes)
-            .ok_or_else(|| "queued payload accounting underflow".to_string())?;
+            .ok_or_else(|| crate::fabric::FabricPortError::malformed("queued payload accounting underflow"))?;
         Ok(payload)
     }
 }
@@ -188,7 +187,7 @@ impl crate::system_extension::FabricEffectPort for RegisteredCrossProcessTranspo
         &mut self,
         binding: &crate::fabric::CanonicalFabricPortBinding,
         effect: &crate::system_extension::TypedEffectRequest,
-    ) -> std::result::Result<crate::system_extension::PortEffectOutput, String> {
+    ) -> crate::fabric::FabricPortResult<crate::system_extension::PortEffectOutput> {
         self.route_effect(binding, effect)
     }
 }

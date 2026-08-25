@@ -1,3 +1,4 @@
+// r[impl molten.modularity.fabric_boundary.adapters]
 use std::io::Read;
 use std::time::Duration;
 use std::time::Instant;
@@ -5,6 +6,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use super::AdmittedTimeProfile;
+use super::CryptographicEntropySource;
 use super::EntropyEvidenceMetadata;
 use super::EntropyRequest;
 use super::EntropyStreamRequest;
@@ -13,13 +15,11 @@ use super::EntropyTransition;
 use super::MonotonicInstant;
 use super::RunnableKey;
 use super::SchedulerCommand;
-use super::SchedulerPolicy;
-use super::SchedulerSelection;
-use super::SchedulerState;
 use super::SchedulerTransition;
 use super::TimeDomain;
 use super::TimeProfileKind;
 use super::TimerAction;
+use super::TimerClockAdapter;
 use super::TimerError;
 use super::TimerKey;
 use super::TimerKind;
@@ -29,7 +29,6 @@ use super::TimerTransition;
 use super::VirtualInstant;
 use super::WallClockObservation;
 use super::cancel_timer;
-use super::cleanup_generation;
 use super::consume_production_entropy;
 use super::entropy_evidence_metadata;
 use super::open_entropy_stream;
@@ -37,9 +36,16 @@ use super::poll_timer;
 use super::schedule_timer;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::fabric::FabricPortKey;
-use crate::system_extension::SystemExtensionExecutor;
-use crate::system_extension::SystemExtensionHost;
+#[allow(
+    tigerstyle::non_trait_imports,
+    reason = "time mechanisms implement the application-owned typed port contracts"
+)]
+use crate::fabric::FabricPortError;
+#[allow(
+    tigerstyle::non_trait_imports,
+    reason = "time mechanisms implement the application-owned typed port contracts"
+)]
+use crate::fabric::FabricPortResult;
 
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 const LIVE_CONFORMANCE_DELAY_NANOS: u64 = 2_000_000;
@@ -48,13 +54,6 @@ const LIVE_WAIT_SLICE_MICROS: u64 = 250;
 const CANCELLATION_TIMER_SEQUENCE: u64 = 2;
 const OS_ENTROPY_PATH: &str = "/dev/urandom";
 const CONFORMANCE_CAPABILITY_REF: &str = "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
-
-pub trait TimerClockAdapter {
-    fn profile_ref(&self) -> &str;
-    fn timer_domain(&self) -> TimeDomain;
-    fn now_ticks(&mut self) -> Result<u64>;
-    fn await_ticks(&mut self, target_ticks: u64) -> Result<u64>;
-}
 
 #[derive(Debug)]
 pub struct LiveClockAdapter {
@@ -124,11 +123,11 @@ impl TimerClockAdapter for LiveClockAdapter {
         TimeDomain::Monotonic
     }
 
-    fn now_ticks(&mut self) -> Result<u64> {
-        Ok(self.observe_monotonic()?.ticks)
+    fn now_ticks(&mut self) -> FabricPortResult<u64> {
+        Ok(self.observe_monotonic().map_err(FabricPortError::from)?.ticks)
     }
 
-    fn await_ticks(&mut self, target_ticks: u64) -> Result<u64> {
+    fn await_ticks(&mut self, target_ticks: u64) -> FabricPortResult<u64> {
         let wait_started = Instant::now();
         let maximum_wait = Duration::from_millis(LIVE_CONFORMANCE_TIMEOUT_MILLIS);
         let wait_slice = Duration::from_micros(LIVE_WAIT_SLICE_MICROS);
@@ -138,10 +137,12 @@ impl TimerClockAdapter for LiveClockAdapter {
                 return Ok(now);
             }
             if wait_started.elapsed() >= maximum_wait {
-                return Err(MoltenError::invalid_harness(format!(
-                    "live timer did not reach {target_ticks} within {} milliseconds",
-                    LIVE_CONFORMANCE_TIMEOUT_MILLIS
-                )));
+                return Err(FabricPortError::Timeout {
+                    message: format!(
+                        "live timer did not reach {target_ticks} within {} milliseconds",
+                        LIVE_CONFORMANCE_TIMEOUT_MILLIS
+                    ),
+                });
             }
             std::thread::sleep(wait_slice);
         }
@@ -242,13 +243,13 @@ impl TimerClockAdapter for VirtualClockAdapter {
         TimeDomain::Virtual
     }
 
-    fn now_ticks(&mut self) -> Result<u64> {
+    fn now_ticks(&mut self) -> FabricPortResult<u64> {
         Ok(self.virtual_ticks)
     }
 
-    fn await_ticks(&mut self, target_ticks: u64) -> Result<u64> {
+    fn await_ticks(&mut self, target_ticks: u64) -> FabricPortResult<u64> {
         if target_ticks < self.virtual_ticks {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(FabricPortError::malformed(format!(
                 "virtual adapter cannot move backwards from {} to {target_ticks}",
                 self.virtual_ticks
             )));
@@ -449,11 +450,6 @@ fn run_entropy_conformance(profile: &AdmittedTimeProfile, generation: u64) -> Re
     Ok(rejected)
 }
 
-pub trait CryptographicEntropySource {
-    fn source_id(&self) -> &'static str;
-    fn fill_secret(&mut self, output: &mut [u8]) -> Result<()>;
-}
-
 #[derive(Debug, Default)]
 pub struct OperatingSystemEntropySource;
 
@@ -462,19 +458,19 @@ impl CryptographicEntropySource for OperatingSystemEntropySource {
         "unix-dev-urandom"
     }
 
-    fn fill_secret(&mut self, output: &mut [u8]) -> Result<()> {
+    fn fill_secret(&mut self, output: &mut [u8]) -> FabricPortResult<()> {
         #[cfg(unix)]
         {
             let mut source = std::fs::File::open(OS_ENTROPY_PATH)
-                .map_err(|error| MoltenError::invalid_harness(format!("open production entropy source: {error}")))?;
+                .map_err(|error| FabricPortError::capability(format!("open production entropy source: {error}")))?;
             source
                 .read_exact(output)
-                .map_err(|error| MoltenError::invalid_harness(format!("read production entropy source: {error}")))
+                .map_err(|error| FabricPortError::capability(format!("read production entropy source: {error}")))
         }
         #[cfg(not(unix))]
         {
             let _ = output;
-            Err(MoltenError::invalid_harness("production entropy adapter has no admitted source on this platform"))
+            Err(FabricPortError::capability("production entropy adapter has no admitted source on this platform"))
         }
     }
 }
@@ -508,188 +504,6 @@ impl<S: CryptographicEntropySource> ProductionEntropyAdapter<S> {
         let metadata = entropy_evidence_metadata(state, &transition);
         Ok((transition, metadata))
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExtensionTimeContext {
-    service_id: String,
-    generation: u64,
-    max_timers: u64,
-    max_runnables: u64,
-    max_concurrency: u64,
-    max_entropy_request_bytes: u64,
-    capability_refs: Vec<String>,
-    timer_profile: Option<String>,
-    scheduler_profile: Option<String>,
-    entropy_profile: Option<String>,
-}
-
-impl ExtensionTimeContext {
-    pub fn from_host<E: SystemExtensionExecutor>(host: &SystemExtensionHost<E>) -> Self {
-        let manifest = host.manifest().manifest();
-        Self {
-            service_id: manifest.service_id.clone(),
-            generation: host.state().generation,
-            max_timers: manifest.resources.max_timers,
-            max_runnables: manifest.resources.max_queued_events,
-            max_concurrency: manifest.resources.max_concurrent_callbacks,
-            max_entropy_request_bytes: manifest.resources.max_inflight_bytes,
-            capability_refs: manifest.capability_refs.clone(),
-            timer_profile: bound_port_profile(host, super::FABRIC_TIMER_PORT_ID),
-            scheduler_profile: bound_port_profile(host, super::FABRIC_SCHEDULER_PORT_ID),
-            entropy_profile: bound_port_profile(host, super::FABRIC_ENTROPY_PORT_ID),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn from_test_snapshot(
-        service_id: &str,
-        generation: u64,
-        profile: &AdmittedTimeProfile,
-        capability_refs: Vec<String>,
-    ) -> Self {
-        Self {
-            service_id: service_id.to_string(),
-            generation,
-            max_timers: profile.max_timers,
-            max_runnables: profile.max_runnables,
-            max_concurrency: profile.max_scheduler_concurrency,
-            max_entropy_request_bytes: profile.max_entropy_request_bytes,
-            capability_refs,
-            timer_profile: Some(profile.profile_id.clone()),
-            scheduler_profile: Some(profile.profile_id.clone()),
-            entropy_profile: Some(profile.profile_id.clone()),
-        }
-    }
-
-    // r[impl molten.fabric_time.live_sim_parity]
-    pub fn schedule_timer(
-        &self,
-        profile: &AdmittedTimeProfile,
-        active_timer_count: u64,
-        request: &TimerScheduleRequest,
-    ) -> Result<TimerState> {
-        ensure_bound_profile(&self.timer_profile, profile, "timer")?;
-        if request.key.service_id != self.service_id {
-            return Err(MoltenError::invalid_harness("timer service identity mismatch"));
-        }
-        if active_timer_count >= self.max_timers {
-            return Err(MoltenError::invalid_harness(format!(
-                "system-extension timer limit {} exhausted",
-                self.max_timers
-            )));
-        }
-        schedule_timer(profile, self.generation, active_timer_count, request)
-            .map_err(|error| core_error("system-extension timer admission", error))
-    }
-
-    pub fn apply_scheduler_command(
-        &self,
-        profile: &AdmittedTimeProfile,
-        policy: SchedulerPolicy,
-        state: &SchedulerState,
-        command: &SchedulerCommand,
-    ) -> Result<SchedulerTransition> {
-        ensure_bound_profile(&self.scheduler_profile, profile, "scheduler")?;
-        let key = scheduler_command_key(command);
-        if key.service_id != self.service_id {
-            return Err(MoltenError::invalid_harness("runnable service identity mismatch"));
-        }
-        if matches!(command, SchedulerCommand::Wake { .. }) {
-            let active = u64::try_from(
-                state
-                    .runnables
-                    .iter()
-                    .filter(|runnable| {
-                        !matches!(runnable.phase, super::RunnablePhase::Completed | super::RunnablePhase::Cancelled)
-                    })
-                    .count(),
-            )
-            .map_err(|_| MoltenError::invalid_harness("runnable count overflow"))?;
-            if active >= self.max_runnables {
-                return Err(MoltenError::invalid_harness(format!(
-                    "system-extension runnable limit {} exhausted",
-                    self.max_runnables
-                )));
-            }
-        }
-        super::apply_scheduler_command(profile, policy, state, self.generation, command)
-            .map_err(|error| core_error("system-extension scheduler command", error))
-    }
-
-    pub fn choose_runnable(
-        &self,
-        profile: &AdmittedTimeProfile,
-        policy: SchedulerPolicy,
-        state: &SchedulerState,
-        recorded_choice: Option<&RunnableKey>,
-    ) -> Result<SchedulerSelection> {
-        ensure_bound_profile(&self.scheduler_profile, profile, "scheduler")?;
-        let running = u64::try_from(
-            state.runnables.iter().filter(|runnable| runnable.phase == super::RunnablePhase::Running).count(),
-        )
-        .map_err(|_| MoltenError::invalid_harness("running runnable count overflow"))?;
-        if running >= self.max_concurrency {
-            return Err(MoltenError::invalid_harness(format!(
-                "system-extension concurrency limit {} exhausted",
-                self.max_concurrency
-            )));
-        }
-        super::choose_runnable(profile, policy, state, self.generation, recorded_choice)
-            .map_err(|error| core_error("system-extension scheduler selection", error))
-    }
-
-    pub fn open_entropy_stream(
-        &self,
-        profile: &AdmittedTimeProfile,
-        request: &EntropyStreamRequest,
-    ) -> Result<EntropyStreamState> {
-        ensure_bound_profile(&self.entropy_profile, profile, "entropy")?;
-        if !self.capability_refs.contains(&request.capability_ref) {
-            return Err(MoltenError::invalid_harness("entropy request lacks an admitted system-extension capability"));
-        }
-        open_entropy_stream(profile, self.generation, request)
-            .map_err(|error| core_error("system-extension entropy stream", error))
-    }
-
-    pub fn admit_entropy_request(&self, request: EntropyRequest) -> Result<()> {
-        let requested = request.requested_bytes();
-        if requested > self.max_entropy_request_bytes {
-            return Err(MoltenError::invalid_harness(format!(
-                "entropy request {requested} exceeds system-extension byte envelope {}",
-                self.max_entropy_request_bytes
-            )));
-        }
-        Ok(())
-    }
-
-    pub fn cleanup_retired_timers(&self, states: &[TimerState], retired_generation: u64) -> Vec<TimerState> {
-        cleanup_generation(states, retired_generation)
-    }
-}
-
-fn bound_port_profile<E: SystemExtensionExecutor>(host: &SystemExtensionHost<E>, port_id: &str) -> Option<String> {
-    host.manifest()
-        .binding_for(&FabricPortKey {
-            port_id: port_id.to_string(),
-            version: super::FABRIC_TIME_PORT_VERSION.to_string(),
-        })
-        .map(|binding| binding.binding.implementation_profile.clone())
-}
-
-fn ensure_bound_profile(bound_profile: &Option<String>, profile: &AdmittedTimeProfile, port: &str) -> Result<()> {
-    let Some(bound_profile) = bound_profile else {
-        return Err(MoltenError::invalid_harness(format!(
-            "system extension has no admitted {port} fabric port binding"
-        )));
-    };
-    if bound_profile != &profile.profile_id {
-        return Err(MoltenError::invalid_harness(format!(
-            "system extension {port} profile {bound_profile} does not admit requested profile {}",
-            profile.profile_id
-        )));
-    }
-    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -809,16 +623,6 @@ fn conformance_timer_request(
         lateness: super::TimerLatenessPolicy::DeliverRegardless,
         overload: super::TimerOverloadPolicy::RejectAndRetain,
         resource_charge: super::TimerResourceCharge::single_slot(),
-    }
-}
-
-fn scheduler_command_key(command: &SchedulerCommand) -> &RunnableKey {
-    match command {
-        SchedulerCommand::Wake { key, .. }
-        | SchedulerCommand::Yield { key }
-        | SchedulerCommand::Block { key }
-        | SchedulerCommand::Complete { key }
-        | SchedulerCommand::Cancel { key } => key,
     }
 }
 

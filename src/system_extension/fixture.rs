@@ -150,14 +150,17 @@ impl FabricEffectPort for FixtureTransportPort {
         &mut self,
         binding: &crate::fabric::CanonicalFabricPortBinding,
         effect: &TypedEffectRequest,
-    ) -> std::result::Result<PortEffectOutput, String> {
+    ) -> crate::fabric::FabricPortResult<PortEffectOutput> {
         if binding.binding.key.port_id != PORT_ID
             || binding.binding.key.version != PORT_VERSION
             || effect.operation != PORT_OPERATION
         {
-            return Err("fixture received an unexpected fabric binding".to_string());
+            return Err(crate::fabric::FabricPortError::malformed("fixture received an unexpected fabric binding"));
         }
-        self.routed = self.routed.checked_add(1).ok_or_else(|| "fixture route counter overflow".to_string())?;
+        self.routed = self
+            .routed
+            .checked_add(1)
+            .ok_or_else(|| crate::fabric::FabricPortError::malformed("fixture route counter overflow"))?;
         Ok(PortEffectOutput {
             output_schema_ref: OUTPUT_SCHEMA.to_string(),
             output_ref: HASH_C.to_string(),
