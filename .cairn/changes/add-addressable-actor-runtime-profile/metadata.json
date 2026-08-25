@@ -2,6 +2,8 @@
   "depends_on": [
     "coordination-delivery-system-extension"
   ],
+  "groups": ["current"],
+  "status": "blocked",
   "workflow_profile": {
     "id": "spec-driven",
     "source": "change_create",

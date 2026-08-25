@@ -1,0 +1,8 @@
+{
+  "depends_on": [
+    "fabric-consistency-service-runtime",
+    "fabric-whole-system-simulation"
+  ],
+  "groups": ["current"],
+  "status": "blocked"
+}
