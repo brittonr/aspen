@@ -178,24 +178,33 @@ impl<'a> ReleaseCandidateGate<'a> {
         validate_source_gate_status(self.input.source_gate_status)?;
         validate_text_slice("source gate caveat", self.input.source_gate_caveats)?;
         validate_diagnostics(self.input.diagnostics)?;
-        self.require_evidence_refs()?;
+        self.require_candidate_bound_evidence()?;
         self.require_source_gate_caveat()
     }
 
-    fn require_evidence_refs(&self) -> Result<()> {
-        for (label, refs) in [
-            ("Rust validation", self.input.rust_validation_refs),
-            ("nextest", self.input.nextest_refs),
-            ("Nix check", self.input.nix_check_refs),
-            ("Cairn validation", self.input.cairn_validation_refs),
-            ("Octet", self.input.octet_refs),
-            ("dogfood", self.input.dogfood_refs),
-            ("release bundle verify", self.input.bundle_verify_refs),
-            ("promotion", self.input.promotion_refs),
-            ("export verify", self.input.export_verify_refs),
-            ("pilot decision", self.input.pilot_decision_refs),
-        ] {
-            require_pass_refs(label, refs, self.input.decision)?;
+    fn evidence_groups(&self) -> [(&'static str, &'a [CandidateEvidenceBinding<'a>]); 10] {
+        [
+            ("Rust validation", self.input.rust_validation_evidence),
+            ("nextest", self.input.nextest_evidence),
+            ("Nix check", self.input.nix_check_evidence),
+            ("Cairn validation", self.input.cairn_validation_evidence),
+            ("Octet", self.input.octet_evidence),
+            ("dogfood", self.input.dogfood_evidence),
+            ("release bundle verify", self.input.bundle_verify_evidence),
+            ("promotion", self.input.promotion_evidence),
+            ("export verify", self.input.export_verify_evidence),
+            ("pilot decision", self.input.pilot_decision_evidence),
+        ]
+    }
+
+    fn require_candidate_bound_evidence(&self) -> Result<()> {
+        for (label, bindings) in self.evidence_groups() {
+            validate_candidate_evidence_bindings(
+                label,
+                bindings,
+                self.input.source_ref,
+                self.input.decision,
+            )?;
         }
         Ok(())
     }
@@ -213,23 +222,23 @@ impl<'a> ReleaseCandidateGate<'a> {
     }
 
     fn value(&self) -> Result<IoValue> {
-        Ok(record("prod-release-candidate-gate-v1", vec![
+        Ok(record("prod-release-candidate-gate-v2", vec![
             string(PROD_RELEASE_CANDIDATE_GATE_SCHEMA),
             decision_field(self.input.decision),
             record("candidate", vec![string(self.input.candidate)]),
             record("source", vec![string(self.input.source_ref)]),
-            refs_field("rust-validation", self.input.rust_validation_refs)?,
-            refs_field("nextest", self.input.nextest_refs)?,
-            refs_field("nix-checks", self.input.nix_check_refs)?,
-            refs_field("cairn-validation", self.input.cairn_validation_refs)?,
-            refs_field("octet-source-gates", self.input.octet_refs)?,
-            refs_field("dogfood", self.input.dogfood_refs)?,
-            refs_field("release-bundle-verification", self.input.bundle_verify_refs)?,
-            refs_field("promotion", self.input.promotion_refs)?,
-            refs_field("export-verification", self.input.export_verify_refs)?,
+            candidate_evidence_field("rust-validation", self.input.rust_validation_evidence),
+            candidate_evidence_field("nextest", self.input.nextest_evidence),
+            candidate_evidence_field("nix-checks", self.input.nix_check_evidence),
+            candidate_evidence_field("cairn-validation", self.input.cairn_validation_evidence),
+            candidate_evidence_field("octet-source-gates", self.input.octet_evidence),
+            candidate_evidence_field("dogfood", self.input.dogfood_evidence),
+            candidate_evidence_field("release-bundle-verification", self.input.bundle_verify_evidence),
+            candidate_evidence_field("promotion", self.input.promotion_evidence),
+            candidate_evidence_field("export-verification", self.input.export_verify_evidence),
             record("source-gate-status", vec![string(self.input.source_gate_status)]),
             texts_field("source-gate-caveats", self.input.source_gate_caveats)?,
-            refs_field("pilot-decisions", self.input.pilot_decision_refs)?,
+            candidate_evidence_field("pilot-decisions", self.input.pilot_decision_evidence),
             diagnostics_field(self.input.diagnostics)?,
             checks_field(self.checks()),
         ]))
@@ -238,18 +247,20 @@ impl<'a> ReleaseCandidateGate<'a> {
     fn checks(&self) -> Vec<IoValue> {
         vec![
             check_value("full-validation-matrix-bound", pass_check(self.has_validation_matrix_gap())),
+            check_value("all-evidence-candidate-bound", "pass"),
             check_value("source-gate-current-or-limited", pass_check(self.has_source_gate_limiter())),
             check_value("bundle-promotion-export-bound", pass_check(self.has_release_bundle_gap())),
-            check_value("pilot-decision-bound", pass_check(self.input.pilot_decision_refs.is_empty())),
+            check_value("pilot-decision-bound", pass_check(self.input.pilot_decision_evidence.is_empty())),
+            check_value("declared-binding-does-not-prove-external-artifact-truth", "pass"),
             check_value("release-candidate-receipt-does-not-grant-authority", "pass"),
         ]
     }
 
     fn has_validation_matrix_gap(&self) -> bool {
-        self.input.rust_validation_refs.is_empty()
-            || self.input.nextest_refs.is_empty()
-            || self.input.nix_check_refs.is_empty()
-            || self.input.cairn_validation_refs.is_empty()
+        self.input.rust_validation_evidence.is_empty()
+            || self.input.nextest_evidence.is_empty()
+            || self.input.nix_check_evidence.is_empty()
+            || self.input.cairn_validation_evidence.is_empty()
     }
 
     fn has_source_gate_limiter(&self) -> bool {
@@ -257,10 +268,63 @@ impl<'a> ReleaseCandidateGate<'a> {
     }
 
     fn has_release_bundle_gap(&self) -> bool {
-        self.input.bundle_verify_refs.is_empty()
-            || self.input.promotion_refs.is_empty()
-            || self.input.export_verify_refs.is_empty()
+        self.input.bundle_verify_evidence.is_empty()
+            || self.input.promotion_evidence.is_empty()
+            || self.input.export_verify_evidence.is_empty()
     }
+}
+
+fn validate_candidate_evidence_bindings(
+    label: &'static str,
+    bindings: &[CandidateEvidenceBinding<'_>],
+    expected_source_ref: &str,
+    decision: &str,
+) -> Result<()> {
+    if bindings.len() > MAX_PROD_REFS {
+        return Err(MoltenError::invalid_harness(format!(
+            "production readiness {label} binding count {} exceeds bound {MAX_PROD_REFS}",
+            bindings.len()
+        )));
+    }
+    if is_pass(decision) && bindings.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "passing production readiness receipt requires at least one {label} candidate evidence binding"
+        )));
+    }
+    for binding in bindings {
+        validate_content_ref(binding.artifact_ref).map_err(|error| {
+            MoltenError::invalid_harness(format!(
+                "invalid production readiness {label} artifact ref {}: {error}",
+                binding.artifact_ref
+            ))
+        })?;
+        validate_content_ref(binding.source_ref).map_err(|error| {
+            MoltenError::invalid_harness(format!(
+                "invalid production readiness {label} candidate source ref {}: {error}",
+                binding.source_ref
+            ))
+        })?;
+        if binding.source_ref != expected_source_ref {
+            return Err(MoltenError::invalid_harness(format!(
+                "production readiness {label} candidate source mismatch: expected {expected_source_ref}, observed {}",
+                binding.source_ref
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn candidate_evidence_field(label: &'static str, bindings: &[CandidateEvidenceBinding<'_>]) -> IoValue {
+    let values = bindings
+        .iter()
+        .map(|binding| {
+            record(
+                "candidate-evidence",
+                vec![string(binding.artifact_ref), string(binding.source_ref)],
+            )
+        })
+        .collect();
+    record(label, vec![sequence(values)])
 }
 
 pub fn release_candidate_gate_value(input: &ReleaseCandidateGateInput<'_>) -> Result<IoValue> {

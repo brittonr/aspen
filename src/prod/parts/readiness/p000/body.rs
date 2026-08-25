@@ -242,22 +242,28 @@ pub struct PilotDecisionInput<'a> {
     pub diagnostics: &'a [String],
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CandidateEvidenceBinding<'a> {
+    pub artifact_ref: &'a str,
+    pub source_ref: &'a str,
+}
+
 pub struct ReleaseCandidateGateInput<'a> {
     pub decision: &'a str,
     pub candidate: &'a str,
     pub source_ref: &'a str,
-    pub rust_validation_refs: &'a [String],
-    pub nextest_refs: &'a [String],
-    pub nix_check_refs: &'a [String],
-    pub cairn_validation_refs: &'a [String],
-    pub octet_refs: &'a [String],
-    pub dogfood_refs: &'a [String],
-    pub bundle_verify_refs: &'a [String],
-    pub promotion_refs: &'a [String],
-    pub export_verify_refs: &'a [String],
+    pub rust_validation_evidence: &'a [CandidateEvidenceBinding<'a>],
+    pub nextest_evidence: &'a [CandidateEvidenceBinding<'a>],
+    pub nix_check_evidence: &'a [CandidateEvidenceBinding<'a>],
+    pub cairn_validation_evidence: &'a [CandidateEvidenceBinding<'a>],
+    pub octet_evidence: &'a [CandidateEvidenceBinding<'a>],
+    pub dogfood_evidence: &'a [CandidateEvidenceBinding<'a>],
+    pub bundle_verify_evidence: &'a [CandidateEvidenceBinding<'a>],
+    pub promotion_evidence: &'a [CandidateEvidenceBinding<'a>],
+    pub export_verify_evidence: &'a [CandidateEvidenceBinding<'a>],
     pub source_gate_status: &'a str,
     pub source_gate_caveats: &'a [String],
-    pub pilot_decision_refs: &'a [String],
+    pub pilot_decision_evidence: &'a [CandidateEvidenceBinding<'a>],
     pub diagnostics: &'a [String],
 }
 

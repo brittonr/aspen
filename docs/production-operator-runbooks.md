@@ -307,23 +307,29 @@ molten test prod-soak pilot-decision \
 
 PILOT_REF=$(molten test prod-soak show target/prod/pilot-decision.preserves 2>/dev/null | awk '{print $3}' | cut -d= -f2)
 
+CANDIDATE_SOURCE_REF="blake3:<reviewed-candidate-source>"
+
 molten test prod-soak release-candidate-gate \
   --candidate aspen-molten-pilot \
-  --source-ref "$REF0" \
-  --rust-validation-ref "$REF0" \
-  --nextest-ref "$REF0" \
-  --nix-check-ref "$REF0" \
-  --cairn-validation-ref "$REF0" \
-  --octet-ref "$REF0" \
-  --dogfood-ref "$REF0" \
-  --bundle-verify-ref "$REF0" \
-  --promotion-ref "$REF0" \
-  --export-verify-ref "$REF0" \
+  --source-ref "$CANDIDATE_SOURCE_REF" \
+  --rust-validation-binding "$RUST_REF@$CANDIDATE_SOURCE_REF" \
+  --nextest-binding "$NEXTEST_REF@$CANDIDATE_SOURCE_REF" \
+  --nix-check-binding "$NIX_REF@$CANDIDATE_SOURCE_REF" \
+  --cairn-validation-binding "$CAIRN_REF@$CANDIDATE_SOURCE_REF" \
+  --octet-binding "$OCTET_REF@$CANDIDATE_SOURCE_REF" \
+  --dogfood-binding "$DOGFOOD_REF@$CANDIDATE_SOURCE_REF" \
+  --bundle-verify-binding "$BUNDLE_REF@$CANDIDATE_SOURCE_REF" \
+  --promotion-binding "$PROMOTION_REF@$CANDIDATE_SOURCE_REF" \
+  --export-verify-binding "$EXPORT_REF@$CANDIDATE_SOURCE_REF" \
   --source-gate-status configuration-clean-caveat \
   --source-gate-caveat octet-configuration-clean-until-source-remediated-zero \
-  --pilot-decision-ref "$PILOT_REF" \
+  --pilot-decision-binding "$PILOT_REF@$CANDIDATE_SOURCE_REF" \
   --out target/prod/release-candidate.preserves
 ```
+
+Each binding uses `ARTIFACT_REF@SOURCE_REF`. The gate denies a missing pair, a malformed reference, or any source that differs from `--source-ref`.
+
+The receipt records declared identity associations. It does not open the referenced artifacts or prove their claims.
 
 If Octet source-remediated-zero evidence is unavailable, the candidate receipt can only support the named constrained pilot scope and must carry the caveat.
 

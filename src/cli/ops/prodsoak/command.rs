@@ -21,7 +21,7 @@ pub(super) fn artifact_kind(text: &str) -> &'static str {
         ("prod-security-incident-response-drill-v1", "incident-response-drill"),
         ("prod-security-readiness-report-v1", "security-readiness-report"),
         ("prod-release-pilot-decision-v1", "pilot-decision"),
-        ("prod-release-candidate-gate-v1", "release-candidate-gate"),
+        ("prod-release-candidate-gate-v2", "release-candidate-gate"),
     ] {
         if text.contains(needle) {
             return kind;

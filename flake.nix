@@ -872,6 +872,55 @@
                   fi
                   grep -q placeholder-release-ref "$TMPDIR/placeholder-source.preserves"
                 '';
+            # r[impl molten.prod_release_candidate.evidence_source_binding]
+            # r[verify molten.prod_release_candidate.evidence_source_binding]
+            # r[impl molten.prod_release_candidate.evidence_binding_non_claim]
+            releaseCandidateBindingCheck =
+              pkgs.runCommand "molten-release-candidate-binding"
+                {
+                  nativeBuildInputs = [ moltenPkg ];
+                }
+                ''
+                  set -euo pipefail
+                  candidate_ref=blake3:d54663d8d304af6d5f486ead64a51c06d74e1ab6320f62b2c6e9864dfe5f33c6
+                  artifact_ref=blake3:a043cb9fc4524bda0424a13e2ff02772cce5b0dd9692db4f8dc62b2b0d2e4274
+                  other_candidate_ref=blake3:6c0498ca351e3817c49603bc14dede0ecc22c5df9718c8f0ffa71f31aba38203
+                  binding="$artifact_ref@$candidate_ref"
+                  run_candidate() {
+                    local rust_binding="$1"
+                    shift
+                    molten test prod-soak release-candidate-gate \
+                      --candidate release-candidate-binding-conformance-fixture \
+                      --source-ref "$candidate_ref" \
+                      --rust-validation-binding "$rust_binding" \
+                      --nextest-binding "$binding" \
+                      --nix-check-binding "$binding" \
+                      --cairn-validation-binding "$binding" \
+                      --octet-binding "$binding" \
+                      --dogfood-binding "$binding" \
+                      --bundle-verify-binding "$binding" \
+                      --promotion-binding "$binding" \
+                      --export-verify-binding "$binding" \
+                      --pilot-decision-binding "$binding" \
+                      "$@"
+                  }
+
+                  run_candidate "$binding" --out "$out"
+                  grep -q prod-release-candidate-gate-v2 "$out"
+                  grep -q candidate-evidence "$out"
+                  grep -q "$candidate_ref" "$out"
+                  grep -q all-evidence-candidate-bound "$out"
+
+                  mismatch_binding="$artifact_ref@$other_candidate_ref"
+                  if run_candidate "$mismatch_binding" \
+                    --out "$TMPDIR/mismatch.preserves" \
+                    > "$TMPDIR/mismatch.stdout" \
+                    2> "$TMPDIR/mismatch.stderr"; then
+                    echo "mixed-candidate release evidence unexpectedly passed" >&2
+                    exit 1
+                  fi
+                  grep -q 'Rust validation candidate source mismatch' "$TMPDIR/mismatch.stderr"
+                '';
             contentStoreAdapterProfileCheck =
               pkgs.runCommand "molten-content-store-adapter-profile"
                 {
@@ -1196,6 +1245,7 @@
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;
             release-profile-validation = releaseProfileValidationCheck;
+            release-candidate-binding = releaseCandidateBindingCheck;
 
             # r[verify molten.artifact_auth_adoption.source]
             # r[verify molten.artifact_auth_adoption.radicle_transport]

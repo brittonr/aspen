@@ -268,6 +268,12 @@
         let base_refs = refs(&["base"]);
         let caveats = texts(&["Octet disabled lint family burn-down remains"]);
         let diagnostics = texts(&["candidate reviewed"]);
+        let source_ref = reference("source");
+        let artifact_ref = reference("validation-artifact");
+        let evidence = [CandidateEvidenceBinding {
+            artifact_ref: &artifact_ref,
+            source_ref: &source_ref,
+        }];
         let pilot = pilot_decision_value(&PilotDecisionInput {
             decision: "pass",
             scope: "limited-internal-pilot",
@@ -280,35 +286,54 @@
             diagnostics: &diagnostics,
         })
         .expect("pilot decision");
-        let pilot_refs = vec![canonical_hash(&pilot).expect("pilot ref")];
+        let pilot_ref = canonical_hash(&pilot).expect("pilot ref");
+        let pilot_evidence = [CandidateEvidenceBinding {
+            artifact_ref: &pilot_ref,
+            source_ref: &source_ref,
+        }];
         let candidate = release_candidate_gate_value(&ReleaseCandidateGateInput {
             decision: "pass",
             candidate: "aspen-molten-pilot",
-            source_ref: &reference("source"),
-            rust_validation_refs: &base_refs,
-            nextest_refs: &base_refs,
-            nix_check_refs: &base_refs,
-            cairn_validation_refs: &base_refs,
-            octet_refs: &base_refs,
-            dogfood_refs: &base_refs,
-            bundle_verify_refs: &base_refs,
-            promotion_refs: &base_refs,
-            export_verify_refs: &base_refs,
+            source_ref: &source_ref,
+            rust_validation_evidence: &evidence,
+            nextest_evidence: &evidence,
+            nix_check_evidence: &evidence,
+            cairn_validation_evidence: &evidence,
+            octet_evidence: &evidence,
+            dogfood_evidence: &evidence,
+            bundle_verify_evidence: &evidence,
+            promotion_evidence: &evidence,
+            export_verify_evidence: &evidence,
             source_gate_status: CONFIGURATION_CLEAN_CAVEAT_STATUS,
             source_gate_caveats: &caveats,
-            pilot_decision_refs: &pilot_refs,
+            pilot_decision_evidence: &pilot_evidence,
             diagnostics: &diagnostics,
         })
         .expect("release candidate gate");
         let candidate_text = to_text(&candidate).expect("candidate text");
-        assert!(candidate_text.contains("prod-release-candidate-gate-v1"));
-        assert!(candidate_text.contains("source-gate-current-or-limited"));
+        assert!(candidate_text.contains("prod-release-candidate-gate-v2"));
+        assert!(candidate_text.contains("candidate-evidence"));
+        assert!(candidate_text.contains(&source_ref));
+        assert!(candidate_text.contains("all-evidence-candidate-bound"));
+        assert!(candidate_text.contains("declared-binding-does-not-prove-external-artifact-truth"));
     }
 
     #[test]
-    fn release_candidate_denies_broad_caveat_or_missing_matrix() {
+    fn release_candidate_denies_broad_caveat_missing_matrix_or_candidate_mismatch() {
         let base_refs = refs(&["base"]);
         let diagnostics = texts(&["candidate reviewed"]);
+        let source_ref = reference("source");
+        let other_source_ref = reference("other-source");
+        let artifact_ref = reference("validation-artifact");
+        let evidence = [CandidateEvidenceBinding {
+            artifact_ref: &artifact_ref,
+            source_ref: &source_ref,
+        }];
+        let mismatched_evidence = [CandidateEvidenceBinding {
+            artifact_ref: &artifact_ref,
+            source_ref: &other_source_ref,
+        }];
+        let caveats = texts(&["source caveat"]);
         let broad = pilot_decision_value(&PilotDecisionInput {
             decision: "pass",
             scope: BROAD_PRODUCTION_SCOPE,
@@ -317,27 +342,71 @@
             rollback_triggers: &texts(&["none"]),
             stop_conditions: &texts(&["none"]),
             operator_review_refs: &base_refs,
-            caveats: &texts(&["source caveat"]),
+            caveats: &caveats,
             diagnostics: &diagnostics,
         });
         let missing_source_caveat = release_candidate_gate_value(&ReleaseCandidateGateInput {
             decision: "pass",
             candidate: "bad-candidate",
-            source_ref: &reference("source"),
-            rust_validation_refs: &base_refs,
-            nextest_refs: &base_refs,
-            nix_check_refs: &base_refs,
-            cairn_validation_refs: &base_refs,
-            octet_refs: &base_refs,
-            dogfood_refs: &base_refs,
-            bundle_verify_refs: &base_refs,
-            promotion_refs: &base_refs,
-            export_verify_refs: &base_refs,
+            source_ref: &source_ref,
+            rust_validation_evidence: &evidence,
+            nextest_evidence: &evidence,
+            nix_check_evidence: &evidence,
+            cairn_validation_evidence: &evidence,
+            octet_evidence: &evidence,
+            dogfood_evidence: &evidence,
+            bundle_verify_evidence: &evidence,
+            promotion_evidence: &evidence,
+            export_verify_evidence: &evidence,
             source_gate_status: CONFIGURATION_CLEAN_CAVEAT_STATUS,
             source_gate_caveats: &[],
-            pilot_decision_refs: &base_refs,
+            pilot_decision_evidence: &evidence,
+            diagnostics: &diagnostics,
+        });
+        let missing_matrix = release_candidate_gate_value(&ReleaseCandidateGateInput {
+            decision: "pass",
+            candidate: "bad-candidate",
+            source_ref: &source_ref,
+            rust_validation_evidence: &[],
+            nextest_evidence: &evidence,
+            nix_check_evidence: &evidence,
+            cairn_validation_evidence: &evidence,
+            octet_evidence: &evidence,
+            dogfood_evidence: &evidence,
+            bundle_verify_evidence: &evidence,
+            promotion_evidence: &evidence,
+            export_verify_evidence: &evidence,
+            source_gate_status: SOURCE_REMEDIATED_ZERO_STATUS,
+            source_gate_caveats: &[],
+            pilot_decision_evidence: &evidence,
+            diagnostics: &diagnostics,
+        });
+        let mismatch = release_candidate_gate_value(&ReleaseCandidateGateInput {
+            decision: "pass",
+            candidate: "bad-candidate",
+            source_ref: &source_ref,
+            rust_validation_evidence: &mismatched_evidence,
+            nextest_evidence: &evidence,
+            nix_check_evidence: &evidence,
+            cairn_validation_evidence: &evidence,
+            octet_evidence: &evidence,
+            dogfood_evidence: &evidence,
+            bundle_verify_evidence: &evidence,
+            promotion_evidence: &evidence,
+            export_verify_evidence: &evidence,
+            source_gate_status: SOURCE_REMEDIATED_ZERO_STATUS,
+            source_gate_caveats: &[],
+            pilot_decision_evidence: &evidence,
             diagnostics: &diagnostics,
         });
         assert!(broad.is_err());
         assert!(missing_source_caveat.is_err());
+        assert!(missing_matrix
+            .expect_err("missing matrix must deny")
+            .to_string()
+            .contains("Rust validation candidate evidence binding"));
+        assert!(mismatch
+            .expect_err("candidate mismatch must deny")
+            .to_string()
+            .contains("Rust validation candidate source mismatch"));
     }
