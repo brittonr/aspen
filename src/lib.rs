@@ -85,6 +85,7 @@ pub mod fabric_observability;
 pub mod fabric_simulation;
 pub mod fabric_time;
 pub mod fabric_transport;
+pub mod profiling;
 pub mod system_extension;
 #[doc(hidden)]
 #[path = "harness/mod.rs"]

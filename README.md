@@ -615,6 +615,8 @@ NixOS VM evidence is validated by canonical receipts and preserved through the `
 
 ## Development
 
+Optional cross-process function profiling is documented in [`docs/development-function-profiling.md`](docs/development-function-profiling.md). Traces are bounded development observations and never release evidence.
+
 Proof-affecting changes should follow [`docs/proof-workflow.md`](docs/proof-workflow.md) for checklists, receipt-backed traceability, deny-path evidence, layered proof boundaries, and readbacks.
 
 ```sh

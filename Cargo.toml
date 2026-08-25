@@ -20,6 +20,12 @@ description = "Molten Rust project"
 [lib]
 path = "src/lib.rs"
 
+[features]
+profiler = ["dep:flux-profiler"]
+profiler-alloc = ["profiler", "flux-profiler/alloc-profile"]
+profiler-disabled = ["dep:flux-profiler", "flux-profiler/disable-profiling"]
+profiler-perf = ["profiler", "flux-profiler/perf"]
+
 [[bin]]
 name = "molten"
 path = "src/main.rs"
@@ -72,3 +78,9 @@ schema-identity-conformance = { git = "https://seed.radicle.garden/z6gGpUJtzdVBC
 hegeltest = { git = "https://github.com/hegeldev/hegel-rust", rev = "ed949b8084595cb467e983747f1089e214965ac6", features = ["native"] }
 
 wat = "1"
+
+[target.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.dependencies]
+flux-profiler = { git = "https://github.com/gattaca-com/flux", rev = "2a1916465ae6649aebef3758233cfea98e5d33db", version = "0.1.3", optional = true, default-features = false }
+
+[target.'cfg(not(all(target_arch = "x86_64", target_os = "linux")))'.dependencies]
+flux-profiler = { git = "https://github.com/gattaca-com/flux", rev = "2a1916465ae6649aebef3758233cfea98e5d33db", version = "0.1.3", optional = true, default-features = false, features = ["disable-profiling"] }

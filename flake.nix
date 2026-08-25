@@ -4,6 +4,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/f9d8b65950353691ab56561e7c73d2e1063d810b";
     nickel-cli.url = "github:tweag/nickel/1320a983e6c3d1e2fb53dd2464b084b4903b1426";
+    flux-src = {
+      url = "github:gattaca-com/flux/2a1916465ae6649aebef3758233cfea98e5d33db";
+      flake = false;
+    };
     unit2nix = {
       url = "github:brittonr/unit2nix/d4883180de0ce3033b7e4e2ab4216f33134863c5";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -60,6 +64,7 @@
     {
       nixpkgs,
       nickel-cli,
+      flux-src,
       unit2nix,
       rust-overlay,
       flake-utils,
@@ -204,6 +209,37 @@
         );
 
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        fluxProfilerRustPlatform = pkgs.makeRustPlatform {
+          cargo = rustToolchain;
+          rustc = rustToolchain;
+        };
+        fluxProfilerCli =
+          if system == "x86_64-linux" then
+            fluxProfilerRustPlatform.buildRustPackage {
+              pname = "flux-profiler";
+              version = "0.1.3-${builtins.substring 0 8 flux-src.rev}";
+              src = flux-src;
+              cargoLock.lockFile = "${flux-src}/Cargo.lock";
+              cargoBuildFlags = [
+                "-p"
+                "flux-profiler"
+                "--bin"
+                "flux-profiler"
+              ];
+              cargoInstallFlags = [
+                "-p"
+                "flux-profiler"
+                "--bin"
+                "flux-profiler"
+              ];
+              doCheck = false;
+              postInstall = ''
+                $out/bin/flux-profiler --help | grep --fixed-strings -- "--duration"
+                $out/bin/flux-profiler --help | grep --fixed-strings -- "--max-mem"
+              '';
+            }
+          else
+            null;
         rustToolchainCompat = rustToolchain // {
           unwrapped = rustToolchain // {
             configureFlags = [ "--target=${pkgs.stdenv.hostPlatform.rust.rustcTarget}" ];
@@ -412,6 +448,7 @@
           all = ws.allWorkspaceMembers;
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          flux-profiler-cli = fluxProfilerCli;
           verified-node-replication-pilot = verifiedNodeReplicationPilot.check;
         };
 
@@ -2783,6 +2820,7 @@
                 '';
           }
           // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+            dev-function-profiling = fluxProfilerCli;
             verified-node-replication-pilot = verifiedNodeReplicationPilot.check;
           };
 
@@ -2827,7 +2865,8 @@
             pkgs.cargo-watch
             pkgs.rust-analyzer
             unit2nix.packages.${system}.unit2nix
-          ];
+          ]
+          ++ pkgs.lib.optional (system == "x86_64-linux") fluxProfilerCli;
 
         };
 

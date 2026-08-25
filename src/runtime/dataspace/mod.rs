@@ -149,6 +149,10 @@ impl LocalAdapter {
         self.observe_pattern(actor, RuntimePattern::from_observe_value(pattern)?)
     }
 
+    #[cfg_attr(
+        any(feature = "profiler", feature = "profiler-disabled"),
+        flux_profiler::timed("molten_dataspace_route_envelope")
+    )]
     pub fn route_envelope(&self, envelope: &Envelope) -> Result<Vec<LocalDelivery>> {
         let subject_ref = envelope.subject.value_ref();
         let boundary = envelope.boundary()?;

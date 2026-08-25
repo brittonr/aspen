@@ -7,6 +7,7 @@ The sparse `vendor/` directory records upstream `Cargo.toml.orig` material rathe
 | Paths | Upstream terms recorded by the package or upstream workspace |
 |---|---|
 | Cargo packages `artifact-auth-core`, `artifact-auth-ed25519`, and `artifact-binding-core` from `OnixResearch/onix-artifact` revision `c932138d880ddf4c2967f4c024b489b5c0022bf1` | MIT OR Apache-2.0 |
+| Cargo packages `flux-profiler`, `flux-profiler-macros`, `flux-communication`, `flux-timing`, `flux-utils`, `type-hash`, and `type-hash-derive` from `gattaca-com/flux` revision `2a1916465ae6649aebef3758233cfea98e5d33db` | Apache-2.0 AND MIT |
 | `vendor/datafusion-*` | Apache-2.0; ASF source headers remain authoritative |
 | `vendor/iroh*`, `vendor/portmapper-*`, `vendor/postcard`, `vendor/genawaiter-*` | MIT OR Apache-2.0 (legacy `MIT/Apache-2.0` spelling is equivalent package metadata) |
 | `vendor/madsim-*`, `vendor/swarm-discovery` | Apache-2.0 |

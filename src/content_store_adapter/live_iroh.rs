@@ -76,6 +76,10 @@ impl LiveIrohPublication {
 
 // r[impl molten.content_store_adapter.identity_boundary]
 // r[impl molten.content_store_adapter.verify_before_available]
+#[cfg_attr(
+    any(feature = "profiler", feature = "profiler-disabled"),
+    flux_profiler::timed("molten_iroh_publish_chunks")
+)]
 pub async fn publish_live_iroh_chunks(
     profile: &ContentAdapterProfile,
     root: &CapabilityChunkRoot,
@@ -145,6 +149,10 @@ pub async fn publish_live_iroh_chunks(
 
 // r[impl molten.content_store_adapter.verify_before_available]
 // r[impl molten.content_store_adapter.live_sim_conformance]
+#[cfg_attr(
+    any(feature = "profiler", feature = "profiler-disabled"),
+    flux_profiler::timed("molten_iroh_stream_get")
+)]
 pub async fn execute_live_iroh_stream_get(
     profile: &ContentAdapterProfile,
     publication: &LiveIrohPublication,

@@ -336,6 +336,23 @@
         "type": "github"
       }
     },
+    "flux-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787601842,
+        "narHash": "sha256-1ZBLORVsTtOXmOWdcfkQZJ/k3Ss+KJY3BMFBJwiSQDE=",
+        "owner": "gattaca-com",
+        "repo": "flux",
+        "rev": "2a1916465ae6649aebef3758233cfea98e5d33db",
+        "type": "github"
+      },
+      "original": {
+        "owner": "gattaca-com",
+        "repo": "flux",
+        "rev": "2a1916465ae6649aebef3758233cfea98e5d33db",
+        "type": "github"
+      }
+    },
     "gitignore": {
       "inputs": {
         "nixpkgs": [
@@ -583,6 +600,7 @@
         "basalt-src": "basalt-src",
         "cairn-src": "cairn-src",
         "flake-utils": "flake-utils",
+        "flux-src": "flux-src",
         "hegel-src": "hegel-src",
         "kamacite-src": "kamacite-src",
         "nickel-cli": "nickel-cli",

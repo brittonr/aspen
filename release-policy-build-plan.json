@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git-worktrees/aspen-nickel-117-20260824",
+  "workspaceRoot": "/home/brittonr/git-worktrees/aspen-flux-profiler-20260824",
   "roots": [
-    "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "5318f8813d165a238774b0a8fbe3c6a81d18b6203a1cbf1c710840e02f042dc6",
-  "inputsHash": "3103b75dc2fd1d6c6283c27bbfa73989ea6d484eef1c171650d9218bfaecfbc7",
+  "cargoLockHash": "790a476f6faa07c3e1e558517c8ba2dbca83b0f306bc071c204cc8d132071e71",
+  "inputsHash": "074351e9629ea23688d464f6474602236a8f148fdd6048db1e6b0d4731a88ae5",
   "crates": {
     "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": {
       "crateName": "kamacite-core",
@@ -123,7 +123,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -163,7 +163,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -179,7 +179,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-nickel-117-20260824/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
