@@ -1,0 +1,40 @@
+--- octet summary ---
+Status: warning-only
+Findings: 5771
+Warnings: 5771
+Errors: 0
+Autofixable: 310
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:f28473b263c85516a552c0cedaa319428dd527c2fac3f8c5bfd26555dd60d73f
+Profile hash: b3:939f87641be243ec8c3c7aa8e00047be314447c7ee186d1419701bb776b87ba9
+
+By crate:
+  molten                            5574
+  molten_node_host                  170
+  cliharness                        21
+  fabric_simulation_boundary        3
+  moltennodehostfacade              3
+
+By effect:
+  unknown         4276
+  resource        1201
+  failure         277
+  time            17
+
+By lint:
+  non_trait_imports                    2317
+  path_segment_repetition              1565
+  excessive_file_length                507
+  borrowed_argument_types              352
+  bool_naming                          308
+  unbounded_collection_growth          188
+  function_length                      166
+  too_many_parameters                  110
+  underscore_in_module_filename        84
+  explicit_defaults                    26
+  usize_in_public_api                  24
+  ambient_clock                        17
+  no_panic                             16
+  module_file_count                    14

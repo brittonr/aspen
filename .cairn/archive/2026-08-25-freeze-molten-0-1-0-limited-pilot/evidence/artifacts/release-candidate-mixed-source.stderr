@@ -1,0 +1,1 @@
+error: invalid harness artifact: production readiness Rust validation candidate source mismatch: expected blake3:80e3ceb18784504c7573191fce72e121d0789613c6c5f7bdcecbdd9ae0e4cdb7, observed blake3:48f801b1aad953111afc15fb935e55d2b6e4224faf72e563b2089533ee9ddde2

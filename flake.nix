@@ -921,6 +921,29 @@
                   fi
                   grep -q 'Rust validation candidate source mismatch' "$TMPDIR/mismatch.stderr"
                 '';
+            # r[verify molten.prod_release.pilot_candidate_freeze]
+            # r[verify molten.prod_release.pilot_evidence_publication]
+            releasePilotManifestCheck =
+              pkgs.runCommand "molten-release-pilot-manifest"
+                {
+                  nativeBuildInputs = [ pkgs.nickel ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel typecheck release/molten-0.1.0-pilot-contracts.ncl
+                  nickel export release/molten-0.1.0-pilot.ncl > "$TMPDIR/manifest.json"
+                  if nickel export release/fixtures/negative/mixed-source.ncl \
+                    > "$TMPDIR/mixed-source.json" \
+                    2> "$TMPDIR/mixed-source.stderr"; then
+                    echo "mixed-source pilot manifest unexpectedly passed" >&2
+                    exit 1
+                  fi
+                  grep -q 'contract broken by a value' "$TMPDIR/mixed-source.stderr"
+                  mkdir -p "$out"
+                  cp "$TMPDIR/manifest.json" "$out/manifest.json"
+                '';
             contentStoreAdapterProfileCheck =
               pkgs.runCommand "molten-content-store-adapter-profile"
                 {
@@ -1246,6 +1269,7 @@
             release-dependency-profile = releaseDependencyProfileCheck;
             release-profile-validation = releaseProfileValidationCheck;
             release-candidate-binding = releaseCandidateBindingCheck;
+            release-pilot-manifest = releasePilotManifestCheck;
 
             # r[verify molten.artifact_auth_adoption.source]
             # r[verify molten.artifact_auth_adoption.radicle_transport]
