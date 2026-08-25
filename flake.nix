@@ -57,6 +57,10 @@
       url = "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea";
       flake = false;
     };
+    schema-identity-src = {
+      url = "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2";
+      flake = false;
+    };
     flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";
   };
 
@@ -78,6 +82,7 @@
       octet-toolchain,
       ucan-src,
       valence-src,
+      schema-identity-src,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -89,7 +94,9 @@
         };
 
         nickelPackage = nickel-cli.packages.${system}.default;
-        pkgs = pkgsBase // { nickel = nickelPackage; };
+        pkgs = pkgsBase // {
+          nickel = nickelPackage;
+        };
 
         localSourceExcludedBaseNames = [
           ".direnv"
@@ -114,7 +121,9 @@
           src: if pkgs.lib.hasInfix "/../" (toString src) then null else cleanLocalGitSource src;
         artifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
         artifactRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
-        artifactRootDependencies = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).dependencies;
+        rootCargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        artifactRootDependencies = rootCargoManifest.dependencies;
+        artifactRootDevelopmentDependencies = rootCargoManifest.dev-dependencies;
         moltenCoreDependencies =
           (builtins.fromTOML (builtins.readFile ./crates/molten-core/Cargo.toml)).dependencies;
         artifactCargoDependencies = [
@@ -170,6 +179,20 @@
             && kamacite-src.rev == kamaciteRevision
           ) "Molten Kamacite Cargo/Nix source identity drifted";
           kamacite-src;
+        schemaIdentityRevision = "2562c8aa38a034061f9af9f3e17280494a5b8de2";
+        schemaIdentityRepository = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git";
+        schemaIdentityCargoDependencies = [
+          artifactRootDependencies.schema-identity-core
+          artifactRootDevelopmentDependencies.schema-identity-conformance
+        ];
+        schemaIdentitySource =
+          assert pkgs.lib.assertMsg (
+            builtins.all (
+              dependency: dependency.git == schemaIdentityRepository && dependency.rev == schemaIdentityRevision
+            ) schemaIdentityCargoDependencies
+            && schema-identity-src.rev == schemaIdentityRevision
+          ) "Molten schema-identity Cargo/Nix source identity drifted";
+          schema-identity-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
           "${artifactRepository}#${artifactRevision}" = maybeCleanLocalGitSource artifactSource;
           "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;
@@ -183,6 +206,8 @@
             maybeCleanLocalGitSource valence-src;
           "https://github.com/hegeldev/hegel-rust#ed949b8084595cb467e983747f1089e214965ac6" =
             maybeCleanLocalGitSource hegel-src;
+          "${schemaIdentityRepository}#${schemaIdentityRevision}" =
+            maybeCleanLocalGitSource schemaIdentitySource;
         };
         unit2nixPkgsBase = pkgsBase.extend (
           final: prev: {

@@ -609,6 +609,7 @@
         "octet-toolchain": "octet-toolchain",
         "onix-core-src": "onix-core-src",
         "rust-overlay": "rust-overlay_5",
+        "schema-identity-src": "schema-identity-src",
         "schema-migration-core-src": "schema-migration-core-src",
         "ucan-src": "ucan-src",
         "unit2nix": "unit2nix",
@@ -724,6 +725,23 @@
         "repo": "rust-overlay",
         "rev": "6cddd512fa2bf7231f098d3a2f92f6e4cff71e0a",
         "type": "github"
+      }
+    },
+    "schema-identity-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787068181,
+        "narHash": "sha256-gRrLAZUz+NE17zrRLSkxKMlwOwltF4yvCK0W++V63u0=",
+        "ref": "refs/heads/main",
+        "rev": "2562c8aa38a034061f9af9f3e17280494a5b8de2",
+        "revCount": 6,
+        "type": "git",
+        "url": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git"
+      },
+      "original": {
+        "rev": "2562c8aa38a034061f9af9f3e17280494a5b8de2",
+        "type": "git",
+        "url": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git"
       }
     },
     "schema-migration-core-src": {

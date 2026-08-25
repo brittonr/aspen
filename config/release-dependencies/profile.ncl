@@ -2,6 +2,8 @@ let Contracts = import "contracts.ncl" in
 let ArtifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
 let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
 let ValenceRevision = "5f1c2ba5072c6f9622fa59b1af20502985f569fd" in
+let SchemaIdentityRevision = "2562c8aa38a034061f9af9f3e17280494a5b8de2" in
+let SchemaIdentitySource = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git" in
 let ArchiveNonClaims = [
   "dependency satisfaction proves presented receipt linkage only",
   "dependency satisfaction does not prove upstream correctness or remote trust",
@@ -98,6 +100,28 @@ in
       nix_input = "ucan-src",
       transport_policy = "ssh-pinned-nix-archive",
       disposition = "runtime",
+    },
+    {
+      manifest_dependency = "schema-identity-core",
+      package_name = "schema-identity-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = SchemaIdentitySource,
+      immutable_revision = SchemaIdentityRevision,
+      nix_input = "schema-identity-src",
+      transport_policy = "https",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "schema-identity-conformance",
+      package_name = "schema-identity-conformance",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = SchemaIdentitySource,
+      immutable_revision = SchemaIdentityRevision,
+      nix_input = "schema-identity-src",
+      transport_policy = "https",
+      disposition = "development",
     },
     {
       manifest_dependency = "hegeltest",

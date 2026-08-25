@@ -1,17 +1,22 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git-worktrees/aspen-flux-profiler-20260824",
+  "workspaceRoot": "/home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825",
   "roots": [
-    "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824#molten@0.1.0",
-    "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824#molten@0.1.0"
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825#molten@0.1.0",
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825#molten@0.1.0",
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-node-host#0.1.0"
+    "molten": "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-release-policy#0.1.0"
   },
   "cargoLockHash": "790a476f6faa07c3e1e558517c8ba2dbca83b0f306bc071c204cc8d132071e71",
-  "inputsHash": "123db5afd1d68a868ef210f7686e4b6bb80ce2ee76803b1483cd3699acd56115",
+  "inputsHash": "f3e53e8c28ed39c4226696c646ca3a8c314b6fb47bb0238fc5d84150888f23ce",
   "crates": {
     "git+https://github.com/gattaca-com/flux?rev=2a1916465ae6649aebef3758233cfea98e5d33db#flux-communication@0.1.3": {
       "crateName": "flux-communication",
@@ -125,7 +130,9 @@
         "sha256": "1274viimdiz19y5zh3gfwgqvpmnyar8j00vwgmm3v2mv8swi4gsy"
       },
       "features": [
-        "disable-profiling"
+        "alloc-profile",
+        "disable-profiling",
+        "perf"
       ],
       "dependencies": [
         {
@@ -1066,7 +1073,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824#molten@0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -1076,7 +1083,10 @@
         "path": "."
       },
       "features": [
-        "profiler-disabled"
+        "profiler",
+        "profiler-alloc",
+        "profiler-disabled",
+        "profiler-perf"
       ],
       "dependencies": [
         {
@@ -1144,11 +1154,11 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -1276,7 +1286,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1316,7 +1326,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -1336,8 +1346,63 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-flux-profiler-20260824/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
+        }
+      ],
+      "buildDependencies": [],
+      "devDependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-tempfile@3.4.5",
+          "externCrateName": "cap_tempfile"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@0.9.12+spec-1.1.0",
+          "externCrateName": "toml"
+        }
+      ],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Capability-rooted node host boundary for Molten",
+      "license": "AGPL-3.0-or-later"
+    },
+    "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-release-policy#0.1.0": {
+      "crateName": "molten-release-policy",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "crates/molten-release-policy"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "path+file:///home/brittonr/git-worktrees/aspen-artifact-binding-effects-20260825/crates/molten-core#0.1.0",
+          "externCrateName": "molten_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@0.9.12+spec-1.1.0",
+          "externCrateName": "toml"
         }
       ],
       "buildDependencies": [],
@@ -1350,7 +1415,6 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "Capability-rooted node host boundary for Molten",
       "license": "AGPL-3.0-or-later"
     },
     "registry+https://github.com/rust-lang/crates.io-index#addr2line@0.26.1": {

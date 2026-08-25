@@ -1,10 +1,6 @@
-# Artifact Registry Specification Delta
+# Live Artifact Binding Specification Delta
 
-## Purpose
-
-Add explicit one-snapshot late-bound artifact bindings while preserving immutable refs, exact pinning below the resolution boundary, and Molten-owned admission.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Molten adopts the shared binding core without transferring authority
 

@@ -1,10 +1,6 @@
-# Runtime Spine Specification Delta
+# Generation Retirement Specification Delta
 
-## Purpose
-
-Add complete-root generation reachability, explainable retirement, and conservative deployment diagnostics around Molten runtime generations.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Every retirement-relevant runtime holder registers a root
 

@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 publish = false
 
+[[bin]]
+name = "molten-release-policy"
+path = "src/main.rs"
+
 [dependencies]
 blake3 = "1"
 molten-core = { path = "../molten-core" }
