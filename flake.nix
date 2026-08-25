@@ -816,6 +816,62 @@
                     fi
                   done
                 '';
+            # r[impl molten.prod_release_profile.executable_gate]
+            # r[verify molten.prod_release_profile.executable_gate]
+            # r[impl molten.prod_release_profile.fixture_non_claim]
+            # r[verify molten.prod_release_profile.fixture_non_claim]
+            releaseProfileValidationCheck =
+              pkgs.runCommand "molten-release-profile-validation"
+                {
+                  nativeBuildInputs = [ moltenPkg ];
+                }
+                ''
+                  set -euo pipefail
+                  fixture_ref=blake3:a043cb9fc4524bda0424a13e2ff02772cce5b0dd9692db4f8dc62b2b0d2e4274
+                  placeholder_ref=blake3:0000000000000000000000000000000000000000000000000000000000000000
+                  valence_policy_hash=8f5174292fe31f8fc364dc8f49560b21581f2cf01e54ae3fe8820c6d90d62f65
+                  run_profile() {
+                    local source_gate_ref="$1"
+                    shift
+                    molten test gate release-profile \
+                      --profile-id release-profile-conformance-fixture \
+                      --tier release \
+                      --source-gate-ref "$source_gate_ref" \
+                      --policy-ref "$fixture_ref" \
+                      --octet-ref "$fixture_ref" \
+                      --cairn-ref "$fixture_ref" \
+                      --stack-provenance-ref "$fixture_ref" \
+                      --production-profile-ref "$fixture_ref" \
+                      --expected-generated-export-ref "$fixture_ref" \
+                      --actual-generated-export-ref "$fixture_ref" \
+                      --stack-provenance-required \
+                      --accepted-valence-policy-hash "$valence_policy_hash" \
+                      --caveat validator-wiring-fixture-only \
+                      "$@"
+                  }
+
+                  run_profile "$fixture_ref" \
+                    --candidate-ref "$fixture_ref" \
+                    --out "$out"
+                  grep -q release-profile-validation-v1 "$out"
+                  grep -q 'candidate-ref' "$out"
+                  grep -q pass "$out"
+
+                  if run_profile "$fixture_ref" \
+                    --out "$TMPDIR/missing-candidate.preserves"; then
+                    echo "missing candidate release profile unexpectedly passed" >&2
+                    exit 1
+                  fi
+                  grep -q missing-release-candidate-ref "$TMPDIR/missing-candidate.preserves"
+
+                  if run_profile "$placeholder_ref" \
+                    --candidate-ref "$fixture_ref" \
+                    --out "$TMPDIR/placeholder-source.preserves"; then
+                    echo "placeholder source release profile unexpectedly passed" >&2
+                    exit 1
+                  fi
+                  grep -q placeholder-release-ref "$TMPDIR/placeholder-source.preserves"
+                '';
             contentStoreAdapterProfileCheck =
               pkgs.runCommand "molten-content-store-adapter-profile"
                 {
@@ -1139,6 +1195,7 @@
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;
+            release-profile-validation = releaseProfileValidationCheck;
 
             # r[verify molten.artifact_auth_adoption.source]
             # r[verify molten.artifact_auth_adoption.radicle_transport]

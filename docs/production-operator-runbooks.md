@@ -24,6 +24,33 @@ The exported profile root carries `schema_id`, `schema_version`, `source_languag
 
 Named production thresholds live in the contract module: `max_queue_depth`, `max_receipt_bytes`, `max_store_bytes`, `max_delivery_latency_ms`, and `max_recovery_time_ms`. Changing their exported numeric values requires threshold review and fixture expectation updates. Adding adapter, redaction, live-transport, startup, or shutdown vocabulary requires updating the allowed-value contracts plus a negative typo fixture before receipts are refreshed.
 
+Validate a release-tier profile against one reviewed candidate before promotion review:
+
+```sh
+CANDIDATE_REF=blake3:<reviewed-source-candidate-ref>
+GENERATED_PROFILE_REF=blake3:<reviewed-generated-profile-ref>
+VALENCE_POLICY_HASH=<reviewed-64-lowercase-hex-policy-hash>
+
+molten test gate release-profile \
+  --profile-id molten-0.1.0-candidate \
+  --tier release \
+  --candidate-ref "$CANDIDATE_REF" \
+  --source-gate-ref "$REF0" \
+  --policy-ref "$REF0" \
+  --octet-ref "$REF0" \
+  --cairn-ref "$REF0" \
+  --stack-provenance-ref "$REF0" \
+  --production-profile-ref "$REF0" \
+  --expected-generated-export-ref "$GENERATED_PROFILE_REF" \
+  --actual-generated-export-ref "$GENERATED_PROFILE_REF" \
+  --stack-provenance-required \
+  --accepted-valence-policy-hash "$VALENCE_POLICY_HASH" \
+  --caveat limited-internal-pilot-review \
+  --out target/prod/release-profile-validation.preserves
+```
+
+The command writes a canonical deny value before it exits unsuccessfully for invalid input. The Nix fixture proves command wiring only. Neither result grants runtime authority or release eligibility.
+
 Bind the reviewed profile inputs into canonical evidence:
 
 ```sh

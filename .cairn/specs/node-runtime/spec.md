@@ -1031,3 +1031,25 @@ r[molten.node_host.bridge_authority] Cross-crate compatibility bridges MUST cons
 - GIVEN an already-open `NodeStateRoot`
 - WHEN root daemon code requests a ledger, artifact, chunk, or delivery store
 - THEN the bridge derives the store from the existing capability without reopening the host path.
+
+### Requirement: Release profile validation binds the reviewed candidate
+
+r[molten.prod_ops.release_profile.candidate_binding] Release-tier profile validation MUST require one valid, non-placeholder candidate content reference and MUST record that reference with the reviewed evidence references.
+
+#### Scenario: Candidate-bound release profile passes
+
+- GIVEN a release-tier profile with a valid candidate reference and complete non-placeholder evidence
+- WHEN release profile validation runs
+- THEN the canonical validation value records the candidate and the accepted evidence references.
+
+#### Scenario: Missing candidate denies release tier
+
+- GIVEN a release-tier profile without a candidate reference
+- WHEN release profile validation runs
+- THEN validation denies with a missing-candidate diagnostic.
+
+#### Scenario: Placeholder candidate denies release tier
+
+- GIVEN a release-tier profile with an all-zero or fixture candidate reference
+- WHEN release profile validation runs
+- THEN validation denies before the profile can support release review.

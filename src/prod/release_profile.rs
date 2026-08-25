@@ -40,6 +40,7 @@ pub struct ReleaseProfileFreshness {
 pub struct ReleaseProfileInput {
     pub profile_id: String,
     pub tier: String,
+    pub candidate_ref: Option<String>,
     pub evidence_refs: ReleaseEvidenceRefs,
     pub freshness: ReleaseProfileFreshness,
     pub stack_provenance_required: bool,
@@ -59,6 +60,7 @@ pub struct ReleaseProfileValidation {
 // r[impl molten.prod_ops.release_profile.no_placeholder_refs]
 // r[impl molten.prod_ops.release_profile.freshness]
 // r[impl molten.prod_ops.release_profile.fixtures]
+// r[impl molten.prod_ops.release_profile.candidate_binding]
 // r[impl molten.evidence.stack_provenance.release_required]
 // r[impl molten.evidence.stack_provenance.non_placeholder_hashes]
 pub fn validate_release_profile(input: &ReleaseProfileInput) -> Result<ReleaseProfileValidation> {
@@ -69,6 +71,7 @@ pub fn validate_release_profile(input: &ReleaseProfileInput) -> Result<ReleasePr
     let mut diagnostics = Vec::new();
     validate_tier(&input.tier, &mut diagnostics)?;
     validate_caveats(&input.caveats)?;
+    validate_candidate_ref(input, &mut diagnostics);
     validate_refs(input, &mut diagnostics);
     validate_stack_provenance(input, &mut diagnostics);
     validate_freshness(input, &mut diagnostics);
@@ -98,6 +101,21 @@ fn validate_tier(tier: &str, diagnostics: &mut Vec<String>) -> Result<()> {
             diagnostics.push(format!("unsupported-release-profile-tier:{other}"));
             Ok(())
         }
+    }
+}
+
+fn validate_candidate_ref(input: &ReleaseProfileInput, diagnostics: &mut Vec<String>) {
+    if input.tier != "release" {
+        return;
+    }
+    match input.candidate_ref.as_ref() {
+        Some(candidate_ref) => {
+            validate_ref_with_diagnostics("candidate", candidate_ref, diagnostics);
+            if is_placeholder_ref(candidate_ref) {
+                diagnostics.push("placeholder-release-candidate-ref".to_string());
+            }
+        }
+        None => diagnostics.push("missing-release-candidate-ref".to_string()),
     }
 }
 
@@ -229,6 +247,7 @@ fn release_profile_value(input: &ReleaseProfileInput, decision: &str, diagnostic
         field_string("decision", decision),
         field_string("profile-id", &input.profile_id),
         field_string("tier", &input.tier),
+        field_string("candidate-ref", input.candidate_ref.as_deref().unwrap_or("none")),
         evidence_refs_value(&input.evidence_refs),
         freshness_value(&input.freshness),
         record("stack-provenance-required", vec![bool_value(input.stack_provenance_required)]),
@@ -342,6 +361,7 @@ mod tests {
         ReleaseProfileInput {
             profile_id: "release-candidate".to_string(),
             tier: "release".to_string(),
+            candidate_ref: Some(local_ref("candidate")),
             evidence_refs: release_refs(),
             freshness: ReleaseProfileFreshness {
                 expected_generated_export_ref: Some(generated.clone()),
@@ -359,6 +379,7 @@ mod tests {
     // r[verify molten.prod_ops.release_profile.no_placeholder_refs]
     // r[verify molten.prod_ops.release_profile.freshness]
     // r[verify molten.prod_ops.release_profile.fixtures]
+    // r[verify molten.prod_ops.release_profile.candidate_binding]
     // r[verify molten.evidence.stack_provenance.release_required]
     // r[verify molten.evidence.stack_provenance.non_placeholder_hashes]
     #[test]
@@ -388,6 +409,32 @@ mod tests {
             crate::preserves_rail::to_text(&release.value)
                 .expect("release profile text")
                 .contains("release-profile-validation-v1")
+        );
+    }
+
+    #[test]
+    fn release_profile_denies_missing_and_placeholder_candidate_refs() {
+        let mut missing = release_input();
+        missing.candidate_ref = None;
+        let missing_validation = validate_release_profile(&missing).expect("missing candidate validation");
+        assert_eq!(missing_validation.decision, DECISION_DENY);
+        assert!(
+            missing_validation
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "missing-release-candidate-ref")
+        );
+
+        let mut placeholder = release_input();
+        placeholder.candidate_ref =
+            Some("blake3:0000000000000000000000000000000000000000000000000000000000000000".to_string());
+        let placeholder_validation = validate_release_profile(&placeholder).expect("placeholder candidate validation");
+        assert_eq!(placeholder_validation.decision, DECISION_DENY);
+        assert!(
+            placeholder_validation
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "placeholder-release-candidate-ref")
         );
     }
 
