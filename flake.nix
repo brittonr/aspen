@@ -1376,6 +1376,50 @@
                   fi
                 '';
 
+            consensus-fastpath-model-profile =
+              pkgs.runCommand "molten-consensus-fastpath-model-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.nickel
+                    pkgs.jq
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=config/consensus-fastpath/profile.ncl
+                  negative_production=config/consensus-fastpath/negative-production.ncl
+                  negative_reference=config/consensus-fastpath/negative-reference.ncl
+                  expected_profiles=2
+                  expected_three_replicas=3
+                  expected_five_replicas=5
+
+                  nickel typecheck "$profile"
+                  nickel export --format json "$profile" > "$TMPDIR/profile.json"
+                  test "$(jq 'length' "$TMPDIR/profile.json")" = "$expected_profiles"
+                  jq -e '.three_replica.claim_profile == "pure-model-only"' "$TMPDIR/profile.json"
+                  jq -e \
+                    --argjson three "$expected_three_replicas" \
+                    --argjson five "$expected_five_replicas" \
+                    '.three_replica.node_count == $three and .five_replica.node_count == $five' \
+                    "$TMPDIR/profile.json"
+
+                  for fixture in "$negative_production" "$negative_reference"; do
+                    if nickel export --format json "$fixture" > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.stderr"; then
+                      echo "negative fast-path profile unexpectedly passed: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+
+                  if rg -n 'flux_profiler|enable_profiler|std::fs|std::env|std::time::Instant' src/fabric_consistency/fastpath; then
+                    echo "pure fast-path model contains an ambient shell dependency" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
+
             nickel-toolchain-cohort =
               pkgs.runCommand "molten-nickel-toolchain-cohort"
                 {

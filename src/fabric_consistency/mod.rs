@@ -1,5 +1,6 @@
 mod binding;
 mod canonical;
+pub mod fastpath;
 mod lifecycle;
 mod live_service;
 mod operation;

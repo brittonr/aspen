@@ -1,3 +1,6 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
 mod bounded;
 
 macro_rules! compat_module {

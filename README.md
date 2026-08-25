@@ -20,7 +20,7 @@ Molten is a workload-neutral, policy-gated distributed-systems fabric built arou
 - Fabric observability keeps metrics, traces, scoped health, readiness, and read-only integrity findings bounded and non-authoritative; exporter or scan failures are explicit terminal observations.
 - Content-store adapters preserve canonical Molten manifests across capability-local, Redb, actual Iroh Blobs, and deterministic simulation profiles; transport and protection hints never replace identity or authority.
 - Fabric ports resolve exact versions and reviewed profiles without silent substitution. Rust DTO layout, backend handles, transport identity, clocks, randomness, and ambient state are not canonical authority.
-- OpenRaft is not selected, adapted, or used; consistency remains an explicit extension and port boundary.
+- OpenRaft is not selected, adapted, or used; consistency remains an explicit extension and port boundary. The bounded, model-only fast-path hazard contract is documented in [`docs/consensus-fastpath-hazard-model.md`](docs/consensus-fastpath-hazard-model.md).
 - Deterministic playback is a central law: the same artifacts, dependency closure, initial state, policy/schema refs, handler profile, and seed or recorded effect log must reproduce the same canonical traces, receipts, outputs, and final state hash.
 - Preserves + Blake3 define stable communication, storage, policy, and evidence boundaries.
 - Synit/SAM-inspired dataspaces provide assertions, retractions, `Observe` patterns, service dependency assertions, and turn tracing.
