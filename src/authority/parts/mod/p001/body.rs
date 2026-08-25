@@ -50,9 +50,15 @@ pub fn authority_grant_currentness(input: AuthorityGrantCurrentnessInput<'_>) ->
     validate_non_empty(input.requested_capability, "authority requested capability")?;
     validate_non_empty(input.requested_operation, "authority requested operation")?;
     validate_non_empty(input.requested_scope, "authority requested scope")?;
+    let context_refs = nominal::admit_context_refs(input.context)?;
+    let request_refs = nominal::admit_currentness_request(
+        input.requested_principal_ref,
+        input.requested_operation,
+        input.current_key_refs,
+    )?;
 
     let mut diagnostics = Vec::with_capacity(AUTHORITY_CURRENTNESS_DIAGNOSTIC_CAPACITY);
-    if input.context.subject_ref != input.requested_principal_ref {
+    if context_refs.subject != request_refs.principal {
         diagnostics.push("principal-mismatch".to_string());
     }
     if !input.context.capabilities.iter().any(|capability| {
@@ -77,7 +83,7 @@ pub fn authority_grant_currentness(input: AuthorityGrantCurrentnessInput<'_>) ->
     if input.context.expires_at.is_some_and(|expires_at| input.logical_time >= expires_at) {
         diagnostics.push("expired".to_string());
     }
-    if !has_current_authority_key(input.context, input.current_key_refs) {
+    if !context_refs.keys.is_empty() && !context_refs.keys.iter().any(|key| request_refs.current_keys.contains(key)) {
         diagnostics.push("key-not-current".to_string());
     }
     if input
@@ -286,10 +292,6 @@ fn revocation_hits_context(revocation: &Revocation, context: &Context, logical_t
                 capability_ref(&context.subject_ref, capability)
                     .is_ok_and(|capability_ref| capability_ref == revocation.target_ref)
             }))
-}
-
-fn has_current_authority_key(context: &Context, current_key_refs: &[String]) -> bool {
-    context.key_refs.is_empty() || context.key_refs.iter().any(|key| current_key_refs.iter().any(|current| current == key))
 }
 
 fn capability_allows_current_action(

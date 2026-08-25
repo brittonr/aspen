@@ -70,9 +70,11 @@ r[molten.authority.nominal_references.authority_tests]
 - THEN the decision MUST remain `deny`
 - AND typed reference possession MUST NOT bypass normal admission.
 
-### Requirement: Execution and artifact references remain distinct
+### Requirement: Execution references retain exact roles
 
 r[molten.authority.nominal_references.execution_core] Effect, handler, node-control, session, operation, and resource APIs MUST retain exact typed reference roles through pure admission decisions.
+
+### Requirement: Artifact references remain distinct
 
 r[molten.authority.nominal_references.artifact_core] Artifact binding, provenance, evidence, operation, and receipt APIs MUST retain exact typed reference roles without moving binding, effect, or authority semantics into generic reference constructors.
 

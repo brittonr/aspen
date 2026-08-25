@@ -1376,6 +1376,41 @@
                   fi
                 '';
 
+            nominal-reference-domains =
+              pkgs.runCommand "molten-nominal-reference-domains"
+                {
+                  nativeBuildInputs = [
+                    pkgs.jq
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=config/nominal-reference-domains.ncl
+                  core=crates/molten-core/src/nominal.rs
+                  expected_domains=15
+
+                  nickel typecheck "$profile"
+                  nickel export --format json "$profile" > "$TMPDIR/profile.json"
+                  test "$(jq '.domains | length' "$TMPDIR/profile.json")" = "$expected_domains"
+                  jq -e '.canonical_algorithm == "blake3" and .wire_authority == "preserves"' "$TMPDIR/profile.json"
+                  jq -e '.constructor_non_claims | index("typed-reference-is-not-authority") != null' "$TMPDIR/profile.json"
+
+                  rg -q 'SessionDomain, SessionRef' "$core"
+                  rg -q 'AuthorityContextDomain, AuthorityContextRef' "$core"
+                  rg -q 'ArtifactDomain, ArtifactRef' "$core"
+                  rg -q 'ReceiptDomain, ReceiptRef' "$core"
+                  rg -q '```compile_fail' "$core"
+                  if rg -n 'pub [a-zA-Z_][a-zA-Z0-9_]*: String' "$core"; then
+                    echo "migrated nominal core exposes a raw string field" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
+
             fabric-port-boundaries =
               pkgs.runCommand "molten-fabric-port-boundaries"
                 {
