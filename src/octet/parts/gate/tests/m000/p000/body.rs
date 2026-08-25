@@ -1,5 +1,53 @@
     use super::*;
 
+    const EXPECTED_OCTET_CONFIG_PAYLOAD: &str =
+        "{\"effective_cargo_check_args\":[\"--all-targets\"],\"effective_scope_args\":[\"-p\",\"molten\"],\"files\":[{\"hash\":\"b3:cargo\",\"path\":\"Cargo.toml\"},{\"hash\":\"b3:dylint\",\"path\":\"dylint.toml\"}]}";
+    const EXPECTED_OCTET_PROFILE_PAYLOAD: &str =
+        "{\"cargo_check_args\":[\"--all-targets\"],\"config_hash\":\"b3:config\",\"output_format\":\"human\",\"scope_args\":[\"-p\",\"molten\"]}";
+
+    // r[verify molten.octet_fail_closed_ci.metadata_hash_parity]
+    #[test]
+    fn octet_metadata_payloads_match_pinned_canonical_field_order() {
+        let files = [
+            OctetFileHashEntry {
+                hash: Some("b3:cargo".to_string()),
+                path: "Cargo.toml".to_string(),
+            },
+            OctetFileHashEntry {
+                hash: Some("b3:dylint".to_string()),
+                path: "dylint.toml".to_string(),
+            },
+        ];
+        let scope_args = ["-p".to_string(), "molten".to_string()];
+        let cargo_check_args = ["--all-targets".to_string()];
+
+        assert_eq!(
+            octet_config_hash_payload(&files, &scope_args, &cargo_check_args).expect("Octet config payload"),
+            EXPECTED_OCTET_CONFIG_PAYLOAD
+        );
+        assert_eq!(
+            octet_profile_hash_payload(&scope_args, &cargo_check_args, "human", "b3:config")
+                .expect("Octet profile payload"),
+            EXPECTED_OCTET_PROFILE_PAYLOAD
+        );
+    }
+
+    // r[verify molten.octet_fail_closed_ci.metadata_hash_parity]
+    #[test]
+    fn octet_metadata_hash_changes_when_effective_input_changes() {
+        let files = [OctetFileHashEntry {
+            hash: Some("b3:cargo".to_string()),
+            path: "Cargo.toml".to_string(),
+        }];
+        let scope_args = ["-p".to_string(), "molten".to_string()];
+        let all_targets = ["--all-targets".to_string()];
+        let library_only = ["--lib".to_string()];
+        let original = octet_config_hash_payload(&files, &scope_args, &all_targets).expect("original payload");
+        let changed = octet_config_hash_payload(&files, &scope_args, &library_only).expect("changed payload");
+
+        assert_ne!(b3_full_hash(&original), b3_full_hash(&changed));
+    }
+
     fn to_text(value: &IoValue) -> Result<String> {
         crate::preserves_rail::to_text(value)
     }

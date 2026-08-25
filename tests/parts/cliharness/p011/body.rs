@@ -123,27 +123,55 @@ fn octet_noncritical_status(total: u64) -> String {
     )
 }
 
+#[derive(serde::Serialize)]
+struct CliOctetConfigPayload<'a> {
+    effective_cargo_check_args: &'a [&'a str],
+    effective_scope_args: &'a [&'a str],
+    files: &'a [CliOctetFileHashEntry<'a>],
+}
+
+#[derive(serde::Serialize)]
+struct CliOctetFileHashEntry<'a> {
+    hash: Option<String>,
+    path: &'a str,
+}
+
+#[derive(serde::Serialize)]
+struct CliOctetProfilePayload<'a> {
+    cargo_check_args: &'a [&'a str],
+    config_hash: &'a str,
+    output_format: &'a str,
+    scope_args: &'a [&'a str],
+}
+
 fn current_octet_hashes() -> (String, String) {
-    let cargo_toml = manifest_dir().join("Cargo.toml");
-    let cargo_hash = file_hash(&cargo_toml);
-    let dylint_hash = file_hash(&manifest_dir().join("dylint.toml"));
-    let files = vec![
-        serde_json::json!({"path": "Cargo.toml", "hash": cargo_hash}),
-        serde_json::json!({"path": "dylint.toml", "hash": dylint_hash}),
+    let cargo_check_args = ["--all-targets"];
+    let scope_args = ["-p", "molten", "-p", "molten-node-host"];
+    let files = [
+        CliOctetFileHashEntry {
+            hash: file_hash(&manifest_dir().join("Cargo.toml")),
+            path: "Cargo.toml",
+        },
+        CliOctetFileHashEntry {
+            hash: file_hash(&manifest_dir().join("dylint.toml")),
+            path: "dylint.toml",
+        },
     ];
-    let config_payload = serde_json::json!({
-        "files": files,
-        "effective_scope_args": ["-p", "molten", "-p", "molten-node-host"],
-        "effective_cargo_check_args": ["--all-targets"],
-    });
-    let config_hash = b3_full_hash(&config_payload.to_string());
-    let profile_payload = serde_json::json!({
-        "scope_args": ["-p", "molten", "-p", "molten-node-host"],
-        "cargo_check_args": ["--all-targets"],
-        "output_format": "human",
-        "config_hash": config_hash,
-    });
-    let profile_hash = b3_full_hash(&profile_payload.to_string());
+    let config_payload = serde_json::to_string(&CliOctetConfigPayload {
+        effective_cargo_check_args: &cargo_check_args,
+        effective_scope_args: &scope_args,
+        files: &files,
+    })
+    .expect("serialize CLI Octet configuration fixture");
+    let config_hash = b3_full_hash(&config_payload);
+    let profile_payload = serde_json::to_string(&CliOctetProfilePayload {
+        cargo_check_args: &cargo_check_args,
+        config_hash: &config_hash,
+        output_format: "human",
+        scope_args: &scope_args,
+    })
+    .expect("serialize CLI Octet profile fixture");
+    let profile_hash = b3_full_hash(&profile_payload);
     (config_hash, profile_hash)
 }
 

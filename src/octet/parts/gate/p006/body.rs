@@ -274,13 +274,13 @@ fn expected_metadata_for_command(command: &str) -> std::result::Result<ExpectedM
     let workspace_root = std::env::current_dir().map_err(|error| format!("current_dir: {error}"))?;
     let workspace_config = load_workspace_octet_config(&workspace_root)?;
     let effective = parse_effective_command(command, &workspace_config)?;
-    let config_hash = current_config_hash(&workspace_root, &effective.scope_args, &effective.cargo_check_args);
+    let config_hash = current_config_hash(&workspace_root, &effective.scope_args, &effective.cargo_check_args)?;
     let profile_hash = current_profile_hash(
         &effective.scope_args,
         &effective.cargo_check_args,
         &effective.output_format,
         &config_hash,
-    );
+    )?;
     Ok(ExpectedMetadata {
         config_hash,
         profile_hash,

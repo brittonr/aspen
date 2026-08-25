@@ -116,17 +116,38 @@ fn string_array_field(
         .collect()
 }
 
-fn current_config_hash(workspace_root: &Path, scope_args: &[String], cargo_check_args: &[String]) -> String {
+#[derive(serde::Serialize)]
+struct OctetConfigHashPayload<'a> {
+    effective_cargo_check_args: &'a [String],
+    effective_scope_args: &'a [String],
+    files: &'a [OctetFileHashEntry],
+}
+
+#[derive(serde::Serialize)]
+struct OctetFileHashEntry {
+    hash: Option<String>,
+    path: String,
+}
+
+#[derive(serde::Serialize)]
+struct OctetProfileHashPayload<'a> {
+    cargo_check_args: &'a [String],
+    config_hash: &'a str,
+    output_format: &'a str,
+    scope_args: &'a [String],
+}
+
+fn current_config_hash(
+    workspace_root: &Path,
+    scope_args: &[String],
+    cargo_check_args: &[String],
+) -> std::result::Result<String, String> {
     let files = vec![
         file_hash_entry(workspace_root.join("Cargo.toml")),
         file_hash_entry(workspace_root.join("dylint.toml")),
     ];
-    let payload = serde_json::json!({
-        "files": files,
-        "effective_scope_args": scope_args,
-        "effective_cargo_check_args": cargo_check_args,
-    });
-    b3_full_hash(&payload.to_string())
+    let payload = octet_config_hash_payload(&files, scope_args, cargo_check_args)?;
+    Ok(b3_full_hash(&payload))
 }
 
 fn current_profile_hash(
@@ -134,22 +155,45 @@ fn current_profile_hash(
     cargo_check_args: &[String],
     output_format: &str,
     config_hash: &str,
-) -> String {
-    let payload = serde_json::json!({
-        "scope_args": scope_args,
-        "cargo_check_args": cargo_check_args,
-        "output_format": output_format,
-        "config_hash": config_hash,
-    });
-    b3_full_hash(&payload.to_string())
+) -> std::result::Result<String, String> {
+    let payload = octet_profile_hash_payload(scope_args, cargo_check_args, output_format, config_hash)?;
+    Ok(b3_full_hash(&payload))
 }
 
-fn file_hash_entry(path: PathBuf) -> serde_json::Value {
-    let relative = path.file_name().and_then(|name| name.to_str()).unwrap_or("unknown");
-    serde_json::json!({
-        "path": relative,
-        "hash": fs::read(&path).ok().and_then(|bytes| b3_ref_from_bytes(&bytes).ok()),
+fn octet_profile_hash_payload(
+    scope_args: &[String],
+    cargo_check_args: &[String],
+    output_format: &str,
+    config_hash: &str,
+) -> std::result::Result<String, String> {
+    serde_json::to_string(&OctetProfileHashPayload {
+        cargo_check_args,
+        config_hash,
+        output_format,
+        scope_args,
     })
+    .map_err(|error| format!("serialize Octet profile hash payload: {error}"))
+}
+
+fn octet_config_hash_payload(
+    files: &[OctetFileHashEntry],
+    scope_args: &[String],
+    cargo_check_args: &[String],
+) -> std::result::Result<String, String> {
+    serde_json::to_string(&OctetConfigHashPayload {
+        effective_cargo_check_args: cargo_check_args,
+        effective_scope_args: scope_args,
+        files,
+    })
+    .map_err(|error| format!("serialize Octet configuration hash payload: {error}"))
+}
+
+fn file_hash_entry(path: PathBuf) -> OctetFileHashEntry {
+    let relative = path.file_name().and_then(|name| name.to_str()).unwrap_or("unknown");
+    OctetFileHashEntry {
+        hash: fs::read(&path).ok().and_then(|bytes| b3_ref_from_bytes(&bytes).ok()),
+        path: relative.to_string(),
+    }
 }
 
 fn b3_full_hash(input: &str) -> String {
