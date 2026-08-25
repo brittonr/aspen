@@ -599,7 +599,7 @@ molten test coordination show target/coordination-apply/report.preserves
 
 ## Production readiness receipts
 
-The production readiness runbooks live in [`docs/production-operator-runbooks.md`](docs/production-operator-runbooks.md), with a typed Nickel deployment profile at [`docs/production-node-profile.ncl`](docs/production-node-profile.ncl).
+The production readiness runbooks live in [`docs/production-operator-runbooks.md`](docs/production-operator-runbooks.md), with a typed Nickel deployment profile at [`docs/production-node-profile.ncl`](docs/production-node-profile.ncl). Profile export requires an explicit reviewed `candidate_source_ref`; the checked-in source contains no release candidate placeholder.
 
 `molten test prod-soak` now also emits canonical production readiness receipts for deployment profiles, backup/restore drills, upgrade/rollback drills, observability/SLO snapshots, runbook checks, security threat models, security drills, redaction audits, supply-chain reviews, boundary negative suites, incident response drills, security readiness reports, pilot decisions, and release-candidate gates. These receipts bind review evidence only; they do not grant authority, policy, provenance, retention, transport, source-gate, or destructive-operation trust. A release candidate with only configuration-clean Octet evidence must carry a source-gate caveat and can only support an explicitly scoped pilot decision.
 

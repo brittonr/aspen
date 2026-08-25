@@ -1,6 +1,8 @@
 let Contracts = import "production-profile-contracts.ncl" in
 let Thresholds = Contracts.thresholds in
 {
+  # r[impl molten.prod_ops.production_profile.candidate_input]
+  candidate_source_ref | Contracts.contracts.CandidateSourceRef,
   schema_id = Contracts.schema_id,
   schema_version = Contracts.schema_version,
   source_language = Contracts.source_language,
@@ -23,9 +25,7 @@ let Thresholds = Contracts.thresholds in
       "retention-index",
       "live-iroh",
     ],
-    source_gate_inputs = [
-      "blake3:0000000000000000000000000000000000000000000000000000000000000000",
-    ],
+    source_gate_inputs = [candidate_source_ref],
     resource_limits = {
       max_queue_depth = Thresholds.max_queue_depth,
       max_receipt_bytes = Thresholds.max_receipt_bytes,
@@ -54,4 +54,4 @@ let Thresholds = Contracts.thresholds in
       "active-lock-removed-after-pass",
     ],
   },
-} | Contracts.ProductionProfileExport
+}

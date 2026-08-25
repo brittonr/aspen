@@ -53,6 +53,14 @@ let ShutdownExpectations = [
 
 let is_non_empty_string = Prelude.is_non_empty_string in
 let is_blake3_ref = Prelude.is_blake3_ref in
+let ZeroCandidateRef = "blake3:0000000000000000000000000000000000000000000000000000000000000000" in
+let DummyACandidateRef = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in
+let DummyFCandidateRef = "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" in
+let is_candidate_source_ref = fun value =>
+  is_blake3_ref value
+  && value != ZeroCandidateRef
+  && value != DummyACandidateRef
+  && value != DummyFCandidateRef in
 
 let is_absolute_state_root = fun value =>
   Prelude.is_absolute_path value
@@ -106,7 +114,7 @@ let is_production_node_profile = fun profile =>
   && array_of (is_one_of RequiredProductionAdapters) profile.required_adapters
   && distinct_strings profile.required_adapters
   && has_all profile.required_adapters RequiredProductionAdapters
-  && array_of is_blake3_ref profile.source_gate_inputs
+  && array_of is_candidate_source_ref profile.source_gate_inputs
   && Prelude.distinct_blake3_refs profile.source_gate_inputs
   && is_resource_limits profile.resource_limits
   && array_of (is_one_of RedactionSettings) profile.redaction_settings
@@ -120,15 +128,18 @@ let is_production_node_profile = fun profile =>
 
 let is_production_profile_export = fun value =>
   std.is_record value
+  && is_candidate_source_ref value.candidate_source_ref
   && is_exact_schema_id value.schema_id
   && is_exact_schema_version value.schema_version
   && is_exact_source_language value.source_language
   && is_non_empty_string value.profile_identity
   && is_production_node_profile value.profile
-  && value.profile_identity == value.profile.profile_name in
+  && value.profile_identity == value.profile.profile_name
+  && value.profile.source_gate_inputs == [value.candidate_source_ref] in
 
 let NonEmptyStringContract = std.contract.from_predicate is_non_empty_string in
 let Blake3RefContract = std.contract.from_predicate is_blake3_ref in
+let CandidateSourceRefContract = std.contract.from_predicate is_candidate_source_ref in
 let AbsoluteStateRootContract = std.contract.from_predicate is_absolute_state_root in
 let SafeRelativeDirContract = std.contract.from_predicate is_safe_relative_dir in
 let PositiveIntegerContract = std.contract.from_predicate is_positive_integer in
@@ -175,6 +186,7 @@ let ProductionProfileExportContract = std.contract.from_predicate is_production_
     AbsoluteStateRoot = AbsoluteStateRootContract,
     AdapterName = AdapterNameContract,
     Blake3Ref = Blake3RefContract,
+    CandidateSourceRef = CandidateSourceRefContract,
     ExactSchemaId = ExactSchemaIdContract,
     ExactSchemaVersion = ExactSchemaVersionContract,
     ExactSourceLanguage = ExactSourceLanguageContract,

@@ -1598,7 +1598,9 @@
                   rg -U 'name = "nickel-lang-parser"\nversion = "0.3.0"' Cargo.lock
                   rg -U 'name = "nickel-lang-vector"\nversion = "0.2.0"' Cargo.lock
                   jq -e '.nodes."nickel-cli".locked.rev == "1320a983e6c3d1e2fb53dd2464b084b4903b1426"' flake.lock >/dev/null
-                  nickel export docs/production-node-profile.ncl > "$TMPDIR/production-profile.json"
+                  fixture_candidate_ref=blake3:d54663d8d304af6d5f486ead64a51c06d74e1ab6320f62b2c6e9864dfe5f33c6
+                  candidate_input="candidate_source_ref=\"$fixture_candidate_ref\""
+                  nickel export docs/production-node-profile.ncl -- "$candidate_input" > "$TMPDIR/production-profile.json"
                   for fixture in \
                     docs/production-profile-fixtures/negative/malformed-ref.ncl \
                     docs/production-profile-fixtures/negative/fractional-limit.ncl \
@@ -1633,10 +1635,18 @@
                   chmod -R u+w source
                   cd source
 
-                  nickel export docs/production-node-profile.ncl > "$TMPDIR/production-node-profile.json"
+                  fixture_candidate_ref=blake3:d54663d8d304af6d5f486ead64a51c06d74e1ab6320f62b2c6e9864dfe5f33c6
+                  candidate_input="candidate_source_ref=\"$fixture_candidate_ref\""
+                  nickel export docs/production-node-profile.ncl -- "$candidate_input" > "$TMPDIR/production-node-profile.json"
                   nickel export docs/production-profile-fixtures/valid.ncl > "$TMPDIR/production-profile-valid.json"
-                  nickel export docs/production-node-profile.ncl --field profile.resource_limits > "$TMPDIR/resource-limits.json"
+                  diff -u "$TMPDIR/production-profile-valid.json" "$TMPDIR/production-node-profile.json"
+                  nickel export docs/production-node-profile.ncl --field profile.resource_limits -- "$candidate_input" > "$TMPDIR/resource-limits.json"
                   diff -u docs/production-profile-fixtures/expected-resource-limits.json "$TMPDIR/resource-limits.json"
+
+                  if nickel export docs/production-node-profile.ncl > "$TMPDIR/missing-candidate.json" 2> "$TMPDIR/missing-candidate.err"; then
+                    echo "production profile without a candidate input unexpectedly exported" >&2
+                    exit 1
+                  fi
 
                   failed=0
                   for fixture in docs/production-profile-fixtures/negative/*.ncl; do
@@ -1675,7 +1685,9 @@
                   nickel export docs/plugin-extension-contracts/storage.grant-envelope.ncl > "$TMPDIR/storage.grant-envelope.json"
                   diff -u docs/plugin-extension-contracts/generated/storage.grant-envelope.json "$TMPDIR/storage.grant-envelope.json"
 
-                  nickel export docs/production-node-profile.ncl --field profile.resource_limits > "$TMPDIR/resource-limits.json"
+                  fixture_candidate_ref=blake3:d54663d8d304af6d5f486ead64a51c06d74e1ab6320f62b2c6e9864dfe5f33c6
+                  candidate_input="candidate_source_ref=\"$fixture_candidate_ref\""
+                  nickel export docs/production-node-profile.ncl --field profile.resource_limits -- "$candidate_input" > "$TMPDIR/resource-limits.json"
                   diff -u docs/production-profile-fixtures/expected-resource-limits.json "$TMPDIR/resource-limits.json"
 
                   failed=0
@@ -1697,8 +1709,17 @@
                     fi
                   }
 
-                  positive_fixture production-node-profile docs/production-node-profile.ncl
+                  if ! nickel export docs/production-node-profile.ncl -- "$candidate_input" > "$TMPDIR/production-node-profile.json" 2> "$TMPDIR/production-node-profile.err"; then
+                    echo "customized production profile failed" >&2
+                    cat "$TMPDIR/production-node-profile.err" >&2
+                    failed=1
+                  fi
+                  if nickel export docs/production-node-profile.ncl > "$TMPDIR/production-node-profile-missing.json" 2> "$TMPDIR/production-node-profile-missing.err"; then
+                    echo "production profile without candidate input unexpectedly exported" >&2
+                    failed=1
+                  fi
                   positive_fixture production-profile-valid docs/production-profile-fixtures/valid.ncl
+                  diff -u "$TMPDIR/production-profile-valid.json" "$TMPDIR/production-node-profile.json"
                   for fixture in docs/production-profile-fixtures/negative/*.ncl; do
                     negative_fixture "production-$(basename "$fixture" .ncl)" "$fixture"
                   done

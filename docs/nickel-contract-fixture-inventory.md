@@ -12,8 +12,8 @@ Module: `docs/production-profile-contracts.ncl`
 
 Positive fixtures:
 
-- `docs/production-node-profile.ncl`
-- `docs/production-profile-fixtures/valid.ncl`
+- `docs/production-node-profile.ncl` with an explicit customized `candidate_source_ref`
+- `docs/production-profile-fixtures/valid.ncl` with a deterministic conformance-only candidate reference
 
 Negative fixture classes:
 
@@ -22,6 +22,7 @@ Negative fixture classes:
 - unsafe paths and layout collisions: `unsafe-state-path.ncl`, `unsafe-layout-dir.ncl`, `layout-collision.ncl`
 - invalid limits: `zero-limit.ncl`, `fractional-limit.ncl`, `incoherent-resource-limits.ncl`
 - unsupported vocabulary/source-gate metadata: `vocabulary-typo.ncl`, `unsupported-metadata.ncl`, `missing-source-gate.ncl`
+- missing, placeholder, or mismatched candidate input: direct uncustomized export, `placeholder-candidate-input.ncl`, and `mismatched-candidate-source.ncl`
 
 ## Peer profile contracts
 

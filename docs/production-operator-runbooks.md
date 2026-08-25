@@ -13,12 +13,17 @@ ZERO_REF_NEGATIVE=blake3:0000000000000000000000000000000000000000000000000000000
 
 ## Deployment profile
 
-The reusable Nickel contract module is `docs/production-profile-contracts.ncl`; the checked-in pilot instance is `docs/production-node-profile.ncl`. Evaluate the instance and run its positive/negative fixture rail before use:
+The reusable Nickel contract module is `docs/production-profile-contracts.ncl`. The candidate-customized pilot profile is `docs/production-node-profile.ncl`. Export it and run its positive and negative fixture rail before use:
 
 ```sh
-nix develop -c nickel export docs/production-node-profile.ncl > target/production-node-profile.json
+CANDIDATE_REF=blake3:<reviewed-source-candidate-ref>
+CANDIDATE_INPUT="candidate_source_ref=\"$CANDIDATE_REF\""
+nix develop -c nickel export docs/production-node-profile.ncl -- "$CANDIDATE_INPUT" \
+  > target/production-node-profile.json
 nix build .#checks.$(nix eval --impure --raw --expr builtins.currentSystem).production-profile-fixtures --no-link
 ```
+
+Export without `candidate_source_ref` fails. All-zero and repeated dummy references also fail. The positive fixture supplies a deterministic conformance reference that is not release evidence.
 
 The exported profile root carries `schema_id`, `schema_version`, `source_language`, and `profile_identity` metadata. Bind the reviewed profile content ref into canonical evidence; metadata identifies the profile evidence shape only and grants no authority, source-gate trust, adapter readiness, policy, resource, retention, or transport trust. Treat profiles as one of three review tiers: `development` permits local fixtures only, `pilot` permits bounded operator-readiness evidence with caveats, and `release` requires non-placeholder source-gate, policy, Octet, Cairn, stack-provenance, production-profile, generated-export, and accepted Valence policy hash refs for the exact source candidate.
 
