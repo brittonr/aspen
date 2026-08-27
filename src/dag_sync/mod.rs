@@ -7,13 +7,17 @@
     reason = "DAG-sync protocol names remain explicit at the product boundary"
 )]
 
+mod domain;
 mod ports;
 mod records;
 mod service;
+mod status;
 
+pub use domain::*;
 pub use ports::*;
 pub use records::*;
 pub use service::*;
+pub use status::*;
 
 #[cfg(test)]
 mod tests;

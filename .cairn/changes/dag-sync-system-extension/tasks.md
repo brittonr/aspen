@@ -13,9 +13,9 @@
 ## Phase 3: Resume and domain integrations
 
 - [x] [serial] Persist bounded verified progress and implement traversal-epoch, root, schema, strategy, peer-assignment, policy, and generation checks for safe resume. r[molten.dag_sync.resume_fencing]
-- [ ] [parallel] Integrate job DAG and artifact dependency-closure callers through generic roots and completion evidence without granting install, execution, publication, or merge authority. r[molten.dag_sync.domain_boundary]
+- [x] [parallel] Integrate job DAG and artifact dependency-closure callers through generic roots and completion evidence without granting install, execution, publication, or merge authority. r[molten.dag_sync.domain_boundary]
 - [ ] [parallel] Add same-core deterministic simulation and live-loopback fixtures for complete, partial, restart, cancellation, partition, peer reassignment, and corruption paths. r[molten.dag_sync.final_validation]
-- [ ] [parallel] Add bounded operator readback for roots, strategy, traversal epoch, requested/verified/missing refs, peers, progress, resources, failures, and evidence refs. r[molten.dag_sync.resume_fencing]
+- [x] [parallel] Add bounded operator readback for roots, strategy, traversal epoch, requested/verified/missing refs, peers, progress, resources, failures, and evidence refs. r[molten.dag_sync.resume_fencing]
 
 ## Phase 4: Validation
 

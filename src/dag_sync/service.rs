@@ -19,6 +19,9 @@ pub struct DagSyncOutcome {
     pub plan: DagSyncPlan,
     pub progress: DagSyncProgress,
     pub receipt: DagSyncReceipt,
+    pub authority_ref: String,
+    pub resource_ref: String,
+    pub evidence_refs: Vec<String>,
     pub canonical_receipt: CanonicalDagRecord,
 }
 
@@ -64,6 +67,7 @@ where
         steps_completed: 0,
     });
     let mut terminal_issue = None;
+    let mut evidence_refs = vec![authority.authority_ref.clone(), resources.reservation_ref.clone()];
 
     for fetch in &plan.requests {
         if progress.verified.contains(&fetch.object_ref) {
@@ -88,10 +92,13 @@ where
             .map_err(|issue| MoltenError::invalid_harness(format!("DAG response denied: {issue:?}")))?;
         let canonical_response = canonical_dag_response(&response)?;
         ports.observations.publish_response(&canonical_response)?;
+        evidence_refs.push(canonical_response.record_ref);
         let durable_ref = ports.progress.store(&next)?;
         validate_ref(&durable_ref, "DAG durable progress")?;
+        evidence_refs.push(durable_ref);
         let canonical_progress = canonical_dag_progress(&next)?;
         ports.observations.publish_progress(&canonical_progress)?;
+        evidence_refs.push(canonical_progress.record_ref);
         progress = next;
     }
 
@@ -121,10 +128,16 @@ where
     };
     let canonical_receipt = canonical_dag_receipt(&receipt)?;
     ports.receipts.publish_receipt(&canonical_receipt)?;
+    evidence_refs.push(canonical_receipt.record_ref.clone());
+    evidence_refs.sort();
+    evidence_refs.dedup();
     Ok(DagSyncOutcome {
         plan,
         progress,
         receipt,
+        authority_ref: authority.authority_ref,
+        resource_ref: resources.reservation_ref,
+        evidence_refs,
         canonical_receipt,
     })
 }

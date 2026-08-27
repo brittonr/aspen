@@ -19,6 +19,10 @@ Implemented pure core coverage:
 
 The imperative shell now composes explicit authority, resource, transport, content verification, progress persistence, observation, and receipt ports. It requests only planned objects, verifies before progress mutation, stores each accepted step, and publishes a bounded receipt last.
 
-Four core tests and four shell tests passed. The shell tests cover complete receiver-driven transfer, durable per-object progress, receipt-last ordering, deferral, and corruption denial. Core and root-crate Clippy passed for all targets and features with warnings denied.
+Job DAGs now project output-root closure through reversed dependency edges. Artifact dependency closures project exact content identities and reject incomplete closures. These adapters do not grant install, execution, publication, or merge authority.
+
+Bounded status readback reports roots, strategy, epoch, requested, verified, missing, peers, resources, failures, evidence references, and non-claims.
+
+Four core tests and five shell tests passed. The shell tests cover complete receiver-driven transfer, durable per-object progress, receipt-last ordering, deferral, corruption denial, domain projections, and status output. Core and root-crate Clippy passed for all targets and features with warnings denied.
 
 No concrete live transport, Redb adapter, system-extension lifecycle, live loopback, multiprocess, or domain activation claim is made by this stage.

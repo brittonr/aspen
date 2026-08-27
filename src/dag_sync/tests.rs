@@ -10,6 +10,7 @@ const DIGEST_HEX_LENGTH: usize = 64;
 const NODE_BYTES: u64 = 10;
 const GENERATION: u64 = 1;
 const DEFER_AFTER_FIRST_RESPONSE: usize = 1;
+const EXPECTED_PROJECTED_NODES: usize = 2;
 
 fn digest(byte: char) -> String {
     format!("blake3:{}", byte.to_string().repeat(DIGEST_HEX_LENGTH))
@@ -236,6 +237,11 @@ fn receiver_driven_shell_persists_each_verified_object_and_receipt_last() {
     assert_eq!(progress.stored.len(), outcome.plan.requests.len());
     assert_eq!(receipts.count, 1);
     assert_eq!(events.borrow().last(), Some(&"publish-receipt"));
+    let status = dag_sync_status(&outcome);
+    assert!(status.missing.is_empty());
+    assert_eq!(status.non_claims.len(), DAG_SYNC_NON_CLAIMS.len());
+    assert_eq!(status.resources, vec![digest('8')]);
+    assert!(!status.evidence_refs.is_empty());
 }
 
 #[test]
@@ -299,4 +305,81 @@ fn deferral_and_corruption_never_publish_false_completion() {
     assert!(corrupt.is_err());
     assert!(progress.stored.is_empty());
     assert_eq!(receipts.count, 0);
+}
+
+#[test]
+fn job_and_artifact_projections_preserve_domain_boundaries() {
+    let first_node = crate::workload::JobNode {
+        id: "source".to_string(),
+        kind: "fixture".to_string(),
+        stage_artifact_ref: Some(digest('d')),
+        input_ports: Vec::new(),
+        output_ports: vec!["out".to_string()],
+        config: crate::preserves_rail::record("fixture-config", Vec::new()),
+        effect_manifest_refs: Vec::new(),
+        policy_refs: Vec::new(),
+        evidence_refs: Vec::new(),
+        checks: Vec::new(),
+    };
+    let second_node = crate::workload::JobNode {
+        id: "sink".to_string(),
+        kind: "fixture".to_string(),
+        stage_artifact_ref: None,
+        input_ports: vec!["in".to_string()],
+        output_ports: Vec::new(),
+        config: crate::preserves_rail::record("fixture-config", Vec::new()),
+        effect_manifest_refs: Vec::new(),
+        policy_refs: Vec::new(),
+        evidence_refs: Vec::new(),
+        checks: Vec::new(),
+    };
+    let job = crate::workload::JobDag {
+        job_ref: digest('e'),
+        version: "v1".to_string(),
+        nodes: vec![first_node, second_node],
+        edges: vec![crate::workload::JobEdge {
+            from_node: "source".to_string(),
+            from_port: "out".to_string(),
+            to_node: "sink".to_string(),
+            to_port: "in".to_string(),
+            schema_ref: None,
+            partitioning: "single".to_string(),
+            materialization: "stream".to_string(),
+        }],
+        output_roots: vec!["sink".to_string()],
+        schema_refs: vec![digest('f')],
+        effect_manifest_refs: Vec::new(),
+        policy_refs: Vec::new(),
+        evidence_refs: Vec::new(),
+        value: crate::preserves_rail::record("fixture-job", Vec::new()),
+    };
+    let job_graph = project_job_dag(&job).expect("job projection");
+    assert_eq!(job_graph.roots.len(), 1);
+    assert_eq!(job_graph.nodes.len(), EXPECTED_PROJECTED_NODES);
+    assert_eq!(job_graph.roots.first().expect("root").domain, "molten-job-dag");
+
+    let root_ref = digest('a');
+    let dependency_ref = digest('b');
+    let closure = crate::objects::ArtifactClosure {
+        roots: vec![root_ref.clone()],
+        closure_refs: vec![root_ref.clone(), dependency_ref.clone()],
+        missing_refs: Vec::new(),
+        closure_hash: digest('c'),
+        receipt_value: crate::preserves_rail::record("fixture-closure", Vec::new()),
+    };
+    let edges = vec![crate::objects::ArtifactDependencyEdge {
+        edge_ref: digest('d'),
+        source_ref: root_ref,
+        target_ref: dependency_ref,
+        target_kind: "artifact".to_string(),
+        relation: "requires".to_string(),
+        required: true,
+        scope: "runtime".to_string(),
+        evidence_refs: Vec::new(),
+        value: crate::preserves_rail::record("fixture-edge", Vec::new()),
+    }];
+    let artifact_graph = project_artifact_closure(&closure, &edges).expect("artifact projection");
+    assert_eq!(artifact_graph.roots.len(), 1);
+    assert_eq!(artifact_graph.nodes.len(), EXPECTED_PROJECTED_NODES);
+    assert_eq!(artifact_graph.roots.first().expect("root").domain, "molten-artifact-closure");
 }
