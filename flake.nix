@@ -572,6 +572,18 @@
           cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
           cp -R ${./crates/molten-core/src/world_merge} "$out/src/world_merge"
         '';
+        worldDistributionOctetWorkspace = pkgs.runCommand "molten-world-distribution-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-distribution-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-distribution-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-distribution-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-distribution-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/content_replication} "$out/src/content_replication"
+          cp -R ${./crates/molten-core/src/dag_sync} "$out/src/dag_sync"
+          cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
+          cp -R ${./crates/molten-core/src/world_distribution} "$out/src/world_distribution"
+          cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1556,6 +1568,27 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            world-distribution-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldDistributionOctetWorkspace;
+                packages = [ "molten-world-distribution-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-distribution-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-distribution-dependency-identity =
+              pkgs.runCommand "molten-world-distribution-dependency-identity" { }
+                ''
+                  test -f ${artifactSource}/crates/artifact-binding-core/src/lib.rs
+                  test -f ${choregraphSource}/crates/choregraph-history/src/refs.rs
+                  test -f ${./crates/molten-core/src/dag_sync/mod.rs}
+                  test -f ${./crates/molten-core/src/content_replication/mod.rs}
+                  touch "$out"
+                '';
             world-merge-dependency-identity = pkgs.runCommand "molten-world-merge-dependency-identity" { } ''
               test -f ${schemaMigrationSource}/crates/schema-migration-core/src/lib.rs
               test -f ${choregraphSource}/crates/choregraph-history/src/refs.rs

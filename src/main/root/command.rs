@@ -56,6 +56,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_world_head::WorldHeadCommand,
     },
+    WorldDistribution {
+        #[command(subcommand)]
+        command: crate::cli_world_distribution::WorldDistributionCommand,
+    },
     WorldMerge {
         #[command(subcommand)]
         command: crate::cli_world_merge::WorldMergeCommand,
@@ -297,6 +301,38 @@ mod tests {
             "--signature",
             "signature.json",
         ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn world_distribution_plan_parses_bounded_identity_and_output() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-distribution",
+            "sync-plan",
+            "--state-root",
+            "state",
+            "--commit",
+            COMMIT_REF,
+            "--epoch-ref",
+            COMMIT_REF,
+            "--policy-ref",
+            COMMIT_REF,
+            "--generation",
+            "1",
+            "--assume-missing",
+            "--out",
+            "world-sync.preserves",
+        ])
+        .expect("world distribution plan command");
+
+        assert!(matches!(cli.command, Some(Top::WorldDistribution { .. })));
+    }
+
+    #[test]
+    fn world_distribution_sync_rejects_missing_capability_root() {
+        let result = Cli::try_parse_from(["molten", "world-distribution", "sync", "--commit", COMMIT_REF]);
 
         assert!(result.is_err());
     }
