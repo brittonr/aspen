@@ -1,0 +1,66 @@
+{
+  "dataset": {
+    "changed_objects": 16,
+    "dataset_ref": "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "key_count": 4096,
+    "logical_bytes": 8388608,
+    "mutation_bytes": 131072,
+    "object_count": 1024,
+    "page_count": 2048,
+    "page_size_bytes": 4096,
+    "preexisting_objects": 1008,
+    "preparation": "declared-warm",
+    "shape": "downstream-shaped",
+    "source_revision": "58185205ffc69ab3f7dc6cc04388885e7d43f562"
+  },
+  "profile": {
+    "adapters": [
+      "molten-deterministic-world-benchmark-v1"
+    ],
+    "bounds": {
+      "max_conflicts": 256,
+      "max_duration_nanoseconds": 2000000000,
+      "max_keys": 8192,
+      "max_logical_bytes": 8388608,
+      "max_objects": 4096,
+      "max_operations": 8,
+      "max_pages": 4096,
+      "max_peak_memory_bytes": 268435456,
+      "max_physical_bytes": 16777216,
+      "max_references": 8192,
+      "max_repetitions": 3
+    },
+    "class": "logical",
+    "dataset_ref": "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "hardware_cohort": "downstream-shaped-count-fixture-v1",
+    "operations": [
+      "root-branch",
+      "first-mutation",
+      "repeated-mutation",
+      "diff",
+      "merge-plan",
+      "capsule-export",
+      "replication",
+      "retention-plan"
+    ],
+    "preparation": "declared-warm",
+    "profile_ref": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "repetitions": 3,
+    "schema": "molten.world-benchmark-profile.v1",
+    "source_revision": "58185205ffc69ab3f7dc6cc04388885e7d43f562",
+    "thresholds": [
+      {
+        "maximum": 131072,
+        "metric": "physical-bytes-written",
+        "name": "mutation-write-ceiling",
+        "operation": "first-mutation"
+      },
+      {
+        "maximum": 0,
+        "metric": "planned-deletions",
+        "name": "retention-candidate-ceiling",
+        "operation": "retention-plan"
+      }
+    ]
+  }
+}

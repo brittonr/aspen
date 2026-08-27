@@ -1,0 +1,59 @@
+{
+  "dataset": {
+    "changed_objects": 64,
+    "dataset_ref": "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "key_count": 1,
+    "logical_bytes": 134217728,
+    "mutation_bytes": 262144,
+    "object_count": 32768,
+    "page_count": 32768,
+    "page_size_bytes": 4096,
+    "preexisting_objects": 32704,
+    "preparation": "declared-warm",
+    "shape": "downstream-shaped",
+    "source_revision": "58185205ffc69ab3f7dc6cc04388885e7d43f562"
+  },
+  "profile": {
+    "adapters": [
+      "chaoscontrol-exact-snapshot-descriptor-v1"
+    ],
+    "bounds": {
+      "max_conflicts": 0,
+      "max_duration_nanoseconds": 2000000000,
+      "max_keys": 1,
+      "max_logical_bytes": 134217728,
+      "max_objects": 65536,
+      "max_operations": 1,
+      "max_pages": 65536,
+      "max_peak_memory_bytes": 536870912,
+      "max_physical_bytes": 268435456,
+      "max_references": 65536,
+      "max_repetitions": 3
+    },
+    "class": "opaque-exact-snapshot",
+    "dataset_ref": "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "hardware_cohort": "chaoscontrol-exact-x86-kvm-v1",
+    "operations": [
+      "snapshot-share"
+    ],
+    "preparation": "declared-warm",
+    "profile_ref": "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "repetitions": 3,
+    "schema": "molten.world-benchmark-profile.v1",
+    "source_revision": "58185205ffc69ab3f7dc6cc04388885e7d43f562",
+    "thresholds": [
+      {
+        "maximum": 64,
+        "metric": "copied-pages",
+        "name": "snapshot-copied-page-ceiling",
+        "operation": "snapshot-share"
+      },
+      {
+        "maximum": 262144,
+        "metric": "physical-bytes-written",
+        "name": "snapshot-physical-write-ceiling",
+        "operation": "snapshot-share"
+      }
+    ]
+  }
+}

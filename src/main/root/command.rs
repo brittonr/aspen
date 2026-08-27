@@ -52,6 +52,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_world_commit::WorldCommitCommand,
     },
+    WorldSnapshot {
+        #[command(subcommand)]
+        command: crate::cli_world_snapshot::WorldSnapshotCommand,
+    },
     WorldHead {
         #[command(subcommand)]
         command: crate::cli_world_head::WorldHeadCommand,
@@ -258,6 +262,39 @@ mod tests {
     #[test]
     fn world_commit_operator_commands_reject_missing_state_root() {
         let result = Cli::try_parse_from(["molten", "world-commit", "inspect", COMMIT_REF]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn world_snapshot_clone_plan_parses_explicit_descriptor_bound_and_output() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-snapshot",
+            "clone-plan",
+            "--descriptor",
+            "snapshot.preserves",
+            "--children",
+            "2",
+            "--out",
+            "clone.preserves",
+        ])
+        .expect("world snapshot clone plan command");
+
+        assert!(matches!(cli.command, Some(Top::WorldSnapshot { .. })));
+    }
+
+    #[test]
+    fn world_snapshot_restore_rejects_missing_denial_receipt_path() {
+        let result = Cli::try_parse_from([
+            "molten",
+            "world-snapshot",
+            "restore",
+            "--descriptor",
+            "snapshot.preserves",
+            "--destination",
+            "destination.preserves",
+        ]);
 
         assert!(result.is_err());
     }

@@ -774,6 +774,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "chaoscontrol-snapshot-descriptor"
+version = "0.1.0"
+source = "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#b8c440ea3b19df796542e58e8ee36200e1c3db85"
+dependencies = [
+ "blake3",
+ "serde",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "choregraph-history"
 version = "0.1.0"
 source = "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19750f53bdbcae970cdf58a47a791ed20b"
@@ -3934,6 +3944,7 @@ dependencies = [
  "cap-fs-ext",
  "cap-std",
  "cap-tempfile",
+ "chaoscontrol-snapshot-descriptor",
  "choregraph-history",
  "clap 4.6.1",
  "data-encoding",
@@ -3968,6 +3979,7 @@ dependencies = [
  "tracing",
  "valence-core",
  "verified-logic",
+ "vm-cohort-core",
  "wasmparser 0.240.0",
  "wasmtime",
  "wasmtime-wasi",
@@ -7352,6 +7364,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "vm-cohort-core"
+version = "0.1.0"
+source = "git+rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3?rev=31f1696ba9391bfda8577a58af84f72361d5573e#31f1696ba9391bfda8577a58af84f72361d5573e"
+dependencies = [
+ "blake3",
+ "serde",
 ]
 
 [[package]]

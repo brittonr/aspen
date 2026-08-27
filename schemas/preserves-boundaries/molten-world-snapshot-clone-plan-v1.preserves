@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-snapshot-clone-plan">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "molten-world-snapshot-clone-plan-v1">
+  <schema-id "molten.world-snapshot.clone-plan.v1">
+  <arity 4>>
