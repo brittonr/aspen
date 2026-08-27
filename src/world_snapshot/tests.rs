@@ -55,6 +55,10 @@ fn canonical_snapshot_records_are_stable_and_domain_separated() {
     let inventory = canonical_snapshot_inventory(&inventory_for(&descriptor)).expect("inventory");
     assert_eq!(first.artifact_ref, repeated.artifact_ref);
     assert_eq!(first.bytes, repeated.bytes);
+    let (parsed, parsed_canonical) =
+        parse_canonical_snapshot_descriptor(&first.bytes).expect("parse canonical descriptor");
+    assert_eq!(parsed, descriptor);
+    assert_eq!(parsed_canonical.artifact_ref, first.artifact_ref);
     assert_ne!(first.artifact_ref, inventory.artifact_ref);
 
     let report = validate_snapshot(&descriptor, &descriptor.cohort);

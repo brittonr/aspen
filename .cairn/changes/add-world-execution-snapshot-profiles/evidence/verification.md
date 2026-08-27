@@ -48,6 +48,10 @@ The logical shell now uses narrow materialization, current-admission, host-handl
 
 Focused tests cover a complete logical restore, stale admission after restore, and unavailable component materialization. Stale or incomplete cases never activate or publish a success receipt.
 
+Strict descriptor decoding round-trips normalized canonical bytes. It denies unsupported schemas and typed values through closed parsers before shell effects.
+
+`docs/world-execution-snapshots.md` records ownership, component and cohort fields, restore order, handle recreation, authority checks, merge limits, VM Cohort blocking, and non-claims.
+
 Focused core and shell tests, formatting, and Clippy with warnings denied passed.
 
 ## Remaining dependency gates

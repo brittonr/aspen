@@ -207,6 +207,9 @@ pub enum CompatibilityVerdict {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SnapshotIssue {
     UnsupportedProfile,
+    UnsupportedComponentKind,
+    UnsupportedCohortFact,
+    UnsupportedOwner,
     TooManyComponents,
     TooManyCohortFacts,
     DuplicateComponent(SnapshotComponentKind),
@@ -363,6 +366,29 @@ impl SnapshotComponentKind {
             Self::BackendState => "backend-state",
         }
     }
+
+    pub fn parse(value: &str) -> Result<Self, SnapshotIssue> {
+        match value {
+            "artifact" => Ok(Self::Artifact),
+            "schema" => Ok(Self::Schema),
+            "durable-state" => Ok(Self::DurableState),
+            "tasks" => Ok(Self::Tasks),
+            "history" => Ok(Self::History),
+            "effects" => Ok(Self::Effects),
+            "scheduler" => Ok(Self::Scheduler),
+            "time" => Ok(Self::Time),
+            "entropy" => Ok(Self::Entropy),
+            "runtime-profile" => Ok(Self::RuntimeProfile),
+            "policy" => Ok(Self::Policy),
+            "machine-descriptor" => Ok(Self::MachineDescriptor),
+            "cpu-state" => Ok(Self::CpuState),
+            "memory" => Ok(Self::Memory),
+            "device-state" => Ok(Self::DeviceState),
+            "disk-state" => Ok(Self::DiskState),
+            "backend-state" => Ok(Self::BackendState),
+            _ => Err(SnapshotIssue::UnsupportedComponentKind),
+        }
+    }
 }
 
 impl CohortFactKind {
@@ -387,6 +413,29 @@ impl CohortFactKind {
             Self::BackendProfile => "backend-profile",
         }
     }
+
+    pub fn parse(value: &str) -> Result<Self, SnapshotIssue> {
+        match value {
+            "architecture" => Ok(Self::Architecture),
+            "runtime-build" => Ok(Self::RuntimeBuild),
+            "runtime-abi" => Ok(Self::RuntimeAbi),
+            "schema-set" => Ok(Self::SchemaSet),
+            "handler-set" => Ok(Self::HandlerSet),
+            "task-model" => Ok(Self::TaskModel),
+            "scheduler-profile" => Ok(Self::SchedulerProfile),
+            "time-profile" => Ok(Self::TimeProfile),
+            "entropy-profile" => Ok(Self::EntropyProfile),
+            "effect-profile" => Ok(Self::EffectProfile),
+            "kvm-state-profile" => Ok(Self::KvmStateProfile),
+            "cpu-feature-inventory" => Ok(Self::CpuFeatureInventory),
+            "vcpu-topology" => Ok(Self::VcpuTopology),
+            "device-inventory" => Ok(Self::DeviceInventory),
+            "memory-format" => Ok(Self::MemoryFormat),
+            "disk-format" => Ok(Self::DiskFormat),
+            "backend-profile" => Ok(Self::BackendProfile),
+            _ => Err(SnapshotIssue::UnsupportedCohortFact),
+        }
+    }
 }
 
 impl ComponentOwner {
@@ -394,6 +443,14 @@ impl ComponentOwner {
         match self {
             Self::Molten => "molten",
             Self::ChaosControl => "chaoscontrol",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, SnapshotIssue> {
+        match value {
+            "molten" => Ok(Self::Molten),
+            "chaoscontrol" => Ok(Self::ChaosControl),
+            _ => Err(SnapshotIssue::UnsupportedOwner),
         }
     }
 }

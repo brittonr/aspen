@@ -17,5 +17,5 @@
 
 - [ ] [parallel] Add positive complete logical restore, exact opaque restore, repeated compatibility, isolated child overlay, and current-handle recreation fixtures. r[molten.world_snapshot.verification]
 - [ ] [parallel] Add negative missing component, duplicate device, CPU inventory mismatch, topology mismatch, stale runtime, unsupported schema, live-handle capture, stale authority, opaque merge, mixed ownership conflict, overlay collision, partial clone, cross-architecture fallback, and snapshot-as-correctness fixtures. r[molten.world_snapshot.verification]
-- [ ] [serial] Document profile classes, cohort fields, completeness rules, handle and authority recreation, VM Cohort boundary, and portability non-claims. r[molten.world_snapshot.profiles] r[molten.world_snapshot.restore]
+- [x] [serial] Document profile classes, cohort fields, completeness rules, handle and authority recreation, VM Cohort boundary, and portability non-claims. r[molten.world_snapshot.profiles] r[molten.world_snapshot.restore]
 - [ ] [depends:world-snapshot-verification] Run focused tests, ChaosControl and VM Cohort compatibility fixtures, Octet, Clippy with warnings denied, Cairn gates, lifecycle checks, and relevant Nix checks. r[molten.world_snapshot.verification]
