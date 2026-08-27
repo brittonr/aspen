@@ -200,6 +200,11 @@ mod world_head_port;
 mod cli_world_head {
     pub(crate) use super::world_head_port::*;
 }
+#[path = "cli/runtime/worldmerge.rs"]
+mod world_merge_port;
+mod cli_world_merge {
+    pub(crate) use super::world_merge_port::*;
+}
 #[path = "cli/core/storage.rs"]
 mod cell_port;
 mod cli_storage {

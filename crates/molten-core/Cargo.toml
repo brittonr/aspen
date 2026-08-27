@@ -17,3 +17,4 @@ blake3 = "1"
 choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
 executable-extent-core = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 kamacite-core = { git = "ssh://git@github.com/OnixResearch/kamacite.git", rev = "d76fe4abe543724d8fc0ac4b362187caf2e27622", version = "0.1.0" }
+schema-migration-core = { git = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git", rev = "4fe90e130f2871cf69a6febcdc70785adca98aea", version = "0.1.0" }

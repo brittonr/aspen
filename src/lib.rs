@@ -104,6 +104,7 @@ pub mod wasm_performance;
 #[path = "worldcommit/mod.rs"]
 pub mod world_commit;
 pub mod world_head;
+pub mod world_merge;
 compat_module!(harness, testbed);
 #[doc(hidden)]
 #[path = "iroh/exchange.rs"]

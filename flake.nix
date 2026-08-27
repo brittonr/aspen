@@ -103,6 +103,7 @@
       ucan-src,
       valence-src,
       schema-identity-src,
+      schema-migration-core-src,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -294,6 +295,34 @@
             && schema-identity-src.rev == schemaIdentityRevision
           ) "Molten schema-identity Cargo/Nix source identity drifted";
           schema-identity-src;
+        schemaMigrationRevision = "4fe90e130f2871cf69a6febcdc70785adca98aea";
+        schemaMigrationRepository = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git";
+        schemaMigrationCargoDependencies = [
+          artifactRootDependencies.schema-migration-core
+          moltenCoreDependencies.schema-migration-core
+        ];
+        schemaMigrationExpectedLockSource = "git+${schemaMigrationRepository}?rev=${schemaMigrationRevision}#${schemaMigrationRevision}";
+        schemaMigrationLockPackages = builtins.filter (
+          package: (package.source or "") == schemaMigrationExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        schemaMigrationWorkspace = builtins.fromTOML (
+          builtins.readFile (schema-migration-core-src + "/Cargo.toml")
+        );
+        schemaMigrationSource =
+          assert pkgs.lib.assertMsg (
+            builtins.all (
+              dependency:
+              dependency.git == schemaMigrationRepository
+              && dependency.rev == schemaMigrationRevision
+              && dependency.version == "0.1.0"
+            ) schemaMigrationCargoDependencies
+            && schema-migration-core-src.rev == schemaMigrationRevision
+            && builtins.length schemaMigrationLockPackages == 1
+            && (builtins.head schemaMigrationLockPackages).name == "schema-migration-core"
+            && builtins.elem "crates/schema-migration-core" schemaMigrationWorkspace.workspace.members
+            && schemaMigrationWorkspace.workspace.package.license == "MIT"
+          ) "Molten schema-migration Cargo/Nix source identity, package, or license drifted";
+          schema-migration-core-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
           "${artifactRepository}#${artifactRevision}" = maybeCleanLocalGitSource artifactSource;
           "${executableExtentRepository}#${executableExtentRevision}" =
@@ -311,6 +340,8 @@
             maybeCleanLocalGitSource hegel-src;
           "${schemaIdentityRepository}#${schemaIdentityRevision}" =
             maybeCleanLocalGitSource schemaIdentitySource;
+          "${schemaMigrationRepository}#${schemaMigrationRevision}" =
+            maybeCleanLocalGitSource schemaMigrationSource;
         };
         unit2nixPkgsBase = pkgsBase.extend (
           final: prev: {
@@ -530,6 +561,16 @@
             "$out/vendor/choregraph-history/src"
           cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
           cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
+        '';
+        worldMergeOctetWorkspace = pkgs.runCommand "molten-world-merge-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-merge-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-merge-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-merge-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-merge-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
+          cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
+          cp -R ${./crates/molten-core/src/world_merge} "$out/src/world_merge"
         '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
@@ -1503,6 +1544,23 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            world-merge-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldMergeOctetWorkspace;
+                packages = [ "molten-world-merge-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-merge-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-merge-dependency-identity = pkgs.runCommand "molten-world-merge-dependency-identity" { } ''
+              test -f ${schemaMigrationSource}/crates/schema-migration-core/src/lib.rs
+              test -f ${choregraphSource}/crates/choregraph-history/src/refs.rs
+              touch "$out"
+            '';
             world-head-dependency-identity = pkgs.runCommand "molten-world-head-dependency-identity" { } ''
               test -f ${choregraphSource}/crates/choregraph-history/src/refs.rs
               test -f ${artifactSource}/crates/artifact-auth-core/src/lib.rs

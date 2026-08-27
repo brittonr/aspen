@@ -56,6 +56,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_world_head::WorldHeadCommand,
     },
+    WorldMerge {
+        #[command(subcommand)]
+        command: crate::cli_world_merge::WorldMergeCommand,
+    },
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -293,6 +297,39 @@ mod tests {
             "--signature",
             "signature.json",
         ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn world_merge_plan_parses_explicit_base_sources_and_policy() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-merge",
+            "merge-plan",
+            "--state-root",
+            "state",
+            "--base",
+            COMMIT_REF,
+            "--left",
+            COMMIT_REF,
+            "--right",
+            COMMIT_REF,
+            "--profile-ref",
+            COMMIT_REF,
+            "--policy-ref",
+            COMMIT_REF,
+            "--out",
+            "merge.preserves",
+        ])
+        .expect("world-merge plan command");
+
+        assert!(matches!(cli.command, Some(Top::WorldMerge { .. })));
+    }
+
+    #[test]
+    fn world_merge_publish_rejects_missing_capability_root() {
+        let result = Cli::try_parse_from(["molten", "world-merge", "merge-publish", "--plan", "merge.preserves"]);
 
         assert!(result.is_err());
     }

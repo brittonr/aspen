@@ -7,6 +7,8 @@ let ExecutableExtentSource = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB" in
 let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
 let ValenceRevision = "5f1c2ba5072c6f9622fa59b1af20502985f569fd" in
 let SchemaIdentityRevision = "2562c8aa38a034061f9af9f3e17280494a5b8de2" in
+let SchemaMigrationRevision = "4fe90e130f2871cf69a6febcdc70785adca98aea" in
+let SchemaMigrationSource = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git" in
 let SchemaIdentitySource = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git" in
 let ArchiveNonClaims = [
   "dependency satisfaction proves presented receipt linkage only",
@@ -147,6 +149,17 @@ in
       immutable_revision = "2aad993027d48ff148028c537cdaf91f6e5285ca",
       nix_input = "ucan-src",
       transport_policy = "ssh-pinned-nix-archive",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "schema-migration-core",
+      package_name = "schema-migration-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = SchemaMigrationSource,
+      immutable_revision = SchemaMigrationRevision,
+      nix_input = "schema-migration-core-src",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {

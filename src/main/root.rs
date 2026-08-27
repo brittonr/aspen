@@ -72,6 +72,7 @@ pub(crate) fn run() -> molten::error::Result<()> {
         }
         Some(command::Top::WorldCommit { command }) => crate::cli_world_commit::run_world_commit_command(command),
         Some(command::Top::WorldHead { command }) => crate::cli_world_head::run_world_head_command(command),
+        Some(command::Top::WorldMerge { command }) => crate::cli_world_merge::run_world_merge_command(command),
     }
 }
 
