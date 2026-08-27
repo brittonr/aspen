@@ -1,14 +1,14 @@
 ## Phase 1: Generic DAG primitives
 
-- [ ] [serial] Define canonical domain-neutral DAG node, edge, root, bounds, inventory, request, plan, response, progress, and receipt records. r[molten.dag_sync.model]
-- [ ] [serial] Implement pure cycle and duplicate detection, edge validation, deterministic traversal/topological order, visited-state, missing-set, completion, and hard-bound checks. r[molten.dag_sync.traversal_core]
-- [ ] [parallel] Add property and negative tests for stable order, cycles, unknown edges, duplicate nodes, node/edge/depth/byte/step limits, and malformed records. r[molten.dag_sync.traversal_core]
+- [x] [serial] Define canonical domain-neutral DAG node, edge, root, bounds, inventory, request, plan, response, progress, and receipt records. r[molten.dag_sync.model]
+- [x] [serial] Implement pure cycle and duplicate detection, edge validation, deterministic traversal/topological order, visited-state, missing-set, completion, and hard-bound checks. r[molten.dag_sync.traversal_core]
+- [x] [parallel] Add property and negative tests for stable order, cycles, unknown edges, duplicate nodes, node/edge/depth/byte/step limits, and malformed records. r[molten.dag_sync.traversal_core]
 
 ## Phase 2: Strategies and extension protocol
 
-- [ ] [serial] Add explicit full, stem-first, leaf-only, resumable, and deterministic peer-partitioned strategy profiles with canonical plan identity. r[molten.dag_sync.strategy_profiles]
+- [x] [serial] Add explicit full, stem-first, leaf-only, resumable, and deterministic peer-partitioned strategy profiles with canonical plan identity. r[molten.dag_sync.strategy_profiles]
 - [ ] [serial] Implement the receiver-driven DAG-sync system extension over admitted transport, content, durable-state, time, identity, resource, and observability ports. r[molten.dag_sync.receiver_driven] r[molten.dag_sync.content_adapter_boundary]
-- [ ] [parallel] Reject unsolicited, stale, duplicate-conflicting, corrupt, unauthorized, or over-bound responses before graph progress advances. r[molten.dag_sync.receiver_driven] r[molten.dag_sync.content_adapter_boundary]
+- [x] [parallel] Reject unsolicited, stale, duplicate-conflicting, corrupt, unauthorized, or over-bound responses before graph progress advances. r[molten.dag_sync.receiver_driven] r[molten.dag_sync.content_adapter_boundary]
 
 ## Phase 3: Resume and domain integrations
 

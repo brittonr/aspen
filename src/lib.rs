@@ -79,6 +79,7 @@ compat_module!(evidence_chain, lineage);
 pub mod mesh;
 compat_module!(federation, mesh);
 pub mod content_store_adapter;
+pub mod dag_sync;
 pub mod fabric;
 pub mod fabric_consistency;
 pub mod fabric_crypto_identity;
