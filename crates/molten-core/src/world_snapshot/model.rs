@@ -7,6 +7,17 @@ use crate::world_commit::WorldRootRef;
 pub const MAX_SNAPSHOT_COMPONENTS: usize = 64;
 pub const MAX_COHORT_FACTS: usize = 64;
 pub const MAX_CLONE_CHILDREN: usize = 32;
+pub const MAX_SNAPSHOT_CANONICAL_BYTES: usize = 1_048_576;
+pub const MAX_SNAPSHOT_RECEIPT_ISSUES: usize = 64;
+pub const MAX_SNAPSHOT_ISSUE_BYTES: usize = 256;
+pub const MAX_OVERLAY_IDENTITY_BYTES: usize = 256;
+
+pub const SNAPSHOT_DESCRIPTOR_SCHEMA: &str = "molten.world-snapshot.descriptor.v1";
+pub const SNAPSHOT_INVENTORY_SCHEMA: &str = "molten.world-snapshot.inventory.v1";
+pub const SNAPSHOT_COMPATIBILITY_SCHEMA: &str = "molten.world-snapshot.compatibility.v1";
+pub const SNAPSHOT_RESTORE_PLAN_SCHEMA: &str = "molten.world-snapshot.restore-plan.v1";
+pub const SNAPSHOT_CLONE_PLAN_SCHEMA: &str = "molten.world-snapshot.clone-plan.v1";
+pub const SNAPSHOT_RECEIPT_SCHEMA: &str = "molten.world-snapshot.receipt.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotClass {
@@ -162,7 +173,27 @@ pub struct SnapshotDescriptor {
     pub cohort: SnapshotCohort,
     pub components: Vec<SnapshotComponent>,
     pub contains_live_handle: bool,
-    pub synchronized_representations: bool,
+    pub synchronization: Option<SnapshotSynchronization>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotSynchronization {
+    pub logical_commit_ref: WorldCommitRef,
+    pub opaque_snapshot_ref: WorldRootRef,
+    pub observation_ref: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotInventory {
+    pub class: SnapshotClass,
+    pub required: Vec<SnapshotComponentKind>,
+    pub observed: Vec<SnapshotComponent>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotOwnership {
+    pub component: SnapshotComponentKind,
+    pub owner: ComponentOwner,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,6 +206,7 @@ pub enum CompatibilityVerdict {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SnapshotIssue {
+    UnsupportedProfile,
     TooManyComponents,
     TooManyCohortFacts,
     DuplicateComponent(SnapshotComponentKind),
@@ -189,9 +221,15 @@ pub enum SnapshotIssue {
     WrongRootKind(SnapshotComponentKind),
     UnexpectedRoot(SnapshotComponentKind),
     LiveHandleCaptured,
+    UnexpectedSynchronization,
+    InvalidContentIdentity,
+    InvalidOverlayIdentity,
+    ReceiptBoundExceeded,
+    ReceiptNonClaimsIncomplete,
     CohortMismatch(CohortFactKind),
     OpaqueMergeDenied,
     CurrentAdmissionDenied,
+    EmptyClonePlan,
     ChildBoundExceeded,
     ParentMismatch,
     OverlayCollision,
@@ -202,6 +240,13 @@ pub enum SnapshotIssue {
 pub struct CompatibilityReport {
     pub verdict: CompatibilityVerdict,
     pub issues: Vec<SnapshotIssue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotDiagnostic {
+    pub issue: SnapshotIssue,
+    pub component: Option<SnapshotComponentKind>,
+    pub cohort_fact: Option<CohortFactKind>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -246,4 +291,151 @@ pub struct CloneChild {
 pub struct ClonePlanRequest {
     pub parent_ref: WorldCommitRef,
     pub children: Vec<CloneChild>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotReceiptDecision {
+    Planned,
+    Restored,
+    Cloned,
+    Denied,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotReceipt {
+    pub decision: SnapshotReceiptDecision,
+    pub descriptor_ref: String,
+    pub compatibility_ref: String,
+    pub restore_plan_ref: Option<String>,
+    pub clone_plan_ref: Option<String>,
+    pub current_admission_ref: Option<String>,
+    pub issues: Vec<String>,
+    pub non_claims: Vec<String>,
+}
+
+pub const SNAPSHOT_NON_CLAIMS: &[&str] = &[
+    "snapshot-completeness-is-not-guest-correctness",
+    "snapshot-compatibility-is-not-cross-host-portability",
+    "restore-planning-is-not-current-authority",
+    "snapshot-bytes-do-not-transfer-host-handles",
+    "opaque-identity-is-not-logical-semantic-equivalence",
+    "clone-isolation-does-not-prove-workload-correctness",
+    "snapshot-receipts-do-not-prove-release-eligibility",
+];
+
+impl SnapshotClass {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Logical => "logical",
+            Self::Opaque => "opaque",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self, SnapshotIssue> {
+        match value {
+            "logical" => Ok(Self::Logical),
+            "opaque" => Ok(Self::Opaque),
+            _ => Err(SnapshotIssue::UnsupportedProfile),
+        }
+    }
+}
+
+impl SnapshotComponentKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Artifact => "artifact",
+            Self::Schema => "schema",
+            Self::DurableState => "durable-state",
+            Self::Tasks => "tasks",
+            Self::History => "history",
+            Self::Effects => "effects",
+            Self::Scheduler => "scheduler",
+            Self::Time => "time",
+            Self::Entropy => "entropy",
+            Self::RuntimeProfile => "runtime-profile",
+            Self::Policy => "policy",
+            Self::MachineDescriptor => "machine-descriptor",
+            Self::CpuState => "cpu-state",
+            Self::Memory => "memory",
+            Self::DeviceState => "device-state",
+            Self::DiskState => "disk-state",
+            Self::BackendState => "backend-state",
+        }
+    }
+}
+
+impl CohortFactKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Architecture => "architecture",
+            Self::RuntimeBuild => "runtime-build",
+            Self::RuntimeAbi => "runtime-abi",
+            Self::SchemaSet => "schema-set",
+            Self::HandlerSet => "handler-set",
+            Self::TaskModel => "task-model",
+            Self::SchedulerProfile => "scheduler-profile",
+            Self::TimeProfile => "time-profile",
+            Self::EntropyProfile => "entropy-profile",
+            Self::EffectProfile => "effect-profile",
+            Self::KvmStateProfile => "kvm-state-profile",
+            Self::CpuFeatureInventory => "cpu-feature-inventory",
+            Self::VcpuTopology => "vcpu-topology",
+            Self::DeviceInventory => "device-inventory",
+            Self::MemoryFormat => "memory-format",
+            Self::DiskFormat => "disk-format",
+            Self::BackendProfile => "backend-profile",
+        }
+    }
+}
+
+impl ComponentOwner {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Molten => "molten",
+            Self::ChaosControl => "chaoscontrol",
+        }
+    }
+}
+
+impl CompatibilityVerdict {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Compatible => "compatible",
+            Self::Incomplete => "incomplete",
+            Self::Incompatible => "incompatible",
+            Self::Unsafe => "unsafe",
+        }
+    }
+}
+
+impl SnapshotRestoreStep {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::VerifyClosure => "verify-closure",
+            Self::VerifyCohort => "verify-cohort",
+            Self::MaterializeArtifacts => "materialize-artifacts",
+            Self::RestoreDurableState => "restore-durable-state",
+            Self::RestoreHistory => "restore-history",
+            Self::RestoreTasks => "restore-tasks",
+            Self::RestoreScheduler => "restore-scheduler",
+            Self::RestoreTime => "restore-time",
+            Self::RestoreEntropy => "restore-entropy",
+            Self::RestoreEffects => "restore-effects",
+            Self::RestoreOpaqueMachine => "restore-opaque-machine",
+            Self::RecreateHostHandles => "recreate-host-handles",
+            Self::RecheckCurrentAdmission => "recheck-current-admission",
+            Self::ActivateRuntime => "activate-runtime",
+        }
+    }
+}
+
+impl SnapshotReceiptDecision {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Planned => "planned",
+            Self::Restored => "restored",
+            Self::Cloned => "cloned",
+            Self::Denied => "denied",
+        }
+    }
 }

@@ -71,12 +71,14 @@ fn descriptor(class: SnapshotClass) -> SnapshotDescriptor {
             })
             .collect(),
         contains_live_handle: false,
-        synchronized_representations: false,
+        synchronization: None,
     }
 }
 
 #[test]
 fn complete_logical_snapshot_has_closed_restore_order() {
+    assert_eq!(SnapshotClass::parse("logical"), Ok(SnapshotClass::Logical));
+    assert_eq!(SnapshotClass::parse("mixed"), Err(SnapshotIssue::UnsupportedProfile));
     let snapshot = descriptor(SnapshotClass::Logical);
     let plan = plan_restore(&snapshot, &snapshot.cohort, true).expect("logical restore plan");
     assert_eq!(plan.class, SnapshotClass::Logical);
@@ -122,6 +124,38 @@ fn divergent_opaque_roots_never_enter_semantic_merge() {
     assert_eq!(admit_semantic_merge(SnapshotClass::Opaque, false), Err(SnapshotIssue::OpaqueMergeDenied));
     assert_eq!(admit_semantic_merge(SnapshotClass::Opaque, true), Ok(()));
     assert_eq!(admit_semantic_merge(SnapshotClass::Logical, false), Ok(()));
+}
+
+#[test]
+fn identities_are_domain_separated_and_receipts_require_non_claims() {
+    let bytes = b"canonical-preserves-snapshot";
+    let descriptor_ref =
+        identify_snapshot_artifact(SnapshotIdentityKind::Descriptor, bytes).expect("descriptor identity");
+    let receipt_ref = identify_snapshot_artifact(SnapshotIdentityKind::Receipt, bytes).expect("receipt identity");
+    assert_ne!(descriptor_ref, receipt_ref);
+    assert_eq!(
+        descriptor_ref,
+        identify_snapshot_artifact(SnapshotIdentityKind::Descriptor, bytes).expect("stable descriptor identity")
+    );
+
+    let receipt = SnapshotReceipt {
+        decision: SnapshotReceiptDecision::Planned,
+        descriptor_ref: digest('1'),
+        compatibility_ref: digest('2'),
+        restore_plan_ref: Some(digest('3')),
+        clone_plan_ref: None,
+        current_admission_ref: None,
+        issues: Vec::new(),
+        non_claims: SNAPSHOT_NON_CLAIMS.iter().map(ToString::to_string).collect(),
+    };
+    assert_eq!(validate_snapshot_receipt(&receipt), Ok(()));
+    let mut incomplete = receipt;
+    incomplete.non_claims.pop();
+    assert!(
+        validate_snapshot_receipt(&incomplete)
+            .expect_err("missing non-claim")
+            .contains(&SnapshotIssue::ReceiptNonClaimsIncomplete)
+    );
 }
 
 #[test]

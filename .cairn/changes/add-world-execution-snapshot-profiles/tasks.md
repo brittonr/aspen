@@ -1,9 +1,9 @@
 ## Phase 1: Profile and compatibility core
 
-- [ ] [depends:introduce-world-commit-core] Record baseline logical task restore, scheduler, time, entropy, effect-log, VM evidence, and ChaosControl snapshot checks. r[molten.world_snapshot.verification]
-- [ ] [serial] Define execution-profile, cohort, completeness inventory, compatibility, ownership, synchronization, restore, clone, and diagnostic DTOs. r[molten.world_snapshot.profiles] r[molten.world_snapshot.cohort]
-- [ ] [depends:world-snapshot-dtos] Implement pure logical and opaque profile validation, completeness checks, cohort comparison, and default denial for unknown profiles. r[molten.world_snapshot.logical] r[molten.world_snapshot.opaque] r[molten.world_snapshot.cohort]
-- [ ] [parallel] Add canonical Preserves descriptors, inventories, compatibility reports, restore plans, clone plans, and bounded receipts. r[molten.world_snapshot.profiles]
+- [x] [depends:introduce-world-commit-core] Record baseline logical task restore, scheduler, time, entropy, effect-log, VM evidence, and ChaosControl snapshot checks. r[molten.world_snapshot.verification]
+- [x] [serial] Define execution-profile, cohort, completeness inventory, compatibility, ownership, synchronization, restore, clone, and diagnostic DTOs. r[molten.world_snapshot.profiles] r[molten.world_snapshot.cohort]
+- [x] [depends:world-snapshot-dtos] Implement pure logical and opaque profile validation, completeness checks, cohort comparison, and default denial for unknown profiles. r[molten.world_snapshot.logical] r[molten.world_snapshot.opaque] r[molten.world_snapshot.cohort]
+- [x] [parallel] Add canonical Preserves descriptors, inventories, compatibility reports, restore plans, clone plans, and bounded receipts. r[molten.world_snapshot.profiles]
 
 ## Phase 2: Restore and clone adapters
 
