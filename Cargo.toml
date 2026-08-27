@@ -37,6 +37,10 @@ profiler-perf = ["profiler", "flux-profiler/perf"]
 name = "molten"
 path = "src/main.rs"
 
+[[bin]]
+name = "molten-native-extension-fixture"
+path = "src/bin/molten-native-extension-fixture.rs"
+
 [dependencies]
 artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }

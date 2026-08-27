@@ -7,6 +7,7 @@
 mod dispatch;
 mod lifecycle;
 mod manifest;
+mod native_host;
 mod supervision;
 
 #[cfg(test)]
@@ -15,6 +16,7 @@ mod tests;
 pub use dispatch::*;
 pub use lifecycle::*;
 pub use manifest::*;
+pub use native_host::*;
 pub use supervision::*;
 
 pub const SYSTEM_EXTENSION_MANIFEST_SCHEMA: &str = "molten.system-extension.manifest.v1";

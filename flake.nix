@@ -585,6 +585,19 @@
           cp ${./checks/fabric-execution-octet/src/fabric.rs} "$out/src/fabric.rs"
           cp -R ${./crates/molten-core/src/fabric_execution} "$out/src/fabric_execution"
         '';
+        nativeSystemExtensionOctetWorkspace =
+          pkgs.runCommand "molten-native-system-extension-octet-workspace" { }
+            ''
+              mkdir -p "$out/src/system_extension"
+              cp ${./checks/native-system-extension-octet/Cargo.toml} "$out/Cargo.toml"
+              cp ${./checks/native-system-extension-octet/Cargo.lock} "$out/Cargo.lock"
+              cp ${./checks/native-system-extension-octet/dylint.toml} "$out/dylint.toml"
+              cp ${./checks/native-system-extension-octet/src/lib.rs} "$out/src/lib.rs"
+              cp ${./checks/native-system-extension-octet/src/system_extension/mod.rs} \
+                "$out/src/system_extension/mod.rs"
+              cp -R ${./crates/molten-core/src/system_extension/native_host} \
+                "$out/src/system_extension/native_host"
+            '';
         worldCommitOctetWorkspace = pkgs.runCommand "molten-world-commit-octet-workspace" { } ''
           mkdir -p "$out/src"
           cp ${./checks/world-commit-octet/Cargo.toml} "$out/Cargo.toml"
@@ -999,6 +1012,55 @@
                   fi
                   test "$(rg -l 'pub trait ExecutionFabricPort' src/fabric_execution | wc -l)" -eq 1
                   rg -Fq 'pub trait ExecutionFabricPort' src/fabric_execution/ports.rs
+                  touch "$out"
+                '';
+            nativeSystemExtensionHostProfileCheck =
+              pkgs.runCommand "molten-native-system-extension-host-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=docs/native-system-extension-host/profile.ncl
+                  generated=docs/native-system-extension-host/generated/profile.json
+                  nickel format --check \
+                    docs/native-system-extension-host/contracts.ncl \
+                    "$profile" \
+                    docs/native-system-extension-host/fixtures/valid.ncl \
+                    docs/native-system-extension-host/fixtures/negative/*.ncl
+                  nickel export "$profile" --format json > "$TMPDIR/profile.json"
+                  diff -u "$generated" "$TMPDIR/profile.json"
+                  nickel export docs/native-system-extension-host/fixtures/valid.ncl --format json \
+                    > "$TMPDIR/valid.json"
+                  for fixture in docs/native-system-extension-host/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative native-host profile fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if rg -n 'std::process::Command|Command::new' src/system_extension/native_host; then
+                    echo 'native host bypasses the bounded execution fabric port' >&2
+                    exit 1
+                  fi
+                  if rg -n -i 'kiln|mantle|cairn' \
+                    --glob '!**/tests.rs' \
+                    --glob '!tests/**' \
+                    crates/molten-core/src/system_extension/native_host \
+                    src/system_extension/native_host \
+                    src/node/nativesystemextension.rs; then
+                    echo 'native host contains a workload-specific branch' >&2
+                    exit 1
+                  fi
+                  rg -Fq 'ExecutionFabricPort' src/system_extension/native_host/executor.rs
+                  rg -Fq 'NativeHostJournal' src/system_extension/native_host/journal.rs
+                  rg -Fq 'molten-native-extension-fixture' Cargo.toml
                   touch "$out"
                 '';
             fabricMembershipPlacementProfileCheck =
@@ -1635,6 +1697,18 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            native-system-extension-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = nativeSystemExtensionOctetWorkspace;
+                packages = [ "molten-native-system-extension-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/native-system-extension-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
             world-commit-octet-deny-all =
               assert executableExtentOctetAdmitted;
               (executable-extent-octet.lib.mkConsumerCheck {
@@ -1710,6 +1784,7 @@
             wasm-component-profile = wasmComponentProfileCheck;
             wasm-component-performance-profile = wasmComponentPerformanceProfileCheck;
             fabric-execution-profile = fabricExecutionProfileCheck;
+            native-system-extension-host-profile = nativeSystemExtensionHostProfileCheck;
             fabric-membership-placement-profile = fabricMembershipPlacementProfileCheck;
             fabric-cryptographic-identity-profile = fabricCryptographicIdentityProfileCheck;
             fabric-observability-profile = fabricObservabilityProfileCheck;

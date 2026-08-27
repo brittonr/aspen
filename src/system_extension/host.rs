@@ -20,6 +20,7 @@ use super::ExecutionProfile;
 use super::FailureClass;
 use super::LifecycleEvent;
 use super::LifecycleEventKind;
+use super::LifecyclePhase;
 use super::LifecycleState;
 use super::MigrationOperation;
 use super::OperatorStatus;
@@ -193,12 +194,61 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         &self.state
     }
 
+    // r[impl molten.system_extension.native_host.recovery]
+    pub fn from_recovered_state(
+        admitted: CanonicalAdmittedSystemExtensionManifest,
+        executor: E,
+        state: LifecycleState,
+        usage: ResourceUsage,
+        invocation_sequence: u64,
+        event_sequence: u64,
+        last_lifecycle_ref: Option<String>,
+    ) -> Result<Self> {
+        let actual = executor.execution_profile();
+        let expected = admitted.manifest().execution_profile;
+        if actual != expected {
+            return Err(MoltenError::invalid_harness("recovered system-extension executor profile mismatch"));
+        }
+        if state.generation < admitted.manifest().initial_generation || state.phase == LifecyclePhase::Absent {
+            return Err(MoltenError::invalid_harness(
+                "recovered system-extension state is not compatible with the admitted manifest",
+            ));
+        }
+        if !usage.is_idle() {
+            return Err(MoltenError::invalid_harness("recovered system-extension state contains live resource usage"));
+        }
+        Ok(Self {
+            admitted,
+            executor,
+            state,
+            usage,
+            invocation_sequence,
+            event_sequence,
+            observations: BTreeMap::new(),
+            execution_binding_refs: Vec::new(),
+            evidence: Vec::new(),
+            last_lifecycle_ref,
+        })
+    }
+
     pub const fn usage(&self) -> ResourceUsage {
         self.usage
     }
 
     pub fn executor(&self) -> &E {
         &self.executor
+    }
+
+    pub fn executor_mut(&mut self) -> &mut E {
+        &mut self.executor
+    }
+
+    pub const fn invocation_sequence(&self) -> u64 {
+        self.invocation_sequence
+    }
+
+    pub const fn event_sequence(&self) -> u64 {
+        self.event_sequence
     }
 
     pub fn evidence(&self) -> &[HostEvidence] {
@@ -238,6 +288,16 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         logical_tick: u64,
     ) -> Result<HostDispatchResult> {
         let event = self.build_event(CallbackKind::Request, Some(payload_ref), accounted_bytes, logical_tick)?;
+        self.dispatch(event)
+    }
+
+    pub fn dispatch_message(
+        &mut self,
+        payload_ref: &str,
+        accounted_bytes: u64,
+        logical_tick: u64,
+    ) -> Result<HostDispatchResult> {
+        let event = self.build_event(CallbackKind::Message, Some(payload_ref), accounted_bytes, logical_tick)?;
         self.dispatch(event)
     }
 
@@ -435,6 +495,17 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
 
     pub fn remove(&mut self) -> Result<CanonicalLifecycleReceipt> {
         self.apply_simple_transition(LifecycleEventKind::Remove)
+    }
+
+    // r[impl molten.system_extension.native_host.recovery]
+    pub fn observe_host_loss(&mut self) -> Result<CanonicalLifecycleReceipt> {
+        self.apply_transition(LifecycleEvent {
+            kind: LifecycleEventKind::Failure,
+            generation: self.state.generation,
+            next_generation: None,
+            checkpoint_ref: None,
+            failure_class: Some(FailureClass::Retryable),
+        })
     }
 
     // r[impl molten.system_extension.supervision]

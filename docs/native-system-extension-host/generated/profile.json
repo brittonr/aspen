@@ -1,0 +1,71 @@
+{
+  "local_live_pilot": {
+    "alpn": "molten/system-extension/native/v1",
+    "authorities": [
+      "execution",
+      "resources",
+      "supervision",
+      "evidence"
+    ],
+    "bounds": {
+      "callback_input_bytes": 1048576,
+      "callback_output_bytes": 1048576,
+      "diagnostic_bytes": 1048576,
+      "instances": 16,
+      "policy_refs": 64,
+      "port_bindings": 64,
+      "unresolved_operations": 256
+    },
+    "claim_level": "local-live-pilot",
+    "environment_mode": "clear",
+    "executable_evidence": [
+      "executable-bytes",
+      "artifact-kind",
+      "target",
+      "dependency-closure",
+      "materialization",
+      "provenance",
+      "source-gate",
+      "policy",
+      "authority",
+      "resources",
+      "execution-profile"
+    ],
+    "execution_port_profile": "bounded-process-live-v1",
+    "execution_profile": "native-process",
+    "framing": "preserves-packed-single-frame-v1",
+    "lifecycle": [
+      "install",
+      "start",
+      "request",
+      "status",
+      "recover",
+      "drain",
+      "stop",
+      "remove"
+    ],
+    "non_claims": [
+      "does-not-prove-sandboxing",
+      "does-not-prove-hermeticity",
+      "does-not-prove-executable-trust",
+      "does-not-prove-callback-correctness",
+      "does-not-prove-effect-success",
+      "does-not-prove-transport-delivery",
+      "does-not-prove-distributed-availability",
+      "does-not-prove-production-readiness"
+    ],
+    "ports": [
+      "execution",
+      "durability",
+      "content",
+      "transport",
+      "time",
+      "scheduling",
+      "evidence"
+    ],
+    "process_per_callback": true,
+    "profile_id": "native-host-local-pilot-v1",
+    "schema": "molten.system-extension.native-host-profile.v1",
+    "transport_profile": "iroh-native-extension-local-v1"
+  }
+}

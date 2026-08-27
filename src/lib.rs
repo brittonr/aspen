@@ -135,6 +135,8 @@ compat_module!(nixos_vm, machine);
 #[doc(hidden)]
 #[path = "node/daemon.rs"]
 pub mod daemon_core;
+#[path = "node/nativesystemextension.rs"]
+pub mod nativehostnode;
 #[path = "node/state.rs"]
 pub mod node_state;
 compat_module!(node_daemon, daemon_core);

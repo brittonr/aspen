@@ -24,6 +24,7 @@ Molten is a workload-neutral, policy-gated distributed-systems fabric built arou
 
 - Pure primitives own deterministic laws and plans; capability-rooted adapters perform external effects without defining authority; optional manifest-installed system extensions own distributed-service semantics.
 - Executable system extensions use a distinct system-tier manifest, exact fabric-port bindings, active-generation callback fencing, finite resources, bounded supervision, and canonical status/evidence; ordinary plugin metadata or artifact possession cannot activate that tier.
+- The native system-extension pilot runs one process per callback through Bounded Exec, persists callback and effect intent, recovers canonical instance state, and exposes exact acknowledged ingress. See [`docs/native-system-extension-host.md`](docs/native-system-extension-host.md).
 - Fabric time keeps wall, monotonic, logical, and virtual values non-interchangeable; timers and runnable scheduling are bounded and generation-fenced, while entropy is purpose/capability-bound and secret-free in evidence.
 - Fabric membership keeps connectivity, suspicion, source-scoped membership, advisory placement, committed assignment, capability authority, and consistency ordering separate; role effects require generation/epoch/token fencing.
 - Fabric cryptographic identity uses opaque purpose-scoped handles, canonical signature domains, admitted Ed25519 entropy and storage, generation-fenced rotation, and public-only status; identity and verification do not grant membership or authority.

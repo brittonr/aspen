@@ -4,6 +4,7 @@
   "roots": [
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-kiln-runtime-backend#molten@0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-kiln-runtime-backend#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-kiln-runtime-backend#molten@0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-kiln-runtime-backend/crates/molten-core#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-kiln-runtime-backend/crates/molten-node-host#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-kiln-runtime-backend/crates/molten-release-policy#0.1.0",
@@ -16,7 +17,7 @@
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-kiln-runtime-backend/crates/molten-release-policy#0.1.0"
   },
   "cargoLockHash": "f536b5e2366647f196b853383f30612f2838413094f20d0bc73a586a668903fc",
-  "inputsHash": "16f8064f565ad01ec30e3efe8b07b4d1ed4e6bb94478419b7f057393b5fa879d",
+  "inputsHash": "55390c8d27e09b3dea038b2910c07b11be2ba864ec21152f562f6d043b88d758",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -1023,6 +1024,10 @@
         {
           "name": "molten",
           "path": "src/main.rs"
+        },
+        {
+          "name": "molten-native-extension-fixture",
+          "path": "src/bin/molten-native-extension-fixture.rs"
         }
       ],
       "links": null,
