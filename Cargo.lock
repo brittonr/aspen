@@ -760,6 +760,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "chaoscontrol-snapshot-descriptor"
+version = "0.1.0"
+source = "git+ssh://git@github.com/brittonr/chaoscontrol.git?rev=7433557b85990f0f07a37ca44b97fef26c2a4c7e#7433557b85990f0f07a37ca44b97fef26c2a4c7e"
+dependencies = [
+ "blake3",
+ "serde",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "choregraph-history"
 version = "0.1.0"
 source = "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19750f53bdbcae970cdf58a47a791ed20b"
@@ -3919,6 +3929,7 @@ dependencies = [
  "cap-fs-ext",
  "cap-std",
  "cap-tempfile",
+ "chaoscontrol-snapshot-descriptor",
  "choregraph-history",
  "clap 4.6.1",
  "data-encoding",

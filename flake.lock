@@ -262,6 +262,23 @@
         "type": "github"
       }
     },
+    "chaoscontrol-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787796569,
+        "narHash": "sha256-2EoR2K/arpS0lAmKgec+Bj/YK/JyLBU+bB2va/BE/Gc=",
+        "owner": "brittonr",
+        "repo": "chaoscontrol",
+        "rev": "7433557b85990f0f07a37ca44b97fef26c2a4c7e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "brittonr",
+        "repo": "chaoscontrol",
+        "rev": "7433557b85990f0f07a37ca44b97fef26c2a4c7e",
+        "type": "github"
+      }
+    },
     "charon": {
       "inputs": {
         "crane": "crane",
@@ -1509,6 +1526,7 @@
         "artifact-src": "artifact-src",
         "basalt-src": "basalt-src",
         "cairn-src": "cairn-src",
+        "chaoscontrol-src": "chaoscontrol-src",
         "choregraph-src": "choregraph-src",
         "executable-extent-octet": "executable-extent-octet",
         "executable-extent-src": "executable-extent-src",

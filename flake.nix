@@ -32,6 +32,10 @@
       url = "git+rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b";
       flake = false;
     };
+    chaoscontrol-src = {
+      url = "github:brittonr/chaoscontrol/7433557b85990f0f07a37ca44b97fef26c2a4c7e";
+      flake = false;
+    };
     executable-extent-src = {
       url = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f";
       flake = false;
@@ -92,6 +96,7 @@
       basalt-src,
       artifact-src,
       choregraph-src,
+      chaoscontrol-src,
       executable-extent-src,
       executable-extent-octet,
       mantle-executable-extent-src,
@@ -216,6 +221,28 @@
             && choregraphHistoryManifest.package.name == "choregraph-history"
           ) "Molten Choregraph branch-history Cargo/Nix source identity, package, or license drifted";
           choregraph-src;
+        chaoscontrolRevision = "7433557b85990f0f07a37ca44b97fef26c2a4c7e";
+        chaoscontrolRepository = "ssh://git@github.com/brittonr/chaoscontrol.git";
+        chaoscontrolDependency = artifactRootDependencies.chaoscontrol-snapshot-descriptor;
+        chaoscontrolExpectedLockSource = "git+${chaoscontrolRepository}?rev=${chaoscontrolRevision}#${chaoscontrolRevision}";
+        chaoscontrolLockPackages = builtins.filter (
+          package: (package.source or "") == chaoscontrolExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        chaoscontrolSnapshotManifest = builtins.fromTOML (
+          builtins.readFile (chaoscontrol-src + "/crates/chaoscontrol-snapshot-descriptor/Cargo.toml")
+        );
+        chaoscontrolSource =
+          assert pkgs.lib.assertMsg (
+            chaoscontrolDependency.git == chaoscontrolRepository
+            && chaoscontrolDependency.rev == chaoscontrolRevision
+            && chaoscontrolDependency.version == "0.1.0"
+            && chaoscontrol-src.rev == chaoscontrolRevision
+            && builtins.length chaoscontrolLockPackages == 1
+            && (builtins.head chaoscontrolLockPackages).name == "chaoscontrol-snapshot-descriptor"
+            && chaoscontrolSnapshotManifest.package.name == "chaoscontrol-snapshot-descriptor"
+            && chaoscontrolSnapshotManifest.package.license == "AGPL-3.0-or-later"
+          ) "Molten ChaosControl snapshot Cargo/Nix source identity, package, or license drifted";
+          chaoscontrol-src;
         executableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f";
         executableExtentRepository = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB";
         executableExtentOctetRevision = "cf04e894e53eb0947230118a086ef6066ddba38c";
@@ -583,6 +610,14 @@
           cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
           cp -R ${./crates/molten-core/src/world_distribution} "$out/src/world_distribution"
           cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
+        '';
+        worldBenchmarkOctetWorkspace = pkgs.runCommand "molten-world-benchmark-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-benchmark-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-benchmark-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-benchmark-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-benchmark-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/world_benchmark} "$out/src/world_benchmark"
         '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
@@ -983,6 +1018,34 @@
                       exit 1
                     fi
                   done
+                  touch "$out"
+                '';
+            worldBenchmarkProfileCheck =
+              pkgs.runCommand "molten-world-benchmark-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.nickel
+                    pkgs.diffutils
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  for profile in config/world-benchmark/profiles/*.ncl
+                  do
+                    name="$(basename "$profile" .ncl)"
+                    nickel export "$profile" --format json > "$TMPDIR/$name.json"
+                    diff -u "config/world-benchmark/generated/$name.json" "$TMPDIR/$name.json"
+                  done
+                  for fixture in config/world-benchmark/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative world benchmark fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  test -f ${chaoscontrolSource}/crates/chaoscontrol-snapshot-descriptor/src/lib.rs
                   touch "$out"
                 '';
             releaseDependencyProfileCheck =
@@ -1580,6 +1643,24 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            world-benchmark-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldBenchmarkOctetWorkspace;
+                packages = [ "molten-world-benchmark-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-benchmark-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-benchmark-dependency-identity =
+              pkgs.runCommand "molten-world-benchmark-dependency-identity" { } ''
+                test -f ${chaoscontrolSource}/crates/chaoscontrol-snapshot-descriptor/src/lib.rs
+                test -f ${./crates/molten-core/src/world_benchmark/mod.rs}
+                touch "$out"
+              '';
             world-distribution-dependency-identity =
               pkgs.runCommand "molten-world-distribution-dependency-identity" { }
                 ''
@@ -1610,6 +1691,7 @@
             fabric-cryptographic-identity-profile = fabricCryptographicIdentityProfileCheck;
             fabric-observability-profile = fabricObservabilityProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
+            world-benchmark-profile = worldBenchmarkProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;
             release-profile-validation = releaseProfileValidationCheck;

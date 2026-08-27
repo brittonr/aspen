@@ -2,6 +2,8 @@ let Contracts = import "contracts.ncl" in
 let ArtifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
 let ChoregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b" in
 let ChoregraphSource = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git" in
+let ChaosControlRevision = "7433557b85990f0f07a37ca44b97fef26c2a4c7e" in
+let ChaosControlSource = "ssh://git@github.com/brittonr/chaoscontrol.git" in
 let ExecutableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f" in
 let ExecutableExtentSource = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB" in
 let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
@@ -94,6 +96,17 @@ in
       immutable_revision = ChoregraphRevision,
       nix_input = "choregraph-src",
       transport_policy = "https",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "chaoscontrol-snapshot-descriptor",
+      package_name = "chaoscontrol-snapshot-descriptor",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ChaosControlSource,
+      immutable_revision = ChaosControlRevision,
+      nix_input = "chaoscontrol-src",
+      transport_policy = "ssh-pinned-nix-archive",
       disposition = "runtime",
     },
     {

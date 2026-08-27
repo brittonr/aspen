@@ -31,6 +31,7 @@ pub mod preserves_profile;
 pub mod release_dependency;
 pub mod stack;
 pub mod system_extension;
+pub mod world_benchmark;
 #[path = "worldcommit/mod.rs"]
 pub mod world_commit;
 pub mod world_distribution;

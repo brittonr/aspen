@@ -1,137 +1,18 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827#molten@0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827/crates/molten-node-host#0.1.0"
   },
-  "cargoLockHash": "2da46e13486a76a90dec6a88bd4bd8374a2b1138e4e281e0ac4233982c8a4907",
-  "inputsHash": "7d993a3042d7b52188dbd661b3b423fc58b9ab435ab6fd5aa5a95604ca1ace16",
+  "cargoLockHash": "2fa3de2b1359967db31ca99b33679dd23648ede484527dd785e180cf7963d912",
+  "inputsHash": "32ca96abda95c5015e3ae8e9ed4821c252222f788e522c24273eaf26d8adc5e3",
   "crates": {
-    "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12": {
-      "crateName": "hegeltest-macros",
-      "version": "0.14.12",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "https://github.com/hegeldev/hegel-rust",
-        "rev": "ed949b8084595cb467e983747f1089e214965ac6",
-        "subDir": "hegel-macros",
-        "sha256": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI="
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-          "externCrateName": "proc_macro2"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-          "externCrateName": "quote"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
-          "externCrateName": "syn"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": true,
-      "build": null,
-      "libPath": null,
-      "libName": "hegel_macros",
-      "libCrateTypes": [
-        "proc-macro"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Procedural macros for Hegel.",
-      "homepage": "http://hegel.dev",
-      "license": "MIT",
-      "repository": "https://github.com/hegeldev/hegel-rust"
-    },
-    "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest@0.14.12": {
-      "crateName": "hegeltest",
-      "version": "0.14.12",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "https://github.com/hegeldev/hegel-rust",
-        "rev": "ed949b8084595cb467e983747f1089e214965ac6",
-        "sha256": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI="
-      },
-      "features": [
-        "default",
-        "native"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ciborium@0.2.2",
-          "externCrateName": "ciborium"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.0",
-          "externCrateName": "crc32fast"
-        },
-        {
-          "packageId": "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12",
-          "externCrateName": "hegel_macros"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#num-bigint@0.4.6",
-          "externCrateName": "num_bigint"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
-          "externCrateName": "num_traits"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5",
-          "externCrateName": "parking_lot"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#paste@1.0.15",
-          "externCrateName": "paste"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rand@0.10.1",
-          "externCrateName": "rand"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0",
-          "externCrateName": "tempfile"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": "hegel",
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Property-based testing for Rust, built on Hypothesis",
-      "homepage": "http://hegel.dev",
-      "license": "MIT",
-      "repository": "https://github.com/hegeldev/hegel-rust"
-    },
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
       "version": "0.1.0",
@@ -168,47 +49,6 @@
       "description": "Product-neutral bounded schema migration planning core",
       "license": "MIT",
       "repository": "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git"
-    },
-    "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-conformance@0.1.0": {
-      "crateName": "schema-identity-conformance",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git",
-        "rev": "2562c8aa38a034061f9af9f3e17280494a5b8de2",
-        "subDir": "crates/schema-identity-conformance",
-        "sha256": "1ybc6ybsgc7cigw1jnhijjlnm93wg17jmwvqbx2hq5rjmvq4dwg8"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-core@0.1.0",
-          "externCrateName": "schema_identity_core"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
-          "externCrateName": "serde_json"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Portable schema identity compatibility vectors",
-      "license": "MIT",
-      "repository": "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git"
     },
     "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-core@0.1.0": {
       "crateName": "schema-identity-core",
@@ -748,7 +588,50 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns#molten@0.1.0": {
+    "git+ssh://git@github.com/brittonr/chaoscontrol.git?rev=7433557b85990f0f07a37ca44b97fef26c2a4c7e#chaoscontrol-snapshot-descriptor@0.1.0": {
+      "crateName": "chaoscontrol-snapshot-descriptor",
+      "version": "0.1.0",
+      "edition": "2021",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/brittonr/chaoscontrol.git",
+        "rev": "7433557b85990f0f07a37ca44b97fef26c2a4c7e",
+        "subDir": "crates/chaoscontrol-snapshot-descriptor",
+        "sha256": "1xiiy60i06jc2prbjzjyzcl8v3yar0wn2z9vjr6mg8xbb8m8q2pg"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
+          "externCrateName": "sha2"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "ChaosControl Contributors"
+      ],
+      "description": "Pure portable exact-snapshot descriptor and preflight core for ChaosControl",
+      "license": "AGPL-3.0-or-later"
+    },
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -796,6 +679,10 @@
           "externCrateName": "cap_std"
         },
         {
+          "packageId": "git+ssh://git@github.com/brittonr/chaoscontrol.git?rev=7433557b85990f0f07a37ca44b97fef26c2a4c7e#chaoscontrol-snapshot-descriptor@0.1.0",
+          "externCrateName": "chaoscontrol_snapshot_descriptor"
+        },
+        {
           "packageId": "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0",
           "externCrateName": "choregraph_history"
         },
@@ -824,11 +711,11 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -925,24 +812,6 @@
         }
       ],
       "buildDependencies": [],
-      "devDependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-tempfile@3.4.5",
-          "externCrateName": "cap_tempfile"
-        },
-        {
-          "packageId": "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest@0.14.12",
-          "externCrateName": "hegel"
-        },
-        {
-          "packageId": "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-conformance@0.1.0",
-          "externCrateName": "schema_identity_conformance"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wat@1.250.0",
-          "externCrateName": "wat"
-        }
-      ],
       "procMacro": false,
       "build": null,
       "libPath": null,
@@ -960,7 +829,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1008,7 +877,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -1028,63 +897,8 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-benchmark-drain-20260827/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
-        }
-      ],
-      "buildDependencies": [],
-      "devDependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-tempfile@3.4.5",
-          "externCrateName": "cap_tempfile"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@0.9.12+spec-1.1.0",
-          "externCrateName": "toml"
-        }
-      ],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Capability-rooted node host boundary for Molten",
-      "license": "AGPL-3.0-or-later"
-    },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0": {
-      "crateName": "molten-release-policy",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "local",
-        "path": "crates/molten-release-policy"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
-          "externCrateName": "molten_core"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
-          "externCrateName": "serde_json"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@0.9.12+spec-1.1.0",
-          "externCrateName": "toml"
         }
       ],
       "buildDependencies": [],
@@ -1097,6 +911,7 @@
       ],
       "crateBin": [],
       "links": null,
+      "description": "Capability-rooted node host boundary for Molten",
       "license": "AGPL-3.0-or-later"
     },
     "registry+https://github.com/rust-lang/crates.io-index#addr2line@0.26.1": {
@@ -3184,53 +2999,6 @@
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
       "repository": "https://github.com/bytecodealliance/cap-std"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#cap-tempfile@3.4.5": {
-      "crateName": "cap-tempfile",
-      "version": "3.4.5",
-      "edition": "2021",
-      "sha256": "68d8ad5cfac469e58e632590f033d45c66415ef7a8aa801409884818036706f5",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-std@3.4.5",
-          "externCrateName": "cap_std"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4",
-          "externCrateName": "rustix"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustix-linux-procfs@0.1.1",
-          "externCrateName": "rustix_linux_procfs"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.1",
-          "externCrateName": "uuid"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Dan Gohman <dev@sunfishcode.online>",
-        "Jakub Konka <kubkon@jakubkonka.com>"
-      ],
-      "description": "Capability-based temporary directories",
-      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
-      "repository": "https://github.com/bytecodealliance/cap-std"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#cap-time-ext@3.4.5": {
       "crateName": "cap-time-ext",
       "version": "3.4.5",
@@ -3500,118 +3268,6 @@
       "homepage": "https://github.com/chronotope/chrono",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/chronotope/chrono"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#ciborium-io@0.2.2": {
-      "crateName": "ciborium-io",
-      "version": "0.2.2",
-      "edition": "2021",
-      "sha256": "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "alloc",
-        "std"
-      ],
-      "dependencies": [],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Nathaniel McCallum <npmccallum@profian.com>"
-      ],
-      "description": "Simplified Read/Write traits for no_std usage",
-      "homepage": "https://github.com/enarx/ciborium",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/enarx/ciborium"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#ciborium-ll@0.2.2": {
-      "crateName": "ciborium-ll",
-      "version": "0.2.2",
-      "edition": "2021",
-      "sha256": "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ciborium-io@0.2.2",
-          "externCrateName": "ciborium_io"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#half@2.7.1",
-          "externCrateName": "half"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Nathaniel McCallum <npmccallum@profian.com>"
-      ],
-      "description": "Low-level CBOR codec primitives",
-      "homepage": "https://github.com/enarx/ciborium",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/enarx/ciborium"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#ciborium@0.2.2": {
-      "crateName": "ciborium",
-      "version": "0.2.2",
-      "edition": "2021",
-      "sha256": "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "std"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ciborium-io@0.2.2",
-          "externCrateName": "ciborium_io"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ciborium-ll@0.2.2",
-          "externCrateName": "ciborium_ll"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Nathaniel McCallum <npmccallum@profian.com>"
-      ],
-      "description": "serde implementation of CBOR using ciborium-basic",
-      "homepage": "https://github.com/enarx/ciborium",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/enarx/ciborium"
     },
     "registry+https://github.com/rust-lang/crates.io-index#cipher@0.4.4": {
       "crateName": "cipher",
@@ -5008,7 +4664,6 @@
         "type": "crates-io"
       },
       "features": [
-        "default",
         "std"
       ],
       "dependencies": [
@@ -8590,42 +8245,6 @@
       "description": "An HTTP/2 client and server",
       "license": "MIT",
       "repository": "https://github.com/hyperium/h2"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#half@2.7.1": {
-      "crateName": "half",
-      "version": "2.7.1",
-      "edition": "2021",
-      "sha256": "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4",
-          "externCrateName": "cfg_if"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.48",
-          "externCrateName": "zerocopy"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Kathryn Long <squeeself@gmail.com>"
-      ],
-      "description": "Half-precision floating point f16 and bf16 types for Rust implementing the IEEE 754-2008 standard binary16 and bfloat16 types.",
-      "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/VoidStarKat/half-rs"
     },
     "registry+https://github.com/rust-lang/crates.io-index#hash32@0.2.1": {
       "crateName": "hash32",
@@ -27765,47 +27384,6 @@
       "license": "Unicode-3.0",
       "repository": "https://github.com/unicode-org/icu4x"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#zerocopy-derive@0.8.48": {
-      "crateName": "zerocopy-derive",
-      "version": "0.8.48",
-      "edition": "2021",
-      "sha256": "70e3cd084b1788766f53af483dd21f93881ff30d7320490ec3ef7526d203bad4",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-          "externCrateName": "proc_macro2"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-          "externCrateName": "quote"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
-          "externCrateName": "syn"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": true,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "proc-macro"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Joshua Liebow-Feeser <joshlf@google.com>",
-        "Jack Wrenn <jswrenn@amazon.com>"
-      ],
-      "description": "Custom derive for traits from the zerocopy crate",
-      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
-      "repository": "https://github.com/google/zerocopy"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.48": {
       "crateName": "zerocopy",
       "version": "0.8.48",
@@ -27815,16 +27393,9 @@
         "type": "crates-io"
       },
       "features": [
-        "derive",
-        "simd",
-        "zerocopy-derive"
+        "simd"
       ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zerocopy-derive@0.8.48",
-          "externCrateName": "zerocopy_derive"
-        }
-      ],
+      "dependencies": [],
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
