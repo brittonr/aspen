@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-commit-closure-report">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "molten-world-commit-closure-report-v1">
+  <schema-id "molten.world-commit.closure-report.v1">
+  <arity 6>>

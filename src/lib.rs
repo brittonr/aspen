@@ -99,6 +99,8 @@ pub mod testbed;
 pub mod wasm_component;
 #[path = "wasm/performance/mod.rs"]
 pub mod wasm_performance;
+#[path = "worldcommit/mod.rs"]
+pub mod world_commit;
 compat_module!(harness, testbed);
 #[doc(hidden)]
 #[path = "iroh/exchange.rs"]

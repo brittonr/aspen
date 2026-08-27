@@ -48,6 +48,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_system_extension::SystemExtensionCommand,
     },
+    WorldCommit {
+        #[command(subcommand)]
+        command: crate::cli_world_commit::WorldCommitCommand,
+    },
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -211,4 +215,38 @@ pub(crate) enum Test {
         #[command(subcommand)]
         command: crate::cli_repro::ReproCommand,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::Cli;
+    use super::Top;
+
+    const COMMIT_REF: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[test]
+    fn world_commit_operator_commands_parse_explicit_state_and_identity() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-commit",
+            "plan-restore",
+            "--state-root",
+            "state",
+            COMMIT_REF,
+            "--out",
+            "restore.preserves",
+        ])
+        .expect("world commit command");
+
+        assert!(matches!(cli.command, Some(Top::WorldCommit { .. })));
+    }
+
+    #[test]
+    fn world_commit_operator_commands_reject_missing_state_root() {
+        let result = Cli::try_parse_from(["molten", "world-commit", "inspect", COMMIT_REF]);
+
+        assert!(result.is_err());
+    }
 }

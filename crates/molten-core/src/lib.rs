@@ -29,6 +29,8 @@ pub mod preserves_profile;
 pub mod release_dependency;
 pub mod stack;
 pub mod system_extension;
+#[path = "worldcommit/mod.rs"]
+pub mod world_commit;
 
 pub mod prelude {
     pub use crate::codec::CodecIssue;
@@ -102,4 +104,20 @@ pub mod prelude {
     pub use crate::stack::default_valence_stack_adapter_rows;
     pub use crate::stack::validate_stack_evidence_envelope;
     pub use crate::stack::validate_valence_stack_adapter;
+    pub use crate::world_commit::CapturePlan;
+    pub use crate::world_commit::CaptureRequest;
+    pub use crate::world_commit::ClosureReport;
+    pub use crate::world_commit::ClosureRequest;
+    pub use crate::world_commit::RestorePlan;
+    pub use crate::world_commit::RootKind;
+    pub use crate::world_commit::SnapshotProfile;
+    pub use crate::world_commit::SnapshotProfileKind;
+    pub use crate::world_commit::WorldCommitCore;
+    pub use crate::world_commit::WorldCommitRef;
+    pub use crate::world_commit::WorldRootRef;
+    pub use crate::world_commit::compare_revision_rechecks;
+    pub use crate::world_commit::identify_world_commit;
+    pub use crate::world_commit::plan_capture;
+    pub use crate::world_commit::plan_restore;
+    pub use crate::world_commit::validate_closure;
 }
