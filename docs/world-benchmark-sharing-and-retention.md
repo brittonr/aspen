@@ -49,7 +49,7 @@ A retention result fails before receipt publication if a reachable, pinned, witn
 
 ## Snapshot boundary
 
-Opaque metrics bind the exact ChaosControl snapshot descriptor cohort at revision `7433557b85990f0f07a37ca44b97fef26c2a4c7e` and profile `exact-x86-kvm-v1`.
+Opaque metrics bind the exact ChaosControl snapshot descriptor cohort at revision `b8c440ea3b19df796542e58e8ee36200e1c3db85` and profile `exact-x86-kvm-v1`.
 
 Descriptor validity binds exact snapshot metadata only. It does not prove clone realization, replay, portability, KVM correctness, semantic equivalence, or release readiness. Logical and opaque receipts cannot enter one comparison cohort.
 

@@ -195,6 +195,11 @@ mod world_commit_port;
 mod cli_world_commit {
     pub(crate) use super::world_commit_port::*;
 }
+#[path = "cli/runtime/worldsnapshot.rs"]
+mod world_snapshot_port;
+mod cli_world_snapshot {
+    pub(crate) use super::world_snapshot_port::*;
+}
 #[path = "cli/runtime/worldhead.rs"]
 mod world_head_port;
 mod cli_world_head {

@@ -32,6 +32,7 @@ profiler = ["dep:flux-profiler"]
 profiler-alloc = ["profiler", "flux-profiler/alloc-profile"]
 profiler-disabled = ["dep:flux-profiler", "flux-profiler/disable-profiling"]
 profiler-perf = ["profiler", "flux-profiler/perf"]
+world-snapshot-vm-cohort = ["dep:vm-cohort-core"]
 
 [[bin]]
 name = "molten"
@@ -45,7 +46,7 @@ bao-tree = "0.16.0"
 basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "d913dc01e765c9b297df5fcc57dfa06aac39bc74", version = "0.1.0" }
 blake3 = "1"
 choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
-chaoscontrol-snapshot-descriptor = { git = "ssh://git@github.com/brittonr/chaoscontrol.git", rev = "7433557b85990f0f07a37ca44b97fef26c2a4c7e", version = "0.1.0" }
+chaoscontrol-snapshot-descriptor = { git = "https://github.com/brittonr/chaoscontrol.git", rev = "b8c440ea3b19df796542e58e8ee36200e1c3db85", version = "0.1.0" }
 cap-fs-ext = "3"
 cap-std = "3"
 data-encoding = { version = "2", optional = true }
@@ -80,6 +81,7 @@ toml = "0.9"
 tracing = "0.1"
 trellis = { git = "ssh://git@github.com/OnixResearch/ucan.git", rev = "2aad993027d48ff148028c537cdaf91f6e5285ca", version = "0.2.0", package = "verified-logic" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+vm-cohort-core = { git = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3", rev = "31f1696ba9391bfda8577a58af84f72361d5573e", version = "0.1.0", optional = true }
 wasmparser = "0.240"
 wasmtime = "45.0.0"
 wasmtime-wasi = "45"

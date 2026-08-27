@@ -83,4 +83,4 @@ They do not prove guest correctness, sandboxing, current authority, cross-host p
 - Exact opaque compatibility limits portability. Explicit denial is safer than silent degraded restore.
 - Opaque snapshots can be large. Content-addressed overlays and retention policy control storage growth.
 - Mixed profiles can double-count state. Ownership and synchronization facts must be explicit.
-- VM Cohort is currently plan-only. Clone tasks remain blocked until its implementation evidence exists.
+- VM Cohort remains an optional mechanism. Clone realization requires its exact published revision, complete observations, certain cleanup, and Molten-owned admission.

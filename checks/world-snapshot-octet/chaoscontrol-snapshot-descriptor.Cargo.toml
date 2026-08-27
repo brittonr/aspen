@@ -1,0 +1,13 @@
+[package]
+name = "chaoscontrol-snapshot-descriptor"
+version = "0.1.0"
+edition = "2021"
+authors = ["ChaosControl Contributors"]
+license = "AGPL-3.0-or-later"
+description = "Pure portable exact-snapshot descriptor and preflight core for ChaosControl"
+publish = false
+
+[dependencies]
+blake3 = "1.8"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"

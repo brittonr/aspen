@@ -265,18 +265,18 @@
     "chaoscontrol-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1787796569,
-        "narHash": "sha256-2EoR2K/arpS0lAmKgec+Bj/YK/JyLBU+bB2va/BE/Gc=",
-        "owner": "brittonr",
-        "repo": "chaoscontrol",
-        "rev": "7433557b85990f0f07a37ca44b97fef26c2a4c7e",
-        "type": "github"
+        "lastModified": 1787850537,
+        "narHash": "sha256-rFuxBDZY7Z9v1/KDT/C4jZJqXSOxa4XI5AQoC0pgrEU=",
+        "ref": "refs/heads/main",
+        "rev": "b8c440ea3b19df796542e58e8ee36200e1c3db85",
+        "revCount": 538,
+        "type": "git",
+        "url": "https://github.com/brittonr/chaoscontrol.git"
       },
       "original": {
-        "owner": "brittonr",
-        "repo": "chaoscontrol",
-        "rev": "7433557b85990f0f07a37ca44b97fef26c2a4c7e",
-        "type": "github"
+        "rev": "b8c440ea3b19df796542e58e8ee36200e1c3db85",
+        "type": "git",
+        "url": "https://github.com/brittonr/chaoscontrol.git"
       }
     },
     "charon": {
@@ -1545,7 +1545,8 @@
         "schema-migration-core-src": "schema-migration-core-src",
         "ucan-src": "ucan-src",
         "unit2nix": "unit2nix",
-        "valence-src": "valence-src"
+        "valence-src": "valence-src",
+        "vm-cohort-src": "vm-cohort-src"
       }
     },
     "rust-overlay": {
@@ -2289,6 +2290,23 @@
         "repo": "valence",
         "rev": "5f1c2ba5072c6f9622fa59b1af20502985f569fd",
         "type": "github"
+      }
+    },
+    "vm-cohort-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787851441,
+        "narHash": "sha256-XLBmSBNJg9D4sZJ9krzkPz46ohww/pqVNxSgIvUNfn4=",
+        "ref": "refs/heads/main",
+        "rev": "31f1696ba9391bfda8577a58af84f72361d5573e",
+        "revCount": 8,
+        "type": "git",
+        "url": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3"
+      },
+      "original": {
+        "rev": "31f1696ba9391bfda8577a58af84f72361d5573e",
+        "type": "git",
+        "url": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3"
       }
     }
   },

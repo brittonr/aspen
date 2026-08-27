@@ -16,6 +16,8 @@ Typed comparison and merge are documented in [`docs/world-state-diff-and-merge.m
 
 World replication and retention are documented in [`docs/world-distribution.md`](docs/world-distribution.md). The adapter composes bounded DAG sync, protected content replication, detached claim exchange, complete retention roots, and observation-only reachability without granting activation or deletion authority.
 
+Logical and opaque restore boundaries are documented in [`docs/world-execution-snapshots.md`](docs/world-execution-snapshots.md). The profile uses closed inventories, exact cohorts, handle recreation, current-admission rechecks, opaque merge denial, and optional fail-closed VM Cohort clone realization.
+
 Bounded sharing, mutation, replication, snapshot, and retention metrics are documented in [`docs/world-benchmark-sharing-and-retention.md`](docs/world-benchmark-sharing-and-retention.md). The rail records exact structural facts and finite-run limits without granting deletion, extraction, dependency, or release authority.
 
 The optional `executable-extents` profile is documented in [`docs/executable-extent-consumer.md`](docs/executable-extent-consumer.md). It admits one exact Mantle bundle, remeasures each member, checks current authority, maps without W+X, and emits a detached consumer receipt.
@@ -839,7 +841,6 @@ Earlier permissive grants remain valid. The current declaration applies prospect
 
 ## References
 
-- [`brittonr/chaoscontrol` at `7433557b85990f0f07a37ca44b97fef26c2a4c7e`](https://github.com/brittonr/chaoscontrol/tree/7433557b85990f0f07a37ca44b97fef26c2a4c7e) — exact portable snapshot-descriptor cohort for opaque benchmark bindings. ChaosControl retains snapshot semantics; Molten retains benchmark policy, comparisons, receipts, and extraction decisions.
 - [Dolt Prolly Tree architecture](https://www.dolthub.com/docs/architecture/storage-engine/prolly-tree/) — design reference for history-independent ordered structure, content-addressed nodes, structural sharing, and changed-region diff. Molten keeps its own canonical format, BLAKE3 domains, bounds, proofs, authority, and evidence.
 - [`dolthub/doltlite` at `10170ed82c1b12414db8d1b29d2fe9ea2a72fd88`](https://github.com/dolthub/doltlite/tree/10170ed82c1b12414db8d1b29d2fe9ea2a72fd88) — pinned optional semantic-state oracle for branch, concurrency, format, GC, and compatibility cases. DoltLite does not own Molten world identity, durable conflicts, authority, effects, or release claims.
 - [Engineering Record And Replay For Deployability](https://www.usenix.org/system/files/conference/atc17/atc17-o_callahan.pdf) — replay-boundary reference for explicit nondeterministic inputs and sealed observations. Molten adapts the principle at typed hostcalls and effect ports rather than adopting native syscall replay as world semantics.
@@ -869,3 +870,5 @@ Earlier permissive grants remain valid. The current declaration applies prospect
 - [`executable-extent`](rad://z37R1bP1kHcELs89RNbQRaqbCVKxB) — private product-neutral source for layout admission, W^X transitions, Linux mapping, and bounded conformance. Molten retains code meaning, runtime authority, world roots, receipts, storage, and release decisions. See [`docs/executable-extent-consumer.md`](docs/executable-extent-consumer.md).
 - [Mantle executable-extent producer](rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb) at `2c636b1b25353a1b0befa5af48dc68615cd686dd` — private producer reference for the exact flat-page bundle and detached producer receipt. Mantle does not grant Molten mapping or execution authority.
 - [`choregraph-history`](rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF) at `b3e08e19750f53bdbcae970cdf58a47a791ed20b` — reviewed pure branch-plan dependency. Choregraph does not own Molten branch policy, head storage, authority, conflict selection, or release decisions.
+- [`chaoscontrol-snapshot-descriptor`](https://github.com/brittonr/chaoscontrol/tree/b8c440ea3b19df796542e58e8ee36200e1c3db85/crates/chaoscontrol-snapshot-descriptor) at `b8c440ea3b19df796542e58e8ee36200e1c3db85` — reviewed portable opaque-snapshot descriptor source. ChaosControl keeps fault, scheduler, replay, guest, evidence, and release meaning.
+- [`vm-cohort`](rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3) at `31f1696ba9391bfda8577a58af84f72361d5573e` — optional product-neutral clone-planning source. Molten keeps world meaning, admission, runtime effects, evidence, and release decisions.
