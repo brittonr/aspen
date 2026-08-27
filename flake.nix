@@ -32,6 +32,14 @@
       url = "git+rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b";
       flake = false;
     };
+    chaoscontrol-src = {
+      url = "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85";
+      flake = false;
+    };
+    vm-cohort-src = {
+      url = "git+rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3?rev=31f1696ba9391bfda8577a58af84f72361d5573e";
+      flake = false;
+    };
     executable-extent-src = {
       url = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f";
       flake = false;
@@ -92,6 +100,8 @@
       basalt-src,
       artifact-src,
       choregraph-src,
+      chaoscontrol-src,
+      vm-cohort-src,
       executable-extent-src,
       executable-extent-octet,
       mantle-executable-extent-src,
@@ -216,6 +226,52 @@
             && choregraphHistoryManifest.package.name == "choregraph-history"
           ) "Molten Choregraph branch-history Cargo/Nix source identity, package, or license drifted";
           choregraph-src;
+        chaosControlRevision = "b8c440ea3b19df796542e58e8ee36200e1c3db85";
+        chaosControlRepository = "https://github.com/brittonr/chaoscontrol.git";
+        chaosControlDependency = artifactRootDependencies."chaoscontrol-snapshot-descriptor";
+        chaosControlExpectedLockSource = "git+${chaosControlRepository}?rev=${chaosControlRevision}#${chaosControlRevision}";
+        chaosControlLockPackages = builtins.filter (
+          package: (package.source or "") == chaosControlExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        chaosControlDescriptorManifest = builtins.fromTOML (
+          builtins.readFile (chaoscontrol-src + "/crates/chaoscontrol-snapshot-descriptor/Cargo.toml")
+        );
+        vmCohortRevision = "31f1696ba9391bfda8577a58af84f72361d5573e";
+        vmCohortRepository = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3";
+        vmCohortDependency = artifactRootDependencies."vm-cohort-core";
+        vmCohortExpectedLockSource = "git+${vmCohortRepository}?rev=${vmCohortRevision}#${vmCohortRevision}";
+        vmCohortLockPackages = builtins.filter (
+          package: (package.source or "") == vmCohortExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        vmCohortCoreManifest = builtins.fromTOML (
+          builtins.readFile (vm-cohort-src + "/crates/vm-cohort-core/Cargo.toml")
+        );
+        vmCohortWorkspaceManifest = builtins.fromTOML (builtins.readFile (vm-cohort-src + "/Cargo.toml"));
+        worldSnapshotSources =
+          assert pkgs.lib.assertMsg (
+            chaosControlDependency.git == chaosControlRepository
+            && chaosControlDependency.rev == chaosControlRevision
+            && chaosControlDependency.version == "0.1.0"
+            && chaoscontrol-src.rev == chaosControlRevision
+            && builtins.length chaosControlLockPackages == 1
+            && (builtins.head chaosControlLockPackages).name == "chaoscontrol-snapshot-descriptor"
+            && chaosControlDescriptorManifest.package.name == "chaoscontrol-snapshot-descriptor"
+            && chaosControlDescriptorManifest.package.license == "AGPL-3.0-or-later"
+            && vmCohortDependency.git == vmCohortRepository
+            && vmCohortDependency.rev == vmCohortRevision
+            && vmCohortDependency.version == "0.1.0"
+            && vmCohortDependency.optional
+            && vm-cohort-src.rev == vmCohortRevision
+            && builtins.length vmCohortLockPackages == 1
+            && (builtins.head vmCohortLockPackages).name == "vm-cohort-core"
+            && vmCohortCoreManifest.package.name == "vm-cohort-core"
+            && vmCohortCoreManifest.package.license.workspace
+            && vmCohortWorkspaceManifest.workspace.package.license == "MIT OR Apache-2.0"
+          ) "Molten world-snapshot ChaosControl and VM Cohort source identity drifted";
+          {
+            chaoscontrol = chaoscontrol-src;
+            vmCohort = vm-cohort-src;
+          };
         executableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f";
         executableExtentRepository = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB";
         executableExtentOctetRevision = "cf04e894e53eb0947230118a086ef6066ddba38c";
@@ -583,6 +639,40 @@
           cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
           cp -R ${./crates/molten-core/src/world_distribution} "$out/src/world_distribution"
           cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
+        '';
+        worldSnapshotOctetWorkspace = pkgs.runCommand "molten-world-snapshot-octet-workspace" { } ''
+          mkdir -p \
+            "$out/src" \
+            "$out/vendor/molten-core/src" \
+            "$out/vendor/chaoscontrol-snapshot-descriptor/src" \
+            "$out/vendor/vm-cohort-core/src"
+          cp ${./checks/world-snapshot-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-snapshot-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-snapshot-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-snapshot-octet/src/lib.rs} "$out/src/lib.rs"
+          substituteInPlace "$out/Cargo.toml" \
+            --replace-fail '@CHAOSCONTROL_SRC@/crates/chaoscontrol-snapshot-descriptor' \
+              'vendor/chaoscontrol-snapshot-descriptor' \
+            --replace-fail '@VM_COHORT_SRC@/crates/vm-cohort-core' \
+              'vendor/vm-cohort-core'
+          cp ${./checks/world-snapshot-octet/molten-core.Cargo.toml} \
+            "$out/vendor/molten-core/Cargo.toml"
+          cp ${./checks/world-snapshot-octet/molten-core.lib.rs} \
+            "$out/vendor/molten-core/src/lib.rs"
+          cp -R ${./crates/molten-core/src/worldcommit} \
+            "$out/vendor/molten-core/src/worldcommit"
+          cp -R ${./crates/molten-core/src/world_snapshot} \
+            "$out/vendor/molten-core/src/world_snapshot"
+          cp ${./checks/world-snapshot-octet/chaoscontrol-snapshot-descriptor.Cargo.toml} \
+            "$out/vendor/chaoscontrol-snapshot-descriptor/Cargo.toml"
+          cp -R ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/. \
+            "$out/vendor/chaoscontrol-snapshot-descriptor/src/"
+          cp ${./checks/world-snapshot-octet/vm-cohort-core.Cargo.toml} \
+            "$out/vendor/vm-cohort-core/Cargo.toml"
+          cp -R ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core/src/. \
+            "$out/vendor/vm-cohort-core/src/"
+          cp ${./src/world_snapshot/chaoscontrol.rs} "$out/src/chaoscontrol.rs"
+          cp -R ${./src/world_snapshot/vm} "$out/src/vm"
         '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
@@ -1580,6 +1670,35 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            world-snapshot-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldSnapshotOctetWorkspace;
+                packages = [ "molten-world-snapshot-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-snapshot-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-snapshot-dependency-identity =
+              pkgs.runCommand "molten-world-snapshot-dependency-identity"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  test -f ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/lib.rs
+                  test -f ${worldSnapshotSources.chaoscontrol}/.cairn/archive/1970-01-01-adopt-vm-cohort-mechanics/tasks.md
+                  test -f ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core/src/lib.rs
+                  test -f ${worldSnapshotSources.vmCohort}/.cairn/archive/1970-01-01-build-vm-cohort/tasks.md
+                  if rg -n 'chaoscontrol_|chaoscontrol-|molten::|molten-' \
+                    ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core; then
+                    echo "consumer-domain meaning leaked into VM Cohort core" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
             world-distribution-dependency-identity =
               pkgs.runCommand "molten-world-distribution-dependency-identity" { }
                 ''

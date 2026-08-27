@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "2da46e13486a76a90dec6a88bd4bd8374a2b1138e4e281e0ac4233982c8a4907",
-  "inputsHash": "60fbb968e26ccaed2ae5f0bfba8f94341fde07922637ff31c6266c9282ce9639",
+  "cargoLockHash": "429040a160ea8f37ca1050145ecc631b8199f95337b90bdf3dcc0b7c0884b634",
+  "inputsHash": "cad4abd63e6059444f8fd2999b10f8b6c18e47fc582074f4a81690e2e5768dd4",
   "crates": {
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
@@ -261,7 +261,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -309,7 +309,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -325,7 +325,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

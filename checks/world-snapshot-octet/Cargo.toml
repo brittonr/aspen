@@ -1,0 +1,32 @@
+[workspace]
+resolver = "3"
+members = [".", "vendor/molten-core"]
+
+[workspace.metadata.octet]
+default_scope = ["--workspace"]
+cargo_check_args = ["--all-targets", "--all-features"]
+
+[package]
+name = "molten-world-snapshot-octet"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+blake3 = "=1.8.5"
+chaoscontrol-snapshot-descriptor = { path = "@CHAOSCONTROL_SRC@/crates/chaoscontrol-snapshot-descriptor" }
+molten-core = { path = "vendor/molten-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+vm-cohort-core = { path = "@VM_COHORT_SRC@/crates/vm-cohort-core" }
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }

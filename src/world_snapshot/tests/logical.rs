@@ -6,7 +6,7 @@ use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_commit::WorldRootRef;
 use molten_core::world_snapshot::*;
 
-use super::*;
+use super::super::*;
 use crate::error::MoltenError;
 use crate::error::Result;
 

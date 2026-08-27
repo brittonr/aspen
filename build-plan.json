@@ -1,23 +1,66 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "2da46e13486a76a90dec6a88bd4bd8374a2b1138e4e281e0ac4233982c8a4907",
-  "inputsHash": "7d993a3042d7b52188dbd661b3b423fc58b9ab435ab6fd5aa5a95604ca1ace16",
+  "cargoLockHash": "429040a160ea8f37ca1050145ecc631b8199f95337b90bdf3dcc0b7c0884b634",
+  "inputsHash": "39275e9ac01d997ed664c4a8b6d96b183f27862fea11d3f3f95ed22dcbba8a2d",
   "crates": {
+    "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#chaoscontrol-snapshot-descriptor@0.1.0": {
+      "crateName": "chaoscontrol-snapshot-descriptor",
+      "version": "0.1.0",
+      "edition": "2021",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/brittonr/chaoscontrol.git",
+        "rev": "b8c440ea3b19df796542e58e8ee36200e1c3db85",
+        "subDir": "crates/chaoscontrol-snapshot-descriptor",
+        "sha256": "0csw6d72c7jqal6y4j9y55lp1bqakqb4i06rn2r8k2cn3x546y8w"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
+          "externCrateName": "sha2"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "ChaosControl Contributors"
+      ],
+      "description": "Pure portable exact-snapshot descriptor and preflight core for ChaosControl",
+      "license": "AGPL-3.0-or-later"
+    },
     "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12": {
       "crateName": "hegeltest-macros",
       "version": "0.14.12",
@@ -748,7 +791,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns#molten@0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -796,6 +839,10 @@
           "externCrateName": "cap_std"
         },
         {
+          "packageId": "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#chaoscontrol-snapshot-descriptor@0.1.0",
+          "externCrateName": "chaoscontrol_snapshot_descriptor"
+        },
+        {
           "packageId": "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0",
           "externCrateName": "choregraph_history"
         },
@@ -824,11 +871,11 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -960,7 +1007,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1008,7 +1055,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -1028,7 +1075,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -1055,7 +1102,7 @@
       "description": "Capability-rooted node host boundary for Molten",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -1071,7 +1118,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-snapshot-drain-20260827/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

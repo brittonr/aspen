@@ -1,0 +1,22 @@
+[package]
+name = "vm-cohort-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3"
+publish = false
+description = "no_std deterministic VM cohort admission and lifecycle core"
+
+[dependencies]
+blake3 = { version = "1.8.2", default-features = false }
+serde = { version = "1", default-features = false, features = ["alloc", "derive", "rc"] }
+
+[lints.rust]
+missing_docs = "deny"
+unsafe_code = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"

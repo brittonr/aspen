@@ -75,6 +75,8 @@ pub trait OpaqueSnapshotRestorePort {
         descriptor: &SnapshotDescriptor,
         destination: &SnapshotCohort,
     ) -> Result<Vec<SnapshotStepObservation>>;
+
+    fn activate(&mut self, descriptor_ref: &str) -> Result<String>;
 }
 
 pub trait SnapshotObservationPort {

@@ -1,0 +1,244 @@
+{
+  "schema": "chaoscontrol-snapshot-descriptor-v1",
+  "descriptor_version": 1,
+  "completeness_profile": "exact-x86-kvm-v1",
+  "state_schema_version": 2,
+  "architecture": "x86_64",
+  "runtime": {
+    "runtime_build": {
+      "algorithm": "blake3",
+      "hex": "0f78d40ce02ec803fb5f7c786d5a8019f83c9996a0e99b8aa9446e4a9d83673f"
+    },
+    "kvm_operations": [
+      "kvm-clock-v1",
+      "kvm-debug-registers-v1",
+      "kvm-fpu-v1",
+      "kvm-irqchip-v1",
+      "kvm-lapic-v1",
+      "kvm-mp-state-v1",
+      "kvm-msrs-v1",
+      "kvm-pit2-v1",
+      "kvm-registers-v1",
+      "kvm-special-registers-v1",
+      "kvm-vcpu-events-v1",
+      "kvm-xcrs-v1",
+      "kvm-xsave-v1"
+    ],
+    "scheduler_profile": "exact-single-step-v1",
+    "time_profile": "virtual-tsc-v1",
+    "entropy_profile": "seeded-chacha20-v1"
+  },
+  "topology": {
+    "vcpu_count": 2,
+    "memory_bytes": 134217728,
+    "msr_indices": [
+      16,
+      27
+    ],
+    "devices": [
+      {
+        "identity": {
+          "base_address": 4096,
+          "irq": 5,
+          "device_id": 2
+        },
+        "queue_count": 1,
+        "backend": "block"
+      },
+      {
+        "identity": {
+          "base_address": 8192,
+          "irq": 6,
+          "device_id": 1
+        },
+        "queue_count": 1,
+        "backend": "network"
+      },
+      {
+        "identity": {
+          "base_address": 12288,
+          "irq": 7,
+          "device_id": 4
+        },
+        "queue_count": 1,
+        "backend": "entropy"
+      }
+    ]
+  },
+  "state_owners": [
+    {
+      "owner_id": "counters",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "coverage",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "deterministic-time",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "entropy",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "fault-engine",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "guest-memory",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "in-kernel-clock",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "in-kernel-irqchip",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "in-kernel-pit",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "panic-detector",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "scheduler",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "serial",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "timer",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "vcpu:0:architecture",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "vcpu:0:events",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "vcpu:0:msrs",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "vcpu:0:xsave",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "vcpu:1:architecture",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "vcpu:1:events",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "vcpu:1:msrs",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "vcpu:1:xsave",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "virtio:0000000000001000:5:2:backend:block",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "virtio:0000000000001000:5:2:queue:0",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "virtio:0000000000001000:5:2:transport",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "virtio:0000000000002000:6:1:backend:network",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "virtio:0000000000002000:6:1:queue:0",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "virtio:0000000000002000:6:1:transport",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "virtio:0000000000003000:7:4:backend:entropy",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "virtio:0000000000003000:7:4:queue:0",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "virtio:0000000000003000:7:4:transport",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    },
+    {
+      "owner_id": "vmm-determinism",
+      "schema_id": "chaoscontrol-state-owner-v1"
+    }
+  ],
+  "guest_artifacts": [
+    {
+      "role": "kernel",
+      "content": {
+        "digest": {
+          "algorithm": "blake3",
+          "hex": "ae302ff07df9fb87c384ff6e92c4494691f498529f7e51e497d8ee1be285bad3"
+        },
+        "length_bytes": 30,
+        "codec": "linux-kernel-image-v1"
+      }
+    },
+    {
+      "role": "initrd",
+      "content": {
+        "digest": {
+          "algorithm": "blake3",
+          "hex": "7e70b30e54f571fb370270d315110fd6be3739b4d6648f590ff97818d836f78d"
+        },
+        "length_bytes": 30,
+        "codec": "linux-initrd-v1"
+      }
+    }
+  ],
+  "payload": {
+    "kind": "monolithic",
+    "logical_payload": {
+      "digest": {
+        "algorithm": "sha256",
+        "hex": "686c354c499261c330176d9df93d721e24c9f55eb67eac921e74cd9e42807939"
+      },
+      "length_bytes": 38,
+      "codec": "simulation-snapshot-cbor-zstd-v2"
+    },
+    "manifest": null,
+    "members": [
+      {
+        "order": 0,
+        "role": "snapshot-payload",
+        "content": {
+          "digest": {
+            "algorithm": "sha256",
+            "hex": "686c354c499261c330176d9df93d721e24c9f55eb67eac921e74cd9e42807939"
+          },
+          "length_bytes": 38,
+          "codec": "simulation-snapshot-cbor-zstd-v2"
+        }
+      }
+    ]
+  }
+}

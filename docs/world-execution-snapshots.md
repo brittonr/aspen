@@ -8,7 +8,7 @@ Molten owns world meaning, logical roots, restore ordering, current admission, a
 
 ChaosControl owns exact machine-snapshot meaning, completeness, compatibility, and machine reconstruction for an admitted opaque cohort.
 
-VM Cohort can own copy-on-write clone mechanics after it publishes implementation and pilot evidence. Molten retains workload, authority, scheduling, retention, and release decisions.
+VM Cohort owns the pinned copy-on-write planning contract at `31f1696ba9391bfda8577a58af84f72361d5573e`. Molten retains workload, authority, scheduling, retention, and release decisions.
 
 No snapshot profile owns current authority or mutable branch heads.
 
@@ -49,7 +49,7 @@ Its cohort binds architecture, runtime build and ABI, KVM state profile, CPU fea
 
 All cohort fields must match. Molten does not fall back to logical restoration after an opaque mismatch.
 
-The current ChaosControl candidate is local and unarchived. Molten therefore exposes an opaque port but does not pin or invoke that implementation.
+Molten pins `chaoscontrol-snapshot-descriptor` at consumer revision `b8c440ea3b19df796542e58e8ee36200e1c3db85`. The adapter validates the exact portable descriptor and maps it without importing ChaosControl policy types.
 
 ## Host handles and authority
 
@@ -65,7 +65,11 @@ A clone plan binds one parent and distinct memory, device, disk, and endpoint ov
 
 The pure core rejects an empty child set, parent mismatch, missing overlay, oversized identity, and any overlay collision.
 
-Clone realization remains blocked. The observed VM Cohort checkout has no implementation package, and no independent ChaosControl pilot is available.
+Molten maps each child to one VM Cohort clone and retains both Molten overlays and VM Cohort private-surface identities.
+
+An explicit materialization fact supplies effective disk size. Descriptor possession cannot invent missing disk bytes.
+
+Realization runs only through `VmCohortRealizationPort`, which is implemented by an admitted ChaosControl adapter. Molten rejects partial activation, cleanup uncertainty, crossed plans, malformed receipts, and product-authority overclaims.
 
 ## Merge and synchronization
 
@@ -74,6 +78,12 @@ Logical roots can enter only their accepted root-specific merge modes.
 Divergent opaque machine roots cannot enter semantic merge. Operators must select one branch, restore an ancestor, or reconcile through application logic.
 
 The current closed profiles reject synchronization claims. Future mixed-profile work needs explicit ownership and synchronization evidence before admission.
+
+## Operator commands
+
+`molten world-snapshot inspect`, `compatibility`, `restore-plan`, and `clone-plan` read or write canonical bounded artifacts.
+
+`molten world-snapshot restore` has no ambient runtime adapter. It writes a canonical denial receipt and fails until an admitted shell supplies the restore capability.
 
 ## Canonical records
 
@@ -97,7 +107,7 @@ Snapshot records do not prove:
 - current authority;
 - host-handle transfer;
 - logical and opaque semantic equivalence;
-- clone implementation or isolation;
+- clone realization correctness or isolation beyond recorded observations;
 - release eligibility.
 
-The active Cairn remains open until exact ChaosControl and VM Cohort dependencies become durable and all adapter tests pass.
+Cargo, Cargo lock, Nix, Nix lock, the release profile, and generated plans bind both reviewed revisions. Focused tests preserve all authority and portability non-claims.

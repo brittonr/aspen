@@ -3,8 +3,10 @@ use std::collections::BTreeMap;
 use molten_core::world_snapshot::*;
 
 use super::CanonicalSnapshotArtifact;
+use super::ChaosControlSnapshotDescriptorPort;
 use super::CurrentSnapshotAdmissionPort;
 use super::LogicalSnapshotRestorePort;
+use super::OpaqueSnapshotRestorePort;
 use super::SnapshotAdmissionObservation;
 use super::SnapshotHostHandlePort;
 use super::SnapshotMaterializationObservation;
@@ -28,6 +30,24 @@ pub struct LogicalSnapshotPorts<'a, M, A, H, R, P> {
 
 #[derive(Debug, Clone)]
 pub struct LogicalSnapshotRestoreOutcome {
+    pub descriptor: CanonicalSnapshotArtifact,
+    pub compatibility: CanonicalSnapshotArtifact,
+    pub plan: CanonicalSnapshotArtifact,
+    pub receipt: CanonicalSnapshotArtifact,
+    pub observations: Vec<SnapshotStepObservation>,
+}
+
+pub struct OpaqueSnapshotPorts<'a, M, C, A, H, R, P> {
+    pub materialization: &'a mut M,
+    pub chaoscontrol: &'a mut C,
+    pub admission: &'a mut A,
+    pub handles: &'a mut H,
+    pub runtime: &'a mut R,
+    pub receipts: &'a mut P,
+}
+
+#[derive(Debug, Clone)]
+pub struct OpaqueSnapshotRestoreOutcome {
     pub descriptor: CanonicalSnapshotArtifact,
     pub compatibility: CanonicalSnapshotArtifact,
     pub plan: CanonicalSnapshotArtifact,
@@ -150,6 +170,135 @@ where
     let canonical_receipt = canonical_snapshot_receipt(&receipt_input)?;
     ports.receipts.publish_receipt(&canonical_receipt.artifact_ref, &canonical_receipt.bytes)?;
     Ok(LogicalSnapshotRestoreOutcome {
+        descriptor: canonical_descriptor,
+        compatibility: canonical_compatibility,
+        plan: canonical_plan,
+        receipt: canonical_receipt,
+        observations,
+    })
+}
+
+/// Restores one exact opaque snapshot through the admitted ChaosControl profile.
+///
+/// # Errors
+///
+/// Returns a bounded error for descriptor drift, unavailable components, stale
+/// admission, wrong restore observations, handle failure, or activation failure.
+// r[impl molten.world_snapshot.opaque]
+// r[impl molten.world_snapshot.restore]
+pub fn restore_opaque_snapshot<M, C, A, H, R, P>(
+    descriptor: &SnapshotDescriptor,
+    destination: &SnapshotCohort,
+    ports: OpaqueSnapshotPorts<'_, M, C, A, H, R, P>,
+) -> Result<OpaqueSnapshotRestoreOutcome>
+where
+    M: SnapshotMaterializationPort,
+    C: ChaosControlSnapshotDescriptorPort,
+    A: CurrentSnapshotAdmissionPort,
+    H: SnapshotHostHandlePort,
+    R: OpaqueSnapshotRestorePort,
+    P: SnapshotReceiptPort,
+{
+    if descriptor.class != SnapshotClass::Opaque {
+        return Err(MoltenError::invalid_harness("opaque snapshot restore rejects non-opaque profiles"));
+    }
+    let canonical_descriptor = canonical_snapshot_descriptor(descriptor)?;
+    let compatibility_report = validate_snapshot(descriptor, destination);
+    let canonical_compatibility = canonical_snapshot_compatibility(&compatibility_report)?;
+    if compatibility_report.verdict != CompatibilityVerdict::Compatible {
+        return Err(MoltenError::invalid_harness(format!(
+            "opaque snapshot restore denied: {:?}",
+            compatibility_report.issues
+        )));
+    }
+    let chaos_observation = ports.chaoscontrol.observe_descriptor(descriptor)?;
+    let machine_descriptor = descriptor
+        .components
+        .iter()
+        .find(|component| component.kind == SnapshotComponentKind::MachineDescriptor)
+        .ok_or_else(|| MoltenError::invalid_harness("opaque machine descriptor is missing"))?;
+    if chaos_observation.descriptor_ref != machine_descriptor.identity
+        || chaos_observation.cohort_ref != destination.cohort_ref.as_str()
+        || !chaos_observation.available
+        || !chaos_observation.identity_verified
+    {
+        return Err(MoltenError::invalid_harness("ChaosControl descriptor observation is unavailable or drifted"));
+    }
+    let initial_admission =
+        ports.admission.observe_current(descriptor, &canonical_descriptor.artifact_ref, destination)?;
+    validate_admission(&initial_admission, descriptor, destination, &canonical_descriptor.artifact_ref, None)?;
+    let restore_plan = plan_restore(descriptor, destination, true).map_err(|report| {
+        MoltenError::invalid_harness(format!("opaque snapshot restore denied: {:?}", report.issues))
+    })?;
+    let canonical_plan = canonical_snapshot_restore_plan(&restore_plan)?;
+    let materializations = materialize_complete_inventory(descriptor, ports.materialization)?;
+    let mut observations = vec![
+        SnapshotStepObservation {
+            step: SnapshotRestoreStep::VerifyClosure,
+            observation_ref: canonical_descriptor.artifact_ref.clone(),
+        },
+        SnapshotStepObservation {
+            step: SnapshotRestoreStep::VerifyCohort,
+            observation_ref: canonical_compatibility.artifact_ref.clone(),
+        },
+        SnapshotStepObservation {
+            step: SnapshotRestoreStep::MaterializeArtifacts,
+            observation_ref: materialization_for(&materializations, SnapshotComponentKind::Artifact)?
+                .observation_ref
+                .clone(),
+        },
+    ];
+    let restored = ports.runtime.restore_exact(descriptor, destination)?;
+    if restored.is_empty()
+        || restored.len() > MAX_SNAPSHOT_COMPONENTS
+        || restored.iter().any(|observation| observation.step != SnapshotRestoreStep::RestoreOpaqueMachine)
+    {
+        return Err(MoltenError::invalid_harness(
+            "ChaosControl restore observations are empty, overbound, or use the wrong step",
+        ));
+    }
+    for observation in &restored {
+        validate_ref(&observation.observation_ref, "ChaosControl opaque restore observation")?;
+    }
+    observations.extend(restored);
+    let handle_ref = ports.handles.recreate_handles(&canonical_descriptor.artifact_ref)?;
+    validate_ref(&handle_ref, "opaque host-handle recreation observation")?;
+    observations.push(SnapshotStepObservation {
+        step: SnapshotRestoreStep::RecreateHostHandles,
+        observation_ref: handle_ref,
+    });
+    let final_admission =
+        ports.admission.observe_current(descriptor, &canonical_descriptor.artifact_ref, destination)?;
+    validate_admission(
+        &final_admission,
+        descriptor,
+        destination,
+        &canonical_descriptor.artifact_ref,
+        Some(initial_admission.generation),
+    )?;
+    observations.push(SnapshotStepObservation {
+        step: SnapshotRestoreStep::RecheckCurrentAdmission,
+        observation_ref: final_admission.admission_ref.clone(),
+    });
+    let activation_ref = ports.runtime.activate(&canonical_descriptor.artifact_ref)?;
+    validate_ref(&activation_ref, "opaque snapshot activation observation")?;
+    observations.push(SnapshotStepObservation {
+        step: SnapshotRestoreStep::ActivateRuntime,
+        observation_ref: activation_ref,
+    });
+    let receipt_input = SnapshotReceipt {
+        decision: SnapshotReceiptDecision::Restored,
+        descriptor_ref: canonical_descriptor.artifact_ref.clone(),
+        compatibility_ref: canonical_compatibility.artifact_ref.clone(),
+        restore_plan_ref: Some(canonical_plan.artifact_ref.clone()),
+        clone_plan_ref: None,
+        current_admission_ref: Some(final_admission.admission_ref),
+        issues: Vec::new(),
+        non_claims: SNAPSHOT_NON_CLAIMS.iter().map(ToString::to_string).collect(),
+    };
+    let canonical_receipt = canonical_snapshot_receipt(&receipt_input)?;
+    ports.receipts.publish_receipt(&canonical_receipt.artifact_ref, &canonical_receipt.bytes)?;
+    Ok(OpaqueSnapshotRestoreOutcome {
         descriptor: canonical_descriptor,
         compatibility: canonical_compatibility,
         plan: canonical_plan,

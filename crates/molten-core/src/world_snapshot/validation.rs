@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use super::model::*;
+use super::operation::*;
 
 pub fn validate_snapshot(descriptor: &SnapshotDescriptor, destination: &SnapshotCohort) -> CompatibilityReport {
     let mut issues = Vec::new();
