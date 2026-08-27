@@ -12,10 +12,20 @@ The planner computes deterministic transfers, repairs, handoffs, reuse, deferral
 
 Resume and operation identity bind the service generation, membership epoch, placement epoch, content, source, receiver, action, and attempt.
 
-Eight positive and negative core tests pass. The tests cover stable ordering, placement domains, stale epochs, corruption, idempotency, conflicts, repair exhaustion, retention, cleanup, protected content, resources, and malformed manifests.
+Nine positive and negative core tests pass. The tests cover stable ordering, placement domains, stale epochs, corruption, idempotency, conflicts, repair exhaustion, handoff, retention, cleanup, protected content, resources, and malformed manifests.
 
-The focused core Clippy command passes for all targets and features with warnings denied.
+## Shell and adapters
+
+The supervised shell binds authority, identity, membership, placement, time, content, transport, durable-state, retention, resources, observations, and receipts.
+
+Nine shell tests cover receipt-last ordering, authority denial, stale placement, unsolicited delivery, cancellation, restart, cleanup, deterministic faults, live Iroh loopback, local content, and simulated durability.
+
+Three multiprocess product tests move exact content bytes through two child processes. They cover transfer, repair, and wrong-payload denial.
+
+The generic distinct-process harness now indexes its explicit request and payload inputs. Existing default CLI harness tests remain green.
+
+The focused Octet workspace passes with zero findings, warnings, and errors. Core and root Clippy pass for all targets and features with warnings denied.
 
 ## Current non-claims
 
-The shell, lifecycle, live adapter, multiprocess fixture, and final repository gates are not complete at this stage.
+Final full-package, Nix, and Cairn archive gates are not complete at this stage.

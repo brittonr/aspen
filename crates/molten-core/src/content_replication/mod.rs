@@ -6,15 +6,15 @@
 )]
 
 mod action;
+mod diagnostic;
 mod identity;
-mod issue;
 mod model;
 mod planner;
 mod validation;
 
 pub use action::*;
+pub use diagnostic::*;
 pub use identity::*;
-pub use issue::*;
 pub use model::*;
 pub use planner::*;
 pub use validation::*;

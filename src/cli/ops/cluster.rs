@@ -156,6 +156,8 @@ fn fabric_transport_run(input: FabricTransportRun) -> molten::error::Result<()> 
             process_binary,
             child_timeout_ms: input.child_timeout_ms,
             force: input.force,
+            request_ref: molten::cluster_harness::DEFAULT_DISTINCT_PROCESS_REQUEST_REF.to_string(),
+            payload: molten::cluster_harness::DEFAULT_DISTINCT_PROCESS_PAYLOAD.to_vec(),
         },
     )?;
     println!(

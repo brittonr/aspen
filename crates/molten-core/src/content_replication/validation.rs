@@ -13,14 +13,20 @@ const BLAKE3_HEX_LENGTH: usize = 64;
 
 pub fn validate_input(input: &ReconcileInput) -> Vec<Issue> {
     let mut issues = BTreeSet::new();
-    validate_manifest(&input.manifest, &mut issues);
+    validate_manifest_fields(&input.manifest, &mut issues);
     validate_peers(input, &mut issues);
     validate_inventory(input, &mut issues);
     validate_history(input, &mut issues);
     issues.into_iter().collect()
 }
 
-fn validate_manifest(manifest: &Manifest, issues: &mut BTreeSet<Issue>) {
+pub fn validate_manifest(manifest: &Manifest) -> Vec<Issue> {
+    let mut issues = BTreeSet::new();
+    validate_manifest_fields(manifest, &mut issues);
+    issues.into_iter().collect()
+}
+
+fn validate_manifest_fields(manifest: &Manifest, issues: &mut BTreeSet<Issue>) {
     if !valid_id(&manifest.service_id)
         || manifest.generation == 0
         || manifest.membership_epoch == 0

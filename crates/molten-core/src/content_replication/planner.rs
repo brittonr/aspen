@@ -6,9 +6,10 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use super::action::TransferBuild;
+use super::action::build_reuse;
+use super::action::build_transfer;
 use super::action::denied_plan;
-use super::action::reuse_action;
-use super::action::transfer_action;
 use super::*;
 
 pub fn plan(input: &ReconcileInput) -> Result<Plan, Issue> {
@@ -16,7 +17,7 @@ pub fn plan(input: &ReconcileInput) -> Result<Plan, Issue> {
     if !issues.is_empty() {
         return denied_plan(input, issues);
     }
-    let mut planner = Planner::new(input);
+    let mut planner = PlanningState::new(input);
     let mut contents = input.manifest.contents.iter().collect::<Vec<_>>();
     contents.sort();
     for content in contents {
@@ -25,7 +26,7 @@ pub fn plan(input: &ReconcileInput) -> Result<Plan, Issue> {
     planner.finish()
 }
 
-pub(super) struct Planner<'a> {
+pub(super) struct PlanningState<'a> {
     pub(super) input: &'a ReconcileInput,
     pub(super) history: BTreeMap<&'a str, &'a PriorOperation>,
     pub(super) actions: Vec<Action>,
@@ -39,7 +40,7 @@ pub(super) struct Planner<'a> {
     pub(super) planned_bytes: u64,
 }
 
-impl<'a> Planner<'a> {
+impl<'a> PlanningState<'a> {
     fn new(input: &'a ReconcileInput) -> Self {
         Self {
             input,
@@ -56,7 +57,7 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn reconcile(&mut self, content: &ContentRule) -> Result<(), Issue> {
+    fn reconcile(&mut self, content: &ReplicaRule) -> Result<(), Issue> {
         let current = self.current_replicas(content);
         self.verified_replicas = self.verified_replicas.saturating_add(current.len());
         let desired = self.input.manifest.policy.desired_replicas;
@@ -69,7 +70,7 @@ impl<'a> Planner<'a> {
         Ok(())
     }
 
-    fn current_replicas(&self, content: &ContentRule) -> Vec<&'a Replica> {
+    fn current_replicas(&self, content: &ReplicaRule) -> Vec<&'a Replica> {
         let mut replicas = self
             .input
             .inventory
@@ -90,7 +91,7 @@ impl<'a> Planner<'a> {
         replicas
     }
 
-    fn plan_missing(&mut self, content: &ContentRule, current: &[&Replica], needed: usize) -> Result<(), Issue> {
+    fn plan_missing(&mut self, content: &ReplicaRule, current: &[&Replica], needed: usize) -> Result<(), Issue> {
         let Some(source) = self.verified_source(content) else {
             let issue = if self.has_protected_form_mismatch(content) {
                 Issue::ProtectedFormMismatch
@@ -126,7 +127,7 @@ impl<'a> Planner<'a> {
         Ok(())
     }
 
-    fn current_peers(&self, content: &ContentRule, current: &BTreeSet<&str>) -> Vec<&'a Peer> {
+    fn current_peers(&self, content: &ReplicaRule, current: &BTreeSet<&str>) -> Vec<&'a Peer> {
         self.input
             .peers
             .iter()
@@ -140,7 +141,7 @@ impl<'a> Planner<'a> {
             .collect()
     }
 
-    fn has_protected_form_mismatch(&self, content: &ContentRule) -> bool {
+    fn has_protected_form_mismatch(&self, content: &ReplicaRule) -> bool {
         self.input.inventory.replicas.iter().any(|replica| {
             replica.content_ref == content.content_ref
                 && replica.present
@@ -150,7 +151,7 @@ impl<'a> Planner<'a> {
         })
     }
 
-    fn verified_source(&self, content: &ContentRule) -> Option<&'a Replica> {
+    fn verified_source(&self, content: &ReplicaRule) -> Option<&'a Replica> {
         let mut sources = self
             .input
             .inventory
@@ -168,7 +169,7 @@ impl<'a> Planner<'a> {
         sources.into_iter().next()
     }
 
-    fn plan_transfer(&mut self, content: &ContentRule, source: &Replica, target: &Peer) -> Result<(), Issue> {
+    fn plan_transfer(&mut self, content: &ReplicaRule, source: &Replica, target: &Peer) -> Result<(), Issue> {
         let kind = self.transfer_kind(content, target);
         let attempt = self.next_attempt(content, target, kind);
         if attempt > self.input.manifest.repair.max_attempts {
@@ -177,16 +178,29 @@ impl<'a> Planner<'a> {
         if !self.resource_available(content.encoded_bytes) {
             return self.defer(content, Issue::ByteBudgetExhausted);
         }
-        let operation_id =
-            identify_operation(&self.input.manifest, content, Some(&source.peer_id), &target.peer_id, kind, attempt)?;
+        let operation_id = identify_operation(OperationFrame {
+            manifest: &self.input.manifest,
+            content,
+            source_peer: Some(&source.peer_id),
+            target_peer: &target.peer_id,
+            kind,
+            attempt,
+        })?;
         if let Some(prior) = self.history.get(operation_id.as_str()) {
-            return self.reuse_or_conflict(content, source, target, kind, prior);
+            return self.reuse_or_conflict(content, source, target, prior);
         }
-        let action = transfer_action(content, source, target, kind, operation_id)?;
+        let action = build_transfer(TransferBuild {
+            content,
+            source,
+            target,
+            kind,
+            attempt,
+            operation_id,
+        })?;
         self.record_transfer(action, content)
     }
 
-    fn transfer_kind(&self, content: &ContentRule, target: &Peer) -> ActionKind {
+    fn transfer_kind(&self, content: &ReplicaRule, target: &Peer) -> ActionKind {
         let prior = self.input.inventory.replicas.iter().find(|replica| {
             replica.content_ref == content.content_ref && replica.peer_id == target.peer_id && replica.present
         });
@@ -197,7 +211,7 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn next_attempt(&self, content: &ContentRule, target: &Peer, _kind: ActionKind) -> u32 {
+    fn next_attempt(&self, content: &ReplicaRule, target: &Peer, _kind: ActionKind) -> u32 {
         let matching = self.input.history.iter().filter(|operation| {
             operation.content_ref == content.content_ref
                 && operation.target_peer == target.peer_id
@@ -221,10 +235,9 @@ impl<'a> Planner<'a> {
 
     fn reuse_or_conflict(
         &mut self,
-        content: &ContentRule,
+        content: &ReplicaRule,
         source: &Replica,
         target: &Peer,
-        kind: ActionKind,
         prior: &PriorOperation,
     ) -> Result<(), Issue> {
         if prior.content_ref != content.content_ref
@@ -238,14 +251,14 @@ impl<'a> Planner<'a> {
             return Err(Issue::ConflictingOperation);
         }
         if prior.outcome == OperationOutcome::Verified {
-            let action = reuse_action(content, source, target, kind, prior)?;
+            let action = build_reuse(content, source, target, prior)?;
             self.actions.push(action);
             return Ok(());
         }
         self.defer(content, Issue::ConflictingOperation)
     }
 
-    fn record_transfer(&mut self, action: Action, content: &ContentRule) -> Result<(), Issue> {
+    fn record_transfer(&mut self, action: Action, content: &ReplicaRule) -> Result<(), Issue> {
         self.planned_transfers = self.planned_transfers.checked_add(1).ok_or(Issue::TooManyActions)?;
         self.planned_bytes = self.planned_bytes.checked_add(content.encoded_bytes).ok_or(Issue::ByteBudgetExhausted)?;
         self.required_pins.insert(content.content_ref.clone());

@@ -1,10 +1,9 @@
-use super::planner::Planner;
 use super::*;
 
-impl Planner<'_> {
+impl super::planner::PlanningState<'_> {
     pub(super) fn plan_cleanup(
         &mut self,
-        content: &ContentRule,
+        content: &ReplicaRule,
         current: &[&Replica],
         excess: usize,
     ) -> Result<(), Issue> {
@@ -22,19 +21,19 @@ impl Planner<'_> {
                 self.defer(content, Issue::MissingRetentionPin)?;
                 continue;
             };
-            let action = cleanup_action(&self.input.manifest, content, replica, authority_ref, clearance_ref)?;
+            let action = build_cleanup(&self.input.manifest, content, replica, authority_ref, clearance_ref)?;
             self.actions.push(action);
         }
         Ok(())
     }
 
-    pub(super) fn defer(&mut self, content: &ContentRule, issue: Issue) -> Result<(), Issue> {
+    pub(super) fn defer(&mut self, content: &ReplicaRule, issue: Issue) -> Result<(), Issue> {
         self.issues.insert(issue);
         self.deferred.insert(content.content_ref.clone());
         if self.actions.len() >= self.input.manifest.resources.max_queue_depth {
             return Err(Issue::QueueExhausted);
         }
-        self.actions.push(defer_action(&self.input.manifest, content, issue)?);
+        self.actions.push(build_defer(&self.input.manifest, content, issue)?);
         Ok(())
     }
 
@@ -73,41 +72,45 @@ impl Planner<'_> {
     }
 }
 
-pub(super) fn transfer_action(
-    content: &ContentRule,
-    source: &Replica,
-    target: &Peer,
-    kind: ActionKind,
-    operation_id: String,
-) -> Result<Action, Issue> {
+pub(super) struct TransferBuild<'a> {
+    pub content: &'a ReplicaRule,
+    pub source: &'a Replica,
+    pub target: &'a Peer,
+    pub kind: ActionKind,
+    pub attempt: u32,
+    pub operation_id: String,
+}
+
+pub(super) fn build_transfer(input: TransferBuild<'_>) -> Result<Action, Issue> {
     Ok(Action {
-        action_id: identify_action(&operation_id, kind)?,
-        operation_id,
-        kind,
-        content_ref: content.content_ref.clone(),
-        source_peer: Some(source.peer_id.clone()),
-        target_peer: target.peer_id.clone(),
-        fault_domain: target.fault_domain.clone(),
-        encoded_bytes: content.encoded_bytes,
+        action_id: identify_action(&input.operation_id, input.kind)?,
+        operation_id: input.operation_id,
+        kind: input.kind,
+        attempt: input.attempt,
+        content_ref: input.content.content_ref.clone(),
+        source_peer: Some(input.source.peer_id.clone()),
+        target_peer: input.target.peer_id.clone(),
+        fault_domain: input.target.fault_domain.clone(),
+        encoded_bytes: input.content.encoded_bytes,
         pin_required: true,
-        preserve_protected_form: content.protected,
+        preserve_protected_form: input.content.protected,
         cleanup_authority_ref: None,
         prior_result_ref: None,
         diagnostic: None,
     })
 }
 
-pub(super) fn reuse_action(
-    content: &ContentRule,
+pub(super) fn build_reuse(
+    content: &ReplicaRule,
     source: &Replica,
     target: &Peer,
-    _kind: ActionKind,
     prior: &PriorOperation,
 ) -> Result<Action, Issue> {
     Ok(Action {
         action_id: identify_action(&prior.operation_id, ActionKind::Reuse)?,
         operation_id: prior.operation_id.clone(),
         kind: ActionKind::Reuse,
+        attempt: prior.attempt,
         content_ref: content.content_ref.clone(),
         source_peer: Some(source.peer_id.clone()),
         target_peer: target.peer_id.clone(),
@@ -121,19 +124,26 @@ pub(super) fn reuse_action(
     })
 }
 
-fn cleanup_action(
+fn build_cleanup(
     manifest: &Manifest,
-    content: &ContentRule,
+    content: &ReplicaRule,
     replica: &Replica,
     authority_ref: &str,
     clearance_ref: &str,
 ) -> Result<Action, Issue> {
-    let operation_id =
-        identify_operation(manifest, content, Some(&replica.peer_id), &replica.peer_id, ActionKind::Cleanup, 1)?;
+    let operation_id = identify_operation(OperationFrame {
+        manifest,
+        content,
+        source_peer: Some(&replica.peer_id),
+        target_peer: &replica.peer_id,
+        kind: ActionKind::Cleanup,
+        attempt: 1,
+    })?;
     Ok(Action {
         action_id: identify_action(&operation_id, ActionKind::Cleanup)?,
         operation_id,
         kind: ActionKind::Cleanup,
+        attempt: 1,
         content_ref: content.content_ref.clone(),
         source_peer: Some(replica.peer_id.clone()),
         target_peer: replica.peer_id.clone(),
@@ -147,13 +157,21 @@ fn cleanup_action(
     })
 }
 
-fn defer_action(manifest: &Manifest, content: &ContentRule, issue: Issue) -> Result<Action, Issue> {
+fn build_defer(manifest: &Manifest, content: &ReplicaRule, issue: Issue) -> Result<Action, Issue> {
     let target = "unassigned";
-    let operation_id = identify_operation(manifest, content, None, target, ActionKind::Defer, 1)?;
+    let operation_id = identify_operation(OperationFrame {
+        manifest,
+        content,
+        source_peer: None,
+        target_peer: target,
+        kind: ActionKind::Defer,
+        attempt: 1,
+    })?;
     Ok(Action {
         action_id: identify_action(&operation_id, ActionKind::Defer)?,
         operation_id,
         kind: ActionKind::Defer,
+        attempt: 1,
         content_ref: content.content_ref.clone(),
         source_peer: None,
         target_peer: target.to_string(),
@@ -189,26 +207,66 @@ pub(super) fn denied_plan(input: &ReconcileInput, issues: Vec<Issue>) -> Result<
 }
 
 pub fn status(plan: &Plan, history: &[PriorOperation]) -> Status {
-    let mut active_operations = plan
-        .actions
+    let terminal = history
         .iter()
-        .filter(|action| matches!(action.kind, ActionKind::Transfer | ActionKind::Repair | ActionKind::Handoff))
+        .map(|operation| (operation.operation_id.as_str(), operation))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let data_actions = plan.actions.iter().filter(|action| {
+        matches!(action.kind, ActionKind::Transfer | ActionKind::Repair | ActionKind::Handoff | ActionKind::Reuse)
+    });
+    let successful = data_actions
+        .clone()
+        .filter(|action| {
+            terminal
+                .get(action.operation_id.as_str())
+                .is_some_and(|operation| operation.outcome == OperationOutcome::Verified)
+        })
+        .collect::<Vec<_>>();
+    let successful_ids = successful
+        .iter()
+        .map(|action| action.operation_id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut active_operations = data_actions
+        .filter(|action| !terminal.contains_key(action.operation_id.as_str()))
         .map(|action| action.operation_id.clone())
         .collect::<Vec<_>>();
     active_operations.sort();
-    let mut failures = history
+    let plan_operation_ids = plan
+        .actions
         .iter()
-        .filter(|operation| operation.outcome != OperationOutcome::Verified)
+        .map(|action| action.operation_id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut failures = terminal
+        .values()
+        .filter(|operation| {
+            plan_operation_ids.contains(operation.operation_id.as_str())
+                && operation.outcome != OperationOutcome::Verified
+        })
         .map(|operation| operation.operation_id.clone())
         .collect::<Vec<_>>();
     failures.sort();
+    let under_replicated = plan
+        .under_replicated
+        .iter()
+        .filter(|content_ref| {
+            plan.actions.iter().any(|action| {
+                action.content_ref == **content_ref
+                    && (action.kind == ActionKind::Defer
+                        || (matches!(
+                            action.kind,
+                            ActionKind::Transfer | ActionKind::Repair | ActionKind::Handoff | ActionKind::Reuse
+                        ) && !successful_ids.contains(action.operation_id.as_str())))
+            })
+        })
+        .cloned()
+        .collect();
     Status {
         plan_ref: plan.plan_ref.clone(),
         generation: plan.generation,
         placement_epoch: plan.placement_epoch,
         desired_replicas: plan.desired_replicas,
-        verified_replicas: plan.verified_replicas,
-        under_replicated: plan.under_replicated.clone(),
+        verified_replicas: plan.verified_replicas.saturating_add(successful.len()).min(plan.desired_replicas),
+        under_replicated,
         active_operations,
         failures,
         pins: plan.required_pins.clone(),

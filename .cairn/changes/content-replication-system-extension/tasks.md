@@ -6,15 +6,15 @@
 
 ## Phase 2: Executable system extension
 
-- [ ] [serial] Implement the supervised replication service lifecycle and bind content, transport, durable-state, time, membership, placement, identity, resource, and observability ports. r[molten.content_replication.manifest] r[molten.content_replication.same_core]
-- [ ] [serial] Execute receiver-driven idempotent transfers, verification, replica-state updates, repair, handoff, cancellation, and restart through typed effects only. r[molten.content_replication.receiver_driven] r[molten.content_replication.resources_failures]
-- [ ] [parallel] Integrate canonical retention pins and protected-content rules before transfer, source cleanup, unpin, or repair exposure. r[molten.content_replication.retention_confidentiality]
+- [x] [serial] Implement the supervised replication service lifecycle and bind content, transport, durable-state, time, membership, placement, identity, resource, and observability ports. r[molten.content_replication.manifest] r[molten.content_replication.same_core]
+- [x] [serial] Execute receiver-driven idempotent transfers, verification, replica-state updates, repair, handoff, cancellation, and restart through typed effects only. r[molten.content_replication.receiver_driven] r[molten.content_replication.resources_failures]
+- [x] [parallel] Integrate canonical retention pins and protected-content rules before transfer, source cleanup, unpin, or repair exposure. r[molten.content_replication.retention_confidentiality]
 
 ## Phase 3: Simulation, live evidence, and operations
 
-- [ ] [parallel] Run the same extension core against deterministic content/transport/time/disk adapters with partition, corruption, cancellation, crash, placement-change, and resource-pressure faults. r[molten.content_replication.same_core] r[molten.content_replication.resources_failures]
-- [ ] [parallel] Add live-loopback and local multiprocess replication, repair, restart, and stale-epoch fixtures with bounded aggregate evidence. r[molten.content_replication.same_core] r[molten.content_replication.final_validation]
-- [ ] [parallel] Add operator readback for desired and verified replicas, placement epoch, under-replication, active plans, transfer resources, failures, pins, and non-claims. r[molten.content_replication.resources_failures]
+- [x] [parallel] Run the same extension core against deterministic content/transport/time/disk adapters with partition, corruption, cancellation, crash, placement-change, and resource-pressure faults. r[molten.content_replication.same_core] r[molten.content_replication.resources_failures]
+- [x] [parallel] Add live-loopback and local multiprocess replication, repair, restart, and stale-epoch fixtures with bounded aggregate evidence. r[molten.content_replication.same_core] r[molten.content_replication.final_validation]
+- [x] [parallel] Add operator readback for desired and verified replicas, placement epoch, under-replication, active plans, transfer resources, failures, pins, and non-claims. r[molten.content_replication.resources_failures]
 
 ## Phase 4: Validation
 

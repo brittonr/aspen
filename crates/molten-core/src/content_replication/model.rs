@@ -46,7 +46,7 @@ pub struct Manifest {
     pub policy: ReplicaPolicy,
     pub repair: RepairPolicy,
     pub resources: ResourceLimits,
-    pub contents: Vec<ContentRule>,
+    pub contents: Vec<ReplicaRule>,
     pub non_claims: Vec<String>,
 }
 
@@ -74,7 +74,7 @@ pub struct ResourceLimits {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ContentRule {
+pub struct ReplicaRule {
     pub content_ref: String,
     pub manifest_ref: String,
     pub encoded_bytes: u64,
@@ -179,6 +179,7 @@ pub struct Action {
     pub action_id: String,
     pub operation_id: String,
     pub kind: ActionKind,
+    pub attempt: u32,
     pub content_ref: String,
     pub source_peer: Option<String>,
     pub target_peer: String,

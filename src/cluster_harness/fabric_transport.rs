@@ -48,8 +48,9 @@ const PEER_CONTEXT_REF: &str = "blake3:80808080808080808080808080808080808080808
 const LOCATOR_COHORT_REF: &str = "blake3:8181818181818181818181818181818181818181818181818181818181818181";
 const VALIDITY_REF: &str = "blake3:8282828282828282828282828282828282828282828282828282828282828282";
 const SESSION_REF: &str = "blake3:8383838383838383838383838383838383838383838383838383838383838383";
-const REQUEST_REF: &str = "blake3:8484848484848484848484848484848484848484848484848484848484848484";
-const PAYLOAD: &[u8] = b"distinct-process-bounded-frame";
+pub const DEFAULT_DISTINCT_PROCESS_REQUEST_REF: &str =
+    "blake3:8484848484848484848484848484848484848484848484848484848484848484";
+pub const DEFAULT_DISTINCT_PROCESS_PAYLOAD: &[u8] = b"distinct-process-bounded-frame";
 const INVOCATION_DOMAIN: &str = "molten.fabric.transport.distinct-process-invocation.v1";
 const COMMAND_PROFILE_DOMAIN: &str = "molten.fabric.transport.distinct-process-command.v1";
 const RUN_INDEX_DOMAIN: &str = "molten.fabric.transport.distinct-process-index.v1";
@@ -75,13 +76,15 @@ const FAILURE_FILE: &str = "failure.preserves";
 const INDEX_FILE: &str = "artifact-index.tsv";
 const LISTENER_LOG_FILE: &str = "logs/listener.log";
 const CLIENT_LOG_FILE: &str = "logs/client.log";
+const REQUEST_INPUT_FILE: &str = "request-ref.txt";
+const PAYLOAD_INPUT_FILE: &str = "payload.bin";
 const INDEX_HEADER: &str = "molten.fabric-transport-distinct-process-index.v1";
 const PARTICIPANT_FIELD_COUNT: usize = 24;
 const START_FIELD_COUNT: usize = 6;
 const CLEANUP_FIELD_COUNT: usize = 9;
 const MAX_RUN_FILES: usize = 16;
 const MAX_ARTIFACT_BYTES: u64 = 1_048_576;
-const EXPECTED_MEMBER_COUNT: usize = 11;
+const EXPECTED_MEMBER_COUNT: usize = 13;
 
 #[derive(Debug, Clone)]
 pub struct DistinctProcessTransportRunInput {
@@ -89,6 +92,8 @@ pub struct DistinctProcessTransportRunInput {
     pub process_binary: PathBuf,
     pub child_timeout_ms: u64,
     pub force: bool,
+    pub request_ref: String,
+    pub payload: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -246,6 +251,7 @@ fn execute_prepared_distinct_process_transport_run(
     input: &DistinctProcessTransportRunInput,
 ) -> Result<DistinctProcessTransportRun> {
     let timeout = Duration::from_millis(input.child_timeout_ms);
+    write_transport_input(&input.run_directory, &input.request_ref, &input.payload)?;
     let listener_invocation_ref = invocation_ref(LISTENER_ROLE);
     let client_invocation_ref = invocation_ref(CLIENT_ROLE);
 
@@ -339,8 +345,9 @@ pub fn run_distinct_process_listener_child(run_directory: &Path) -> Result<()> {
         })
         .await?;
         write_preserves_atomic(&run_directory.join(HANDOFF_FILE), &listener.handoff().value)?;
+        let (request_ref, _payload) = read_transport_input(run_directory)?;
         let frame = listener
-            .accept_one(SESSION_REF, REQUEST_REF, Duration::from_millis(DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS))
+            .accept_one(SESSION_REF, &request_ref, Duration::from_millis(DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS))
             .await?;
         let endpoint_cleanup = listener.drain_and_close(ListenerDrainReason::OperatorRequest).await?;
         let participant = participant_artifact(
@@ -362,6 +369,7 @@ pub fn run_distinct_process_client_child(run_directory: &Path) -> Result<()> {
     validate_child_directory(run_directory)?;
     let handoff = read_endpoint_handoff(&run_directory.join(HANDOFF_FILE))?;
     validate_fixture_endpoint(&handoff)?;
+    let (request_ref, payload) = read_transport_input(run_directory)?;
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|error| MoltenError::invalid_harness(format!("client runtime creation failed: {error}")))?;
     runtime.block_on(async {
@@ -375,9 +383,9 @@ pub fn run_distinct_process_client_child(run_directory: &Path) -> Result<()> {
                 endpoint: handoff.clone(),
                 admission: EndpointAdmissionState::fully_active(),
                 session_ref: SESSION_REF.to_string(),
-                request_ref: REQUEST_REF.to_string(),
+                request_ref,
             },
-            PAYLOAD,
+            &payload,
             Duration::from_millis(DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS),
         )
         .await?;
@@ -482,7 +490,32 @@ fn validate_run_input(input: &DistinctProcessTransportRunInput) -> Result<()> {
             "distinct-process run requires explicit run directory and process binary",
         ));
     }
+    crate::preserves_rail::validate_content_ref(&input.request_ref)?;
+    let payload_bytes = u64::try_from(input.payload.len())
+        .map_err(|_| MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
+    if input.payload.is_empty() || payload_bytes > FRAME_LIMIT {
+        return Err(MoltenError::invalid_harness(
+            "distinct-process payload must be nonempty and within the frame bound",
+        ));
+    }
     Ok(())
+}
+
+fn write_transport_input(run_directory: &Path, request_ref: &str, payload: &[u8]) -> Result<()> {
+    std::fs::write(run_directory.join(REQUEST_INPUT_FILE), request_ref.as_bytes()).map_err(MoltenError::from)?;
+    std::fs::write(run_directory.join(PAYLOAD_INPUT_FILE), payload).map_err(MoltenError::from)
+}
+
+fn read_transport_input(run_directory: &Path) -> Result<(String, Vec<u8>)> {
+    let request_ref = std::fs::read_to_string(run_directory.join(REQUEST_INPUT_FILE)).map_err(MoltenError::from)?;
+    crate::preserves_rail::validate_content_ref(&request_ref)?;
+    let payload = std::fs::read(run_directory.join(PAYLOAD_INPUT_FILE)).map_err(MoltenError::from)?;
+    let payload_bytes = u64::try_from(payload.len())
+        .map_err(|_| MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
+    if payload.is_empty() || payload_bytes > FRAME_LIMIT {
+        return Err(MoltenError::invalid_harness("distinct-process payload input is empty or over-bound"));
+    }
+    Ok((request_ref, payload))
 }
 
 fn prepare_run_directory(run_directory: &Path, force: bool) -> Result<()> {
@@ -1041,6 +1074,8 @@ fn collect_indexed_artifacts(run_directory: &Path) -> Result<Vec<IndexedArtifact
         (LISTENER_START_FILE, "parent-listener-start", "preserves"),
         (LISTENER_TERMINAL_FILE, "listener-terminal", "preserves"),
         (PARENT_RUN_FILE, "distinct-process-run", "preserves"),
+        (PAYLOAD_INPUT_FILE, "transport-payload", "binary"),
+        (REQUEST_INPUT_FILE, "transport-request-ref", "text"),
         (CLIENT_LOG_FILE, "diagnostic-log", "text"),
         (LISTENER_LOG_FILE, "diagnostic-log", "text"),
     ];
@@ -1052,6 +1087,10 @@ fn collect_indexed_artifacts(run_directory: &Path) -> Result<Vec<IndexedArtifact
         let expected_ref = if format == "preserves" {
             let value = crate::preserves_rail::parse_canonical_bytes(&bytes)?;
             crate::preserves_rail::canonical_hash(&value)?
+        } else if format == "binary" {
+            crate::preserves_rail::content_ref_from_bytes(&bytes)
+        } else if relative_path == REQUEST_INPUT_FILE {
+            text_ref("molten.fabric.transport.distinct-process-request-input.v1", &String::from_utf8_lossy(&bytes))
         } else {
             text_ref("molten.fabric.transport.distinct-process-log.v1", &String::from_utf8_lossy(&bytes))
         };
@@ -1117,6 +1156,8 @@ fn expected_members() -> BTreeSet<String> {
         PARENT_RUN_FILE,
         VERIFICATION_FILE,
         INDEX_FILE,
+        PAYLOAD_INPUT_FILE,
+        REQUEST_INPUT_FILE,
         LISTENER_LOG_FILE,
         CLIENT_LOG_FILE,
     ];
