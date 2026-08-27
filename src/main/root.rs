@@ -76,6 +76,9 @@ pub(crate) fn run() -> molten::error::Result<()> {
             crate::cli_world_distribution::run_world_distribution_command(command)
         }
         Some(command::Top::WorldMerge { command }) => crate::cli_world_merge::run_world_merge_command(command),
+        Some(command::Top::WorldPromotion { command }) => {
+            crate::cli_world_promotion::run_world_promotion_command(command)
+        }
     }
 }
 

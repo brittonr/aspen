@@ -64,6 +64,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_world_merge::WorldMergeCommand,
     },
+    WorldPromotion {
+        #[command(subcommand)]
+        command: crate::cli_world_promotion::WorldPromotionCommand,
+    },
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -333,6 +337,29 @@ mod tests {
     #[test]
     fn world_distribution_sync_rejects_missing_capability_root() {
         let result = Cli::try_parse_from(["molten", "world-distribution", "sync", "--commit", COMMIT_REF]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn world_promotion_plan_requires_explicit_request_and_output() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-promotion",
+            "plan",
+            "--request",
+            "promotion.json",
+            "--out",
+            "promotion.preserves",
+        ])
+        .expect("world promotion plan command");
+
+        assert!(matches!(cli.command, Some(Top::WorldPromotion { .. })));
+    }
+
+    #[test]
+    fn world_promotion_mutation_rejects_missing_capability_root() {
+        let result = Cli::try_parse_from(["molten", "world-promotion", "promote", "--request", "promotion.json"]);
 
         assert!(result.is_err());
     }

@@ -1525,6 +1525,7 @@
         "rust-overlay": "rust-overlay_13",
         "schema-identity-src": "schema-identity-src",
         "schema-migration-core-src": "schema-migration-core-src",
+        "transactional-reconciliation-src": "transactional-reconciliation-src",
         "ucan-src": "ucan-src",
         "unit2nix": "unit2nix",
         "valence-src": "valence-src"
@@ -2193,6 +2194,23 @@
         "owner": "nix-systems",
         "repo": "default",
         "type": "github"
+      }
+    },
+    "transactional-reconciliation-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787328365,
+        "narHash": "sha256-xkZ79TBbTHfjj8jM1b4+F3k2MdtkQ9TUGBinmNOpdKY=",
+        "ref": "refs/heads/main",
+        "rev": "eb2bd3441753af97bfcb247cef7cc22d72675b62",
+        "revCount": 8,
+        "type": "git",
+        "url": "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git"
+      },
+      "original": {
+        "rev": "eb2bd3441753af97bfcb247cef7cc22d72675b62",
+        "type": "git",
+        "url": "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git"
       }
     },
     "ucan-src": {

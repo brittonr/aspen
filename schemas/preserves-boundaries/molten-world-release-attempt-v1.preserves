@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-release-attempt">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "world-release-attempt">
+  <schema-id "molten.world-release-attempt.v1">
+  <arity 7>>

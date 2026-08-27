@@ -77,6 +77,10 @@
       url = "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2";
       flake = false;
     };
+    transactional-reconciliation-src = {
+      url = "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62";
+      flake = false;
+    };
     flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";
   };
 
@@ -104,6 +108,7 @@
       valence-src,
       schema-identity-src,
       schema-migration-core-src,
+      transactional-reconciliation-src,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -323,6 +328,36 @@
             && schemaMigrationWorkspace.workspace.package.license == "MIT"
           ) "Molten schema-migration Cargo/Nix source identity, package, or license drifted";
           schema-migration-core-src;
+        transactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675b62";
+        transactionalReconciliationRid = "rad:z4Tky6zvC8w4Y6c4YBzNxVbq5n752";
+        transactionalReconciliationRepository = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git";
+        transactionalReconciliationCargoDependencies = [
+          artifactRootDependencies.transactional-reconciliation-core
+          moltenCoreDependencies.transactional-reconciliation-core
+        ];
+        transactionalReconciliationExpectedLockSource = "git+${transactionalReconciliationRepository}?rev=${transactionalReconciliationRevision}#${transactionalReconciliationRevision}";
+        transactionalReconciliationLockPackages = builtins.filter (
+          package: (package.source or "") == transactionalReconciliationExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        transactionalReconciliationWorkspace = builtins.fromTOML (
+          builtins.readFile (transactional-reconciliation-src + "/Cargo.toml")
+        );
+        transactionalReconciliationSource =
+          assert pkgs.lib.assertMsg (
+            builtins.all (
+              dependency:
+              dependency.git == transactionalReconciliationRepository
+              && dependency.rev == transactionalReconciliationRevision
+              && dependency.version == "0.1.0"
+            ) transactionalReconciliationCargoDependencies
+            && transactional-reconciliation-src.rev == transactionalReconciliationRevision
+            && builtins.length transactionalReconciliationLockPackages == 1
+            &&
+              (builtins.head transactionalReconciliationLockPackages).name == "transactional-reconciliation-core"
+            && builtins.elem "crates/transactional-reconciliation-core" transactionalReconciliationWorkspace.workspace.members
+            && transactionalReconciliationWorkspace.workspace.package.license == "MIT"
+          ) "Molten transactional reconciliation Cargo/Nix source identity, package, RID, or license drifted";
+          transactional-reconciliation-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
           "${artifactRepository}#${artifactRevision}" = maybeCleanLocalGitSource artifactSource;
           "${executableExtentRepository}#${executableExtentRevision}" =
@@ -342,6 +377,8 @@
             maybeCleanLocalGitSource schemaIdentitySource;
           "${schemaMigrationRepository}#${schemaMigrationRevision}" =
             maybeCleanLocalGitSource schemaMigrationSource;
+          "${transactionalReconciliationRepository}#${transactionalReconciliationRevision}" =
+            maybeCleanLocalGitSource transactionalReconciliationSource;
         };
         unit2nixPkgsBase = pkgsBase.extend (
           final: prev: {
@@ -583,6 +620,16 @@
           cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
           cp -R ${./crates/molten-core/src/world_distribution} "$out/src/world_distribution"
           cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
+        '';
+        worldPromotionOctetWorkspace = pkgs.runCommand "molten-world-promotion-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-promotion-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-promotion-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-promotion-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-promotion-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
+          cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
+          cp -R ${./crates/molten-core/src/world_promotion} "$out/src/world_promotion"
         '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
@@ -1587,6 +1634,25 @@
                   test -f ${choregraphSource}/crates/choregraph-history/src/refs.rs
                   test -f ${./crates/molten-core/src/dag_sync/mod.rs}
                   test -f ${./crates/molten-core/src/content_replication/mod.rs}
+                  touch "$out"
+                '';
+            world-promotion-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldPromotionOctetWorkspace;
+                packages = [ "molten-world-promotion-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-promotion-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-promotion-dependency-identity =
+              pkgs.runCommand "molten-world-promotion-dependency-identity" { }
+                ''
+                  test -f ${transactionalReconciliationSource}/crates/transactional-reconciliation-core/src/lib.rs
+                  test '${transactionalReconciliationRid}' = 'rad:z4Tky6zvC8w4Y6c4YBzNxVbq5n752'
                   touch "$out"
                 '';
             world-merge-dependency-identity = pkgs.runCommand "molten-world-merge-dependency-identity" { } ''

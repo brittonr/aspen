@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-promotion-reconciliation">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "world-promotion-reconciliation">
+  <schema-id "molten.world-promotion-reconciliation.v1">
+  <arity 7>>

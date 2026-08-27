@@ -36,6 +36,7 @@ pub mod world_commit;
 pub mod world_distribution;
 pub mod world_head;
 pub mod world_merge;
+pub mod world_promotion;
 
 pub mod prelude {
     pub use crate::codec::CodecIssue;
