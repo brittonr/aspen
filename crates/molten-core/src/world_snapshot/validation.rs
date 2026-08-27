@@ -165,6 +165,9 @@ fn validate_components(descriptor: &SnapshotDescriptor, issues: &mut Vec<Snapsho
 }
 
 fn validate_cohort(descriptor: &SnapshotDescriptor, destination: &SnapshotCohort, issues: &mut Vec<SnapshotIssue>) {
+    if descriptor.cohort.cohort_ref != destination.cohort_ref {
+        issues.push(SnapshotIssue::CohortIdentityMismatch);
+    }
     if descriptor.cohort.facts.len() > MAX_COHORT_FACTS || destination.facts.len() > MAX_COHORT_FACTS {
         issues.push(SnapshotIssue::TooManyCohortFacts);
     }
@@ -256,8 +259,7 @@ pub fn validate_snapshot_receipt(receipt: &SnapshotReceipt) -> Result<(), Vec<Sn
     if receipt.non_claims != expected_non_claims {
         issues.push(SnapshotIssue::ReceiptNonClaimsIncomplete);
     }
-    let has_output_plan = receipt.restore_plan_ref.is_some() || receipt.clone_plan_ref.is_some();
-    if receipt.decision == SnapshotReceiptDecision::Denied && has_output_plan {
+    if receipt.decision == SnapshotReceiptDecision::Denied && receipt.issues.is_empty() {
         issues.push(SnapshotIssue::ReceiptBoundExceeded);
     }
     if receipt.decision != SnapshotReceiptDecision::Denied && !receipt.issues.is_empty() {

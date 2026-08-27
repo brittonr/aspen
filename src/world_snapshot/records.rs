@@ -225,6 +225,7 @@ fn simple_issue_code(issue: &SnapshotIssue) -> &'static str {
         SnapshotIssue::InvalidOverlayIdentity => "invalid-overlay-identity",
         SnapshotIssue::ReceiptBoundExceeded => "receipt-bound-exceeded",
         SnapshotIssue::ReceiptNonClaimsIncomplete => "receipt-non-claims-incomplete",
+        SnapshotIssue::CohortIdentityMismatch => "cohort-identity-mismatch",
         SnapshotIssue::OpaqueMergeDenied => "opaque-merge-denied",
         SnapshotIssue::CurrentAdmissionDenied => "current-admission-denied",
         SnapshotIssue::EmptyClonePlan => "empty-clone-plan",

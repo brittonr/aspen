@@ -44,6 +44,10 @@ The pure snapshot core now provides:
 - domain-separated BLAKE3 identities for each canonical artifact class;
 - explicit non-claims for correctness, portability, authority, handle transfer, semantic equivalence, isolation, and release eligibility.
 
+The logical shell now uses narrow materialization, current-admission, host-handle, restore, observation, and receipt ports. It validates the complete inventory before state effects, recreates handles, rechecks non-regressing current admission, activates last, and publishes the success receipt after activation.
+
+Focused tests cover a complete logical restore, stale admission after restore, and unavailable component materialization. Stale or incomplete cases never activate or publish a success receipt.
+
 Focused core and shell tests, formatting, and Clippy with warnings denied passed.
 
 ## Remaining dependency gates

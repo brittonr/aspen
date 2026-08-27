@@ -226,6 +226,7 @@ pub enum SnapshotIssue {
     InvalidOverlayIdentity,
     ReceiptBoundExceeded,
     ReceiptNonClaimsIncomplete,
+    CohortIdentityMismatch,
     CohortMismatch(CohortFactKind),
     OpaqueMergeDenied,
     CurrentAdmissionDenied,

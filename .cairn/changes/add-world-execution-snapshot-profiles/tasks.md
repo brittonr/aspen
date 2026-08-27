@@ -7,8 +7,8 @@
 
 ## Phase 2: Restore and clone adapters
 
-- [ ] [depends:world-snapshot-core] Add narrow logical-root, ChaosControl descriptor, host-handle, current-authority, restore, and observation ports. r[molten.world_snapshot.restore]
-- [ ] [depends:world-snapshot-ports] Implement logical restore ordering and current runtime admission over Molten-owned roots. r[molten.world_snapshot.logical] r[molten.world_snapshot.restore]
+- [x] [depends:world-snapshot-core] Add narrow logical-root, ChaosControl descriptor, host-handle, current-authority, restore, and observation ports. r[molten.world_snapshot.restore]
+- [x] [depends:world-snapshot-ports] Implement logical restore ordering and current runtime admission over Molten-owned roots. r[molten.world_snapshot.logical] r[molten.world_snapshot.restore]
 - [ ] [depends:chaoscontrol-exact-snapshot-cohort] Add an exact ChaosControl snapshot descriptor and restore adapter with no compatibility fallback. r[molten.world_snapshot.opaque] r[molten.world_snapshot.restore]
 - [ ] [depends:build-vm-cohort] [depends:vm-cohort-chaoscontrol-pilot] Pin a reviewed VM Cohort revision and add parent-bound isolated copy-on-write clone planning and realization. r[molten.world_snapshot.cow]
 - [ ] [depends:world-snapshot-restore-adapters] Add operator snapshot-inspect, compatibility, restore-plan, restore, clone-plan, and clone commands with safe receipts. r[molten.world_snapshot.restore]
