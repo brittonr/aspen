@@ -21,6 +21,13 @@ description = "Molten Rust project"
 path = "src/lib.rs"
 
 [features]
+executable-extents = [
+  "dep:data-encoding",
+  "dep:executable-extent-conformance",
+  "dep:executable-extent-core",
+  "dep:executable-extent-linux",
+  "molten-core/executable-extents",
+]
 profiler = ["dep:flux-profiler"]
 profiler-alloc = ["profiler", "flux-profiler/alloc-profile"]
 profiler-disabled = ["dep:flux-profiler", "flux-profiler/disable-profiling"]
@@ -39,6 +46,10 @@ basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "d913dc01
 blake3 = "1"
 cap-fs-ext = "3"
 cap-std = "3"
+data-encoding = { version = "2", optional = true }
+executable-extent-conformance = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
+executable-extent-core = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
+executable-extent-linux = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 molten-core = { path = "crates/molten-core" }
 molten-node-host = { path = "crates/molten-node-host" }
 cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", rev = "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b", package = "cairn-core" }

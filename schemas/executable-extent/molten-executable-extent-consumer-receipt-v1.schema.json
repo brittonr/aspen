@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onix.computer/schemas/molten-executable-extent-consumer-receipt-v1.schema.json",
+  "title": "Molten executable-extent consumer receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "receipt_identity_blake3",
+    "bundle_identity_blake3",
+    "producer_receipt_identity_blake3",
+    "semantic_code_identity_blake3",
+    "built_artifact_identity_blake3",
+    "layout_identity_blake3",
+    "runtime_cohort_identity_blake3",
+    "policy_identity_blake3",
+    "disposition",
+    "denial",
+    "mappings",
+    "extents_remeasured",
+    "detached_review_admitted",
+    "executable_extent_repository",
+    "executable_extent_revision",
+    "mantle_producer_repository",
+    "mantle_producer_revision",
+    "non_claims"
+  ],
+  "properties": {
+    "schema": { "const": "molten-executable-extent-consumer-receipt-v1" },
+    "receipt_identity_blake3": { "$ref": "#/$defs/digest" },
+    "bundle_identity_blake3": { "$ref": "#/$defs/digest" },
+    "producer_receipt_identity_blake3": { "$ref": "#/$defs/digest" },
+    "semantic_code_identity_blake3": { "$ref": "#/$defs/digest" },
+    "built_artifact_identity_blake3": { "$ref": "#/$defs/digest" },
+    "layout_identity_blake3": { "$ref": "#/$defs/digest" },
+    "runtime_cohort_identity_blake3": { "$ref": "#/$defs/digest" },
+    "policy_identity_blake3": { "$ref": "#/$defs/digest" },
+    "disposition": { "enum": ["mapped-and-unmapped", "inert"] },
+    "denial": { "type": ["string", "null"] },
+    "mappings": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ordinal", "extent_identity_blake3", "mapping_identity_blake3", "mapped_state", "final_state"],
+        "properties": {
+          "ordinal": { "const": 0 },
+          "extent_identity_blake3": { "$ref": "#/$defs/digest" },
+          "mapping_identity_blake3": { "$ref": "#/$defs/digest" },
+          "mapped_state": { "const": "executable-read-only" },
+          "final_state": { "const": "unmapped" }
+        }
+      }
+    },
+    "extents_remeasured": { "const": true },
+    "detached_review_admitted": { "const": true },
+    "executable_extent_repository": { "const": "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB" },
+    "executable_extent_revision": { "$ref": "#/$defs/revision" },
+    "mantle_producer_repository": { "const": "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb" },
+    "mantle_producer_revision": { "$ref": "#/$defs/revision" },
+    "non_claims": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        { "const": "consumer receipt does not prove compiler correctness" },
+        { "const": "consumer receipt does not prove executable code semantics" },
+        { "const": "consumer receipt does not prove sandbox or host integrity" },
+        { "const": "consumer receipt does not grant storage or retention authority" },
+        { "const": "consumer receipt does not prove external authority freshness" },
+        { "const": "consumer receipt does not prove release eligibility" }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+  }
+}

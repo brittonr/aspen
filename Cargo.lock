@@ -1449,7 +1449,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1808,6 +1808,33 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener",
  "pin-project-lite",
+]
+
+[[package]]
+name = "executable-extent-conformance"
+version = "0.1.0"
+source = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636f0161777710dac37b3c210ca0ad9483f"
+dependencies = [
+ "blake3",
+ "executable-extent-core",
+]
+
+[[package]]
+name = "executable-extent-core"
+version = "0.1.0"
+source = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636f0161777710dac37b3c210ca0ad9483f"
+dependencies = [
+ "blake3",
+]
+
+[[package]]
+name = "executable-extent-linux"
+version = "0.1.0"
+source = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636f0161777710dac37b3c210ca0ad9483f"
+dependencies = [
+ "blake3",
+ "executable-extent-core",
+ "rustix",
 ]
 
 [[package]]
@@ -3885,6 +3912,10 @@ dependencies = [
  "cap-std",
  "cap-tempfile",
  "clap 4.6.1",
+ "data-encoding",
+ "executable-extent-conformance",
+ "executable-extent-core",
+ "executable-extent-linux",
  "flux-profiler",
  "hegeltest",
  "iroh",
@@ -3927,6 +3958,7 @@ dependencies = [
  "artifact-auth-core",
  "artifact-binding-core",
  "blake3",
+ "executable-extent-core",
  "kamacite-core",
 ]
 

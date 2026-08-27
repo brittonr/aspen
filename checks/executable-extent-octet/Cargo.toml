@@ -1,0 +1,48 @@
+[workspace]
+resolver = "3"
+members = ["."]
+exclude = ["product/molten-core", "vendor/artifact", "vendor/executable-extent"]
+
+[workspace.metadata.octet]
+default_scope = ["--workspace"]
+cargo_check_args = ["--all-targets", "--all-features"]
+
+[package]
+name = "molten-executable-extent-octet"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
+artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
+blake3 = "=1.8.5"
+cap-std = "=3.4.5"
+data-encoding = "=2.11.0"
+executable-extent-conformance = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f" }
+executable-extent-core = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f" }
+executable-extent-linux = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f" }
+molten-core = { path = "product/molten-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[patch."rad://z37R1bP1kHcELs89RNbQRaqbCVKxB"]
+executable-extent-conformance = { path = "vendor/executable-extent/crates/executable-extent-conformance" }
+executable-extent-core = { path = "vendor/executable-extent/crates/executable-extent-core" }
+executable-extent-linux = { path = "vendor/executable-extent/crates/executable-extent-linux" }
+
+[patch."ssh://git@github.com/OnixResearch/onix-artifact.git"]
+artifact-auth-core = { path = "vendor/artifact/crates/artifact-auth-core" }
+artifact-binding-core = { path = "vendor/artifact/crates/artifact-binding-core" }
+
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }

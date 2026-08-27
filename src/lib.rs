@@ -81,6 +81,8 @@ compat_module!(federation, mesh);
 pub mod content_replication;
 pub mod content_store_adapter;
 pub mod dag_sync;
+#[cfg(feature = "executable-extents")]
+pub mod executable_extent;
 pub mod fabric;
 pub mod fabric_consistency;
 pub mod fabric_crypto_identity;

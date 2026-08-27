@@ -28,6 +28,18 @@
       url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
       flake = false;
     };
+    executable-extent-src = {
+      url = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f";
+      flake = false;
+    };
+    executable-extent-octet = {
+      url = "github:OnixResearch/octet/cf04e894e53eb0947230118a086ef6066ddba38c";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    mantle-executable-extent-src = {
+      url = "git+rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb?rev=2c636b1b25353a1b0befa5af48dc68615cd686dd";
+      flake = false;
+    };
     kamacite-src = {
       url = "github:OnixResearch/kamacite/d76fe4abe543724d8fc0ac4b362187caf2e27622";
       flake = false;
@@ -75,6 +87,9 @@
       onix-core-src,
       basalt-src,
       artifact-src,
+      executable-extent-src,
+      executable-extent-octet,
+      mantle-executable-extent-src,
       kamacite-src,
       cairn-src,
       hegel-src,
@@ -165,6 +180,57 @@
             && artifactWorkspace.workspace.package.license == "MIT OR Apache-2.0"
           ) "Molten Artifact Cargo/Nix source identity, package set, workspace, or license drifted";
           artifact-src;
+        executableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f";
+        executableExtentRepository = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB";
+        executableExtentOctetRevision = "cf04e894e53eb0947230118a086ef6066ddba38c";
+        executableExtentOctetAdmitted =
+          assert pkgs.lib.assertMsg (
+            executable-extent-octet.rev == executableExtentOctetRevision
+          ) "Molten executable-extent Octet input drifted";
+          true;
+        executableExtentDependencies = [
+          artifactRootDependencies.executable-extent-core
+          artifactRootDependencies.executable-extent-conformance
+          artifactRootDependencies.executable-extent-linux
+          moltenCoreDependencies.executable-extent-core
+        ];
+        executableExtentExpectedPackages = [
+          "executable-extent-conformance"
+          "executable-extent-core"
+          "executable-extent-linux"
+        ];
+        executableExtentExpectedLockSource = "git+${executableExtentRepository}?rev=${executableExtentRevision}#${executableExtentRevision}";
+        executableExtentLockPackages = builtins.filter (
+          package: (package.source or "") == executableExtentExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        executableExtentWorkspace = builtins.fromTOML (
+          builtins.readFile (executable-extent-src + "/Cargo.toml")
+        );
+        executableExtentSource =
+          assert pkgs.lib.assertMsg (
+            builtins.all (
+              dependency:
+              dependency.git == executableExtentRepository && dependency.rev == executableExtentRevision
+            ) executableExtentDependencies
+            && executable-extent-src.rev == executableExtentRevision
+            &&
+              builtins.sort builtins.lessThan (map (package: package.name) executableExtentLockPackages)
+              == executableExtentExpectedPackages
+            &&
+              builtins.sort builtins.lessThan executableExtentWorkspace.workspace.members == [
+                "crates/executable-extent-conformance"
+                "crates/executable-extent-core"
+                "crates/executable-extent-linux"
+              ]
+            && executableExtentWorkspace.workspace.dependencies.blake3.version == ">=1.8.2, <2"
+          ) "Molten executable-extent Cargo/Nix source identity, package set, or hash cohort drifted";
+          executable-extent-src;
+        mantleExecutableExtentRevision = "2c636b1b25353a1b0befa5af48dc68615cd686dd";
+        mantleExecutableExtentSource =
+          assert pkgs.lib.assertMsg (
+            mantle-executable-extent-src.rev == mantleExecutableExtentRevision
+          ) "Molten Mantle producer Nix source identity drifted";
+          mantle-executable-extent-src;
         kamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622";
         kamaciteRepository = "ssh://git@github.com/OnixResearch/kamacite.git";
         kamaciteCargoDependencies = [
@@ -195,6 +261,8 @@
           schema-identity-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
           "${artifactRepository}#${artifactRevision}" = maybeCleanLocalGitSource artifactSource;
+          "${executableExtentRepository}#${executableExtentRevision}" =
+            maybeCleanLocalGitSource executableExtentSource;
           "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;
           "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" =
             maybeCleanLocalGitSource basalt-src;
@@ -386,6 +454,25 @@
             in
             !(base == "target" || base == ".direnv" || base == ".git");
         };
+        executableExtentOctetWorkspace = pkgs.runCommand "molten-executable-extent-octet-workspace" { } ''
+          mkdir -p \
+            "$out/src" \
+            "$out/product/molten-core/src"
+          cp ${./checks/executable-extent-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/executable-extent-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/executable-extent-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/executable-extent-octet/src/lib.rs} "$out/src/lib.rs"
+          substituteInPlace "$out/Cargo.toml" \
+            --replace-fail 'vendor/executable-extent' '${executableExtentSource}' \
+            --replace-fail 'vendor/artifact' '${artifactSource}'
+          cp ${./checks/executable-extent-octet/molten-core.Cargo.toml} \
+            "$out/product/molten-core/Cargo.toml"
+          cp ${./checks/executable-extent-octet/molten-core.lib.rs} \
+            "$out/product/molten-core/src/lib.rs"
+          cp -R ${./src/executable_extent} "$out/product/executable_extent"
+          cp -R ${./crates/molten-core/src/executable_extent} \
+            "$out/product/molten-core/src/executable_extent"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1255,6 +1342,85 @@
             molten = nextest;
             molten-node-host = moltenNodeHostTests;
             clippy = ws.clippy.allWorkspaceMembers;
+            executable-extent-consumer =
+              assert executableExtentSource != null;
+              assert mantleExecutableExtentSource != null;
+              pkgs.runCommand "molten-executable-extent-consumer"
+                {
+                  src = ./.;
+                  nativeBuildInputs = [
+                    pkgs.jq
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                }
+                ''
+                  set -eu
+                  cd "$src"
+
+                  cmp \
+                    tests/fixtures/executable-extent/executable-extent-bundle.valid.json \
+                    ${mantleExecutableExtentSource}/schemas/machine-contracts/fixtures/executable-extent-bundle.valid.json
+                  cmp \
+                    tests/fixtures/executable-extent/executable-extent-producer-receipt.valid.json \
+                    ${mantleExecutableExtentSource}/schemas/machine-contracts/fixtures/executable-extent-producer-receipt.valid.json
+
+                  rg -Fq '${executableExtentRepository}' Cargo.toml crates/molten-core/Cargo.toml flake.nix
+                  rg -Fq '${executableExtentRevision}' Cargo.toml crates/molten-core/Cargo.toml Cargo.lock flake.nix
+                  rg -Fq '${mantleExecutableExtentRevision}' src/executable_extent/mod.rs flake.nix
+                  rg -Fq '${executableExtentRepository}' checks/executable-extent-octet/Cargo.toml
+                  rg -Fq '${executableExtentRevision}' checks/executable-extent-octet/Cargo.toml
+                  rg -Fq '${executableExtentOctetRevision}' flake.nix flake.lock
+                  if rg -n '/home/|\.\./\.\./executable-extent' \
+                    checks/executable-extent-octet; then
+                    echo 'focused Octet source contains an ambient sibling path' >&2
+                    exit 1
+                  fi
+                  if rg -n 'executable-extent-(core|conformance|linux)[[:space:]]*=[[:space:]]*\{[[:space:]]*path' \
+                    Cargo.toml crates/molten-core/Cargo.toml; then
+                    echo 'executable-extent sibling path is not admitted' >&2
+                    exit 1
+                  fi
+
+                  nickel format --check \
+                    schemas/executable-extent/consumer-receipt-contract.ncl \
+                    schemas/executable-extent/fixtures/*.ncl
+                  nickel typecheck schemas/executable-extent/fixtures/consumer-receipt.valid.ncl
+                  nickel export --format json \
+                    schemas/executable-extent/fixtures/consumer-receipt.valid.ncl \
+                    > "$TMPDIR/consumer-receipt.json"
+                  jq -S . \
+                    tests/fixtures/executable-extent/molten-executable-extent-consumer-receipt.valid.json \
+                    > "$TMPDIR/checked-consumer-receipt.json"
+                  jq -S . "$TMPDIR/consumer-receipt.json" \
+                    > "$TMPDIR/exported-consumer-receipt.json"
+                  diff -u \
+                    "$TMPDIR/checked-consumer-receipt.json" \
+                    "$TMPDIR/exported-consumer-receipt.json"
+                  for fixture in schemas/executable-extent/fixtures/*.invalid.ncl; do
+                    if nickel export --format json "$fixture" \
+                      > "$TMPDIR/invalid.json" 2> "$TMPDIR/invalid.stderr"; then
+                      echo "invalid executable-extent fixture passed: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  jq -e '.additionalProperties == false' \
+                    schemas/executable-extent/molten-executable-extent-consumer-receipt-v1.schema.json \
+                    > /dev/null
+                  touch "$out"
+                '';
+            executable-extent-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = executableExtentOctetWorkspace;
+                packages = [ "molten-executable-extent-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/executable-extent-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
             cap-std-store-authority = capStdStoreAuthorityCheck;
             cap-std-test-workspaces = capStdTestWorkspaceCheck;
             node-state-authority = nodeStateAuthorityCheck;

@@ -13,6 +13,8 @@ pub mod content_replication;
 pub mod content_store_adapter;
 pub mod dag_sync;
 pub mod dependency;
+#[cfg(feature = "executable-extents")]
+pub mod executable_extent;
 pub mod fabric;
 pub mod fabric_crypto_identity;
 pub mod fabric_durability;
@@ -42,6 +44,24 @@ pub mod prelude {
     pub use crate::dependency::ImportFact;
     pub use crate::dependency::Layer;
     pub use crate::dependency::validate_dependency_boundaries;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ActivationDecision;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ActivationFacts;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::AdmissionDecision;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::CodeProfile;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ConsumerProfile;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ExtentCodeRootProfile;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ProducerBundleFacts;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::RemeasuredExtent;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::admit_code_profile;
     pub use crate::fabric_durability::ownership::CasLease;
     pub use crate::fabric_durability::ownership::CasLeaseDecision;
     pub use crate::fabric_durability::ownership::CasLeaseDecisionInput;

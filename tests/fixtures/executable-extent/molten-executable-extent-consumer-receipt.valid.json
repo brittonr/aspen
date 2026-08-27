@@ -1,0 +1,36 @@
+{
+  "schema": "molten-executable-extent-consumer-receipt-v1",
+  "receipt_identity_blake3": "e02c5e04505f3bd05b351593d471ef64a86596b4c304a71f97d49a770dd4482f",
+  "bundle_identity_blake3": "2f44f5eeb1d93cafc65dfdac36fb0d2020fed4466d074d331602422a8d411d81",
+  "producer_receipt_identity_blake3": "82b1ccefdbe9080649c154e02410f53006cdf7ce541a3b93e653c1846aea526a",
+  "semantic_code_identity_blake3": "d1fa9b20ee1b6cfc42fcfdfe91e3e35f75517c1344f08f3cb1cbe4c4a2fc3050",
+  "built_artifact_identity_blake3": "4598e001cd6e4c4fe4aa57bb055c11f1cbe10b3e0def42de0da8ec4036500f6c",
+  "layout_identity_blake3": "b1f86e8102e359b22e9f0cb4f7efaa65ad84f6953fc68259b725bf1051400dd9",
+  "runtime_cohort_identity_blake3": "de78fe4699f3c108b25642cc0590254db4b86e79a53a11e052d823e61ae25461",
+  "policy_identity_blake3": "6c7f65890211dd588b74b5ff42496128d80fc574c64c288b9c04841da1186e52",
+  "disposition": "mapped-and-unmapped",
+  "denial": null,
+  "mappings": [
+    {
+      "ordinal": 0,
+      "extent_identity_blake3": "4598e001cd6e4c4fe4aa57bb055c11f1cbe10b3e0def42de0da8ec4036500f6c",
+      "mapping_identity_blake3": "5135a7c1c41621af7ad7a00be99aca5eefd6a9027e749d9fe049020635828c76",
+      "mapped_state": "executable-read-only",
+      "final_state": "unmapped"
+    }
+  ],
+  "extents_remeasured": true,
+  "detached_review_admitted": true,
+  "executable_extent_repository": "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB",
+  "executable_extent_revision": "025d9636f0161777710dac37b3c210ca0ad9483f",
+  "mantle_producer_repository": "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb",
+  "mantle_producer_revision": "2c636b1b25353a1b0befa5af48dc68615cd686dd",
+  "non_claims": [
+    "consumer receipt does not prove compiler correctness",
+    "consumer receipt does not prove executable code semantics",
+    "consumer receipt does not prove sandbox or host integrity",
+    "consumer receipt does not grant storage or retention authority",
+    "consumer receipt does not prove external authority freshness",
+    "consumer receipt does not prove release eligibility"
+  ]
+}

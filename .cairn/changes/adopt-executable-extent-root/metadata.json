@@ -3,7 +3,6 @@
     "introduce-world-commit-core"
   ],
   "groups": ["current"],
-  "status": "blocked",
   "workflow_profile": {
     "id": "spec-driven",
     "source": "change_create",

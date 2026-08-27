@@ -60,12 +60,14 @@ Unsupported target, format, ABI, page size, relocation model, or runtime cohort 
 
 ## Rollout
 
-1. Pin private Radicle source `rad://z37R1bP1kHcELs89RNbQRaqbCVKxB` at reviewed revision `65f00649eebd5b42426f76f77ffa1f91e26d17eb`, then wait for the Mantle producer bundle. Private visibility does not replace immutable source identity.
-2. Pin exact source and add compatibility vectors.
-3. Add pure profile and manifest admission without mapping.
-4. Add capability-relative materialization, sealing, and read-back.
-5. Add one native or AOT executable mapping fixture.
-6. Add optional hardened Wasmtime adoption only under an exact compiled-artifact cohort.
+1. Pin Mantle producer `rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb` at `2c636b1b25353a1b0befa5af48dc68615cd686dd`.
+2. Pin archived executable-extent revision `025d9636f0161777710dac37b3c210ca0ad9483f` through the private Radicle source.
+3. Run the shared layout and W^X corpora under Molten's BLAKE3 1.8.5 cohort.
+4. Add pure profile and manifest admission without mapping.
+5. Add capability-relative materialization, sealing, mapping, read-back, and unmap.
+6. Require the executable-extent project to archive the cross-cohort compatibility change.
+7. Move all Molten pins and receipts to the archived final revision and repeat verification.
+8. Add optional hardened Wasmtime adoption only under an exact compiled-artifact cohort.
 
 ## Risks / Trade-offs
 
