@@ -44,6 +44,7 @@ artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact
 bao-tree = "0.16.0"
 basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "d913dc01e765c9b297df5fcc57dfa06aac39bc74", version = "0.1.0" }
 blake3 = "1"
+choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
 cap-fs-ext = "3"
 cap-std = "3"
 data-encoding = { version = "2", optional = true }

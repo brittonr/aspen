@@ -52,6 +52,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_world_commit::WorldCommitCommand,
     },
+    WorldHead {
+        #[command(subcommand)]
+        command: crate::cli_world_head::WorldHeadCommand,
+    },
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -246,6 +250,49 @@ mod tests {
     #[test]
     fn world_commit_operator_commands_reject_missing_state_root() {
         let result = Cli::try_parse_from(["molten", "world-commit", "inspect", COMMIT_REF]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn world_head_plan_parses_every_compare_and_swap_input() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-head",
+            "plan",
+            "--branch",
+            "main",
+            "--expected-head",
+            COMMIT_REF,
+            "--successor-head",
+            COMMIT_REF,
+            "--expected-generation",
+            "1",
+            "--successor-generation",
+            "2",
+            "--purpose",
+            "advance",
+            "--policy-ref",
+            COMMIT_REF,
+            "--out",
+            "claim.preserves",
+        ])
+        .expect("world-head plan command");
+
+        assert!(matches!(cli.command, Some(Top::WorldHead { .. })));
+    }
+
+    #[test]
+    fn world_head_mutation_commands_reject_missing_capability_root() {
+        let result = Cli::try_parse_from([
+            "molten",
+            "world-head",
+            "advance",
+            "--claim",
+            "claim.preserves",
+            "--signature",
+            "signature.json",
+        ]);
 
         assert!(result.is_err());
     }

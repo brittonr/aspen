@@ -9,9 +9,41 @@
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-core#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "93b290250d73c3ccf5667f034f3e100d3842cb8d619e42585e9ccb8c217cedb0",
-  "inputsHash": "2f7474799297ba39906284b20cea34ad2a62e29f590c431f11fda493c1cfd343",
+  "cargoLockHash": "bd60304f81001708a835f9673187b8904ef919c22080eca816a7883e65c3cf86",
+  "inputsHash": "7f23a7c675cd2e39ee7d565e179436241c3ec92b80923ad5810911ad335671e1",
   "crates": {
+    "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0": {
+      "crateName": "choregraph-history",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git",
+        "rev": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
+        "subDir": "crates/choregraph-history",
+        "sha256": "0rifkbnc5vsddmlq7slsx7s1jv4blfd0qdk5sgyfjkfwbc21ksll"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Pure no-std immutable branchable event history for Choregraph consumers.",
+      "license": "AGPL-3.0-or-later"
+    },
     "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": {
       "crateName": "kamacite-core",
       "version": "0.1.0",
@@ -145,6 +177,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
           "externCrateName": "blake3"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0",
+          "externCrateName": "choregraph_history"
         },
         {
           "packageId": "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",

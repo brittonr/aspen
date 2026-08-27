@@ -760,6 +760,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "choregraph-history"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19750f53bdbcae970cdf58a47a791ed20b"
+dependencies = [
+ "blake3",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3911,6 +3919,7 @@ dependencies = [
  "cap-fs-ext",
  "cap-std",
  "cap-tempfile",
+ "choregraph-history",
  "clap 4.6.1",
  "data-encoding",
  "executable-extent-conformance",
@@ -3958,6 +3967,7 @@ dependencies = [
  "artifact-auth-core",
  "artifact-binding-core",
  "blake3",
+ "choregraph-history",
  "executable-extent-core",
  "kamacite-core",
 ]

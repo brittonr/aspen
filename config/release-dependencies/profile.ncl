@@ -1,5 +1,9 @@
 let Contracts = import "contracts.ncl" in
 let ArtifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
+let ChoregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b" in
+let ChoregraphSource = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git" in
+let ExecutableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f" in
+let ExecutableExtentSource = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB" in
 let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
 let ValenceRevision = "5f1c2ba5072c6f9622fa59b1af20502985f569fd" in
 let SchemaIdentityRevision = "2562c8aa38a034061f9af9f3e17280494a5b8de2" in
@@ -44,6 +48,50 @@ in
       immutable_revision = ArtifactRevision,
       nix_input = "artifact-src",
       transport_policy = "ssh-pinned-nix-archive",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "executable-extent-conformance",
+      package_name = "executable-extent-conformance",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ExecutableExtentSource,
+      immutable_revision = ExecutableExtentRevision,
+      nix_input = "executable-extent-src",
+      transport_policy = "private-radicle",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "executable-extent-core",
+      package_name = "executable-extent-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ExecutableExtentSource,
+      immutable_revision = ExecutableExtentRevision,
+      nix_input = "executable-extent-src",
+      transport_policy = "private-radicle",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "executable-extent-linux",
+      package_name = "executable-extent-linux",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ExecutableExtentSource,
+      immutable_revision = ExecutableExtentRevision,
+      nix_input = "executable-extent-src",
+      transport_policy = "private-radicle",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "choregraph-history",
+      package_name = "choregraph-history",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ChoregraphSource,
+      immutable_revision = ChoregraphRevision,
+      nix_input = "choregraph-src",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {

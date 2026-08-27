@@ -122,6 +122,7 @@ impl DependencyRow {
         };
         let transport_policy = match self.transport_policy.as_str() {
             "https" => TransportPolicy::Https,
+            "private-radicle" => TransportPolicy::PrivateRadicle,
             "ssh-pinned-nix-archive" => TransportPolicy::SshPinnedWithNixArchive,
             other => {
                 return Err(format!("unsupported transport policy for {}: {other}", self.manifest_dependency));
@@ -129,6 +130,7 @@ impl DependencyRow {
         };
         let disposition = match self.disposition.as_str() {
             "runtime" => ReleaseDisposition::Runtime,
+            "optional-runtime" => ReleaseDisposition::OptionalRuntime,
             "development" => ReleaseDisposition::Development,
             other => {
                 return Err(format!("unsupported release disposition for {}: {other}", self.manifest_dependency));

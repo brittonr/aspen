@@ -102,7 +102,7 @@ fn observe_dependency(
 
 fn manifest_dependency<'a>(manifest: &'a TomlValue, row: &DependencyRow) -> Option<&'a toml::Table> {
     let section = match row.disposition.as_str() {
-        "runtime" => "dependencies",
+        "runtime" | "optional-runtime" => "dependencies",
         "development" => "dev-dependencies",
         _ => return None,
     };

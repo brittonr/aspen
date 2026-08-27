@@ -10,6 +10,7 @@ const MAX_DISTRIBUTION_ARTIFACTS: usize = 64;
 const REQUIRED_AGPL_LICENSE: &str = "AGPL-3.0-or-later";
 const REQUIRED_CANONICAL_VALENCE_PACKAGE: &str = "valence-core";
 const REQUIRED_HTTPS_PREFIX: &str = "https://";
+const REQUIRED_RADICLE_PREFIX: &str = "rad://";
 const REQUIRED_ARCHIVE_STATUS: &str = "archived";
 const LEGAL_ADVICE_NON_CLAIM: &str = "not legal advice";
 const UNIVERSAL_COMPLIANCE_NON_CLAIM: &str = "does not prove compliance in every jurisdiction";
@@ -22,12 +23,14 @@ pub enum SourceKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TransportPolicy {
     Https,
+    PrivateRadicle,
     SshPinnedWithNixArchive,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReleaseDisposition {
     Runtime,
+    OptionalRuntime,
     Development,
 }
 
@@ -325,6 +328,10 @@ fn validate_expectation(expectation: &DependencyExpectation, diagnostics: &mut V
     }
     let transport_valid = match expectation.transport_policy {
         TransportPolicy::Https => expectation.source_coordinate.starts_with(REQUIRED_HTTPS_PREFIX),
+        TransportPolicy::PrivateRadicle => {
+            expectation.source_coordinate.starts_with(REQUIRED_RADICLE_PREFIX)
+                && !expectation.nix_input.trim().is_empty()
+        }
         TransportPolicy::SshPinnedWithNixArchive => {
             expectation.source_coordinate.starts_with("ssh://git@github.com/")
                 && !expectation.nix_input.trim().is_empty()
@@ -829,12 +836,14 @@ mod tests {
     use super::*;
 
     const BASALT_REVISION: &str = "d913dc01e765c9b297df5fcc57dfa06aac39bc74";
+    const EXECUTABLE_EXTENT_REVISION: &str = "025d9636f0161777710dac37b3c210ca0ad9483f";
     const VALENCE_REVISION: &str = "5f1c2ba5072c6f9622fa59b1af20502985f569fd";
     const OCTET_REVISION: &str = "4367300e10740ecc99ba4b2171ace561b4787327";
     const DRIFT_REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const EVIDENCE_DIGEST: &str = "3abda77b5931c5ef6dcdde504f71dfce06f95d1d6c43f087cd35f8816147f7e2";
     const ALTERNATE_EVIDENCE_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const BASALT_SOURCE: &str = "https://github.com/OnixResearch/basalt.git";
+    const EXECUTABLE_EXTENT_SOURCE: &str = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB";
     const VALENCE_SOURCE: &str = "https://github.com/OnixResearch/valence.git";
     const ASPEN_SOURCE: &str = "https://github.com/OnixResearch/aspen.git";
     const ARCHIVE_NON_CLAIM: &str = "dependency satisfaction does not prove upstream correctness or remote trust; dependency satisfaction does not prove downstream integration correctness or release eligibility";
@@ -991,6 +1000,28 @@ mod tests {
         input.resolved_package_identities[0].source_coordinate = source;
 
         assert!(validate_release_dependencies(&input).is_valid());
+    }
+
+    #[test]
+    fn private_radicle_pin_requires_its_exact_transport_policy() {
+        let mut admitted = valid_input();
+        admitted.dependencies[0].source_coordinate = EXECUTABLE_EXTENT_SOURCE.to_owned();
+        admitted.dependencies[0].immutable_revision = EXECUTABLE_EXTENT_REVISION.to_owned();
+        admitted.dependencies[0].transport_policy = TransportPolicy::PrivateRadicle;
+        admitted.dependencies[0].disposition = ReleaseDisposition::OptionalRuntime;
+        admitted.observations[1].manifest_source_coordinate = Some(EXECUTABLE_EXTENT_SOURCE.to_owned());
+        admitted.observations[1].manifest_revision = Some(EXECUTABLE_EXTENT_REVISION.to_owned());
+        admitted.observations[1].lock_source_coordinate = Some(EXECUTABLE_EXTENT_SOURCE.to_owned());
+        admitted.observations[1].lock_revision = Some(EXECUTABLE_EXTENT_REVISION.to_owned());
+        admitted.observations[1].nix_revision = Some(EXECUTABLE_EXTENT_REVISION.to_owned());
+        admitted.resolved_package_identities[0].source_coordinate = EXECUTABLE_EXTENT_SOURCE.to_owned();
+        admitted.resolved_package_identities[0].immutable_revision = EXECUTABLE_EXTENT_REVISION.to_owned();
+        assert!(validate_release_dependencies(&admitted).is_valid());
+
+        admitted.dependencies[0].transport_policy = TransportPolicy::Https;
+        let denied = validate_release_dependencies(&admitted);
+        assert!(!denied.is_valid());
+        assert!(denied.diagnostics.iter().any(|item| item.code == DiagnosticCode::InvalidSourceRow));
     }
 
     #[test]

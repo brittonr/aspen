@@ -1,0 +1,57 @@
+use super::WorldHeadConflictSet;
+use super::WorldHeadTransitionPlan;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum WorldHeadIssue {
+    InvalidBounds(&'static str),
+    PolicyMismatch,
+    BranchMismatch,
+    BranchClassMismatch,
+    PurposeDenied,
+    RecoveryDenied,
+    CurrentHeadRequired,
+    CurrentHeadUnexpected,
+    ExpectedHeadMissing,
+    StaleExpectedHead,
+    OldGeneration,
+    RepeatedGeneration,
+    SkippedGeneration,
+    GenerationOverflow,
+    DurableGenerationUnavailable,
+    IndependentCurrentnessRequired,
+    AuthorityDenied,
+    AuthorityPolicyMismatch,
+    AuthorityGenerationMismatch,
+    AuthenticationDenied,
+    AuthenticationPurposeMismatch,
+    AuthenticationPolicyMismatch,
+    SignerLimitExceeded,
+    SignerThresholdMiss,
+    DuplicateSigner,
+    UnknownSignerRole,
+    SignerNotCurrent,
+    SignerRevoked,
+    SignerAuthorityDenied,
+    HistoryLimitExceeded,
+    HistoryEmpty,
+    DuplicateHistoryNode,
+    ParentLimitExceeded,
+    MissingHistoryParent,
+    HistoryCycle,
+    SuccessorMissing,
+    ExpectedHistoryHeadMissing,
+    UnrelatedSuccessor,
+    MergeSourceMissing,
+    DuplicateMergeSource,
+    MergeNeedsMultipleSources,
+    ChoregraphDenied,
+    ConflictLimitExceeded,
+    ConflictStateMismatch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorldHeadDecision {
+    Admitted(WorldHeadTransitionPlan),
+    Denied(Vec<WorldHeadIssue>),
+    Conflict(WorldHeadConflictSet),
+}

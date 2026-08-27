@@ -284,6 +284,23 @@
         "type": "github"
       }
     },
+    "choregraph-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787243576,
+        "narHash": "sha256-BO/AlwJBIuW+WXGRQgd2LymvGIYtK0fqd3YYMDtfGBw=",
+        "ref": "refs/heads/main",
+        "rev": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
+        "revCount": 69,
+        "type": "git",
+        "url": "rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF"
+      },
+      "original": {
+        "rev": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
+        "type": "git",
+        "url": "rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF"
+      }
+    },
     "crane": {
       "locked": {
         "lastModified": 1743700120,
@@ -1492,6 +1509,7 @@
         "artifact-src": "artifact-src",
         "basalt-src": "basalt-src",
         "cairn-src": "cairn-src",
+        "choregraph-src": "choregraph-src",
         "executable-extent-octet": "executable-extent-octet",
         "executable-extent-src": "executable-extent-src",
         "flake-utils": "flake-utils_9",

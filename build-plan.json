@@ -15,8 +15,8 @@
     "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-node-host#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-realm-commit-cairns/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "93b290250d73c3ccf5667f034f3e100d3842cb8d619e42585e9ccb8c217cedb0",
-  "inputsHash": "651fd22ee0614ea3fcdb6f21be9c8c21a556f62b3af283ef2a82f0dec3cc6558",
+  "cargoLockHash": "bd60304f81001708a835f9673187b8904ef919c22080eca816a7883e65c3cf86",
+  "inputsHash": "d18f33e04a8ed386fe6b51c8115e337cd1c1e4121ce464795993bccd550fdd8f",
   "crates": {
     "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12": {
       "crateName": "hegeltest-macros",
@@ -241,6 +241,38 @@
       "description": "Product-neutral BLAKE3 identity framing based on Lattice encoding",
       "license": "MIT",
       "repository": "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git"
+    },
+    "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0": {
+      "crateName": "choregraph-history",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git",
+        "rev": "b3e08e19750f53bdbcae970cdf58a47a791ed20b",
+        "subDir": "crates/choregraph-history",
+        "sha256": "0rifkbnc5vsddmlq7slsx7s1jv4blfd0qdk5sgyfjkfwbc21ksll"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Pure no-std immutable branchable event history for Choregraph consumers.",
+      "license": "AGPL-3.0-or-later"
     },
     "git+ssh://git@github.com/OnixResearch/basalt.git?rev=d913dc01e765c9b297df5fcc57dfa06aac39bc74#basalt@0.1.0": {
       "crateName": "basalt",
@@ -727,6 +759,10 @@
           "externCrateName": "cap_std"
         },
         {
+          "packageId": "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0",
+          "externCrateName": "choregraph_history"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#clap@4.6.1",
           "externCrateName": "clap"
         },
@@ -905,6 +941,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
           "externCrateName": "blake3"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0",
+          "externCrateName": "choregraph_history"
         },
         {
           "packageId": "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",

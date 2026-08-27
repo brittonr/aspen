@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-head-claim">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "world-head-claim">
+  <schema-id "molten.world-head-claim.v1">
+  <arity 10>>

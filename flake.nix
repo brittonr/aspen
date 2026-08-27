@@ -28,6 +28,10 @@
       url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
       flake = false;
     };
+    choregraph-src = {
+      url = "git+rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b";
+      flake = false;
+    };
     executable-extent-src = {
       url = "git+rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f";
       flake = false;
@@ -87,6 +91,7 @@
       onix-core-src,
       basalt-src,
       artifact-src,
+      choregraph-src,
       executable-extent-src,
       executable-extent-octet,
       mantle-executable-extent-src,
@@ -180,6 +185,36 @@
             && artifactWorkspace.workspace.package.license == "MIT OR Apache-2.0"
           ) "Molten Artifact Cargo/Nix source identity, package set, workspace, or license drifted";
           artifact-src;
+        choregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b";
+        choregraphRepository = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git";
+        choregraphHistoryDependencies = [
+          artifactRootDependencies."choregraph-history"
+          moltenCoreDependencies."choregraph-history"
+        ];
+        choregraphExpectedLockSource = "git+${choregraphRepository}?rev=${choregraphRevision}#${choregraphRevision}";
+        choregraphLockPackages = builtins.filter (
+          package: (package.source or "") == choregraphExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        choregraphWorkspace = builtins.fromTOML (builtins.readFile (choregraph-src + "/Cargo.toml"));
+        choregraphHistoryManifest = builtins.fromTOML (
+          builtins.readFile (choregraph-src + "/crates/choregraph-history/Cargo.toml")
+        );
+        choregraphSource =
+          assert pkgs.lib.assertMsg (
+            builtins.all (
+              dependency:
+              dependency.git == choregraphRepository
+              && dependency.rev == choregraphRevision
+              && dependency.version == "0.1.0"
+            ) choregraphHistoryDependencies
+            && choregraph-src.rev == choregraphRevision
+            && builtins.length choregraphLockPackages == 1
+            && (builtins.head choregraphLockPackages).name == "choregraph-history"
+            && builtins.elem "crates/choregraph-history" choregraphWorkspace.workspace.members
+            && choregraphWorkspace.workspace.package.license == "AGPL-3.0-or-later"
+            && choregraphHistoryManifest.package.name == "choregraph-history"
+          ) "Molten Choregraph branch-history Cargo/Nix source identity, package, or license drifted";
+          choregraph-src;
         executableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f";
         executableExtentRepository = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB";
         executableExtentOctetRevision = "cf04e894e53eb0947230118a086ef6066ddba38c";
@@ -480,6 +515,21 @@
           cp ${./checks/world-commit-octet/dylint.toml} "$out/dylint.toml"
           cp ${./checks/world-commit-octet/src/lib.rs} "$out/src/lib.rs"
           cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
+        '';
+        worldHeadOctetWorkspace = pkgs.runCommand "molten-world-head-octet-workspace" { } ''
+          mkdir -p \
+            "$out/src" \
+            "$out/vendor/choregraph-history"
+          cp ${./checks/world-head-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-head-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-head-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-head-octet/src/lib.rs} "$out/src/lib.rs"
+          cp ${./checks/world-head-octet/choregraph-history.Cargo.toml} \
+            "$out/vendor/choregraph-history/Cargo.toml"
+          cp -R ${choregraphSource}/crates/choregraph-history/src \
+            "$out/vendor/choregraph-history/src"
+          cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
+          cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
         '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
@@ -1441,6 +1491,24 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            world-head-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldHeadOctetWorkspace;
+                packages = [ "molten-world-head-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-head-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-head-dependency-identity = pkgs.runCommand "molten-world-head-dependency-identity" { } ''
+              test -f ${choregraphSource}/crates/choregraph-history/src/refs.rs
+              test -f ${artifactSource}/crates/artifact-auth-core/src/lib.rs
+              test -f ${artifactSource}/crates/artifact-auth-ed25519/src/lib.rs
+              touch "$out"
+            '';
             cap-std-store-authority = capStdStoreAuthorityCheck;
             cap-std-test-workspaces = capStdTestWorkspaceCheck;
             node-state-authority = nodeStateAuthorityCheck;

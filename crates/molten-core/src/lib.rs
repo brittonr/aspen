@@ -33,6 +33,7 @@ pub mod stack;
 pub mod system_extension;
 #[path = "worldcommit/mod.rs"]
 pub mod world_commit;
+pub mod world_head;
 
 pub mod prelude {
     pub use crate::codec::CodecIssue;
