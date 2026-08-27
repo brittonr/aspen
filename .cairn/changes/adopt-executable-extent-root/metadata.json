@@ -1,0 +1,12 @@
+{
+  "depends_on": [
+    "introduce-world-commit-core"
+  ],
+  "groups": ["current"],
+  "status": "blocked",
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

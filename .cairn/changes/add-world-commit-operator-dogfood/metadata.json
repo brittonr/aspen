@@ -1,0 +1,19 @@
+{
+  "depends_on": [
+    "introduce-world-commit-core",
+    "add-world-branch-head-protocol",
+    "add-world-state-diff-and-merge",
+    "add-world-execution-snapshot-profiles",
+    "adopt-world-branch-authority-policy",
+    "bind-world-promotion-to-effect-release",
+    "add-world-commit-replication-and-retention",
+    "add-world-commit-replay-capsules"
+  ],
+  "groups": ["current"],
+  "status": "blocked",
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

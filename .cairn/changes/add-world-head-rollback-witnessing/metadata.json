@@ -1,0 +1,12 @@
+{
+  "depends_on": [
+    "add-world-branch-head-protocol"
+  ],
+  "groups": ["current"],
+  "status": "blocked",
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}
