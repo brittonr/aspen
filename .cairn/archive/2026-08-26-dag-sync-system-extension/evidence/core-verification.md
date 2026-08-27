@@ -13,7 +13,7 @@ Implemented pure core coverage:
 - deterministic reachable-set and topological ordering;
 - cycle, node, edge, root, depth, byte, peer, and step bounds;
 - full, stem-first, leaf-only, resumable, and deterministic peer-partitioned strategies;
-- generation, epoch, strategy, policy, and progress fencing;
+- generation, epoch, strategy, policy, root, schema, peer-assignment, and progress fencing;
 - unsolicited, wrong-peer, stale, corrupt, unauthorized, and over-bound response denial;
 - canonical Preserves records and domain-separated record identities.
 
@@ -23,6 +23,18 @@ Job DAGs now project output-root closure through reversed dependency edges. Arti
 
 Bounded status readback reports roots, strategy, epoch, requested, verified, missing, peers, resources, failures, evidence references, and non-claims.
 
-Four core tests and five shell tests passed. The shell tests cover complete receiver-driven transfer, durable per-object progress, receipt-last ordering, deferral, corruption denial, domain projections, and status output. Core and root-crate Clippy passed for all targets and features with warnings denied.
+Eight core tests and ten shell tests passed. The tests cover bounded traversal, input-order properties, reference spelling, complete transfer, durable progress, restart, receipt-last ordering, cancellation, partition, corruption, authority denial, peer reassignment, domain projections, and status output.
 
-No concrete live transport, Redb adapter, system-extension lifecycle, live loopback, multiprocess, or domain activation claim is made by this stage.
+The same core passed with the existing deterministic transport adapter and the existing live Iroh loopback adapter. DAG code does not import Iroh backend types.
+
+The focused Octet workspace passed with zero findings, warnings, and errors. Core and root-crate Clippy passed for all targets and features with warnings denied.
+
+The full `molten` and `molten-core` all-target, all-feature test command passed. It included 1,305 root-library tests and 207 core tests.
+
+The all-target, all-feature Clippy command passed with warnings denied. `nix flake check --no-build --builders ''` also passed.
+
+Strict Cairn validation and the proposal, design, and tasks gates passed. The focused Octet command passed after the final Rust changes.
+
+The Nix evaluation first found a stale `cairn/archive` path. The path now points to the existing `.cairn/archive` directory.
+
+This stage makes no multiprocess, global convergence, domain activation, installation, execution, publication, or merge claim.

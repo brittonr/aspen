@@ -392,7 +392,7 @@
           octetRevision = "fc38f59330b626961d166febfdf1a5aa6575460f";
           profileDir = ./verification/verified-node-replication-pilot;
           workspaceSource = sourceForConfigChecks;
-          savedEvidenceDir = ./cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence;
+          savedEvidenceDir = ./.cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence;
         };
 
         moltenVmNodeModule =

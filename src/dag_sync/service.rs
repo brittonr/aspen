@@ -63,6 +63,9 @@ where
         generation: plan.generation,
         strategy: plan.strategy,
         policy_ref: request.policy_ref.clone(),
+        root_refs: plan.roots.clone(),
+        schema_refs: plan.schema_refs.clone(),
+        peers: plan.peers.clone(),
         verified: Vec::new(),
         steps_completed: 0,
     });
@@ -87,6 +90,7 @@ where
             }
         };
         validate_envelope(&envelope, fetch)?;
+        evidence_refs.push(envelope.transport_observation_ref.clone());
         let response = ports.content.verify(&plan, &envelope, &authority.authority_ref)?;
         let next = admit_dag_response(&plan, &progress, &response)
             .map_err(|issue| MoltenError::invalid_harness(format!("DAG response denied: {issue:?}")))?;

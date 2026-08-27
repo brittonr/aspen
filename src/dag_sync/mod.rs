@@ -7,12 +7,14 @@
     reason = "DAG-sync protocol names remain explicit at the product boundary"
 )]
 
+mod conformance;
 mod domain;
 mod ports;
 mod records;
 mod service;
 mod status;
 
+pub use conformance::*;
 pub use domain::*;
 pub use ports::*;
 pub use records::*;

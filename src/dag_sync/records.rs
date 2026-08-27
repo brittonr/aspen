@@ -93,6 +93,8 @@ pub fn canonical_dag_plan(plan: &DagSyncPlan) -> Result<CanonicalDagRecord> {
             field("generation", number(plan.generation)),
             field("strategy", string(plan.strategy.as_str())),
             field("roots", refs(plan.roots.iter().map(DagRootRef::as_str))),
+            field("schemas", refs(plan.schema_refs.iter().map(DagSchemaRef::as_str))),
+            field("peers", refs(plan.peers.iter().map(DagPeerId::as_str))),
             field("topological-nodes", refs(plan.topological_nodes.iter().map(DagNodeRef::as_str))),
             field("missing", sequence(plan.missing.iter().map(object_value).collect())),
             field(
@@ -166,6 +168,9 @@ fn progress_value(progress: &DagSyncProgress) -> IOValue {
         field("generation", number(progress.generation)),
         field("strategy", string(progress.strategy.as_str())),
         field("policy-ref", string(progress.policy_ref.as_str())),
+        field("roots", refs(progress.root_refs.iter().map(DagRootRef::as_str))),
+        field("schemas", refs(progress.schema_refs.iter().map(DagSchemaRef::as_str))),
+        field("peers", refs(progress.peers.iter().map(DagPeerId::as_str))),
         field("verified", sequence(verified.iter().map(object_value).collect())),
         field("steps-completed", usize_value(progress.steps_completed)),
     ])

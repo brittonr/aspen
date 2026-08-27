@@ -23,14 +23,7 @@ pub fn dag_sync_status(outcome: &DagSyncOutcome) -> DagSyncStatusView {
     let plan = &outcome.plan;
     let progress = &outcome.progress;
     let receipt = &outcome.receipt;
-    let mut peers = plan
-        .requests
-        .iter()
-        .filter_map(|request| request.assigned_peer.as_ref().map(DagPeerId::as_str))
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    peers.sort();
-    peers.dedup();
+    let peers = plan.peers.iter().map(DagPeerId::as_str).map(ToString::to_string).collect();
     DagSyncStatusView {
         plan_ref: plan.plan_ref.as_str().to_string(),
         epoch_ref: plan.epoch_ref.as_str().to_string(),

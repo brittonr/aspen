@@ -1,3 +1,6 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
 //! Pure Molten boundary cores.
 //!
 //! This crate intentionally has no filesystem, process, network, clock, Redb,
