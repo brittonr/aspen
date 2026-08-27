@@ -1,3 +1,6 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
 #[cfg(test)]
 #[path = "test/support.rs"]
 mod test_support;
@@ -186,6 +189,26 @@ mod cli_fabric_simulation {
 mod system_extension_port;
 mod cli_system_extension {
     pub(crate) use super::system_extension_port::*;
+}
+#[path = "cli/runtime/worldcommit.rs"]
+mod world_commit_port;
+mod cli_world_commit {
+    pub(crate) use super::world_commit_port::*;
+}
+#[path = "cli/runtime/worldhead.rs"]
+mod world_head_port;
+mod cli_world_head {
+    pub(crate) use super::world_head_port::*;
+}
+#[path = "cli/runtime/worlddistribution.rs"]
+mod world_distribution_port;
+mod cli_world_distribution {
+    pub(crate) use super::world_distribution_port::*;
+}
+#[path = "cli/runtime/worldmerge.rs"]
+mod world_merge_port;
+mod cli_world_merge {
+    pub(crate) use super::world_merge_port::*;
 }
 #[path = "cli/core/storage.rs"]
 mod cell_port;

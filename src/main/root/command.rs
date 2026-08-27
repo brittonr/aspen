@@ -48,6 +48,22 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_system_extension::SystemExtensionCommand,
     },
+    WorldCommit {
+        #[command(subcommand)]
+        command: crate::cli_world_commit::WorldCommitCommand,
+    },
+    WorldHead {
+        #[command(subcommand)]
+        command: crate::cli_world_head::WorldHeadCommand,
+    },
+    WorldDistribution {
+        #[command(subcommand)]
+        command: crate::cli_world_distribution::WorldDistributionCommand,
+    },
+    WorldMerge {
+        #[command(subcommand)]
+        command: crate::cli_world_merge::WorldMergeCommand,
+    },
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -211,4 +227,146 @@ pub(crate) enum Test {
         #[command(subcommand)]
         command: crate::cli_repro::ReproCommand,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::Cli;
+    use super::Top;
+
+    const COMMIT_REF: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[test]
+    fn world_commit_operator_commands_parse_explicit_state_and_identity() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-commit",
+            "plan-restore",
+            "--state-root",
+            "state",
+            COMMIT_REF,
+            "--out",
+            "restore.preserves",
+        ])
+        .expect("world commit command");
+
+        assert!(matches!(cli.command, Some(Top::WorldCommit { .. })));
+    }
+
+    #[test]
+    fn world_commit_operator_commands_reject_missing_state_root() {
+        let result = Cli::try_parse_from(["molten", "world-commit", "inspect", COMMIT_REF]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn world_head_plan_parses_every_compare_and_swap_input() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-head",
+            "plan",
+            "--branch",
+            "main",
+            "--expected-head",
+            COMMIT_REF,
+            "--successor-head",
+            COMMIT_REF,
+            "--expected-generation",
+            "1",
+            "--successor-generation",
+            "2",
+            "--purpose",
+            "advance",
+            "--policy-ref",
+            COMMIT_REF,
+            "--out",
+            "claim.preserves",
+        ])
+        .expect("world-head plan command");
+
+        assert!(matches!(cli.command, Some(Top::WorldHead { .. })));
+    }
+
+    #[test]
+    fn world_head_mutation_commands_reject_missing_capability_root() {
+        let result = Cli::try_parse_from([
+            "molten",
+            "world-head",
+            "advance",
+            "--claim",
+            "claim.preserves",
+            "--signature",
+            "signature.json",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn world_distribution_plan_parses_bounded_identity_and_output() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-distribution",
+            "sync-plan",
+            "--state-root",
+            "state",
+            "--commit",
+            COMMIT_REF,
+            "--epoch-ref",
+            COMMIT_REF,
+            "--policy-ref",
+            COMMIT_REF,
+            "--generation",
+            "1",
+            "--assume-missing",
+            "--out",
+            "world-sync.preserves",
+        ])
+        .expect("world distribution plan command");
+
+        assert!(matches!(cli.command, Some(Top::WorldDistribution { .. })));
+    }
+
+    #[test]
+    fn world_distribution_sync_rejects_missing_capability_root() {
+        let result = Cli::try_parse_from(["molten", "world-distribution", "sync", "--commit", COMMIT_REF]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn world_merge_plan_parses_explicit_base_sources_and_policy() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-merge",
+            "merge-plan",
+            "--state-root",
+            "state",
+            "--base",
+            COMMIT_REF,
+            "--left",
+            COMMIT_REF,
+            "--right",
+            COMMIT_REF,
+            "--profile-ref",
+            COMMIT_REF,
+            "--policy-ref",
+            COMMIT_REF,
+            "--out",
+            "merge.preserves",
+        ])
+        .expect("world-merge plan command");
+
+        assert!(matches!(cli.command, Some(Top::WorldMerge { .. })));
+    }
+
+    #[test]
+    fn world_merge_publish_rejects_missing_capability_root() {
+        let result = Cli::try_parse_from(["molten", "world-merge", "merge-publish", "--plan", "merge.preserves"]);
+
+        assert!(result.is_err());
+    }
 }

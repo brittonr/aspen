@@ -1,0 +1,28 @@
+{
+  "schema": "mantle-executable-extent-producer-receipt-v1",
+  "receipt_identity_blake3": "82b1ccefdbe9080649c154e02410f53006cdf7ce541a3b93e653c1846aea526a",
+  "bundle_identity_blake3": "2f44f5eeb1d93cafc65dfdac36fb0d2020fed4466d074d331602422a8d411d81",
+  "bundle_manifest_leaf": "bundle-2f44f5eeb1d93cafc65dfdac36fb0d2020fed4466d074d331602422a8d411d81.json",
+  "source_artifact_blake3": "4598e001cd6e4c4fe4aa57bb055c11f1cbe10b3e0def42de0da8ec4036500f6c",
+  "layout_identity_blake3": "b1f86e8102e359b22e9f0cb4f7efaa65ad84f6953fc68259b725bf1051400dd9",
+  "plan_identity_blake3": "1048bf5dc173c761e55512d0e09be2f320a14538c97fde5b53e25ee3d6ea94dc",
+  "producer_implementation_id": "mantle-flat-page-producer@v1",
+  "layout_corpus_identity_blake3": "765a7b724c3ba1215f66aee8657a728038b6608ef7e6060366e0490a628acaae",
+  "layout_receipt_identity_blake3": "e1148bbfc1e5c4798cdce394bb4ec125c038a725d10b4535c278a11f2b23fe2a",
+  "transition_corpus_identity_blake3": "bbf6fea58b43ccb6d8e47d4cea113b1c0a94ff8058ce14ef104d8fc857c48362",
+  "transition_receipt_identity_blake3": "abcf011ff3b20c5b6446c41751798b8686a252ce075d224ac2e5ca8a36de0896",
+  "publication_disposition": "published",
+  "source_remeasured": true,
+  "extents_remeasured": true,
+  "manifest_published": true,
+  "non_claims": [
+    "producer receipt does not prove compiler correctness",
+    "producer receipt does not prove semantic code equivalence",
+    "producer receipt does not prove consumer mapping safety",
+    "producer receipt does not grant execution authority",
+    "producer receipt does not prove sandbox or host integrity",
+    "producer receipt does not grant retention or deletion authority",
+    "producer receipt does not grant deployment authority",
+    "producer receipt does not prove release eligibility"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "depends_on": [
+    "introduce-world-commit-core",
+    "add-world-branch-head-protocol",
+    "bind-world-promotion-to-effect-release",
+    "add-world-commit-replication-and-retention",
+    "add-world-commit-replay-capsules"
+  ],
+  "groups": ["current"],
+  "status": "blocked",
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

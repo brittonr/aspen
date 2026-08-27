@@ -70,6 +70,12 @@ pub(crate) fn run() -> molten::error::Result<()> {
         Some(command::Top::SystemExtension { command }) => {
             crate::cli_system_extension::run_system_extension_command(command)
         }
+        Some(command::Top::WorldCommit { command }) => crate::cli_world_commit::run_world_commit_command(command),
+        Some(command::Top::WorldHead { command }) => crate::cli_world_head::run_world_head_command(command),
+        Some(command::Top::WorldDistribution { command }) => {
+            crate::cli_world_distribution::run_world_distribution_command(command)
+        }
+        Some(command::Top::WorldMerge { command }) => crate::cli_world_merge::run_world_merge_command(command),
     }
 }
 

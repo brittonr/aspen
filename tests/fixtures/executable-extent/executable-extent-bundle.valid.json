@@ -1,0 +1,37 @@
+{
+  "schema": "mantle-executable-extent-bundle-v1",
+  "bundle_identity_blake3": "2f44f5eeb1d93cafc65dfdac36fb0d2020fed4466d074d331602422a8d411d81",
+  "profile_id": "mantle-flat-page-x86_64-linux-gnu-v1",
+  "source_artifact_blake3": "4598e001cd6e4c4fe4aa57bb055c11f1cbe10b3e0def42de0da8ec4036500f6c",
+  "source_length_bytes": 4096,
+  "format": "mantle-flat-page-v1",
+  "architecture": "x86_64",
+  "abi": "linux-gnu",
+  "endianness": "little",
+  "page_size_bytes": 4096,
+  "maximum_virtual_bytes": 4096,
+  "parser_id": "mantle-flat-page-parser@v1",
+  "toolchain_id": "mantle-flat-page-fixture-toolchain@v1",
+  "relocation_model": "none",
+  "layout_identity_blake3": "b1f86e8102e359b22e9f0cb4f7efaa65ad84f6953fc68259b725bf1051400dd9",
+  "plan_identity_blake3": "1048bf5dc173c761e55512d0e09be2f320a14538c97fde5b53e25ee3d6ea94dc",
+  "extents": [
+    {
+      "ordinal": 0,
+      "member_leaf": "extent-4598e001cd6e4c4fe4aa57bb055c11f1cbe10b3e0def42de0da8ec4036500f6c.bin",
+      "source_offset_bytes": 0,
+      "virtual_offset_bytes": 0,
+      "length_bytes": 4096,
+      "content_blake3": "4598e001cd6e4c4fe4aa57bb055c11f1cbe10b3e0def42de0da8ec4036500f6c",
+      "permission": "executable-read-only"
+    }
+  ],
+  "non_claims": [
+    "bundle production does not prove compiler correctness",
+    "bundle production does not prove executable code semantics",
+    "bundle production does not grant mapping or execution authority",
+    "bundle production does not prove sandbox or host integrity",
+    "bundle production does not grant retention or deletion authority",
+    "bundle production does not prove release eligibility"
+  ]
+}

@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["."]
+
+[workspace.metadata.octet]
+default_scope = ["--workspace"]
+cargo_check_args = ["--all-targets", "--all-features"]
+
+[package]
+name = "molten-world-distribution-octet"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
+blake3 = "=1.8.5"
+choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }

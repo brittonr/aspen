@@ -1,0 +1,11 @@
+{
+  "depends_on": [
+    "content-store-adapter-runtime",
+    "fabric-membership-placement-runtime",
+    "fabric-observability-integrity-runtime",
+    "fabric-time-scheduler-runtime",
+    "fabric-transport-session-runtime",
+    "fabric-whole-system-simulation"
+  ],
+  "groups": ["current"]
+}

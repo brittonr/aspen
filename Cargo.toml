@@ -21,6 +21,13 @@ description = "Molten Rust project"
 path = "src/lib.rs"
 
 [features]
+executable-extents = [
+  "dep:data-encoding",
+  "dep:executable-extent-conformance",
+  "dep:executable-extent-core",
+  "dep:executable-extent-linux",
+  "molten-core/executable-extents",
+]
 profiler = ["dep:flux-profiler"]
 profiler-alloc = ["profiler", "flux-profiler/alloc-profile"]
 profiler-disabled = ["dep:flux-profiler", "flux-profiler/disable-profiling"]
@@ -37,8 +44,13 @@ artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact
 bao-tree = "0.16.0"
 basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "d913dc01e765c9b297df5fcc57dfa06aac39bc74", version = "0.1.0" }
 blake3 = "1"
+choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
 cap-fs-ext = "3"
 cap-std = "3"
+data-encoding = { version = "2", optional = true }
+executable-extent-conformance = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
+executable-extent-core = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
+executable-extent-linux = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 molten-core = { path = "crates/molten-core" }
 molten-node-host = { path = "crates/molten-node-host" }
 cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", rev = "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b", package = "cairn-core" }
@@ -57,6 +69,7 @@ redb = "4.1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schema-identity-core = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "2562c8aa38a034061f9af9f3e17280494a5b8de2" }
+schema-migration-core = { git = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git", rev = "4fe90e130f2871cf69a6febcdc70785adca98aea", version = "0.1.0" }
 snafu = "0.8"
 steel-core = "0.8.2"
 tar = "0.4"

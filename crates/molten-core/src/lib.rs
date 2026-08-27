@@ -1,3 +1,6 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
 //! Pure Molten boundary cores.
 //!
 //! This crate intentionally has no filesystem, process, network, clock, Redb,
@@ -6,8 +9,12 @@
 
 pub mod cluster_harness;
 pub mod codec;
+pub mod content_replication;
 pub mod content_store_adapter;
+pub mod dag_sync;
 pub mod dependency;
+#[cfg(feature = "executable-extents")]
+pub mod executable_extent;
 pub mod fabric;
 pub mod fabric_crypto_identity;
 pub mod fabric_durability;
@@ -24,6 +31,11 @@ pub mod preserves_profile;
 pub mod release_dependency;
 pub mod stack;
 pub mod system_extension;
+#[path = "worldcommit/mod.rs"]
+pub mod world_commit;
+pub mod world_distribution;
+pub mod world_head;
+pub mod world_merge;
 
 pub mod prelude {
     pub use crate::codec::CodecIssue;
@@ -35,6 +47,24 @@ pub mod prelude {
     pub use crate::dependency::ImportFact;
     pub use crate::dependency::Layer;
     pub use crate::dependency::validate_dependency_boundaries;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ActivationDecision;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ActivationFacts;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::AdmissionDecision;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::CodeProfile;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ConsumerProfile;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ExtentCodeRootProfile;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::ProducerBundleFacts;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::RemeasuredExtent;
+    #[cfg(feature = "executable-extents")]
+    pub use crate::executable_extent::admit_code_profile;
     pub use crate::fabric_durability::ownership::CasLease;
     pub use crate::fabric_durability::ownership::CasLeaseDecision;
     pub use crate::fabric_durability::ownership::CasLeaseDecisionInput;
@@ -97,4 +127,20 @@ pub mod prelude {
     pub use crate::stack::default_valence_stack_adapter_rows;
     pub use crate::stack::validate_stack_evidence_envelope;
     pub use crate::stack::validate_valence_stack_adapter;
+    pub use crate::world_commit::CapturePlan;
+    pub use crate::world_commit::CaptureRequest;
+    pub use crate::world_commit::ClosureReport;
+    pub use crate::world_commit::ClosureRequest;
+    pub use crate::world_commit::RestorePlan;
+    pub use crate::world_commit::RootKind;
+    pub use crate::world_commit::SnapshotProfile;
+    pub use crate::world_commit::SnapshotProfileKind;
+    pub use crate::world_commit::WorldCommitCore;
+    pub use crate::world_commit::WorldCommitRef;
+    pub use crate::world_commit::WorldRootRef;
+    pub use crate::world_commit::compare_revision_rechecks;
+    pub use crate::world_commit::identify_world_commit;
+    pub use crate::world_commit::plan_capture;
+    pub use crate::world_commit::plan_restore;
+    pub use crate::world_commit::validate_closure;
 }

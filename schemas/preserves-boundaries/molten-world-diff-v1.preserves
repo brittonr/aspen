@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-diff">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "world-diff">
+  <schema-id "molten.world-diff.v1">
+  <arity 5>>

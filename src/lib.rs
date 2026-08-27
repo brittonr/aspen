@@ -78,7 +78,11 @@ compat_module!(evidence_chain, lineage);
 #[path = "federation/mod.rs"]
 pub mod mesh;
 compat_module!(federation, mesh);
+pub mod content_replication;
 pub mod content_store_adapter;
+pub mod dag_sync;
+#[cfg(feature = "executable-extents")]
+pub mod executable_extent;
 pub mod fabric;
 pub mod fabric_consistency;
 pub mod fabric_crypto_identity;
@@ -97,6 +101,11 @@ pub mod testbed;
 pub mod wasm_component;
 #[path = "wasm/performance/mod.rs"]
 pub mod wasm_performance;
+#[path = "worldcommit/mod.rs"]
+pub mod world_commit;
+pub mod world_distribution;
+pub mod world_head;
+pub mod world_merge;
 compat_module!(harness, testbed);
 #[doc(hidden)]
 #[path = "iroh/exchange.rs"]

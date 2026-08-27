@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-merge-conflict">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "world-merge-conflict">
+  <schema-id "molten.world-merge-conflict.v1">
+  <arity 6>>
