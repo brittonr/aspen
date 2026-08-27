@@ -19,6 +19,7 @@
 - [x] [parallel] Add positive logical captures, stable repeated identities, complete restores, and cohort-bound opaque-reference fixtures. r[molten.world_commit.verification]
 - [x] [parallel] Add negative drift, incomplete inventory, missing root, wrong domain, duplicate parent, cycle, malformed canonical bytes, stale schema, secret disclosure, authority confusion, and evidence-inside-core fixtures. r[molten.world_commit.verification]
 - [x] [serial] Document ownership, root profiles, detached envelopes, restore limits, and the absence of external `RealmCommit` compatibility claims. r[molten.world_commit.detached_evidence]
-- [ ] [depends:world-commit-verification] Run focused tests, Octet, Clippy with warnings denied, Cairn validation and gates, lifecycle checks, and relevant Nix checks. r[molten.world_commit.verification]
-  - Blocked: Octet reports `warning-only` with 5,856 default-scope and 978 `molten-core` findings outside the world-commit paths. The focused path gate reports no world-commit findings.
-  - Blocked: `nix flake check path:$PWD -L` references the missing legacy path `cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence`. The focused `.#molten` build remains the relevant fallback.
+- [x] [depends:world-commit-verification] Run focused tests, Octet, Clippy with warnings denied, Cairn validation and gates, lifecycle checks, and relevant Nix checks. r[molten.world_commit.verification]
+  - Passed: the dedicated full-catalog `world-commit-octet-deny-all` check over the real core source reported zero findings, warnings, and errors.
+  - Passed: focused core and shell tests, Clippy with warnings denied, Cairn strict validation and gates, `nix flake check --no-build`, and `checks.x86_64-linux.verified-node-replication-pilot`.
+  - Bounded: inherited repository-wide findings remain outside this focused completion claim.

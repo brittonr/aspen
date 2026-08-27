@@ -473,6 +473,14 @@
           cp -R ${./crates/molten-core/src/executable_extent} \
             "$out/product/molten-core/src/executable_extent"
         '';
+        worldCommitOctetWorkspace = pkgs.runCommand "molten-world-commit-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-commit-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-commit-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-commit-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-commit-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1417,6 +1425,18 @@
                 packages = [ "molten-executable-extent-octet" ];
                 cargoExtraArgs = "--all-targets --all-features";
                 cargoLock = ./checks/executable-extent-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-commit-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldCommitOctetWorkspace;
+                packages = [ "molten-world-commit-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-commit-octet/Cargo.lock;
               }).overrideAttrs
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
