@@ -1,6 +1,6 @@
 ## Phase 1: Dependency and pure admission
 
-- [ ] [serial] [blocked:executable-extent-project] Record the accepted project contract, immutable source revision, license, Octet gate, conformance suite, and claim boundaries. r[molten.world_extents.dependency]
+- [ ] [serial] Record private Radicle source `rad://z37R1bP1kHcELs89RNbQRaqbCVKxB`, immutable revision `65f00649eebd5b42426f76f77ffa1f91e26d17eb`, license, Octet gate, conformance suite, and claim boundaries. r[molten.world_extents.dependency]
 - [ ] [serial] [blocked:mantle-extent-bundle] Record the reviewed Mantle producer bundle schema, fixtures, and exact source identity. r[molten.world_extents.profile]
 - [ ] [depends:introduce-world-commit-core] Record baseline artifact registry, runtime admission, content-store, and world code-root tests. r[molten.world_extents.verification]
 - [ ] [serial] Define nominal semantic-code, artifact, extent-manifest, extent, page-profile, mapping, runtime-cohort, admission, and diagnostic DTOs. r[molten.world_extents.identity_domains] r[molten.world_extents.profile]

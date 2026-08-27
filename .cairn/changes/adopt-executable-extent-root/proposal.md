@@ -18,7 +18,7 @@ Ordinary content availability does not prove that bytes are correctly aligned, s
 ## Dependencies
 
 - `introduce-world-commit-core`.
-- The workspace `establish-executable-extent-project` coordination change.
+- The workspace `establish-executable-extent-project` coordination change and private Radicle source `rad://z37R1bP1kHcELs89RNbQRaqbCVKxB` at immutable revision `65f00649eebd5b42426f76f77ffa1f91e26d17eb`.
 - Mantle `publish-executable-extent-bundles`.
 - Cap Root, Durable File Publication, Artifact Auth, Artifact Binding, and the reviewed executable-extent contract.
 - Existing Molten artifact registry and runtime admission mechanisms.

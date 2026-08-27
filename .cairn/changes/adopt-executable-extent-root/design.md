@@ -60,7 +60,7 @@ Unsupported target, format, ABI, page size, relocation model, or runtime cohort 
 
 ## Rollout
 
-1. Wait for the shared project contract and Mantle producer bundle.
+1. Pin private Radicle source `rad://z37R1bP1kHcELs89RNbQRaqbCVKxB` at reviewed revision `65f00649eebd5b42426f76f77ffa1f91e26d17eb`, then wait for the Mantle producer bundle. Private visibility does not replace immutable source identity.
 2. Pin exact source and add compatibility vectors.
 3. Add pure profile and manifest admission without mapping.
 4. Add capability-relative materialization, sealing, and read-back.
