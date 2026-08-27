@@ -1,0 +1,10 @@
+{
+  "depends_on": [
+    "operationalize-native-system-extension-host"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}
