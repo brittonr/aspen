@@ -23,8 +23,9 @@ pub const EFFECT_OPERATION: &str = "fixture-effect";
 pub const EFFECT_INPUT_SCHEMA: &str = "molten.fixture.native.effect-input.v1";
 pub const EFFECT_OUTPUT_SCHEMA: &str = "molten.fixture.native.effect-output.v1";
 pub const GENERATION: u64 = 1;
-pub const REQUEST_BYTES: u64 = 128;
+const REQUEST_PAYLOAD: &[u8] = b"fixture-ingress-request-v2";
 const CALLBACK_LIMIT: u64 = 1_048_576;
+const MAX_VALUE_BYTES: u64 = 262_144;
 const DIAGNOSTIC_LIMIT: u64 = 1_048_576;
 const TIMEOUT_MS: u64 = 5_000;
 const POLL_INTERVAL_MS: u64 = 5;
@@ -115,6 +116,7 @@ pub struct Cohort {
     pub execution_profile: CanonicalExecutionProfile,
     pub template: NativeExecutionTemplate,
     pub journal: Arc<Mutex<Journal>>,
+    pub values: SharedNativeCallbackValuePort,
 }
 
 impl Cohort {
@@ -133,7 +135,7 @@ impl Cohort {
         )
         .expect("native executable evidence");
         let instance_id = native_identity_ref(&[
-            "native-instance-v1",
+            "native-instance-v2",
             &admitted.manifest().extension_id,
             &admitted.manifest().service_id,
             admitted.manifest_ref(),
@@ -153,6 +155,7 @@ impl Cohort {
             execution_profile,
             template,
             journal: Arc::new(Mutex::new(Journal::default())),
+            values: shared_native_callback_value_port(InMemoryNativeCallbackValuePort::default()),
         }
     }
 
@@ -181,6 +184,7 @@ impl Cohort {
             self.admitted.clone(),
             port,
             self.journal.clone(),
+            self.values.clone(),
             self.template.clone(),
         )
         .expect("install native service")
@@ -193,6 +197,7 @@ impl Cohort {
         let executor = NativeProcessSystemExtensionExecutor::new(
             port,
             self.journal.clone(),
+            self.values.clone(),
             instance.clone(),
             self.template.clone(),
         )
@@ -210,6 +215,8 @@ impl Cohort {
 }
 
 pub fn ingress(generation: u64, manifest_ref: &str) -> NativeIngressEnvelope {
+    let payload = REQUEST_PAYLOAD.to_vec();
+    let accounted_bytes = u64::try_from(payload.len()).expect("fixture ingress length");
     NativeIngressEnvelope {
         schema: NATIVE_INGRESS_SCHEMA.to_string(),
         request_ref: HASH_A.to_string(),
@@ -224,8 +231,11 @@ pub fn ingress(generation: u64, manifest_ref: &str) -> NativeIngressEnvelope {
         transport_profile_ref: HASH_C.to_string(),
         alpn: NATIVE_ALPN.to_string(),
         framing: NATIVE_FRAMING.to_string(),
-        payload_ref: HASH_D.to_string(),
-        accounted_bytes: REQUEST_BYTES,
+        payload: NativeCallbackValue {
+            value_ref: molten::preserves_rail::content_ref_from_bytes(&payload),
+            bytes: payload,
+        },
+        accounted_bytes,
     }
 }
 
@@ -263,7 +273,7 @@ fn execution_profile_descriptor() -> ExecutionProfileDescriptor {
 fn native_profile(execution: &CanonicalExecutionProfile) -> NativeHostProfile {
     NativeHostProfile {
         schema: NATIVE_HOST_PROFILE_SCHEMA.to_string(),
-        profile_id: "native-host-local-pilot-v1".to_string(),
+        profile_id: "native-host-local-pilot-v2".to_string(),
         profile_ref: HASH_A.to_string(),
         execution_profile_ref: execution.profile_ref.clone(),
         transport_profile_ref: HASH_C.to_string(),
@@ -272,11 +282,14 @@ fn native_profile(execution: &CanonicalExecutionProfile) -> NativeHostProfile {
         max_callback_input_bytes: CALLBACK_LIMIT,
         max_callback_output_bytes: CALLBACK_LIMIT,
         max_diagnostic_bytes: DIAGNOSTIC_LIMIT,
+        max_materialized_value_bytes: MAX_VALUE_BYTES,
         max_instances: MAX_INSTANCES,
         max_unresolved_operations: MAX_OPERATIONS,
         max_port_bindings: MAX_BINDINGS,
         max_policy_refs: MAX_POLICIES,
+        max_materialized_values: MAX_OPERATIONS,
         is_local_live_pilot: true,
+        requires_materialized_values: true,
         non_claims: REQUIRED_NATIVE_HOST_NON_CLAIMS.to_vec(),
     }
 }
@@ -317,6 +330,7 @@ fn execution_template(
     NativeExecutionTemplate {
         host_profile: native_profile.clone(),
         executable: executable.clone(),
+        admitted: admitted.clone(),
         request: ExecutionRequest {
             schema: EXECUTION_REQUEST_SCHEMA.to_string(),
             operation_ref: HASH_A.to_string(),

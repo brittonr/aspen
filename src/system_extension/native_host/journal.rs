@@ -24,13 +24,13 @@ use crate::preserves_rail::strict_canonical_decode;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
 
-const INSTANCE_RECORD: &str = "native-instance-state-v1";
-const LIFECYCLE_RECORD: &str = "native-instance-lifecycle-v1";
-const USAGE_RECORD: &str = "native-instance-usage-v1";
-const OPERATION_RECORD: &str = "native-instance-operation-v1";
+const INSTANCE_RECORD: &str = "native-instance-state-v2";
+const LIFECYCLE_RECORD: &str = "native-instance-lifecycle-v2";
+const USAGE_RECORD: &str = "native-instance-usage-v2";
+const OPERATION_RECORD: &str = "native-instance-operation-v2";
 const NONE_RECORD: &str = "none";
 const SOME_RECORD: &str = "some";
-const INSTANCE_FIELD_COUNT: usize = 18;
+const INSTANCE_FIELD_COUNT: usize = 19;
 const LIFECYCLE_FIELD_COUNT: usize = 5;
 const USAGE_FIELD_COUNT: usize = 6;
 const OPERATION_FIELD_COUNT: usize = 8;
@@ -195,12 +195,13 @@ pub fn decode_native_instance_record(bytes: &[u8]) -> crate::error::Result<Nativ
         usage: parse_usage(&fields[9])?,
         callback_sequence: required_u64(&fields[10], "native callback sequence")?,
         event_sequence: required_u64(&fields[11], "native event sequence")?,
-        checkpoint_ref: parse_optional_ref(&fields[12], "native checkpoint ref")?,
-        unresolved: parse_operations(&fields[13])?,
-        completed_operations: parse_operations(&fields[14])?,
-        completed_operation_refs: parse_refs(&fields[15], "completed operation refs")?,
-        evidence_refs: parse_refs(&fields[16], "native evidence refs")?,
-        is_accepting_ingress: required_bool(&fields[17], "native ingress state")?,
+        state_ref: parse_optional_ref(&fields[12], "native state ref")?,
+        checkpoint_ref: parse_optional_ref(&fields[13], "native checkpoint ref")?,
+        unresolved: parse_operations(&fields[14])?,
+        completed_operations: parse_operations(&fields[15])?,
+        completed_operation_refs: parse_refs(&fields[16], "completed operation refs")?,
+        evidence_refs: parse_refs(&fields[17], "native evidence refs")?,
+        is_accepting_ingress: required_bool(&fields[18], "native ingress state")?,
     })
 }
 
@@ -218,6 +219,7 @@ fn native_instance_value(instance: &NativeInstanceRecord) -> IOValue {
         usage_value(instance.usage),
         u64_value(instance.callback_sequence),
         u64_value(instance.event_sequence),
+        optional_ref_value(instance.state_ref.as_deref()),
         optional_ref_value(instance.checkpoint_ref.as_deref()),
         sequence(instance.unresolved.iter().map(operation_value).collect()),
         sequence(instance.completed_operations.iter().map(operation_value).collect()),
@@ -390,6 +392,7 @@ fn parse_operation_kind(value: &str) -> crate::error::Result<NativeOperationKind
         "callback" => Ok(NativeOperationKind::Callback),
         "effect" => Ok(NativeOperationKind::Effect),
         "ingress" => Ok(NativeOperationKind::Ingress),
+        "value-publication" => Ok(NativeOperationKind::ValuePublication),
         _ => Err(MoltenError::invalid_harness("native operation kind is unsupported")),
     }
 }

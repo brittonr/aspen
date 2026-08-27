@@ -117,11 +117,14 @@ mod tests {
             max_callback_input_bytes: GENERATION,
             max_callback_output_bytes: GENERATION,
             max_diagnostic_bytes: GENERATION,
+            max_materialized_value_bytes: GENERATION,
             max_instances: MAX_INSTANCES,
             max_unresolved_operations: MAX_INSTANCES,
             max_port_bindings: MAX_INSTANCES,
             max_policy_refs: MAX_INSTANCES,
+            max_materialized_values: MAX_INSTANCES,
             is_local_live_pilot: true,
+            requires_materialized_values: true,
             non_claims: REQUIRED_NATIVE_HOST_NON_CLAIMS.to_vec(),
         })
         .expect("node native profile")
@@ -147,6 +150,7 @@ mod tests {
             usage: ResourceUsage::default(),
             callback_sequence: 0,
             event_sequence: 0,
+            state_ref: None,
             checkpoint_ref: None,
             unresolved: Vec::new(),
             completed_operations: Vec::new(),

@@ -11,10 +11,21 @@ const HASH_C: &str = "blake3:ccccccccccccccccccccccccccccccccccccccccccccccccccc
 const HASH_D: &str = "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 const GENERATION: u64 = 1;
 const CALLBACK_BYTES: u64 = 4_096;
-const MAX_ITEMS: usize = 16;
+const MAX_ITEMS: u64 = 16;
 const PROFILE_LIMIT: u64 = 32;
 const OPERATION_BYTE_LIMIT: u64 = 65_536;
 const NAMESPACE_BYTE_LIMIT: u64 = 1_048_576;
+const PAYLOAD_BYTES: &[u8] = b"native-payload-v2";
+const STATE_BYTES: &[u8] = b"native-state-v2";
+const OUTPUT_BYTES: &[u8] = b"native-output-v2";
+const EFFECT_REQUEST_BYTES: &[u8] = b"native-effect-request-v2";
+
+fn value(bytes: &[u8]) -> NativeCallbackValue {
+    NativeCallbackValue {
+        value_ref: crate::preserves_rail::content_ref_from_bytes(bytes),
+        bytes: bytes.to_vec(),
+    }
+}
 
 fn invocation() -> CallbackInvocation {
     CallbackInvocation {
@@ -22,7 +33,7 @@ fn invocation() -> CallbackInvocation {
         generation: GENERATION,
         sequence: GENERATION,
         event_ref: HASH_A.to_string(),
-        payload_ref: Some(HASH_B.to_string()),
+        payload_ref: Some(value(PAYLOAD_BYTES).value_ref),
         logical_tick: GENERATION,
         deadline_tick: PROFILE_LIMIT,
     }
@@ -35,7 +46,7 @@ fn context() -> NativeCallbackContext {
         instance_id: "native-fixture".to_string(),
         extension_id: "fixture-extension".to_string(),
         service_id: "fixture-service".to_string(),
-        state_ref: Some(HASH_C.to_string()),
+        state_ref: Some(value(STATE_BYTES).value_ref),
         policy_refs: vec![HASH_C.to_string()],
         resource_ref: HASH_D.to_string(),
         port_binding_refs: vec![HASH_D.to_string()],
@@ -51,9 +62,9 @@ fn effect() -> TypedEffectRequest {
         operation: "fixture-operation".to_string(),
         input_schema_ref: "fixture-input-v1".to_string(),
         output_schema_ref: "fixture-output-v1".to_string(),
-        request_ref: HASH_D.to_string(),
+        request_ref: value(EFFECT_REQUEST_BYTES).value_ref,
         generation: GENERATION,
-        accounted_bytes: PROFILE_LIMIT,
+        accounted_bytes: u64::try_from(EFFECT_REQUEST_BYTES.len()).expect("effect request length"),
     }
 }
 
@@ -77,6 +88,7 @@ fn instance() -> NativeInstanceRecord {
         usage: ResourceUsage::default(),
         callback_sequence: GENERATION,
         event_sequence: GENERATION,
+        state_ref: Some(value(STATE_BYTES).value_ref),
         checkpoint_ref: Some(HASH_A.to_string()),
         unresolved: vec![NativeOperationRecord {
             schema: NATIVE_OPERATION_SCHEMA.to_string(),
@@ -154,45 +166,109 @@ fn durability_descriptor() -> DurableNamespaceDescriptor {
 // r[verify molten.system_extension.native_host.callback_protocol]
 #[test]
 fn callback_envelope_and_outcome_roundtrip_canonical_bytes() {
-    let envelope = canonical_native_callback_envelope(&context(), &invocation()).expect("callback envelope");
-    let decoded =
-        decode_native_callback_envelope(&envelope.bytes, CALLBACK_BYTES, MAX_ITEMS).expect("decode callback envelope");
+    let inputs = NativeCallbackInputs {
+        payload: Some(value(PAYLOAD_BYTES)),
+        state: Some(value(STATE_BYTES)),
+    };
+    let envelope = canonical_native_callback_envelope(&context(), &invocation(), &inputs).expect("callback envelope");
+    let decoded = decode_native_callback_envelope(&envelope.bytes, CALLBACK_BYTES, CALLBACK_BYTES, MAX_ITEMS)
+        .expect("decode callback envelope");
     assert_eq!(decoded.invocation, invocation());
     assert_eq!(decoded.context, context());
+    assert_eq!(decoded.inputs, inputs);
 
-    let outcome = CallbackOutcome {
-        output_refs: vec![HASH_A.to_string()],
-        effects: vec![effect()],
-        state_ref: Some(HASH_B.to_string()),
-        checkpoint_ref: None,
+    let outcome = NativeMaterializedCallbackOutcome {
+        outputs: vec![value(OUTPUT_BYTES)],
+        effects: vec![NativeMaterializedEffectRequest {
+            effect: effect(),
+            request: value(EFFECT_REQUEST_BYTES),
+        }],
+        state: Some(value(STATE_BYTES)),
+        checkpoint: None,
         health: HealthState::Healthy,
     };
     let bytes = encode_native_callback_outcome(&outcome).expect("encode outcome");
-    assert_eq!(decode_native_callback_outcome(&bytes, CALLBACK_BYTES, MAX_ITEMS).expect("decode outcome"), outcome);
+    assert_eq!(
+        decode_native_callback_outcome(&bytes, CALLBACK_BYTES, CALLBACK_BYTES, MAX_ITEMS).expect("decode outcome"),
+        outcome,
+    );
 }
 
 // r[verify molten.system_extension.native_host.callback_protocol]
 #[test]
 fn malformed_oversized_trailing_and_ambient_outcomes_deny() {
-    let outcome = CallbackOutcome {
-        output_refs: Vec::new(),
-        effects: vec![effect()],
-        state_ref: Some(HASH_B.to_string()),
-        checkpoint_ref: None,
+    let outcome = NativeMaterializedCallbackOutcome {
+        outputs: Vec::new(),
+        effects: vec![NativeMaterializedEffectRequest {
+            effect: effect(),
+            request: value(EFFECT_REQUEST_BYTES),
+        }],
+        state: Some(value(STATE_BYTES)),
+        checkpoint: None,
         health: HealthState::Healthy,
     };
     let mut bytes = encode_native_callback_outcome(&outcome).expect("encode outcome");
     bytes.push(0);
-    assert!(decode_native_callback_outcome(&bytes, CALLBACK_BYTES, MAX_ITEMS).is_err());
+    assert!(decode_native_callback_outcome(&bytes, CALLBACK_BYTES, CALLBACK_BYTES, MAX_ITEMS).is_err());
     let maximum = u64::try_from(bytes.len() - 1).expect("fixture output length");
-    assert!(decode_native_callback_outcome(&bytes, maximum, MAX_ITEMS).is_err());
+    assert!(decode_native_callback_outcome(&bytes, maximum, CALLBACK_BYTES, MAX_ITEMS).is_err());
 
     let mut ambient = outcome;
-    ambient.effects[0].target = EffectTarget::Ambient(AmbientEffect::Process);
+    ambient.effects[0].effect.target = EffectTarget::Ambient(AmbientEffect::Process);
     let ambient_bytes = encode_native_callback_outcome(&ambient).expect("encode ambient outcome");
-    assert!(decode_native_callback_outcome(&ambient_bytes, CALLBACK_BYTES, MAX_ITEMS).is_err());
+    assert!(decode_native_callback_outcome(&ambient_bytes, CALLBACK_BYTES, CALLBACK_BYTES, MAX_ITEMS).is_err());
 }
 
+// r[verify molten.system_extension.native_host.value_materialization]
+// r[verify molten.system_extension.native_host.value_publication]
+// r[verify molten.system_extension.native_host.value_validation]
+#[test]
+fn value_port_verifies_identity_bounds_rejection_and_uncertainty() {
+    let exact = value(PAYLOAD_BYTES);
+    let mut port = InMemoryNativeCallbackValuePort::from_values([PAYLOAD_BYTES.to_vec()]);
+    assert_eq!(port.materialize(&exact.value_ref, CALLBACK_BYTES).expect("materialize exact value"), exact,);
+    assert!(port.materialize(HASH_A, CALLBACK_BYTES).is_err());
+    assert!(port.materialize(&exact.value_ref, 1).is_err());
+
+    let mut corrupt = exact.clone();
+    corrupt.bytes.push(0);
+    assert!(admit_native_callback_value(&corrupt, CALLBACK_BYTES).is_err());
+
+    let output = value(OUTPUT_BYTES);
+    port.fail_next_publication(NativeValuePortFailureKind::RejectedBeforeAcceptance);
+    let rejected = port.publish(&output, CALLBACK_BYTES).expect_err("publication rejection");
+    assert!(!rejected.may_have_published());
+    assert!(!port.contains(&output.value_ref));
+
+    port.fail_next_publication(NativeValuePortFailureKind::UnknownAfterAcceptance);
+    let unknown = port.publish(&output, CALLBACK_BYTES).expect_err("uncertain publication");
+    assert!(unknown.may_have_published());
+    assert!(port.contains(&output.value_ref));
+}
+
+// r[verify molten.system_extension.native_host.value_protocol]
+// r[verify molten.system_extension.native_host.value_validation]
+#[test]
+fn reference_only_and_substituted_v2_values_deny() {
+    let missing_payload = NativeCallbackInputs {
+        payload: None,
+        state: Some(value(STATE_BYTES)),
+    };
+    assert!(canonical_native_callback_envelope(&context(), &invocation(), &missing_payload).is_err());
+
+    let mut substituted = value(OUTPUT_BYTES);
+    substituted.value_ref = value(PAYLOAD_BYTES).value_ref;
+    let outcome = NativeMaterializedCallbackOutcome {
+        outputs: vec![substituted],
+        effects: Vec::new(),
+        state: Some(value(STATE_BYTES)),
+        checkpoint: None,
+        health: HealthState::Healthy,
+    };
+    assert!(encode_native_callback_outcome(&outcome).is_err());
+}
+
+// r[verify molten.system_extension.native_host.semantic_state]
 // r[verify molten.system_extension.native_host.durability]
 #[test]
 fn memory_and_redb_journals_roundtrip_exact_instance_across_restart() {

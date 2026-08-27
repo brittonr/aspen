@@ -1,6 +1,6 @@
 {
   "local_live_pilot": {
-    "alpn": "molten/system-extension/native/v1",
+    "alpn": "molten/system-extension/native/v2",
     "authorities": [
       "execution",
       "resources",
@@ -12,11 +12,13 @@
       "callback_output_bytes": 1048576,
       "diagnostic_bytes": 1048576,
       "instances": 16,
+      "materialized_value_bytes": 262144,
+      "materialized_values": 256,
       "policy_refs": 64,
       "port_bindings": 64,
       "unresolved_operations": 256
     },
-    "claim_level": "local-live-pilot",
+    "claim_level": "local-live-materialized-values-pilot",
     "environment_mode": "clear",
     "executable_evidence": [
       "executable-bytes",
@@ -33,7 +35,7 @@
     ],
     "execution_port_profile": "bounded-process-live-v1",
     "execution_profile": "native-process",
-    "framing": "preserves-packed-single-frame-v1",
+    "framing": "preserves-packed-materialized-values-v2",
     "lifecycle": [
       "install",
       "start",
@@ -50,6 +52,8 @@
       "does-not-prove-executable-trust",
       "does-not-prove-callback-correctness",
       "does-not-prove-effect-success",
+      "does-not-prove-value-meaning",
+      "does-not-prove-value-durability",
       "does-not-prove-transport-delivery",
       "does-not-prove-distributed-availability",
       "does-not-prove-production-readiness"
@@ -64,8 +68,9 @@
       "evidence"
     ],
     "process_per_callback": true,
-    "profile_id": "native-host-local-pilot-v1",
-    "schema": "molten.system-extension.native-host-profile.v1",
+    "profile_id": "native-host-local-pilot-v2",
+    "requires_materialized_values": true,
+    "schema": "molten.system-extension.native-host-profile.v2",
     "transport_profile": "iroh-native-extension-local-v1"
   }
 }

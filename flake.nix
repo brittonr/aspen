@@ -597,6 +597,11 @@
                 "$out/src/system_extension/mod.rs"
               cp -R ${./crates/molten-core/src/system_extension/native_host} \
                 "$out/src/system_extension/native_host"
+              chmod -R u+w "$out/src/system_extension/native_host"
+              cp ${./src/system_extension/native_host/materialization.rs} \
+                "$out/src/system_extension/native_host/materialization.rs"
+              printf '\nmod materialization;\npub use materialization::*;\n' \
+                >> "$out/src/system_extension/native_host/mod.rs"
             '';
         worldCommitOctetWorkspace = pkgs.runCommand "molten-world-commit-octet-workspace" { } ''
           mkdir -p "$out/src"
@@ -1058,6 +1063,15 @@
                     echo 'native host contains a workload-specific branch' >&2
                     exit 1
                   fi
+                  if rg -n 'std::(fs|net|process|env)' \
+                    crates/molten-core/src/system_extension/native_host; then
+                    echo 'native host functional core contains ambient value I/O' >&2
+                    exit 1
+                  fi
+                  test "$(rg -l 'pub trait NativeCallbackValuePort' src/system_extension/native_host | wc -l)" -eq 1
+                  rg -Fq 'NativeCallbackValuePort' src/system_extension/native_host/materialization.rs
+                  rg -Fq '.materialize(' src/system_extension/native_host/executor.rs
+                  rg -Fq '.publish(' src/system_extension/native_host/executor.rs
                   rg -Fq 'ExecutionFabricPort' src/system_extension/native_host/executor.rs
                   rg -Fq 'NativeHostJournal' src/system_extension/native_host/journal.rs
                   rg -Fq 'molten-native-extension-fixture' Cargo.toml

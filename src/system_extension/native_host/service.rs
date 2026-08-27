@@ -10,19 +10,21 @@ use super::super::*;
 use crate::error::MoltenError;
 use crate::fabric::CanonicalFabricPortBinding;
 use crate::fabric::FabricPortResult;
+use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
 
-const STATUS_RECORD: &str = "native-host-status-v1";
-const CLAIM_LEVEL: &str = "local-live-pilot";
+const STATUS_RECORD: &str = "native-host-status-v2";
+const CLAIM_LEVEL: &str = "local-live-materialized-values-pilot";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeServiceError {
     Host(String),
     Journal(NativeJournalError),
+    Executor(NativeExecutorError),
     StatePoisoned,
     Admission(Vec<NativeHostIssue>),
     MissingCheckpoint,
@@ -102,6 +104,7 @@ where
         admitted: CanonicalAdmittedSystemExtensionManifest,
         port: P,
         journal: Arc<Mutex<J>>,
+        values: SharedNativeCallbackValuePort,
         template: NativeExecutionTemplate,
     ) -> std::result::Result<Self, NativeServiceError> {
         if admitted.manifest().execution_profile != ExecutionProfile::NativeProcess {
@@ -114,8 +117,9 @@ where
         }
         let instance = Arc::new(Mutex::new(initial_instance(&profile, &executable, &admitted)));
         save_shared(&journal, &lock_instance(&instance)?.clone())?;
-        let executor = NativeProcessSystemExtensionExecutor::new(port, journal.clone(), instance.clone(), template)
-            .map_err(|error| NativeServiceError::Host(format!("native executor construction failed: {error:?}")))?;
+        let executor =
+            NativeProcessSystemExtensionExecutor::new(port, journal.clone(), values, instance.clone(), template)
+                .map_err(|error| NativeServiceError::Host(format!("native executor construction failed: {error:?}")))?;
         let host = SystemExtensionHost::new(admitted, executor)?;
         Ok(Self {
             profile,
@@ -149,6 +153,7 @@ where
             restored.usage,
             restored.callback_sequence,
             restored.event_sequence,
+            restored.state_ref.clone(),
             restored.evidence_refs.last().cloned(),
         )?;
         Ok(Self {
@@ -195,7 +200,7 @@ where
         let operation = NativeOperationRecord {
             schema: NATIVE_OPERATION_SCHEMA.to_string(),
             operation_ref: ingress.request_ref.clone(),
-            parent_ref: ingress.payload_ref.clone(),
+            parent_ref: ingress.payload.value_ref.clone(),
             kind: NativeOperationKind::Ingress,
             generation: ingress.generation,
             state: NativeOperationState::IntentCommitted,
@@ -205,7 +210,23 @@ where
         let with_intent = commit_native_operation_intent(&self.profile, &current, operation)
             .map_err(NativeServiceError::Admission)?;
         self.replace_instance(with_intent)?;
-        let dispatch = self.host.dispatch_request(&ingress.payload_ref, ingress.accounted_bytes, logical_tick)?;
+        if let Err(error) =
+            self.host
+                .executor_mut()
+                .publish_external_value(&ingress.request_ref, "ingress-payload", &ingress.payload)
+        {
+            let state = match &error {
+                NativeExecutorError::Value(failure) if failure.may_have_published() => NativeOperationState::Unknown,
+                _ => NativeOperationState::Terminal,
+            };
+            let terminal_ref = (state == NativeOperationState::Terminal)
+                .then(|| native_identity_ref(&["native-ingress-publication-rejection-v2", &ingress.request_ref]));
+            let next = observe_native_operation(&self.instance()?, &ingress.request_ref, state, terminal_ref)
+                .map_err(NativeServiceError::Admission)?;
+            self.replace_instance(next)?;
+            return Err(NativeServiceError::Executor(error));
+        }
+        let dispatch = self.host.dispatch_request(&ingress.payload.value_ref, ingress.accounted_bytes, logical_tick)?;
         let terminal_ref = match &dispatch {
             HostDispatchResult::Executed { receipt, .. } | HostDispatchResult::Failed { receipt, .. } => {
                 receipt.receipt_ref.clone()
@@ -249,7 +270,7 @@ where
         logical_tick: u64,
     ) -> std::result::Result<HostDispatchResult, NativeServiceError> {
         let operation_ref = native_identity_ref(&[
-            "native-effect-operation-v1",
+            "native-effect-operation-v2",
             &completion.request_ref,
             &completion.binding_ref,
             &completion.generation.to_string(),
@@ -262,7 +283,18 @@ where
             generation: completion.generation,
         };
         let plan = admit_native_effect_completion(&self.instance()?, &input).map_err(NativeServiceError::Admission)?;
-        let dispatch = self.host.dispatch_message(&plan.payload_ref, 0, logical_tick)?;
+        let completion_bytes = canonical_bytes(&completion.value)?;
+        let completion_value = NativeCallbackValue {
+            value_ref: completion.completion_ref.clone(),
+            bytes: completion_bytes,
+        };
+        self.host
+            .executor_mut()
+            .publish_external_value(&input.operation_ref, "effect-completion", &completion_value)
+            .map_err(NativeServiceError::Executor)?;
+        let completion_bytes = u64::try_from(completion_value.bytes.len())
+            .map_err(|_| NativeServiceError::Host("effect completion byte count does not fit u64".to_string()))?;
+        let dispatch = self.host.dispatch_message(&plan.payload_ref, completion_bytes, logical_tick)?;
         if matches!(dispatch, HostDispatchResult::Executed { .. }) {
             let consumed =
                 consume_native_effect_completion(&self.instance()?, &input).map_err(NativeServiceError::Admission)?;
@@ -350,12 +382,14 @@ where
         })
     }
 
+    // r[impl molten.system_extension.native_host.semantic_state]
     fn sync_instance(&mut self, is_accepting_ingress: bool) -> std::result::Result<(), NativeServiceError> {
         let mut next = self.instance()?;
         next.lifecycle = self.host.state().clone();
         next.usage = self.host.usage();
         next.callback_sequence = self.host.invocation_sequence();
         next.event_sequence = self.host.event_sequence();
+        next.state_ref = self.host.semantic_state_ref().map(str::to_string);
         next.checkpoint_ref = self.host.state().checkpoint_ref.clone();
         next.is_accepting_ingress = is_accepting_ingress;
         if let Some(evidence) = self.host.evidence().last() {
@@ -417,7 +451,7 @@ where
         effect: &TypedEffectRequest,
     ) -> FabricPortResult<PortEffectOutput> {
         let operation_ref = native_identity_ref(&[
-            "native-effect-operation-v1",
+            "native-effect-operation-v2",
             &effect.request_ref,
             &binding.binding_ref,
             &effect.generation.to_string(),
@@ -502,7 +536,7 @@ fn initial_instance(
     NativeInstanceRecord {
         schema: NATIVE_INSTANCE_STATE_SCHEMA.to_string(),
         instance_id: native_identity_ref(&[
-            "native-instance-v1",
+            "native-instance-v2",
             &admitted.manifest().extension_id,
             &admitted.manifest().service_id,
             admitted.manifest_ref(),
@@ -523,6 +557,7 @@ fn initial_instance(
         usage: ResourceUsage::default(),
         callback_sequence: 0,
         event_sequence: 0,
+        state_ref: None,
         checkpoint_ref: None,
         unresolved: Vec::new(),
         completed_operations: Vec::new(),

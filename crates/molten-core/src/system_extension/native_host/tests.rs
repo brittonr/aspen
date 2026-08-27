@@ -4,6 +4,8 @@ use super::super::ResourceUsage;
 // r[impl molten.system_extension.native_host.validation]
 use super::*;
 
+mod value;
+
 const HASH_A: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HASH_B: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const HASH_C: &str = "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -12,7 +14,7 @@ const HASH_E: &str = "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 const HASH_F: &str = "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 const GENERATION: u64 = 1;
 const STALE_GENERATION: u64 = 2;
-const CALLBACK_BYTES: u64 = 128;
+const CALLBACK_PAYLOAD: &[u8] = b"native-core-ingress-v2";
 const MAX_CALLBACK_BYTES: u64 = 4_096;
 const MAX_DIAGNOSTIC_BYTES: u64 = 1_024;
 const MAX_INSTANCES: usize = 4;
@@ -23,7 +25,7 @@ const MAX_POLICIES: usize = 4;
 fn profile() -> NativeHostProfile {
     NativeHostProfile {
         schema: NATIVE_HOST_PROFILE_SCHEMA.to_string(),
-        profile_id: "native-host-local-pilot-v1".to_string(),
+        profile_id: "native-host-local-pilot-v2".to_string(),
         profile_ref: HASH_A.to_string(),
         execution_profile_ref: HASH_B.to_string(),
         transport_profile_ref: HASH_C.to_string(),
@@ -32,11 +34,14 @@ fn profile() -> NativeHostProfile {
         max_callback_input_bytes: MAX_CALLBACK_BYTES,
         max_callback_output_bytes: MAX_CALLBACK_BYTES,
         max_diagnostic_bytes: MAX_DIAGNOSTIC_BYTES,
+        max_materialized_value_bytes: MAX_CALLBACK_BYTES,
         max_instances: MAX_INSTANCES,
         max_unresolved_operations: MAX_OPERATIONS,
         max_port_bindings: MAX_BINDINGS,
         max_policy_refs: MAX_POLICIES,
+        max_materialized_values: MAX_OPERATIONS,
         is_local_live_pilot: true,
+        requires_materialized_values: true,
         non_claims: REQUIRED_NATIVE_HOST_NON_CLAIMS.to_vec(),
     }
 }
@@ -82,6 +87,7 @@ fn instance() -> NativeInstanceRecord {
         usage: ResourceUsage::default(),
         callback_sequence: 0,
         event_sequence: 0,
+        state_ref: Some(HASH_C.to_string()),
         checkpoint_ref: Some(HASH_B.to_string()),
         unresolved: Vec::new(),
         completed_operations: Vec::new(),
@@ -105,6 +111,9 @@ fn operation(kind: NativeOperationKind) -> NativeOperationRecord {
 }
 
 fn ingress() -> NativeIngressEnvelope {
+    let payload = CALLBACK_PAYLOAD.to_vec();
+    let payload_ref = format!("blake3:{}", blake3::hash(&payload).to_hex());
+    let accounted_bytes = u64::try_from(payload.len()).expect("core ingress payload length");
     NativeIngressEnvelope {
         schema: NATIVE_INGRESS_SCHEMA.to_string(),
         request_ref: HASH_A.to_string(),
@@ -119,8 +128,11 @@ fn ingress() -> NativeIngressEnvelope {
         transport_profile_ref: HASH_C.to_string(),
         alpn: NATIVE_ALPN.to_string(),
         framing: NATIVE_FRAMING.to_string(),
-        payload_ref: HASH_A.to_string(),
-        accounted_bytes: CALLBACK_BYTES,
+        payload: NativeCallbackValue {
+            value_ref: payload_ref,
+            bytes: payload,
+        },
+        accounted_bytes,
     }
 }
 
@@ -132,25 +144,11 @@ fn ingress() -> NativeIngressEnvelope {
 // r[verify molten.system_extension.native_host.validation]
 #[test]
 fn contract_surface_binds_protocol_execution_state_effects_and_neutral_identity() {
-    assert_eq!(NATIVE_CALLBACK_ENVELOPE_SCHEMA, "molten.system-extension.native-callback-envelope.v1");
-    assert_eq!(NATIVE_FRAMING, "preserves-packed-single-frame-v1");
-    assert_eq!(NATIVE_INSTANCE_STATE_SCHEMA, "molten.system-extension.native-instance-state.v1");
+    assert_eq!(NATIVE_CALLBACK_ENVELOPE_SCHEMA, "molten.system-extension.native-callback-envelope.v2");
+    assert_eq!(NATIVE_FRAMING, "preserves-packed-materialized-values-v2");
+    assert_eq!(NATIVE_INSTANCE_STATE_SCHEMA, "molten.system-extension.native-instance-state.v2");
     assert_eq!(NativeOperationKind::Effect.as_str(), "effect");
     assert!(!NATIVE_HOST_PROFILE_SCHEMA.contains("kiln"));
-}
-
-// r[verify molten.system_extension.native_host.profile]
-// r[verify molten.system_extension.native_host.nonclaims]
-#[test]
-fn exact_local_pilot_profile_passes_and_missing_nonclaim_denies() {
-    let admitted = admit_native_host_profile(&profile()).expect("native host profile");
-    assert_eq!(admitted.profile.alpn, NATIVE_ALPN);
-    assert_eq!(admitted.profile.non_claims, REQUIRED_NATIVE_HOST_NON_CLAIMS);
-
-    let mut invalid = profile();
-    invalid.non_claims.pop();
-    let issues = admit_native_host_profile(&invalid).expect_err("missing non-claim must deny");
-    assert!(issues.iter().any(|issue| matches!(issue, NativeHostIssue::MissingNonClaim(_))));
 }
 
 // r[verify molten.system_extension.native_host.executable]
@@ -209,19 +207,6 @@ fn linked_effect_completion_passes_and_stale_or_duplicate_completion_denies() {
     assert!(admit_native_effect_completion(&terminal, &input).is_ok());
     let consumed = consume_native_effect_completion(&terminal, &input).expect("consume completion");
     assert!(admit_native_effect_completion(&consumed, &input).is_err());
-}
-
-// r[verify molten.system_extension.native_host.ingress]
-#[test]
-fn ingress_binds_transport_and_service_acceptance_separately() {
-    let profile = admit_native_host_profile(&profile()).expect("native host profile");
-    let admitted = admit_native_ingress(&profile, &instance(), &ingress()).expect("ingress admission");
-    assert!(admitted.acknowledgement_ref.starts_with("blake3:"));
-
-    let mut stale = ingress();
-    stale.generation = STALE_GENERATION;
-    let issues = admit_native_ingress(&profile, &instance(), &stale).expect_err("stale ingress must deny");
-    assert!(issues.iter().any(|issue| matches!(issue, NativeHostIssue::StaleGeneration { .. })));
 }
 
 // r[verify molten.system_extension.native_host.recovery]

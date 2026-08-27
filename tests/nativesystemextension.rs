@@ -5,6 +5,8 @@
 mod support;
 
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 
 use molten::system_extension::*;
@@ -36,7 +38,16 @@ fn separate_process_service_runs_lifecycle_effect_restart_and_removal() {
     let cohort = Cohort::new();
     let mut service = cohort.install();
     service.start(START_TICK).expect("start native service");
-    assert_eq!(service.status().expect("running status").claim_level, "local-live-pilot");
+    assert_eq!(service.status().expect("running status").claim_level, "local-live-materialized-values-pilot",);
+    let started_state_ref =
+        service.instance().expect("started native instance").state_ref.expect("materialized start state");
+    let started_state = cohort
+        .values
+        .lock()
+        .expect("native values")
+        .materialize(&started_state_ref, FULL_OUTPUT_BYTES)
+        .expect("read materialized start state");
+    assert!(!started_state.bytes.is_empty());
 
     let stale_observations = service.host().executor().observations().len();
     assert!(service.ingress(&ingress(STALE_GENERATION, cohort.admitted.manifest_ref()), REQUEST_TICK,).is_err());
@@ -48,9 +59,17 @@ fn separate_process_service_runs_lifecycle_effect_restart_and_removal() {
             .submit(&ingress(GENERATION, cohort.admitted.manifest_ref()), REQUEST_TICK)
             .expect("accepted native ingress")
     };
-    let (callback_receipt, _outcome) =
+    let (callback_receipt, outcome) =
         accepted.dispatch.require_executed("accepted ingress").expect("accepted ingress callback");
     assert_eq!(callback_receipt.approved_effects.len(), 1);
+    let request_state_ref = outcome.state_ref.expect("request state ref");
+    assert_eq!(service.instance().expect("request instance").state_ref.as_deref(), Some(request_state_ref.as_str()),);
+    cohort
+        .values
+        .lock()
+        .expect("native values")
+        .materialize(&callback_receipt.approved_effects[0].request_ref, FULL_OUTPUT_BYTES)
+        .expect("published effect request body");
     let mut effects = EffectPort::default();
     let completions = service.route_effects(&callback_receipt, &mut effects).expect("route exact native effect");
     assert_eq!(completions.len(), 1);
@@ -71,6 +90,8 @@ fn separate_process_service_runs_lifecycle_effect_restart_and_removal() {
     .expect("native artifact index");
     verify_native_artifact_index(&artifact_index).expect("verify native artifact index");
     assert!(artifact_index.members.iter().any(|member| member.role == NativeArtifactRole::Effect));
+    assert!(artifact_index.members.iter().any(|member| member.role == NativeArtifactRole::SemanticState));
+    assert!(artifact_index.members.iter().any(|member| member.role == NativeArtifactRole::ValuePublication));
     let mut tampered_index = artifact_index.clone();
     tampered_index.members[0].parent_ref = HASH_F.to_string();
     assert!(verify_native_artifact_index(&tampered_index).is_err());
@@ -94,7 +115,24 @@ fn separate_process_service_runs_lifecycle_effect_restart_and_removal() {
     recovered.remove().expect("remove native service");
     assert_eq!(recovered.host().state().phase, LifecyclePhase::Removed);
     assert!(recovered.host().executor().observations().len() > 1);
-    assert!(cohort.journal.lock().expect("native journal").history(&instance_id).expect("native history").len() > 1);
+    let history = cohort.journal.lock().expect("native journal").history(&instance_id).expect("native history");
+    assert!(history.len() > 1);
+    assert!(callback_intent_precedes_publication(&history));
+}
+
+fn callback_intent_precedes_publication(history: &[NativeInstanceRecord]) -> bool {
+    let callback_intent = history.iter().position(|record| {
+        record.unresolved.iter().any(|operation| {
+            operation.kind == NativeOperationKind::Callback && operation.state == NativeOperationState::IntentCommitted
+        })
+    });
+    let publication_intent = history.iter().position(|record| {
+        record.unresolved.iter().any(|operation| {
+            operation.kind == NativeOperationKind::ValuePublication
+                && operation.state == NativeOperationState::IntentCommitted
+        })
+    });
+    matches!((callback_intent, publication_intent), (Some(callback), Some(publication)) if callback < publication)
 }
 
 // r[verify molten.system_extension.native_host.profile]
@@ -113,6 +151,152 @@ fn exact_profile_and_generation_fail_closed_without_hidden_fallback() {
     wrong_transport.alpn = "unreviewed/fallback".to_string();
     assert!(service.ingress(&wrong_transport, REQUEST_TICK).is_err());
     assert!(service.ingress(&ingress(STALE_GENERATION, cohort.admitted.manifest_ref()), REQUEST_TICK,).is_err());
+}
+
+// r[verify molten.system_extension.native_host.value_intent]
+// r[verify molten.system_extension.native_host.value_validation]
+#[test]
+fn uncertain_ingress_publication_blocks_callback_and_retry() {
+    let controlled = ControlledValuePort::default();
+    let mut cohort = Cohort::new();
+    cohort.values = shared_native_callback_value_port(controlled.clone());
+    let mut service = cohort.install();
+    service.start(START_TICK).expect("start controlled native service");
+    let observations = service.host().executor().observations().len();
+    controlled.fail_next(NativeValuePortFailureKind::UnknownAfterAcceptance);
+
+    let failure = service
+        .ingress(&ingress(GENERATION, cohort.admitted.manifest_ref()), REQUEST_TICK)
+        .expect_err("uncertain ingress publication must fail");
+    assert!(matches!(
+        failure,
+        NativeServiceError::Executor(NativeExecutorError::Value(ref value_failure))
+            if value_failure.may_have_published()
+    ));
+    assert_eq!(service.host().executor().observations().len(), observations);
+    let instance = service.instance().expect("uncertain ingress instance");
+    assert!(instance.unresolved.iter().any(|operation| {
+        operation.kind == NativeOperationKind::ValuePublication && operation.state == NativeOperationState::Unknown
+    }));
+    assert!(instance.unresolved.iter().any(|operation| {
+        operation.kind == NativeOperationKind::Ingress && operation.state == NativeOperationState::Unknown
+    }));
+}
+
+// r[verify molten.system_extension.native_host.value_publication]
+// r[verify molten.system_extension.native_host.value_intent]
+// r[verify molten.system_extension.native_host.value_validation]
+#[test]
+fn uncertain_callback_publication_blocks_state_and_provider_effects() {
+    let controlled = ControlledValuePort::default();
+    let mut cohort = Cohort::new();
+    cohort.values = shared_native_callback_value_port(controlled.clone());
+    let mut service = cohort.install();
+    service.start(START_TICK).expect("start controlled native service");
+    let prior_state_ref = service.instance().expect("prior native instance").state_ref;
+    controlled.fail_after(1, NativeValuePortFailureKind::UnknownAfterAcceptance);
+
+    let result = service
+        .ingress(&ingress(GENERATION, cohort.admitted.manifest_ref()), REQUEST_TICK)
+        .expect("ingress classification");
+    assert!(matches!(result.dispatch, HostDispatchResult::Failed { .. }));
+    let instance = service.instance().expect("failed callback instance");
+    assert_eq!(instance.state_ref, prior_state_ref);
+    assert!(instance.unresolved.iter().any(|operation| {
+        operation.kind == NativeOperationKind::ValuePublication && operation.state == NativeOperationState::Unknown
+    }));
+}
+
+// r[verify molten.system_extension.native_host.value_materialization]
+// r[verify molten.system_extension.native_host.semantic_state]
+// r[verify molten.system_extension.native_host.value_validation]
+#[test]
+fn restart_with_missing_state_bytes_fails_before_process_start() {
+    let mut cohort = Cohort::new();
+    let mut service = cohort.install();
+    service.start(START_TICK).expect("start native service");
+    service.checkpoint(CHECKPOINT_TICK).expect("checkpoint native service");
+    let restored = service.instance().expect("checkpointed instance");
+    let expected_state_ref = restored.state_ref.clone();
+    drop(service);
+
+    cohort.values = shared_native_callback_value_port(InMemoryNativeCallbackValuePort::default());
+    let mut recovered = cohort.recovered(restored);
+    assert!(recovered.restart(RESTART_TICK).is_err());
+    let observations = recovered.host().executor().observations();
+    assert_eq!(observations.len(), 1);
+    assert_eq!(observations[0].lifecycle, molten::fabric_execution::ExecutionLifecycleState::FailedBeforeStart,);
+    assert_eq!(recovered.instance().expect("failed recovery instance").state_ref, expected_state_ref);
+}
+
+#[derive(Clone, Default)]
+struct ControlledValuePort {
+    inner: Arc<Mutex<InMemoryNativeCallbackValuePort>>,
+    failure: Arc<Mutex<Option<(usize, NativeValuePortFailureKind)>>>,
+}
+
+impl ControlledValuePort {
+    fn fail_next(&self, kind: NativeValuePortFailureKind) {
+        self.fail_after(0, kind);
+    }
+
+    fn fail_after(&self, successful_publications: usize, kind: NativeValuePortFailureKind) {
+        *self.failure.lock().expect("controlled value failure") = Some((successful_publications, kind));
+    }
+}
+
+impl NativeCallbackValuePort for ControlledValuePort {
+    fn materialize(
+        &mut self,
+        value_ref: &str,
+        maximum_bytes: u64,
+    ) -> std::result::Result<NativeCallbackValue, NativeValuePortFailure> {
+        self.inner
+            .lock()
+            .map_err(|_| {
+                NativeValuePortFailure::new(
+                    NativeValuePortFailureKind::RejectedBeforeAcceptance,
+                    "controlled value port lock is unavailable",
+                )
+            })?
+            .materialize(value_ref, maximum_bytes)
+    }
+
+    fn publish(
+        &mut self,
+        value: &NativeCallbackValue,
+        maximum_bytes: u64,
+    ) -> std::result::Result<NativeValuePublicationReceipt, NativeValuePortFailure> {
+        let failure = {
+            let mut failure = self.failure.lock().map_err(|_| {
+                NativeValuePortFailure::new(
+                    NativeValuePortFailureKind::RejectedBeforeAcceptance,
+                    "controlled value failure lock is unavailable",
+                )
+            })?;
+            match *failure {
+                Some((0, kind)) => {
+                    *failure = None;
+                    Some(kind)
+                }
+                Some((remaining, kind)) => {
+                    *failure = Some((remaining - 1, kind));
+                    None
+                }
+                None => None,
+            }
+        };
+        let mut inner = self.inner.lock().map_err(|_| {
+            NativeValuePortFailure::new(
+                NativeValuePortFailureKind::RejectedBeforeAcceptance,
+                "controlled value port lock is unavailable",
+            )
+        })?;
+        if let Some(kind) = failure {
+            inner.fail_next_publication(kind);
+        }
+        inner.publish(value, maximum_bytes)
+    }
 }
 
 // r[verify molten.system_extension.native_host.execution]

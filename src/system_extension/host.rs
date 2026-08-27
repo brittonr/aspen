@@ -62,6 +62,14 @@ pub trait SystemExtensionExecutor {
     /// Invoke admitted code. The host passes only canonical callback context;
     /// execution profiles own any stronger isolation or process boundary.
     fn invoke(&mut self, invocation: &CallbackInvocation) -> std::result::Result<CallbackOutcome, String>;
+
+    fn commit_admitted_outcome(
+        &mut self,
+        _invocation: &CallbackInvocation,
+        _outcome: &CallbackOutcome,
+    ) -> std::result::Result<(), String> {
+        Ok(())
+    }
 }
 
 pub trait FabricEffectPort {
@@ -79,6 +87,14 @@ impl<T: SystemExtensionExecutor + ?Sized> SystemExtensionExecutor for Box<T> {
 
     fn invoke(&mut self, invocation: &CallbackInvocation) -> std::result::Result<CallbackOutcome, String> {
         (**self).invoke(invocation)
+    }
+
+    fn commit_admitted_outcome(
+        &mut self,
+        invocation: &CallbackInvocation,
+        outcome: &CallbackOutcome,
+    ) -> std::result::Result<(), String> {
+        (**self).commit_admitted_outcome(invocation, outcome)
     }
 }
 
@@ -158,6 +174,7 @@ pub struct SystemExtensionHost<E: SystemExtensionExecutor> {
     usage: ResourceUsage,
     invocation_sequence: u64,
     event_sequence: u64,
+    semantic_state_ref: Option<String>,
     observations: BTreeMap<CallbackKind, u64>,
     execution_binding_refs: Vec<String>,
     evidence: Vec<HostEvidence>,
@@ -183,6 +200,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             usage: ResourceUsage::default(),
             invocation_sequence: FIRST_SEQUENCE,
             event_sequence: FIRST_SEQUENCE,
+            semantic_state_ref: None,
             observations: BTreeMap::new(),
             execution_binding_refs: Vec::new(),
             evidence: Vec::new(),
@@ -202,6 +220,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         usage: ResourceUsage,
         invocation_sequence: u64,
         event_sequence: u64,
+        semantic_state_ref: Option<String>,
         last_lifecycle_ref: Option<String>,
     ) -> Result<Self> {
         let actual = executor.execution_profile();
@@ -224,6 +243,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             usage,
             invocation_sequence,
             event_sequence,
+            semantic_state_ref,
             observations: BTreeMap::new(),
             execution_binding_refs: Vec::new(),
             evidence: Vec::new(),
@@ -249,6 +269,10 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
 
     pub const fn event_sequence(&self) -> u64 {
         self.event_sequence
+    }
+
+    pub fn semantic_state_ref(&self) -> Option<&str> {
+        self.semantic_state_ref.as_deref()
     }
 
     pub fn evidence(&self) -> &[HostEvidence] {
@@ -356,8 +380,21 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
                         );
                     }
                 };
+                if self.executor.commit_admitted_outcome(&invocation, &outcome).is_err() {
+                    return self.fail_invocation(
+                        &invocation,
+                        event.accounted_bytes,
+                        CallbackExecutionDecision::ExecutorFailed,
+                        EXECUTOR_ERROR_DIAGNOSTIC,
+                        Some(&outcome),
+                        FailureClass::Retryable,
+                    );
+                }
                 self.usage = release_callback_resources(reserved, event.accounted_bytes, outcome.effects.len())
                     .map_err(|issues| validation_error("callback resource release", &issues))?;
+                if let Some(state_ref) = &outcome.state_ref {
+                    self.semantic_state_ref = Some(state_ref.clone());
+                }
                 self.state.health = outcome.health;
                 let receipt = canonical_callback_receipt(super::CallbackReceiptInput {
                     manifest_ref: self.admitted.manifest_ref(),

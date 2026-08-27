@@ -11,9 +11,9 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 
-const ARTIFACT_INDEX_RECORD: &str = "native-host-artifact-index-v1";
-const ARTIFACT_MEMBER_RECORD: &str = "native-host-artifact-member-v1";
-const ARTIFACT_INDEX_SCHEMA: &str = "molten.system-extension.native-artifact-index.v1";
+const ARTIFACT_INDEX_RECORD: &str = "native-host-artifact-index-v2";
+const ARTIFACT_MEMBER_RECORD: &str = "native-host-artifact-member-v2";
+const ARTIFACT_INDEX_SCHEMA: &str = "molten.system-extension.native-artifact-index.v2";
 const MAX_ARTIFACT_MEMBERS: usize = 1_024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -23,6 +23,8 @@ pub enum NativeArtifactRole {
     CallbackReceipt,
     ExecutionReceipt,
     InstanceState,
+    SemanticState,
+    ValuePublication,
     Effect,
     Checkpoint,
     LifecycleEvidence,
@@ -36,6 +38,8 @@ impl NativeArtifactRole {
             Self::CallbackReceipt => "callback-receipt",
             Self::ExecutionReceipt => "execution-receipt",
             Self::InstanceState => "instance-state",
+            Self::SemanticState => "semantic-state",
+            Self::ValuePublication => "value-publication",
             Self::Effect => "effect",
             Self::Checkpoint => "checkpoint",
             Self::LifecycleEvidence => "lifecycle-evidence",
@@ -84,8 +88,9 @@ pub fn build_native_artifact_index(
         .and_then(|value| value.checked_add(callback_receipts.len()))
         .and_then(|value| value.checked_add(effect_completions.len()))
         .and_then(|value| value.checked_add(instance.unresolved.len()))
+        .and_then(|value| value.checked_add(instance.completed_operations.len()))
         .and_then(|value| value.checked_add(instance.evidence_refs.len()))
-        .and_then(|value| value.checked_add(3))
+        .and_then(|value| value.checked_add(4))
         .ok_or_else(|| MoltenError::invalid_harness("native artifact index member count overflow"))?;
     let mut members = Vec::with_capacity(estimated);
     members.push(NativeArtifactMember {
@@ -98,6 +103,13 @@ pub fn build_native_artifact_index(
         artifact_ref: state.record_ref.clone(),
         parent_ref: instance.manifest_ref.clone(),
     });
+    if let Some(state_ref) = &instance.state_ref {
+        members.push(NativeArtifactMember {
+            role: NativeArtifactRole::SemanticState,
+            artifact_ref: state_ref.clone(),
+            parent_ref: state.record_ref.clone(),
+        });
+    }
     if let Some(checkpoint_ref) = &instance.checkpoint_ref {
         members.push(NativeArtifactMember {
             role: NativeArtifactRole::Checkpoint,
@@ -134,11 +146,27 @@ pub fn build_native_artifact_index(
         });
     }
     for operation in &instance.unresolved {
-        if operation.kind == NativeOperationKind::Effect {
+        let role = match operation.kind {
+            NativeOperationKind::Effect => Some(NativeArtifactRole::Effect),
+            NativeOperationKind::ValuePublication => Some(NativeArtifactRole::ValuePublication),
+            NativeOperationKind::Callback | NativeOperationKind::Ingress => None,
+        };
+        if let Some(role) = role {
             members.push(NativeArtifactMember {
-                role: NativeArtifactRole::Effect,
+                role,
                 artifact_ref: operation.operation_ref.clone(),
-                parent_ref: operation.parent_ref.clone(),
+                parent_ref: state.record_ref.clone(),
+            });
+        }
+    }
+    for operation in &instance.completed_operations {
+        if operation.kind == NativeOperationKind::ValuePublication
+            && let Some(terminal_ref) = &operation.terminal_ref
+        {
+            members.push(NativeArtifactMember {
+                role: NativeArtifactRole::ValuePublication,
+                artifact_ref: terminal_ref.clone(),
+                parent_ref: state.record_ref.clone(),
             });
         }
     }
@@ -178,11 +206,13 @@ pub fn verify_native_artifact_index(
             maximum: MAX_ARTIFACT_MEMBERS,
         });
     }
+    let mut members = BTreeSet::new();
     let mut refs = BTreeSet::new();
     for member in &index.members {
-        if !refs.insert(member.artifact_ref.clone()) {
+        if !members.insert((member.role, member.artifact_ref.clone())) {
             issues.push(NativeArtifactIndexIssue::DuplicateMember(member.artifact_ref.clone()));
         }
+        refs.insert(member.artifact_ref.clone());
         validate_ref("artifact-ref", &member.artifact_ref, &mut issues);
         validate_ref("parent-ref", &member.parent_ref, &mut issues);
     }

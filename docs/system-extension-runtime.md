@@ -94,7 +94,7 @@ The host rejects ambient filesystem, network, clock, randomness, process, and en
 Execution profiles are explicit and have no fallback:
 
 - `in-process-native` is trusted native Rust execution. It has process authority risk and must be admitted only for reviewed code.
-- `native-process` runs one admitted executable per callback through the bounded execution fabric port. The initial cohort is a local live pilot.
+- `native-process` runs one admitted executable per callback through the bounded execution fabric port. Its v2 local pilot supplies identity-checked payload, state, completion, effect, output, and checkpoint bytes without reference-only fallback.
 - `sandboxed-component` is exercised by the conformance fixture through a fuel-bounded Wasmtime module with no imports or WASI. A production component adapter must separately define its ABI, memory/fuel limits, hostcalls, process isolation, and evidence.
 
 An executor whose advertised profile differs from the manifest is rejected before activation. Native execution is not a sandbox. Wasmtime execution does not itself grant capabilities or prove extension semantics.

@@ -3,16 +3,17 @@ use super::super::ResourceUsage;
 
 // r[impl molten.system_extension.native_host.callback_protocol]
 // r[impl molten.system_extension.native_host.execution]
-pub const NATIVE_HOST_PROFILE_SCHEMA: &str = "molten.system-extension.native-host-profile.v1";
-pub const NATIVE_EXECUTABLE_EVIDENCE_SCHEMA: &str = "molten.system-extension.native-executable-evidence.v1";
-pub const NATIVE_CALLBACK_ENVELOPE_SCHEMA: &str = "molten.system-extension.native-callback-envelope.v1";
-pub const NATIVE_CALLBACK_OUTCOME_SCHEMA: &str = "molten.system-extension.native-callback-outcome.v1";
-pub const NATIVE_INSTANCE_STATE_SCHEMA: &str = "molten.system-extension.native-instance-state.v1";
-pub const NATIVE_OPERATION_SCHEMA: &str = "molten.system-extension.native-operation.v1";
-pub const NATIVE_INGRESS_SCHEMA: &str = "molten.system-extension.native-ingress.v1";
-pub const NATIVE_STATUS_SCHEMA: &str = "molten.system-extension.native-status.v1";
-pub const NATIVE_ALPN: &str = "molten/system-extension/native/v1";
-pub const NATIVE_FRAMING: &str = "preserves-packed-single-frame-v1";
+// r[impl molten.system_extension.native_host.value_protocol]
+pub const NATIVE_HOST_PROFILE_SCHEMA: &str = "molten.system-extension.native-host-profile.v2";
+pub const NATIVE_EXECUTABLE_EVIDENCE_SCHEMA: &str = "molten.system-extension.native-executable-evidence.v2";
+pub const NATIVE_CALLBACK_ENVELOPE_SCHEMA: &str = "molten.system-extension.native-callback-envelope.v2";
+pub const NATIVE_CALLBACK_OUTCOME_SCHEMA: &str = "molten.system-extension.native-callback-outcome.v2";
+pub const NATIVE_INSTANCE_STATE_SCHEMA: &str = "molten.system-extension.native-instance-state.v2";
+pub const NATIVE_OPERATION_SCHEMA: &str = "molten.system-extension.native-operation.v2";
+pub const NATIVE_INGRESS_SCHEMA: &str = "molten.system-extension.native-ingress.v2";
+pub const NATIVE_STATUS_SCHEMA: &str = "molten.system-extension.native-status.v2";
+pub const NATIVE_ALPN: &str = "molten/system-extension/native/v2";
+pub const NATIVE_FRAMING: &str = "preserves-packed-materialized-values-v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum NativeHostNonClaim {
@@ -21,6 +22,8 @@ pub enum NativeHostNonClaim {
     ExecutableTrust,
     CallbackCorrectness,
     EffectSuccess,
+    ValueMeaning,
+    ValueDurability,
     TransportDelivery,
     DistributedAvailability,
     ProductionReadiness,
@@ -34,6 +37,8 @@ impl NativeHostNonClaim {
             Self::ExecutableTrust => "does-not-prove-executable-trust",
             Self::CallbackCorrectness => "does-not-prove-callback-correctness",
             Self::EffectSuccess => "does-not-prove-effect-success",
+            Self::ValueMeaning => "does-not-prove-value-meaning",
+            Self::ValueDurability => "does-not-prove-value-durability",
             Self::TransportDelivery => "does-not-prove-transport-delivery",
             Self::DistributedAvailability => "does-not-prove-distributed-availability",
             Self::ProductionReadiness => "does-not-prove-production-readiness",
@@ -41,7 +46,7 @@ impl NativeHostNonClaim {
     }
 }
 
-const REQUIRED_NATIVE_HOST_NON_CLAIM_COUNT: usize = 8;
+const REQUIRED_NATIVE_HOST_NON_CLAIM_COUNT: usize = 10;
 
 pub const REQUIRED_NATIVE_HOST_NON_CLAIMS: [NativeHostNonClaim; REQUIRED_NATIVE_HOST_NON_CLAIM_COUNT] = [
     NativeHostNonClaim::Sandboxing,
@@ -49,6 +54,8 @@ pub const REQUIRED_NATIVE_HOST_NON_CLAIMS: [NativeHostNonClaim; REQUIRED_NATIVE_
     NativeHostNonClaim::ExecutableTrust,
     NativeHostNonClaim::CallbackCorrectness,
     NativeHostNonClaim::EffectSuccess,
+    NativeHostNonClaim::ValueMeaning,
+    NativeHostNonClaim::ValueDurability,
     NativeHostNonClaim::TransportDelivery,
     NativeHostNonClaim::DistributedAvailability,
     NativeHostNonClaim::ProductionReadiness,
@@ -66,11 +73,14 @@ pub struct NativeHostProfile {
     pub max_callback_input_bytes: u64,
     pub max_callback_output_bytes: u64,
     pub max_diagnostic_bytes: u64,
+    pub max_materialized_value_bytes: u64,
     pub max_instances: usize,
     pub max_unresolved_operations: usize,
     pub max_port_bindings: usize,
     pub max_policy_refs: usize,
+    pub max_materialized_values: usize,
     pub is_local_live_pilot: bool,
+    pub requires_materialized_values: bool,
     pub non_claims: Vec<NativeHostNonClaim>,
 }
 
@@ -110,6 +120,7 @@ pub enum NativeOperationKind {
     Callback,
     Effect,
     Ingress,
+    ValuePublication,
 }
 
 impl NativeOperationKind {
@@ -118,6 +129,7 @@ impl NativeOperationKind {
             Self::Callback => "callback",
             Self::Effect => "effect",
             Self::Ingress => "ingress",
+            Self::ValuePublication => "value-publication",
         }
     }
 }
@@ -156,6 +168,7 @@ pub struct NativeOperationRecord {
 }
 
 // r[impl molten.system_extension.native_host.durability]
+// r[impl molten.system_extension.native_host.semantic_state]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeInstanceRecord {
     pub schema: String,
@@ -170,12 +183,21 @@ pub struct NativeInstanceRecord {
     pub usage: ResourceUsage,
     pub callback_sequence: u64,
     pub event_sequence: u64,
+    pub state_ref: Option<String>,
     pub checkpoint_ref: Option<String>,
     pub unresolved: Vec<NativeOperationRecord>,
     pub completed_operations: Vec<NativeOperationRecord>,
     pub completed_operation_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub is_accepting_ingress: bool,
+}
+
+// r[impl molten.system_extension.native_host.value_materialization]
+// r[impl molten.system_extension.native_host.value_publication]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeCallbackValue {
+    pub value_ref: String,
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,7 +215,7 @@ pub struct NativeIngressEnvelope {
     pub transport_profile_ref: String,
     pub alpn: String,
     pub framing: String,
-    pub payload_ref: String,
+    pub payload: NativeCallbackValue,
     pub accounted_bytes: u64,
 }
 

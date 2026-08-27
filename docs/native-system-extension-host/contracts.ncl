@@ -37,6 +37,8 @@ let NonClaimSet = [
   "does-not-prove-executable-trust",
   "does-not-prove-callback-correctness",
   "does-not-prove-effect-success",
+  "does-not-prove-value-meaning",
+  "does-not-prove-value-durability",
   "does-not-prove-transport-delivery",
   "does-not-prove-distributed-availability",
   "does-not-prove-production-readiness",
@@ -47,20 +49,23 @@ let ContainsAll = fun required actual =>
 in
 let IsProfile = fun value =>
   std.is_record value
-  && value.schema == "molten.system-extension.native-host-profile.v1"
+  && value.schema == "molten.system-extension.native-host-profile.v2"
   && value.execution_profile == "native-process"
-  && value.claim_level == "local-live-pilot"
-  && value.alpn == "molten/system-extension/native/v1"
-  && value.framing == "preserves-packed-single-frame-v1"
+  && value.claim_level == "local-live-materialized-values-pilot"
+  && value.alpn == "molten/system-extension/native/v2"
+  && value.framing == "preserves-packed-materialized-values-v2"
   && value.environment_mode == "clear"
   && value.process_per_callback == true
+  && value.requires_materialized_values == true
   && PositiveNatural value.bounds.callback_input_bytes
   && PositiveNatural value.bounds.callback_output_bytes
   && PositiveNatural value.bounds.diagnostic_bytes
+  && PositiveNatural value.bounds.materialized_value_bytes
   && PositiveNatural value.bounds.instances
   && PositiveNatural value.bounds.unresolved_operations
   && PositiveNatural value.bounds.port_bindings
   && PositiveNatural value.bounds.policy_refs
+  && PositiveNatural value.bounds.materialized_values
   && std.is_array value.authorities
   && ContainsAll AuthoritySet value.authorities
   && std.array.length value.authorities == std.array.length AuthoritySet

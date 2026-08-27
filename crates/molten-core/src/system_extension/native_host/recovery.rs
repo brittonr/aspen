@@ -58,6 +58,9 @@ pub fn admit_native_instance_recovery(
     {
         issues.push(NativeHostIssue::IdentityMismatch("checkpoint-ref"));
     }
+    if instance.lifecycle.phase == LifecyclePhase::Running && instance.state_ref.is_none() {
+        issues.push(NativeHostIssue::IdentityMismatch("state-ref"));
+    }
     if instance.unresolved.len() > profile.profile.max_unresolved_operations {
         issues.push(NativeHostIssue::TooManyUnresolvedOperations {
             actual: instance.unresolved.len(),
@@ -68,6 +71,7 @@ pub fn admit_native_instance_recovery(
 }
 
 // r[impl molten.system_extension.native_host.intent]
+// r[impl molten.system_extension.native_host.value_intent]
 pub fn commit_native_operation_intent(
     profile: &AdmittedNativeHostProfile,
     instance: &NativeInstanceRecord,
