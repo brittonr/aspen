@@ -7,6 +7,5 @@
     "fabric-transport-session-runtime",
     "fabric-whole-system-simulation"
   ],
-  "groups": ["current"],
-  "status": "blocked"
+  "groups": ["current"]
 }

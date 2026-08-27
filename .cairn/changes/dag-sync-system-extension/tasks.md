@@ -22,10 +22,6 @@
 - [ ] [serial] Run traversal properties and all positive/negative protocol, content, resume, simulation/live parity, authority, and domain-boundary tests. r[molten.dag_sync.final_validation]
 - [ ] [serial] Run formatting, Clippy, Cairn validation, proposal/design/tasks gates, and the smallest relevant Nix checks before sync and archive. r[molten.dag_sync.final_validation]
 
-## Blocker
+## Dependency resolution
 
-This package explicitly depends on `fabric-whole-system-simulation`, which is
-blocked by the unavailable live consistency transport shell. The required
-same-core restart, partition, reassignment, corruption, and differential evidence
-cannot be produced through the declared composition. Resume after that dependency
-is completed; do not substitute a DAG-specific mock world.
+`fabric-whole-system-simulation` is archived at `.cairn/archive/2026-08-01-fabric-whole-system-simulation`. All other declared fabric dependencies are also archived. Implementation can resume against the accepted same-core composition without a DAG-specific mock world.
