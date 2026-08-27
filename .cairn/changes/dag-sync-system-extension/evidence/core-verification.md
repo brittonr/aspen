@@ -17,6 +17,8 @@ Implemented pure core coverage:
 - unsolicited, wrong-peer, stale, corrupt, unauthorized, and over-bound response denial;
 - canonical Preserves records and domain-separated record identities.
 
-Four core tests and two canonical shell-record tests passed. Core and root-crate Clippy passed for all targets and features with warnings denied.
+The imperative shell now composes explicit authority, resource, transport, content verification, progress persistence, observation, and receipt ports. It requests only planned objects, verifies before progress mutation, stores each accepted step, and publishes a bounded receipt last.
 
-No transport, storage, progress persistence, extension lifecycle, live loopback, multiprocess, or domain activation claim is made by this stage.
+Four core tests and four shell tests passed. The shell tests cover complete receiver-driven transfer, durable per-object progress, receipt-last ordering, deferral, and corruption denial. Core and root-crate Clippy passed for all targets and features with warnings denied.
+
+No concrete live transport, Redb adapter, system-extension lifecycle, live loopback, multiprocess, or domain activation claim is made by this stage.

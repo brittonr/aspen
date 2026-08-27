@@ -85,6 +85,9 @@ pub fn admit_dag_response(
     if expected.assigned_peer != observation.assigned_peer {
         return Err(DagSyncIssue::ResponsePeerMismatch);
     }
+    if progress.verified.contains(&observation.object_ref) {
+        return Err(DagSyncIssue::DuplicateResponse);
+    }
     if !observation.identity_verified {
         return Err(DagSyncIssue::ResponseIdentityMismatch);
     }

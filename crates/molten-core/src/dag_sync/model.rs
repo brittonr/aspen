@@ -330,12 +330,15 @@ pub enum DagSyncIssue {
     ProgressContainsUnknownObject,
     StrategyRequiresPeers,
     UnsolicitedResponse,
+    DuplicateResponse,
     ResponseEpochMismatch,
     ResponseGenerationMismatch,
     ResponsePeerMismatch,
     ResponseIdentityMismatch,
     ResponseUnauthorized,
     ResponseByteMismatch,
+    TransferDeferred,
+    TransferCancelled,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -373,12 +376,15 @@ impl DagSyncIssue {
             Self::ProgressContainsUnknownObject => "progress-contains-unknown-object",
             Self::StrategyRequiresPeers => "strategy-requires-peers",
             Self::UnsolicitedResponse => "unsolicited-response",
+            Self::DuplicateResponse => "duplicate-response",
             Self::ResponseEpochMismatch => "response-epoch-mismatch",
             Self::ResponseGenerationMismatch => "response-generation-mismatch",
             Self::ResponsePeerMismatch => "response-peer-mismatch",
             Self::ResponseIdentityMismatch => "response-identity-mismatch",
             Self::ResponseUnauthorized => "response-unauthorized",
             Self::ResponseByteMismatch => "response-byte-mismatch",
+            Self::TransferDeferred => "transfer-deferred",
+            Self::TransferCancelled => "transfer-cancelled",
         }
     }
 }
