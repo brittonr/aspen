@@ -24,6 +24,10 @@
       url = "github:OnixResearch/basalt/d913dc01e765c9b297df5fcc57dfa06aac39bc74";
       flake = false;
     };
+    bounded-exec-src = {
+      url = "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525";
+      flake = false;
+    };
     artifact-src = {
       url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
       flake = false;
@@ -90,6 +94,7 @@
       flake-utils,
       onix-core-src,
       basalt-src,
+      bounded-exec-src,
       artifact-src,
       choregraph-src,
       executable-extent-src,
@@ -186,6 +191,37 @@
             && artifactWorkspace.workspace.package.license == "MIT OR Apache-2.0"
           ) "Molten Artifact Cargo/Nix source identity, package set, workspace, or license drifted";
           artifact-src;
+        boundedExecRevision = "29dac88ecded94457572db3fdfaaaab95fa91525";
+        boundedExecRepository = "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git";
+        boundedExecDependency = artifactRootDependencies."bounded-exec";
+        boundedExecExpectedLockSource = "git+${boundedExecRepository}?rev=${boundedExecRevision}#${boundedExecRevision}";
+        boundedExecLockPackages = builtins.filter (
+          package: (package.source or "") == boundedExecExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        boundedExecWorkspace = builtins.fromTOML (builtins.readFile (bounded-exec-src + "/Cargo.toml"));
+        boundedExecPackage = builtins.fromTOML (
+          builtins.readFile (bounded-exec-src + "/crates/bounded-exec/Cargo.toml")
+        );
+        boundedExecSource =
+          assert pkgs.lib.assertMsg (
+            boundedExecDependency.git == boundedExecRepository
+            && boundedExecDependency.rev == boundedExecRevision
+            && boundedExecDependency.version == "0.1.0"
+            && bounded-exec-src.rev == boundedExecRevision
+            &&
+              builtins.sort builtins.lessThan (map (package: package.name) boundedExecLockPackages) == [
+                "bounded-exec"
+                "bounded-exec-core"
+              ]
+            &&
+              builtins.sort builtins.lessThan boundedExecWorkspace.workspace.members == [
+                "crates/bounded-exec"
+                "crates/bounded-exec-core"
+              ]
+            && boundedExecWorkspace.workspace.package.license == "AGPL-3.0-or-later"
+            && boundedExecPackage.package.name == "bounded-exec"
+          ) "Molten Bounded Exec Cargo/Nix source identity, package set, workspace, or license drifted";
+          bounded-exec-src;
         choregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b";
         choregraphRepository = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git";
         choregraphHistoryDependencies = [
@@ -325,6 +361,7 @@
           schema-migration-core-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
           "${artifactRepository}#${artifactRevision}" = maybeCleanLocalGitSource artifactSource;
+          "${boundedExecRepository}#${boundedExecRevision}" = maybeCleanLocalGitSource boundedExecSource;
           "${executableExtentRepository}#${executableExtentRevision}" =
             maybeCleanLocalGitSource executableExtentSource;
           "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;
@@ -538,6 +575,15 @@
           cp -R ${./src/executable_extent} "$out/product/executable_extent"
           cp -R ${./crates/molten-core/src/executable_extent} \
             "$out/product/molten-core/src/executable_extent"
+        '';
+        fabricExecutionOctetWorkspace = pkgs.runCommand "molten-fabric-execution-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/fabric-execution-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/fabric-execution-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/fabric-execution-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/fabric-execution-octet/src/lib.rs} "$out/src/lib.rs"
+          cp ${./checks/fabric-execution-octet/src/fabric.rs} "$out/src/fabric.rs"
+          cp -R ${./crates/molten-core/src/fabric_execution} "$out/src/fabric_execution"
         '';
         worldCommitOctetWorkspace = pkgs.runCommand "molten-world-commit-octet-workspace" { } ''
           mkdir -p "$out/src"
@@ -908,6 +954,51 @@
                     echo "Wasm performance shell must not invoke Wizer or precompile tools" >&2
                     exit 1
                   fi
+                  touch "$out"
+                '';
+            fabricExecutionProfileCheck =
+              pkgs.runCommand "molten-fabric-execution-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=docs/fabric-execution/profile.ncl
+                  generated=docs/fabric-execution/generated/profile.json
+                  nickel format --check \
+                    docs/fabric-execution/contracts.ncl \
+                    "$profile" \
+                    docs/fabric-execution/fixtures/valid.ncl \
+                    docs/fabric-execution/fixtures/negative/*.ncl
+                  nickel export "$profile" --format json > "$TMPDIR/profile.json"
+                  diff -u "$generated" "$TMPDIR/profile.json"
+                  nickel export docs/fabric-execution/fixtures/valid.ncl --format json \
+                    > "$TMPDIR/valid.json"
+                  for fixture in docs/fabric-execution/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative execution profile fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  rg -Fq '${boundedExecRepository}' Cargo.toml flake.nix
+                  rg -Fq '${boundedExecRevision}' Cargo.toml Cargo.lock flake.nix flake.lock
+                  if rg -n 'bounded-exec[[:space:]]*=[[:space:]]*\{[^}]*path[[:space:]]*=' Cargo.toml; then
+                    echo 'mutable Bounded Exec path dependency is not admitted' >&2
+                    exit 1
+                  fi
+                  if rg -n 'std::process::Command|Command::new' src/fabric_execution; then
+                    echo 'execution adapter bypasses the pinned Bounded Exec mechanism' >&2
+                    exit 1
+                  fi
+                  test "$(rg -l 'pub trait ExecutionFabricPort' src/fabric_execution | wc -l)" -eq 1
+                  rg -Fq 'pub trait ExecutionFabricPort' src/fabric_execution/ports.rs
                   touch "$out"
                 '';
             fabricMembershipPlacementProfileCheck =
@@ -1532,6 +1623,18 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            fabric-execution-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = fabricExecutionOctetWorkspace;
+                packages = [ "molten-fabric-execution-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/fabric-execution-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
             world-commit-octet-deny-all =
               assert executableExtentOctetAdmitted;
               (executable-extent-octet.lib.mkConsumerCheck {
@@ -1606,6 +1709,7 @@
             materialization-authority = materializationAuthorityCheck;
             wasm-component-profile = wasmComponentProfileCheck;
             wasm-component-performance-profile = wasmComponentPerformanceProfileCheck;
+            fabric-execution-profile = fabricExecutionProfileCheck;
             fabric-membership-placement-profile = fabricMembershipPlacementProfileCheck;
             fabric-cryptographic-identity-profile = fabricCryptographicIdentityProfileCheck;
             fabric-observability-profile = fabricObservabilityProfileCheck;

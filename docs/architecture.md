@@ -14,6 +14,8 @@ Pure primitives own deterministic validation, transitions, plans, bounds, and ca
 
 Canonical values are Preserves records identified with BLAKE3. Rust structure layout, debug text, backend handles, transport identity, clocks, randomness, and ambient process state are never canonical authority. Port resolution rejects unknown, duplicate, disabled, incompatible, over-authorizing, or silently substituted implementations.
 
+The bounded execution port keeps executable policy in the pure core and process mechanics in one adapter. Canonical requests contain capability and content references, not host paths. The live adapter uses the exact pinned Bounded Exec cohort, while simulation uses the same request and receipt algebra. See [`fabric-execution.md`](fabric-execution.md).
+
 No global coordination mechanism is mandatory. OpenRaft is not selected, adapted, or used. A consistency service is an explicit optional extension, and local verified transition laws do not imply whole-system correctness.
 
 ## Executable system-extension tier

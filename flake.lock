@@ -100,6 +100,23 @@
         "type": "github"
       }
     },
+    "bounded-exec-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784441700,
+        "narHash": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
+        "ref": "refs/heads/main",
+        "rev": "29dac88ecded94457572db3fdfaaaab95fa91525",
+        "revCount": 3,
+        "type": "git",
+        "url": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git"
+      },
+      "original": {
+        "rev": "29dac88ecded94457572db3fdfaaaab95fa91525",
+        "type": "git",
+        "url": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git"
+      }
+    },
     "cairn": {
       "inputs": {
         "artifact": "artifact",
@@ -1508,6 +1525,7 @@
       "inputs": {
         "artifact-src": "artifact-src",
         "basalt-src": "basalt-src",
+        "bounded-exec-src": "bounded-exec-src",
         "cairn-src": "cairn-src",
         "choregraph-src": "choregraph-src",
         "executable-extent-octet": "executable-extent-octet",

@@ -1,5 +1,7 @@
 let Contracts = import "contracts.ncl" in
 let ArtifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
+let BoundedExecRevision = "29dac88ecded94457572db3fdfaaaab95fa91525" in
+let BoundedExecSource = "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git" in
 let ChoregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b" in
 let ChoregraphSource = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git" in
 let ExecutableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f" in
@@ -50,6 +52,17 @@ in
       immutable_revision = ArtifactRevision,
       nix_input = "artifact-src",
       transport_policy = "ssh-pinned-nix-archive",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "bounded-exec",
+      package_name = "bounded-exec",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = BoundedExecSource,
+      immutable_revision = BoundedExecRevision,
+      nix_input = "bounded-exec-src",
+      transport_policy = "https",
       disposition = "runtime",
     },
     {

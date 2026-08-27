@@ -368,6 +368,7 @@ fn authority_for_class(class: FabricPortClass) -> FabricAuthority {
         FabricPortClass::Authority => FabricAuthority::ProtocolOwnership,
         FabricPortClass::Transport => FabricAuthority::Transport,
         FabricPortClass::DurableState => FabricAuthority::DurableState,
+        FabricPortClass::Execution => FabricAuthority::Execution,
         FabricPortClass::Time => FabricAuthority::Time,
         FabricPortClass::Scheduling => FabricAuthority::Scheduling,
         FabricPortClass::Membership => FabricAuthority::Membership,
@@ -385,6 +386,7 @@ fn resource_for_class(class: FabricPortClass) -> FabricResource {
     match class {
         FabricPortClass::Transport => FabricResource::NetworkBytes,
         FabricPortClass::DurableState => FabricResource::StorageBytes,
+        FabricPortClass::Execution => FabricResource::ExecutionMillis,
         FabricPortClass::Time | FabricPortClass::Scheduling => FabricResource::LogicalTime,
         FabricPortClass::Evidence => FabricResource::Diagnostics,
         FabricPortClass::Authority
@@ -412,6 +414,12 @@ fn declared_faults(class: FabricPortClass) -> Vec<SimulationFaultKind> {
             SimulationFaultKind::Delay,
             SimulationFaultKind::BoundedCorruption,
             SimulationFaultKind::CapacityExhaustion,
+            SimulationFaultKind::Crash,
+        ],
+        FabricPortClass::Execution => vec![
+            SimulationFaultKind::Delay,
+            SimulationFaultKind::CapacityExhaustion,
+            SimulationFaultKind::Pause,
             SimulationFaultKind::Crash,
         ],
         FabricPortClass::Time | FabricPortClass::Scheduling => vec![

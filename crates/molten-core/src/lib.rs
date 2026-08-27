@@ -18,6 +18,7 @@ pub mod executable_extent;
 pub mod fabric;
 pub mod fabric_crypto_identity;
 pub mod fabric_durability;
+pub mod fabric_execution;
 pub mod fabric_membership;
 pub mod fabric_observability;
 pub mod fabric_simulation;

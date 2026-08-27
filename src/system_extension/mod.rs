@@ -6,6 +6,7 @@
 //! from the ordinary receipt-first plugin host.
 
 mod canonical;
+mod executionfabric;
 mod fixture;
 mod host;
 
@@ -13,6 +14,7 @@ mod host;
 mod tests;
 
 pub use canonical::*;
+pub use executionfabric::*;
 pub use fixture::*;
 pub use host::*;
 pub use molten_core::system_extension::*;

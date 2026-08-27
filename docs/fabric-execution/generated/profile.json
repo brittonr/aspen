@@ -1,0 +1,90 @@
+{
+  "live": {
+    "bounds": {
+      "argument_bytes": 4096,
+      "arguments": 64,
+      "concurrency_units": 1,
+      "environment_entries": 64,
+      "environment_name_bytes": 128,
+      "environment_value_bytes": 4096,
+      "poll_interval_ms": 10,
+      "queue_units": 64,
+      "stderr_bytes": 1048576,
+      "stdin_bytes": 1048576,
+      "stdout_bytes": 1048576,
+      "teardown_timeout_ms": 5000,
+      "timeout_ms": 30000
+    },
+    "component": {
+      "license": "AGPL-3.0-or-later",
+      "package": "bounded-exec",
+      "repository": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git",
+      "revision": "29dac88ecded94457572db3fdfaaaab95fa91525"
+    },
+    "environment_mode": "clear",
+    "executable_resolution": "exact-artifact",
+    "invocation_mode": "direct",
+    "kind": "live-bounded-process",
+    "non_claims": [
+      "does-not-prove-sandboxing",
+      "does-not-prove-hermeticity",
+      "does-not-prove-executable-trust",
+      "does-not-prove-child-correctness",
+      "does-not-prove-network-isolation",
+      "does-not-prove-platform-equivalence",
+      "does-not-prove-application-success",
+      "does-not-prove-release-readiness"
+    ],
+    "platform": "unix-process-group",
+    "profile_id": "bounded-process-live-v1",
+    "schema": "molten.fabric.execution-profile.v1",
+    "termination_scopes": [
+      "process-group"
+    ],
+    "workspace_mode": "capability-root"
+  },
+  "simulation": {
+    "bounds": {
+      "argument_bytes": 4096,
+      "arguments": 64,
+      "concurrency_units": 1,
+      "environment_entries": 64,
+      "environment_name_bytes": 128,
+      "environment_value_bytes": 4096,
+      "poll_interval_ms": 10,
+      "queue_units": 64,
+      "stderr_bytes": 1048576,
+      "stdin_bytes": 1048576,
+      "stdout_bytes": 1048576,
+      "teardown_timeout_ms": 5000,
+      "timeout_ms": 30000
+    },
+    "component": {
+      "license": "AGPL-3.0-or-later",
+      "package": "bounded-exec",
+      "repository": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git",
+      "revision": "29dac88ecded94457572db3fdfaaaab95fa91525"
+    },
+    "environment_mode": "clear",
+    "executable_resolution": "exact-artifact",
+    "invocation_mode": "direct",
+    "kind": "deterministic-simulation",
+    "non_claims": [
+      "does-not-prove-sandboxing",
+      "does-not-prove-hermeticity",
+      "does-not-prove-executable-trust",
+      "does-not-prove-child-correctness",
+      "does-not-prove-network-isolation",
+      "does-not-prove-platform-equivalence",
+      "does-not-prove-application-success",
+      "does-not-prove-release-readiness"
+    ],
+    "platform": "unix-process-group",
+    "profile_id": "bounded-process-simulation-v1",
+    "schema": "molten.fabric.execution-profile.v1",
+    "termination_scopes": [
+      "process-group"
+    ],
+    "workspace_mode": "capability-root"
+  }
+}
