@@ -1,8 +1,8 @@
 ## Phase 1: Replication manifest and pure planner
 
-- [ ] [serial] Define canonical replication manifests, replica policy, placement epochs, inventories, plans, operations, status assertions, and evidence with explicit system-extension authority. r[molten.content_replication.manifest]
-- [ ] [serial] Implement pure deterministic inventory diff, target selection, repair, handoff, deferral, pin, cleanup, idempotency, and epoch-fencing plans. r[molten.content_replication.planner] r[molten.content_replication.epoch_fencing]
-- [ ] [parallel] Add generated positive and negative planner tests for placement constraints, stable ordering, insufficient peers, stale epochs, conflicting operations, retention, and resource bounds. r[molten.content_replication.planner] r[molten.content_replication.epoch_fencing] r[molten.content_replication.resources_failures]
+- [x] [serial] Define canonical replication manifests, replica policy, placement epochs, inventories, plans, operations, status assertions, and evidence with explicit system-extension authority. r[molten.content_replication.manifest]
+- [x] [serial] Implement pure deterministic inventory diff, target selection, repair, handoff, deferral, pin, cleanup, idempotency, and epoch-fencing plans. r[molten.content_replication.planner] r[molten.content_replication.epoch_fencing]
+- [x] [parallel] Add generated positive and negative planner tests for placement constraints, stable ordering, insufficient peers, stale epochs, conflicting operations, retention, and resource bounds. r[molten.content_replication.planner] r[molten.content_replication.epoch_fencing] r[molten.content_replication.resources_failures]
 
 ## Phase 2: Executable system extension
 
@@ -21,11 +21,6 @@
 - [ ] [serial] Run placement/convergence properties and all positive and negative extension, adapter, retention, failure, restart, live/simulation, and authority tests. r[molten.content_replication.final_validation]
 - [ ] [serial] Run formatting, Clippy, Cairn validation, proposal/design/tasks gates, and the smallest relevant Nix checks before sync and archive. r[molten.content_replication.final_validation]
 
-## Blocker
+## Dependency resolution
 
-This package explicitly depends on `fabric-whole-system-simulation`, which is
-blocked by the unavailable live consistency transport shell. Its required
-same-core partition, crash, placement-change, and resource-pressure evidence
-cannot be produced against the declared whole-system composition yet. Resume
-after that dependency is completed; do not replace it with extension-private
-mocks or relabel local loopback as multiprocess evidence.
+`fabric-whole-system-simulation` is archived at `.cairn/archive/2026-08-01-fabric-whole-system-simulation`. All other declared fabric dependencies are also archived. Implementation can resume against the accepted same-core composition without extension-private mocks or relabeled loopback evidence.

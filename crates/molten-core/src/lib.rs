@@ -9,6 +9,7 @@
 
 pub mod cluster_harness;
 pub mod codec;
+pub mod content_replication;
 pub mod content_store_adapter;
 pub mod dag_sync;
 pub mod dependency;
