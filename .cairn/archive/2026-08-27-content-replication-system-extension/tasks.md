@@ -18,8 +18,8 @@
 
 ## Phase 4: Validation
 
-- [ ] [serial] Run placement/convergence properties and all positive and negative extension, adapter, retention, failure, restart, live/simulation, and authority tests. r[molten.content_replication.final_validation]
-- [ ] [serial] Run formatting, Clippy, Cairn validation, proposal/design/tasks gates, and the smallest relevant Nix checks before sync and archive. r[molten.content_replication.final_validation]
+- [x] [serial] Run placement/convergence properties and all positive and negative extension, adapter, retention, failure, restart, live/simulation, and authority tests. r[molten.content_replication.final_validation]
+- [x] [serial] Run formatting, Clippy, Cairn validation, proposal/design/tasks gates, and the smallest relevant Nix checks before sync and archive. r[molten.content_replication.final_validation]
 
 ## Dependency resolution
 

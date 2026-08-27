@@ -24,8 +24,12 @@ Three multiprocess product tests move exact content bytes through two child proc
 
 The generic distinct-process harness now indexes its explicit request and payload inputs. Existing default CLI harness tests remain green.
 
+The full all-target, all-feature package command passed 1,314 root-library tests, 216 core tests, 51 binary tests, 61 CLI tests, and 12 content-replication integration tests.
+
 The focused Octet workspace passes with zero findings, warnings, and errors. Core and root Clippy pass for all targets and features with warnings denied.
+
+`nix flake check --no-build --builders ''` passed. Strict Cairn validation and the proposal, design, and tasks gates also passed.
 
 ## Current non-claims
 
-Final full-package, Nix, and Cairn archive gates are not complete at this stage.
+These checks prove the bounded tested profiles only. They do not prove permanent durability, global availability, or release eligibility.
