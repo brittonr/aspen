@@ -9,7 +9,7 @@ use crate::fabric_simulation::SimulationClaimProfile;
 use crate::fabric_simulation::SimulationSchedulerState;
 use crate::fabric_simulation::select_simulation_choice;
 
-const TEST_SOURCE_REVISION: &str = "51646db62379c6790f21211630ff648f4a0446d1";
+const TEST_SOURCE_REVISION: &str = "06cd7ca465550d2a35e0511cbbd7989e434d8f51";
 const TEST_MAX_CHOICES: u64 = 128;
 const TEST_MAX_EVENTS: u64 = 128;
 const TEST_MAX_TICKS: u64 = 128;

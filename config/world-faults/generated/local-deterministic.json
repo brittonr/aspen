@@ -799,7 +799,7 @@
     "max_unsupported_rows": 16
   },
   "profile_name": "local-deterministic-process-restart-v1",
-  "rust_profile_ref": "blake3:edd4bce3f6b3bf91cd213966a33b25141a5410a65eae93e097e191bca4aea7c0",
+  "rust_profile_ref": "blake3:c7dc3a3c40e1d2cc1618bac585ecbeaa5178d94b4290607018c74cf8a94aaa3c",
   "schedules": [
     {
       "mutation": "head",
@@ -1507,6 +1507,6 @@
     }
   ],
   "schema": "molten.world-fault-profile.v1",
-  "source_revision": "51646db62379c6790f21211630ff648f4a0446d1",
+  "source_revision": "06cd7ca465550d2a35e0511cbbd7989e434d8f51",
   "unexplained_numeric_thresholds": []
 }

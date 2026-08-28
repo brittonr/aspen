@@ -1,7 +1,7 @@
 let Contracts = import "../contracts.ncl" in
-let SourceRevision = "51646db62379c6790f21211630ff648f4a0446d1" in
+let SourceRevision = "06cd7ca465550d2a35e0511cbbd7989e434d8f51" in
 let InventoryRef = "blake3:d2d36a4685dbfcee16075e508a70592e51e6df12f86b58d039d5b961b985d367" in
-let RustProfileRef = "blake3:edd4bce3f6b3bf91cd213966a33b25141a5410a65eae93e097e191bca4aea7c0" in
+let RustProfileRef = "blake3:c7dc3a3c40e1d2cc1618bac585ecbeaa5178d94b4290607018c74cf8a94aaa3c" in
 let OperationGeneration = 1 in
 let NodeGeneration = 1 in
 let Mutations = [
