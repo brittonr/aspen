@@ -46,6 +46,7 @@ compat_module!(coordination, orchestration);
 #[path = "cluster.rs"]
 pub mod cluster;
 pub mod cluster_harness;
+pub mod coordination_delivery;
 #[doc(hidden)]
 #[path = "delivery/idempotency.rs"]
 pub mod dedupe;

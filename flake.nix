@@ -903,6 +903,25 @@
           mkdir -p "$out/src/prolly_map/tests"
           cp ${./checks/prolly-map-octet/empty-tests.rs} "$out/src/prolly_map/tests/mod.rs"
         '';
+        coordinationDeliveryOctetWorkspace =
+          pkgs.runCommand "molten-coordination-delivery-octet-workspace" { }
+            ''
+              mkdir -p "$out/src"
+              cp ${./checks/coordination-delivery-octet/Cargo.toml} "$out/Cargo.toml"
+              cp ${./checks/coordination-delivery-octet/Cargo.lock} "$out/Cargo.lock"
+              cp ${./checks/coordination-delivery-octet/dylint.toml} "$out/dylint.toml"
+              cp ${./checks/coordination-delivery-octet/src/lib.rs} "$out/src/lib.rs"
+              mkdir -p "$out/src/fabric"
+              cp ${./checks/coordination-delivery-octet/src/fabric/mod.rs} \
+                "$out/src/fabric/mod.rs"
+              cp ${./checks/coordination-delivery-octet/src/fabric/time.rs} \
+                "$out/src/fabric/time.rs"
+              cp -R ${./crates/molten-core/src/coordination_delivery} "$out/src/coordination_delivery"
+              chmod -R u+w "$out/src/coordination_delivery"
+              rm -rf "$out/src/coordination_delivery/tests.rs"
+              cp ${./checks/coordination-delivery-octet/empty-tests.rs} \
+                "$out/src/coordination_delivery/tests.rs"
+            '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1619,6 +1638,47 @@
                     echo "effect or infrastructure type leaked into the Prolly map core" >&2
                     exit 1
                   fi
+                  touch "$out"
+                '';
+            coordinationDeliveryProfileCheck =
+              pkgs.runCommand "molten-coordination-delivery-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/coordination-delivery/*.ncl \
+                    config/coordination-delivery/fixtures/negative/*.ncl
+                  nickel export config/coordination-delivery/profile.ncl \
+                    --format json --output "$TMPDIR/profile.json"
+                  cmp config/coordination-delivery/generated/profile.json \
+                    "$TMPDIR/profile.json"
+                  for fixture in config/coordination-delivery/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative coordination delivery fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if rg -n 'std::fs|std::path|std::env|std::time|redb::|cap_std::|std::process|println!|eprintln!' \
+                    crates/molten-core/src/coordination_delivery; then
+                    echo "effect or infrastructure type leaked into the coordination delivery core" >&2
+                    exit 1
+                  fi
+                  rg -Fq 'pub trait DeliveryCommitPort' \
+                    src/coordination_delivery/ports.rs
+                  rg -Fq 'pub trait DeliveryTimerPort' \
+                    src/coordination_delivery/ports.rs
+                  rg -Fq 'pub trait DeliveryStatusPort' \
+                    src/coordination_delivery/ports.rs
                   touch "$out"
                 '';
             worldOperatorProfileCheck =
@@ -2544,6 +2604,52 @@
                   done
                   touch "$out"
                 '';
+            # r[verify molten.coordination_delivery.final_validation]
+            coordination-delivery-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = coordinationDeliveryOctetWorkspace;
+                packages = [ "molten-coordination-delivery-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/coordination-delivery-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            coordination-delivery-schema-inventory =
+              pkgs.runCommand "molten-coordination-delivery-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  schema_root=${./schemas/preserves-boundaries}
+                  expected_schema_count=17
+                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-coordination-delivery-*.preserves' | wc -l)"
+                  test "$actual_schema_count" -eq "$expected_schema_count"
+                  for schema_id in \
+                    molten.coordination-delivery-manifest.v1 \
+                    molten.coordination-delivery-policy.v1 \
+                    molten.coordination-delivery-host-binding.v1 \
+                    molten.coordination-delivery-item.v1 \
+                    molten.coordination-delivery-token.v1 \
+                    molten.coordination-delivery-attempt.v1 \
+                    molten.coordination-delivery-state.v1 \
+                    molten.coordination-delivery-ack.v1 \
+                    molten.coordination-delivery-nack.v1 \
+                    molten.coordination-delivery-expiry.v1 \
+                    molten.coordination-delivery-retry.v1 \
+                    molten.coordination-delivery-dead-letter.v1 \
+                    molten.coordination-delivery-redrive.v1 \
+                    molten.coordination-delivery-transition.v1 \
+                    molten.coordination-delivery-status.v1 \
+                    molten.coordination-delivery-commit-receipt.v1 \
+                    molten.coordination-delivery-worker-plan.v1
+                  do
+                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
+                  done
+                  touch "$out"
+                '';
             # r[verify molten.world_faults.verification]
             world-faults-octet-deny-all =
               assert executableExtentOctetAdmitted;
@@ -2675,6 +2781,7 @@
             world-state-oracle-profile = worldStateOracleProfileCheck;
             world-state-oracle-source = worldStateOracleSourceCheck;
             prolly-map-profile = prollyMapProfileCheck;
+            coordination-delivery-profile = coordinationDeliveryProfileCheck;
             world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;

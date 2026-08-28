@@ -4468,6 +4468,7 @@ dependencies = [
  "executable-extent-core",
  "kamacite-core",
  "schema-migration-core",
+ "serde",
  "transactional-reconciliation-core",
 ]
 

@@ -1,0 +1,71 @@
+{
+  "base_fifo_unchanged": true,
+  "claims_exactly_once": false,
+  "inline_payloads_allowed": false,
+  "jitter": "none",
+  "manifest": {
+    "extension_id": "coordination-delivery",
+    "implementation_ref": "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "non_claims": [
+      "delivery-evidence-does-not-grant-authority",
+      "delivery-evidence-does-not-prove-exactly-once-effects",
+      "delivery-evidence-does-not-prove-payload-correctness",
+      "delivery-evidence-does-not-prove-global-ordering",
+      "delivery-evidence-does-not-prove-store-or-broker-correctness",
+      "delivery-evidence-does-not-establish-release-eligibility"
+    ],
+    "policy_ref": "blake3:05be03f3c3a2af25a8ba2f4f603b205b8105abdc15c61b4438518370b5e09d8a",
+    "port_bindings": {
+      "fabric_consistency": "blake3:1111111111111111111111111111111111111111111111111111111111111111",
+      "fabric_durable_state": "blake3:2222222222222222222222222222222222222222222222222222222222222222",
+      "fabric_logical_time": "blake3:3333333333333333333333333333333333333333333333333333333333333333",
+      "fabric_observability": "blake3:5555555555555555555555555555555555555555555555555555555555555555",
+      "fabric_resource": "blake3:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "schema": "molten.coordination-delivery-manifest.v1",
+    "service_generation": 7,
+    "service_id": "coordination-delivery-local",
+    "time_profile_ref": "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "policy": {
+    "completion_authority_ref": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dead_letter_capacity": 8,
+    "dead_letter_queue_id": "queue:delivery-dlq",
+    "dead_letter_retention_ticks": 20,
+    "expiry_authority_ref": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "in_flight_capacity": 8,
+    "maximum_attempts": 2,
+    "metadata_byte_limit": 32,
+    "non_claims": [
+      "delivery-evidence-does-not-grant-authority",
+      "delivery-evidence-does-not-prove-exactly-once-effects",
+      "delivery-evidence-does-not-prove-payload-correctness",
+      "delivery-evidence-does-not-prove-global-ordering",
+      "delivery-evidence-does-not-prove-store-or-broker-correctness",
+      "delivery-evidence-does-not-establish-release-eligibility"
+    ],
+    "ordering": "strict-fifo",
+    "poison_failure_classes": [
+      "poison"
+    ],
+    "poison_item_handling": "dead-letter",
+    "policy_id": "delivery-policy-v1",
+    "ready_capacity": 8,
+    "redrive_authority_ref": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "retention_authority_ref": "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "retry_backoff": "fixed",
+    "retry_base_delay_ticks": 5,
+    "retry_capacity": 8,
+    "retry_maximum_delay_ticks": 5,
+    "retryable_failure_classes": [
+      "transient"
+    ],
+    "schema": "molten.coordination-delivery-policy.v1",
+    "status_item_limit": 8,
+    "visibility_timeout_ticks": 10
+  },
+  "receipt_establishes_release_eligibility": false,
+  "receipt_grants_authority": false,
+  "schema": "molten.coordination-delivery-profile.v1",
+  "time_domain": "logical"
+}

@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-coordination-delivery-policy">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "molten-coordination-delivery-policy-v1">
+  <schema-id "molten.coordination-delivery-policy.v1">
+  <arity 25>>
