@@ -16,8 +16,8 @@
     "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-authority-drain-20260827/crates/molten-node-host#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-authority-drain-20260827/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "847a37215e332709f29033e7cc177a8f682ae5698e9254ec02cea7586ef8a148",
-  "inputsHash": "b2828081bb6798f8f6d6428554d4b8c7bf111c79d5e1582faa7792769630e0e8",
+  "cargoLockHash": "4831149e509872705a47b22aeb5e48e06a2eb7b15524fc09ee7cbf766ffcf935",
+  "inputsHash": "2fcd14e356d451a4c67ff28ea1aec0575de9a36c7644d85bf0e096c5f381aee5",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -450,6 +450,34 @@
       "links": null,
       "description": "Bounded HTTP shell with explicit network, TLS, clock, timer, and credential ports",
       "license": "MIT"
+    },
+    "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62#transactional-reconciliation-core@0.1.0": {
+      "crateName": "transactional-reconciliation-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git",
+        "rev": "eb2bd3441753af97bfcb247cef7cc22d72675b62",
+        "subDir": "crates/transactional-reconciliation-core",
+        "sha256": "0xpddm581amnqswb2y7h53jawr68bbk8g4rl92rb13f805chi01b"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Pure transactional planning and uncertain-outcome reconciliation",
+      "license": "MIT",
+      "repository": "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git"
     },
     "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-conformance@0.1.0": {
       "crateName": "schema-identity-conformance",
@@ -1318,6 +1346,10 @@
           "externCrateName": "tracing"
         },
         {
+          "packageId": "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62#transactional-reconciliation-core@0.1.0",
+          "externCrateName": "transactional_reconciliation_core"
+        },
+        {
           "packageId": "git+ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#valence-core@0.1.0",
           "externCrateName": "valence"
         },
@@ -1424,6 +1456,10 @@
         {
           "packageId": "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0",
           "externCrateName": "schema_migration_core"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62#transactional-reconciliation-core@0.1.0",
+          "externCrateName": "transactional_reconciliation_core"
         }
       ],
       "buildDependencies": [],

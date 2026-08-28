@@ -1,0 +1,10 @@
+{
+  "groups": [
+    "feature:native-effect-completion-values"
+  ],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

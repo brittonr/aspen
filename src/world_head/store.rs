@@ -52,6 +52,10 @@ impl LocalWorldHeadStore {
         let table = read.open_table(WORLD_HEAD_TRANSITIONS_TABLE).map_err(store_error)?;
         table.get(receipt_ref).map_err(store_error).map(|value| value.map(|guard| guard.value().to_vec()))
     }
+
+    pub(crate) const fn database(&self) -> &redb::Database {
+        &self.database
+    }
 }
 
 impl WorldHeadStatePort for LocalWorldHeadStore {

@@ -48,6 +48,7 @@ pub(super) fn valid_diagnostic(value: &str) -> bool {
             | "simulation-adapter-missing"
             | "simulation-live-fallback"
             | "promotion-reservation-missing"
+            | "promotion-dispatch-overclaim"
             | "bearer-material-present"
             | "receipt-authority-overclaim"
             | "activation-denied"
@@ -78,6 +79,7 @@ pub(super) const fn diagnostic_text(diagnostic: WorldBranchAuthorityDiagnostic) 
         WorldBranchAuthorityDiagnostic::SimulationAdapterMissing => "simulation-adapter-missing",
         WorldBranchAuthorityDiagnostic::SimulationLiveFallback => "simulation-live-fallback",
         WorldBranchAuthorityDiagnostic::PromotionReservationMissing => "promotion-reservation-missing",
+        WorldBranchAuthorityDiagnostic::PromotionDispatchOverclaim => "promotion-dispatch-overclaim",
         WorldBranchAuthorityDiagnostic::BearerMaterialPresent => "bearer-material-present",
         WorldBranchAuthorityDiagnostic::ReceiptAuthorityOverclaim => "receipt-authority-overclaim",
         WorldBranchAuthorityDiagnostic::ActivationDenied => "activation-denied",

@@ -9,10 +9,12 @@
 mod activation;
 mod mapping;
 mod model;
+mod promotion;
 
 pub use activation::*;
 pub use mapping::*;
 pub use model::*;
+pub use promotion::*;
 
 #[cfg(test)]
 mod tests;

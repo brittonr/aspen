@@ -10,6 +10,7 @@ use super::FailureClass;
 use super::HealthState;
 use super::LifecycleEvent;
 use super::LifecycleState;
+use super::NativeCallbackValue;
 use super::ResourceEnvelope;
 use super::ResourceUsage;
 use super::SystemExtensionAdmissionContext;
@@ -343,10 +344,12 @@ pub(crate) fn canonical_callback_receipt(input: CallbackReceiptInput<'_>) -> Res
     })
 }
 
+// r[impl molten.system_extension.native_host.effect_completion_value]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PortEffectOutput {
     pub output_schema_ref: String,
     pub output_ref: String,
+    pub materialized_output: Option<NativeCallbackValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -357,6 +360,7 @@ pub struct CanonicalEffectCompletion {
     pub request_ref: String,
     pub generation: u64,
     pub output_ref: String,
+    pub materialized_output: Option<NativeCallbackValue>,
     pub value: IOValue,
 }
 
@@ -373,7 +377,14 @@ pub(crate) fn canonical_effect_completion(
             output.output_schema_ref, effect.output_schema_ref
         )));
     }
-    let value = record("system-extension-effect-completion-v1", vec![
+    if let Some(materialized) = &output.materialized_output {
+        crate::preserves_rail::validate_content_ref(&materialized.value_ref)?;
+        let observed_ref = crate::preserves_rail::content_ref_from_bytes(&materialized.bytes);
+        if materialized.value_ref != output.output_ref || observed_ref != materialized.value_ref {
+            return Err(MoltenError::invalid_harness("system-extension materialized effect output identity mismatch"));
+        }
+    }
+    let value = record("system-extension-effect-completion-v2", vec![
         string(super::SYSTEM_EXTENSION_EFFECT_COMPLETION_SCHEMA),
         field("callback-receipt-ref", string(callback_receipt_ref)),
         field("binding-ref", string(&binding.binding_ref)),
@@ -383,10 +394,12 @@ pub(crate) fn canonical_effect_completion(
         field("generation", u64_value(effect.generation)),
         field("output-schema-ref", string(&output.output_schema_ref)),
         field("output-ref", string(&output.output_ref)),
+        field("output-value", optional_native_callback_value(output.materialized_output.as_ref())),
         checks_value(&[
             "exact-bound-port-routed",
             "generation-correlated",
             "output-schema-matched",
+            "materialized-output-identity-checked",
             "completion-is-not-durability-proof",
         ]),
     ]);
@@ -398,6 +411,7 @@ pub(crate) fn canonical_effect_completion(
         request_ref: effect.request_ref.clone(),
         generation: effect.generation,
         output_ref: output.output_ref.clone(),
+        materialized_output: output.materialized_output.clone(),
         value,
     })
 }
@@ -779,6 +793,18 @@ fn optional_string(value: Option<&str>) -> IOValue {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }
+}
+
+fn optional_native_callback_value(value: Option<&NativeCallbackValue>) -> IOValue {
+    value.map_or_else(
+        || record("none", Vec::new()),
+        |value| {
+            record("some", vec![record("native-callback-value-v2", vec![
+                string(&value.value_ref),
+                sequence(value.bytes.iter().map(|byte| u64_value(u64::from(*byte))).collect()),
+            ])])
+        },
+    )
 }
 
 fn field(label: &'static str, value: IOValue) -> IOValue {

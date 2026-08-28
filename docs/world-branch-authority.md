@@ -29,7 +29,7 @@ A Basalt decision does not mint, move, activate, or enforce a capability.
 
 `simulation-only` requires an exact deterministic simulation adapter. Molten never falls back to a live adapter.
 
-`promotion-gated` requires a current promotion recheck and a release reservation. This path remains denied until the effect-release dependency closes.
+`promotion-gated` requires a current promotion recheck and a complete committed release-reservation set. Admission never authorizes effect dispatch.
 
 `replace-before-activation` requires a new current destination grant.
 
@@ -84,11 +84,17 @@ Receipts state these limits:
 - linear plans do not prove exclusive ownership;
 - simulation plans do not prove parity or host confinement;
 - promotion plans do not authorize dispatch;
+- release reservation admission does not authorize dispatch;
+- reservation binding does not prove handler success or effect meaning;
 - activation observations do not prove future enforcement;
 - evidence does not prove release eligibility.
 
-## Current blocker
+## Promotion reservation boundary
 
-The promotion-gated path depends on `bind-world-promotion-to-effect-release`.
-That change remains blocked until Weft publishes the required replay and effect-log runtime.
-Molten therefore plans the obligation but does not reserve or dispatch effects from this branch-authority work.
+`PromotionReservationPort` observes one admitted promotion reservation. It has no dispatch method.
+
+`bind_world_branch_promotion_reservation` checks the exact promotion plan, complete committed reservation set, selected reservation, candidate head, and release branch class. It then creates a typed admission that always sets `dispatch_authorized` to false.
+
+The pure activation core recomputes the admission identity. It denies missing, incomplete, crossed, uncommitted, or dispatch-authorizing facts.
+
+Activation receipts contain only the promotion-plan, reservation, candidate, capability, and admission identities. They contain no intent payload, bearer material, private policy body, or dispatch authorization.

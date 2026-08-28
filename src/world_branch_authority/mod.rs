@@ -5,10 +5,12 @@
 )]
 
 mod ports;
+mod promotion;
 mod records;
 mod service;
 
 pub use ports::*;
+pub use promotion::*;
 pub use records::*;
 pub use service::*;
 

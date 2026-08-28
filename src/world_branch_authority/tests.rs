@@ -3,6 +3,11 @@ use std::collections::VecDeque;
 use basalt::world_branch_authority::DEFAULT_WORLD_BRANCH_AUTHORITY_POLICY_JSON;
 use basalt::world_branch_authority::parse_branch_authority_policy;
 use molten_core::world_branch_authority::*;
+use molten_core::world_commit::WorldCommitRef;
+use molten_core::world_head::WorldBranchClass;
+use molten_core::world_head::WorldBranchId;
+use molten_core::world_head::WorldHeadPolicyRef;
+use molten_core::world_promotion::*;
 
 use super::*;
 use crate::error::Result;
@@ -74,6 +79,9 @@ struct Runtime {
     ownership_calls: usize,
     grant_calls: usize,
     simulation_calls: usize,
+    promotion_calls: usize,
+    promotion_dispatch_overclaim: bool,
+    promotion_uncommitted: bool,
     transfer_calls: usize,
     activation_calls: usize,
     activation_reconcile_calls: usize,
@@ -96,6 +104,9 @@ impl Runtime {
             ownership_calls: 0,
             grant_calls: 0,
             simulation_calls: 0,
+            promotion_calls: 0,
+            promotion_dispatch_overclaim: false,
+            promotion_uncommitted: false,
             transfer_calls: 0,
             activation_calls: 0,
             activation_reconcile_calls: 0,
@@ -130,10 +141,50 @@ impl Runtime {
                 .then(|| content_ref("simulation-adapter")),
             simulation_adapter_deterministic: plan.mode == Some(WorldBranchMode::SimulationOnly),
             release_reservation_ref: None,
+            promotion_admission: None,
             bearer_material_present: false,
             receipt_claims_authority: false,
         }
     }
+}
+
+fn promotion_material(
+    plan: &WorldBranchAuthorityPlan,
+) -> (WorldPromotionPlan, Vec<WorldReleaseReservation>, WorldReleaseReservationRef) {
+    let policy_ref = WorldHeadPolicyRef::new(content_ref("promotion-policy")).expect("policy ref");
+    let request = WorldPromotionRequest {
+        operation_ref: WorldPromotionOperationRef::new(content_ref("promotion-operation")).expect("operation ref"),
+        branch_id: WorldBranchId::new("release").expect("branch id"),
+        branch_class: WorldBranchClass::Candidate,
+        expected_head: WorldCommitRef::new(content_ref("promotion-active")).expect("active head"),
+        candidate_head: WorldCommitRef::new(content_ref("promotion-candidate")).expect("candidate head"),
+        expected_generation: POLICY_GENERATION,
+        policy_ref: policy_ref.clone(),
+        authority: WorldPromotionAuthorityObservation {
+            authority_ref: WorldPromotionAuthorityRef::new(content_ref("promotion-authority")).expect("authority ref"),
+            policy_ref,
+            observed_generation: POLICY_GENERATION,
+            admitted: true,
+        },
+        intent_closure_complete: true,
+        simulation_only: false,
+        intents: vec![WorldEffectIntent {
+            intent_ref: WorldEffectIntentRef::new(content_ref("promotion-intent")).expect("intent ref"),
+            semantic_ref: WorldSemanticIntentRef::new(content_ref("promotion-semantic")).expect("semantic ref"),
+            handler_ref: WorldPromotionHandlerRef::new(content_ref("promotion-handler")).expect("handler ref"),
+            adapter_ref: WorldPromotionAdapterRef::new(content_ref("promotion-adapter")).expect("adapter ref"),
+            release_class: Some(WorldIntentReleaseClass::Release),
+        }],
+        bounds: WorldPromotionBounds::standard(),
+    };
+    let promotion = plan_world_promotion(&request).expect("promotion plan");
+    let mut committed = promotion.reservations.clone();
+    for reservation in &mut committed {
+        reservation.state = WorldReleaseState::Committed;
+    }
+    let selected_ref = committed[0].reservation_ref.clone();
+    assert_eq!(plan.mode, Some(WorldBranchMode::PromotionGated));
+    (promotion, committed, selected_ref)
 }
 
 impl CurrentBranchPolicyPort for Runtime {
@@ -223,6 +274,24 @@ impl SimulationAuthorityPort for Runtime {
         let mut observation = Self::realization(plan, content_ref("simulation-operation"), true, None);
         observation.simulation_adapter_deterministic = self.simulation_deterministic;
         Ok(observation)
+    }
+}
+
+impl PromotionReservationPort for Runtime {
+    fn admit_promotion_reservation(
+        &mut self,
+        plan: &WorldBranchAuthorityPlan,
+    ) -> Result<WorldBranchPromotionReservationAdmission> {
+        self.promotion_calls += 1;
+        let (promotion, committed, selected_ref) = promotion_material(plan);
+        let mut admission = bind_world_branch_promotion_reservation(plan, &promotion, &committed, &selected_ref)?;
+        if self.promotion_dispatch_overclaim {
+            admission.dispatch_authorized = true;
+        }
+        if self.promotion_uncommitted {
+            admission.reservation_committed = false;
+        }
+        Ok(admission)
     }
 }
 
@@ -384,8 +453,34 @@ fn activation_rechecks_policy_and_reconciles_unknown_outcomes() {
     assert!(!contains_bytes(receipt, b"secret="));
 }
 
+// r[verify molten.world_branch_authority.activation]
 #[test]
-fn bearer_and_promotion_modes_never_activate_from_policy_receipts() {
+fn promotion_adapter_requires_complete_committed_exact_reservations() {
+    let authority = plan_world_branch_authority(
+        DEFAULT_WORLD_BRANCH_AUTHORITY_POLICY_JSON,
+        &facts(CapabilityKind::DeferredEffect, WorldBranchAction::Promote),
+        &current("promotion-current"),
+    );
+    let (promotion, committed, selected_ref) = promotion_material(&authority);
+    let admission = bind_world_branch_promotion_reservation(&authority, &promotion, &committed, &selected_ref)
+        .expect("promotion admission");
+    assert!(admission.reservation_committed);
+    assert!(admission.complete_reservation_set);
+    assert!(!admission.dispatch_authorized);
+
+    assert!(bind_world_branch_promotion_reservation(&authority, &promotion, &[], &selected_ref).is_err());
+
+    let mut uncommitted = committed.clone();
+    uncommitted[0].state = WorldReleaseState::Planned;
+    assert!(bind_world_branch_promotion_reservation(&authority, &promotion, &uncommitted, &selected_ref,).is_err());
+
+    let mut crossed = committed;
+    crossed[0].candidate_head = WorldCommitRef::new(content_ref("crossed-candidate")).expect("candidate ref");
+    assert!(bind_world_branch_promotion_reservation(&authority, &promotion, &crossed, &selected_ref).is_err());
+}
+
+#[test]
+fn bearer_denies_and_promotion_requires_committed_non_dispatching_reservation() {
     let mut bearer_runtime = Runtime::new();
     let bearer = execute_world_branch_authority(
         &facts(CapabilityKind::BearerCredential, WorldBranchAction::Create),
@@ -401,12 +496,47 @@ fn bearer_and_promotion_modes_never_activate_from_policy_receipts() {
         &facts(CapabilityKind::DeferredEffect, WorldBranchAction::Promote),
         &mut promotion_runtime,
     )
-    .expect("promotion remains pending");
+    .expect("promotion reservation admission");
+    assert_eq!(promotion.activation_outcome, Some(ActivationOutcome::Activated));
+    assert_eq!(promotion_runtime.promotion_calls, 1);
+    assert_eq!(promotion_runtime.grant_calls, 0);
+    assert_eq!(promotion_runtime.simulation_calls, 0);
+    assert_eq!(promotion_runtime.transfer_calls, 0);
+    assert_eq!(promotion_runtime.activation_calls, 1);
+    let promotion_receipt = promotion_runtime.receipt_bytes.last().expect("promotion receipt");
+    assert!(contains_bytes(promotion_receipt, b"promotion-plan-ref"));
+    assert!(contains_bytes(promotion_receipt, b"release-reservation-ref"));
+    assert!(contains_bytes(
+        promotion_receipt,
+        b"release reservation admission does not authorize effect dispatch"
+    ));
+    assert!(!contains_bytes(promotion_receipt, b"dispatch-authorized"));
+
+    let mut dispatch_overclaim = Runtime::new();
+    dispatch_overclaim.promotion_dispatch_overclaim = true;
+    let denied = execute_world_branch_authority(
+        &facts(CapabilityKind::DeferredEffect, WorldBranchAction::Promote),
+        &mut dispatch_overclaim,
+    )
+    .expect("dispatch overclaim emits denial receipt");
     assert_eq!(
-        promotion.activation.expect("activation decision").diagnostic,
-        WorldBranchAuthorityDiagnostic::MissingObligationEvidence
+        denied.activation.expect("activation denial").diagnostic,
+        WorldBranchAuthorityDiagnostic::PromotionDispatchOverclaim
     );
-    assert_eq!(promotion_runtime.activation_calls, 0);
+    assert_eq!(dispatch_overclaim.activation_calls, 0);
+
+    let mut uncommitted = Runtime::new();
+    uncommitted.promotion_uncommitted = true;
+    let denied = execute_world_branch_authority(
+        &facts(CapabilityKind::DeferredEffect, WorldBranchAction::Promote),
+        &mut uncommitted,
+    )
+    .expect("uncommitted reservation emits denial receipt");
+    assert_eq!(
+        denied.activation.expect("activation denial").diagnostic,
+        WorldBranchAuthorityDiagnostic::PromotionReservationMissing
+    );
+    assert_eq!(uncommitted.activation_calls, 0);
     assert!(promotion_runtime.receipt_bytes.iter().all(|bytes| {
         let text = String::from_utf8_lossy(bytes);
         !text.contains("secret=") && !text.contains("bearer-token")

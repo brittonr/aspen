@@ -24,11 +24,15 @@ const SHORT_TIMEOUT_MS: u64 = 50;
 const NORMAL_TIMEOUT_MS: u64 = 5_000;
 const SMALL_OUTPUT_BYTES: u64 = 4;
 const FULL_OUTPUT_BYTES: u64 = 1_048_576;
+const MAX_VALUE_BYTES_USIZE: usize = 262_144;
+const OVERSIZED_VALUE_BYTES: usize = MAX_VALUE_BYTES_USIZE + 1;
+const EXPECTED_GENERIC_COMPLETIONS: usize = 1;
 
 // r[verify molten.system_extension.native_host.execution]
 // r[verify molten.system_extension.native_host.intent]
 // r[verify molten.system_extension.native_host.effects]
 // r[verify molten.system_extension.native_host.effect_completion]
+// r[verify molten.system_extension.native_host.effect_completion_value.accepted]
 // r[verify molten.system_extension.native_host.operator]
 // r[verify molten.system_extension.native_host.recovery]
 // r[verify molten.system_extension.native_host.validation]
@@ -73,6 +77,9 @@ fn separate_process_service_runs_lifecycle_effect_restart_and_removal() {
     let mut effects = EffectPort::default();
     let completions = service.route_effects(&callback_receipt, &mut effects).expect("route exact native effect");
     assert_eq!(completions.len(), 1);
+    let materialized = completions[0].materialized_output.as_ref().expect("materialized provider effect output");
+    assert_eq!(materialized.bytes, EFFECT_OUTPUT_BYTES);
+    assert_eq!(materialized.value_ref, completions[0].output_ref);
     assert_eq!(effects.routed, 1);
     service
         .deliver_effect_completion(&completions[0], EFFECT_COMPLETION_TICK)
@@ -133,6 +140,15 @@ fn callback_intent_precedes_publication(history: &[NativeInstanceRecord]) -> boo
         })
     });
     matches!((callback_intent, publication_intent), (Some(callback), Some(publication)) if callback < publication)
+}
+
+// r[verify molten.system_extension.native_host.effect_completion_value.compatibility]
+#[test]
+fn generic_system_extension_completion_can_remain_reference_only() {
+    let run = run_executable_system_extension_fixture(ExecutionProfile::InProcessNative)
+        .expect("generic system extension fixture");
+    assert_eq!(run.first_effect_completions.len(), EXPECTED_GENERIC_COMPLETIONS,);
+    assert!(run.first_effect_completions.iter().all(|completion| completion.materialized_output.is_none()));
 }
 
 // r[verify molten.system_extension.native_host.profile]
@@ -227,6 +243,86 @@ fn restart_with_missing_state_bytes_fails_before_process_start() {
     assert_eq!(observations.len(), 1);
     assert_eq!(observations[0].lifecycle, molten::fabric_execution::ExecutionLifecycleState::FailedBeforeStart,);
     assert_eq!(recovered.instance().expect("failed recovery instance").state_ref, expected_state_ref);
+}
+
+#[derive(Clone, Copy)]
+enum InvalidEffectOutput {
+    Missing,
+    IdentityMismatch,
+    Oversized,
+}
+
+struct InvalidEffectPort {
+    kind: InvalidEffectOutput,
+    routed: u64,
+}
+
+impl FabricEffectPort for InvalidEffectPort {
+    fn route(
+        &mut self,
+        _binding: &molten::fabric::CanonicalFabricPortBinding,
+        _effect: &TypedEffectRequest,
+    ) -> molten::fabric::FabricPortResult<PortEffectOutput> {
+        self.routed = self
+            .routed
+            .checked_add(1)
+            .ok_or_else(|| molten::fabric::FabricPortError::malformed("invalid effect route count overflow"))?;
+        let (output_ref, materialized_output) = match self.kind {
+            InvalidEffectOutput::Missing => (HASH_E.to_string(), None),
+            InvalidEffectOutput::IdentityMismatch => (
+                HASH_E.to_string(),
+                Some(NativeCallbackValue {
+                    value_ref: HASH_E.to_string(),
+                    bytes: b"identity-mismatch".to_vec(),
+                }),
+            ),
+            InvalidEffectOutput::Oversized => {
+                let bytes = vec![0; OVERSIZED_VALUE_BYTES];
+                let value_ref = molten::preserves_rail::content_ref_from_bytes(&bytes);
+                (value_ref.clone(), Some(NativeCallbackValue { value_ref, bytes }))
+            }
+        };
+        Ok(PortEffectOutput {
+            output_schema_ref: EFFECT_OUTPUT_SCHEMA.to_string(),
+            output_ref,
+            materialized_output,
+        })
+    }
+}
+
+// r[verify molten.system_extension.native_host.effect_completion_value.rejected]
+#[test]
+fn materializing_native_host_rejects_missing_mismatched_and_oversized_effect_values_without_retry() {
+    assert_eq!(u64::try_from(MAX_VALUE_BYTES_USIZE), Ok(MAX_VALUE_BYTES));
+    for kind in [
+        InvalidEffectOutput::Missing,
+        InvalidEffectOutput::IdentityMismatch,
+        InvalidEffectOutput::Oversized,
+    ] {
+        let cohort = Cohort::new();
+        let mut service = cohort.install();
+        service.start(START_TICK).expect("start native service");
+        let accepted = {
+            let mut client = NativeServiceClient::new(&mut service);
+            client
+                .submit(&ingress(GENERATION, cohort.admitted.manifest_ref()), REQUEST_TICK)
+                .expect("accepted native ingress")
+        };
+        let (callback_receipt, _outcome) =
+            accepted.dispatch.require_executed("accepted ingress").expect("accepted ingress callback");
+        let callback_observations = service.host().executor().observations().len();
+        let mut effects = InvalidEffectPort { kind, routed: 0 };
+
+        assert!(service.route_effects(&callback_receipt, &mut effects).is_err());
+        assert_eq!(effects.routed, 1);
+        assert_eq!(service.host().executor().observations().len(), callback_observations);
+        let instance = service.instance().expect("terminal invalid effect instance");
+        assert!(instance.completed_operations.iter().any(|operation| {
+            operation.kind == NativeOperationKind::Effect
+                && operation.state == NativeOperationState::Terminal
+                && !operation.is_retry_permitted
+        }));
+    }
 }
 
 #[derive(Clone, Default)]

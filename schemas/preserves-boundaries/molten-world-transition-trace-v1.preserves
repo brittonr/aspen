@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-transition-trace">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "molten-world-transition-trace-v1">
+  <schema-id "molten.world-replay.transition-trace.v1">
+  <arity 5>>

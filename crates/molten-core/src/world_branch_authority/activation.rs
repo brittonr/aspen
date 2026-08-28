@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::model::*;
+use super::promotion::validate_world_branch_promotion_admission;
 
 const ACTIVATION_IDENTITY_DOMAIN: &str = "onixresearch.molten.world-branch-authority.activation.v1";
 
@@ -78,10 +79,11 @@ fn activation_diagnostic(
     if !complete_evidence(plan, observation) {
         return WorldBranchAuthorityDiagnostic::MissingObligationEvidence;
     }
-    mode_diagnostic(mode, observation)
+    mode_diagnostic(plan, mode, observation)
 }
 
 fn mode_diagnostic(
+    plan: &WorldBranchAuthorityPlan,
     mode: WorldBranchMode,
     observation: &WorldBranchRealizationObservation,
 ) -> WorldBranchAuthorityDiagnostic {
@@ -111,14 +113,30 @@ fn mode_diagnostic(
                 WorldBranchAuthorityDiagnostic::Admitted
             }
         }
-        WorldBranchMode::PromotionGated => {
-            if observation.release_reservation_ref.as_deref().is_some_and(valid_content_ref) {
-                WorldBranchAuthorityDiagnostic::Admitted
-            } else {
-                WorldBranchAuthorityDiagnostic::PromotionReservationMissing
-            }
-        }
+        WorldBranchMode::PromotionGated => promotion_mode_diagnostic(plan, observation),
         WorldBranchMode::NonBranchable => WorldBranchAuthorityDiagnostic::NonBranchable,
+    }
+}
+
+fn promotion_mode_diagnostic(
+    plan: &WorldBranchAuthorityPlan,
+    observation: &WorldBranchRealizationObservation,
+) -> WorldBranchAuthorityDiagnostic {
+    let (Some(reservation_ref), Some(admission)) =
+        (observation.release_reservation_ref.as_deref(), observation.promotion_admission.as_ref())
+    else {
+        return WorldBranchAuthorityDiagnostic::PromotionReservationMissing;
+    };
+    if reservation_ref != admission.reservation_ref {
+        return WorldBranchAuthorityDiagnostic::ObservationMismatch;
+    }
+    if let Err(diagnostic) = validate_world_branch_promotion_admission(plan, admission) {
+        return diagnostic;
+    }
+    if observation.destination_grant_current {
+        WorldBranchAuthorityDiagnostic::Admitted
+    } else {
+        WorldBranchAuthorityDiagnostic::CurrentnessDenied
     }
 }
 
@@ -206,6 +224,7 @@ const fn diagnostic_text(diagnostic: WorldBranchAuthorityDiagnostic) -> &'static
         WorldBranchAuthorityDiagnostic::SimulationAdapterMissing => "simulation-adapter-missing",
         WorldBranchAuthorityDiagnostic::SimulationLiveFallback => "simulation-live-fallback",
         WorldBranchAuthorityDiagnostic::PromotionReservationMissing => "promotion-reservation-missing",
+        WorldBranchAuthorityDiagnostic::PromotionDispatchOverclaim => "promotion-dispatch-overclaim",
         WorldBranchAuthorityDiagnostic::BearerMaterialPresent => "bearer-material-present",
         WorldBranchAuthorityDiagnostic::ReceiptAuthorityOverclaim => "receipt-authority-overclaim",
         WorldBranchAuthorityDiagnostic::ActivationDenied => "activation-denied",

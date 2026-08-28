@@ -4443,6 +4443,7 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+ "transactional-reconciliation-core",
  "valence-core",
  "verified-logic",
  "vm-cohort-core",
@@ -4466,6 +4467,7 @@ dependencies = [
  "executable-extent-core",
  "kamacite-core",
  "schema-migration-core",
+ "transactional-reconciliation-core",
 ]
 
 [[package]]
@@ -7832,6 +7834,11 @@ dependencies = [
  "tracing-core",
  "tracing-log 0.2.0",
 ]
+
+[[package]]
+name = "transactional-reconciliation-core"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62#eb2bd3441753af97bfcb247cef7cc22d72675b62"
 
 [[package]]
 name = "try-lock"

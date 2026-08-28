@@ -49,6 +49,8 @@ pub struct WorldBranchAuthorityReceipt {
     pub obligations: Vec<String>,
     pub diagnostic: String,
     pub operation_ref: Option<String>,
+    pub promotion_plan_ref: Option<String>,
+    pub release_reservation_ref: Option<String>,
     pub activation_outcome: Option<String>,
     pub evidence_refs: Vec<String>,
     pub non_claims: Vec<String>,
@@ -68,6 +70,8 @@ pub fn plan_receipt(plan: &WorldBranchAuthorityPlan) -> WorldBranchAuthorityRece
         obligations: plan.obligations.iter().map(|obligation| obligation.as_str().to_string()).collect(),
         diagnostic: diagnostic_text(plan.diagnostic).to_string(),
         operation_ref: None,
+        promotion_plan_ref: None,
+        release_reservation_ref: None,
         activation_outcome: None,
         evidence_refs: Vec::new(),
         non_claims: plan.non_claims.clone(),
@@ -91,6 +95,11 @@ pub fn activation_receipt(
         obligations: plan.obligations.iter().map(|obligation| obligation.as_str().to_string()).collect(),
         diagnostic: diagnostic_text(decision.diagnostic).to_string(),
         operation_ref: Some(observation.operation_ref.clone()),
+        promotion_plan_ref: observation
+            .promotion_admission
+            .as_ref()
+            .map(|admission| admission.promotion_plan_ref.clone()),
+        release_reservation_ref: observation.release_reservation_ref.clone(),
         activation_outcome: None,
         evidence_refs: observation.evidence_refs.clone(),
         non_claims: decision.non_claims.clone(),
@@ -120,6 +129,11 @@ pub fn activation_outcome_receipt(
         obligations: plan.obligations.iter().map(|obligation| obligation.as_str().to_string()).collect(),
         diagnostic: diagnostic_text(diagnostic).to_string(),
         operation_ref: Some(observation.operation_ref.clone()),
+        promotion_plan_ref: observation
+            .promotion_admission
+            .as_ref()
+            .map(|admission| admission.promotion_plan_ref.clone()),
+        release_reservation_ref: observation.release_reservation_ref.clone(),
         activation_outcome: Some(outcome.as_str().to_string()),
         evidence_refs: observation.evidence_refs.clone(),
         non_claims: decision.non_claims.clone(),
@@ -140,6 +154,8 @@ pub fn encode_receipt(receipt: &WorldBranchAuthorityReceipt) -> Result<(String, 
         field("obligations", sequence(receipt.obligations.iter().map(string).collect())),
         field("diagnostic", string(&receipt.diagnostic)),
         field("operation-ref", optional_text(receipt.operation_ref.as_deref())),
+        field("promotion-plan-ref", optional_text(receipt.promotion_plan_ref.as_deref())),
+        field("release-reservation-ref", optional_text(receipt.release_reservation_ref.as_deref())),
         field("activation-outcome", optional_text(receipt.activation_outcome.as_deref())),
         field("evidence-refs", sequence(receipt.evidence_refs.iter().map(string).collect())),
         field("non-claims", sequence(receipt.non_claims.iter().map(string).collect())),
@@ -162,6 +178,8 @@ fn validate_receipt(receipt: &WorldBranchAuthorityReceipt) -> Result<()> {
         non_empty(&receipt.policy_ref),
         non_empty(&receipt.capability_ref),
         receipt.operation_ref.as_deref(),
+        receipt.promotion_plan_ref.as_deref(),
+        receipt.release_reservation_ref.as_deref(),
     ]
     .into_iter()
     .flatten()

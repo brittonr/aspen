@@ -22,10 +22,11 @@ pub const EFFECT_PORT_VERSION: &str = "v1";
 pub const EFFECT_OPERATION: &str = "fixture-effect";
 pub const EFFECT_INPUT_SCHEMA: &str = "molten.fixture.native.effect-input.v1";
 pub const EFFECT_OUTPUT_SCHEMA: &str = "molten.fixture.native.effect-output.v1";
+pub const EFFECT_OUTPUT_BYTES: &[u8] = b"fixture-native-effect-output-v2";
 pub const GENERATION: u64 = 1;
+pub const MAX_VALUE_BYTES: u64 = 262_144;
 const REQUEST_PAYLOAD: &[u8] = b"fixture-ingress-request-v2";
 const CALLBACK_LIMIT: u64 = 1_048_576;
-const MAX_VALUE_BYTES: u64 = 262_144;
 const DIAGNOSTIC_LIMIT: u64 = 1_048_576;
 const TIMEOUT_MS: u64 = 5_000;
 const POLL_INTERVAL_MS: u64 = 5;
@@ -97,9 +98,14 @@ impl FabricEffectPort for EffectPort {
             .routed
             .checked_add(1)
             .ok_or_else(|| FabricPortError::malformed("fixture effect count overflow"))?;
+        let output_ref = molten::preserves_rail::content_ref_from_bytes(EFFECT_OUTPUT_BYTES);
         Ok(PortEffectOutput {
             output_schema_ref: EFFECT_OUTPUT_SCHEMA.to_string(),
-            output_ref: HASH_E.to_string(),
+            output_ref: output_ref.clone(),
+            materialized_output: Some(NativeCallbackValue {
+                value_ref: output_ref,
+                bytes: EFFECT_OUTPUT_BYTES.to_vec(),
+            }),
         })
     }
 }

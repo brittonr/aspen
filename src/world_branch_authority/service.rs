@@ -16,7 +16,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 
 const LINEAR_OPERATION_DOMAIN: &str = "onixresearch.molten.world-branch-authority.linear-operation.v1";
-const PROMOTION_PENDING_GENERATION: u64 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldBranchAuthorityExecution {
@@ -135,7 +134,7 @@ fn realize<R: WorldBranchAuthorityRuntime>(
         }
         Some(WorldBranchMode::Linear) => realize_linear(plan, runtime),
         Some(WorldBranchMode::SimulationOnly) => runtime.bind_simulation(plan),
-        Some(WorldBranchMode::PromotionGated) => Ok(promotion_pending_observation(plan)),
+        Some(WorldBranchMode::PromotionGated) => realize_promotion(plan, runtime),
         Some(WorldBranchMode::NonBranchable) | None => {
             Err(MoltenError::invalid_harness("branch-authority denied plan cannot be realized"))
         }
@@ -181,24 +180,34 @@ fn realize_linear<R: WorldBranchAuthorityRuntime>(
     Ok(observation)
 }
 
-fn promotion_pending_observation(plan: &WorldBranchAuthorityPlan) -> WorldBranchRealizationObservation {
-    WorldBranchRealizationObservation {
+fn realize_promotion<R: PromotionReservationPort>(
+    plan: &WorldBranchAuthorityPlan,
+    runtime: &mut R,
+) -> Result<WorldBranchRealizationObservation> {
+    let admission = runtime.admit_promotion_reservation(plan)?;
+    let evidence_refs = vec![
+        admission.promotion_plan_ref.clone(),
+        admission.reservation_ref.clone(),
+        admission.admission_ref.clone(),
+    ];
+    Ok(WorldBranchRealizationObservation {
         plan_ref: plan.plan_ref.clone(),
         policy_ref: plan.policy_ref.clone(),
         capability_ref: plan.capability_ref.clone(),
-        operation_ref: linear_operation_ref(plan, PROMOTION_PENDING_GENERATION),
-        evidence_refs: Vec::new(),
+        operation_ref: admission.admission_ref.clone(),
+        evidence_refs,
         destination_scope: plan.destination_scope.clone(),
-        destination_grant_current: false,
+        destination_grant_current: admission.reservation_committed && admission.complete_reservation_set,
         source_active: true,
         destination_active: false,
         transfer_generation: None,
         simulation_adapter_ref: None,
         simulation_adapter_deterministic: false,
-        release_reservation_ref: None,
+        release_reservation_ref: Some(admission.reservation_ref.clone()),
+        promotion_admission: Some(admission),
         bearer_material_present: false,
         receipt_claims_authority: false,
-    }
+    })
 }
 
 fn linear_operation_ref(plan: &WorldBranchAuthorityPlan, generation: u64) -> String {

@@ -1,5 +1,7 @@
 use std::collections::BTreeSet;
 
+use super::promotion::WorldBranchPromotionReservationAdmission;
+
 // r[impl molten.world_branch_authority.derivation]
 // r[impl molten.world_branch_authority.evidence]
 
@@ -18,6 +20,8 @@ pub const WORLD_BRANCH_AUTHORITY_NON_CLAIMS: &[&str] = &[
     "linear plans do not prove source deactivation or destination activation",
     "simulation plans do not prove parity or prevent host escape",
     "promotion plans do not authorize effect dispatch",
+    "release reservation admission does not authorize effect dispatch",
+    "reservation binding does not prove handler success or effect meaning",
     "activation observations do not prove future enforcement",
     "branch-authority evidence does not prove release eligibility",
 ];
@@ -115,6 +119,7 @@ pub enum WorldBranchAuthorityDiagnostic {
     SimulationAdapterMissing,
     SimulationLiveFallback,
     PromotionReservationMissing,
+    PromotionDispatchOverclaim,
     BearerMaterialPresent,
     ReceiptAuthorityOverclaim,
     ActivationDenied,
@@ -241,6 +246,7 @@ pub struct WorldBranchRealizationObservation {
     pub simulation_adapter_ref: Option<String>,
     pub simulation_adapter_deterministic: bool,
     pub release_reservation_ref: Option<String>,
+    pub promotion_admission: Option<WorldBranchPromotionReservationAdmission>,
     pub bearer_material_present: bool,
     pub receipt_claims_authority: bool,
 }

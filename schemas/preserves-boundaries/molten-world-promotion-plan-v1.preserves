@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-promotion-plan">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "world-promotion-plan">
+  <schema-id "molten.world-promotion-plan.v1">
+  <arity 11>>

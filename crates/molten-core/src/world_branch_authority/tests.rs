@@ -5,6 +5,8 @@ const TRANSFER_GENERATION: u64 = 2;
 const SOURCE_LIMIT: u64 = 100;
 const DESTINATION_LIMIT: u64 = 50;
 
+mod promotion;
+
 fn content_ref(label: &str) -> String {
     let mut hasher = blake3::Hasher::new_derive_key("onixresearch.molten.world-branch-authority.test.v1");
     hasher.update(label.as_bytes());
@@ -57,18 +59,28 @@ fn plan(kind: CapabilityKind, action: WorldBranchAction) -> WorldBranchAuthority
 }
 
 fn observation(plan: &WorldBranchAuthorityPlan) -> WorldBranchRealizationObservation {
-    let evidence_refs = plan
+    let promotion_admission = (plan.mode == Some(WorldBranchMode::PromotionGated)).then(|| promotion::admission(plan));
+    let mut evidence_refs = plan
         .obligations
         .iter()
         .enumerate()
         .filter(|(_, obligation)| **obligation != WorldBranchObligation::DenyActivation)
         .map(|(index, _)| content_ref(&format!("evidence-{index}")))
-        .collect();
+        .collect::<Vec<_>>();
+    if let Some(admission) = &promotion_admission {
+        evidence_refs = vec![
+            admission.promotion_plan_ref.clone(),
+            admission.reservation_ref.clone(),
+            admission.admission_ref.clone(),
+        ];
+    }
     WorldBranchRealizationObservation {
         plan_ref: plan.plan_ref.clone(),
         policy_ref: plan.policy_ref.clone(),
         capability_ref: plan.capability_ref.clone(),
-        operation_ref: content_ref("operation"),
+        operation_ref: promotion_admission
+            .as_ref()
+            .map_or_else(|| content_ref("operation"), |admission| admission.admission_ref.clone()),
         evidence_refs,
         destination_scope: plan.destination_scope.clone(),
         destination_grant_current: true,
@@ -78,8 +90,8 @@ fn observation(plan: &WorldBranchAuthorityPlan) -> WorldBranchRealizationObserva
         simulation_adapter_ref: (plan.mode == Some(WorldBranchMode::SimulationOnly))
             .then(|| content_ref("simulation-adapter")),
         simulation_adapter_deterministic: plan.mode == Some(WorldBranchMode::SimulationOnly),
-        release_reservation_ref: (plan.mode == Some(WorldBranchMode::PromotionGated))
-            .then(|| content_ref("release-reservation")),
+        release_reservation_ref: promotion_admission.as_ref().map(|admission| admission.reservation_ref.clone()),
+        promotion_admission,
         bearer_material_present: false,
         receipt_claims_authority: false,
     }

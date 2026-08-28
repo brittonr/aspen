@@ -654,3 +654,305 @@ r[molten.world_bench.verification] Molten MUST test stable results, structural r
 - GIVEN positive and negative fixtures use one reviewed cohort
 - WHEN benchmark verification runs
 - THEN it MUST report exact metric coverage and all bounded non-claims
+
+### Requirement: Replay traces bind every expected world transition
+
+r[molten.world_replay.transition_chain] Molten MUST define a canonical bounded transition trace that binds one initial world commit and an ordered sequence of transition inputs, deterministic profiles, expected parents, and expected successor commits.
+
+#### Scenario: Every replayed step matches
+
+- GIVEN a complete trace and closure for a supported logical profile
+- WHEN Molten restores and replays each step
+- THEN every actual successor commit MUST equal the expected successor before the next step runs
+
+#### Scenario: One intermediate successor differs
+
+- GIVEN a replay produces an unexpected commit before a later step
+- WHEN transition verification compares the result
+- THEN it MUST stop at the first mismatching step
+- AND it MUST NOT report final-trace success
+
+### Requirement: Replay divergence is complete-world and refs-only
+
+r[molten.world_replay.divergence] Molten MUST compare expected and actual commit identities and typed roots. It MUST report the earliest differing step, root domain, and bounded field path without exposing secret bytes or bearer material.
+
+#### Scenario: Entropy root diverges
+
+- GIVEN all earlier steps match and one step produces a different entropy root
+- WHEN divergence classification runs
+- THEN the report MUST name that step and the entropy-root domain
+- AND later differences MUST NOT replace the earliest result
+
+### Requirement: Replay capsules bind complete typed closure
+
+r[molten.world_replay.capsule] Molten MUST define a canonical capsule manifest over every required trace, commit, typed root, artifact, schema, policy, runtime cohort, snapshot descriptor, transition input, and content manifest. Each member MUST bind its role, identity, codec, and byte length.
+
+#### Scenario: Complete capsule is exported
+
+- GIVEN every reachable member is available and within declared bounds
+- WHEN capsule planning runs
+- THEN the resulting manifest MUST enumerate the complete typed closure with one stable identity
+
+#### Scenario: Required schema is absent
+
+- GIVEN one world root references a schema that is not in the capsule closure
+- WHEN capsule validation runs
+- THEN validation MUST fail before replay or import publication
+
+### Requirement: Import validates before availability
+
+r[molten.world_replay.import] Molten MUST validate capsule identity, canonical encodings, member bounds, complete closure, object identities, supported profiles, and protection policy before imported objects become available for restore or replay.
+
+#### Scenario: Imported member is tampered
+
+- GIVEN transport returns bytes that do not match the declared member identity
+- WHEN import verification runs
+- THEN Molten MUST reject the member and MUST NOT publish capsule availability
+
+#### Scenario: Valid import completes
+
+- GIVEN every member verifies and the complete closure passes
+- WHEN import publication commits
+- THEN Molten MAY report capsule availability without moving a branch or activating a runtime
+
+### Requirement: Replay execution remains profile-bound and authority-neutral
+
+r[molten.world_replay.execution_boundary] Molten MUST use the declared logical or opaque restore profile and MUST rerun current authority, artifact, schema, resource, runtime, and effect admission before execution. Capsule possession MUST NOT grant those admissions.
+
+#### Scenario: Capsule is complete but authority is absent
+
+- GIVEN capsule validation passes and current execution authority denies
+- WHEN replay activation is requested
+- THEN replay MUST remain denied
+
+#### Scenario: Opaque profile targets a different cohort
+
+- GIVEN an exact machine snapshot descriptor does not match the destination cohort
+- WHEN replay planning runs
+- THEN Molten MUST reject the profile without falling back to logical restore
+
+### Requirement: Replay receipts preserve bounded claims
+
+r[molten.world_replay.receipts] Replay and import receipts MUST bind trace, capsule, profile, horizon, closure, actual transitions, divergence, redaction, and dependency identities. They MUST NOT claim universal determinism, semantic equivalence, capability transfer, effect completion, or release eligibility.
+
+#### Scenario: Focused replay rail runs
+
+- GIVEN positive and negative fixtures use reviewed dependency cohorts
+- WHEN the world replay verification rail runs
+- THEN it MUST report exact supported profiles and all bounded non-claims
+
+### Requirement: Replay verification covers success and denial paths
+
+r[molten.world_replay.verification] Molten MUST test complete replay, stable identities, capsule round trips, first divergence, closure failures, malformed encodings, unsupported profiles, secret disclosure, missing authority, and import-overclaim cases.
+
+#### Scenario: Negative corpus is incomplete
+
+- GIVEN replay fixtures omit malformed, missing-closure, profile-mismatch, or authority-denial cases
+- WHEN verification coverage is evaluated
+- THEN the replay change MUST remain incomplete
+
+### Requirement: Promotion plans bind one candidate and intent closure
+
+r[molten.world_promotion.plan] Molten MUST bind each promotion plan to the expected active head, candidate commit, exact effect-intent closure, branch policy, current authority inputs, and one operation identity.
+
+#### Scenario: Candidate intent closure is complete
+
+- GIVEN every candidate intent has one exact semantic identity and admitted release classification
+- WHEN promotion planning runs
+- THEN it MUST produce a complete bounded reservation plan
+
+#### Scenario: Candidate contains an unclassified intent
+
+- GIVEN one intent lacks a release, deny, simulate, or retain classification
+- WHEN promotion planning runs
+- THEN Molten MUST deny promotion planning as incomplete
+
+### Requirement: Active-head movement and release reservation are locally atomic
+
+r[molten.world_promotion.transaction] Molten MUST update the active head and publish the complete release-reservation set in one local transaction. A failed or stale transaction MUST leave both prior states unchanged.
+
+#### Scenario: Promotion transaction commits
+
+- GIVEN expected head, authority, policy, intent closure, and reservation identities remain current
+- WHEN the local transaction commits
+- THEN the candidate MUST become active and every admitted reservation MUST be durable
+
+#### Scenario: Reservation insertion fails
+
+- GIVEN one required reservation cannot enter the transaction
+- WHEN promotion publication runs
+- THEN the active head MUST remain unchanged and no partial reservation set may become dispatchable
+
+### Requirement: Dispatch consumes only committed current reservations
+
+r[molten.world_promotion.dispatch] Molten MUST dispatch only from committed reservations after rechecking current capability, policy, semantic handler, adapter generation, and reservation ownership. Retries MUST reuse the same logical release identity.
+
+#### Scenario: Reservation remains admitted
+
+- GIVEN a committed reservation passes every current dispatch gate
+- WHEN a dispatcher claims it
+- THEN one attempt MAY run under the reservation identity
+
+#### Scenario: Authority changed after promotion
+
+- GIVEN promotion succeeded but current capability admission now denies
+- WHEN dispatch admission runs
+- THEN Molten MUST record a blocked reservation and MUST NOT execute the effect
+
+### Requirement: Uncertain outcomes require observation-first reconciliation
+
+r[molten.world_promotion.reconciliation] Molten MUST classify publication and effect observations as not published, published, unknown, or conflicting before retry decisions. Unknown or conflicting outcomes MUST NOT trigger a blind new logical operation.
+
+#### Scenario: Local commit result is unknown
+
+- GIVEN the transaction returned no reliable completion result
+- WHEN recovery begins
+- THEN Molten MUST observe the durable operation identity before planning any repeat mutation
+
+#### Scenario: External acknowledgment was lost
+
+- GIVEN an effect may have completed but no acknowledgment is durable
+- WHEN reconciliation runs
+- THEN Molten MUST retain an uncertain state unless an admitted observation resolves it
+
+### Requirement: Acknowledged observations use explicit successor commits
+
+r[molten.world_promotion.observation_commit] Molten MUST bind an acknowledged effect observation to one recorded-effect transition from the promoted candidate to an explicit successor. This transition MUST NOT mutate the promoted commit or grant dispatch authority.
+
+#### Scenario: Acknowledged observation becomes recorded history
+
+- GIVEN one acknowledged attempt has an exact reservation and observation identity
+- WHEN observation-commit planning runs
+- THEN the transition MUST bind the promoted candidate as parent, the observation as input, and the supplied successor
+
+#### Scenario: Observation is unknown or mismatched
+
+- GIVEN an attempt is unacknowledged, lacks an observation, names another reservation, or keeps the same successor
+- WHEN observation-commit planning runs
+- THEN Molten MUST deny the transition before history publication
+
+### Requirement: Promotion receipts state bounded non-claims
+
+r[molten.world_promotion.non_claims] Promotion, reservation, attempt, and reconciliation receipts MUST distinguish local eligibility, dispatch attempts, observations, and external completion. They MUST NOT claim generic exactly-once execution or atomic external effects.
+
+#### Scenario: Promotion succeeded without dispatch
+
+- GIVEN the active head and reservations committed but no dispatcher ran
+- WHEN the promotion receipt is inspected
+- THEN it MUST report eligibility without claiming any external effect occurred
+
+### Requirement: Promotion verification covers crash windows
+
+r[molten.world_promotion.verification] Molten MUST test pre-commit, uncertain-commit, post-commit, pre-dispatch, post-dispatch, lost-acknowledgment, duplicate, conflict, denial, and overclaim paths.
+
+#### Scenario: Focused promotion rail runs
+
+- GIVEN deterministic fake adapters cover every declared crash boundary
+- WHEN the promotion verification rail runs
+- THEN it MUST report local atomicity and external-effect non-claims
+
+### Requirement: Molten consumes branch policy without transferring runtime authority
+
+r[molten.world_branch_authority.adoption] Molten MUST consume one reviewed immutable Basalt world-branch authority policy cohort. Basalt decisions MUST remain supplied policy facts and MUST NOT mint, move, store, or enforce capabilities.
+
+#### Scenario: Basalt admits a normalized branch action
+
+- GIVEN the policy identity, normalized capability facts, and authority inputs are current
+- WHEN Basalt returns an admitted branch mode
+- THEN Molten MAY build a realization plan under its own runtime gates
+
+#### Scenario: Policy receipt is presented as a capability
+
+- GIVEN a passing Basalt receipt exists without current realization evidence
+- WHEN branch activation runs
+- THEN Molten MUST deny activation
+
+### Requirement: Branch authority uses explicit derivation obligations
+
+r[molten.world_branch_authority.derivation] Molten MUST support closed copyable, attenuated, linear, simulation-only, promotion-gated, replace-before-activation, and non-branchable modes. Each admitted mode MUST produce explicit obligations, and unknown modes MUST deny.
+
+#### Scenario: Attenuated capability is requested
+
+- GIVEN policy permits attenuation and names required limits
+- WHEN planning runs
+- THEN the plan MUST require a verifiably narrower destination grant
+
+#### Scenario: Unknown branch mode appears
+
+- GIVEN a policy output contains an unsupported mode
+- WHEN Molten validates the output
+- THEN it MUST deny instead of treating the mode as copyable
+
+### Requirement: Linear authority cannot remain active on both branches
+
+r[molten.world_branch_authority.linear] Molten MUST realize linear movement through generation-fenced durable transfer. Destination activation MUST require evidence that the source no longer owns active use.
+
+#### Scenario: Linear transfer commits
+
+- GIVEN the source owns the exact current generation and every transfer gate passes
+- WHEN the durable transfer commits
+- THEN source use MUST become unavailable before destination activation succeeds
+
+#### Scenario: Source still appears active
+
+- GIVEN current observations cannot prove source deactivation
+- WHEN destination activation runs
+- THEN Molten MUST deny activation as ambiguous ownership
+
+### Requirement: Simulation authority cannot reach live adapters
+
+r[molten.world_branch_authority.simulation] Molten MUST bind simulation-only grants to exact deterministic simulation adapters. Missing or failed simulation support MUST deny instead of falling back to live effects.
+
+#### Scenario: Simulation adapter is available
+
+- GIVEN an exact admitted simulation profile implements the requested capability
+- WHEN branch activation runs in simulation mode
+- THEN Molten MAY bind only that simulation adapter
+
+#### Scenario: Simulation adapter is missing
+
+- GIVEN a live adapter exists but no admitted simulation adapter exists
+- WHEN branch activation runs
+- THEN Molten MUST deny without invoking the live adapter
+
+### Requirement: Authority is rechecked at activation and promotion
+
+r[molten.world_branch_authority.activation] Molten MUST recheck current policy, UCAN, revocation, replay, scope, durable ownership, adapter, and effect facts at branch activation and promotion.
+
+#### Scenario: Stored observation became stale
+
+- GIVEN the world commit references an earlier passing authority observation
+- WHEN current revocation or policy facts differ
+- THEN activation MUST use current facts and deny when they no longer admit use
+
+#### Scenario: Promotion reservation is complete and committed
+
+- GIVEN the exact promotion plan has one complete committed reservation set and a selected reservation for the candidate
+- WHEN promotion-gated activation admission runs
+- THEN Molten MAY admit branch activation without authorizing effect dispatch
+
+#### Scenario: Promotion observation authorizes dispatch
+
+- GIVEN a promotion observation claims dispatch authority or has an incomplete, uncommitted, or crossed reservation
+- WHEN promotion-gated activation admission runs
+- THEN Molten MUST deny before branch activation
+
+### Requirement: Branch-authority evidence excludes bearer material
+
+r[molten.world_branch_authority.evidence] Branch plans and receipts MUST exclude bearer tokens, private keys, credentials, secret entropy, raw capability paths, and private policy bodies. They MUST state that decisions and observations do not prove future enforcement.
+
+#### Scenario: Receipt projection receives a bearer token
+
+- GIVEN shell inputs include private capability material
+- WHEN safe receipt projection runs
+- THEN the output MUST omit the material and retain only approved identities and bounded decisions
+
+### Requirement: Branch-authority verification covers widening and escape
+
+r[molten.world_branch_authority.verification] Molten MUST test every supported mode and negative widening, duplicate linear use, stale currentness, simulation escape, promotion bypass, secret disclosure, and enforcement overclaims.
+
+#### Scenario: Focused branch-authority rail runs
+
+- GIVEN positive and negative fixtures use the reviewed Basalt cohort
+- WHEN the focused verification rail runs
+- THEN it MUST report supported modes and current-enforcement non-claims

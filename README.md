@@ -18,9 +18,13 @@ Typed comparison and merge are documented in [`docs/world-state-diff-and-merge.m
 
 World replication and retention are documented in [`docs/world-distribution.md`](docs/world-distribution.md). The adapter composes bounded DAG sync, protected content replication, detached claim exchange, complete retention roots, and observation-only reachability without granting activation or deletion authority.
 
+World promotion and effect release are documented in [`docs/world-promotion-and-effect-release.md`](docs/world-promotion-and-effect-release.md). The flow makes active-head movement and the complete local reservation set atomic while keeping dispatch, observations, and external completion separate.
+
 Logical and opaque restore boundaries are documented in [`docs/world-execution-snapshots.md`](docs/world-execution-snapshots.md). The profile uses closed inventories, exact cohorts, handle recreation, current-admission rechecks, opaque merge denial, and optional fail-closed VM Cohort clone realization.
 
 Bounded sharing, mutation, replication, snapshot, and retention metrics are documented in [`docs/world-benchmark-sharing-and-retention.md`](docs/world-benchmark-sharing-and-retention.md). The rail records exact structural facts and finite-run limits without granting deletion, extraction, dependency, or release authority.
+
+Exact transition replay and complete bounded capsules are documented in [`docs/world-replay-capsules.md`](docs/world-replay-capsules.md). The profile stops at the first complete-world divergence and keeps import, activation, authority, effects, and release claims separate.
 
 The optional `executable-extents` profile is documented in [`docs/executable-extent-consumer.md`](docs/executable-extent-consumer.md). It admits one exact Mantle bundle, remeasures each member, checks current authority, maps without W+X, and emits a detached consumer receipt.
 
@@ -871,6 +875,7 @@ Earlier permissive grants remain valid. The current declaration applies prospect
 - [`executable-extent`](rad://z37R1bP1kHcELs89RNbQRaqbCVKxB) — private product-neutral source for layout admission, W^X transitions, Linux mapping, and bounded conformance. Molten retains code meaning, runtime authority, world roots, receipts, storage, and release decisions. See [`docs/executable-extent-consumer.md`](docs/executable-extent-consumer.md).
 - [Mantle executable-extent producer](rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb) at `2c636b1b25353a1b0befa5af48dc68615cd686dd` — private producer reference for the exact flat-page bundle and detached producer receipt. Mantle does not grant Molten mapping or execution authority.
 - [`choregraph-history`](rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF) at `b3e08e19750f53bdbcae970cdf58a47a791ed20b` — reviewed pure branch-plan dependency. Choregraph does not own Molten branch policy, head storage, authority, conflict selection, or release decisions.
+- [`transactional-reconciliation-core`](rad://z4Tky6zvC8w4Y6c4YBzNxVbq5n752) at `eb2bd3441753af97bfcb247cef7cc22d72675b62` — reviewed pure publication and uncertain-outcome classification dependency. It does not own Molten mutation, dispatch, authority, observations, or release decisions.
 - [`bounded-exec`](https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git) at `29dac88ecded94457572db3fdfaaaab95fa91525` — reviewed bounded process mechanism for explicit input, output, deadlines, cancellation, and owned teardown. Molten retains executable authority, content publication, lifecycle, evidence, and release decisions. See [`docs/fabric-execution.md`](docs/fabric-execution.md).
 - [`chaoscontrol-snapshot-descriptor`](https://github.com/brittonr/chaoscontrol/tree/b8c440ea3b19df796542e58e8ee36200e1c3db85/crates/chaoscontrol-snapshot-descriptor) at `b8c440ea3b19df796542e58e8ee36200e1c3db85` — reviewed portable opaque-snapshot descriptor source. ChaosControl keeps fault, scheduler, replay, guest, evidence, and release meaning.
 - [`vm-cohort`](rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3) at `31f1696ba9391bfda8577a58af84f72361d5573e` — optional product-neutral clone-planning source. Molten keeps world meaning, admission, runtime effects, evidence, and release decisions.

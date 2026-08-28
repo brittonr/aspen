@@ -164,6 +164,7 @@ impl FabricEffectPort for FixtureTransportPort {
         Ok(PortEffectOutput {
             output_schema_ref: OUTPUT_SCHEMA.to_string(),
             output_ref: HASH_C.to_string(),
+            materialized_output: None,
         })
     }
 }

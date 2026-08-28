@@ -482,6 +482,7 @@ where
             next;
         match self.delegate.route(binding, effect) {
             Ok(output) => {
+                let materialized_admission = admit_materialized_effect_output(self.profile, &output);
                 let current = self
                     .instance
                     .lock()
@@ -502,6 +503,7 @@ where
                 *self.instance.lock().map_err(|_| {
                     crate::fabric::FabricPortError::storage("native effect instance state is unavailable")
                 })? = terminal;
+                materialized_admission?;
                 Ok(output)
             }
             Err(error) => {
@@ -526,6 +528,23 @@ where
             }
         }
     }
+}
+
+// r[impl molten.system_extension.native_host.effect_completion_value]
+fn admit_materialized_effect_output(
+    profile: &AdmittedNativeHostProfile,
+    output: &PortEffectOutput,
+) -> FabricPortResult<()> {
+    molten_core::system_extension::admit_materialized_native_effect_output(
+        profile,
+        &output.output_ref,
+        output.materialized_output.as_ref(),
+    )
+    .map_err(|_| {
+        crate::fabric::FabricPortError::malformed(
+            "materialized provider output is missing, overbound, or identity-mismatched",
+        )
+    })
 }
 
 fn initial_instance(

@@ -324,5 +324,6 @@ fn effect_output(
     crate::system_extension::PortEffectOutput {
         output_schema_ref: effect.output_schema_ref.clone(),
         output_ref,
+        materialized_output: None,
     }
 }

@@ -220,6 +220,11 @@ mod world_merge_port;
 mod cli_world_merge {
     pub(crate) use super::world_merge_port::*;
 }
+#[path = "cli/runtime/worldpromotion.rs"]
+mod world_promotion_port;
+mod cli_world_promotion {
+    pub(crate) use super::world_promotion_port::*;
+}
 #[path = "cli/core/storage.rs"]
 mod cell_port;
 mod cli_storage {

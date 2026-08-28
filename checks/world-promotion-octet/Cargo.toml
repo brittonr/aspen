@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["."]
+
+[workspace.metadata.octet]
+default_scope = ["--workspace"]
+cargo_check_args = ["--all-targets", "--all-features"]
+
+[package]
+name = "molten-world-promotion-octet"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+blake3 = "=1.8.5"
+choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
+transactional-reconciliation-core = { git = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git", rev = "eb2bd3441753af97bfcb247cef7cc22d72675b62", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }

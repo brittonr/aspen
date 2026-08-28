@@ -16,6 +16,8 @@ let SchemaIdentityRevision = "2562c8aa38a034061f9af9f3e17280494a5b8de2" in
 let SchemaMigrationRevision = "4fe90e130f2871cf69a6febcdc70785adca98aea" in
 let SchemaMigrationSource = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git" in
 let SchemaIdentitySource = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git" in
+let TransactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675b62" in
+let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git" in
 let ArchiveNonClaims = [
   "dependency satisfaction proves presented receipt linkage only",
   "dependency satisfaction does not prove upstream correctness or remote trust",
@@ -222,6 +224,17 @@ in
       nix_input = "schema-identity-src",
       transport_policy = "https",
       disposition = "development",
+    },
+    {
+      manifest_dependency = "transactional-reconciliation-core",
+      package_name = "transactional-reconciliation-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = TransactionalReconciliationSource,
+      immutable_revision = TransactionalReconciliationRevision,
+      nix_input = "transactional-reconciliation-src",
+      transport_policy = "https",
+      disposition = "runtime",
     },
     {
       manifest_dependency = "hegeltest",

@@ -2,6 +2,7 @@ use molten_core::world_branch_authority::CurrentAuthorityFacts;
 use molten_core::world_branch_authority::WorldBranchActivationDecision;
 use molten_core::world_branch_authority::WorldBranchAuthorityFacts;
 use molten_core::world_branch_authority::WorldBranchAuthorityPlan;
+use molten_core::world_branch_authority::WorldBranchPromotionReservationAdmission;
 use molten_core::world_branch_authority::WorldBranchRealizationObservation;
 
 use crate::error::Result;
@@ -83,6 +84,13 @@ pub trait SimulationAuthorityPort {
     fn bind_simulation(&mut self, plan: &WorldBranchAuthorityPlan) -> Result<WorldBranchRealizationObservation>;
 }
 
+pub trait PromotionReservationPort {
+    fn admit_promotion_reservation(
+        &mut self,
+        plan: &WorldBranchAuthorityPlan,
+    ) -> Result<WorldBranchPromotionReservationAdmission>;
+}
+
 pub trait BranchActivationPort {
     fn activate(&mut self, decision: &WorldBranchActivationDecision) -> Result<ActivationOutcome>;
 
@@ -99,6 +107,7 @@ pub trait WorldBranchAuthorityRuntime:
     + DestinationGrantPort
     + LinearAuthorityTransferPort
     + SimulationAuthorityPort
+    + PromotionReservationPort
     + BranchActivationPort
     + BranchAuthorityReceiptPort
 {
@@ -109,6 +118,7 @@ impl<T> WorldBranchAuthorityRuntime for T where T: CurrentBranchPolicyPort
         + DestinationGrantPort
         + LinearAuthorityTransferPort
         + SimulationAuthorityPort
+        + PromotionReservationPort
         + BranchActivationPort
         + BranchAuthorityReceiptPort
 {
