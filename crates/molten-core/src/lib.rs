@@ -38,6 +38,7 @@ pub mod world_commit;
 pub mod world_distribution;
 pub mod world_head;
 pub mod world_merge;
+pub mod world_replay;
 pub mod world_snapshot;
 
 pub mod prelude {

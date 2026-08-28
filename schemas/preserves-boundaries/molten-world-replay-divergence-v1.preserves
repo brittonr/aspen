@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-replay-divergence">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "molten-world-replay-divergence-v1">
+  <schema-id "molten.world-replay.divergence.v1">
+  <arity 10>>
