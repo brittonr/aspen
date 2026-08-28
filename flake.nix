@@ -891,6 +891,18 @@
           cp ${./checks/world-state-oracle-octet/src/lib.rs} "$out/src/lib.rs"
           cp -R ${./crates/molten-core/src/world_state_oracle} "$out/src/world_state_oracle"
         '';
+        prollyMapOctetWorkspace = pkgs.runCommand "molten-prolly-map-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/prolly-map-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/prolly-map-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/prolly-map-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/prolly-map-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/prolly_map} "$out/src/prolly_map"
+          chmod -R u+w "$out/src/prolly_map"
+          rm -rf "$out/src/prolly_map/tests"
+          mkdir -p "$out/src/prolly_map/tests"
+          cp ${./checks/prolly-map-octet/empty-tests.rs} "$out/src/prolly_map/tests/mod.rs"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1564,6 +1576,47 @@
                   if rg -n 'std::fs|std::path|PathBuf|sqlite3|bounded_exec|CommandSpec' \
                     crates/molten-core/src/world_state_oracle; then
                     echo "effect or vendor type leaked into the oracle core" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
+            prollyMapProfileCheck =
+              pkgs.runCommand "molten-prolly-map-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/prolly-map/*.ncl \
+                    config/prolly-map/fixtures/negative/*.ncl
+                  nickel export config/prolly-map/profile.ncl \
+                    --format json --output "$TMPDIR/profile.json"
+                  cmp config/prolly-map/generated/profile.json "$TMPDIR/profile.json"
+                  nickel export config/prolly-map/benchmark.ncl \
+                    --format json --output "$TMPDIR/benchmark.json"
+                  cmp config/prolly-map/generated/benchmark.json "$TMPDIR/benchmark.json"
+                  nickel export config/prolly-map/proof-obligations.ncl \
+                    --format json --output "$TMPDIR/proof-obligations.json"
+                  cmp config/prolly-map/generated/proof-obligations.json \
+                    "$TMPDIR/proof-obligations.json"
+                  for fixture in config/prolly-map/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative Prolly map fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if rg -n 'std::fs|std::path|std::env|std::time|redb::|cap_std::|std::process|println!|eprintln!' \
+                    crates/molten-core/src/prolly_map; then
+                    echo "effect or infrastructure type leaked into the Prolly map core" >&2
                     exit 1
                   fi
                   touch "$out"
@@ -2452,6 +2505,45 @@
                   done
                   touch "$out"
                 '';
+            # r[verify molten.prolly_map.verification]
+            prolly-map-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = prollyMapOctetWorkspace;
+                packages = [ "molten-prolly-map-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/prolly-map-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            prolly-map-schema-inventory =
+              pkgs.runCommand "molten-prolly-map-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  schema_root=${./schemas/preserves-boundaries}
+                  expected_schema_count=10
+                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-prolly-*.preserves' | wc -l)"
+                  test "$actual_schema_count" -eq "$expected_schema_count"
+                  for schema_id in \
+                    molten.prolly-map-profile.v1 \
+                    molten.prolly-leaf-node.v1 \
+                    molten.prolly-internal-node.v1 \
+                    molten.prolly-map-root.v1 \
+                    molten.prolly-map-edit-plan.v1 \
+                    molten.prolly-map-diff.v1 \
+                    molten.prolly-map-gc-plan.v1 \
+                    molten.prolly-map-publication-receipt.v1 \
+                    molten.prolly-map-differential.v1 \
+                    molten.prolly-map-benchmark.v1
+                  do
+                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
+                  done
+                  touch "$out"
+                '';
             # r[verify molten.world_faults.verification]
             world-faults-octet-deny-all =
               assert executableExtentOctetAdmitted;
@@ -2582,6 +2674,7 @@
             world-faults-profile = worldFaultsProfileCheck;
             world-state-oracle-profile = worldStateOracleProfileCheck;
             world-state-oracle-source = worldStateOracleSourceCheck;
+            prolly-map-profile = prollyMapProfileCheck;
             world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;

@@ -53,6 +53,7 @@ compat_module!(delivery_idempotency, dedupe);
 #[doc(hidden)]
 #[path = "deterministic/replay.rs"]
 pub mod playback;
+pub mod prolly_map;
 compat_module!(deterministic_replay, playback);
 #[doc(hidden)]
 #[path = "effects/mod.rs"]

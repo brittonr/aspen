@@ -1,23 +1,23 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-release-policy#0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "4831149e509872705a47b22aeb5e48e06a2eb7b15524fc09ee7cbf766ffcf935",
-  "inputsHash": "31754bf14db8d3eb2b53d3dc1152612f8b1483e82ffcc5610cba29a36c9d415a",
+  "cargoLockHash": "c5d0d470a081ac0e22094371520cac94bf6bece4f65c1a4f61fb874dea7ae5de",
+  "inputsHash": "d403c687e16af303320d8d89e112669a300f5fd04eab198ab9faf87bea7a31a8",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -1190,7 +1190,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828#molten@0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -1274,11 +1274,11 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -1427,7 +1427,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1459,6 +1459,10 @@
           "externCrateName": "choregraph_history"
         },
         {
+          "packageId": "git+https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#content-identity-core@0.1.0",
+          "externCrateName": "content_identity_core"
+        },
+        {
           "packageId": "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",
           "externCrateName": "kamacite_core"
         },
@@ -1483,7 +1487,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -1503,7 +1507,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -1530,7 +1534,7 @@
       "description": "Capability-rooted node host boundary for Molten",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -1546,7 +1550,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-prolly-state-map-drain-20260828/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

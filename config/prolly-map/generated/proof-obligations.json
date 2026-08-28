@@ -1,0 +1,86 @@
+{
+  "claims_collision_impossibility": false,
+  "claims_database_correctness": false,
+  "formal_refinement_complete": false,
+  "obligations": [
+    {
+      "assumptions": [
+        "input entries are admitted canonical bytes"
+      ],
+      "id": "prolly.sorted-unique",
+      "proves_collision_impossibility": false,
+      "proves_database_correctness": false,
+      "statement": "canonical build preserves strict key order and uniqueness",
+      "status": "model-checked",
+      "target_owner": "trellis"
+    },
+    {
+      "assumptions": [
+        "all supplied node bytes pass canonical validation"
+      ],
+      "id": "prolly.search-containment",
+      "proves_collision_impossibility": false,
+      "proves_database_correctness": false,
+      "statement": "point and range reads return exactly entries within the requested key interval",
+      "status": "model-checked",
+      "target_owner": "trellis"
+    },
+    {
+      "assumptions": [
+        "content identity framing is deterministic"
+      ],
+      "id": "prolly.boundary-determinism",
+      "proves_collision_impossibility": false,
+      "proves_database_correctness": false,
+      "statement": "equal profile key and encoded-size inputs yield equal split decisions",
+      "status": "model-checked",
+      "target_owner": "trellis"
+    },
+    {
+      "assumptions": [
+        "the rebuild-first pilot receives a complete valid prior snapshot"
+      ],
+      "id": "prolly.edit-preservation",
+      "proves_collision_impossibility": false,
+      "proves_database_correctness": false,
+      "statement": "admitted edits preserve canonical ordering and the canonical equal-state root",
+      "status": "model-checked",
+      "target_owner": "trellis"
+    },
+    {
+      "assumptions": [
+        "equal BLAKE3 node identities are equal under collision resistance"
+      ],
+      "id": "prolly.diff-soundness",
+      "proves_collision_impossibility": false,
+      "proves_database_correctness": false,
+      "statement": "complete diff records exactly added removed and modified entries",
+      "status": "model-checked",
+      "target_owner": "trellis"
+    },
+    {
+      "assumptions": [
+        "graph facts are complete and bind the supplied node identities"
+      ],
+      "id": "prolly.reachability",
+      "proves_collision_impossibility": false,
+      "proves_database_correctness": false,
+      "statement": "complete supplied graph facts classify every node reachable from roots or pins",
+      "status": "model-checked",
+      "target_owner": "trellis"
+    },
+    {
+      "assumptions": [
+        "a reviewed production linkage is supplied"
+      ],
+      "id": "prolly.formal-refinement",
+      "proves_collision_impossibility": false,
+      "proves_database_correctness": false,
+      "statement": "future Trellis proofs refine production-linked Rust profile and node codecs",
+      "status": "open-formal",
+      "target_owner": "trellis"
+    }
+  ],
+  "schema": "molten.prolly-map-proof-obligations.v1",
+  "trellis_revision": "0bf65150d4c75da5887d5cc53392c3da6b94b9d2"
+}
