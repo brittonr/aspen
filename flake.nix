@@ -1170,6 +1170,9 @@
                   rg -Fq 'NativeCallbackValuePort' src/system_extension/native_host/materialization.rs
                   rg -Fq '.materialize(' src/system_extension/native_host/executor.rs
                   rg -Fq '.publish(' src/system_extension/native_host/executor.rs
+                  rg -Fq 'materialized_output: Option<NativeCallbackValue>' src/system_extension/canonical.rs
+                  rg -Fq 'molten.system-extension.effect-completion.v2' crates/molten-core/src/system_extension/mod.rs
+                  rg -Fq 'admit_materialized_effect_output' src/system_extension/native_host/service.rs
                   rg -Fq 'ExecutionFabricPort' src/system_extension/native_host/executor.rs
                   rg -Fq 'NativeHostJournal' src/system_extension/native_host/journal.rs
                   rg -Fq 'molten-native-extension-fixture' Cargo.toml

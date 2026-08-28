@@ -8,6 +8,7 @@ use super::*;
 const MAX_PROFILE_ISSUES: usize = 16;
 const MAX_EXECUTABLE_ISSUES: usize = 24;
 const MAX_INGRESS_ISSUES: usize = 16;
+const MAX_EFFECT_OUTPUT_ISSUES: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeHostIssue {
@@ -253,4 +254,36 @@ pub fn admit_native_ingress(
             &ingress.generation.to_string(),
         ]),
     })
+}
+
+// r[impl molten.system_extension.native_host.effect_completion_value]
+pub fn admit_native_effect_output(
+    profile: &AdmittedNativeHostProfile,
+    output_ref: &str,
+    materialized_output: Option<&NativeCallbackValue>,
+) -> Result<(), Vec<NativeHostIssue>> {
+    let mut issues = Vec::with_capacity(MAX_EFFECT_OUTPUT_ISSUES);
+    validate_ref("effect-output-ref", output_ref, &mut issues);
+    let Some(output) = materialized_output else {
+        if profile.profile.requires_materialized_values {
+            issues.push(NativeHostIssue::MaterializedValuesRequired);
+        }
+        return if issues.is_empty() { Ok(()) } else { Err(issues) };
+    };
+    validate_ref("effect-output-value-ref", &output.value_ref, &mut issues);
+    let observed_ref = format!("blake3:{}", blake3::hash(&output.bytes).to_hex());
+    if output.value_ref != output_ref || observed_ref != output.value_ref {
+        issues.push(NativeHostIssue::ValueIdentityMismatch("effect-output"));
+    }
+    match u64::try_from(output.bytes.len()) {
+        Ok(actual) if actual > profile.profile.max_materialized_value_bytes => {
+            issues.push(NativeHostIssue::CallbackBytesExceeded {
+                actual,
+                maximum: profile.profile.max_materialized_value_bytes,
+            });
+        }
+        Ok(_) => {}
+        Err(_) => issues.push(NativeHostIssue::ByteCountOverflow("effect-output")),
+    }
+    if issues.is_empty() { Ok(()) } else { Err(issues) }
 }

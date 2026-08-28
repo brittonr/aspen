@@ -1,6 +1,6 @@
 # Native system-extension host
 
-r[impl molten.system_extension.native_host.profile] r[impl molten.system_extension.native_host.callback_protocol] r[impl molten.system_extension.native_host.executable] r[impl molten.system_extension.native_host.execution] r[impl molten.system_extension.native_host.durability] r[impl molten.system_extension.native_host.intent] r[impl molten.system_extension.native_host.effects] r[impl molten.system_extension.native_host.effect_completion] r[impl molten.system_extension.native_host.ingress] r[impl molten.system_extension.native_host.recovery] r[impl molten.system_extension.native_host.operator] r[impl molten.system_extension.native_host.neutrality] r[impl molten.system_extension.native_host.validation] r[impl molten.system_extension.native_host.nonclaims] r[impl molten.system_extension.native_host.value_protocol] r[impl molten.system_extension.native_host.value_materialization] r[impl molten.system_extension.native_host.value_publication] r[impl molten.system_extension.native_host.value_intent] r[impl molten.system_extension.native_host.semantic_state] r[impl molten.system_extension.native_host.value_validation]
+r[impl molten.system_extension.native_host.profile] r[impl molten.system_extension.native_host.callback_protocol] r[impl molten.system_extension.native_host.executable] r[impl molten.system_extension.native_host.execution] r[impl molten.system_extension.native_host.durability] r[impl molten.system_extension.native_host.intent] r[impl molten.system_extension.native_host.effects] r[impl molten.system_extension.native_host.effect_completion] r[impl molten.system_extension.native_host.effect_completion_value] r[impl molten.system_extension.native_host.ingress] r[impl molten.system_extension.native_host.recovery] r[impl molten.system_extension.native_host.operator] r[impl molten.system_extension.native_host.neutrality] r[impl molten.system_extension.native_host.validation] r[impl molten.system_extension.native_host.nonclaims] r[impl molten.system_extension.native_host.value_protocol] r[impl molten.system_extension.native_host.value_materialization] r[impl molten.system_extension.native_host.value_publication] r[impl molten.system_extension.native_host.value_intent] r[impl molten.system_extension.native_host.semantic_state] r[impl molten.system_extension.native_host.value_validation]
 
 Molten can host an admitted system extension as one bounded process per callback. The host remains workload-neutral.
 
@@ -75,7 +75,11 @@ The callback outcome is validated before any effect is visible. Every effect req
 
 The service persists effect intent before adapter routing. A lost result remains unknown.
 
-A terminal effect observation returns through a generation-fenced `message` callback. The extension decides its semantic transition. The host does not infer workload success.
+A terminal effect observation returns through a generation-fenced `message` callback. Version two binds the exact optional provider output value.
+
+A materializing native profile requires bounded output bytes whose BLAKE3 identity matches the effect output reference. Missing or changed bytes block callback delivery.
+
+The provider effect remains terminal when value admission fails. The host does not retry it or infer workload success. The extension decides its semantic transition.
 
 ## Ingress
 
