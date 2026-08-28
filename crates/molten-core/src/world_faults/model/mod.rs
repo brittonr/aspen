@@ -1,0 +1,36 @@
+mod boundary;
+mod contract;
+mod issue;
+mod mutation;
+mod observation;
+mod profile;
+
+pub use boundary::*;
+pub use contract::*;
+pub use issue::*;
+pub use mutation::*;
+pub use observation::*;
+pub use profile::*;
+
+pub const WORLD_MUTATION_INVENTORY_SCHEMA: &str = "molten.world-mutation-inventory.v1";
+pub const WORLD_FAULT_PROFILE_SCHEMA: &str = "molten.world-fault-profile.v1";
+pub const WORLD_FAULT_RECEIPT_SCHEMA: &str = "molten.world-fault-conformance-receipt.v1";
+pub const WORLD_MUTATION_INVENTORY_VERSION: u32 = 1;
+pub const REQUIRED_WORLD_MUTATION_COUNT: usize = 9;
+pub const REQUIRED_FAULT_PHASE_COUNT: usize = 8;
+pub const REQUIRED_FAULT_NON_CLAIM_COUNT: usize = 4;
+pub const MAX_WORLD_FAULT_CASES: usize = 72;
+pub const MAX_WORLD_FAULT_SCHEDULES: usize = 8;
+pub const MAX_WORLD_FAULT_SCHEDULE_STEPS: usize = 64;
+pub const MAX_WORLD_FAULT_ADAPTERS: usize = 16;
+pub const MAX_WORLD_FAULT_OBSERVATIONS: usize = 72;
+pub const MAX_WORLD_FAULT_UNSUPPORTED_ROWS: usize = 16;
+pub const MAX_WORLD_FAULT_RESTARTS: u32 = 16;
+pub const WORLD_FAULT_NODE_GENERATION: u64 = 1;
+pub const WORLD_FAULT_OPERATION_GENERATION: u64 = 1;
+pub const WORLD_FAULT_SCHEDULE_FIRST_POSITION: u32 = 0;
+pub const WORLD_FAULT_SCHEDULE_SECOND_POSITION: u32 = 1;
+pub const WORLD_FAULT_SCHEDULE_THIRD_POSITION: u32 = 2;
+pub const WORLD_FAULT_SCHEDULE_FOURTH_POSITION: u32 = 3;
+pub const WORLD_FAULT_CONTENDER_COUNT: usize = 2;
+pub const WORLD_FAULT_STEPS_PER_SCHEDULE: usize = 8;

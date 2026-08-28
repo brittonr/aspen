@@ -814,6 +814,16 @@
           cp ${./checks/world-operator-octet/src/lib.rs} "$out/src/lib.rs"
           cp -R ${./crates/molten-core/src/world_operator} "$out/src/world_operator"
         '';
+        worldFaultsOctetWorkspace = pkgs.runCommand "molten-world-faults-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-faults-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-faults-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-faults-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-faults-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/world_faults} "$out/src/world_faults"
+          chmod u+w "$out/src/world_faults/tests.rs"
+          cp ${./checks/world-faults-octet/empty-tests.rs} "$out/src/world_faults/tests.rs"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1347,6 +1357,36 @@
                     fi
                   done
                   test -f ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/lib.rs
+                  touch "$out"
+                '';
+            worldFaultsProfileCheck =
+              pkgs.runCommand "molten-world-faults-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/world-faults/contracts.ncl \
+                    config/world-faults/profiles/local-deterministic.ncl \
+                    config/world-faults/fixtures/negative/*.ncl
+                  nickel export config/world-faults/profiles/local-deterministic.ncl \
+                    --format json --output "$TMPDIR/local-deterministic.json"
+                  cmp config/world-faults/generated/local-deterministic.json \
+                    "$TMPDIR/local-deterministic.json"
+                  for fixture in config/world-faults/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative world fault fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
                   touch "$out"
                 '';
             worldOperatorProfileCheck =
@@ -2159,6 +2199,38 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            # r[verify molten.world_faults.verification]
+            world-faults-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldFaultsOctetWorkspace;
+                packages = [ "molten-world-faults-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-faults-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-faults-schema-inventory =
+              pkgs.runCommand "molten-world-faults-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  schema_root=${./schemas/preserves-boundaries}
+                  expected_schema_count=3
+                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-world-*fault*.preserves' -o -name 'molten-world-mutation-inventory-v1.preserves' | wc -l)"
+                  test "$actual_schema_count" -eq "$expected_schema_count"
+                  for schema_id in \
+                    molten.world-mutation-inventory.v1 \
+                    molten.world-fault-profile.v1 \
+                    molten.world-fault-conformance-receipt.v1
+                  do
+                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
+                  done
+                  touch "$out"
+                '';
             world-operator-schema-inventory =
               pkgs.runCommand "molten-world-operator-schema-inventory"
                 {
@@ -2254,6 +2326,7 @@
             fabric-observability-profile = fabricObservabilityProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
             world-benchmark-profile = worldBenchmarkProfileCheck;
+            world-faults-profile = worldFaultsProfileCheck;
             world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;

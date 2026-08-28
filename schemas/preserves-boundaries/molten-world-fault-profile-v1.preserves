@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-world-fault-profile">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "molten-world-fault-profile-v1">
+  <schema-id "molten.world-fault-profile.v1">
+  <arity 8>>

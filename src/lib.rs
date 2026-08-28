@@ -107,6 +107,7 @@ pub mod world_branch_authority;
 #[path = "worldcommit/mod.rs"]
 pub mod world_commit;
 pub mod world_distribution;
+pub mod world_faults;
 pub mod world_head;
 pub mod world_merge;
 pub mod world_operator;
