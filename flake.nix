@@ -746,6 +746,15 @@
           cp ${./checks/world-benchmark-octet/src/lib.rs} "$out/src/lib.rs"
           cp -R ${./crates/molten-core/src/world_benchmark} "$out/src/world_benchmark"
         '';
+        worldReplayOctetWorkspace = pkgs.runCommand "molten-world-replay-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-replay-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-replay-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-replay-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-replay-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
+          cp -R ${./crates/molten-core/src/world_replay} "$out/src/world_replay"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1946,6 +1955,35 @@
                 ''
                   test -f ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/lib.rs
                   test -f ${./crates/molten-core/src/world_benchmark/mod.rs}
+                  touch "$out"
+                '';
+            world-replay-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldReplayOctetWorkspace;
+                packages = [ "molten-world-replay-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-replay-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-replay-schema-inventory =
+              pkgs.runCommand "molten-world-replay-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  test -f ${./schemas/preserves-boundaries/molten-world-transition-trace-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-capsule-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-plan-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-divergence-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-receipt-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-import-receipt-v1.preserves}
+                  rg -q 'molten.world-replay.transition-trace.v1' ${./schemas/preserves-boundaries/molten-world-transition-trace-v1.preserves}
+                  rg -q 'molten.world-replay.capsule.v1' ${./schemas/preserves-boundaries/molten-world-replay-capsule-v1.preserves}
+                  rg -q 'molten.world-replay.receipt.v1' ${./schemas/preserves-boundaries/molten-world-replay-receipt-v1.preserves}
                   touch "$out"
                 '';
             world-distribution-dependency-identity =
