@@ -225,6 +225,11 @@ mod world_promotion_port;
 mod cli_world_promotion {
     pub(crate) use super::world_promotion_port::*;
 }
+#[path = "cli/runtime/world.rs"]
+mod world_operator_port;
+mod cli_world_operator {
+    pub(crate) use super::world_operator_port::*;
+}
 #[path = "cli/core/storage.rs"]
 mod cell_port;
 mod cli_storage {

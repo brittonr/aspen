@@ -1,0 +1,48 @@
+{
+  "authority_observation_ref": "blake3:aedae687c7102307927390b75e67062c68a1e099c4468bf2e7732e0dc46ad7a3",
+  "branch_id": "world/operator-opaque",
+  "expected_generation": 3,
+  "expected_head": "blake3:76874bf8e2d46f80b9c53ab7ee2e9f2dc4f502765cd3f36f09864e61be311362",
+  "limits": {
+    "limits_ref": "blake3:a3f11a6fdc2c1e48e5b8bfa0c9023c73e4ec7a92d5aea981ea35faddd528fe1f",
+    "max_canonical_bytes": 262144,
+    "max_dependencies_per_operation": 32,
+    "max_operations": 32,
+    "max_receipt_links": 64
+  },
+  "observations": [
+    {
+      "admitted": true,
+      "kind": "profile",
+      "observation_ref": "blake3:44bc86b91e3f55e4d0e5ea8917135712cb81ea877fb8499677907bd79eed8d61",
+      "subject_ref": "blake3:c44f7cbbc1c6e7d7891c4685de9803c07068ad010c6a5322c5299bec1beb32a3"
+    },
+    {
+      "admitted": true,
+      "kind": "capsule-closure",
+      "observation_ref": "blake3:725387af70e79b377155c16b8ed191170aeb2a4c53689b47f14be8f8702cf496",
+      "subject_ref": "blake3:76874bf8e2d46f80b9c53ab7ee2e9f2dc4f502765cd3f36f09864e61be311362"
+    }
+  ],
+  "operations": [
+    {
+      "dependencies": [],
+      "kind": "replay",
+      "operation_id": "blake3:501f8eefa33fd4a96742ff83b8997d63278f6ec1c9da790a6ecfe68b8b82de26",
+      "profile_ref": "blake3:c44f7cbbc1c6e7d7891c4685de9803c07068ad010c6a5322c5299bec1beb32a3",
+      "subject_ref": "blake3:76874bf8e2d46f80b9c53ab7ee2e9f2dc4f502765cd3f36f09864e61be311362"
+    }
+  ],
+  "policy_ref": "blake3:ff096070fb25d5456f50000af78f1c92fda605bdb7bc3d1e7d1cc0091204e61c",
+  "profiles": [
+    {
+      "kind": "opaque",
+      "profile_ref": "blake3:c44f7cbbc1c6e7d7891c4685de9803c07068ad010c6a5322c5299bec1beb32a3",
+      "status": "admitted",
+      "status_ref": "blake3:7c196f88a7e0220312a350117160f10b117b96b55420615b86939fab2d63f5de"
+    }
+  ],
+  "request_ref": "blake3:589b75a935bb093a575482c6081c09d36046e24d70ed6a4943f0c5a0c81c09b6",
+  "schema": "molten.world-workflow-request.v1",
+  "world_ref": "blake3:76874bf8e2d46f80b9c53ab7ee2e9f2dc4f502765cd3f36f09864e61be311362"
+}

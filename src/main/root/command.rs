@@ -48,6 +48,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_system_extension::SystemExtensionCommand,
     },
+    World {
+        #[command(subcommand)]
+        command: crate::cli_world_operator::WorldCommand,
+    },
     WorldCommit {
         #[command(subcommand)]
         command: crate::cli_world_commit::WorldCommitCommand,
@@ -249,6 +253,44 @@ mod tests {
     use super::Top;
 
     const COMMIT_REF: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[test]
+    fn world_operator_closed_commands_parse_explicit_request_and_plan_output() {
+        let commands = [
+            "inspect",
+            "checkpoint",
+            "branch",
+            "run",
+            "diff",
+            "conflicts",
+            "replay",
+            "simulate",
+            "verify",
+            "promote",
+            "export",
+            "import",
+            "gc-plan",
+        ];
+        for command in commands {
+            let cli = Cli::try_parse_from([
+                "molten",
+                "world",
+                command,
+                "--request",
+                "workflow.json",
+                "--plan-out",
+                "workflow-plan.preserves",
+            ])
+            .expect("world operator command");
+            assert!(matches!(cli.command, Some(Top::World { .. })));
+        }
+    }
+
+    #[test]
+    fn world_operator_rejects_missing_request() {
+        let result = Cli::try_parse_from(["molten", "world", "inspect", "--plan-out", "workflow-plan.preserves"]);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn world_commit_operator_commands_parse_explicit_state_and_identity() {

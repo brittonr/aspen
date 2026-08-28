@@ -806,6 +806,14 @@
           cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
           cp -R ${./crates/molten-core/src/world_replay} "$out/src/world_replay"
         '';
+        worldOperatorOctetWorkspace = pkgs.runCommand "molten-world-operator-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-operator-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-operator-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-operator-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-operator-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/world_operator} "$out/src/world_operator"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1339,6 +1347,62 @@
                     fi
                   done
                   test -f ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/lib.rs
+                  touch "$out"
+                '';
+            worldOperatorProfileCheck =
+              pkgs.runCommand "molten-world-operator-profile"
+                {
+                  nativeBuildInputs = [
+                    moltenPkg
+                    pkgs.diffutils
+                    pkgs.nickel
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  mkdir -p "$TMPDIR/logical" "$TMPDIR/opaque"
+                  nickel export config/world-operator/profiles/logical-dogfood.ncl \
+                    --format json --output "$TMPDIR/logical/request.json"
+                  diff -u tests/fixtures/world-operator/logical/request.json \
+                    "$TMPDIR/logical/request.json"
+                  molten world plan \
+                    --request "$TMPDIR/logical/request.json" \
+                    --out "$TMPDIR/logical/plan.preserves" \
+                    --receipt-out "$TMPDIR/logical/receipt.preserves" \
+                    --summary-out "$TMPDIR/logical/summary.preserves" \
+                    > "$TMPDIR/logical/terminal.txt"
+                  cmp tests/fixtures/world-operator/logical/plan.preserves \
+                    "$TMPDIR/logical/plan.preserves"
+                  cmp tests/fixtures/world-operator/logical/receipt.preserves \
+                    "$TMPDIR/logical/receipt.preserves"
+                  cmp tests/fixtures/world-operator/logical/summary.preserves \
+                    "$TMPDIR/logical/summary.preserves"
+                  nickel export config/world-operator/profiles/opaque-replay.ncl \
+                    --format json --output "$TMPDIR/opaque/request.json"
+                  diff -u tests/fixtures/world-operator/opaque/request.json \
+                    "$TMPDIR/opaque/request.json"
+                  molten world replay \
+                    --request "$TMPDIR/opaque/request.json" \
+                    --plan-out "$TMPDIR/opaque/plan.preserves" \
+                    --receipt-out "$TMPDIR/opaque/receipt.preserves" \
+                    --summary-out "$TMPDIR/opaque/summary.preserves" \
+                    > "$TMPDIR/opaque/terminal.txt"
+                  cmp tests/fixtures/world-operator/opaque/plan.preserves \
+                    "$TMPDIR/opaque/plan.preserves"
+                  cmp tests/fixtures/world-operator/opaque/receipt.preserves \
+                    "$TMPDIR/opaque/receipt.preserves"
+                  cmp tests/fixtures/world-operator/opaque/summary.preserves \
+                    "$TMPDIR/opaque/summary.preserves"
+                  for fixture in config/world-operator/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative world operator fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
                   touch "$out"
                 '';
             releaseDependencyProfileCheck =
@@ -2082,6 +2146,54 @@
                   rg -q 'molten.world-replay.receipt.v1' ${./schemas/preserves-boundaries/molten-world-replay-receipt-v1.preserves}
                   touch "$out"
                 '';
+            # r[verify molten.world_operator.verification]
+            world-operator-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldOperatorOctetWorkspace;
+                packages = [ "molten-world-operator-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-operator-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-operator-schema-inventory =
+              pkgs.runCommand "molten-world-operator-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  schema_root=${./schemas/preserves-boundaries}
+                  expected_schema_count=4
+                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-world-workflow-*.preserves' | wc -l)"
+                  test "$actual_schema_count" -eq "$expected_schema_count"
+                  for schema_id in \
+                    molten.world-workflow.request.v1 \
+                    molten.world-workflow.plan.v1 \
+                    molten.world-workflow.receipt.v1 \
+                    molten.world-workflow.summary.v1
+                  do
+                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
+                  done
+                  touch "$out"
+                '';
+            world-operator-dependency-identity =
+              pkgs.runCommand "molten-world-operator-dependency-identity" { }
+                ''
+                  test -f ${./.cairn/archive/2026-08-26-introduce-world-commit-core/tasks.md}
+                  test -f ${./.cairn/archive/2026-08-26-add-world-branch-head-protocol/tasks.md}
+                  test -f ${./.cairn/archive/2026-08-26-add-world-state-diff-and-merge/tasks.md}
+                  test -f ${./.cairn/archive/1970-01-01-add-world-execution-snapshot-profiles/tasks.md}
+                  test -f ${./.cairn/archive/1970-01-01-adopt-world-branch-authority-policy/tasks.md}
+                  test -f ${./.cairn/archive/1970-01-01-bind-world-promotion-to-effect-release/tasks.md}
+                  test -f ${./.cairn/archive/2026-08-27-add-world-commit-replication-and-retention/tasks.md}
+                  test -f ${./.cairn/archive/1970-01-01-add-world-commit-replay-capsules/tasks.md}
+                  test -f ${./crates/molten-core/src/world_operator/mod.rs}
+                  test -f ${./src/world_operator/mod.rs}
+                  touch "$out"
+                '';
             world-distribution-dependency-identity =
               pkgs.runCommand "molten-world-distribution-dependency-identity" { }
                 ''
@@ -2142,6 +2254,7 @@
             fabric-observability-profile = fabricObservabilityProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
             world-benchmark-profile = worldBenchmarkProfileCheck;
+            world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;
             release-profile-validation = releaseProfileValidationCheck;

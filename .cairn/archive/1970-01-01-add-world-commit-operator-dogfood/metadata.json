@@ -10,7 +10,6 @@
     "add-world-commit-replay-capsules"
   ],
   "groups": ["current"],
-  "status": "blocked",
   "workflow_profile": {
     "id": "spec-driven",
     "source": "change_create",
