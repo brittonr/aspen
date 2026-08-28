@@ -8,6 +8,8 @@ use crate::world_head::WorldHeadPolicyRef;
 const CURRENT_GENERATION: u64 = 1;
 const EXPECTED_RESERVATIONS: usize = 1;
 
+mod observation;
+
 // r[verify molten.world_promotion.plan]
 // r[verify molten.world_promotion.transaction]
 #[test]
@@ -62,6 +64,9 @@ fn incomplete_stale_simulated_and_duplicate_inputs_fail_closed() {
         plan_world_promotion(&duplicate),
         Err(issues) if issues.iter().any(|issue| matches!(issue, WorldPromotionIssue::DuplicateIntent(_)))
     ));
+
+    let plan = plan_world_promotion(&promotion_request()).expect("promotion plan");
+    assert_eq!(validate_reservation_set(&plan, &[]), Err(WorldPromotionIssue::ReservationSetMismatch));
 }
 
 // r[verify molten.world_promotion.dispatch]
@@ -77,6 +82,24 @@ fn dispatch_rechecks_current_facts_and_keeps_retry_identity_stable() {
 
     let uncertain = classify_attempt_observation(&dispatch, WorldAttemptObservation::Unknown);
     assert_eq!(uncertain.state, WorldReleaseState::Uncertain);
+
+    let duplicate_observation =
+        WorldReleaseObservationRef::new(reference("duplicate-observation")).expect("observation ref");
+    let duplicate =
+        classify_attempt_observation(&dispatch, WorldAttemptObservation::Duplicate(duplicate_observation.clone()));
+    assert_eq!(duplicate.state, WorldReleaseState::Uncertain);
+    assert_eq!(duplicate.observation_ref, Some(duplicate_observation));
+    assert!(!duplicate.external_completion_proven);
+    assert_eq!(acknowledge_attempt(&duplicate), Err(WorldPromotionIssue::ReservationNotCommitted));
+
+    let conflict_observation =
+        WorldReleaseObservationRef::new(reference("conflict-observation")).expect("observation ref");
+    let conflict =
+        classify_attempt_observation(&dispatch, WorldAttemptObservation::Conflict(conflict_observation.clone()));
+    assert_eq!(conflict.state, WorldReleaseState::Conflict);
+    assert_eq!(conflict.observation_ref, Some(conflict_observation));
+    assert!(!conflict.external_completion_proven);
+
     let next_attempt = WorldReleaseAttemptRef::new(reference("retry-attempt")).expect("retry ref");
     assert!(matches!(
         plan_world_retry(&plan, &reservation, &uncertain, next_attempt.clone(), false),

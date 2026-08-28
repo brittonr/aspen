@@ -24,12 +24,24 @@
       url = "github:OnixResearch/basalt/d913dc01e765c9b297df5fcc57dfa06aac39bc74";
       flake = false;
     };
+    bounded-exec-src = {
+      url = "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525";
+      flake = false;
+    };
     artifact-src = {
       url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
       flake = false;
     };
     choregraph-src = {
       url = "git+rad://zL2ncTUeASVYwcoGkEXv9JKgGbAF?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b";
+      flake = false;
+    };
+    chaoscontrol-src = {
+      url = "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85";
+      flake = false;
+    };
+    vm-cohort-src = {
+      url = "git+rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3?rev=31f1696ba9391bfda8577a58af84f72361d5573e";
       flake = false;
     };
     executable-extent-src = {
@@ -94,8 +106,11 @@
       flake-utils,
       onix-core-src,
       basalt-src,
+      bounded-exec-src,
       artifact-src,
       choregraph-src,
+      chaoscontrol-src,
+      vm-cohort-src,
       executable-extent-src,
       executable-extent-octet,
       mantle-executable-extent-src,
@@ -191,6 +206,37 @@
             && artifactWorkspace.workspace.package.license == "MIT OR Apache-2.0"
           ) "Molten Artifact Cargo/Nix source identity, package set, workspace, or license drifted";
           artifact-src;
+        boundedExecRevision = "29dac88ecded94457572db3fdfaaaab95fa91525";
+        boundedExecRepository = "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git";
+        boundedExecDependency = artifactRootDependencies."bounded-exec";
+        boundedExecExpectedLockSource = "git+${boundedExecRepository}?rev=${boundedExecRevision}#${boundedExecRevision}";
+        boundedExecLockPackages = builtins.filter (
+          package: (package.source or "") == boundedExecExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        boundedExecWorkspace = builtins.fromTOML (builtins.readFile (bounded-exec-src + "/Cargo.toml"));
+        boundedExecPackage = builtins.fromTOML (
+          builtins.readFile (bounded-exec-src + "/crates/bounded-exec/Cargo.toml")
+        );
+        boundedExecSource =
+          assert pkgs.lib.assertMsg (
+            boundedExecDependency.git == boundedExecRepository
+            && boundedExecDependency.rev == boundedExecRevision
+            && boundedExecDependency.version == "0.1.0"
+            && bounded-exec-src.rev == boundedExecRevision
+            &&
+              builtins.sort builtins.lessThan (map (package: package.name) boundedExecLockPackages) == [
+                "bounded-exec"
+                "bounded-exec-core"
+              ]
+            &&
+              builtins.sort builtins.lessThan boundedExecWorkspace.workspace.members == [
+                "crates/bounded-exec"
+                "crates/bounded-exec-core"
+              ]
+            && boundedExecWorkspace.workspace.package.license == "AGPL-3.0-or-later"
+            && boundedExecPackage.package.name == "bounded-exec"
+          ) "Molten Bounded Exec Cargo/Nix source identity, package set, workspace, or license drifted";
+          bounded-exec-src;
         choregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b";
         choregraphRepository = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git";
         choregraphHistoryDependencies = [
@@ -221,6 +267,52 @@
             && choregraphHistoryManifest.package.name == "choregraph-history"
           ) "Molten Choregraph branch-history Cargo/Nix source identity, package, or license drifted";
           choregraph-src;
+        chaosControlRevision = "b8c440ea3b19df796542e58e8ee36200e1c3db85";
+        chaosControlRepository = "https://github.com/brittonr/chaoscontrol.git";
+        chaosControlDependency = artifactRootDependencies."chaoscontrol-snapshot-descriptor";
+        chaosControlExpectedLockSource = "git+${chaosControlRepository}?rev=${chaosControlRevision}#${chaosControlRevision}";
+        chaosControlLockPackages = builtins.filter (
+          package: (package.source or "") == chaosControlExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        chaosControlDescriptorManifest = builtins.fromTOML (
+          builtins.readFile (chaoscontrol-src + "/crates/chaoscontrol-snapshot-descriptor/Cargo.toml")
+        );
+        vmCohortRevision = "31f1696ba9391bfda8577a58af84f72361d5573e";
+        vmCohortRepository = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3";
+        vmCohortDependency = artifactRootDependencies."vm-cohort-core";
+        vmCohortExpectedLockSource = "git+${vmCohortRepository}?rev=${vmCohortRevision}#${vmCohortRevision}";
+        vmCohortLockPackages = builtins.filter (
+          package: (package.source or "") == vmCohortExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        vmCohortCoreManifest = builtins.fromTOML (
+          builtins.readFile (vm-cohort-src + "/crates/vm-cohort-core/Cargo.toml")
+        );
+        vmCohortWorkspaceManifest = builtins.fromTOML (builtins.readFile (vm-cohort-src + "/Cargo.toml"));
+        worldSnapshotSources =
+          assert pkgs.lib.assertMsg (
+            chaosControlDependency.git == chaosControlRepository
+            && chaosControlDependency.rev == chaosControlRevision
+            && chaosControlDependency.version == "0.1.0"
+            && chaoscontrol-src.rev == chaosControlRevision
+            && builtins.length chaosControlLockPackages == 1
+            && (builtins.head chaosControlLockPackages).name == "chaoscontrol-snapshot-descriptor"
+            && chaosControlDescriptorManifest.package.name == "chaoscontrol-snapshot-descriptor"
+            && chaosControlDescriptorManifest.package.license == "AGPL-3.0-or-later"
+            && vmCohortDependency.git == vmCohortRepository
+            && vmCohortDependency.rev == vmCohortRevision
+            && vmCohortDependency.version == "0.1.0"
+            && vmCohortDependency.optional
+            && vm-cohort-src.rev == vmCohortRevision
+            && builtins.length vmCohortLockPackages == 1
+            && (builtins.head vmCohortLockPackages).name == "vm-cohort-core"
+            && vmCohortCoreManifest.package.name == "vm-cohort-core"
+            && vmCohortCoreManifest.package.license.workspace
+            && vmCohortWorkspaceManifest.workspace.package.license == "MIT OR Apache-2.0"
+          ) "Molten world-snapshot ChaosControl and VM Cohort source identity drifted";
+          {
+            chaoscontrol = chaoscontrol-src;
+            vmCohort = vm-cohort-src;
+          };
         executableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f";
         executableExtentRepository = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB";
         executableExtentOctetRevision = "cf04e894e53eb0947230118a086ef6066ddba38c";
@@ -360,6 +452,7 @@
           transactional-reconciliation-src;
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
           "${artifactRepository}#${artifactRevision}" = maybeCleanLocalGitSource artifactSource;
+          "${boundedExecRepository}#${boundedExecRevision}" = maybeCleanLocalGitSource boundedExecSource;
           "${executableExtentRepository}#${executableExtentRevision}" =
             maybeCleanLocalGitSource executableExtentSource;
           "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;
@@ -576,6 +669,33 @@
           cp -R ${./crates/molten-core/src/executable_extent} \
             "$out/product/molten-core/src/executable_extent"
         '';
+        fabricExecutionOctetWorkspace = pkgs.runCommand "molten-fabric-execution-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/fabric-execution-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/fabric-execution-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/fabric-execution-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/fabric-execution-octet/src/lib.rs} "$out/src/lib.rs"
+          cp ${./checks/fabric-execution-octet/src/fabric.rs} "$out/src/fabric.rs"
+          cp -R ${./crates/molten-core/src/fabric_execution} "$out/src/fabric_execution"
+        '';
+        nativeSystemExtensionOctetWorkspace =
+          pkgs.runCommand "molten-native-system-extension-octet-workspace" { }
+            ''
+              mkdir -p "$out/src/system_extension"
+              cp ${./checks/native-system-extension-octet/Cargo.toml} "$out/Cargo.toml"
+              cp ${./checks/native-system-extension-octet/Cargo.lock} "$out/Cargo.lock"
+              cp ${./checks/native-system-extension-octet/dylint.toml} "$out/dylint.toml"
+              cp ${./checks/native-system-extension-octet/src/lib.rs} "$out/src/lib.rs"
+              cp ${./checks/native-system-extension-octet/src/system_extension/mod.rs} \
+                "$out/src/system_extension/mod.rs"
+              cp -R ${./crates/molten-core/src/system_extension/native_host} \
+                "$out/src/system_extension/native_host"
+              chmod -R u+w "$out/src/system_extension/native_host"
+              cp ${./src/system_extension/native_host/materialization.rs} \
+                "$out/src/system_extension/native_host/materialization.rs"
+              printf '\nmod materialization;\npub use materialization::*;\n' \
+                >> "$out/src/system_extension/native_host/mod.rs"
+            '';
         worldCommitOctetWorkspace = pkgs.runCommand "molten-world-commit-octet-workspace" { } ''
           mkdir -p "$out/src"
           cp ${./checks/world-commit-octet/Cargo.toml} "$out/Cargo.toml"
@@ -630,6 +750,58 @@
           cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
           cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
           cp -R ${./crates/molten-core/src/world_promotion} "$out/src/world_promotion"
+          cp -R ${./crates/molten-core/src/world_replay} "$out/src/world_replay"
+        '';
+        worldSnapshotOctetWorkspace = pkgs.runCommand "molten-world-snapshot-octet-workspace" { } ''
+          mkdir -p \
+            "$out/src" \
+            "$out/vendor/molten-core/src" \
+            "$out/vendor/chaoscontrol-snapshot-descriptor/src" \
+            "$out/vendor/vm-cohort-core/src"
+          cp ${./checks/world-snapshot-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-snapshot-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-snapshot-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-snapshot-octet/src/lib.rs} "$out/src/lib.rs"
+          substituteInPlace "$out/Cargo.toml" \
+            --replace-fail '@CHAOSCONTROL_SRC@/crates/chaoscontrol-snapshot-descriptor' \
+              'vendor/chaoscontrol-snapshot-descriptor' \
+            --replace-fail '@VM_COHORT_SRC@/crates/vm-cohort-core' \
+              'vendor/vm-cohort-core'
+          cp ${./checks/world-snapshot-octet/molten-core.Cargo.toml} \
+            "$out/vendor/molten-core/Cargo.toml"
+          cp ${./checks/world-snapshot-octet/molten-core.lib.rs} \
+            "$out/vendor/molten-core/src/lib.rs"
+          cp -R ${./crates/molten-core/src/worldcommit} \
+            "$out/vendor/molten-core/src/worldcommit"
+          cp -R ${./crates/molten-core/src/world_snapshot} \
+            "$out/vendor/molten-core/src/world_snapshot"
+          cp ${./checks/world-snapshot-octet/chaoscontrol-snapshot-descriptor.Cargo.toml} \
+            "$out/vendor/chaoscontrol-snapshot-descriptor/Cargo.toml"
+          cp -R ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/. \
+            "$out/vendor/chaoscontrol-snapshot-descriptor/src/"
+          cp ${./checks/world-snapshot-octet/vm-cohort-core.Cargo.toml} \
+            "$out/vendor/vm-cohort-core/Cargo.toml"
+          cp -R ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core/src/. \
+            "$out/vendor/vm-cohort-core/src/"
+          cp ${./src/world_snapshot/chaoscontrol.rs} "$out/src/chaoscontrol.rs"
+          cp -R ${./src/world_snapshot/vm} "$out/src/vm"
+        '';
+        worldBenchmarkOctetWorkspace = pkgs.runCommand "molten-world-benchmark-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-benchmark-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-benchmark-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-benchmark-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-benchmark-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/world_benchmark} "$out/src/world_benchmark"
+        '';
+        worldReplayOctetWorkspace = pkgs.runCommand "molten-world-replay-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-replay-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-replay-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-replay-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-replay-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
+          cp -R ${./crates/molten-core/src/world_replay} "$out/src/world_replay"
         '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
@@ -957,6 +1129,112 @@
                   fi
                   touch "$out"
                 '';
+            fabricExecutionProfileCheck =
+              pkgs.runCommand "molten-fabric-execution-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=docs/fabric-execution/profile.ncl
+                  generated=docs/fabric-execution/generated/profile.json
+                  nickel format --check \
+                    docs/fabric-execution/contracts.ncl \
+                    "$profile" \
+                    docs/fabric-execution/fixtures/valid.ncl \
+                    docs/fabric-execution/fixtures/negative/*.ncl
+                  nickel export "$profile" --format json > "$TMPDIR/profile.json"
+                  diff -u "$generated" "$TMPDIR/profile.json"
+                  nickel export docs/fabric-execution/fixtures/valid.ncl --format json \
+                    > "$TMPDIR/valid.json"
+                  for fixture in docs/fabric-execution/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative execution profile fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  rg -Fq '${boundedExecRepository}' Cargo.toml flake.nix
+                  rg -Fq '${boundedExecRevision}' Cargo.toml Cargo.lock flake.nix flake.lock
+                  if rg -n 'bounded-exec[[:space:]]*=[[:space:]]*\{[^}]*path[[:space:]]*=' Cargo.toml; then
+                    echo 'mutable Bounded Exec path dependency is not admitted' >&2
+                    exit 1
+                  fi
+                  if rg -n 'std::process::Command|Command::new' src/fabric_execution; then
+                    echo 'execution adapter bypasses the pinned Bounded Exec mechanism' >&2
+                    exit 1
+                  fi
+                  test "$(rg -l 'pub trait ExecutionFabricPort' src/fabric_execution | wc -l)" -eq 1
+                  rg -Fq 'pub trait ExecutionFabricPort' src/fabric_execution/ports.rs
+                  touch "$out"
+                '';
+            nativeSystemExtensionHostProfileCheck =
+              pkgs.runCommand "molten-native-system-extension-host-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=docs/native-system-extension-host/profile.ncl
+                  generated=docs/native-system-extension-host/generated/profile.json
+                  nickel format --check \
+                    docs/native-system-extension-host/contracts.ncl \
+                    "$profile" \
+                    docs/native-system-extension-host/fixtures/valid.ncl \
+                    docs/native-system-extension-host/fixtures/negative/*.ncl
+                  nickel export "$profile" --format json > "$TMPDIR/profile.json"
+                  diff -u "$generated" "$TMPDIR/profile.json"
+                  nickel export docs/native-system-extension-host/fixtures/valid.ncl --format json \
+                    > "$TMPDIR/valid.json"
+                  for fixture in docs/native-system-extension-host/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative native-host profile fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if rg -n 'std::process::Command|Command::new' src/system_extension/native_host; then
+                    echo 'native host bypasses the bounded execution fabric port' >&2
+                    exit 1
+                  fi
+                  if rg -n -i 'kiln|mantle|cairn' \
+                    --glob '!**/tests.rs' \
+                    --glob '!tests/**' \
+                    crates/molten-core/src/system_extension/native_host \
+                    src/system_extension/native_host \
+                    src/node/nativesystemextension.rs; then
+                    echo 'native host contains a workload-specific branch' >&2
+                    exit 1
+                  fi
+                  if rg -n 'std::(fs|net|process|env)' \
+                    crates/molten-core/src/system_extension/native_host; then
+                    echo 'native host functional core contains ambient value I/O' >&2
+                    exit 1
+                  fi
+                  test "$(rg -l 'pub trait NativeCallbackValuePort' src/system_extension/native_host | wc -l)" -eq 1
+                  rg -Fq 'NativeCallbackValuePort' src/system_extension/native_host/materialization.rs
+                  rg -Fq '.materialize(' src/system_extension/native_host/executor.rs
+                  rg -Fq '.publish(' src/system_extension/native_host/executor.rs
+                  rg -Fq 'materialized_output: Option<NativeCallbackValue>' src/system_extension/canonical.rs
+                  rg -Fq 'molten.system-extension.effect-completion.v2' crates/molten-core/src/system_extension/mod.rs
+                  rg -Fq 'admit_materialized_effect_output' src/system_extension/native_host/service.rs
+                  rg -Fq 'ExecutionFabricPort' src/system_extension/native_host/executor.rs
+                  rg -Fq 'NativeHostJournal' src/system_extension/native_host/journal.rs
+                  rg -Fq 'molten-native-extension-fixture' Cargo.toml
+                  touch "$out"
+                '';
             fabricMembershipPlacementProfileCheck =
               pkgs.runCommand "molten-fabric-membership-placement-profile"
                 {
@@ -1030,6 +1308,34 @@
                       exit 1
                     fi
                   done
+                  touch "$out"
+                '';
+            worldBenchmarkProfileCheck =
+              pkgs.runCommand "molten-world-benchmark-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.nickel
+                    pkgs.diffutils
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  for profile in config/world-benchmark/profiles/*.ncl
+                  do
+                    name="$(basename "$profile" .ncl)"
+                    nickel export "$profile" --format json > "$TMPDIR/$name.json"
+                    diff -u "config/world-benchmark/generated/$name.json" "$TMPDIR/$name.json"
+                  done
+                  for fixture in config/world-benchmark/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative world benchmark fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  test -f ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/lib.rs
                   touch "$out"
                 '';
             releaseDependencyProfileCheck =
@@ -1579,6 +1885,30 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            fabric-execution-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = fabricExecutionOctetWorkspace;
+                packages = [ "molten-fabric-execution-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/fabric-execution-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            native-system-extension-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = nativeSystemExtensionOctetWorkspace;
+                packages = [ "molten-native-system-extension-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/native-system-extension-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
             world-commit-octet-deny-all =
               assert executableExtentOctetAdmitted;
               (executable-extent-octet.lib.mkConsumerCheck {
@@ -1627,6 +1957,83 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            world-snapshot-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldSnapshotOctetWorkspace;
+                packages = [ "molten-world-snapshot-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-snapshot-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-snapshot-dependency-identity =
+              pkgs.runCommand "molten-world-snapshot-dependency-identity"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  test -f ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/lib.rs
+                  test -f ${worldSnapshotSources.chaoscontrol}/.cairn/archive/1970-01-01-adopt-vm-cohort-mechanics/tasks.md
+                  test -f ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core/src/lib.rs
+                  test -f ${worldSnapshotSources.vmCohort}/.cairn/archive/1970-01-01-build-vm-cohort/tasks.md
+                  if rg -n 'chaoscontrol_|chaoscontrol-|molten::|molten-' \
+                    ${worldSnapshotSources.vmCohort}/crates/vm-cohort-core; then
+                    echo "consumer-domain meaning leaked into VM Cohort core" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
+            world-benchmark-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldBenchmarkOctetWorkspace;
+                packages = [ "molten-world-benchmark-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-benchmark-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-benchmark-dependency-identity =
+              pkgs.runCommand "molten-world-benchmark-dependency-identity" { }
+                ''
+                  test -f ${worldSnapshotSources.chaoscontrol}/crates/chaoscontrol-snapshot-descriptor/src/lib.rs
+                  test -f ${./crates/molten-core/src/world_benchmark/mod.rs}
+                  touch "$out"
+                '';
+            world-replay-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldReplayOctetWorkspace;
+                packages = [ "molten-world-replay-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-replay-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-replay-schema-inventory =
+              pkgs.runCommand "molten-world-replay-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  test -f ${./schemas/preserves-boundaries/molten-world-transition-trace-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-capsule-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-plan-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-divergence-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-receipt-v1.preserves}
+                  test -f ${./schemas/preserves-boundaries/molten-world-replay-import-receipt-v1.preserves}
+                  rg -q 'molten.world-replay.transition-trace.v1' ${./schemas/preserves-boundaries/molten-world-transition-trace-v1.preserves}
+                  rg -q 'molten.world-replay.capsule.v1' ${./schemas/preserves-boundaries/molten-world-replay-capsule-v1.preserves}
+                  rg -q 'molten.world-replay.receipt.v1' ${./schemas/preserves-boundaries/molten-world-replay-receipt-v1.preserves}
+                  touch "$out"
+                '';
             world-distribution-dependency-identity =
               pkgs.runCommand "molten-world-distribution-dependency-identity" { }
                 ''
@@ -1652,7 +2059,15 @@
               pkgs.runCommand "molten-world-promotion-dependency-identity" { }
                 ''
                   test -f ${transactionalReconciliationSource}/crates/transactional-reconciliation-core/src/lib.rs
+                  test -f ${choregraphSource}/crates/choregraph-history/src/lib.rs
                   test '${transactionalReconciliationRid}' = 'rad:z4Tky6zvC8w4Y6c4YBzNxVbq5n752'
+                  grep -Fq 'dee51eff9940bc53921bd8675b68c5abce8b05dd' \
+                    ${./.cairn/changes/bind-world-promotion-to-effect-release/proposal.md}
+                  ! grep -R -F 'weft-replay' \
+                    ${./Cargo.toml} \
+                    ${./crates/molten-core/Cargo.toml} \
+                    ${./crates/molten-core/src/world_promotion} \
+                    ${./src/world_promotion}
                   touch "$out"
                 '';
             world-merge-dependency-identity = pkgs.runCommand "molten-world-merge-dependency-identity" { } ''
@@ -1672,10 +2087,13 @@
             materialization-authority = materializationAuthorityCheck;
             wasm-component-profile = wasmComponentProfileCheck;
             wasm-component-performance-profile = wasmComponentPerformanceProfileCheck;
+            fabric-execution-profile = fabricExecutionProfileCheck;
+            native-system-extension-host-profile = nativeSystemExtensionHostProfileCheck;
             fabric-membership-placement-profile = fabricMembershipPlacementProfileCheck;
             fabric-cryptographic-identity-profile = fabricCryptographicIdentityProfileCheck;
             fabric-observability-profile = fabricObservabilityProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
+            world-benchmark-profile = worldBenchmarkProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;
             release-profile-validation = releaseProfileValidationCheck;

@@ -6,13 +6,17 @@
 //! from the ordinary receipt-first plugin host.
 
 mod canonical;
+mod executionfabric;
 mod fixture;
 mod host;
+mod native_host;
 
 #[cfg(test)]
 mod tests;
 
 pub use canonical::*;
+pub use executionfabric::*;
 pub use fixture::*;
 pub use host::*;
 pub use molten_core::system_extension::*;
+pub use native_host::*;

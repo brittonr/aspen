@@ -1,0 +1,14 @@
+{
+  "depends_on": [
+    "introduce-world-commit-core",
+    "add-world-state-diff-and-merge",
+    "add-world-execution-snapshot-profiles",
+    "add-world-commit-replication-and-retention"
+  ],
+  "groups": ["current"],
+  "workflow_profile": {
+    "id": "spec-driven",
+    "source": "change_create",
+    "version": 1
+  }
+}

@@ -94,7 +94,7 @@ The host rejects ambient filesystem, network, clock, randomness, process, and en
 Execution profiles are explicit and have no fallback:
 
 - `in-process-native` is trusted native Rust execution. It has process authority risk and must be admitted only for reviewed code.
-- `native-process` is reserved for a separately implemented process adapter and is not accepted by the deterministic fixture.
+- `native-process` runs one admitted executable per callback through the bounded execution fabric port. Its v2 local pilot supplies identity-checked payload, state, completion, effect, output, and checkpoint bytes without reference-only fallback.
 - `sandboxed-component` is exercised by the conformance fixture through a fuel-bounded Wasmtime module with no imports or WASI. A production component adapter must separately define its ABI, memory/fuel limits, hostcalls, process isolation, and evidence.
 
 An executor whose advertised profile differs from the manifest is rejected before activation. Native execution is not a sandbox. Wasmtime execution does not itself grant capabilities or prove extension semantics.
@@ -128,7 +128,7 @@ cargo run -- system-extension show \
   --status target/system-extension-fixture/status.preserves
 ```
 
-The fixture also supports `--profile in-process-native`. `--profile native-process` fails closed because that adapter is not implemented.
+The deterministic fixture also supports `--profile in-process-native`. The native process pilot uses the separate lifecycle test and profile in [`native-system-extension-host.md`](native-system-extension-host.md).
 
 ## Non-claims
 
@@ -143,4 +143,4 @@ Installation is not activation. Artifact possession is not authority. A callback
 
 OpenRaft is not selected, adapted, or used. A future consensus implementation remains an optional system extension composed from pure laws and admitted adapters.
 
-Aspen `main` is an AGPL-3.0-or-later architecture and behavior reference only. Molten's system-extension requirements, implementation, and tests are independently expressed under Molten's MIT OR Apache-2.0 license; Aspen implementation code, comments, and fixtures are not copied without compatible relicensing.
+Aspen `main` is an AGPL-3.0-or-later architecture and behavior reference. Molten's system-extension requirements, implementation, and tests use the repository's `AGPL-3.0-or-later` license.

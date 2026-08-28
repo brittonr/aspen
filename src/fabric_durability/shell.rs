@@ -75,6 +75,7 @@ impl<A: DurableCommandShell> crate::system_extension::FabricEffectPort for Regis
         Ok(crate::system_extension::PortEffectOutput {
             output_schema_ref: effect.output_schema_ref.clone(),
             output_ref: transition.transition_ref,
+            materialized_output: None,
         })
     }
 }

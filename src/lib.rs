@@ -87,6 +87,7 @@ pub mod fabric;
 pub mod fabric_consistency;
 pub mod fabric_crypto_identity;
 pub mod fabric_durability;
+pub mod fabric_execution;
 pub mod fabric_membership;
 pub mod fabric_observability;
 pub mod fabric_simulation;
@@ -101,12 +102,15 @@ pub mod testbed;
 pub mod wasm_component;
 #[path = "wasm/performance/mod.rs"]
 pub mod wasm_performance;
+pub mod world_benchmark;
 #[path = "worldcommit/mod.rs"]
 pub mod world_commit;
 pub mod world_distribution;
 pub mod world_head;
 pub mod world_merge;
 pub mod world_promotion;
+pub mod world_replay;
+pub mod world_snapshot;
 compat_module!(harness, testbed);
 #[doc(hidden)]
 #[path = "iroh/exchange.rs"]
@@ -135,6 +139,8 @@ compat_module!(nixos_vm, machine);
 #[doc(hidden)]
 #[path = "node/daemon.rs"]
 pub mod daemon_core;
+#[path = "node/nativesystemextension.rs"]
+pub mod nativehostnode;
 #[path = "node/state.rs"]
 pub mod node_state;
 compat_module!(node_daemon, daemon_core);

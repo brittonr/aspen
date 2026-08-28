@@ -11,11 +11,13 @@
 
 mod dispatch;
 mod model;
+mod observation;
 mod planning;
 mod reconciliation;
 
 pub use dispatch::*;
 pub use model::*;
+pub use observation::*;
 pub use planning::*;
 pub use reconciliation::*;
 

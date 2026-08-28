@@ -8,6 +8,7 @@ const ROLLED_BACK_GENERATION: u64 = 3;
 // r[verify molten.system_extension.callbacks]
 // r[verify molten.system_extension.execution_profiles]
 // r[verify molten.system_extension.final_validation]
+// r[verify molten.system_extension.native_host.effect_completion_value.compatibility]
 #[test]
 fn executable_fixture_runs_real_callbacks_under_two_admitted_profiles() {
     let in_process = run_executable_system_extension_fixture(ExecutionProfile::InProcessNative)
@@ -19,7 +20,9 @@ fn executable_fixture_runs_real_callbacks_under_two_admitted_profiles() {
         assert_eq!(run.first_request_effects.len(), EXPECTED_FIRST_EFFECT_COUNT);
         assert_eq!(run.first_effect_completions.len(), EXPECTED_FIRST_EFFECT_COUNT);
         assert!(run.first_effect_completions.iter().all(|completion| {
-            completion.binding_ref.starts_with("blake3:") && completion.completion_ref.starts_with("blake3:")
+            completion.binding_ref.starts_with("blake3:")
+                && completion.completion_ref.starts_with("blake3:")
+                && completion.materialized_output.is_none()
         }));
         assert!(validate_executable_conformance(&run.conformance).is_empty());
         assert_eq!(run.upgraded_status.status.phase, LifecyclePhase::Running);

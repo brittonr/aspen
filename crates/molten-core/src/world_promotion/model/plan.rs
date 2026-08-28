@@ -149,5 +149,10 @@ pub enum WorldPromotionIssue {
     DispatchAdapterMismatch,
     AttemptIdentityReused,
     RetryAcknowledgementRequired,
+    ObservationReservationMismatch,
+    ObservationNotAcknowledged,
+    ObservationReferenceMissing,
+    ObservationSuccessorUnchanged,
+    ObservationTraceInvalid,
     TransactionalMapping(String),
 }

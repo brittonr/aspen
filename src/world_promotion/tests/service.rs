@@ -1,9 +1,17 @@
+use molten_core::world_commit::SnapshotProfileRef;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_promotion::*;
 
 use super::super::*;
 use super::support::*;
+use crate::deterministic_replay::ConsumedEffect;
+use crate::deterministic_replay::EffectLogEntry;
+use crate::deterministic_replay::EffectLogValidationInput;
+use crate::deterministic_replay::validate_effect_log;
 use crate::world_head::WorldHeadStatePort;
+
+const PROMOTION_EFFECT_SEQUENCE: u64 = 0;
+const OBSERVATION_BYTES: u64 = 64;
 
 // r[verify molten.world_promotion.transaction]
 #[test]
@@ -129,6 +137,143 @@ fn unknown_commit_uses_readback_before_reporting_dispatch_eligibility() {
     assert_eq!(transaction.readback_calls.get(), 1);
     assert!(outcome.persistence.dispatch_eligible);
     assert_eq!(receipt_port.count, 1);
+}
+
+// r[verify molten.world_promotion.observation_commit]
+// r[verify molten.world_promotion.verification]
+#[test]
+fn effect_log_parity_binds_acknowledged_observation_to_follow_up_commit() {
+    let request = promotion_request();
+    let mut state = test_state(&request);
+    let mut current = Current { is_admitted: true };
+    let mut promotion_receipts = receipts();
+    let promoted = promote_world(&request, WorldPromotionPorts {
+        current: &mut current,
+        transaction: &mut state.store,
+        receipts: &mut promotion_receipts,
+    })
+    .expect("promotion");
+    let reservation = promoted.committed_reservations[0].clone();
+    let attempt_ref = expected_initial_attempt(&reservation);
+    let observation_ref =
+        WorldReleaseObservationRef::new(reference("effect-log-observation")).expect("observation ref");
+    let mut admission = Admission {
+        facts: dispatch_facts(),
+    };
+    let mut dispatcher = Dispatcher {
+        calls: 0,
+        observation: WorldAttemptObservation::Succeeded(observation_ref.clone()),
+    };
+    let mut dispatch_receipts = receipts();
+    let dispatched =
+        dispatch_world_reservation(&promoted.plan, &reservation.reservation_ref, &attempt_ref, WorldDispatchPorts {
+            transaction: &mut state.store,
+            admission: &mut admission,
+            dispatcher: &mut dispatcher,
+            receipts: &mut dispatch_receipts,
+        })
+        .expect("dispatch");
+    let acknowledged =
+        acknowledge_attempt(dispatched.attempt.as_ref().expect("attempt")).expect("acknowledged attempt");
+
+    let entry = EffectLogEntry {
+        sequence: PROMOTION_EFFECT_SEQUENCE,
+        effect_kind: "world-release".to_string(),
+        run_identity_ref: promoted.plan.plan_ref.as_str().to_string(),
+        handler_profile_ref: reservation.handler_ref.as_str().to_string(),
+        turn_ref: acknowledged.attempt_ref.as_str().to_string(),
+        boundary_ref: reservation.reservation_ref.as_str().to_string(),
+        request_ref: reservation.intent_ref.as_str().to_string(),
+        response_ref: observation_ref.as_str().to_string(),
+    };
+    let consumed = ConsumedEffect {
+        sequence: PROMOTION_EFFECT_SEQUENCE,
+        effect_kind: entry.effect_kind.clone(),
+        request_ref: entry.request_ref.clone(),
+        response_ref: entry.response_ref.clone(),
+        boundary_ref: entry.boundary_ref.clone(),
+        used_live_fallback: false,
+    };
+    let validation = validate_effect_log(EffectLogValidationInput {
+        expected_run_identity_ref: &entry.run_identity_ref,
+        expected_handler_profile_ref: &entry.handler_profile_ref,
+        entries: std::slice::from_ref(&entry),
+        consumed: std::slice::from_ref(&consumed),
+    })
+    .expect("effect log validation");
+    assert_eq!(validation.decision, "pass");
+
+    let follow_up = plan_world_promotion_observation_commit(&WorldPromotionObservationCommitRequest {
+        reservation,
+        attempt: acknowledged,
+        successor_commit: WorldCommitRef::new(reference("observation-successor")).expect("successor"),
+        logical_profile_ref: SnapshotProfileRef::new(reference("logical-world-profile")).expect("profile"),
+        observation_schema_ref: reference("world-release-observation-schema"),
+        observation_byte_length: OBSERVATION_BYTES,
+    })
+    .expect("follow-up observation commit");
+    assert_eq!(follow_up.trace.steps[0].input.input_ref, observation_ref.as_str());
+    assert!(!follow_up.mutates_promoted_commit);
+    assert!(!follow_up.grants_dispatch_authority);
+}
+
+// r[verify molten.world_promotion.verification]
+#[test]
+fn promotion_effect_log_rejects_missing_mismatched_and_live_fallback_outcomes() {
+    let run_ref = reference("promotion-run");
+    let handler_ref = reference("promotion-handler");
+    let request_ref = reference("promotion-request");
+    let response_ref = reference("promotion-response");
+    let boundary_ref = reference("promotion-boundary");
+    let entry = EffectLogEntry {
+        sequence: PROMOTION_EFFECT_SEQUENCE,
+        effect_kind: "world-release".to_string(),
+        run_identity_ref: run_ref.clone(),
+        handler_profile_ref: handler_ref.clone(),
+        turn_ref: reference("promotion-turn"),
+        boundary_ref: boundary_ref.clone(),
+        request_ref: request_ref.clone(),
+        response_ref: response_ref.clone(),
+    };
+    let consumed = ConsumedEffect {
+        sequence: PROMOTION_EFFECT_SEQUENCE,
+        effect_kind: entry.effect_kind.clone(),
+        request_ref,
+        response_ref: response_ref.clone(),
+        boundary_ref,
+        used_live_fallback: false,
+    };
+
+    let missing = validate_effect_log(EffectLogValidationInput {
+        expected_run_identity_ref: &run_ref,
+        expected_handler_profile_ref: &handler_ref,
+        entries: &[],
+        consumed: std::slice::from_ref(&consumed),
+    })
+    .expect("missing validation");
+    assert_eq!(missing.decision, "deny");
+
+    let mut mismatched = consumed.clone();
+    mismatched.response_ref = reference("other-response");
+    let mismatch = validate_effect_log(EffectLogValidationInput {
+        expected_run_identity_ref: &run_ref,
+        expected_handler_profile_ref: &handler_ref,
+        entries: std::slice::from_ref(&entry),
+        consumed: std::slice::from_ref(&mismatched),
+    })
+    .expect("mismatch validation");
+    assert_eq!(mismatch.decision, "deny");
+
+    let mut live = consumed;
+    live.used_live_fallback = true;
+    let fallback = validate_effect_log(EffectLogValidationInput {
+        expected_run_identity_ref: &run_ref,
+        expected_handler_profile_ref: &handler_ref,
+        entries: std::slice::from_ref(&entry),
+        consumed: std::slice::from_ref(&live),
+    })
+    .expect("fallback validation");
+    assert_eq!(fallback.decision, "deny");
 }
 
 #[test]

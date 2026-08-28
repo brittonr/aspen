@@ -574,6 +574,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bounded-exec"
+version = "0.1.0"
+source = "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88ecded94457572db3fdfaaaab95fa91525"
+dependencies = [
+ "bounded-exec-core",
+ "nix 0.30.1",
+]
+
+[[package]]
+name = "bounded-exec-core"
+version = "0.1.0"
+source = "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88ecded94457572db3fdfaaaab95fa91525"
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -757,6 +771,16 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "chaoscontrol-snapshot-descriptor"
+version = "0.1.0"
+source = "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#b8c440ea3b19df796542e58e8ee36200e1c3db85"
+dependencies = [
+ "blake3",
+ "serde",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -3915,10 +3939,12 @@ dependencies = [
  "bao-tree",
  "basalt",
  "blake3",
+ "bounded-exec",
  "cairn-core",
  "cap-fs-ext",
  "cap-std",
  "cap-tempfile",
+ "chaoscontrol-snapshot-descriptor",
  "choregraph-history",
  "clap 4.6.1",
  "data-encoding",
@@ -3954,6 +3980,7 @@ dependencies = [
  "transactional-reconciliation-core",
  "valence-core",
  "verified-logic",
+ "vm-cohort-core",
  "wasmparser 0.240.0",
  "wasmtime",
  "wasmtime-wasi",
@@ -4307,6 +4334,18 @@ dependencies = [
  "cfg-if",
  "libc",
  "memoffset",
+]
+
+[[package]]
+name = "nix"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+dependencies = [
+ "bitflags 2.11.1",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
 ]
 
 [[package]]
@@ -6027,7 +6066,7 @@ checksum = "ba8593196da75d9dc4f69349682bd4c2099f8cde114257d1ef7ef1b33d1aba54"
 dependencies = [
  "cfg-if",
  "libc",
- "nix",
+ "nix 0.23.2",
  "rand 0.8.6",
  "win-sys",
 ]
@@ -7332,6 +7371,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "vm-cohort-core"
+version = "0.1.0"
+source = "git+rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3?rev=31f1696ba9391bfda8577a58af84f72361d5573e#31f1696ba9391bfda8577a58af84f72361d5573e"
+dependencies = [
+ "blake3",
+ "serde",
 ]
 
 [[package]]

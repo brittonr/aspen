@@ -18,6 +18,7 @@ pub mod executable_extent;
 pub mod fabric;
 pub mod fabric_crypto_identity;
 pub mod fabric_durability;
+pub mod fabric_execution;
 pub mod fabric_membership;
 pub mod fabric_observability;
 pub mod fabric_simulation;
@@ -31,12 +32,15 @@ pub mod preserves_profile;
 pub mod release_dependency;
 pub mod stack;
 pub mod system_extension;
+pub mod world_benchmark;
 #[path = "worldcommit/mod.rs"]
 pub mod world_commit;
 pub mod world_distribution;
 pub mod world_head;
 pub mod world_merge;
 pub mod world_promotion;
+pub mod world_replay;
+pub mod world_snapshot;
 
 pub mod prelude {
     pub use crate::codec::CodecIssue;

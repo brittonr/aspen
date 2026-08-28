@@ -1,7 +1,13 @@
 let Contracts = import "contracts.ncl" in
 let ArtifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
+let BoundedExecRevision = "29dac88ecded94457572db3fdfaaaab95fa91525" in
+let BoundedExecSource = "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git" in
 let ChoregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b" in
 let ChoregraphSource = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git" in
+let ChaosControlRevision = "b8c440ea3b19df796542e58e8ee36200e1c3db85" in
+let ChaosControlSource = "https://github.com/brittonr/chaoscontrol.git" in
+let VmCohortRevision = "31f1696ba9391bfda8577a58af84f72361d5573e" in
+let VmCohortSource = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3" in
 let ExecutableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f" in
 let ExecutableExtentSource = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB" in
 let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
@@ -55,6 +61,17 @@ in
       disposition = "runtime",
     },
     {
+      manifest_dependency = "bounded-exec",
+      package_name = "bounded-exec",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = BoundedExecSource,
+      immutable_revision = BoundedExecRevision,
+      nix_input = "bounded-exec-src",
+      transport_policy = "https",
+      disposition = "runtime",
+    },
+    {
       manifest_dependency = "executable-extent-conformance",
       package_name = "executable-extent-conformance",
       package_version = "0.1.0",
@@ -97,6 +114,28 @@ in
       nix_input = "choregraph-src",
       transport_policy = "https",
       disposition = "runtime",
+    },
+    {
+      manifest_dependency = "chaoscontrol-snapshot-descriptor",
+      package_name = "chaoscontrol-snapshot-descriptor",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ChaosControlSource,
+      immutable_revision = ChaosControlRevision,
+      nix_input = "chaoscontrol-src",
+      transport_policy = "https",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "vm-cohort-core",
+      package_name = "vm-cohort-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = VmCohortSource,
+      immutable_revision = VmCohortRevision,
+      nix_input = "vm-cohort-src",
+      transport_policy = "private-radicle",
+      disposition = "optional-runtime",
     },
     {
       manifest_dependency = "kamacite-core",

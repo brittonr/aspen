@@ -468,3 +468,385 @@ r[molten.world_distribution.verification] Molten MUST test complete and partial 
 - GIVEN positive and negative fixtures use reviewed DAG, replication, binding, and retention cohorts
 - WHEN the focused verification rail runs
 - THEN it MUST report closure and retention facts without claiming convergence or permanent durability
+
+### Requirement: Execution snapshots use closed profile classes
+
+r[molten.world_snapshot.profiles] Molten MUST distinguish logical and opaque execution-snapshot profiles. Each profile MUST declare required roots, ownership, completeness, compatibility, restore, replay, retention, and merge behavior. Unknown profiles MUST deny.
+
+#### Scenario: Logical profile is complete
+
+- GIVEN every declared Molten logical root is present under one profile
+- WHEN profile validation runs
+- THEN Molten MUST classify the profile by its logical restore contract
+
+#### Scenario: Unknown profile is supplied
+
+- GIVEN a descriptor names an unsupported profile class
+- WHEN validation runs
+- THEN Molten MUST reject it instead of treating it as logical or opaque
+
+### Requirement: Logical profiles bind resumable Molten state
+
+r[molten.world_snapshot.logical] A logical profile MUST bind exact durable-state, task, history, scheduler, virtual-time, entropy, effect-state, runtime, schema, and policy roots required by its declared resume boundary.
+
+#### Scenario: Required task root is absent
+
+- GIVEN a logical profile declares resumable tasks but omits the task root
+- WHEN completeness validation runs
+- THEN Molten MUST classify the snapshot as incomplete
+
+### Requirement: Opaque profiles require exact machine completeness
+
+r[molten.world_snapshot.opaque] An opaque profile MUST bind an exact machine-snapshot descriptor and complete CPU, memory, device, disk, backend, topology, and runtime cohort facts. Missing or incompatible facts MUST block restore.
+
+#### Scenario: Exact ChaosControl cohort matches
+
+- GIVEN the snapshot inventory and restore host observations match the admitted exact cohort
+- WHEN opaque compatibility runs
+- THEN Molten MAY produce an opaque restore plan
+
+#### Scenario: CPU state inventory differs
+
+- GIVEN the restore host lacks one required CPU state group or feature inventory entry
+- WHEN compatibility runs
+- THEN Molten MUST deny restore without filling defaults
+
+### Requirement: Compatibility binds behavior-relevant cohorts
+
+r[molten.world_snapshot.cohort] Molten MUST compare exact architecture, runtime, ABI, schema, topology, device, storage, scheduler, time, entropy, and effect profile identities required by the selected snapshot class.
+
+#### Scenario: Snapshot bytes match but runtime cohort differs
+
+- GIVEN an object identity is valid but one required runtime behavior identity differs
+- WHEN compatibility admission runs
+- THEN Molten MUST reject the snapshot for that restore target
+
+### Requirement: Copy-on-write children remain parent-bound and isolated
+
+r[molten.world_snapshot.cow] Molten MUST use reviewed VM Cohort mechanics for opaque checkpoint clones. Each child MUST bind one parent and isolated memory, device, disk, and endpoint overlay identities.
+
+#### Scenario: Child overlays are isolated
+
+- GIVEN two children derive from one admitted checkpoint with distinct overlay identities
+- WHEN clone validation runs
+- THEN writes from either child MUST NOT be attributed to the other child or parent
+
+#### Scenario: Overlay identity collides
+
+- GIVEN a proposed child reuses an active sibling overlay identity
+- WHEN clone admission runs
+- THEN Molten MUST deny the clone before host effects
+
+### Requirement: Restore recreates handles and rechecks authority
+
+r[molten.world_snapshot.restore] Snapshot bytes MUST exclude live host handles and bearer authority. Restore MUST obtain new handles and recheck current policy, capability, revocation, resource, adapter, and runtime facts before activation.
+
+#### Scenario: Snapshot is complete but authority expired
+
+- GIVEN all deterministic state restores but current authority admission denies
+- WHEN activation runs
+- THEN Molten MUST keep the restored world inactive
+
+#### Scenario: Descriptor contains a live handle
+
+- GIVEN a candidate descriptor includes a file descriptor, socket handle, credential, or private key
+- WHEN safe schema validation runs
+- THEN Molten MUST reject or omit that field according to the closed schema
+
+### Requirement: Snapshot verification covers completeness and overclaims
+
+r[molten.world_snapshot.verification] Molten MUST test logical and opaque success paths plus incomplete state, cohort mismatch, unsafe handle, stale authority, isolation, merge denial, portability, and correctness overclaims.
+
+#### Scenario: Focused snapshot rail runs
+
+- GIVEN positive and negative fixtures use reviewed Molten, ChaosControl, and available VM Cohort cohorts
+- WHEN the focused verification rail runs
+- THEN it MUST report supported restore profiles and exact compatibility non-claims
+
+### Requirement: Benchmark profiles are typed and content-bound
+
+r[molten.world_bench.profile] Molten MUST define typed Nickel benchmark profiles that bind dataset, preparation, operation sequence, warm or cold state, profile class, adapters, bounds, repetitions, hardware cohort, and named acceptance thresholds. Rust MUST revalidate every projection before execution.
+
+#### Scenario: Complete profile is repeated
+
+- GIVEN the same validated profile, source revision, dataset, adapters, and preparation state
+- WHEN two benchmark plans are identified
+- THEN they MUST have the same canonical plan identity
+
+#### Scenario: Threshold is unexplained
+
+- GIVEN a profile contains a nontrivial numeric threshold without a named typed field
+- WHEN profile validation runs
+- THEN Molten MUST reject the profile
+
+### Requirement: Structural sharing metrics use exact facts
+
+r[molten.world_bench.metrics] Required results MUST record logical bytes, physical bytes written, new objects, reused objects, copied pages, mapped pages, traversed references, compared keys, emitted conflicts, transferred bytes, retained objects, and planned deletions where applicable. Missing required metrics MUST invalidate the result.
+
+#### Scenario: Branch starts from unchanged roots
+
+- GIVEN a branch is created without mutation
+- WHEN branch cost is measured
+- THEN the result MUST distinguish root-reference publication from copied bytes and new object materialization
+
+#### Scenario: Physical bytes are reported as logical bytes
+
+- GIVEN compression or deduplication makes physical and logical byte counts differ
+- WHEN receipt validation runs
+- THEN Molten MUST reject a result that collapses the two metrics
+
+### Requirement: Preparation state is explicit
+
+r[molten.world_bench.datasets] Dataset construction, prepopulation, cache warming, compaction, and prior object availability MUST be identified before measured operations. Unknown preparation state MUST block accepted comparison.
+
+#### Scenario: Warm cache is undeclared
+
+- GIVEN objects are available from an earlier run but the profile declares cold state
+- WHEN benchmark admission runs
+- THEN the result MUST be rejected as preparation drift
+
+### Requirement: Snapshot profile results remain distinct
+
+r[molten.world_bench.snapshot_profiles] Logical typed-state and opaque machine-snapshot benchmark cohorts MUST use distinct result classes. Molten MUST NOT claim semantic or performance equivalence across those classes.
+
+#### Scenario: Opaque snapshot reports fewer written bytes
+
+- GIVEN one opaque fixture writes fewer bytes than one logical fixture
+- WHEN results are summarized
+- THEN the summary MUST NOT claim the opaque profile is universally superior or semantically equivalent
+
+### Requirement: Retention benchmarks do not grant deletion authority
+
+r[molten.world_bench.retention] Retention measurements MAY cover reachability, pin evaluation, protected-object reuse, candidate classification, and deletion-plan size. The benchmark verdict MUST NOT authorize deletion.
+
+#### Scenario: Reachable object enters a deletion plan
+
+- GIVEN an object remains reachable from an admitted world, branch, witness, capsule, quarantine, or policy root
+- WHEN retention correctness validation runs
+- THEN the result MUST fail regardless of benchmark speed
+
+### Requirement: Extraction decisions require accepted evidence
+
+r[molten.world_bench.extraction_decision] A pure classifier MUST return retain-current, optimize-in-place, or evaluate-shared-component from accepted benchmark receipts and typed policy. It MUST require repeated product-neutral limits and at least two credible consumers before recommending shared-component evaluation.
+
+#### Scenario: One Molten fixture misses a duration target
+
+- GIVEN only one product-specific timing result misses policy
+- WHEN extraction classification runs
+- THEN it MUST NOT recommend automatic creation of a shared repository
+
+### Requirement: Benchmark receipts preserve finite-run limits
+
+r[molten.world_bench.receipt] Receipts MUST bind source revision, profile, dataset, preparation, adapters, hardware cohort, limits, exact metrics, duration observations, results, and unsupported rows. They MUST NOT claim asymptotic proof, universal performance, storage correctness, or release eligibility.
+
+#### Scenario: Receipt claims big-O proof
+
+- GIVEN a finite benchmark receipt claims it proved asymptotic complexity
+- WHEN receipt validation runs
+- THEN Molten MUST reject the overclaim
+
+### Requirement: Benchmark verification covers misleading inputs
+
+r[molten.world_bench.verification] Molten MUST test stable results, structural reuse, mutation accounting, profile separation, preparation drift, missing metrics, stale revisions, unsafe retention, and extraction overclaims.
+
+#### Scenario: Focused benchmark rail runs
+
+- GIVEN positive and negative fixtures use one reviewed cohort
+- WHEN benchmark verification runs
+- THEN it MUST report exact metric coverage and all bounded non-claims
+
+### Requirement: Replay traces bind every expected world transition
+
+r[molten.world_replay.transition_chain] Molten MUST define a canonical bounded transition trace that binds one initial world commit and an ordered sequence of transition inputs, deterministic profiles, expected parents, and expected successor commits.
+
+#### Scenario: Every replayed step matches
+
+- GIVEN a complete trace and closure for a supported logical profile
+- WHEN Molten restores and replays each step
+- THEN every actual successor commit MUST equal the expected successor before the next step runs
+
+#### Scenario: One intermediate successor differs
+
+- GIVEN a replay produces an unexpected commit before a later step
+- WHEN transition verification compares the result
+- THEN it MUST stop at the first mismatching step
+- AND it MUST NOT report final-trace success
+
+### Requirement: Replay divergence is complete-world and refs-only
+
+r[molten.world_replay.divergence] Molten MUST compare expected and actual commit identities and typed roots. It MUST report the earliest differing step, root domain, and bounded field path without exposing secret bytes or bearer material.
+
+#### Scenario: Entropy root diverges
+
+- GIVEN all earlier steps match and one step produces a different entropy root
+- WHEN divergence classification runs
+- THEN the report MUST name that step and the entropy-root domain
+- AND later differences MUST NOT replace the earliest result
+
+### Requirement: Replay capsules bind complete typed closure
+
+r[molten.world_replay.capsule] Molten MUST define a canonical capsule manifest over every required trace, commit, typed root, artifact, schema, policy, runtime cohort, snapshot descriptor, transition input, and content manifest. Each member MUST bind its role, identity, codec, and byte length.
+
+#### Scenario: Complete capsule is exported
+
+- GIVEN every reachable member is available and within declared bounds
+- WHEN capsule planning runs
+- THEN the resulting manifest MUST enumerate the complete typed closure with one stable identity
+
+#### Scenario: Required schema is absent
+
+- GIVEN one world root references a schema that is not in the capsule closure
+- WHEN capsule validation runs
+- THEN validation MUST fail before replay or import publication
+
+### Requirement: Import validates before availability
+
+r[molten.world_replay.import] Molten MUST validate capsule identity, canonical encodings, member bounds, complete closure, object identities, supported profiles, and protection policy before imported objects become available for restore or replay.
+
+#### Scenario: Imported member is tampered
+
+- GIVEN transport returns bytes that do not match the declared member identity
+- WHEN import verification runs
+- THEN Molten MUST reject the member and MUST NOT publish capsule availability
+
+#### Scenario: Valid import completes
+
+- GIVEN every member verifies and the complete closure passes
+- WHEN import publication commits
+- THEN Molten MAY report capsule availability without moving a branch or activating a runtime
+
+### Requirement: Replay execution remains profile-bound and authority-neutral
+
+r[molten.world_replay.execution_boundary] Molten MUST use the declared logical or opaque restore profile and MUST rerun current authority, artifact, schema, resource, runtime, and effect admission before execution. Capsule possession MUST NOT grant those admissions.
+
+#### Scenario: Capsule is complete but authority is absent
+
+- GIVEN capsule validation passes and current execution authority denies
+- WHEN replay activation is requested
+- THEN replay MUST remain denied
+
+#### Scenario: Opaque profile targets a different cohort
+
+- GIVEN an exact machine snapshot descriptor does not match the destination cohort
+- WHEN replay planning runs
+- THEN Molten MUST reject the profile without falling back to logical restore
+
+### Requirement: Replay receipts preserve bounded claims
+
+r[molten.world_replay.receipts] Replay and import receipts MUST bind trace, capsule, profile, horizon, closure, actual transitions, divergence, redaction, and dependency identities. They MUST NOT claim universal determinism, semantic equivalence, capability transfer, effect completion, or release eligibility.
+
+#### Scenario: Focused replay rail runs
+
+- GIVEN positive and negative fixtures use reviewed dependency cohorts
+- WHEN the world replay verification rail runs
+- THEN it MUST report exact supported profiles and all bounded non-claims
+
+### Requirement: Replay verification covers success and denial paths
+
+r[molten.world_replay.verification] Molten MUST test complete replay, stable identities, capsule round trips, first divergence, closure failures, malformed encodings, unsupported profiles, secret disclosure, missing authority, and import-overclaim cases.
+
+#### Scenario: Negative corpus is incomplete
+
+- GIVEN replay fixtures omit malformed, missing-closure, profile-mismatch, or authority-denial cases
+- WHEN verification coverage is evaluated
+- THEN the replay change MUST remain incomplete
+
+### Requirement: Promotion plans bind one candidate and intent closure
+
+r[molten.world_promotion.plan] Molten MUST bind each promotion plan to the expected active head, candidate commit, exact effect-intent closure, branch policy, current authority inputs, and one operation identity.
+
+#### Scenario: Candidate intent closure is complete
+
+- GIVEN every candidate intent has one exact semantic identity and admitted release classification
+- WHEN promotion planning runs
+- THEN it MUST produce a complete bounded reservation plan
+
+#### Scenario: Candidate contains an unclassified intent
+
+- GIVEN one intent lacks a release, deny, simulate, or retain classification
+- WHEN promotion planning runs
+- THEN Molten MUST deny promotion planning as incomplete
+
+### Requirement: Active-head movement and release reservation are locally atomic
+
+r[molten.world_promotion.transaction] Molten MUST update the active head and publish the complete release-reservation set in one local transaction. A failed or stale transaction MUST leave both prior states unchanged.
+
+#### Scenario: Promotion transaction commits
+
+- GIVEN expected head, authority, policy, intent closure, and reservation identities remain current
+- WHEN the local transaction commits
+- THEN the candidate MUST become active and every admitted reservation MUST be durable
+
+#### Scenario: Reservation insertion fails
+
+- GIVEN one required reservation cannot enter the transaction
+- WHEN promotion publication runs
+- THEN the active head MUST remain unchanged and no partial reservation set may become dispatchable
+
+### Requirement: Dispatch consumes only committed current reservations
+
+r[molten.world_promotion.dispatch] Molten MUST dispatch only from committed reservations after rechecking current capability, policy, semantic handler, adapter generation, and reservation ownership. Retries MUST reuse the same logical release identity.
+
+#### Scenario: Reservation remains admitted
+
+- GIVEN a committed reservation passes every current dispatch gate
+- WHEN a dispatcher claims it
+- THEN one attempt MAY run under the reservation identity
+
+#### Scenario: Authority changed after promotion
+
+- GIVEN promotion succeeded but current capability admission now denies
+- WHEN dispatch admission runs
+- THEN Molten MUST record a blocked reservation and MUST NOT execute the effect
+
+### Requirement: Uncertain outcomes require observation-first reconciliation
+
+r[molten.world_promotion.reconciliation] Molten MUST classify publication and effect observations as not published, published, unknown, or conflicting before retry decisions. Unknown or conflicting outcomes MUST NOT trigger a blind new logical operation.
+
+#### Scenario: Local commit result is unknown
+
+- GIVEN the transaction returned no reliable completion result
+- WHEN recovery begins
+- THEN Molten MUST observe the durable operation identity before planning any repeat mutation
+
+#### Scenario: External acknowledgment was lost
+
+- GIVEN an effect may have completed but no acknowledgment is durable
+- WHEN reconciliation runs
+- THEN Molten MUST retain an uncertain state unless an admitted observation resolves it
+
+### Requirement: Acknowledged observations use explicit successor commits
+
+r[molten.world_promotion.observation_commit] Molten MUST bind an acknowledged effect observation to one recorded-effect transition from the promoted candidate to an explicit successor. This transition MUST NOT mutate the promoted commit or grant dispatch authority.
+
+#### Scenario: Acknowledged observation becomes recorded history
+
+- GIVEN one acknowledged attempt has an exact reservation and observation identity
+- WHEN observation-commit planning runs
+- THEN the transition MUST bind the promoted candidate as parent, the observation as input, and the supplied successor
+
+#### Scenario: Observation is unknown or mismatched
+
+- GIVEN an attempt is unacknowledged, lacks an observation, names another reservation, or keeps the same successor
+- WHEN observation-commit planning runs
+- THEN Molten MUST deny the transition before history publication
+
+### Requirement: Promotion receipts state bounded non-claims
+
+r[molten.world_promotion.non_claims] Promotion, reservation, attempt, and reconciliation receipts MUST distinguish local eligibility, dispatch attempts, observations, and external completion. They MUST NOT claim generic exactly-once execution or atomic external effects.
+
+#### Scenario: Promotion succeeded without dispatch
+
+- GIVEN the active head and reservations committed but no dispatcher ran
+- WHEN the promotion receipt is inspected
+- THEN it MUST report eligibility without claiming any external effect occurred
+
+### Requirement: Promotion verification covers crash windows
+
+r[molten.world_promotion.verification] Molten MUST test pre-commit, uncertain-commit, post-commit, pre-dispatch, post-dispatch, lost-acknowledgment, duplicate, conflict, denial, and overclaim paths.
+
+#### Scenario: Focused promotion rail runs
+
+- GIVEN deterministic fake adapters cover every declared crash boundary
+- WHEN the promotion verification rail runs
+- THEN it MUST report local atomicity and external-effect non-claims

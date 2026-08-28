@@ -66,6 +66,22 @@ Unknown, repair, corrupt, missing, or inconsistent observations enter quarantine
 
 A lost acknowledgment keeps the attempt uncertain. Retry requires explicit duplicate-risk acknowledgment and a new attempt identity. It keeps the same logical reservation identity. Abandonment requires explicit unknown-outcome acknowledgment and does not invent an effect result.
 
+## Effect-log and successor boundary
+
+Molten retains effect-log meaning. Its ordered validator binds each request, outcome, runtime, handler profile, and boundary. It rejects gaps, duplicates, missing outcomes, unused outcomes, mismatches, and live fallback.
+
+Weft revision `dee51eff9940bc53921bd8675b68c5abce8b05dd` withdraws the planned effect runtime. Choregraph revision `b3e08e19750f53bdbcae970cdf58a47a791ed20b` owns branchable history without effect-outcome or dispatch authority.
+
+`plan_world_promotion_observation_commit` maps one acknowledged outcome into one logical `recorded-effect` transition. The transition binds these values:
+
+- the promoted candidate as the immutable parent;
+- the exact observation reference as the transition input;
+- the selected logical profile;
+- one explicit successor world commit; and
+- non-claims that deny mutation and dispatch authority.
+
+An unknown, unacknowledged, mismatched, unchanged, or malformed observation fails before trace publication. The logical successor does not establish opaque replay equivalence.
+
 ## Operator commands
 
 `molten world-promotion` provides these commands:

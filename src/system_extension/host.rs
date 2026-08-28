@@ -20,6 +20,7 @@ use super::ExecutionProfile;
 use super::FailureClass;
 use super::LifecycleEvent;
 use super::LifecycleEventKind;
+use super::LifecyclePhase;
 use super::LifecycleState;
 use super::MigrationOperation;
 use super::OperatorStatus;
@@ -61,6 +62,14 @@ pub trait SystemExtensionExecutor {
     /// Invoke admitted code. The host passes only canonical callback context;
     /// execution profiles own any stronger isolation or process boundary.
     fn invoke(&mut self, invocation: &CallbackInvocation) -> std::result::Result<CallbackOutcome, String>;
+
+    fn commit_admitted_outcome(
+        &mut self,
+        _invocation: &CallbackInvocation,
+        _outcome: &CallbackOutcome,
+    ) -> std::result::Result<(), String> {
+        Ok(())
+    }
 }
 
 pub trait FabricEffectPort {
@@ -78,6 +87,14 @@ impl<T: SystemExtensionExecutor + ?Sized> SystemExtensionExecutor for Box<T> {
 
     fn invoke(&mut self, invocation: &CallbackInvocation) -> std::result::Result<CallbackOutcome, String> {
         (**self).invoke(invocation)
+    }
+
+    fn commit_admitted_outcome(
+        &mut self,
+        invocation: &CallbackInvocation,
+        outcome: &CallbackOutcome,
+    ) -> std::result::Result<(), String> {
+        (**self).commit_admitted_outcome(invocation, outcome)
     }
 }
 
@@ -157,6 +174,7 @@ pub struct SystemExtensionHost<E: SystemExtensionExecutor> {
     usage: ResourceUsage,
     invocation_sequence: u64,
     event_sequence: u64,
+    semantic_state_ref: Option<String>,
     observations: BTreeMap<CallbackKind, u64>,
     execution_binding_refs: Vec<String>,
     evidence: Vec<HostEvidence>,
@@ -182,6 +200,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             usage: ResourceUsage::default(),
             invocation_sequence: FIRST_SEQUENCE,
             event_sequence: FIRST_SEQUENCE,
+            semantic_state_ref: None,
             observations: BTreeMap::new(),
             execution_binding_refs: Vec::new(),
             evidence: Vec::new(),
@@ -193,12 +212,67 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         &self.state
     }
 
+    // r[impl molten.system_extension.native_host.recovery]
+    pub fn from_recovered_state(
+        admitted: CanonicalAdmittedSystemExtensionManifest,
+        executor: E,
+        state: LifecycleState,
+        usage: ResourceUsage,
+        invocation_sequence: u64,
+        event_sequence: u64,
+        semantic_state_ref: Option<String>,
+        last_lifecycle_ref: Option<String>,
+    ) -> Result<Self> {
+        let actual = executor.execution_profile();
+        let expected = admitted.manifest().execution_profile;
+        if actual != expected {
+            return Err(MoltenError::invalid_harness("recovered system-extension executor profile mismatch"));
+        }
+        if state.generation < admitted.manifest().initial_generation || state.phase == LifecyclePhase::Absent {
+            return Err(MoltenError::invalid_harness(
+                "recovered system-extension state is not compatible with the admitted manifest",
+            ));
+        }
+        if !usage.is_idle() {
+            return Err(MoltenError::invalid_harness("recovered system-extension state contains live resource usage"));
+        }
+        Ok(Self {
+            admitted,
+            executor,
+            state,
+            usage,
+            invocation_sequence,
+            event_sequence,
+            semantic_state_ref,
+            observations: BTreeMap::new(),
+            execution_binding_refs: Vec::new(),
+            evidence: Vec::new(),
+            last_lifecycle_ref,
+        })
+    }
+
     pub const fn usage(&self) -> ResourceUsage {
         self.usage
     }
 
     pub fn executor(&self) -> &E {
         &self.executor
+    }
+
+    pub fn executor_mut(&mut self) -> &mut E {
+        &mut self.executor
+    }
+
+    pub const fn invocation_sequence(&self) -> u64 {
+        self.invocation_sequence
+    }
+
+    pub const fn event_sequence(&self) -> u64 {
+        self.event_sequence
+    }
+
+    pub fn semantic_state_ref(&self) -> Option<&str> {
+        self.semantic_state_ref.as_deref()
     }
 
     pub fn evidence(&self) -> &[HostEvidence] {
@@ -238,6 +312,16 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         logical_tick: u64,
     ) -> Result<HostDispatchResult> {
         let event = self.build_event(CallbackKind::Request, Some(payload_ref), accounted_bytes, logical_tick)?;
+        self.dispatch(event)
+    }
+
+    pub fn dispatch_message(
+        &mut self,
+        payload_ref: &str,
+        accounted_bytes: u64,
+        logical_tick: u64,
+    ) -> Result<HostDispatchResult> {
+        let event = self.build_event(CallbackKind::Message, Some(payload_ref), accounted_bytes, logical_tick)?;
         self.dispatch(event)
     }
 
@@ -296,8 +380,21 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
                         );
                     }
                 };
+                if self.executor.commit_admitted_outcome(&invocation, &outcome).is_err() {
+                    return self.fail_invocation(
+                        &invocation,
+                        event.accounted_bytes,
+                        CallbackExecutionDecision::ExecutorFailed,
+                        EXECUTOR_ERROR_DIAGNOSTIC,
+                        Some(&outcome),
+                        FailureClass::Retryable,
+                    );
+                }
                 self.usage = release_callback_resources(reserved, event.accounted_bytes, outcome.effects.len())
                     .map_err(|issues| validation_error("callback resource release", &issues))?;
+                if let Some(state_ref) = &outcome.state_ref {
+                    self.semantic_state_ref = Some(state_ref.clone());
+                }
                 self.state.health = outcome.health;
                 let receipt = canonical_callback_receipt(super::CallbackReceiptInput {
                     manifest_ref: self.admitted.manifest_ref(),
@@ -435,6 +532,17 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
 
     pub fn remove(&mut self) -> Result<CanonicalLifecycleReceipt> {
         self.apply_simple_transition(LifecycleEventKind::Remove)
+    }
+
+    // r[impl molten.system_extension.native_host.recovery]
+    pub fn observe_host_loss(&mut self) -> Result<CanonicalLifecycleReceipt> {
+        self.apply_transition(LifecycleEvent {
+            kind: LifecycleEventKind::Failure,
+            generation: self.state.generation,
+            next_generation: None,
+            checkpoint_ref: None,
+            failure_class: Some(FailureClass::Retryable),
+        })
     }
 
     // r[impl molten.system_extension.supervision]

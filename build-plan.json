@@ -4,6 +4,7 @@
   "roots": [
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-promotion-drain-20260827#molten@0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-promotion-drain-20260827#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-promotion-drain-20260827#molten@0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-promotion-drain-20260827/crates/molten-core#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-promotion-drain-20260827/crates/molten-node-host#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-promotion-drain-20260827/crates/molten-release-policy#0.1.0",
@@ -15,9 +16,117 @@
     "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-promotion-drain-20260827/crates/molten-node-host#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-world-promotion-drain-20260827/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "b3c8e315a7475e2296ba4127617d3dda3f33b735889a07d3ab01d4c7681d51ae",
-  "inputsHash": "3cb2b13c6cb049013ef769ef48588b54cf39c86edae03d6fe73df2974eb27b08",
+  "cargoLockHash": "e3e55a68c9d06182e02239c6abd991b1576b9c25625b8114b6cdc4b09210c71c",
+  "inputsHash": "7ca1b2298d656dcce091c2017e9d580dc7507949477d6163281e84c0eb98ab32",
   "crates": {
+    "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
+      "crateName": "bounded-exec-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git",
+        "rev": "29dac88ecded94457572db3fdfaaaab95fa91525",
+        "subDir": "crates/bounded-exec-core",
+        "sha256": "03vs67baqgmasgs7p2f5rxfw2wf7h2hj8191jadkx7w3avvs0jld"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Deterministic no-std validation and outcome classification for bounded child-process execution.",
+      "license": "AGPL-3.0-or-later",
+      "repository": "https://github.com/OnixResearch/bounded-exec"
+    },
+    "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec@0.1.0": {
+      "crateName": "bounded-exec",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git",
+        "rev": "29dac88ecded94457572db3fdfaaaab95fa91525",
+        "subDir": "crates/bounded-exec",
+        "sha256": "03vs67baqgmasgs7p2f5rxfw2wf7h2hj8191jadkx7w3avvs0jld"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0",
+          "externCrateName": "bounded_exec_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#nix@0.30.1",
+          "externCrateName": "nix"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Bounded child-process execution with concurrent capture, deadlines, cancellation, and owned teardown.",
+      "license": "AGPL-3.0-or-later",
+      "repository": "https://github.com/OnixResearch/bounded-exec"
+    },
+    "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#chaoscontrol-snapshot-descriptor@0.1.0": {
+      "crateName": "chaoscontrol-snapshot-descriptor",
+      "version": "0.1.0",
+      "edition": "2021",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/brittonr/chaoscontrol.git",
+        "rev": "b8c440ea3b19df796542e58e8ee36200e1c3db85",
+        "subDir": "crates/chaoscontrol-snapshot-descriptor",
+        "sha256": "0csw6d72c7jqal6y4j9y55lp1bqakqb4i06rn2r8k2cn3x546y8w"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
+          "externCrateName": "sha2"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "ChaosControl Contributors"
+      ],
+      "description": "Pure portable exact-snapshot descriptor and preflight core for ChaosControl",
+      "license": "AGPL-3.0-or-later"
+    },
     "git+https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest-macros@0.14.12": {
       "crateName": "hegeltest-macros",
       "version": "0.14.12",
@@ -812,6 +921,10 @@
           "externCrateName": "blake3"
         },
         {
+          "packageId": "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec@0.1.0",
+          "externCrateName": "bounded_exec"
+        },
+        {
           "packageId": "git+ssh://git@github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#cairn-core@0.1.0",
           "externCrateName": "cairn"
         },
@@ -822,6 +935,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-std@3.4.5",
           "externCrateName": "cap_std"
+        },
+        {
+          "packageId": "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#chaoscontrol-snapshot-descriptor@0.1.0",
+          "externCrateName": "chaoscontrol_snapshot_descriptor"
         },
         {
           "packageId": "git+https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0",
@@ -986,6 +1103,10 @@
         {
           "name": "molten",
           "path": "src/main.rs"
+        },
+        {
+          "name": "molten-native-extension-fixture",
+          "path": "src/bin/molten-native-extension-fixture.rs"
         }
       ],
       "links": null,
@@ -12965,6 +13086,7 @@
       },
       "features": [
         "default",
+        "extra_traits",
         "std"
       ],
       "dependencies": [],
@@ -14952,6 +15074,54 @@
       "homepage": "https://nickel-lang.org",
       "license": "MIT",
       "repository": "https://github.com/tweag/nickel"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#nix@0.30.1": {
+      "crateName": "nix",
+      "version": "0.30.1",
+      "edition": "2021",
+      "sha256": "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "process",
+        "signal"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.1",
+          "externCrateName": "bitflags"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4",
+          "externCrateName": "cfg_if"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+          "externCrateName": "libc"
+        }
+      ],
+      "buildDependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg_aliases@0.2.1",
+          "externCrateName": "cfg_aliases"
+        }
+      ],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The nix-rust Project Developers"
+      ],
+      "description": "Rust friendly bindings to *nix APIs",
+      "license": "MIT",
+      "repository": "https://github.com/nix-rust/nix"
     },
     "registry+https://github.com/rust-lang/crates.io-index#noq-proto@1.0.0": {
       "crateName": "noq-proto",

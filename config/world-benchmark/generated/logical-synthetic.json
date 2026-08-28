@@ -1,0 +1,66 @@
+{
+  "dataset": {
+    "changed_objects": 8,
+    "dataset_ref": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "key_count": 256,
+    "logical_bytes": 1048576,
+    "mutation_bytes": 65536,
+    "object_count": 128,
+    "page_count": 256,
+    "page_size_bytes": 4096,
+    "preexisting_objects": 0,
+    "preparation": "cold",
+    "shape": "synthetic",
+    "source_revision": "58185205ffc69ab3f7dc6cc04388885e7d43f562"
+  },
+  "profile": {
+    "adapters": [
+      "molten-deterministic-world-benchmark-v1"
+    ],
+    "bounds": {
+      "max_conflicts": 64,
+      "max_duration_nanoseconds": 1000000000,
+      "max_keys": 1024,
+      "max_logical_bytes": 1048576,
+      "max_objects": 512,
+      "max_operations": 8,
+      "max_pages": 512,
+      "max_peak_memory_bytes": 67108864,
+      "max_physical_bytes": 2097152,
+      "max_references": 1024,
+      "max_repetitions": 3
+    },
+    "class": "logical",
+    "dataset_ref": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "hardware_cohort": "deterministic-count-fixture-v1",
+    "operations": [
+      "root-branch",
+      "first-mutation",
+      "repeated-mutation",
+      "diff",
+      "merge-plan",
+      "capsule-export",
+      "replication",
+      "retention-plan"
+    ],
+    "preparation": "cold",
+    "profile_ref": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "repetitions": 3,
+    "schema": "molten.world-benchmark-profile.v1",
+    "source_revision": "58185205ffc69ab3f7dc6cc04388885e7d43f562",
+    "thresholds": [
+      {
+        "maximum": 1048576,
+        "metric": "physical-bytes-written",
+        "name": "root-reference-write-ceiling",
+        "operation": "root-branch"
+      },
+      {
+        "maximum": 65536,
+        "metric": "transferred-bytes",
+        "name": "replication-transfer-ceiling",
+        "operation": "replication"
+      }
+    ]
+  }
+}
