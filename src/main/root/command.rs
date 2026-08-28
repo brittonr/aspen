@@ -56,6 +56,10 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_world_snapshot::WorldSnapshotCommand,
     },
+    WorldAuthority {
+        #[command(subcommand)]
+        command: crate::cli_world_authority::WorldAuthorityCommand,
+    },
     WorldHead {
         #[command(subcommand)]
         command: crate::cli_world_head::WorldHeadCommand,
@@ -294,6 +298,39 @@ mod tests {
             "snapshot.preserves",
             "--destination",
             "destination.preserves",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn world_authority_plan_parses_bounded_request_policy_and_output() {
+        let cli = Cli::try_parse_from([
+            "molten",
+            "world-authority",
+            "plan",
+            "--request",
+            "authority-request.json",
+            "--policy",
+            "branch-policy.json",
+            "--out",
+            "authority-receipt.json",
+        ])
+        .expect("world authority plan command");
+
+        assert!(matches!(cli.command, Some(Top::WorldAuthority { .. })));
+    }
+
+    #[test]
+    fn world_authority_effect_command_requires_denial_receipt_path() {
+        let result = Cli::try_parse_from([
+            "molten",
+            "world-authority",
+            "activate",
+            "--request",
+            "authority-request.json",
+            "--policy",
+            "branch-policy.json",
         ]);
 
         assert!(result.is_err());

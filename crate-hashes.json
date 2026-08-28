@@ -3,8 +3,5 @@
   "https://github.com/hegeldev/hegel-rust#hegeltest@0.14.12": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
   "ssh://git@github.com/OnixResearch/basalt.git#basalt@0.1.0": "10qb9j64kxnr57qp4fbna3b7s7l70x4kri1knqhxpjsa85q4dw67",
   "ssh://git@github.com/OnixResearch/cairn.git#cairn-core@0.1.0": "1j0z1rzv6aps6xlmgasrr4l3l41gbpv31np9ijcm32nb4gnr9rbc",
-  "ssh://git@github.com/OnixResearch/octet.git#valence-core@0.1.0": "1d4hzxpv9izqicygrszc5zsn31hc6vmjpk7j3ybmfp16hy40dnjp",
-  "ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#ucan-core@0.1.0": "1aq7jx1sqnsnc0rll6rj1xswvap8cshsmnlfc8bscy5x2gvnwrb7",
-  "ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#ucan@0.1.0": "1aq7jx1sqnsnc0rll6rj1xswvap8cshsmnlfc8bscy5x2gvnwrb7",
-  "ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#verified-logic@0.2.0": "1aq7jx1sqnsnc0rll6rj1xswvap8cshsmnlfc8bscy5x2gvnwrb7"
+  "ssh://git@github.com/OnixResearch/octet.git#valence-core@0.1.0": "1d4hzxpv9izqicygrszc5zsn31hc6vmjpk7j3ybmfp16hy40dnjp"
 }

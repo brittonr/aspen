@@ -103,7 +103,7 @@ fn cli_nextest_profile_matrix_denies_missing_filter() -> CliResult<()> {
 
 fn write_config_lint_root(dir: &std::path::Path, drift: bool) -> CliResult<()> {
     std::fs::create_dir_all(dir.join("docs"))?;
-    let cargo_revision = "d913dc01e765c9b297df5fcc57dfa06aac39bc74";
+    let cargo_revision = "89675cd4f585f837323c049e4a25f7b94c903038";
     let nix_revision = if drift {
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     } else {

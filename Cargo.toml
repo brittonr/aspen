@@ -47,7 +47,7 @@ artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.gi
 artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 bao-tree = "0.16.0"
-basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "d913dc01e765c9b297df5fcc57dfa06aac39bc74", version = "0.1.0" }
+basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "89675cd4f585f837323c049e4a25f7b94c903038", version = "0.1.0" }
 blake3 = "1"
 bounded-exec = { git = "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git", rev = "29dac88ecded94457572db3fdfaaaab95fa91525", version = "0.1.0" }
 choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
@@ -84,7 +84,7 @@ tar = "0.4"
 syndicate = "0.44.0-rc.3"
 toml = "0.9"
 tracing = "0.1"
-trellis = { git = "ssh://git@github.com/OnixResearch/ucan.git", rev = "2aad993027d48ff148028c537cdaf91f6e5285ca", version = "0.2.0", package = "verified-logic" }
+trellis = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "89675cd4f585f837323c049e4a25f7b94c903038", version = "0.2.0", package = "verified-logic" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 vm-cohort-core = { git = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3", rev = "31f1696ba9391bfda8577a58af84f72361d5573e", version = "0.1.0", optional = true }
 wasmparser = "0.240"

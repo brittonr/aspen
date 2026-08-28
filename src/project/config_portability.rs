@@ -232,7 +232,7 @@ fn ensure_diagnostic_bound(count: usize) -> Result<()> {
 mod tests {
     use super::*;
 
-    const MATCHING_REVISION: &str = "d913dc01e765c9b297df5fcc57dfa06aac39bc74";
+    const MATCHING_REVISION: &str = "89675cd4f585f837323c049e4a25f7b94c903038";
     const DRIFT_REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     fn file(path: &str, contents: &str, release_scoped: bool) -> ConfigFileRecord {
