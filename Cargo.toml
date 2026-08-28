@@ -21,6 +21,7 @@ description = "Molten Rust project"
 path = "src/lib.rs"
 
 [features]
+doltlite-oracle = []
 executable-extents = [
   "dep:data-encoding",
   "dep:executable-extent-conformance",
@@ -37,6 +38,11 @@ world-snapshot-vm-cohort = ["dep:vm-cohort-core"]
 [[bin]]
 name = "molten"
 path = "src/main.rs"
+
+[[test]]
+name = "doltlite_oracle"
+path = "tests/doltlite_oracle.rs"
+required-features = ["doltlite-oracle"]
 
 [[bin]]
 name = "molten-native-extension-fixture"

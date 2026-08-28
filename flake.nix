@@ -8,6 +8,10 @@
       url = "github:gattaca-com/flux/2a1916465ae6649aebef3758233cfea98e5d33db";
       flake = false;
     };
+    doltlite-src = {
+      url = "github:dolthub/doltlite/10170ed82c1b12414db8d1b29d2fe9ea2a72fd88";
+      flake = false;
+    };
     unit2nix = {
       url = "github:brittonr/unit2nix/d4883180de0ce3033b7e4e2ab4216f33134863c5";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -97,6 +101,7 @@
       nixpkgs,
       nickel-cli,
       flux-src,
+      doltlite-src,
       unit2nix,
       rust-overlay,
       flake-utils,
@@ -617,6 +622,60 @@
         kacheWs = mkUnit2nixWorkspace { enableKache = true; };
         kacheWrappedRust = mkUnit2nixRust { enableKache = true; };
 
+        doltliteRevision = "10170ed82c1b12414db8d1b29d2fe9ea2a72fd88";
+        doltliteShortRevision = "10170ed8";
+        doltliteSourceAdmitted =
+          assert pkgs.lib.assertMsg (
+            doltlite-src.rev == doltliteRevision
+          ) "Molten DoltLite source input drifted";
+          true;
+        doltliteOracle =
+          assert doltliteSourceAdmitted;
+          pkgs.stdenv.mkDerivation {
+            pname = "molten-doltlite-oracle";
+            version = doltliteShortRevision;
+            src = doltlite-src;
+            nativeBuildInputs = [ pkgs.gnumake ];
+            buildInputs = [ pkgs.zlib ];
+            configurePhase = ''
+              runHook preConfigure
+              mkdir build
+              (cd build && ../configure --prefix="$out")
+              runHook postConfigure
+            '';
+            buildPhase = ''
+              runHook preBuild
+              make -C build -j"$NIX_BUILD_CORES" \
+                DOLTLITE_ENABLE_REMOTES=0 \
+                DOLTLITE_VEC1=0 \
+                DOLTLITE_VERSION=${doltliteShortRevision} \
+                doltlite doltlite-lib \
+                detached_head_test concurrent_commit_test vc_concurrency_test \
+                multi_process_test multi_process_gc_test gc_tip_survival_test \
+                corruption_test commit_deserialize_test \
+                catalog_serialize_determinism_test serialize_pending_test
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out/bin" "$out/lib" "$out/include" "$out/share/molten-doltlite-oracle/contracts"
+              install -m755 build/doltlite "$out/bin/doltlite"
+              install -m644 build/libdoltlite.a "$out/lib/libdoltlite.a"
+              install -m644 build/doltlite.h "$out/include/doltlite.h"
+              install -m644 LICENSE.md APACHE_LICENSE "$out/share/molten-doltlite-oracle/"
+              install -m644 test/sqlite_compatibility_contract.tsv \
+                test/concurrency_contract.tsv test/storage_format_contract.tsv \
+                "$out/share/molten-doltlite-oracle/contracts/"
+              mkdir -p "$out/libexec/molten-doltlite-oracle"
+              install -m755 build/detached_head_test build/concurrent_commit_test \
+                build/vc_concurrency_test build/multi_process_test \
+                build/multi_process_gc_test build/gc_tip_survival_test \
+                build/corruption_test build/commit_deserialize_test \
+                build/catalog_serialize_determinism_test build/serialize_pending_test \
+                "$out/libexec/molten-doltlite-oracle/"
+              runHook postInstall
+            '';
+          };
         moltenPkg = ws.workspaceMembers."molten".build;
         moltenNodeHostPkg = ws.workspaceMembers."molten-node-host".build;
         moltenNodeHostTests = ws.test.workspaceMembers."molten-node-host".build;
@@ -824,6 +883,14 @@
           chmod u+w "$out/src/world_faults/tests.rs"
           cp ${./checks/world-faults-octet/empty-tests.rs} "$out/src/world_faults/tests.rs"
         '';
+        worldStateOracleOctetWorkspace = pkgs.runCommand "molten-world-state-oracle-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/world-state-oracle-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/world-state-oracle-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/world-state-oracle-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/world-state-oracle-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/world_state_oracle} "$out/src/world_state_oracle"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -906,6 +973,7 @@
           molten = moltenPkg;
           molten-node-host = moltenNodeHostPkg;
           molten-release-policy = releasePolicyPkg;
+          doltlite-oracle = doltliteOracle;
           molten-kache = kacheWs.workspaceMembers."molten".build;
           molten-kache-rust = kacheWrappedRust;
           all = ws.allWorkspaceMembers;
@@ -1387,6 +1455,117 @@
                       exit 1
                     fi
                   done
+                  touch "$out"
+                '';
+            worldStateOracleProfileCheck =
+              pkgs.runCommand "molten-world-state-oracle-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/world-state-oracle/*.ncl \
+                    config/world-state-oracle/fixtures/negative/*.ncl
+                  nickel export config/world-state-oracle/ledger.ncl \
+                    --format json --output "$TMPDIR/ledger.json"
+                  cmp config/world-state-oracle/generated/ledger.json \
+                    "$TMPDIR/ledger.json"
+                  nickel export config/world-state-oracle/source.ncl \
+                    --format json --output "$TMPDIR/source.json"
+                  cmp config/world-state-oracle/generated/source.json \
+                    "$TMPDIR/source.json"
+                  for fixture in config/world-state-oracle/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative world state oracle fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  touch "$out"
+                '';
+            worldStateOracleSourceCheck =
+              assert doltliteSourceAdmitted;
+              pkgs.runCommand "molten-world-state-oracle-source"
+                {
+                  nativeBuildInputs = [
+                    pkgs.b3sum
+                    pkgs.coreutils
+                    pkgs.diffutils
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  source_root=${doltlite-src}
+                  package_root=${doltliteOracle}
+                  cd "$src"
+                  test "$(b3sum "$source_root/APACHE_LICENSE" | cut -d ' ' -f 1)" = \
+                    a24e4e2958e399474e4b0913dde32c6be84630b6dcf153af7eae29779399eb2f
+                  test "$(b3sum "$source_root/LICENSE.md" | cut -d ' ' -f 1)" = \
+                    4f91d1a7d7b99eefb5c81ddb148446616d8260fc0c8113999cf2a48d3589267c
+                  test "$(b3sum "$source_root/test/sqlite_compatibility_contract.tsv" | cut -d ' ' -f 1)" = \
+                    82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664
+                  test "$(b3sum "$source_root/test/concurrency_contract.tsv" | cut -d ' ' -f 1)" = \
+                    9efcaf8c67d3b1d6c1e9eac578810bfd266bb2fb920344230299db143d6afcc8
+                  test "$(b3sum "$source_root/test/storage_format_contract.tsv" | cut -d ' ' -f 1)" = \
+                    9a24814b1023720459092e2fc0126c09ad6af221b6ec876948d0c67c2bcb5452
+                  test "$(b3sum "$package_root/bin/doltlite" | cut -d ' ' -f 1)" = \
+                    019983d04bbbd689aec0faac418f99fa49f2f61e888bed8d9e0f34cfc8b3e08b
+                  test "$(b3sum src/world_state_oracle/process.rs | cut -d ' ' -f 1)" = \
+                    a4b36a1a46cff61a2c4efb5fa4bbd26778467d65b9cc511197470607ac3e393a
+                  rg -Fq 'pin_commit_rejected' "$source_root/test/concurrent_commit_test.c"
+                  rg -Fq 'mp_conflict_detected' "$source_root/test/multi_process_test.c"
+                  rg -Fq 'reader_iter_saw_all_rows' "$source_root/test/multi_process_gc_test.c"
+                  rg -Fq 'attached tag readonly' "$source_root/test/detached_head_test.c"
+                  rg -Fq 'tampered_wal_offset_detected' "$source_root/test/corruption_test.c"
+                  rg -Fq 'bad_version_detected' "$source_root/test/corruption_test.c"
+                  rg -Fq 'trunc_before_email_len' "$source_root/test/commit_deserialize_test.c"
+                  rg -Fq 'fresh-db image deserializes' "$source_root/test/serialize_pending_test.c"
+                  rg -Fq 'reopen_bytes_match' "$source_root/test/catalog_serialize_determinism_test.c"
+                  rg -Fq 'skew_version_13_notadb' "$source_root/test/storage_format_contract_test.sh"
+                  cmp "$source_root/APACHE_LICENSE" \
+                    "$package_root/share/molten-doltlite-oracle/APACHE_LICENSE"
+                  cmp "$source_root/LICENSE.md" \
+                    "$package_root/share/molten-doltlite-oracle/LICENSE.md"
+                  for contract in \
+                    sqlite_compatibility_contract.tsv \
+                    concurrency_contract.tsv \
+                    storage_format_contract.tsv
+                  do
+                    cmp "$source_root/test/$contract" \
+                      "$package_root/share/molten-doltlite-oracle/contracts/$contract"
+                  done
+                  for harness in \
+                    detached_head_test \
+                    concurrent_commit_test \
+                    vc_concurrency_test \
+                    multi_process_test \
+                    multi_process_gc_test \
+                    gc_tip_survival_test \
+                    corruption_test \
+                    commit_deserialize_test \
+                    catalog_serialize_determinism_test \
+                    serialize_pending_test
+                  do
+                    test -x "$package_root/libexec/molten-doltlite-oracle/$harness"
+                  done
+                  rg -Fq 'DOLTLITE_ENABLE_REMOTES=0' flake.nix
+                  rg -Fq 'DOLTLITE_VEC1=0' flake.nix
+                  rg -Fq '#[cfg(feature = "doltlite-oracle")]' src/lib.rs
+                  rg -Fq 'pub trait SemanticStateOracle' src/world_state_oracle/ports.rs
+                  if rg -n 'std::fs|std::path|PathBuf|sqlite3|bounded_exec|CommandSpec' \
+                    crates/molten-core/src/world_state_oracle; then
+                    echo "effect or vendor type leaked into the oracle core" >&2
+                    exit 1
+                  fi
                   touch "$out"
                 '';
             worldOperatorProfileCheck =
@@ -2199,6 +2378,80 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
+            # r[verify molten.world_state_oracle.verification]
+            world-state-oracle-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = worldStateOracleOctetWorkspace;
+                packages = [ "molten-world-state-oracle-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/world-state-oracle-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            world-state-oracle-schema-inventory =
+              pkgs.runCommand "molten-world-state-oracle-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  schema_root=${./schemas/preserves-boundaries}
+                  expected_schema_count=4
+                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-semantic-state-oracle-*.preserves' | wc -l)"
+                  test "$actual_schema_count" -eq "$expected_schema_count"
+                  for schema_id in \
+                    molten.semantic-state-oracle-source.v1 \
+                    molten.semantic-state-oracle-observation.v1 \
+                    molten.semantic-state-oracle-comparison.v1 \
+                    molten.semantic-state-oracle-projection.v1
+                  do
+                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
+                  done
+                  touch "$out"
+                '';
+            world-state-oracle-format-contract =
+              pkgs.runCommand "molten-world-state-oracle-format-contract"
+                {
+                  nativeBuildInputs = [
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.perl
+                    pkgs.python3
+                  ];
+                }
+                ''
+                  set -euo pipefail
+                  cp -R ${doltlite-src} "$TMPDIR/doltlite-source"
+                  chmod -R u+w "$TMPDIR/doltlite-source"
+                  bash "$TMPDIR/doltlite-source/test/storage_format_contract_test.sh" \
+                    ${doltliteOracle}/bin/doltlite
+                  touch "$out"
+                '';
+            world-state-oracle-upstream-harnesses =
+              pkgs.runCommand "molten-world-state-oracle-upstream-harnesses" { }
+                ''
+                  set -euo pipefail
+                  harness_root=${doltliteOracle}/libexec/molten-doltlite-oracle
+                  for harness in \
+                    detached_head_test \
+                    concurrent_commit_test \
+                    vc_concurrency_test \
+                    multi_process_test \
+                    multi_process_gc_test \
+                    gc_tip_survival_test \
+                    corruption_test \
+                    commit_deserialize_test \
+                    catalog_serialize_determinism_test \
+                    serialize_pending_test
+                  do
+                    "$harness_root/$harness"
+                  done
+                  touch "$out"
+                '';
             # r[verify molten.world_faults.verification]
             world-faults-octet-deny-all =
               assert executableExtentOctetAdmitted;
@@ -2327,6 +2580,8 @@
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
             world-benchmark-profile = worldBenchmarkProfileCheck;
             world-faults-profile = worldFaultsProfileCheck;
+            world-state-oracle-profile = worldStateOracleProfileCheck;
+            world-state-oracle-source = worldStateOracleSourceCheck;
             world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;

@@ -500,6 +500,23 @@
         "type": "github"
       }
     },
+    "doltlite-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787686131,
+        "narHash": "sha256-/1F7W5l2BvnI2ig9ZGjvcZ341QDRvB4xweIvJYrsbdo=",
+        "owner": "dolthub",
+        "repo": "doltlite",
+        "rev": "10170ed82c1b12414db8d1b29d2fe9ea2a72fd88",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dolthub",
+        "repo": "doltlite",
+        "rev": "10170ed82c1b12414db8d1b29d2fe9ea2a72fd88",
+        "type": "github"
+      }
+    },
     "dylint-src": {
       "flake": false,
       "locked": {
@@ -1546,6 +1563,7 @@
         "cairn-src": "cairn-src",
         "chaoscontrol-src": "chaoscontrol-src",
         "choregraph-src": "choregraph-src",
+        "doltlite-src": "doltlite-src",
         "executable-extent-octet": "executable-extent-octet",
         "executable-extent-src": "executable-extent-src",
         "flake-utils": "flake-utils_9",

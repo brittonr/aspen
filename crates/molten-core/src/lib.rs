@@ -44,6 +44,7 @@ pub mod world_operator;
 pub mod world_promotion;
 pub mod world_replay;
 pub mod world_snapshot;
+pub mod world_state_oracle;
 
 pub mod prelude {
     pub use crate::codec::CodecIssue;

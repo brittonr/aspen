@@ -37,7 +37,7 @@ fn simulation_replays_equal_receipts_and_preserves_unknown_without_retry() {
 // r[verify molten.fabric_execution.validation]
 #[test]
 fn live_and_simulation_compositions_share_command_and_outcome_shape() {
-    let arguments = script_arguments("printf 'bounded:input'");
+    let arguments = script_arguments("cat >/dev/null; printf 'bounded:input'");
     let (live_profile, live_request) = canonical_request(ExecutionProfileKind::LiveBoundedProcess, arguments.clone());
     let mut live = crate::system_extension::compose_system_extension_execution_fabric(
         live_profile,

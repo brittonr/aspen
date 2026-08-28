@@ -1,0 +1,79 @@
+{
+  "absolute_paths_required": true,
+  "adapter_ref": "blake3:a4b36a1a46cff61a2c4efb5fa4bbd26778467d65b9cc511197470607ac3e393a",
+  "adapter_version": "molten-doltlite-oracle-v1",
+  "authority_granted": false,
+  "backend_format": "doltlite-chunk-store-v12",
+  "binary_ref": "blake3:019983d04bbbd689aec0faac418f99fa49f2f61e888bed8d9e0f34cfc8b3e08b",
+  "bounds": {
+    "max_diagnostics": 32,
+    "max_key_bytes": 256,
+    "max_rows": 256,
+    "max_value_bytes": 4096,
+    "stderr_max_bytes": 65536,
+    "stdin_max_bytes": 65536,
+    "stdout_max_bytes": 262144,
+    "teardown_timeout_ms": 1000,
+    "timeout_ms": 10000
+  },
+  "build_inputs": [
+    "stdenv.cc",
+    "gnumake",
+    "zlib"
+  ],
+  "capability_rooted_workspace": true,
+  "claims_global_root_identity": false,
+  "claims_molten_correctness": false,
+  "contract_artifacts": [
+    {
+      "content_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "path": "test/sqlite_compatibility_contract.tsv"
+    },
+    {
+      "content_ref": "blake3:9efcaf8c67d3b1d6c1e9eac578810bfd266bb2fb920344230299db143d6afcc8",
+      "path": "test/concurrency_contract.tsv"
+    },
+    {
+      "content_ref": "blake3:9a24814b1023720459092e2fc0126c09ad6af221b6ec876948d0c67c2bcb5452",
+      "path": "test/storage_format_contract.tsv"
+    }
+  ],
+  "environment_cleared": true,
+  "imported_scope": [
+    "flake-input:full-pinned-source-checkout",
+    "build:non-amalgamation-cli-and-library",
+    "src/doltlite_*.c",
+    "src/prolly_*.c",
+    "src/chunk_*.c",
+    "test/sqlite_compatibility_contract.tsv",
+    "test/concurrency_contract.tsv",
+    "test/storage_format_contract.tsv"
+  ],
+  "non_claims": [
+    "oracle-agreement-is-not-correctness",
+    "backend-roots-are-not-global-identities",
+    "oracle-evidence-grants-no-authority",
+    "oracle-evidence-is-not-production-readiness"
+  ],
+  "notices": [
+    {
+      "content_ref": "blake3:a24e4e2958e399474e4b0913dde32c6be84630b6dcf153af7eae29779399eb2f",
+      "license": "Apache-2.0",
+      "path": "APACHE_LICENSE"
+    },
+    {
+      "content_ref": "blake3:4f91d1a7d7b99eefb5c81ddb148446616d8260fc0c8113999cf2a48d3589267c",
+      "license": "SQLite-public-domain-and-project-notices",
+      "path": "LICENSE.md"
+    }
+  ],
+  "process_group_teardown": true,
+  "production_enabled": false,
+  "remotes_enabled": false,
+  "repository": "https://github.com/dolthub/doltlite",
+  "schema": "molten.semantic-state-oracle-source.v1",
+  "source_input": "github:dolthub/doltlite/10170ed82c1b12414db8d1b29d2fe9ea2a72fd88",
+  "source_revision": "10170ed82c1b12414db8d1b29d2fe9ea2a72fd88",
+  "test_only": true,
+  "vec1_enabled": false
+}

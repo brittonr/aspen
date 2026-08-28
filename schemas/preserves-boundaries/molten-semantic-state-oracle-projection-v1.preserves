@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-semantic-state-oracle-projection">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "molten-semantic-state-oracle-projection-v1">
+  <schema-id "molten.semantic-state-oracle-projection.v1">
+  <arity 17>>

@@ -1,0 +1,181 @@
+{
+  "backend_format": "doltlite-chunk-store-v12",
+  "claims_global_root_identity": false,
+  "claims_molten_correctness": false,
+  "limits": {
+    "max_adapted": 2,
+    "max_engine_gap": 0,
+    "max_intentional": 7,
+    "max_unsupported": 1
+  },
+  "production_enabled": false,
+  "remotes_enabled": false,
+  "repository": "https://github.com/dolthub/doltlite",
+  "rows": [
+    {
+      "evidence_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "explanation": "Molten retains authority admission",
+      "fixture": "authority-nonclaim",
+      "id": "authority",
+      "issue": null,
+      "source_contract": "molten.authority",
+      "status": "intentional"
+    },
+    {
+      "evidence_ref": "blake3:9efcaf8c67d3b1d6c1e9eac578810bfd266bb2fb920344230299db143d6afcc8",
+      "explanation": "branch-visible state stays isolated",
+      "fixture": "branch-isolation",
+      "id": "branch-isolation",
+      "issue": null,
+      "source_contract": "concurrency.per-connection-branch",
+      "status": "compatible"
+    },
+    {
+      "evidence_ref": "blake3:9efcaf8c67d3b1d6c1e9eac578810bfd266bb2fb920344230299db143d6afcc8",
+      "explanation": "stale tips do not replace a winner",
+      "fixture": "compare-and-advance",
+      "id": "compare-and-advance",
+      "issue": null,
+      "source_contract": "concurrency.vc-head-recheck",
+      "status": "compatible"
+    },
+    {
+      "evidence_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "explanation": "Molten commits a complete world under its own protocol",
+      "fixture": "multi-file-negative",
+      "id": "complete-world-atomicity",
+      "issue": null,
+      "source_contract": "molten.complete-world",
+      "status": "intentional"
+    },
+    {
+      "evidence_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "explanation": "oracle schemas use built-in binary ordering",
+      "fixture": "custom-collation-negative",
+      "id": "custom-collation",
+      "issue": null,
+      "source_contract": "sqlite.persisted-custom-collation",
+      "status": "adapted"
+    },
+    {
+      "evidence_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "explanation": "detached snapshots remain read-only",
+      "fixture": "detached-read",
+      "id": "detached-read",
+      "issue": null,
+      "source_contract": "branch.detached-revision",
+      "status": "compatible"
+    },
+    {
+      "evidence_ref": "blake3:9efcaf8c67d3b1d6c1e9eac578810bfd266bb2fb920344230299db143d6afcc8",
+      "explanation": "Molten persists typed conflict artifacts",
+      "fixture": "conflict-nonclaim",
+      "id": "durable-conflicts",
+      "issue": null,
+      "source_contract": "molten.durable-conflicts",
+      "status": "intentional"
+    },
+    {
+      "evidence_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "explanation": "Molten owns effect reservation and dispatch",
+      "fixture": "effect-nonclaim",
+      "id": "effect-release",
+      "issue": null,
+      "source_contract": "molten.effect-release",
+      "status": "intentional"
+    },
+    {
+      "evidence_ref": "blake3:9a24814b1023720459092e2fc0126c09ad6af221b6ec876948d0c67c2bcb5452",
+      "explanation": "format version twelve reopens and other versions deny",
+      "fixture": "exact-format",
+      "id": "exact-format",
+      "issue": null,
+      "source_contract": "storage.exact-version",
+      "status": "compatible"
+    },
+    {
+      "evidence_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "explanation": "oracle rows use explicit canonical primary keys",
+      "fixture": "rowid-negative",
+      "id": "explicit-primary-key",
+      "issue": null,
+      "source_contract": "sqlite.clustered-primary-key",
+      "status": "adapted"
+    },
+    {
+      "evidence_ref": "blake3:9a24814b1023720459092e2fc0126c09ad6af221b6ec876948d0c67c2bcb5452",
+      "explanation": "backend hashes stay local evidence",
+      "fixture": "identity-overclaim",
+      "id": "global-identities",
+      "issue": null,
+      "source_contract": "molten.blake3-identities",
+      "status": "intentional"
+    },
+    {
+      "evidence_ref": "blake3:9a24814b1023720459092e2fc0126c09ad6af221b6ec876948d0c67c2bcb5452",
+      "explanation": "equal primary-key state has equal backend roots",
+      "fixture": "history-independent",
+      "id": "history-independent-state",
+      "issue": null,
+      "source_contract": "storage.history-independent-table-root",
+      "status": "compatible"
+    },
+    {
+      "evidence_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "explanation": "DoltLite rejects multiple file-backed writes",
+      "fixture": "multi-file-write-negative",
+      "id": "multi-file-write",
+      "issue": "dolthub/doltlite#storage-multi-file",
+      "source_contract": "sqlite.multi-file-atomic-write",
+      "status": "unsupported"
+    },
+    {
+      "evidence_ref": "blake3:9efcaf8c67d3b1d6c1e9eac578810bfd266bb2fb920344230299db143d6afcc8",
+      "explanation": "open readers retain committed observations during GC",
+      "fixture": "reader-safe-gc",
+      "id": "reader-safe-gc",
+      "issue": null,
+      "source_contract": "concurrency.gc-reader",
+      "status": "compatible"
+    },
+    {
+      "evidence_ref": "blake3:9efcaf8c67d3b1d6c1e9eac578810bfd266bb2fb920344230299db143d6afcc8",
+      "explanation": "Molten owns retention and deletion admission",
+      "fixture": "retention-nonclaim",
+      "id": "retention-policy",
+      "issue": null,
+      "source_contract": "molten.retention",
+      "status": "intentional"
+    },
+    {
+      "evidence_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "explanation": "native images round trip inside the pinned cohort",
+      "fixture": "serialization",
+      "id": "serialization",
+      "issue": null,
+      "source_contract": "sqlite.serialize-native-image",
+      "status": "compatible"
+    },
+    {
+      "evidence_ref": "blake3:9efcaf8c67d3b1d6c1e9eac578810bfd266bb2fb920344230299db143d6afcc8",
+      "explanation": "stale read snapshots deny write upgrade",
+      "fixture": "stale-writer",
+      "id": "stale-writer",
+      "issue": null,
+      "source_contract": "concurrency.snapshot-upgrade",
+      "status": "compatible"
+    },
+    {
+      "evidence_ref": "blake3:82d470f924e39e4e6eed5ce48095bcb30e682b15e076476a1caf847dac9ab664",
+      "explanation": "Molten owns typed merge decisions",
+      "fixture": "merge-nonclaim",
+      "id": "typed-merge-policy",
+      "issue": null,
+      "source_contract": "molten.typed-merge",
+      "status": "intentional"
+    }
+  ],
+  "schema": "molten.semantic-state-oracle-compatibility.v1",
+  "source_revision": "10170ed82c1b12414db8d1b29d2fe9ea2a72fd88",
+  "vec1_enabled": false
+}

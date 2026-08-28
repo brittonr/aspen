@@ -114,6 +114,8 @@ pub mod world_operator;
 pub mod world_promotion;
 pub mod world_replay;
 pub mod world_snapshot;
+#[cfg(feature = "doltlite-oracle")]
+pub mod world_state_oracle;
 compat_module!(harness, testbed);
 #[doc(hidden)]
 #[path = "iroh/exchange.rs"]
