@@ -200,11 +200,6 @@ mod world_snapshot_port;
 mod cli_world_snapshot {
     pub(crate) use super::world_snapshot_port::*;
 }
-#[path = "cli/runtime/worldauthority.rs"]
-mod world_authority_port;
-mod cli_world_authority {
-    pub(crate) use super::world_authority_port::*;
-}
 #[path = "cli/runtime/worldhead.rs"]
 mod world_head_port;
 mod cli_world_head {

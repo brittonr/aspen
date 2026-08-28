@@ -33,7 +33,6 @@ pub mod release_dependency;
 pub mod stack;
 pub mod system_extension;
 pub mod world_benchmark;
-pub mod world_branch_authority;
 #[path = "worldcommit/mod.rs"]
 pub mod world_commit;
 pub mod world_distribution;

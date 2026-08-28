@@ -103,7 +103,6 @@ pub mod wasm_component;
 #[path = "wasm/performance/mod.rs"]
 pub mod wasm_performance;
 pub mod world_benchmark;
-pub mod world_branch_authority;
 #[path = "worldcommit/mod.rs"]
 pub mod world_commit;
 pub mod world_distribution;

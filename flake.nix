@@ -21,7 +21,7 @@
       flake = false;
     };
     basalt-src = {
-      url = "github:OnixResearch/basalt/89675cd4f585f837323c049e4a25f7b94c903038";
+      url = "github:OnixResearch/basalt/d913dc01e765c9b297df5fcc57dfa06aac39bc74";
       flake = false;
     };
     bounded-exec-src = {
@@ -73,6 +73,10 @@
       flake = false;
     };
     octet-toolchain.url = "github:OnixResearch/octet?rev=fc38f59330b626961d166febfdf1a5aa6575460f";
+    ucan-src = {
+      url = "github:OnixResearch/ucan/2aad993027d48ff148028c537cdaf91f6e5285ca";
+      flake = false;
+    };
     valence-src = {
       url = "github:OnixResearch/valence/5f1c2ba5072c6f9622fa59b1af20502985f569fd";
       flake = false;
@@ -111,6 +115,7 @@
       hegel-src,
       octet-cutover-src,
       octet-toolchain,
+      ucan-src,
       valence-src,
       schema-identity-src,
       schema-migration-core-src,
@@ -416,10 +421,12 @@
           "${executableExtentRepository}#${executableExtentRevision}" =
             maybeCleanLocalGitSource executableExtentSource;
           "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;
-          "ssh://git@github.com/OnixResearch/basalt.git#89675cd4f585f837323c049e4a25f7b94c903038" =
+          "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" =
             maybeCleanLocalGitSource basalt-src;
           "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" =
             maybeCleanLocalGitSource cairn-src;
+          "ssh://git@github.com/OnixResearch/ucan.git#2aad993027d48ff148028c537cdaf91f6e5285ca" =
+            maybeCleanLocalGitSource ucan-src;
           "ssh://git@github.com/OnixResearch/valence.git#5f1c2ba5072c6f9622fa59b1af20502985f569fd" =
             maybeCleanLocalGitSource valence-src;
           "https://github.com/hegeldev/hegel-rust#ed949b8084595cb467e983747f1089e214965ac6" =
@@ -738,16 +745,6 @@
           cp ${./checks/world-benchmark-octet/dylint.toml} "$out/dylint.toml"
           cp ${./checks/world-benchmark-octet/src/lib.rs} "$out/src/lib.rs"
           cp -R ${./crates/molten-core/src/world_benchmark} "$out/src/world_benchmark"
-        '';
-        worldAuthorityOctetWorkspace = pkgs.runCommand "molten-world-authority-octet-workspace" { } ''
-          mkdir -p "$out/src" "$out/vendor/basalt"
-          cp ${./checks/world-authority-octet/Cargo.toml} "$out/Cargo.toml"
-          cp ${./checks/world-authority-octet/Cargo.lock} "$out/Cargo.lock"
-          cp ${./checks/world-authority-octet/dylint.toml} "$out/dylint.toml"
-          cp ${./checks/world-authority-octet/src/lib.rs} "$out/src/lib.rs"
-          cp -R ${./crates/molten-core/src/world_branch_authority} \
-            "$out/src/world_branch_authority"
-          cp -R ${basalt-src}/. "$out/vendor/basalt/"
         '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
@@ -1941,47 +1938,6 @@
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";
                 });
-            world-authority-octet-deny-all =
-              assert executableExtentOctetAdmitted;
-              (executable-extent-octet.lib.mkConsumerCheck {
-                inherit system;
-                src = worldAuthorityOctetWorkspace;
-                packages = [ "molten-world-authority-octet" ];
-                cargoExtraArgs = "--all-targets --all-features";
-                cargoLock = ./checks/world-authority-octet/Cargo.lock;
-              }).overrideAttrs
-                (_previous: {
-                  DYLINT_RUSTFLAGS = "--deny warnings";
-                });
-            world-authority-dependency-identity =
-              pkgs.runCommand "molten-world-authority-dependency-identity" { }
-                ''
-                  test -f ${basalt-src}/src/world_branch_authority/mod.rs
-                  test -f ${basalt-src}/.cairn/archive/2026-08-26-add-world-branch-authority-policy/tasks.md
-                  test -f ${./crates/molten-core/src/world_branch_authority/mod.rs}
-                  touch "$out"
-                '';
-            world-authority-schema-inventory =
-              pkgs.runCommand "molten-world-authority-schema-inventory"
-                {
-                  nativeBuildInputs = [ pkgs.ripgrep ];
-                }
-                ''
-                  schema_root=${./schemas/preserves-boundaries}
-                  expected_schema_count=5
-                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-world-branch-authority-*.preserves' | wc -l)"
-                  test "$actual_schema_count" -eq "$expected_schema_count"
-                  for schema_id in \
-                    molten.world-branch-authority-plan.v1 \
-                    molten.world-branch-authority-observation.v1 \
-                    molten.world-branch-authority-activation.v1 \
-                    molten.world-branch-authority-transfer.v1 \
-                    molten.world-branch-authority-receipt.v1
-                  do
-                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
-                  done
-                  touch "$out"
-                '';
             world-benchmark-dependency-identity =
               pkgs.runCommand "molten-world-benchmark-dependency-identity" { }
                 ''
