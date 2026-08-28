@@ -12,6 +12,8 @@ The product-owned world-commit protocol is documented in [`docs/world-commit.md`
 
 The detached branch-head protocol is documented in [`docs/world-branch-heads.md`](docs/world-branch-heads.md). It defines generation-fenced claims, Choregraph mapping, Artifact Auth statements, atomic local updates, explicit conflicts, and rollback limits.
 
+World branch authority is documented in [`docs/world-branch-authority.md`](docs/world-branch-authority.md). It maps portable Basalt policy into explicit derivation, simulation, linear-transfer, replacement, promotion, and activation obligations without copying live authority.
+
 Typed comparison and merge are documented in [`docs/world-state-diff-and-merge.md`](docs/world-state-diff-and-merge.md). The profile uses an exact base, closed merge modes, schema gates, pure handlers, durable conflicts, and publish-last output.
 
 World replication and retention are documented in [`docs/world-distribution.md`](docs/world-distribution.md). The adapter composes bounded DAG sync, protected content replication, detached claim exchange, complete retention roots, and observation-only reachability without granting activation or deletion authority.
@@ -190,7 +192,6 @@ nix run \
   --override-input basalt-src path:../basalt \
   --override-input cairn-src path:../cairn \
   --override-input valence-src path:../valence \
-  --override-input ucan-src path:../ucan \
   --override-input onix-core-src path:../../onix-core \
   .#molten -- cluster status --state-root target/cluster
 ```
@@ -673,7 +674,6 @@ nix build .#checks.x86_64-linux.nixos-vm-multinode -L \
   --override-input basalt-src path:../basalt \
   --override-input cairn-src path:../cairn \
   --override-input valence-src path:../valence \
-  --override-input ucan-src path:../ucan \
   --override-input onix-core-src path:../../onix-core
 ```
 

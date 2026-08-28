@@ -86,17 +86,17 @@
     "basalt-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1782891181,
-        "narHash": "sha256-x/BGcEFKy9shtjPEPEkHhx591lB2OXLxKdn2SYxMC4M=",
+        "lastModified": 1787871189,
+        "narHash": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg=",
         "owner": "OnixResearch",
         "repo": "basalt",
-        "rev": "d913dc01e765c9b297df5fcc57dfa06aac39bc74",
+        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
         "type": "github"
       },
       "original": {
         "owner": "OnixResearch",
         "repo": "basalt",
-        "rev": "d913dc01e765c9b297df5fcc57dfa06aac39bc74",
+        "rev": "89675cd4f585f837323c049e4a25f7b94c903038",
         "type": "github"
       }
     },
@@ -1561,7 +1561,6 @@
         "rust-overlay": "rust-overlay_13",
         "schema-identity-src": "schema-identity-src",
         "schema-migration-core-src": "schema-migration-core-src",
-        "ucan-src": "ucan-src",
         "unit2nix": "unit2nix",
         "valence-src": "valence-src",
         "vm-cohort-src": "vm-cohort-src"
@@ -2229,23 +2228,6 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
-        "type": "github"
-      }
-    },
-    "ucan-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1782889775,
-        "narHash": "sha256-Z2Vu9xO9eKYXYo7aqqFm6KrNdQ8yG0ozYFZbrEOXB6s=",
-        "owner": "OnixResearch",
-        "repo": "ucan",
-        "rev": "2aad993027d48ff148028c537cdaf91f6e5285ca",
-        "type": "github"
-      },
-      "original": {
-        "owner": "OnixResearch",
-        "repo": "ucan",
-        "rev": "2aad993027d48ff148028c537cdaf91f6e5285ca",
         "type": "github"
       }
     },

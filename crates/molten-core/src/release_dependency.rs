@@ -835,7 +835,7 @@ fn distribution_material_rows(input: &ReleaseDependencyInput) -> Vec<String> {
 mod tests {
     use super::*;
 
-    const BASALT_REVISION: &str = "d913dc01e765c9b297df5fcc57dfa06aac39bc74";
+    const BASALT_REVISION: &str = "89675cd4f585f837323c049e4a25f7b94c903038";
     const EXECUTABLE_EXTENT_REVISION: &str = "025d9636f0161777710dac37b3c210ca0ad9483f";
     const VALENCE_REVISION: &str = "5f1c2ba5072c6f9622fa59b1af20502985f569fd";
     const OCTET_REVISION: &str = "4367300e10740ecc99ba4b2171ace561b4787327";
