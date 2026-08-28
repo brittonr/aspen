@@ -3,7 +3,7 @@
     "coordination-delivery-system-extension"
   ],
   "groups": ["current"],
-  "status": "blocked",
+  "status": "current",
   "workflow_profile": {
     "id": "spec-driven",
     "source": "change_create",
