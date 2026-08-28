@@ -11,6 +11,8 @@ macro_rules! compat_module {
     };
 }
 
+pub mod addressable_actor;
+
 #[doc(hidden)]
 #[path = "audit/ast_grep.rs"]
 pub mod ast_grep_runtime_authority_core;

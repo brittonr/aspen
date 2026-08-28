@@ -1,0 +1,86 @@
+{
+  "automatic_external_retry": false,
+  "claims_global_key_uniqueness": false,
+  "claims_runtime_survival": false,
+  "idle_after_ticks": 5,
+  "inline_payloads_allowed": false,
+  "logical_time_only": true,
+  "maximum_drain_items": 16,
+  "non_claims": [
+    "actor-identity-does-not-grant-authority",
+    "wake-success-does-not-prove-transport-delivery",
+    "checkpoint-possession-does-not-prove-survival",
+    "runtime-processes-streams-sessions-callbacks-and-deltas-do-not-survive",
+    "unknown-external-effects-are-not-retried-automatically",
+    "actor-receipts-do-not-authorize-mutation-activation-release-or-retry"
+  ],
+  "port_profiles": {
+    "authority": "blake3:8888888888888888888888888888888888888888888888888888888888888888",
+    "coordination_delivery": "blake3:3333333333333333333333333333333333333333333333333333333333333333",
+    "durable_state": "blake3:4444444444444444444444444444444444444444444444444444444444444444",
+    "evidence": "blake3:9999999999999999999999999999999999999999999999999999999999999999",
+    "logical_time": "blake3:5555555555555555555555555555555555555555555555555555555555555555",
+    "placement": "blake3:2222222222222222222222222222222222222222222222222222222222222222",
+    "resources": "blake3:6666666666666666666666666666666666666666666666666666666666666666",
+    "supervision": "blake3:7777777777777777777777777777777777777777777777777777777777777777",
+    "system_extension": "blake3:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "profile_id": "addressable-actor-v1",
+  "profile_version": 1,
+  "receipt_grants_authority": false,
+  "reference_source": {
+    "license": "Apache-2.0",
+    "repository": "https://github.com/rivet-dev/actors",
+    "revision": "71f371ba4eab1234d8b6b6c419e6748cc6fc9911",
+    "selected_concepts": [
+      "keyed-addressability",
+      "generation-fenced-runtime",
+      "sleep-intent-and-rewake-separation",
+      "persisted-state-and-scheduled-events",
+      "runtime-and-durable-survival-separation"
+    ]
+  },
+  "schema": "molten.addressable-actor.profile.v1",
+  "survival": {
+    "profile_version": 1,
+    "rules": [
+      {
+        "class": "durable-state",
+        "disposition": "durable"
+      },
+      {
+        "class": "mailbox-entries",
+        "disposition": "durable"
+      },
+      {
+        "class": "completed-semantic-events",
+        "disposition": "durable"
+      },
+      {
+        "class": "checkpoints",
+        "disposition": "durable"
+      },
+      {
+        "class": "processes",
+        "disposition": "runtime-only"
+      },
+      {
+        "class": "streams",
+        "disposition": "runtime-only"
+      },
+      {
+        "class": "sessions",
+        "disposition": "runtime-only"
+      },
+      {
+        "class": "partial-callbacks",
+        "disposition": "unsupported"
+      },
+      {
+        "class": "in-flight-deltas",
+        "disposition": "unsupported"
+      }
+    ],
+    "schema": "molten.addressable-actor.survival-matrix.v1"
+  }
+}

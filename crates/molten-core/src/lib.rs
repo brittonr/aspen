@@ -7,6 +7,7 @@
 //! Wasmtime, Steel, Nickel runtime, Iroh, or CLI dependencies. It owns small
 //! in-memory decision cores that adapter shells can call before side effects.
 
+pub mod addressable_actor;
 pub mod cluster_harness;
 pub mod codec;
 pub mod content_replication;

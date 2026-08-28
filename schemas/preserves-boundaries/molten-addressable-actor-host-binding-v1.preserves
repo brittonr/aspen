@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-addressable-actor-host-binding">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "molten-addressable-actor-host-binding-v1">
+  <schema-id "molten.addressable-actor.host-binding.v1">
+  <arity 15>>

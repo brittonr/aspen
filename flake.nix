@@ -922,6 +922,22 @@
               cp ${./checks/coordination-delivery-octet/empty-tests.rs} \
                 "$out/src/coordination_delivery/tests.rs"
             '';
+        addressableActorOctetWorkspace = pkgs.runCommand "molten-addressable-actor-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/addressable-actor-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/addressable-actor-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/addressable-actor-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/addressable-actor-octet/src/lib.rs} "$out/src/lib.rs"
+          cp ${./checks/addressable-actor-octet/src/fabric.rs} "$out/src/fabric.rs"
+          mkdir -p "$out/src/system_extension"
+          cp ${./checks/addressable-actor-octet/src/system_extension/mod.rs} \
+            "$out/src/system_extension/mod.rs"
+          cp -R ${./crates/molten-core/src/addressable_actor} "$out/src/addressable_actor"
+          chmod -R u+w "$out/src/addressable_actor"
+          rm -rf "$out/src/addressable_actor/tests.rs"
+          cp ${./checks/addressable-actor-octet/empty-tests.rs} \
+            "$out/src/addressable_actor/tests.rs"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1679,6 +1695,44 @@
                     src/coordination_delivery/ports.rs
                   rg -Fq 'pub trait DeliveryStatusPort' \
                     src/coordination_delivery/ports.rs
+                  touch "$out"
+                '';
+            addressableActorProfileCheck =
+              pkgs.runCommand "molten-addressable-actor-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/addressable-actor/*.ncl \
+                    config/addressable-actor/fixtures/negative/*.ncl
+                  nickel export config/addressable-actor/profile.ncl \
+                    --format json --output "$TMPDIR/profile.json"
+                  cmp config/addressable-actor/generated/profile.json \
+                    "$TMPDIR/profile.json"
+                  for fixture in config/addressable-actor/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative addressable actor fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if rg -n 'std::fs|std::path|std::env|std::time|redb::|cap_std::|std::process|println!|eprintln!' \
+                    crates/molten-core/src/addressable_actor; then
+                    echo "effect or infrastructure type leaked into the addressable actor core" >&2
+                    exit 1
+                  fi
+                  rg -Fq 'pub trait ActorCommitPort' src/addressable_actor/ports.rs
+                  rg -Fq 'pub trait ActorEffectPort' src/addressable_actor/ports.rs
+                  rg -Fq 'pub trait ActorStatusPort' src/addressable_actor/ports.rs
                   touch "$out"
                 '';
             worldOperatorProfileCheck =
@@ -2650,6 +2704,46 @@
                   done
                   touch "$out"
                 '';
+            # r[verify molten.addressable_actor.verification]
+            addressable-actor-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = addressableActorOctetWorkspace;
+                packages = [ "molten-addressable-actor-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/addressable-actor-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            addressable-actor-schema-inventory =
+              pkgs.runCommand "molten-addressable-actor-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  schema_root=${./schemas/preserves-boundaries}
+                  expected_schema_count=11
+                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-addressable-actor-*.preserves' | wc -l)"
+                  test "$actual_schema_count" -eq "$expected_schema_count"
+                  for schema_id in \
+                    molten.addressable-actor.key.v1 \
+                    molten.addressable-actor.profile.v1 \
+                    molten.addressable-actor.survival-matrix.v1 \
+                    molten.addressable-actor.state.v1 \
+                    molten.addressable-actor.request.v1 \
+                    molten.addressable-actor.wake.v1 \
+                    molten.addressable-actor.transition.v1 \
+                    molten.addressable-actor.effect-intent.v1 \
+                    molten.addressable-actor.status.v1 \
+                    molten.addressable-actor.host-binding.v1 \
+                    molten.addressable-actor.commit-receipt.v1
+                  do
+                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
+                  done
+                  touch "$out"
+                '';
             # r[verify molten.world_faults.verification]
             world-faults-octet-deny-all =
               assert executableExtentOctetAdmitted;
@@ -2782,6 +2876,7 @@
             world-state-oracle-source = worldStateOracleSourceCheck;
             prolly-map-profile = prollyMapProfileCheck;
             coordination-delivery-profile = coordinationDeliveryProfileCheck;
+            addressable-actor-profile = addressableActorProfileCheck;
             world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;
