@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: ChaosControl SMR profiles use immutable contracts
-r[molten.testing.chaoscontrol_smr_profile] Molten MUST bind an immutable ChaosControl package revision, workload schema ref, hash profile ref, initial-state ref, observation mode, guest closure, Molten artifact refs, campaign profile, and evidence classes. Workspace-relative paths MUST NOT become evidence-bearing runtime inputs.
+r[molten.testing.chaoscontrol_smr_profile] Molten MUST bind an immutable ChaosControl package revision, workload schema ref, protocol-observation envelope and cohort schema refs, hash profile ref, initial-state ref, observation mode, guest closure, Molten artifact refs, campaign profile, and evidence classes. Workspace-relative paths MUST NOT become evidence-bearing runtime inputs.
 
 #### Scenario: Exact producer and consumer cohort is admitted
 - GIVEN all producer, schema, guest, Molten, profile, and bound refs are complete and compatible
