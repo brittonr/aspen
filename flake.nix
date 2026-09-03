@@ -891,6 +891,53 @@
           cp ${./checks/world-state-oracle-octet/src/lib.rs} "$out/src/lib.rs"
           cp -R ${./crates/molten-core/src/world_state_oracle} "$out/src/world_state_oracle"
         '';
+        prollyMapOctetWorkspace = pkgs.runCommand "molten-prolly-map-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/prolly-map-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/prolly-map-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/prolly-map-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/prolly-map-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/prolly_map} "$out/src/prolly_map"
+          chmod -R u+w "$out/src/prolly_map"
+          rm -rf "$out/src/prolly_map/tests"
+          mkdir -p "$out/src/prolly_map/tests"
+          cp ${./checks/prolly-map-octet/empty-tests.rs} "$out/src/prolly_map/tests/mod.rs"
+        '';
+        coordinationDeliveryOctetWorkspace =
+          pkgs.runCommand "molten-coordination-delivery-octet-workspace" { }
+            ''
+              mkdir -p "$out/src"
+              cp ${./checks/coordination-delivery-octet/Cargo.toml} "$out/Cargo.toml"
+              cp ${./checks/coordination-delivery-octet/Cargo.lock} "$out/Cargo.lock"
+              cp ${./checks/coordination-delivery-octet/dylint.toml} "$out/dylint.toml"
+              cp ${./checks/coordination-delivery-octet/src/lib.rs} "$out/src/lib.rs"
+              mkdir -p "$out/src/fabric"
+              cp ${./checks/coordination-delivery-octet/src/fabric/mod.rs} \
+                "$out/src/fabric/mod.rs"
+              cp ${./checks/coordination-delivery-octet/src/fabric/time.rs} \
+                "$out/src/fabric/time.rs"
+              cp -R ${./crates/molten-core/src/coordination_delivery} "$out/src/coordination_delivery"
+              chmod -R u+w "$out/src/coordination_delivery"
+              rm -rf "$out/src/coordination_delivery/tests.rs"
+              cp ${./checks/coordination-delivery-octet/empty-tests.rs} \
+                "$out/src/coordination_delivery/tests.rs"
+            '';
+        addressableActorOctetWorkspace = pkgs.runCommand "molten-addressable-actor-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/addressable-actor-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/addressable-actor-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/addressable-actor-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/addressable-actor-octet/src/lib.rs} "$out/src/lib.rs"
+          cp ${./checks/addressable-actor-octet/src/fabric.rs} "$out/src/fabric.rs"
+          mkdir -p "$out/src/system_extension"
+          cp ${./checks/addressable-actor-octet/src/system_extension/mod.rs} \
+            "$out/src/system_extension/mod.rs"
+          cp -R ${./crates/molten-core/src/addressable_actor} "$out/src/addressable_actor"
+          chmod -R u+w "$out/src/addressable_actor"
+          rm -rf "$out/src/addressable_actor/tests.rs"
+          cp ${./checks/addressable-actor-octet/empty-tests.rs} \
+            "$out/src/addressable_actor/tests.rs"
+        '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
@@ -1566,6 +1613,126 @@
                     echo "effect or vendor type leaked into the oracle core" >&2
                     exit 1
                   fi
+                  touch "$out"
+                '';
+            prollyMapProfileCheck =
+              pkgs.runCommand "molten-prolly-map-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/prolly-map/*.ncl \
+                    config/prolly-map/fixtures/negative/*.ncl
+                  nickel export config/prolly-map/profile.ncl \
+                    --format json --output "$TMPDIR/profile.json"
+                  cmp config/prolly-map/generated/profile.json "$TMPDIR/profile.json"
+                  nickel export config/prolly-map/benchmark.ncl \
+                    --format json --output "$TMPDIR/benchmark.json"
+                  cmp config/prolly-map/generated/benchmark.json "$TMPDIR/benchmark.json"
+                  nickel export config/prolly-map/proof-obligations.ncl \
+                    --format json --output "$TMPDIR/proof-obligations.json"
+                  cmp config/prolly-map/generated/proof-obligations.json \
+                    "$TMPDIR/proof-obligations.json"
+                  for fixture in config/prolly-map/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative Prolly map fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if rg -n 'std::fs|std::path|std::env|std::time|redb::|cap_std::|std::process|println!|eprintln!' \
+                    crates/molten-core/src/prolly_map; then
+                    echo "effect or infrastructure type leaked into the Prolly map core" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
+            coordinationDeliveryProfileCheck =
+              pkgs.runCommand "molten-coordination-delivery-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/coordination-delivery/*.ncl \
+                    config/coordination-delivery/fixtures/negative/*.ncl
+                  nickel export config/coordination-delivery/profile.ncl \
+                    --format json --output "$TMPDIR/profile.json"
+                  cmp config/coordination-delivery/generated/profile.json \
+                    "$TMPDIR/profile.json"
+                  for fixture in config/coordination-delivery/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative coordination delivery fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if rg -n 'std::fs|std::path|std::env|std::time|redb::|cap_std::|std::process|println!|eprintln!' \
+                    crates/molten-core/src/coordination_delivery; then
+                    echo "effect or infrastructure type leaked into the coordination delivery core" >&2
+                    exit 1
+                  fi
+                  rg -Fq 'pub trait DeliveryCommitPort' \
+                    src/coordination_delivery/ports.rs
+                  rg -Fq 'pub trait DeliveryTimerPort' \
+                    src/coordination_delivery/ports.rs
+                  rg -Fq 'pub trait DeliveryStatusPort' \
+                    src/coordination_delivery/ports.rs
+                  touch "$out"
+                '';
+            addressableActorProfileCheck =
+              pkgs.runCommand "molten-addressable-actor-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/addressable-actor/*.ncl \
+                    config/addressable-actor/fixtures/negative/*.ncl
+                  nickel export config/addressable-actor/profile.ncl \
+                    --format json --output "$TMPDIR/profile.json"
+                  cmp config/addressable-actor/generated/profile.json \
+                    "$TMPDIR/profile.json"
+                  for fixture in config/addressable-actor/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative addressable actor fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if rg -n 'std::fs|std::path|std::env|std::time|redb::|cap_std::|std::process|println!|eprintln!' \
+                    crates/molten-core/src/addressable_actor; then
+                    echo "effect or infrastructure type leaked into the addressable actor core" >&2
+                    exit 1
+                  fi
+                  rg -Fq 'pub trait ActorCommitPort' src/addressable_actor/ports.rs
+                  rg -Fq 'pub trait ActorEffectPort' src/addressable_actor/ports.rs
+                  rg -Fq 'pub trait ActorStatusPort' src/addressable_actor/ports.rs
                   touch "$out"
                 '';
             worldOperatorProfileCheck =
@@ -2452,6 +2619,131 @@
                   done
                   touch "$out"
                 '';
+            # r[verify molten.prolly_map.verification]
+            prolly-map-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = prollyMapOctetWorkspace;
+                packages = [ "molten-prolly-map-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/prolly-map-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            prolly-map-schema-inventory =
+              pkgs.runCommand "molten-prolly-map-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  schema_root=${./schemas/preserves-boundaries}
+                  expected_schema_count=10
+                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-prolly-*.preserves' | wc -l)"
+                  test "$actual_schema_count" -eq "$expected_schema_count"
+                  for schema_id in \
+                    molten.prolly-map-profile.v1 \
+                    molten.prolly-leaf-node.v1 \
+                    molten.prolly-internal-node.v1 \
+                    molten.prolly-map-root.v1 \
+                    molten.prolly-map-edit-plan.v1 \
+                    molten.prolly-map-diff.v1 \
+                    molten.prolly-map-gc-plan.v1 \
+                    molten.prolly-map-publication-receipt.v1 \
+                    molten.prolly-map-differential.v1 \
+                    molten.prolly-map-benchmark.v1
+                  do
+                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
+                  done
+                  touch "$out"
+                '';
+            # r[verify molten.coordination_delivery.final_validation]
+            coordination-delivery-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = coordinationDeliveryOctetWorkspace;
+                packages = [ "molten-coordination-delivery-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/coordination-delivery-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            coordination-delivery-schema-inventory =
+              pkgs.runCommand "molten-coordination-delivery-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  schema_root=${./schemas/preserves-boundaries}
+                  expected_schema_count=17
+                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-coordination-delivery-*.preserves' | wc -l)"
+                  test "$actual_schema_count" -eq "$expected_schema_count"
+                  for schema_id in \
+                    molten.coordination-delivery-manifest.v1 \
+                    molten.coordination-delivery-policy.v1 \
+                    molten.coordination-delivery-host-binding.v1 \
+                    molten.coordination-delivery-item.v1 \
+                    molten.coordination-delivery-token.v1 \
+                    molten.coordination-delivery-attempt.v1 \
+                    molten.coordination-delivery-state.v1 \
+                    molten.coordination-delivery-ack.v1 \
+                    molten.coordination-delivery-nack.v1 \
+                    molten.coordination-delivery-expiry.v1 \
+                    molten.coordination-delivery-retry.v1 \
+                    molten.coordination-delivery-dead-letter.v1 \
+                    molten.coordination-delivery-redrive.v1 \
+                    molten.coordination-delivery-transition.v1 \
+                    molten.coordination-delivery-status.v1 \
+                    molten.coordination-delivery-commit-receipt.v1 \
+                    molten.coordination-delivery-worker-plan.v1
+                  do
+                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
+                  done
+                  touch "$out"
+                '';
+            # r[verify molten.addressable_actor.verification]
+            addressable-actor-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = addressableActorOctetWorkspace;
+                packages = [ "molten-addressable-actor-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/addressable-actor-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            addressable-actor-schema-inventory =
+              pkgs.runCommand "molten-addressable-actor-schema-inventory"
+                {
+                  nativeBuildInputs = [ pkgs.ripgrep ];
+                }
+                ''
+                  schema_root=${./schemas/preserves-boundaries}
+                  expected_schema_count=11
+                  actual_schema_count="$(find "$schema_root" -maxdepth 1 -type f -name 'molten-addressable-actor-*.preserves' | wc -l)"
+                  test "$actual_schema_count" -eq "$expected_schema_count"
+                  for schema_id in \
+                    molten.addressable-actor.key.v1 \
+                    molten.addressable-actor.profile.v1 \
+                    molten.addressable-actor.survival-matrix.v1 \
+                    molten.addressable-actor.state.v1 \
+                    molten.addressable-actor.request.v1 \
+                    molten.addressable-actor.wake.v1 \
+                    molten.addressable-actor.transition.v1 \
+                    molten.addressable-actor.effect-intent.v1 \
+                    molten.addressable-actor.status.v1 \
+                    molten.addressable-actor.host-binding.v1 \
+                    molten.addressable-actor.commit-receipt.v1
+                  do
+                    rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
+                  done
+                  touch "$out"
+                '';
             # r[verify molten.world_faults.verification]
             world-faults-octet-deny-all =
               assert executableExtentOctetAdmitted;
@@ -2582,6 +2874,9 @@
             world-faults-profile = worldFaultsProfileCheck;
             world-state-oracle-profile = worldStateOracleProfileCheck;
             world-state-oracle-source = worldStateOracleSourceCheck;
+            prolly-map-profile = prollyMapProfileCheck;
+            coordination-delivery-profile = coordinationDeliveryProfileCheck;
+            addressable-actor-profile = addressableActorProfileCheck;
             world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;

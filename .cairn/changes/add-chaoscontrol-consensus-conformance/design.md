@@ -86,7 +86,7 @@ Consensus execution, guest startup, Nix materialization, filesystem access, KVM 
 
 ## Dependencies and blocker
 
-Implementation is blocked until ChaosControl archives a versioned SMR chain-workload contract and accepted producer evidence classes. Foundation artifacts and local negative fixtures can proceed before that handoff.
+Implementation is blocked until ChaosControl archives versioned SMR chain-workload and protocol-observation-cohort contracts with accepted producer evidence classes. Foundation artifacts and local negative fixtures can proceed before that handoff.
 
 The integration also requires a production-shaped multi-node Molten consensus guest profile. If that profile cannot use admitted cross-process transport, the KVM tasks remain blocked rather than substituting an in-process model.
 

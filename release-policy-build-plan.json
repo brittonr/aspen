@@ -1,16 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "4831149e509872705a47b22aeb5e48e06a2eb7b15524fc09ee7cbf766ffcf935",
-  "inputsHash": "33220a8c21ad48beb848b8ca8860032dc9bb7e1b99c8f628bd48d489c18bf18c",
+  "cargoLockHash": "6393384ce712610bed165680cd20cc1b097a56fbaf8584c46084b44562aed247",
+  "inputsHash": "03f37aae3b6728240778c7d4eacd6eb50facc54eca211835a5aacfcd11c74811",
   "crates": {
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
@@ -791,7 +790,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -823,12 +822,20 @@
           "externCrateName": "choregraph_history"
         },
         {
+          "packageId": "git+https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#content-identity-core@0.1.0",
+          "externCrateName": "content_identity_core"
+        },
+        {
           "packageId": "git+ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0",
           "externCrateName": "kamacite_core"
         },
         {
           "packageId": "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0",
           "externCrateName": "schema_migration_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
         },
         {
           "packageId": "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62#transactional-reconciliation-core@0.1.0",
@@ -847,7 +854,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -863,7 +870,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-doltlite-oracle-drain-20260828/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

@@ -1,0 +1,7 @@
+<preserves-boundary-schema-artifact-v1
+  <family "molten-addressable-actor-state">
+  <version "v1">
+  <preserves-schema-version "0.4.2">
+  <record-label "molten-addressable-actor-state-v1">
+  <schema-id "molten.addressable-actor.state.v1">
+  <arity 17>>

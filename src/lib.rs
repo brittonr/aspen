@@ -11,6 +11,8 @@ macro_rules! compat_module {
     };
 }
 
+pub mod addressable_actor;
+
 #[doc(hidden)]
 #[path = "audit/ast_grep.rs"]
 pub mod ast_grep_runtime_authority_core;
@@ -46,6 +48,7 @@ compat_module!(coordination, orchestration);
 #[path = "cluster.rs"]
 pub mod cluster;
 pub mod cluster_harness;
+pub mod coordination_delivery;
 #[doc(hidden)]
 #[path = "delivery/idempotency.rs"]
 pub mod dedupe;
@@ -53,6 +56,7 @@ compat_module!(delivery_idempotency, dedupe);
 #[doc(hidden)]
 #[path = "deterministic/replay.rs"]
 pub mod playback;
+pub mod prolly_map;
 compat_module!(deterministic_replay, playback);
 #[doc(hidden)]
 #[path = "effects/mod.rs"]

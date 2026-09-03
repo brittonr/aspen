@@ -20,6 +20,6 @@ The integration must exercise Molten code and preserve Molten authority, policy,
 
 - **Files**: consensus observation and harness code, cluster fixtures, guest packaging, Nix integration, evidence parsers, docs, and consensus/testing-harness Cairn specs.
 - **Testing**: pure chain projection, operation identity, no-fault convergence, divergence fixture, partitions, quorum loss, crash/restart, snapshot catch-up, replay, malformed evidence, and claim-promotion denial.
-- **Dependencies**: implementation depends on an archived versioned ChaosControl `add-smr-chain-workload` contract and immutable package identity.
+- **Dependencies**: implementation depends on archived versioned ChaosControl SMR-chain and protocol-observation-cohort contracts with immutable package identities.
 - **Portability**: integration must use immutable source and artifact refs. Workspace-relative sibling paths remain development conveniences only.
 - **Claims**: passing evidence covers only the exact Molten, ChaosControl, guest, profile, fault, and replay cohort.

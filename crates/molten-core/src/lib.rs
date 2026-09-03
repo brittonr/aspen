@@ -7,10 +7,12 @@
 //! Wasmtime, Steel, Nickel runtime, Iroh, or CLI dependencies. It owns small
 //! in-memory decision cores that adapter shells can call before side effects.
 
+pub mod addressable_actor;
 pub mod cluster_harness;
 pub mod codec;
 pub mod content_replication;
 pub mod content_store_adapter;
+pub mod coordination_delivery;
 pub mod dag_sync;
 pub mod dependency;
 #[cfg(feature = "executable-extents")]
@@ -29,6 +31,7 @@ pub mod nominal;
 pub mod planning;
 pub mod policy;
 pub mod preserves_profile;
+pub mod prolly_map;
 pub mod release_dependency;
 pub mod stack;
 pub mod system_extension;
