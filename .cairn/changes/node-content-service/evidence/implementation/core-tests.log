@@ -1,0 +1,19 @@
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core)
+    Finished `test` profile [unoptimized] target(s) in 13.85s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/molten_core-7a5c4cbd2780236d)
+
+running 11 tests
+test content_store_adapter::node_service::tests::archive_identity_fails_closed ... ok
+test content_store_adapter::node_service::tests::bounded_specific_grant_admits ... ok
+test content_store_adapter::read_grant::tests::explicit_grant_is_reader_and_manifest_specific ... ok
+test content_store_adapter::node_service::tests::malformed_empty_duplicate_and_overbound_requests_deny ... ok
+test content_store_adapter::read_grant::tests::malformed_duplicate_empty_and_overbound_policy_is_rejected ... ok
+test content_store_adapter::tests::protection_handles_pins_and_unprotect_never_grant_read_or_delete_authority ... ok
+test content_store_adapter::tests::repeated_chunk_refs_preserve_order_without_changing_manifest_identity ... ok
+test content_store_adapter::tests::verification_advances_in_order_and_corruption_never_becomes_available ... ok
+test content_store_adapter::tests::preflight_is_bounded_capability_checked_and_range_specific ... ok
+test content_store_adapter::tests::verified_partial_state_resumes_and_disconnect_is_uncertain ... ok
+test content_store_adapter::tests::unsupported_transform_overbound_queue_reordering_and_truncation_deny_before_availability ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 353 filtered out; finished in 0.00s
+

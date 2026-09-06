@@ -1,0 +1,31 @@
+Running as unit: molten-node-service-build-v2.service; invocation ID: 3b224bb3ae2643b08e5168cb244675d3
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `test` profile [unoptimized] target(s) in 0.88s
+     Running tests/cairn_policy_migration.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/cairn_policy_migration-db5481580a859187)
+
+running 3 tests
+test existing_gate_authority_and_artifact_graph_are_preserved ... ok
+test weaker_gate_missing_requirement_and_added_profile_fail ... ok
+test runtime_admits_policy_and_rejects_bad_graph_and_profile ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `test` profile [unoptimized] target(s) in 1.61s
+     Running tests/node_content_service.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/node_content_service-5498a3c56df8546b)
+
+running 2 tests
+test unknown_json_authority_is_rejected ... ok
+test denied_policy_precedes_root_and_listener_effects ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core)
+   Compiling molten-node-host v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-host)
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `dev` profile [unoptimized] target(s) in 1m 00s
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 1min 3.085s
+             CPU time consumed: 1min 27.903s
+                   Memory peak: 2.7G (swap: 0B)

@@ -1,0 +1,38 @@
+{
+  "change": "node-content-service",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "87cc56b6ea964ff35a902df82f1b605c3e18e0a9aea5b74f6bcece8503f6e6c2",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "d504b9473640f58c37425e4c101172bc46fba4e5489dbaecb3a8f5c633722752",
+  "probe_evidence": null,
+  "receipt_hash": "3d723cc314d16d21d835ecf8b72f562dc5b1c12192186ec678bd08519cb941db",
+  "stage": "proposal",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/node-content-service/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 3,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "valid": true,
+  "verdict": "PASS"
+}

@@ -1,10 +1,34 @@
+const NODE_STARTUP_SOURCE_GATE_REQUIRED: &str = "node-startup-source-gate-required: real Octet evidence admission is not wired; synthetic startup evidence is forbidden";
+
+#[cfg(test)]
+fn startup_source_gate() -> Result<IoValue> {
+    crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()
+}
+
+#[cfg(not(test))]
+fn startup_source_gate() -> Result<IoValue> {
+    Err(MoltenError::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED))
+}
+
+// A new real-evidence route must replace this guard with checked admission.
+// There is deliberately no CLI flag, environment override, or manifest fallback.
+fn require_real_content_startup_route() -> Result<()> {
+    Err(MoltenError::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED))
+}
+
 pub fn run_local(input: &RunInput<'_>) -> Result<Run> {
+    let source_gate_value = startup_source_gate()?;
     validate_state_root(input.state_root)?;
     let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
-    run_local_with_root(&root)
+    run_local_admitted_with_root(&root, source_gate_value)
 }
 
 pub fn run_local_with_root(root: &crate::node_state::NodeStateRoot) -> Result<Run> {
+    let source_gate_value = startup_source_gate()?;
+    run_local_admitted_with_root(root, source_gate_value)
+}
+
+fn run_local_admitted_with_root(root: &crate::node_state::NodeStateRoot, source_gate_value: IoValue) -> Result<Run> {
     ensure_state_layout(root)?;
     verify_restart_state(root)?;
     let config_value = read_preserves(root, &fixed_node_path(CONFIG_FILE)?)?;
@@ -15,7 +39,6 @@ pub fn run_local_with_root(root: &crate::node_state::NodeStateRoot) -> Result<Ru
     let capability_receipt_refs = capability_receipt_refs(root)?;
     let version_refs = vec![local_ref("molten-binary-version", env!("CARGO_PKG_VERSION"))?];
     let profile_metadata_refs = profile_metadata_refs(root)?;
-    let source_gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
     let source_gate_ref = crate::preserves_rail::canonical_hash(&source_gate_value)?;
     let run = crate::node_runtime::start_node_runtime(&crate::node_runtime::NodeRuntimeStartInput {
         config_value,

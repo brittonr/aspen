@@ -9,12 +9,18 @@ r[molten.node_content.inputs] Validation MUST use the existing pinned source rev
 - THEN its Git and locked NAR identities match before compilation and consumer lockfiles remain unchanged.
 
 ### Requirement: Normal node lifecycle owns content service
-r[molten.node_content.lifecycle] Protected content serving MUST compose with the normal node startup, capability-rooted state, service lifecycle, and stop path. The node MUST require explicit read grants before content exposure. Pins and transport locators MUST NOT create read authority.
+r[molten.node_content.lifecycle] Protected content serving MUST compose with the normal node startup, capability-rooted state, service lifecycle, and stop path. The node MUST require explicit read grants before content exposure. Pins and transport locators MUST NOT create read authority. Production startup MUST NOT manufacture clean source-gate receipts through test helpers. Until a real source-gate admission path exists, normal startup and content exposure MUST fail closed.
 
 #### Scenario: Node stops
 - GIVEN a normal node with an active protected content service
 - WHEN its normal lifecycle stops
 - THEN its content router stops and the node records the bounded outcome without retaining an independent fixture server.
+
+#### Scenario: Real startup evidence is unavailable
+- GIVEN no admitted real source-gate evidence path
+- WHEN an operator requests normal startup or protected serving
+- THEN the node rejects before startup-state mutation or listener creation
+- AND a minimal workspace manifest cannot activate synthetic clean evidence.
 
 ### Requirement: Real normal-service VM proof
 r[molten.node_content.vm] Tests MUST use normal node and client commands in distinct VMs without shared payload mounts. They MUST cover exact transfer, server-side denial, wrong identity, clean storage restart, and damaged-store rejection. The retrieved archive MUST pass the unchanged Mantle/Onix native replay separately.

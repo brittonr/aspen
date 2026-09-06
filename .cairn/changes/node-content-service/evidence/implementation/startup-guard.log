@@ -1,0 +1,33 @@
+Warning: can't set `wrap_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `comment_width = 100`, unstable features are only available in nightly channel.
+Warning: can't set `where_single_line = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `overflow_delimited_expr = true`, unstable features are only available in nightly channel.
+Warning: can't set `trailing_comma = Vertical`, unstable features are only available in nightly channel.
+Warning: can't set `inline_attribute_width = 0`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Running as unit: molten-node-startup-guard.service; invocation ID: 28612273012842d9a590feb09374da5c
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core)
+   Compiling molten-node-host v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-host)
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `test` profile [unoptimized] target(s) in 1m 27s
+     Running tests/node_content_service.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/node_content_service-5498a3c56df8546b)
+
+running 4 tests
+test unknown_json_authority_is_rejected ... ok
+test valid_content_policy_cannot_bypass_missing_real_startup_evidence ... ok
+test denied_policy_precedes_root_and_listener_effects ... ok
+test production_cli_never_manufactures_a_clean_startup_gate ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+    Checking molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `dev` profile [unoptimized] target(s) in 50.38s
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `dev` profile [unoptimized] target(s) in 54.50s
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 3min 12.719s
+             CPU time consumed: 3min 55.464s
+                   Memory peak: 4.9G (swap: 0B)

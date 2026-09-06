@@ -1,0 +1,83 @@
+{
+  "change": "node-content-service",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "e01d0c3ee2f646ca512e888ef956e3fb77083ff7eb0c75fbed1a6989f9ee4b8c",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "d504b9473640f58c37425e4c101172bc46fba4e5489dbaecb3a8f5c633722752",
+  "probe_evidence": {
+    "declarations_present": false,
+    "probes": []
+  },
+  "receipt_hash": "cc7911f94b2e45db8a8706d8165ed268e7f6490b0198c66ea58d1cb65627e5b0",
+  "stage": "tasks",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/node-content-service/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 11,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/node-content-service/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 3,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/node-content-service/specs/node-content-service/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 5,
+      "substantive_lines": 20,
+      "substantive_requirement_blocks": 4,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 6,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/node-content-service/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 6,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 6,
+      "task_done": 3,
+      "task_in_progress": 0,
+      "task_todo": 3
+    }
+  ],
+  "valid": true,
+  "verdict": "PASS"
+}

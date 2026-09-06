@@ -13,6 +13,7 @@ pub fn serve_control_content(
 ) -> Result<ControlServe> {
     let plan = crate::content_store_adapter::NodeContentPlan::admit(config, policy_ref, input.max_ticks)
         .map_err(MoltenError::invalid_harness)?;
+    require_real_content_startup_route()?;
     let root = crate::node_state::NodeStateRoot::open_existing(input.state_root)?;
     validate_state_root(input.state_root)?;
     serve_control_with_root(&root, input, Some(&plan))

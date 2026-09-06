@@ -24,6 +24,12 @@ The authored Nickel policy lagged the committed runtime projection. The migratio
 
 The node host owns atomic leaf replacement without exporting directory capabilities. Content status uses that operation. The optional listener starts after normal startup and service-lock admission, runs inside the normal tick loop, and closes before the normal service receipt completes. Its tick-wait budget is finite; it is not a hard wall-clock bound on arbitrary blocking filesystem calls.
 
+## Startup evidence blocker found in the real VM run
+
+The normal `run_local_with_root` path calls `synthetic_clean_octet_gate_receipt_for_tests`. The first VM attempt stopped at its ambient `/Cargo.toml` read before a listener started. Supplying a minimal manifest, as the older Onix compatibility adapter does, would permit manufactured clean findings and fixture artifact refs. This change must not use that workaround.
+
+Production startup and content serving therefore remain blocked until a real, source-bound Octet evidence admission route exists. Test-only startup fixtures can remain behind `cfg(test)`. No flag, environment variable, or workspace file can bypass the production guard. The installed Rust 1.97.1 and focused Clippy results do not replace the exact nightly/Octet gate.
+
 ## Evidence
 
 Use separate VMs, no shared payload mount, and only an initial storage-VM archive seed. Require transfer, server denial, wrong digest, clean restart, damaged-store failure, and the unchanged native replay. No host listener or full-daemon success claim is permitted before these commands actually run.

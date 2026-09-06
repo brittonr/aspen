@@ -1,0 +1,66 @@
+{
+  "change": "node-content-service",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "9ef6bac642c8965770879b4ab170b0c916d3aa9e11b3dd3dac960e4386358fcb",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "d504b9473640f58c37425e4c101172bc46fba4e5489dbaecb3a8f5c633722752",
+  "probe_evidence": null,
+  "receipt_hash": "af1e7ca6aefb5e6f131f1b57cefd4275149c0272afa9bf3cb923fe07c198d1c9",
+  "stage": "design",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/node-content-service/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 11,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/node-content-service/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 3,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/node-content-service/specs/node-content-service/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 5,
+      "substantive_lines": 20,
+      "substantive_requirement_blocks": 4,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "valid": true,
+  "verdict": "PASS"
+}
