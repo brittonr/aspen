@@ -8,8 +8,8 @@ description = "Capability-rooted node host boundary for Molten"
 [dependencies]
 cap-fs-ext = "3"
 cap-std = "3"
+cap-tempfile = "3"
 molten-core = { path = "../molten-core" }
 
 [dev-dependencies]
-cap-tempfile = "3"
 toml = "0.9"

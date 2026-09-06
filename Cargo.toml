@@ -60,6 +60,7 @@ choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9J
 chaoscontrol-snapshot-descriptor = { git = "https://github.com/brittonr/chaoscontrol.git", rev = "b8c440ea3b19df796542e58e8ee36200e1c3db85", version = "0.1.0" }
 cap-fs-ext = "3"
 cap-std = "3"
+cap-tempfile = "3"
 data-encoding = { version = "2", optional = true }
 executable-extent-conformance = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 executable-extent-core = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
@@ -101,7 +102,6 @@ wit-bindgen = "0.46"
 zstd = "0.13"
 
 [dev-dependencies]
-cap-tempfile = "3"
 schema-identity-conformance = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "2562c8aa38a034061f9af9f3e17280494a5b8de2" }
 hegeltest = { git = "https://github.com/hegeldev/hegel-rust", rev = "ed949b8084595cb467e983747f1089e214965ac6", features = ["native"] }
 

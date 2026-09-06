@@ -1,11 +1,19 @@
 let Contracts = import "../contracts.ncl" in
-(import "../default.ncl") & {
-  schemas | force = [{
-    id = "duplicate-artifact-schema",
-    description = "duplicate artifact id fixture",
-    artifacts = [
-      { id = "proposal", generates = "proposal.md", requires = [] },
-      { id = "proposal", generates = "proposal-copy.md", requires = [] },
-    ],
-  }],
-} | Contracts.Policy
+let Base = import "../default.ncl" in
+(
+  Base
+  & {
+    schemas | force =
+      std.array.map
+        (fun schema =>
+          if schema.id == "spec-driven" then
+            schema
+            & {
+              artifacts | force = schema.artifacts @ [std.array.first schema.artifacts],
+            }
+          else
+            schema
+        )
+        Base.schemas,
+  }
+) | Contracts.Policy

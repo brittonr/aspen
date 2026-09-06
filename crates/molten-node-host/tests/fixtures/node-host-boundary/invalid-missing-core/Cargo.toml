@@ -7,3 +7,4 @@ publish = false
 [dependencies]
 cap-fs-ext = "3"
 cap-std = "3"
+cap-tempfile = "3"

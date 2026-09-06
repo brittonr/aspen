@@ -185,6 +185,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
         max_ticks,
         max_requests_per_tick,
         live_iroh,
+        content_config,
         live_max_events,
         live_event_timeout_ms,
         service_receipt_out,
@@ -202,6 +203,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
                 max_ticks,
                 max_requests_per_tick,
                 live_iroh,
+                content_config,
                 live_max_events,
                 live_event_timeout_ms,
                 service_receipt_out,
@@ -212,13 +214,27 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
             supervisor_policy_value.as_ref(),
         )
     } else {
-        let served = molten::node_daemon::serve_control(&molten::node_daemon::ControlServeInput {
+        let request = molten::node_daemon::ControlServeInput {
             state_root: &state_root,
             topic: &topic,
             max_ticks,
             max_requests_per_tick,
             supervisor_policy_value: supervisor_policy_value.as_ref(),
-        })?;
+        };
+        let served = if let Some(path) = content_config {
+            let bytes = super::content::read_input(&path, 16_384)?;
+            let config = serde_json::from_slice(&bytes).map_err(|error|
+                molten::error::MoltenError::invalid_harness(format!("node content config: {error}")))?;
+            let result = molten::node_daemon::serve_control_content(
+                &request, config, molten::preserves_rail::content_ref_from_bytes(&bytes),
+            )?;
+            if result.decision != "pass" {
+                return Err(molten::error::MoltenError::invalid_harness("node content service lifecycle denied"));
+            }
+            result
+        } else {
+            molten::node_daemon::serve_control(&request)?
+        };
         super::core::emit_named_receipt(
             receipt_out.as_ref(),
             "node control service run receipt",

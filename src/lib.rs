@@ -152,6 +152,8 @@ pub mod daemon_core;
 pub mod nativehostnode;
 #[path = "node/state.rs"]
 pub mod node_state;
+#[path = "node/content.rs"]
+pub mod node_content;
 compat_module!(node_daemon, daemon_core);
 #[doc(hidden)]
 #[path = "node/identity.rs"]

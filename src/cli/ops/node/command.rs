@@ -21,6 +21,7 @@ pub(crate) enum Top {
     Run(base::Run),
     RunLoop(base::RunLoop),
     Serve(base::Serve),
+    Content(super::content::Command),
     Status(base::Status),
     Stop(base::Stop),
     Show(base::Show),

@@ -5,6 +5,8 @@ pub(crate) mod command;
 mod authority;
 #[path = "node/control.rs"]
 mod control;
+#[path = "node/content.rs"]
+mod content;
 #[path = "node/core.rs"]
 mod core;
 #[path = "node/health.rs"]
@@ -24,6 +26,7 @@ pub(crate) fn run(command: Command) -> molten::error::Result<()> {
         command::Top::Run(input) => lifecycle::run(input),
         command::Top::RunLoop(input) => lifecycle::run_loop(input),
         command::Top::Serve(input) => lifecycle::serve(input),
+        command::Top::Content(input) => content::run(input),
         command::Top::Status(input) => lifecycle::status(input),
         command::Top::Stop(input) => lifecycle::stop(input),
         command::Top::Show(input) => lifecycle::show(input),

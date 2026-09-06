@@ -4892,136 +4892,6 @@
         "valid",
         "verdict"
       ]
-    },
-    {
-      "action_keys": [],
-      "artifact_keys": [],
-      "case_keys": [],
-      "command": "evidence function-object validate",
-      "hash_fields": [
-        "object_hash"
-      ],
-      "issue_keys": [
-        "actual",
-        "code",
-        "expected",
-        "field_path"
-      ],
-      "mismatch_keys": [],
-      "replay_evidence_keys": [],
-      "top_level_keys": [
-        "command",
-        "family",
-        "issues",
-        "object_hash",
-        "schema",
-        "valid",
-        "verdict"
-      ]
-    },
-    {
-      "action_keys": [],
-      "artifact_keys": [],
-      "case_keys": [],
-      "command": "evidence name-pointer validate",
-      "hash_fields": [
-        "pointer_hash"
-      ],
-      "issue_keys": [
-        "actual",
-        "code",
-        "expected",
-        "field_path"
-      ],
-      "mismatch_keys": [],
-      "replay_evidence_keys": [],
-      "top_level_keys": [
-        "command",
-        "family",
-        "issues",
-        "pointer_hash",
-        "schema",
-        "valid",
-        "verdict"
-      ]
-    },
-    {
-      "action_keys": [],
-      "artifact_keys": [],
-      "case_keys": [],
-      "command": "evidence export-bundle validate",
-      "hash_fields": [
-        "bundle_hash"
-      ],
-      "issue_keys": [
-        "actual",
-        "code",
-        "expected",
-        "field_path"
-      ],
-      "mismatch_keys": [],
-      "replay_evidence_keys": [],
-      "top_level_keys": [
-        "bundle_hash",
-        "command",
-        "family",
-        "issues",
-        "schema",
-        "valid",
-        "verdict"
-      ]
-    },
-    {
-      "action_keys": [],
-      "artifact_keys": [],
-      "case_keys": [],
-      "command": "evidence downstream-pilot validate",
-      "hash_fields": [
-        "pilot_hash"
-      ],
-      "issue_keys": [
-        "actual",
-        "code",
-        "expected",
-        "field_path"
-      ],
-      "mismatch_keys": [],
-      "replay_evidence_keys": [],
-      "top_level_keys": [
-        "command",
-        "family",
-        "issues",
-        "pilot_hash",
-        "schema",
-        "valid",
-        "verdict"
-      ]
-    },
-    {
-      "action_keys": [],
-      "artifact_keys": [],
-      "case_keys": [],
-      "command": "evidence circuit-primitive validate",
-      "hash_fields": [
-        "graph_hash"
-      ],
-      "issue_keys": [
-        "actual",
-        "code",
-        "expected",
-        "field_path"
-      ],
-      "mismatch_keys": [],
-      "replay_evidence_keys": [],
-      "top_level_keys": [
-        "command",
-        "family",
-        "graph_hash",
-        "issues",
-        "schema",
-        "valid",
-        "verdict"
-      ]
     }
   ],
   "registry_label_policy": {
@@ -5628,16 +5498,6 @@
         "id": "depends",
         "kind": "depends-prefix",
         "token": "[depends:<task-or-id>]"
-      },
-      {
-        "id": "task",
-        "kind": "task-id-prefix",
-        "token": "[task:<id>]"
-      },
-      {
-        "id": "after",
-        "kind": "task-predecessor-prefix",
-        "token": "[after:<task-id>]"
       }
     ],
     "stages": [
@@ -5649,8 +5509,6 @@
     "default_profile": "cairn-default",
     "profiles": [
       {
-        "anchor_kind": "exact_marker_bytes",
-        "assurance_level": "declared",
         "evidence_sources": [
           {
             "extensions": [
@@ -5700,8 +5558,6 @@
         ]
       },
       {
-        "anchor_kind": "exact_marker_bytes",
-        "assurance_level": "declared",
         "evidence_sources": [
           {
             "extensions": [

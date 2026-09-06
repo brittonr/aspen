@@ -14,9 +14,15 @@ The receiving normal CLI path must admit independent manifest/provider/socket ex
 
 ## Build prerequisites
 
-The exact executable-extent and VM Cohort Git commits are available through owner repositories on the desktop. Invocation-local Git cache transport can recover those objects. Commit and locked NAR identity must match before use. Manifests, source URLs, lockfiles, and the desktop toolchain remain unchanged.
+The exact executable-extent and VM Cohort Git commits are available through owner repositories on the desktop. Invocation-local Git cache transport can recover those objects. Commit and locked NAR identity must match before use. Recovery kept manifests, source URLs, lockfiles, and the desktop toolchain unchanged. Service implementation promotes the already-locked `cap-tempfile` dependency from test-only to runtime use in Molten and `molten-node-host`. It supplies atomic capability-relative publication. Neither lockfile nor any dependency revision changes.
 
 Current dependencies require Rust 1.96 or newer. An existing installed Rust 1.97.1 is available for ordinary compilation. It is not the repository's exact nightly or an Octet acceptance substitute. Cairn 3b4c280 is the producer's pinned tool version, but that tool expects the older `cairn/` layout. The present tree has active content in `.cairn/` and retained history under `cairn/archive/`. Do not overwrite either tree to force a gate.
+
+## Implemented policy migration
+
+The authored Nickel policy lagged the committed runtime projection. The migration preserves that projection's trust hashes, gate settings, workflow choices, replay cases, and receipt identities. It adds required traceability metadata and task-order marker definitions. Five missing receipt-schema rows return without deleting their existing contract references. A pinned Cairn Nickel snapshot supplies shared schemas. Regression tests reject weaker gates and missing prior records.
+
+The node host owns atomic leaf replacement without exporting directory capabilities. Content status uses that operation. The optional listener starts after normal startup and service-lock admission, runs inside the normal tick loop, and closes before the normal service receipt completes. Its tick-wait budget is finite; it is not a hard wall-clock bound on arbitrary blocking filesystem calls.
 
 ## Evidence
 

@@ -1,4 +1,5 @@
-const REQUIRED_PRODUCTION_DEPENDENCIES: [&str; 3] = ["cap-fs-ext", "cap-std", "molten-core"];
+// cap-tempfile supplies capability-relative atomic leaf publication, not a test harness.
+const REQUIRED_PRODUCTION_DEPENDENCIES: [&str; 4] = ["cap-fs-ext", "cap-std", "cap-tempfile", "molten-core"];
 
 fn production_dependencies(source: &str) -> Result<std::collections::BTreeSet<String>, String> {
     let manifest = source.parse::<toml::Table>().map_err(|error| error.to_string())?;

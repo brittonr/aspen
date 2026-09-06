@@ -75,6 +75,23 @@ impl NodeStateNamespace {
         write_regular_file(&self.dir, path.as_path(), bytes, None)
     }
 
+    /// Replace one bounded regular leaf atomically without exporting its directory capability.
+    /// This is file visibility, not a power-loss durability or multi-writer transaction guarantee.
+    pub fn write_atomic_leaf(&self, path: &NodeStatePath, bytes: &[u8]) -> crate::error::Result<()> {
+        use std::io::Write;
+        validate_write_size(bytes, MAX_NODE_STATE_FILE_BYTES)?;
+        if path.as_path().components().count() != 1 {
+            return Err(invalid("atomic namespace write requires one leaf"));
+        }
+        if !matches!(self.entry_kind(path)?, None | Some(NodeStateEntryKind::RegularFile)) {
+            return Err(invalid("atomic namespace destination must be a regular file"));
+        }
+        let mut file = cap_tempfile::TempFile::new(&self.dir).map_err(crate::error::MoltenError::from)?;
+        file.write_all(bytes).map_err(crate::error::MoltenError::from)?;
+        file.as_file().sync_all().map_err(crate::error::MoltenError::from)?;
+        file.replace(path.as_path().as_os_str()).map_err(crate::error::MoltenError::from)
+    }
+
     pub fn write_restricted(&self, path: &NodeStatePath, bytes: &[u8], unix_mode: u32) -> crate::error::Result<()> {
         validate_write_size(bytes, MAX_NODE_SECRET_BYTES)?;
         write_regular_file(&self.dir, path.as_path(), bytes, Some(unix_mode))

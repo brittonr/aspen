@@ -18,7 +18,7 @@ async fn serve_node_control_live_listener_with_topic(
         max_requests_per_tick: input.max_requests_per_tick,
         supervisor_policy_value: input.supervisor_policy_value,
     };
-    let service = serve_control_with_root(state_root, &service_input)?;
+    let service = serve_control_with_root(state_root, &service_input, None)?;
     if service.decision != "pass" {
         scan.diagnostics
             .push(format!("node control live listener service drain decision {}", service.decision));

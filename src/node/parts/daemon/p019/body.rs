@@ -2,12 +2,26 @@
 pub fn serve_control(input: &ControlServeInput<'_>) -> Result<ControlServe> {
     let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
-    serve_control_with_root(&state_root, input)
+    serve_control_with_root(&state_root, input, None)
+}
+
+// r[impl molten.node_content.lifecycle]
+pub fn serve_control_content(
+    input: &ControlServeInput<'_>,
+    config: crate::content_store_adapter::NodeContentConfig,
+    policy_ref: String,
+) -> Result<ControlServe> {
+    let plan = crate::content_store_adapter::NodeContentPlan::admit(config, policy_ref, input.max_ticks)
+        .map_err(MoltenError::invalid_harness)?;
+    let root = crate::node_state::NodeStateRoot::open_existing(input.state_root)?;
+    validate_state_root(input.state_root)?;
+    serve_control_with_root(&root, input, Some(&plan))
 }
 
 fn serve_control_with_root(
     state_root: &crate::node_state::NodeStateRoot,
     input: &ControlServeInput<'_>,
+    content: Option<&crate::content_store_adapter::NodeContentPlan>,
 ) -> Result<ControlServe> {
     validate_node_id(input.topic)?;
     ensure_state_layout(state_root)?;
@@ -46,7 +60,16 @@ fn serve_control_with_root(
         supervisor_policy.as_ref(),
         existing_lock.supervisor_receipt_refs,
     )?;
-    let run = run_service_ticks(ServiceTickInput {
+    let mut content_session = match content.map(|plan| crate::node_content::Session::start(
+        state_root, plan, &startup.receipt_ref, &start.service_lock_ref,
+    )).transpose() {
+        Ok(session) => session,
+        Err(error) => {
+            remove_service_lock(state_root, &start.service_lock_ref)?;
+            return Err(error);
+        }
+    };
+    let run_result = run_service_ticks(ServiceTickInput {
         state_root,
         topic: input.topic,
         max_ticks: input.max_ticks,
@@ -55,7 +78,14 @@ fn serve_control_with_root(
         event_capacity: max_ticks.saturating_mul(max_requests_per_tick),
         startup_receipt_ref: &startup.receipt_ref,
         service_lock_ref: &start.service_lock_ref,
-    })?;
+        content: content_session.as_mut(),
+    });
+    let close_result = content_session.map(|session| session.close(state_root)).transpose();
+    if run_result.is_err() || close_result.is_err() {
+        remove_service_lock(state_root, &start.service_lock_ref)?;
+    }
+    close_result?;
+    let run = run_result?;
     let shutdown = note_shutdown_drain(ShutdownDrainInput {
         state_root,
         topic: input.topic,
@@ -96,6 +126,7 @@ struct ServiceTickInput<'a> {
     max_requests_per_tick: u64,
     tick_capacity: usize,
     event_capacity: usize,
+    content: Option<&'a mut crate::node_content::Session>,
     startup_receipt_ref: &'a str,
     service_lock_ref: &'a str,
 }
@@ -293,7 +324,7 @@ fn start_service_run(
     })
 }
 
-fn run_service_ticks(input: ServiceTickInput<'_>) -> Result<ServiceRunParts> {
+fn run_service_ticks(mut input: ServiceTickInput<'_>) -> Result<ServiceRunParts> {
     let mut run = ServiceRunParts {
         heartbeat_receipt_refs: Vec::with_capacity(input.tick_capacity),
         ingress_receipt_refs: Vec::with_capacity(input.event_capacity),
@@ -308,6 +339,9 @@ fn run_service_ticks(input: ServiceTickInput<'_>) -> Result<ServiceRunParts> {
         run.ticks = tick + 1;
         if run_service_tick(&input, &mut run, tick)? {
             break;
+        }
+        if let Some(content) = input.content.as_deref_mut() {
+            content.tick(input.state_root, run.ticks)?;
         }
     }
     if !run.has_stopped {
