@@ -1,0 +1,20 @@
+Six preserved inputs match: compiler, driver, Mantle, native archive, guarded Molten, and original blob fixture.
+Id=molten-octet-pinned-build.service
+ActiveState=inactive
+MainPID=0
+
+Id=molten-octet-smoke.service
+ActiveState=inactive
+MainPID=0
+
+Id=molten-octet-smoke-2.service
+ActiveState=inactive
+MainPID=0
+
+Id=molten-octet-smoke-3.service
+ActiveState=inactive
+MainPID=0
+
+Id=molten-octet-smoke-4.service
+ActiveState=inactive
+MainPID=0

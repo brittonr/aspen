@@ -1,0 +1,10 @@
+[package]
+name = "octet-tool-smoke-positive"
+version = "0.0.0"
+edition = "2024"
+
+[workspace]
+
+[workspace.metadata.octet]
+default_scope = ["--workspace"]
+cargo_check_args = ["--all-targets", "--all-features"]

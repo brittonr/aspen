@@ -1,0 +1,11 @@
+these 10 derivations will be built:
+  /nix/store/0bacp1dcpqfsripxzd6rfzgw9mj0n1my-vendor-registry.drv
+  /nix/store/ahnmv0127bkqsbkhwnp1kzkhrsw0zkjz-Cargo.toml.drv
+  /nix/store/cfjvrzvqsdwx94d37icsvi553jch3681-Cargo.toml.drv
+  /nix/store/i3skv9fswqd0ckgckngcg76k3aaxyq9x-Cargo.toml.drv
+  /nix/store/q5dscxrjwrdp8ranvnkbvmxy865ci946-Cargo.toml.drv
+  /nix/store/j4v1rxig511d615hh58587vxx2k24v9q-source.drv
+  /nix/store/rsv35l964k687msv9xi6s1hs7vn2xv1p-vendor-cargo-deps.drv
+  /nix/store/157zcj9ip85anq4vcibr5pzmfdd9n17d-octet-deps-0.1.0.drv
+  /nix/store/bwmmsqja61wf2jih23ffaa0srrk3yyba-cargo-octet-0.1.0.drv
+  /nix/store/v38pdgsnsx0dmyrh4ihvh9a45mpn2i78-octet-0.1.0.drv

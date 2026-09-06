@@ -1,0 +1,378 @@
+Running as unit: molten-octet-pinned-build.service; invocation ID: 3b1d8e771f374da396f23734ada46749
+these 10 derivations will be built:
+  /nix/store/0bacp1dcpqfsripxzd6rfzgw9mj0n1my-vendor-registry.drv
+  /nix/store/ahnmv0127bkqsbkhwnp1kzkhrsw0zkjz-Cargo.toml.drv
+  /nix/store/cfjvrzvqsdwx94d37icsvi553jch3681-Cargo.toml.drv
+  /nix/store/i3skv9fswqd0ckgckngcg76k3aaxyq9x-Cargo.toml.drv
+  /nix/store/q5dscxrjwrdp8ranvnkbvmxy865ci946-Cargo.toml.drv
+  /nix/store/j4v1rxig511d615hh58587vxx2k24v9q-source.drv
+  /nix/store/rsv35l964k687msv9xi6s1hs7vn2xv1p-vendor-cargo-deps.drv
+  /nix/store/157zcj9ip85anq4vcibr5pzmfdd9n17d-octet-deps-0.1.0.drv
+  /nix/store/bwmmsqja61wf2jih23ffaa0srrk3yyba-cargo-octet-0.1.0.drv
+  /nix/store/v38pdgsnsx0dmyrh4ihvh9a45mpn2i78-octet-0.1.0.drv
+building '/nix/store/0bacp1dcpqfsripxzd6rfzgw9mj0n1my-vendor-registry.drv'...
+building '/nix/store/q5dscxrjwrdp8ranvnkbvmxy865ci946-Cargo.toml.drv'...
+Cargo.toml> 
+building '/nix/store/rsv35l964k687msv9xi6s1hs7vn2xv1p-vendor-cargo-deps.drv'...
+building '/nix/store/i3skv9fswqd0ckgckngcg76k3aaxyq9x-Cargo.toml.drv'...
+Cargo.toml> 
+building '/nix/store/cfjvrzvqsdwx94d37icsvi553jch3681-Cargo.toml.drv'...
+Cargo.toml> 
+building '/nix/store/ahnmv0127bkqsbkhwnp1kzkhrsw0zkjz-Cargo.toml.drv'...
+Cargo.toml> 
+building '/nix/store/j4v1rxig511d615hh58587vxx2k24v9q-source.drv'...
+building '/nix/store/157zcj9ip85anq4vcibr5pzmfdd9n17d-octet-deps-0.1.0.drv'...
+octet-deps> cargoArtifacts not set, will not reuse any cargo artifacts
+octet-deps> Running phase: unpackPhase
+octet-deps> unpacking source archive /nix/store/yfsix8amxc6r80bk8fa2gzcbjcffrnn8-source
+octet-deps> source root is source
+octet-deps> Running phase: patchPhase
+octet-deps> Executing configureCargoCommonVars
+octet-deps> Running phase: updateAutotoolsGnuConfigScriptsPhase
+octet-deps> Running phase: configurePhase
+octet-deps> will append /build/source/.cargo-home/config.toml with contents of /nix/store/l5jm0i0397hg6nh5w40mby14isi2ngwh-vendor-cargo-deps/config.toml
+octet-deps> default configurePhase, nothing to do
+octet-deps> Running phase: buildPhase
+octet-deps> +++ command cargo --version
+octet-deps> cargo 1.96.0-nightly (cbb9bb8bd 2026-03-13)
+octet-deps> +++ command cargo check --release --locked --all-targets
+octet-deps>    Compiling serde_core v1.0.228
+octet-deps>    Compiling proc-macro2 v1.0.106
+octet-deps>    Compiling quote v1.0.46
+octet-deps>    Compiling unicode-ident v1.0.24
+octet-deps>    Compiling syn v2.0.118
+octet-deps>     Checking memchr v2.8.3
+octet-deps>    Compiling zmij v1.0.21
+octet-deps>    Compiling crossbeam-utils v0.8.22
+octet-deps>    Compiling serde v1.0.228
+octet-deps>    Compiling serde_json v1.0.150
+octet-deps>    Compiling serde_derive v1.0.228
+octet-deps>     Checking itoa v1.0.18
+octet-deps>    Compiling winnow v1.0.3
+octet-deps>    Compiling camino v1.2.4
+octet-deps>    Compiling thiserror v2.0.18
+octet-deps>    Compiling toml_parser v1.1.2+spec-1.1.0
+octet-deps>    Compiling toml_datetime v1.1.1+spec-1.1.0
+octet-deps>    Compiling serde_spanned v1.1.1
+octet-deps>    Compiling thiserror-impl v2.0.18
+octet-deps>     Checking aho-corasick v1.1.4
+octet-deps>    Compiling anyhow v1.0.103
+octet-deps>     Checking regex-syntax v0.8.11
+octet-deps>    Compiling toml_writer v1.1.1+spec-1.1.0
+octet-deps>    Compiling toml v1.1.2+spec-1.1.0
+octet-deps>     Checking regex-automata v0.4.15
+octet-deps>     Checking cargo-platform v0.3.3
+octet-deps>     Checking semver v1.0.28
+octet-deps>    Compiling dylint_internal v5.0.0 (https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9#0e0a71ee)
+octet-deps>    Compiling find-msvc-tools v0.1.9
+octet-deps>    Compiling shlex v2.0.1
+octet-deps>    Compiling crossbeam-epoch v0.9.20
+octet-deps>    Compiling paste v1.0.15
+octet-deps>    Compiling rustversion v1.0.23
+octet-deps>     Checking regex v1.13.0
+octet-deps>    Compiling cc v1.2.66
+octet-deps>     Checking cargo_metadata v0.23.1
+octet-deps>    Compiling dylint_linting v5.0.0 (https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9#0e0a71ee)
+octet-deps>    Compiling crossbeam-deque v0.8.7
+octet-deps>     Checking log v0.4.33
+octet-deps>    Compiling octet-lint-metadata v0.1.0 (/build/source/crates/octet-lint-metadata)
+octet-deps>    Compiling blake3 v1.8.5
+octet-deps>    Compiling octet v0.1.0 (/build/source)
+octet-deps>     Checking crossbeam-channel v0.5.16
+octet-deps>     Checking crossbeam-queue v0.3.13
+octet-deps>    Compiling tokio-macros v2.7.0
+octet-deps>     Checking pin-project-lite v0.2.17
+octet-deps>     Checking cpufeatures v0.3.0
+octet-deps>     Checking cfg-if v1.0.4
+octet-deps>     Checking arrayref v0.3.9
+octet-deps>     Checking constant_time_eq v0.4.2
+octet-deps>     Checking arrayvec v0.7.8
+octet-deps>     Checking tokio v1.52.3
+octet-deps>     Checking crossbeam v0.8.4
+octet-deps>     Finished `release` profile [optimized] target(s) in 14.24s
+octet-deps> +++ command cargo build --release --locked
+octet-deps>    Compiling serde_core v1.0.228
+octet-deps>    Compiling syn v2.0.118
+octet-deps>    Compiling memchr v2.8.3
+octet-deps>    Compiling zmij v1.0.21
+octet-deps>    Compiling serde_derive v1.0.228
+octet-deps>    Compiling itoa v1.0.18
+octet-deps>    Compiling serde_json v1.0.150
+octet-deps>    Compiling serde v1.0.228
+octet-deps>    Compiling aho-corasick v1.1.4
+octet-deps>    Compiling thiserror-impl v2.0.18
+octet-deps>    Compiling regex-syntax v0.8.11
+octet-deps>    Compiling winnow v1.0.3
+octet-deps>    Compiling toml_parser v1.1.2+spec-1.1.0
+octet-deps>    Compiling regex-automata v0.4.15
+octet-deps>    Compiling thiserror v2.0.18
+octet-deps>    Compiling camino v1.2.4
+octet-deps>    Compiling serde_spanned v1.1.1
+octet-deps>    Compiling cargo-platform v0.3.3
+octet-deps>    Compiling semver v1.0.28
+octet-deps>    Compiling toml_datetime v1.1.1+spec-1.1.0
+octet-deps>    Compiling toml_writer v1.1.1+spec-1.1.0
+octet-deps>    Compiling toml v1.1.2+spec-1.1.0
+octet-deps>    Compiling cargo_metadata v0.23.1
+octet-deps>    Compiling regex v1.13.0
+octet-deps>    Compiling anyhow v1.0.103
+octet-deps>    Compiling log v0.4.33
+octet-deps>    Compiling dylint_internal v5.0.0 (https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9#0e0a71ee)
+octet-deps>    Compiling dylint_linting v5.0.0 (https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9#0e0a71ee)
+octet-deps>    Compiling octet-lint-metadata v0.1.0 (/build/source/crates/octet-lint-metadata)
+octet-deps>    Compiling octet v0.1.0 (/build/source)
+octet-deps>     Finished `release` profile [optimized] target(s) in 22.67s
+octet-deps> buildPhase completed in 37 seconds
+octet-deps> Running phase: checkPhase
+octet-deps> +++ command cargo test --release --locked --no-run
+octet-deps>    Compiling crossbeam-utils v0.8.22
+octet-deps>    Compiling serde v1.0.228
+octet-deps>    Compiling thiserror v2.0.18
+octet-deps>    Compiling crossbeam-epoch v0.9.20
+octet-deps>    Compiling cargo_metadata v0.23.1
+octet-deps>    Compiling crossbeam-deque v0.8.7
+octet-deps>    Compiling crossbeam-channel v0.5.16
+octet-deps>    Compiling dylint_internal v5.0.0 (https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9#0e0a71ee)
+octet-deps>    Compiling crossbeam-queue v0.3.13
+octet-deps>    Compiling cfg-if v1.0.4
+octet-deps>    Compiling arrayvec v0.7.8
+octet-deps>    Compiling arrayref v0.3.9
+octet-deps>    Compiling constant_time_eq v0.4.2
+octet-deps>    Compiling pin-project-lite v0.2.17
+octet-deps>    Compiling cpufeatures v0.3.0
+octet-deps>    Compiling blake3 v1.8.5
+octet-deps>    Compiling tokio v1.52.3
+octet-deps>    Compiling crossbeam v0.8.4
+octet-deps>    Compiling dylint_linting v5.0.0 (https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9#0e0a71ee)
+octet-deps>    Compiling octet-lint-metadata v0.1.0 (/build/source/crates/octet-lint-metadata)
+octet-deps>    Compiling octet v0.1.0 (/build/source)
+octet-deps>     Finished `release` profile [optimized] target(s) in 6.69s
+octet-deps>   Executable unittests src/lib.rs (target/release/deps/octet-515279d813fdf312)
+octet-deps> Running phase: installPhase
+octet-deps> no previous artifacts found, compressing and installing full archive of target to /nix/store/sxabvjdxk2kkx6fn6gxxn03w16q1wp9k-octet-deps-0.1.0/target.tar.zst
+octet-deps> /*stdin*\            : 24.58%   (   190 MiB =>   46.7 MiB, /nix/store/sxabvjdxk2kkx6fn6gxxn03w16q1wp9k-octet-deps-0.1.0/target.tar.zst)
+octet-deps> Running phase: fixupPhase
+octet-deps> shrinking RPATHs of ELF executables and libraries in /nix/store/sxabvjdxk2kkx6fn6gxxn03w16q1wp9k-octet-deps-0.1.0
+octet-deps> checking for references to /build/ in /nix/store/sxabvjdxk2kkx6fn6gxxn03w16q1wp9k-octet-deps-0.1.0...
+octet-deps> patching script interpreter paths in /nix/store/sxabvjdxk2kkx6fn6gxxn03w16q1wp9k-octet-deps-0.1.0
+building '/nix/store/bwmmsqja61wf2jih23ffaa0srrk3yyba-cargo-octet-0.1.0.drv'...
+cargo-octet> Running phase: unpackPhase
+cargo-octet> unpacking source archive /nix/store/psxg34hk9hb8y0fd9z9vsnksaviz3zak-source
+cargo-octet> source root is source
+cargo-octet> Running phase: patchPhase
+cargo-octet> Executing configureCargoCommonVars
+cargo-octet> decompressing cargo artifacts from /nix/store/sxabvjdxk2kkx6fn6gxxn03w16q1wp9k-octet-deps-0.1.0/target.tar.zst to target
+cargo-octet> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-octet> Running phase: configurePhase
+cargo-octet> will append /build/source/.cargo-home/config.toml with contents of /nix/store/l5jm0i0397hg6nh5w40mby14isi2ngwh-vendor-cargo-deps/config.toml
+cargo-octet> default configurePhase, nothing to do
+cargo-octet> Running phase: buildPhase
+cargo-octet> +++ command cargo --version
+cargo-octet> cargo 1.96.0-nightly (cbb9bb8bd 2026-03-13)
+cargo-octet> +++ command cargo build --release --message-format json-render-diagnostics -p cargo-octet
+cargo-octet>    Compiling serde_core v1.0.228
+cargo-octet>    Compiling rustix v1.1.4
+cargo-octet>    Compiling io-lifetimes v2.0.4
+cargo-octet>    Compiling serde_json v1.0.150
+cargo-octet>    Compiling bitflags v2.13.0
+cargo-octet>    Compiling utf8parse v0.2.2
+cargo-octet>    Compiling linux-raw-sys v0.12.1
+cargo-octet>    Compiling anstyle-parse v1.0.0
+cargo-octet>    Compiling proc-macro2 v1.0.106
+cargo-octet>    Compiling is_terminal_polyfill v1.70.2
+cargo-octet>    Compiling io-extras v0.18.4
+cargo-octet>    Compiling anstyle-query v1.1.5
+cargo-octet>    Compiling anstyle v1.0.14
+cargo-octet>    Compiling colorchoice v1.0.5
+cargo-octet>    Compiling anstream v1.0.0
+cargo-octet>    Compiling serde v1.0.228
+cargo-octet>    Compiling blake3 v1.8.5
+cargo-octet>    Compiling constant_time_eq v0.4.2
+cargo-octet>    Compiling cfg-if v1.0.4
+cargo-octet>    Compiling once_cell v1.21.4
+cargo-octet>    Compiling clap_lex v1.1.0
+cargo-octet>    Compiling arrayref v0.3.9
+cargo-octet>    Compiling heck v0.5.0
+cargo-octet>    Compiling strsim v0.11.1
+cargo-octet>    Compiling unicode-ident v1.0.24
+cargo-octet>    Compiling cap-primitives v3.4.5
+cargo-octet>    Compiling quote v1.0.46
+cargo-octet>    Compiling cpufeatures v0.3.0
+cargo-octet>    Compiling arrayvec v0.7.8
+cargo-octet>    Compiling clap_builder v4.6.0
+cargo-octet>    Compiling clap_derive v4.6.1
+cargo-octet>    Compiling rustix-linux-procfs v0.1.1
+cargo-octet>    Compiling fs-set-times v0.20.3
+cargo-octet>    Compiling ambient-authority v0.0.2
+cargo-octet>    Compiling ipnet v2.12.0
+cargo-octet>    Compiling cap-std v3.4.5
+cargo-octet>    Compiling maybe-owned v0.3.4
+cargo-octet>    Compiling clap v4.6.1
+cargo-octet>    Compiling cargo-octet v0.1.0 (/build/source/cargo-octet)
+cargo-octet>    Compiling serde_spanned v1.1.1
+cargo-octet>    Compiling toml_datetime v1.1.1+spec-1.1.0
+cargo-octet>    Compiling toml v1.1.2+spec-1.1.0
+cargo-octet>    Compiling syn v2.0.118
+cargo-octet>    Compiling octet-standards v0.1.0 (/build/source/crates/octet-standards)
+cargo-octet>    Compiling valence-core v0.1.0 (/build/source/crates/valence-core)
+cargo-octet>    Compiling octet-lint-metadata v0.1.0 (/build/source/crates/octet-lint-metadata)
+cargo-octet> warning: constant `TRELLIS_PROOF_IR_INTAKE_SCHEMA_VERSION` is never used
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:15:11
+cargo-octet>    |
+cargo-octet> 15 | pub const TRELLIS_PROOF_IR_INTAKE_SCHEMA_VERSION: &str = "octet-trellis-proof-ir-intake/v1";
+cargo-octet>    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet>    |
+cargo-octet>    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+cargo-octet> 
+cargo-octet> warning: constant `TRELLIS_PROOF_IR_PROFILE` is never used
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:16:11
+cargo-octet>    |
+cargo-octet> 16 | pub const TRELLIS_PROOF_IR_PROFILE: &str = "trellis-proof-evidence-ir-v1";
+cargo-octet>    |           ^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: constant `TRELLIS_INTAKE_ROLE_RECORDED_ONLY` is never used
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:17:11
+cargo-octet>    |
+cargo-octet> 17 | pub const TRELLIS_INTAKE_ROLE_RECORDED_ONLY: &str = "recorded_only_reference";
+cargo-octet>    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: constant `TRELLIS_INTAKE_ROLE_PROMOTION_CANDIDATE` is never used
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:18:11
+cargo-octet>    |
+cargo-octet> 18 | pub const TRELLIS_INTAKE_ROLE_PROMOTION_CANDIDATE: &str = "promotion_candidate";
+cargo-octet>    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: constant `TRELLIS_INTAKE_ROLE_FORMAL_PROOF` is never used
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:19:11
+cargo-octet>    |
+cargo-octet> 19 | pub const TRELLIS_INTAKE_ROLE_FORMAL_PROOF: &str = "formal_proof";
+cargo-octet>    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: constant `TRELLIS_RESULT_PASSED` is never used
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:21:7
+cargo-octet>    |
+cargo-octet> 21 | const TRELLIS_RESULT_PASSED: &str = "passed";
+cargo-octet>    |       ^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: constant `REQUIRED_TRELLIS_NON_CLAIMS` is never used
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:22:7
+cargo-octet>    |
+cargo-octet> 22 | const REQUIRED_TRELLIS_NON_CLAIMS: &[&str] = &[
+cargo-octet>    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: constant `FORBIDDEN_TRELLIS_OVERCLAIMS` is never used
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:28:7
+cargo-octet>    |
+cargo-octet> 28 | const FORBIDDEN_TRELLIS_OVERCLAIMS: &[&str] = &[
+cargo-octet>    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: struct `TrellisProofIrIntake` is never constructed
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:72:12
+cargo-octet>    |
+cargo-octet> 72 | pub struct TrellisProofIrIntake {
+cargo-octet>    |            ^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: struct `TrellisProofIrRerunReceipt` is never constructed
+cargo-octet>   --> cargo-octet/src/imported_proof.rs:94:12
+cargo-octet>    |
+cargo-octet> 94 | pub struct TrellisProofIrRerunReceipt {
+cargo-octet>    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: function `validate_trellis_proof_ir_intake` is never used
+cargo-octet>    --> cargo-octet/src/imported_proof.rs:215:8
+cargo-octet>     |
+cargo-octet> 215 | pub fn validate_trellis_proof_ir_intake(intake: &TrellisProofIrIntake) -> Vec<String> {
+cargo-octet>     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: function `validate_trellis_intake_shape` is never used
+cargo-octet>    --> cargo-octet/src/imported_proof.rs:225:4
+cargo-octet>     |
+cargo-octet> 225 | fn validate_trellis_intake_shape(intake: &TrellisProofIrIntake) -> Vec<String> {
+cargo-octet>     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: function `validate_trellis_intake_non_claims` is never used
+cargo-octet>    --> cargo-octet/src/imported_proof.rs:276:4
+cargo-octet>     |
+cargo-octet> 276 | fn validate_trellis_intake_non_claims(intake: &TrellisProofIrIntake) -> Vec<String> {
+cargo-octet>     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: function `validate_trellis_intake_promotion` is never used
+cargo-octet>    --> cargo-octet/src/imported_proof.rs:292:4
+cargo-octet>     |
+cargo-octet> 292 | fn validate_trellis_intake_promotion(intake: &TrellisProofIrIntake) -> Vec<String> {
+cargo-octet>     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: function `compare_promotion_field` is never used
+cargo-octet>    --> cargo-octet/src/imported_proof.rs:334:4
+cargo-octet>     |
+cargo-octet> 334 | fn compare_promotion_field(diagnostics: &mut Vec<String>, field: &str, expected: &str, actual: &str) {
+cargo-octet>     |    ^^^^^^^^^^^^^^^^^^^^^^^
+cargo-octet> 
+cargo-octet> warning: `cargo-octet` (lib) generated 15 warnings
+cargo-octet>     Finished `release` profile [optimized] target(s) in 1m 12s
+cargo-octet> searching for bins/libs to install from cargo build log at cargoBuildLog612n.json
+cargo-octet> installing /build/source/target/release/cargo-slotcar in postBuildInstallFromCargoBuildLogOutTempyj7/bin
+cargo-octet> installing /build/source/target/release/cargo-tigerstyle in postBuildInstallFromCargoBuildLogOutTempyj7/bin
+cargo-octet> installing /build/source/target/release/cargo-octet in postBuildInstallFromCargoBuildLogOutTempyj7/bin
+cargo-octet> searching for bins/libs complete
+cargo-octet> buildPhase completed in 1 minutes 13 seconds
+cargo-octet> Running phase: installPhase
+cargo-octet> actually installing contents of postBuildInstallFromCargoBuildLogOutTempyj7 to /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0
+cargo-octet> stripping references to Rust toolchain
+cargo-octet> Rust toolchain at: /nix/store/1yvh3d6y3fj3xk2dgwczrp1dj5svd92c-rust-default-1.96.0-nightly-2026-03-21
+cargo-octet> stripping Rust toolchain references done
+cargo-octet> stripping references to cargoVendorDir from:
+cargo-octet> /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0/bin/cargo-octet
+cargo-octet> /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0/bin/cargo-slotcar
+cargo-octet> /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0/bin/cargo-tigerstyle
+cargo-octet> stripping references done
+cargo-octet> Running phase: fixupPhase
+cargo-octet> shrinking RPATHs of ELF executables and libraries in /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0
+cargo-octet> shrinking /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0/bin/cargo-tigerstyle
+cargo-octet> shrinking /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0/bin/cargo-slotcar
+cargo-octet> shrinking /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0/bin/cargo-octet
+cargo-octet> checking for references to /build/ in /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0...
+cargo-octet> patching script interpreter paths in /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0
+cargo-octet> stripping (with command strip and flags -S -p) in  /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0/bin
+building '/nix/store/v38pdgsnsx0dmyrh4ihvh9a45mpn2i78-octet-0.1.0.drv'...
+octet> Running phase: unpackPhase
+octet> unpacking source archive /nix/store/psxg34hk9hb8y0fd9z9vsnksaviz3zak-source
+octet> source root is source
+octet> Running phase: patchPhase
+octet> Executing configureCargoCommonVars
+octet> decompressing cargo artifacts from /nix/store/sxabvjdxk2kkx6fn6gxxn03w16q1wp9k-octet-deps-0.1.0/target.tar.zst to target
+octet> Running phase: updateAutotoolsGnuConfigScriptsPhase
+octet> Running phase: configurePhase
+octet> will append /build/source/.cargo-home/config.toml with contents of /nix/store/l5jm0i0397hg6nh5w40mby14isi2ngwh-vendor-cargo-deps/config.toml
+octet> default configurePhase, nothing to do
+octet> Running phase: buildPhase
+octet> +++ command cargo --version
+octet> cargo 1.96.0-nightly (cbb9bb8bd 2026-03-13)
+octet> +++ command cargo build --release --message-format json-render-diagnostics --locked
+octet>    Compiling octet-lint-metadata v0.1.0 (/build/source/crates/octet-lint-metadata)
+octet>    Compiling octet v0.1.0 (/build/source)
+octet>     Finished `release` profile [optimized] target(s) in 10.21s
+octet> searching for bins/libs to install from cargo build log at cargoBuildLogAodA.json
+octet> installing /build/source/target/release/liboctet.so in postBuildInstallFromCargoBuildLogOutTempyCj/lib
+octet> searching for bins/libs complete
+octet> Running phase: installPhase
+octet> actually installing contents of postBuildInstallFromCargoBuildLogOutTempyCj to /nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0
+octet> stripping references to Rust toolchain
+octet> Rust toolchain at: /nix/store/1yvh3d6y3fj3xk2dgwczrp1dj5svd92c-rust-default-1.96.0-nightly-2026-03-21
+octet> stripping Rust toolchain references done
+octet> stripping references to cargoVendorDir from:
+octet> /nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0/lib/liboctet.so
+octet> stripping references done
+octet> Running phase: fixupPhase
+octet> shrinking RPATHs of ELF executables and libraries in /nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0
+octet> shrinking /nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0/lib/liboctet.so
+octet> checking for references to /build/ in /nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0...
+octet> patching script interpreter paths in /nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0
+octet> stripping (with command strip and flags -S -p) in  /nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0/lib
+/nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0
+/nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 2min 10.689s
+             CPU time consumed: 49ms
+                   Memory peak: 14.1M (swap: 0B)

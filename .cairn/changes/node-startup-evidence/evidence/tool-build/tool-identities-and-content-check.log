@@ -1,0 +1,13 @@
+cd4db81a8cf74be49b86c0ae2edab17963679652289f21eca4426fd64da3468a  /nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0/bin/cargo-octet
+10ea7d049202ebdf12e621c33ca26269a8e78ea4e9bc77186fad2e8fe42c366e  /nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0/lib/liboctet.so
+cargo-octet 0.1.0
+cargo octet check
+
+Options: --profile robust|bounded-systems|deterministic-core, --output-format human|json|sarif, --artifact-dir PATH, --baseline PATH, --write-baseline PATH, --cache, --function-addresses off|observe|warn|deny, --function-address-path PATH, --function-address-baseline PATH.
+
+Strict profiles activate reviewed deny-level lint floors and minimum function-address modes. They validate direct source-shape policy only; they do not prove transitive effects, whole-program correctness, or release eligibility. Artifacts include summary.txt effect-summary output, findings JSON/SARIF, cache_status fields when --cache enables the lint-cache, and optional function-address diagnostics for gradual content-address adoption.
+
+/nix/store/bwmmsqja61wf2jih23ffaa0srrk3yyba-cargo-octet-0.1.0.drv
+/nix/store/v38pdgsnsx0dmyrh4ihvh9a45mpn2i78-octet-0.1.0.drv
+checking '/nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0'...
+checking '/nix/store/hxd7wylwz756id11hksv9h5ywjjs66f2-cargo-octet-0.1.0'...

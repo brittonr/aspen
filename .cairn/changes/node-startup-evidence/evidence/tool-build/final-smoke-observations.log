@@ -1,0 +1,9 @@
+Running as unit: molten-octet-smoke-4.service; invocation ID: 75811b2b19d64725a469c8ef84be5f78
+Real strict positive fixture exited 0.
+Message-bearing todo CLI exit: 2
+Message-bearing todo was rejected with no_todo errors; bare-todo false-clean remains unresolved.
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 367ms
+             CPU time consumed: 427ms
+                   Memory peak: 31.9M (swap: 0B)
