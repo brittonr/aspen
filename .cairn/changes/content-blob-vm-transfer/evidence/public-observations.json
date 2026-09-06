@@ -1,0 +1,186 @@
+{
+  "handoffs_and_transport_keys_exported": false,
+  "logs": {
+    "client-0": {
+      "observations": [
+        {
+          "event": "fetch-failed",
+          "failure": "stale-ticket",
+          "terminal": "failed"
+        },
+        {
+          "error_category": "transfer-not-verified"
+        },
+        {
+          "marker": "MOLTEN_WRONG_READER_FAILED"
+        },
+        {
+          "marker": "MOLTEN_WRONG_DIGEST_DENIED"
+        },
+        {
+          "archive_blake3": "3e429fca9829a73ecba22f711b67c11baaa9e8958737ed781b8ec3181a66bac9",
+          "bytes": 119321,
+          "chunks": 2,
+          "deployable": false,
+          "event": "fetched",
+          "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+          "receipt_ref": "blake3:d92eded92a6395875d88f2ee2e37569a8ceae194ace9645d227aaa36a7a697e4",
+          "vm_only": true
+        },
+        {
+          "marker": "MOLTEN_VM_PHASE_DONE"
+        }
+      ],
+      "raw_log_blake3": "1ad5328aeeb4b4423f05c47c148dca24c159a9507d6bcfe29217f0f23d2bf46f"
+    },
+    "client-1": {
+      "observations": [
+        {
+          "event": "fetch-failed",
+          "failure": "stale-ticket",
+          "terminal": "failed"
+        },
+        {
+          "error_category": "transfer-not-verified"
+        },
+        {
+          "marker": "MOLTEN_WRONG_READER_FAILED"
+        },
+        {
+          "marker": "MOLTEN_WRONG_DIGEST_DENIED"
+        },
+        {
+          "archive_blake3": "3e429fca9829a73ecba22f711b67c11baaa9e8958737ed781b8ec3181a66bac9",
+          "bytes": 119321,
+          "chunks": 2,
+          "deployable": false,
+          "event": "fetched",
+          "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+          "receipt_ref": "blake3:d92eded92a6395875d88f2ee2e37569a8ceae194ace9645d227aaa36a7a697e4",
+          "vm_only": true
+        },
+        {
+          "marker": "MOLTEN_VM_PHASE_DONE"
+        }
+      ],
+      "raw_log_blake3": "b1b191b3e703740c328f71d8217f9f55c30306be5c7fc1422add29b811e07206"
+    },
+    "identity-0": {
+      "observations": [
+        {
+          "event": "identity"
+        },
+        {
+          "marker": "MOLTEN_VM_PHASE_DONE"
+        }
+      ],
+      "raw_log_blake3": "687f7742688315e8445e15c06e20d00a757d82b42f55a739816112cd7632e647"
+    },
+    "identity-1": {
+      "observations": [
+        {
+          "event": "identity"
+        },
+        {
+          "marker": "MOLTEN_VM_PHASE_DONE"
+        }
+      ],
+      "raw_log_blake3": "b3e6216488859c8f44b91616d3327729c44426f7704f8cd244942b6a7514b9c8"
+    },
+    "storage-0": {
+      "observations": [
+        {
+          "archive_blake3": "3e429fca9829a73ecba22f711b67c11baaa9e8958737ed781b8ec3181a66bac9",
+          "event": "prepared",
+          "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+          "pinned": true
+        },
+        {
+          "event": "serving",
+          "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+          "pinned": true
+        },
+        {
+          "event": "serving",
+          "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+          "pinned": true
+        },
+        {
+          "count": 1,
+          "event": "reader-denial"
+        },
+        {
+          "marker": "MOLTEN_VM_PHASE_DONE"
+        }
+      ],
+      "raw_log_blake3": "c592b99ac737043d980ef94bc4323995c1b50bb3746e7b69a7d6308cdce50264"
+    },
+    "storage-1": {
+      "observations": [
+        {
+          "event": "serving",
+          "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+          "pinned": true
+        },
+        {
+          "event": "serving",
+          "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+          "pinned": true
+        },
+        {
+          "count": 1,
+          "event": "reader-denial"
+        },
+        {
+          "marker": "MOLTEN_VM_PHASE_DONE"
+        }
+      ],
+      "raw_log_blake3": "73715b41eef9004a6a653c1cdea3e3d20e0cb5cc12d1d9e03b4a37f330208935"
+    },
+    "storage-corrupt": {
+      "observations": [
+        {
+          "deletion_authority": false,
+          "event": "fault-injected",
+          "kind": "corrupt",
+          "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+          "vm_only": true
+        },
+        {
+          "error_category": "chunk-hash-mismatch"
+        },
+        {
+          "marker": "MOLTEN_DAMAGED_STORE_DENIED"
+        },
+        {
+          "marker": "MOLTEN_VM_PHASE_DONE"
+        }
+      ],
+      "raw_log_blake3": "17516d26a3965efee7c8dbdc28686541ef4bd84fe5d6608b1cd8bd8159c91d5b"
+    },
+    "storage-missing": {
+      "observations": [
+        {
+          "deletion_authority": false,
+          "event": "fault-injected",
+          "kind": "missing",
+          "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+          "vm_only": true
+        },
+        {
+          "error_category": "chunk-missing"
+        },
+        {
+          "marker": "MOLTEN_DAMAGED_STORE_DENIED"
+        },
+        {
+          "marker": "MOLTEN_VM_PHASE_DONE"
+        }
+      ],
+      "raw_log_blake3": "86d5b344f04b94cb6c3873cf87e081058ff7ae325a8c179b3412e27eedb30209"
+    }
+  },
+  "projection": "exact-event-field-allowlist",
+  "raw_logs_retained_privately": true,
+  "schema": "onix.molten-blob-vm-observations.v1"
+}

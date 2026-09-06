@@ -1,0 +1,22 @@
+origin	github.com:brittonr/aspen (fetch)
+origin	github.com:brittonr/aspen (push)
+    Checking serde_core v1.0.228
+    Checking memchr v2.8.1
+    Checking aho-corasick v1.1.4
+    Checking regex-automata v0.4.14
+    Checking serde v1.0.228
+    Checking num-integer v0.1.46
+    Checking hashbrown v0.17.1
+    Checking arrayvec v0.7.6
+    Checking constant_time_eq v0.4.2
+    Checking indexmap v2.14.0
+    Checking blake3 v1.8.5
+    Checking regex v1.12.3
+    Checking num-bigint v0.4.6
+    Checking serde_bytes v0.11.19
+    Checking serde_json v1.0.150
+    Checking preserves v5.0.0-rc.7
+    Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+    Checking kamacite-core v0.1.0 (ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#d76fe4ab)
+    Checking molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/blob-vm-v01/crates/molten-core)
+    Finished `dev` profile [unoptimized] target(s) in 45.32s

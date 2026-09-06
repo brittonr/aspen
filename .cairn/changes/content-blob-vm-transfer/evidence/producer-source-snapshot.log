@@ -1,0 +1,22 @@
+Switched to a new branch 'proof/content-blob-vm-v01'
+[proof/content-blob-vm-v01 3b5b79132] test: snapshot protected blob VM fixture on reviewed release
+ 9 files changed, 999 insertions(+), 14 deletions(-)
+ create mode 100644 crates/molten-core/src/content_store_adapter/read_grant.rs
+ create mode 100644 examples/content-blob-vm.rs
+ create mode 100644 examples/content-blob-vm/tests.rs
+ create mode 100644 src/content_store_adapter/live_handoff.rs
+ create mode 100644 src/content_store_adapter/live_read_gate.rs
+ create mode 100644 verification/content-blob-vm/policy.json
+ create mode 100644 verification/content-blob-vm/policy.ncl
+3b5b79132e9b875c6c72c70ed7f38cfdd4e6f11a
+a6d8e0448cb95f7f912c482a03c1c6000f3fa03f67d3f963838e75b4ebfe9e64  Cargo.toml
+82b4f722c5a097f382acb97e7b89ce46adea3ea92eaa73297a6dd1df4b8f162f  Cargo.lock
+e0d99521f3de2f64b2c7d1368470ffc26c4e27768b651b612c9b2d9260e96b67  crates/molten-core/src/content_store_adapter/mod.rs
+dd123cbe192547b898af62e27e12ab472043595ee6bfd9e54bf01335f0e32aff  crates/molten-core/src/content_store_adapter/read_grant.rs
+f46ab5bf6ff5a091d105a0ec9257e85244d80eb1c64b8d3e6130fa7ad0986c5c  src/content_store_adapter/live_iroh.rs
+efe0143f96e1f595715aadb7f36a45e8d942c64a8c0a172a7fdeb9180e229688  src/content_store_adapter/live_handoff.rs
+9529be25749944169b1905a2df7c1e3f116c212af58ac954330cedc7e0266115  src/content_store_adapter/live_read_gate.rs
+a7c8afc5fb5c4bbeb2e6d3daa5b617ea9856eecce091a209cc78c31d7307b7a7  examples/content-blob-vm.rs
+ea05fef34848d593d4e4849790c509cc7a0f1631de04530ca9e82fd990514dd0  examples/content-blob-vm/tests.rs
+9250aed545e3d157b1101cbee4e5b38086edc89e70998d85d06b32dbba9473c6  verification/content-blob-vm/policy.ncl
+4012c76f3728c40b4b5d666a164414de28a20ab6925ca2d693b3e3f123807dff  verification/content-blob-vm/policy.json

@@ -1,0 +1,79 @@
+{
+  "archive_blake3": "3e429fca9829a73ecba22f711b67c11baaa9e8958737ed781b8ec3181a66bac9",
+  "cases": [
+    {
+      "archive_blake3": "3e429fca9829a73ecba22f711b67c11baaa9e8958737ed781b8ec3181a66bac9",
+      "case": "first-transfer",
+      "client_initial_payload_absent": true,
+      "client_initrd_blake3": "9104ecb13fb0d8b20b81a0b29490aba50ecf7166a28f28be631bd5c14dcbd273",
+      "client_log_blake3": "1ad5328aeeb4b4423f05c47c148dca24c159a9507d6bcfe29217f0f23d2bf46f",
+      "client_receipt": {
+        "archive_blake3": "3e429fca9829a73ecba22f711b67c11baaa9e8958737ed781b8ec3181a66bac9",
+        "bytes": 119321,
+        "chunks": 2,
+        "deployable": false,
+        "event": "fetched",
+        "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+        "receipt_ref": "blake3:d92eded92a6395875d88f2ee2e37569a8ceae194ace9645d227aaa36a7a697e4",
+        "vm_only": true
+      },
+      "server_log_blake3": "c592b99ac737043d980ef94bc4323995c1b50bb3746e7b69a7d6308cdce50264",
+      "server_reader_denial_observed": true,
+      "server_seed_present": true,
+      "storage_initrd_blake3": "caeebb20793217376cb0605f87803cd2a26964e6104f0bd5155c2516fe0e0cf1",
+      "wrong_archive_identity_denied": true
+    },
+    {
+      "archive_blake3": "3e429fca9829a73ecba22f711b67c11baaa9e8958737ed781b8ec3181a66bac9",
+      "case": "after-storage-vm-restart",
+      "client_initial_payload_absent": true,
+      "client_initrd_blake3": "9104ecb13fb0d8b20b81a0b29490aba50ecf7166a28f28be631bd5c14dcbd273",
+      "client_log_blake3": "b1b191b3e703740c328f71d8217f9f55c30306be5c7fc1422add29b811e07206",
+      "client_receipt": {
+        "archive_blake3": "3e429fca9829a73ecba22f711b67c11baaa9e8958737ed781b8ec3181a66bac9",
+        "bytes": 119321,
+        "chunks": 2,
+        "deployable": false,
+        "event": "fetched",
+        "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+        "receipt_ref": "blake3:d92eded92a6395875d88f2ee2e37569a8ceae194ace9645d227aaa36a7a697e4",
+        "vm_only": true
+      },
+      "server_log_blake3": "73715b41eef9004a6a653c1cdea3e3d20e0cb5cc12d1d9e03b4a37f330208935",
+      "server_reader_denial_observed": true,
+      "server_seed_present": false,
+      "storage_initrd_blake3": "12f1e2e0c86db5f21ccf1b7ec7c07c38948b1911d9b4f581948860df8e6c4aae",
+      "wrong_archive_identity_denied": true
+    }
+  ],
+  "corrupt_and_missing_blob_cases": "publication-denied-before-handoff",
+  "default_eligible": false,
+  "deployable": false,
+  "fault_cases": [
+    {
+      "handoff_absent": true,
+      "image_blake3": "7553e38a4c5dfb17e3c76f3e8637e32db14e7c9e401c5f4d29e6ee791e326db9",
+      "kind": "missing",
+      "log_blake3": "86d5b344f04b94cb6c3873cf87e081058ff7ae325a8c179b3412e27eedb30209",
+      "publication_denied": true
+    },
+    {
+      "handoff_absent": true,
+      "image_blake3": "2136c9a89bd600115a6526c5681c700ff0c5731f26b1f06bcb5ef48b8eb56e45",
+      "kind": "corrupt",
+      "log_blake3": "17516d26a3965efee7c8dbdc28686541ef4bd84fe5d6608b1cd8bd8159c91d5b",
+      "publication_denied": true
+    }
+  ],
+  "host_blob_service": false,
+  "manifest_ref": "blake3:4a622e1380974360b4544e7e2d08e697eb14fdbc593b4e3348590772a7938cd0",
+  "native_replay": "separate-receipt-required",
+  "network": "isolated-qemu-ethernet-pair",
+  "package_admission": "not-established-by-transfer",
+  "same_provider_across_restart": true,
+  "schema": "onix.molten-blob-vm-transfer.v1",
+  "shared_payload_mount": false,
+  "status": "passed",
+  "storage_vm_restart_verified": true,
+  "vm_only": true
+}

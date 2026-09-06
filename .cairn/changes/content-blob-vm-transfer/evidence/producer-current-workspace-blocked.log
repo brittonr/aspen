@@ -1,0 +1,10 @@
+error: failed to get `executable-extent-conformance` as a dependency of package `molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/blob-vm)`
+
+Caused by:
+  failed to load source for dependency `executable-extent-conformance`
+
+Caused by:
+  unable to update rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636
+
+Caused by:
+  can't checkout from 'rad://z37R1bP1kHcELs89RNbQRaqbCVKxB': you are in the offline mode (--offline)

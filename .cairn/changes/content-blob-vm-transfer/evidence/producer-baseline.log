@@ -1,0 +1,39 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling num-traits v0.2.19
+   Compiling find-msvc-tools v0.1.9
+   Compiling memchr v2.8.1
+   Compiling syn v2.0.117
+   Compiling cc v1.2.62
+   Compiling serde_derive v1.0.228
+   Compiling blake3 v1.8.5
+   Compiling aho-corasick v1.1.4
+   Compiling serde v1.0.228
+   Compiling regex-automata v0.4.14
+   Compiling num-integer v0.1.46
+   Compiling serde_json v1.0.150
+   Compiling hashbrown v0.17.1
+   Compiling indexmap v2.14.0
+   Compiling num-bigint v0.4.6
+   Compiling regex v1.12.3
+   Compiling serde_bytes v0.11.19
+   Compiling bytemuck v1.25.0
+   Compiling lazy_static v1.5.0
+   Compiling preserves v5.0.0-rc.7
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling artifact-binding-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling kamacite-core v0.1.0 (ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#d76fe4ab)
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/blob-vm-v01/crates/molten-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 30.01s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/molten_core-5913b1b3519dc113)
+
+running 6 tests
+test content_store_adapter::tests::protection_handles_pins_and_unprotect_never_grant_read_or_delete_authority ... ok
+test content_store_adapter::tests::repeated_chunk_refs_preserve_order_without_changing_manifest_identity ... ok
+test content_store_adapter::tests::verification_advances_in_order_and_corruption_never_becomes_available ... ok
+test content_store_adapter::tests::preflight_is_bounded_capability_checked_and_range_specific ... ok
+test content_store_adapter::tests::unsupported_transform_overbound_queue_reordering_and_truncation_deny_before_availability ... ok
+test content_store_adapter::tests::verified_partial_state_resumes_and_disconnect_is_uncertain ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 193 filtered out; finished in 0.00s
+
