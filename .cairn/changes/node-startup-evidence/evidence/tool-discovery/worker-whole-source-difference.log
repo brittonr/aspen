@@ -1,0 +1,133 @@
+ .../.cargo/config.toml                             |    3 +
+ .../.github/workflows/nix-flake-check.yml}         |   14 +
+ .../Cargo.lock                                     |   86 +
+ .../Cargo.toml                                     |    3 +-
+ .../README.md                                      |   29 +-
+ .../cargo-octet/Cargo.toml                         |    5 +-
+ .../cargo-octet/build.rs                           |    1 -
+ .../cargo-octet/src/artifact.rs                    |  249 ++-
+ .../cargo-octet/src/ast_grep_rail.rs}              |  771 ++++++++
+ .../cargo-octet/src/cli.rs                         |   56 +-
+ .../cargo-octet/src/evidence.rs                    |   16 +
+ .../cargo-octet/src/evidence_rails.rs              | 1347 ++++++++++++-
+ .../cargo-octet/src/imported_proof.rs              |   15 +
+ .../cargo-octet/src/lib.rs                         |    2 +
+ .../cargo-octet/src/source_acquisition_receipts.rs |   13 +-
+ .../cargo-octet/src/valence_core_shim.rs           |    4 +
+ .../cargo-octet/src/valence_cutover.rs             |  545 ++++--
+ .../cargo-octet/src/wasm_artifact.rs}              | 1980 ++++++++++++++++++++
+ .../cargo-octet/tests/fingerprint_consumer.rs      |   15 +
+ .../evidence-rails/verifier-fixture-negative.json} |   66 +
+ .../evidence-rails/verifier-fixture-positive.json} |   63 +
+ .../z4-solver-invalid-overclaim.json}              |   21 +
+ .../evidence-rails/z4-solver-sat-diagnostic.json}  |   26 +
+ .../evidence-rails/z4-solver-unknown.json}         |   26 +
+ .../evidence-rails/z4-solver-unsat-proof.json}     |   21 +
+ .../expanded-internal-corpus-caveat-taxonomy.json  |  122 +-
+ .../expanded-internal-corpus-receipt.json          |   30 +-
+ .../object-corpus/internal-corpus-receipt.json     |   30 +-
+ .../octet-lint-metadata/src/strict_profile.rs      |   18 +
+ .../crates/octet-standards/Cargo.toml              |    1 +
+ .../crates/octet-standards/src/cli_shell.rs        |    4 +-
+ .../crates/octet-standards/src/nickel_export.rs    |  433 +++--
+ .../crates/valence-core/Cargo.toml                 |    9 +-
+ .../crates/valence-core/README.md                  |   16 +-
+ .../crates/valence-core/src/lib.rs                 |   35 +-
+ .../docs/evidence-codebase-index.md                |    2 +-
+ .../docs/law-tested-cores.md                       |    4 +-
+ .../docs/lint-reference.md                         |    6 +-
+ .../docs/nickel-export-helpers.md                  |   12 +-
+ .../docs/valence-core-cutover.md                   |   33 +-
+ .../hooks/octet-deny-all.sh                        |    1 +
+ .../src/concurrency/ignored_join_handle.rs         |    4 +-
+ .../src/lib.rs                                     |    8 +-
+ .../src/performance/allocation_in_loop.rs          |   22 +-
+ .../src/purity/effect_lints.rs                     |    6 +-
+ .../src/safety/drop_must_use.rs                    |   21 +-
+ .../src/safety/public_unsafe_api.rs                |   81 +-
+ .../src/safety/state_machine_exhaustiveness.rs     |   26 +-
+ .../src/safety/unbounded_loop.rs                   |   64 +-
+ .../src/structure/concrete_construction_in_core.rs |   22 +-
+ .../src/structure/magic_number.rs                  |   59 +-
+ .../standards/ast-grep/README.md}                  |   22 +
+ .../standards/ast-grep/contracts.ncl}              |   54 +
+ .../ast-grep/fixtures/negative/safe_block.rs}      |    3 +
+ .../ast-grep/fixtures/positive/unsafe_block.rs}    |    3 +
+ .../standards/ast-grep/generated/profile.json}     |   72 +
+ .../standards/ast-grep/profile.ncl}                |   50 +
+ .../unsafe-block-review-snapshot.yml}              |   25 +
+ .../rule-tests/unsafe-block-review-test.yml}       |   22 +
+ .../ast-grep/rules/unsafe-block-review.yml}        |   11 +
+ .../standards/ast-grep/sgconfig.yml}               |    4 +
+ .../nickel-export-cutover/generated-manifest.json} |   40 +
+ .../generated-migration-profiles.json}             |  102 +
+ .../standards/nickel-export-cutover/manifest.ncl}  |   73 +
+ .../nickel-export-cutover/migration-profiles.ncl}  |   84 +
+ .../standards/policies/contracts.ncl               |    1 +
+ .../standards/policies/registry.ncl                |   53 +-
+ .../proof-rails/fixtures/invalid/empty_rails.ncl   |    2 +-
+ .../fixtures/invalid/empty_source_paths.ncl        |    2 +-
+ .../fixtures/invalid/invalid_backend.ncl           |    2 +-
+ .../invalid/malformed_trust_boundaries.ncl         |    2 +-
+ .../fixtures/invalid/missing_verifier_identity.ncl |    2 +-
+ .../fixtures/valid/consumer_extra_rail.ncl         |   16 +-
+ .../standards/proof-rails/manifest.ncl             |   51 +-
+ .../valence-core-cutover/generated-manifest.json}  |   95 +
+ .../standards/valence-core-cutover/manifest.ncl    |   62 +-
+ .../standards/verus-toolchain/contracts.ncl        |    1 +
+ .../verus-toolchain/generated/profile.json         |   35 +-
+ .../standards/verus-toolchain/profile.ncl          |   35 +-
+ .../standards/wasm-artifact/README.md}             |   33 +
+ .../standards/wasm-artifact/contracts.ncl}         |   80 +
+ .../standards/wasm-artifact/fixtures/corpus.json}  |   93 +
+ .../standards/wasm-artifact/fixtures/corpus.ncl}   |   80 +
+ .../fixtures/negative/memory-grow.wat}             |    6 +
+ .../fixtures/negative/sign-extension.wat}          |    6 +
+ .../fixtures/negative/start-function.wat}          |    4 +
+ .../fixtures/negative/undeclared-wasi.wat}         |    3 +
+ .../wasm-artifact/fixtures/positive/component.wat} |    1 +
+ .../wasm-artifact/fixtures/positive/module.wat}    |    3 +
+ .../wasm-artifact/generated/profiles.json}         |  230 +++
+ .../standards/wasm-artifact/profiles.ncl}          |  143 ++
+ .../standards/wasm-artifact/spacewasm/README.md}   |   55 +
+ .../standards/wasm-artifact/spacewasm/corpus.json} |  293 +++
+ .../standards/wasm-artifact/spacewasm/corpus.ncl}  |  127 ++
+ .../fixtures/external/chaoscontrol-recorded.json}  |   13 +
+ .../spacewasm/fixtures/external/overclaim.json}    |   13 +
+ .../spacewasm/fixtures/generated/bulk-memory.wasm} |  Bin 0 -> 48 bytes
+ .../spacewasm/fixtures/generated/component.wasm}   |  Bin 0 -> 8 bytes
+ .../spacewasm/fixtures/generated/memory-grow.wasm} |  Bin 0 -> 34 bytes
+ .../fixtures/generated/memory-limit.wasm}          |  Bin 0 -> 41 bytes
+ .../spacewasm/fixtures/generated/mutated-mvp.wasm} |  Bin 0 -> 50 bytes
+ .../spacewasm/fixtures/generated/mvp-module.wasm}  |  Bin 0 -> 46 bytes
+ .../generated/nontrapping-conversion.wasm}         |  Bin 0 -> 41 bytes
+ .../fixtures/generated/parameter-limit.wasm}       |  Bin 0 -> 50 bytes
+ .../fixtures/generated/sign-extension.wasm}        |  Bin 0 -> 29 bytes
+ .../spacewasm/fixtures/generated/smith-fast.wasm}  |  Bin 0 -> 70 bytes
+ .../fixtures/generated/start-function.wasm}        |  Bin 0 -> 44 bytes
+ .../spacewasm/fixtures/generated/table-limit.wasm} |  Bin 0 -> 42 bytes
+ .../spacewasm/fixtures/generated/wrong-abi.wasm}   |  Bin 0 -> 22 bytes
+ .../fixtures/generated/wrong-import.wasm}          |  Bin 0 -> 70 bytes
+ .../spacewasm/fixtures/negative/bulk-memory.wat}   |    9 +
+ .../spacewasm/fixtures/negative/memory-limit.wat}  |    4 +
+ .../fixtures/negative/nontrapping-conversion.wat}  |    6 +
+ .../fixtures/negative/parameter-limit.wat}         |    5 +
+ .../spacewasm/fixtures/negative/table-limit.wat}   |    4 +
+ .../spacewasm/fixtures/negative/wrong-abi.wat}     |    3 +
+ .../spacewasm/fixtures/negative/wrong-import.wat}  |    4 +
+ .../spacewasm/fixtures/positive/mvp-module.wat}    |    5 +
+ .../spacewasm/fixtures/seeds/smith-fast.seed}      |    1 +
+ .../spacewasm/support-projection.json}             |   57 +
+ .../spacewasm/support-projection.ncl}              |   88 +
+ .../tests/fixtures/lint_compatibility_aliases.json |    4 +
+ .../tests/fixtures/lint_diagnostic_metadata.json   |   12 +
+ .../tests/fixtures/lint_emitting_fixtures.json     |    4 +
+ .../tests/fixtures/lint_group_memberships.json     |    1 +
+ .../tests/fixtures/lint_guardrail_fixtures.json    |    5 +
+ .../fixtures/lint_inventory_default_levels.txt     |    1 +
+ .../tests/fixtures/lint_inventory_names.txt        |    1 +
+ .../tests/support/consumer_fixture.rs              |    1 -
+ .../ui_tests/unbounded_channel/Cargo.lock          |   20 +-
+ .../verus/README.md                                |    2 +-
+ 131 files changed, 7997 insertions(+), 793 deletions(-)
+sha256-JI1n3oa2gsnjWkYIcUOrRHwntvs+GGWNgLb4KrxuEZ4=

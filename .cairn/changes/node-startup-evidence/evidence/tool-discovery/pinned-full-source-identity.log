@@ -1,0 +1,3 @@
+sha256-O0jnGZ9cr7bsyZqYTmBEUY0TvRnvMalI19b7eGZu42I=
+Full pinned source matches the unchanged Molten flake.lock NAR hash.
+{"nar_hash":"sha256-O0jnGZ9cr7bsyZqYTmBEUY0TvRnvMalI19b7eGZu42I=","revision":"fc38f59330b626961d166febfdf1a5aa6575460f","source_path":"/nix/store/pp4l3in8gypmsgrnav4f4z6vq168hzpg-source"}

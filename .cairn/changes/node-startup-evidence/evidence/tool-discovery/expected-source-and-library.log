@@ -1,0 +1,5 @@
+/nix/store/psxg34hk9hb8y0fd9z9vsnksaviz3zak-source
+mkdir -p "$out/lib"
+ln -s "/nix/store/d5kynl0p00wailfm1swkm3rbc7bm7hg8-octet-0.1.0/lib/liboctet.so" "$out/lib/liboctet@nightly-2026-03-21-x86_64-unknown-linux-gnu.so"
+
+/nix/store/q1ch4lshmg6g7nyk6ybsndg6v0jzpgz5-octet-0.1.0

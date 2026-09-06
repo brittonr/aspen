@@ -1,0 +1,10 @@
+rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)
+binary: rustc
+commit-hash: ac7f9ec7da74d37fd28667c86bf117a39ba5b02a
+commit-date: 2026-03-20
+host: x86_64-unknown-linux-gnu
+release: 1.96.0-nightly
+LLVM version: 22.1.0
+5891756528d0229025735e63e32e2d57e7b49ad5f6fdac09592d623218d3bd8b  /nix/store/1yvh3d6y3fj3xk2dgwczrp1dj5svd92c-rust-default-1.96.0-nightly-2026-03-21/bin/rustc
+0c465775ce14d8394840fc6c1389a7e830c9eaf92c8bcea4492cba36f7cd5b24  /nix/store/v685hxclxij36n3bcgal3xpv64q4bkqv-dylint-driver-5.0.0/bin/dylint-driver
+Pinned-reference compiler and driver are present; no tool build occurred.
