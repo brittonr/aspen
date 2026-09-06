@@ -1,0 +1,10 @@
+error: rustc 1.95.0 is not supported by the following packages:
+  bounded-http@0.1.0 requires rustc 1.96.0
+  bounded-http-core@0.1.0 requires rustc 1.96.0
+  choregraph-history@0.1.0 requires rustc 1.96.0
+  replay-ledger-core@0.1.0 requires rustc 1.96.0
+  revocation-view-core@0.1.0 requires rustc 1.96.0
+Either upgrade rustc or select compatible dependency versions with
+`cargo update <name>@<current-ver> --precise <compatible-ver>`
+where `<compatible-ver>` is the latest version supporting rustc 1.95.0
+

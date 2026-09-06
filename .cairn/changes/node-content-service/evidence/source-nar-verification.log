@@ -1,0 +1,3 @@
+executable-extent NAR: sha256-gN8jGxgxwckXu/YyG/p2YGkQnPrsJZPfkCy5t3r3yo4=
+vm-cohort NAR: sha256-XLBmSBNJg9D4sZJ9krzkPz46ohww/pqVNxSgIvUNfn4=
+Both source trees match unchanged Molten flake.lock NAR pins.

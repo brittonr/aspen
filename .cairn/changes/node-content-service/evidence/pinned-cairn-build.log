@@ -1,0 +1,42 @@
+Preparing worktree (detached HEAD 3b4c280)
+HEAD is now at 3b4c280 Split semantic review core tests
+   Compiling autocfg v1.5.1
+   Compiling proc-macro2 v1.0.106
+   Compiling num-traits v0.2.19
+   Compiling serde_core v1.0.228
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling memchr v2.8.0
+   Compiling num-integer v0.1.46
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling cc v1.2.62
+   Compiling syn v2.0.117
+   Compiling num-bigint v0.4.6
+   Compiling aho-corasick v1.1.4
+   Compiling regex-syntax v0.8.10
+   Compiling serde v1.0.228
+   Compiling zmij v1.0.21
+   Compiling num-rational v0.4.2
+   Compiling serde_derive v1.0.228
+   Compiling regex-automata v0.4.14
+   Compiling blake3 v1.8.5
+   Compiling num-iter v0.1.45
+   Compiling num-complex v0.4.6
+   Compiling serde_json v1.0.149
+   Compiling num v0.4.3
+   Compiling serde_bytes v0.11.19
+   Compiling lazy_static v1.5.0
+   Compiling dtoa v0.4.8
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling base64 v0.13.1
+   Compiling arrayvec v0.7.6
+   Compiling cfg-if v1.0.4
+   Compiling cpufeatures v0.3.0
+   Compiling itoa v1.0.18
+   Compiling regex v1.12.3
+   Compiling preserves v4.996.0
+   Compiling cairn-core v0.1.0 (/home/brittonr/git/cairn-worktrees/molten-policy-pin/crates/cairn-core)
+   Compiling cairn-cli v0.1.0 (/home/brittonr/git/cairn-worktrees/molten-policy-pin/crates/cairn-cli)
+    Finished `dev` profile [unoptimized] target(s) in 11.32s

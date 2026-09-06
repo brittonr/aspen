@@ -1,0 +1,29 @@
+{
+  "schema": "molten.source-cache-recovery-observation.v1",
+  "consumer_base": "73b4a00e44a6ca699ee52e265abfcf2cc4ebe560",
+  "sources": [
+    {
+      "url": "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB",
+      "revision": "025d9636f0161777710dac37b3c210ca0ad9483f",
+      "git_tree": "ee9ed56da3648372cddbf529e34e3db2eea938c3",
+      "locked_nar_hash": "sha256-gN8jGxgxwckXu/YyG/p2YGkQnPrsJZPfkCy5t3r3yo4=",
+      "observed_nar_hash": "sha256-gN8jGxgxwckXu/YyG/p2YGkQnPrsJZPfkCy5t3r3yo4="
+    },
+    {
+      "url": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3",
+      "revision": "31f1696ba9391bfda8577a58af84f72361d5573e",
+      "git_tree": "3334ac3b8fed7ce2300ba320a034455672ae826b",
+      "locked_nar_hash": "sha256-XLBmSBNJg9D4sZJ9krzkPz46ohww/pqVNxSgIvUNfn4=",
+      "observed_nar_hash": "sha256-XLBmSBNJg9D4sZJ9krzkPz46ohww/pqVNxSgIvUNfn4="
+    }
+  ],
+  "transport": "read-only-owner-git-over-ssh-then-invocation-local-cache",
+  "locked_cargo_fetch_passed": true,
+  "manifest_and_lockfiles_changed": false,
+  "global_git_config_changed": false,
+  "private_source_payloads_published": false,
+  "new_vm_proof": false,
+  "normal_content_service_implemented": false,
+  "release_admitted": false,
+  "stage0_used": false
+}

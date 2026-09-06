@@ -1,0 +1,31 @@
+    Updating git repository `rad://z37R1bP1kHcELs89RNbQRaqbCVKxB`
+From file:///home/brittonr/.local/state/onix/molten-node-vm/sources/executable-extent
+ * [new branch]      pinned     -> origin/pinned
+ * [new ref]         HEAD       -> origin/HEAD
+    Updating git repository `https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git`
+From https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY
+ * [new branch]      main       -> origin/main
+ * [new ref]         HEAD       -> origin/HEAD
+    Updating git repository `rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3`
+From file:///home/brittonr/.local/state/onix/molten-node-vm/sources/vm-cohort
+ * [new branch]      pinned     -> origin/pinned
+ * [new ref]         HEAD       -> origin/HEAD
+    Updating git repository `https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git`
+From https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv
+ * [new branch]      main       -> origin/main
+ * [new ref]         HEAD       -> origin/HEAD
+    Updating crates.io index
+    Updating git repository `https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git`
+From https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih
+ * [new branch]      main       -> origin/main
+ * [new ref]         HEAD       -> origin/HEAD
+ Downloading crates ...
+  Downloaded owo-colors v4.4.0
+  Downloaded win-sys v0.3.1
+  Downloaded jsonwebtoken v11.0.0
+  Downloaded windows_x86_64_msvc v0.34.0
+  Downloaded windows_aarch64_msvc v0.34.0
+  Downloaded windows_i686_msvc v0.34.0
+  Downloaded windows_i686_gnu v0.34.0
+  Downloaded windows_x86_64_gnu v0.34.0
+  Downloaded windows v0.34.0

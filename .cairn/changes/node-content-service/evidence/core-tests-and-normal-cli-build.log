@@ -1,0 +1,163 @@
+   Compiling subtle v2.6.1
+   Compiling generic-array v0.14.7
+   Compiling getrandom v0.2.17
+   Compiling cc v1.2.62
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling rand_core v0.6.4
+   Compiling serde v1.0.228
+   Compiling blake3 v1.8.5
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.6
+   Compiling zerofrom v0.1.8
+   Compiling stable_deref_trait v1.2.1
+   Compiling yoke v0.8.2
+   Compiling signature v2.2.0
+   Compiling hmac v0.12.1
+   Compiling smallvec v1.15.1
+   Compiling zerovec v0.11.6
+   Compiling zerocopy v0.8.48
+   Compiling sha2 v0.10.9
+   Compiling ff v0.13.1
+   Compiling hashbrown v0.17.1
+   Compiling sec1 v0.7.3
+   Compiling indexmap v2.14.0
+   Compiling group v0.13.0
+   Compiling tinystr v0.8.3
+   Compiling num-integer v0.1.46
+   Compiling hkdf v0.12.4
+   Compiling crypto-bigint v0.5.5
+   Compiling ppv-lite86 v0.2.21
+   Compiling litemap v0.8.2
+   Compiling rustix v1.1.4
+   Compiling writeable v0.6.3
+   Compiling elliptic-curve v0.13.8
+   Compiling icu_locale_core v2.2.0
+   Compiling serde_json v1.0.149
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling linux-raw-sys v0.12.1
+   Compiling spin v0.9.8
+   Compiling lazy_static v1.5.0
+   Compiling icu_provider v2.2.0
+   Compiling icu_collections v2.2.0
+   Compiling rfc6979 v0.4.0
+   Compiling ring v0.17.14
+   Compiling errno v0.3.14
+   Compiling regex-automata v0.4.14
+   Compiling signal-hook-registry v1.4.8
+   Compiling ecdsa v0.16.9
+   Compiling rand_chacha v0.3.1
+   Compiling getrandom v0.4.2
+   Compiling rand v0.8.6
+   Compiling mio v1.2.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling regex v1.12.3
+   Compiling signal-hook v0.3.18
+   Compiling parking_lot_core v0.9.12
+   Compiling object v0.37.3
+   Compiling derive_more-impl v2.1.1
+   Compiling getrandom v0.3.4
+   Compiling num-iter v0.1.45
+   Compiling ed25519 v2.2.3
+   Compiling once_cell v1.21.4
+   Compiling rustc-demangle v0.1.27
+   Compiling backtrace v0.3.76
+   Compiling ed25519-dalek v2.2.0
+   Compiling num-bigint-dig v0.8.6
+   Compiling rand_core v0.9.5
+   Compiling derive_more v2.1.1
+   Compiling parking_lot v0.12.5
+   Compiling signal-hook-mio v0.2.5
+   Compiling idna_adapter v1.2.2
+   Compiling primeorder v0.13.6
+   Compiling heck v0.4.1
+   Compiling rustls v0.23.40
+   Compiling snafu-derive v0.8.9
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling rsa v0.9.10
+   Compiling idna v1.1.0
+   Compiling crossterm v0.29.0
+   Compiling rand_chacha v0.9.0
+   Compiling backtrace-ext v0.2.1
+   Compiling rustls-webpki v0.103.13
+   Compiling redb v2.6.3
+   Compiling terminal_size v0.4.4
+   Compiling serde_spanned v1.1.1
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling allocator-api2 v0.2.21
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling winnow v0.7.15
+   Compiling tokio v1.52.3
+   Compiling verified-logic v0.2.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling tempfile v3.27.0
+   Compiling miette v7.6.0
+   Compiling inquire v0.9.4
+   Compiling hashbrown v0.16.1
+   Compiling rand v0.9.4
+   Compiling url v2.5.8
+   Compiling snafu v0.8.9
+   Compiling p384 v0.13.1
+   Compiling p256 v0.13.2
+   Compiling uuid v1.23.1
+   Compiling k256 v0.13.4
+   Compiling num-bigint v0.4.6
+   Compiling ucan-core v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling content-identity-core v0.1.0 (https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#7f55597b)
+   Compiling bounded-http-core v0.1.0 (https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#5abc2b93)
+   Compiling secrecy v0.10.3
+   Compiling serde_bytes v0.11.19
+   Compiling secretspec v0.17.0
+   Compiling preserves v5.0.0-rc.7
+   Compiling iddqd v0.4.5
+   Compiling bounded-http v0.1.0 (https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#5abc2b93)
+   Compiling ucan v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling schema-identity-core v0.1.0 (https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#2562c8aa)
+   Compiling ucan-nostr v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling jsonwebtoken v11.0.0
+   Compiling schema-migration-core v0.1.0 (https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#4fe90e13)
+   Compiling basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling kamacite-core v0.1.0 (ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#d76fe4ab)
+   Compiling choregraph-history v0.1.0 (https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19)
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core)
+    Finished `test` profile [unoptimized] target(s) in 1m 00s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/molten_core-7a5c4cbd2780236d)
+
+running 8 tests
+test content_store_adapter::tests::protection_handles_pins_and_unprotect_never_grant_read_or_delete_authority ... ok
+test content_store_adapter::read_grant::tests::explicit_grant_is_reader_and_manifest_specific ... ok
+test content_store_adapter::read_grant::tests::malformed_duplicate_empty_and_overbound_policy_is_rejected ... ok
+test content_store_adapter::tests::repeated_chunk_refs_preserve_order_without_changing_manifest_identity ... ok
+test content_store_adapter::tests::preflight_is_bounded_capability_checked_and_range_specific ... ok
+test content_store_adapter::tests::verification_advances_in_order_and_corruption_never_becomes_available ... ok
+test content_store_adapter::tests::verified_partial_state_resumes_and_disconnect_is_uncertain ... ok
+test content_store_adapter::tests::unsupported_transform_overbound_queue_reordering_and_truncation_deny_before_availability ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 353 filtered out; finished in 0.00s
+
+   Compiling rand_chacha v0.3.1
+   Compiling rand_chacha v0.9.0
+   Compiling rand v0.8.6
+   Compiling rand v0.9.4
+   Compiling ahash v0.8.12
+   Compiling num-bigint-dig v0.8.6
+   Compiling hashbrown v0.14.5
+   Compiling dashmap v6.2.1
+   Compiling rsa v0.9.10
+   Compiling lasso v0.7.3
+   Compiling jsonwebtoken v11.0.0
+   Compiling secretspec v0.17.0
+   Compiling steel-parser v0.8.2
+   Compiling steel-core v0.8.2
+   Compiling basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core)
+   Compiling molten-node-host v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-host)
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `dev` profile [unoptimized] target(s) in 1m 10s

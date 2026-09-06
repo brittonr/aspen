@@ -1,0 +1,8 @@
+Initialized empty Git repository in /home/brittonr/.local/state/onix/molten-node-vm/sources/executable-extent.git/
+From ssh://britton-desktop/home/brittonr/git/OnixResearch/executable-extent
+ * [new ref]         025d9636f0161777710dac37b3c210ca0ad9483f -> pinned
+Initialized empty Git repository in /home/brittonr/.local/state/onix/molten-node-vm/sources/vm-cohort.git/
+From ssh://britton-desktop/home/brittonr/git/OnixResearch/vm-cohort
+ * [new ref]         31f1696ba9391bfda8577a58af84f72361d5573e -> pinned
+025d9636f0161777710dac37b3c210ca0ad9483f ee9ed56da3648372cddbf529e34e3db2eea938c3 Keep both consumer hash cohorts on one source
+31f1696ba9391bfda8577a58af84f72361d5573e 3334ac3b8fed7ce2300ba320a034455672ae826b bind stable publication to verified consumer evidence

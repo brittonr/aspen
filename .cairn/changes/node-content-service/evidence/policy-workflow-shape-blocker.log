@@ -1,0 +1,2 @@
+error: failed to parse policy cairn-policy/generated/cairn-policy.json: cairn.workflow.policy.shape at schemas: workflow schema shape is invalid: missing field `output_path`
+Current Cairn proposal exit=1

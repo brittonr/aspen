@@ -1,0 +1,21 @@
+    Updating git repository `rad://z37R1bP1kHcELs89RNbQRaqbCVKxB`
+fatal: couldn't find remote ref HEAD
+warning: spurious network error (3 tries remaining): process didn't exit successfully: `git fetch --tags --force --update-head-ok 'rad://z37R1bP1kHcELs89RNbQRaqbCVKxB' '+refs/heads/*:refs/remotes/origin/*' '+HEAD:refs/remotes/origin/HEAD'` (exit status: 128)
+fatal: couldn't find remote ref HEAD
+warning: spurious network error (2 tries remaining): process didn't exit successfully: `git fetch --tags --force --update-head-ok 'rad://z37R1bP1kHcELs89RNbQRaqbCVKxB' '+refs/heads/*:refs/remotes/origin/*' '+HEAD:refs/remotes/origin/HEAD'` (exit status: 128)
+fatal: couldn't find remote ref HEAD
+warning: spurious network error (1 try remaining): process didn't exit successfully: `git fetch --tags --force --update-head-ok 'rad://z37R1bP1kHcELs89RNbQRaqbCVKxB' '+refs/heads/*:refs/remotes/origin/*' '+HEAD:refs/remotes/origin/HEAD'` (exit status: 128)
+fatal: couldn't find remote ref HEAD
+error: failed to get `executable-extent-conformance` as a dependency of package `molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)`
+
+Caused by:
+  failed to load source for dependency `executable-extent-conformance`
+
+Caused by:
+  unable to update rad://z37R1bP1kHcELs89RNbQRaqbCVKxB?rev=025d9636f0161777710dac37b3c210ca0ad9483f#025d9636
+
+Caused by:
+  failed to fetch into: /home/brittonr/.cargo/git/db/_empty-ee1c240dc3f955cf
+
+Caused by:
+  process didn't exit successfully: `git fetch --tags --force --update-head-ok 'rad://z37R1bP1kHcELs89RNbQRaqbCVKxB' '+refs/heads/*:refs/remotes/origin/*' '+HEAD:refs/remotes/origin/HEAD'` (exit status: 128)
