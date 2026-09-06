@@ -1,0 +1,8 @@
+{
+  "chunk_bytes": 65536,
+  "max_archive_bytes": 1048576,
+  "max_connections": 2,
+  "read_seconds": 10,
+  "schema": "molten.content-blob-vm-policy.v1",
+  "service_seconds": 300
+}
