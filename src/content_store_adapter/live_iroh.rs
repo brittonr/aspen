@@ -1,4 +1,15 @@
+use std::net::SocketAddr;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 use std::time::Duration;
+
+#[path = "live_handoff.rs"]
+mod handoff;
+pub use handoff::*;
+#[path = "live_read_gate.rs"]
+mod read_gate;
 
 use bao_tree::io::BaoContentItem;
 use iroh::protocol::Router;
@@ -30,12 +41,67 @@ pub struct LiveIrohIdentity<'a> {
     pub backend_ref: &'a str,
 }
 
+/// Public readback only; the key remains in the supplied capability namespace.
+#[derive(Debug, Clone)]
+pub struct LiveIrohIdentitySummary {
+    pub endpoint_id: String,
+    pub public_key: String,
+    pub handle_ref: String,
+    pub backend_ref: String,
+}
+
+pub fn inspect_live_iroh_identity(
+    namespace: &NodeStateNamespace,
+    backend_ref: &str,
+) -> Result<LiveIrohIdentitySummary> {
+    let path = crate::fabric_crypto_identity::transport_key_path()?;
+    let bytes = namespace.read(&path, crate::node_state::MAX_NODE_SECRET_BYTES)?;
+    let material = crate::fabric_crypto_identity::transport_endpoint_material(&bytes, backend_ref)?;
+    // Reuse the owner's permission/currentness/identity check before readback.
+    let _key = crate::fabric_crypto_identity::load_transport_secret_for_identity(
+        namespace,
+        &material.endpoint_id,
+        &material.handle_ref,
+        backend_ref,
+    )?;
+    Ok(LiveIrohIdentitySummary {
+        endpoint_id: material.endpoint_id,
+        public_key: material.public_key,
+        handle_ref: material.handle_ref,
+        backend_ref: backend_ref.to_string(),
+    })
+}
+
+impl LiveIrohIdentitySummary {
+    pub fn bind<'a>(&'a self, namespace: &'a NodeStateNamespace) -> LiveIrohIdentity<'a> {
+        LiveIrohIdentity {
+            namespace,
+            endpoint_id: &self.endpoint_id,
+            handle_ref: &self.handle_ref,
+            backend_ref: &self.backend_ref,
+        }
+    }
+}
+
 pub struct LiveIrohPublication {
     router: Router,
     _store: MemStore,
     manifest: ContentManifestDescriptor,
     locators: Vec<LiveChunkLocator>,
     backend_hint_ref: String,
+    manifest_value: preserves::IOValue,
+    denied_connections: Arc<AtomicU64>,
+}
+
+pub struct LiveIrohServeOptions {
+    pub bind_addr: SocketAddr,
+    pub read_grant: ContentReadGrant,
+}
+
+pub struct LiveIrohReadOptions<'a> {
+    pub identity: Option<LiveIrohIdentity<'a>>,
+    pub bind_addr: Option<SocketAddr>,
+    pub timeout: Duration,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,6 +119,18 @@ impl LiveIrohPublication {
 
     pub fn backend_hint_ref(&self) -> &str {
         &self.backend_hint_ref
+    }
+
+    pub fn denied_connections(&self) -> u64 {
+        self.denied_connections.load(Ordering::Relaxed)
+    }
+
+    fn remote(&self) -> LiveIrohRemote {
+        LiveIrohRemote {
+            manifest: self.manifest.clone(),
+            locators: self.locators.clone(),
+            backend_hint_ref: self.backend_hint_ref.clone(),
+        }
     }
 
     #[cfg(test)]
@@ -86,15 +164,44 @@ pub async fn publish_live_iroh_chunks(
     manifest_ref: &str,
     identity: LiveIrohIdentity<'_>,
 ) -> Result<LiveIrohPublication> {
+    publish_live_iroh_inner(profile, root, manifest_ref, identity, None).await
+}
+
+/// Opt-in explicit-address, manifest-specific read protection. Old publication
+/// remains a compatibility API; endpoint possession never creates this grant.
+pub async fn publish_protected_live_iroh_chunks(
+    profile: &ContentAdapterProfile,
+    root: &CapabilityChunkRoot,
+    manifest_ref: &str,
+    identity: LiveIrohIdentity<'_>,
+    options: LiveIrohServeOptions,
+) -> Result<LiveIrohPublication> {
+    if options.read_grant.manifest_ref() != manifest_ref
+        || profile.bounds.max_concurrent_operations > 64
+        || options.bind_addr.ip().is_unspecified()
+        || options.bind_addr.port() == 0
+    {
+        return Err(MoltenError::invalid_harness("live Iroh serving grant/address denied"));
+    }
+    publish_live_iroh_inner(profile, root, manifest_ref, identity, Some(options)).await
+}
+
+async fn publish_live_iroh_inner(
+    profile: &ContentAdapterProfile,
+    root: &CapabilityChunkRoot,
+    manifest_ref: &str,
+    identity: LiveIrohIdentity<'_>,
+    options: Option<LiveIrohServeOptions>,
+) -> Result<LiveIrohPublication> {
     if profile.class != ContentAdapterClass::IrohBlobs {
         return Err(MoltenError::invalid_harness("live Iroh publication requires iroh-blobs adapter profile"));
     }
-    let source_manifest = crate::chunk_store::read_manifest_with_root(root, manifest_ref)?;
-    let manifest = manifest_descriptor(&source_manifest);
     let profile_issues = validate_content_profile(profile);
     if !profile_issues.is_empty() {
         return Err(MoltenError::invalid_harness(format!("live Iroh profile denied: {profile_issues:?}")));
     }
+    let source_manifest = crate::chunk_store::read_manifest_with_root(root, manifest_ref)?;
+    let manifest = manifest_descriptor(&source_manifest);
     let manifest_issues = validate_manifest_descriptor(&manifest);
     if !manifest_issues.is_empty() {
         return Err(MoltenError::invalid_harness(format!("live Iroh manifest denied: {manifest_issues:?}")));
@@ -109,12 +216,13 @@ pub async fn publish_live_iroh_chunks(
         identity.handle_ref,
         identity.backend_ref,
     )?;
-    let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
+    let mut builder = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
         .secret_key(secret_key)
-        .relay_mode(iroh::RelayMode::Disabled)
-        .bind()
-        .await
-        .map_err(iroh_error)?;
+        .relay_mode(iroh::RelayMode::Disabled);
+    if let Some(options) = &options {
+        builder = builder.clear_ip_transports().bind_addr(options.bind_addr).map_err(iroh_error)?;
+    }
+    let endpoint = builder.bind().await.map_err(iroh_error)?;
     let store = MemStore::new();
     let mut locators = Vec::with_capacity(source_manifest.chunks.len());
     for (position, chunk) in source_manifest.chunks.iter().enumerate() {
@@ -133,7 +241,22 @@ pub async fn publish_live_iroh_chunks(
         });
     }
     let blobs = BlobsProtocol::new(&store, None);
-    let router = Router::builder(endpoint).accept(iroh_blobs::ALPN, blobs).spawn();
+    let denied_connections = Arc::new(AtomicU64::new(0));
+    let router = match options {
+        Some(options) => Router::builder(endpoint)
+            .accept(
+                iroh_blobs::ALPN,
+                read_gate::ReadGatedBlobs::new(
+                    blobs,
+                    options.read_grant,
+                    manifest_ref.to_string(),
+                    denied_connections.clone(),
+                    profile.bounds.max_concurrent_operations,
+                ),
+            )
+            .spawn(),
+        None => Router::builder(endpoint).accept(iroh_blobs::ALPN, blobs).spawn(),
+    };
     let backend_hint_ref = backend_hint_ref(
         ContentAdapterClass::IrohBlobs,
         &format!("{}\0{}", identity.endpoint_id, identity.backend_ref),
@@ -144,6 +267,8 @@ pub async fn publish_live_iroh_chunks(
         manifest,
         locators,
         backend_hint_ref,
+        manifest_value: source_manifest.value,
+        denied_connections,
     })
 }
 
@@ -161,6 +286,34 @@ pub async fn execute_live_iroh_stream_get(
     retained: Option<&ContentPartialState>,
     timeout: Duration,
 ) -> Result<LiveIrohContentExecution> {
+    execute_live_iroh_remote_get(
+        profile,
+        &publication.remote(),
+        command,
+        generation,
+        retained,
+        LiveIrohReadOptions {
+            identity: None,
+            bind_addr: None,
+            timeout,
+        },
+    )
+    .await
+}
+
+/// Cross-process client path. The remote descriptor has no router or source store.
+pub async fn execute_live_iroh_remote_get(
+    profile: &ContentAdapterProfile,
+    publication: &LiveIrohRemote,
+    command: &ContentCommand,
+    generation: u64,
+    retained: Option<&ContentPartialState>,
+    options: LiveIrohReadOptions<'_>,
+) -> Result<LiveIrohContentExecution> {
+    let timeout = options.timeout;
+    if timeout.is_zero() || timeout > Duration::from_secs(60) {
+        return Err(MoltenError::invalid_harness("live Iroh timeout exceeds finite bound"));
+    }
     if profile.class != ContentAdapterClass::IrohBlobs {
         return Err(MoltenError::invalid_harness("live Iroh get requires iroh-blobs adapter profile"));
     }
@@ -170,11 +323,19 @@ pub async fn execute_live_iroh_stream_get(
     }
     let mut state = begin_partial_state(profile, &publication.manifest, command, generation, retained)
         .map_err(|issues| MoltenError::invalid_harness(format!("live Iroh partial state denied: {issues:?}")))?;
-    let client = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
-        .relay_mode(iroh::RelayMode::Disabled)
-        .bind()
-        .await
-        .map_err(iroh_error)?;
+    let mut builder = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal).relay_mode(iroh::RelayMode::Disabled);
+    if let Some(identity) = options.identity {
+        builder = builder.secret_key(crate::fabric_crypto_identity::load_transport_secret_for_identity(
+            identity.namespace,
+            identity.endpoint_id,
+            identity.handle_ref,
+            identity.backend_ref,
+        )?);
+    }
+    if let Some(address) = options.bind_addr {
+        builder = builder.clear_ip_transports().bind_addr(address).map_err(iroh_error)?;
+    }
+    let client = builder.bind().await.map_err(iroh_error)?;
     let resume_position = state.verified_chunk_refs.len();
     let mut events = Vec::new();
     let mut verified_chunks = Vec::new();
@@ -310,7 +471,7 @@ pub async fn execute_live_iroh_stream_get(
 
 fn finish_live_execution(
     profile: &ContentAdapterProfile,
-    publication: &LiveIrohPublication,
+    publication: &LiveIrohRemote,
     state: ContentPartialState,
     events: Vec<CanonicalContentArtifact<ContentEvent>>,
     verified_chunks: Vec<VerifiedChunkPayload>,
