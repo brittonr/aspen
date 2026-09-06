@@ -184,6 +184,8 @@ Molten runs a bounded adapter pilot against the published `schema-identity-core`
 
 ## Node runtime daemon
 
+Normal `node run` and protected content serving currently fail closed. Real startup evidence is not yet integrated. The portable [startup evidence verifier](docs/node-startup-evidence.md) checks explicit snapshots without an ambient workspace. Its reports are verification-only and cannot authorize startup. The lifecycle examples below do not establish production readiness.
+
 The cluster convenience wrapper initializes and controls per-node state roots while preserving the same node receipts. For source-tree development, run it through Cargo or an already-built Cargo binary; `nix develop` provides tools but does not install a freshly built `molten` binary by itself. Re-running `cluster init` over an existing cluster manifest or node lifecycle state fails closed; pass `--force` only when you intentionally want to remove the planned node roots and write fresh lifecycle evidence.
 
 ```sh

@@ -1,0 +1,72 @@
+Running as unit: molten-startup-tests.service; invocation ID: be1b3d0a61e74bc88559133006b76dbd
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core)
+    Finished `test` profile [unoptimized] target(s) in 12.75s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/molten_core-7a5c4cbd2780236d)
+
+running 5 tests
+test node_startup::tests::source_binary_and_tool_roles_do_not_alias ... ok
+test node_startup::tests::membership_order_and_bounds_are_exact ... ok
+test node_startup::tests::policy_and_descriptor_deny_before_member_plan ... ok
+test node_startup::tests::exact_plan_and_measured_members ... ok
+test node_startup::tests::source_context_and_raw_inventory_are_bound ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 364 filtered out; finished in 0.00s
+
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core)
+   Compiling molten-node-host v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-host)
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+error[E0433]: cannot find module or crate `tempfile` in this scope
+  --> src/node/startup_evidence/tests.rs:18:16
+   |
+18 |     let root = tempfile::tempdir().unwrap();
+   |                ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+   |
+   = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `tempfile` in this scope
+  --> src/node/startup_evidence/tests.rs:19:22
+   |
+19 |     let policy_dir = tempfile::tempdir().unwrap();
+   |                      ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+   |
+   = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `tempfile` in this scope
+  --> src/node/startup_evidence/tests.rs:34:16
+   |
+34 |     let root = tempfile::tempdir().unwrap();
+   |                ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+   |
+   = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `tempfile` in this scope
+  --> src/node/startup_evidence/tests.rs:45:16
+   |
+45 |     let root = tempfile::tempdir().unwrap();
+   |                ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+   |
+   = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `tempfile` in this scope
+  --> src/node/startup_evidence/tests.rs:67:16
+   |
+67 |     let root = tempfile::tempdir().unwrap();
+   |                ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+   |
+   = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `tempfile` in this scope
+  --> src/node/startup_evidence/tests.rs:68:19
+   |
+68 |     let outside = tempfile::tempdir().unwrap();
+   |                   ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+   |
+   = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `molten` (lib test) due to 6 previous errors
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=101/n/a
+               Service runtime: 55.200s
+             CPU time consumed: 1min 720ms
+                   Memory peak: 2.3G (swap: 0B)

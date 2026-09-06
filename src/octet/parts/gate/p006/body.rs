@@ -239,7 +239,16 @@ fn validate_metadata_binding(
         push_check(checks, "status-profile-current", false);
         return false;
     };
-    let expected = match expected_metadata_for_command(command.text.trim()) {
+    validate_metadata_against_expected(status, expected_metadata_for_command(command.text.trim()), checks, diagnostics)
+}
+
+fn validate_metadata_against_expected(
+    status: &StatusArtifact,
+    expected: std::result::Result<ExpectedMetadata, String>,
+    checks: &mut impl crate::bounded::VecSink<Check>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> bool {
+    let expected = match expected {
         Ok(expected) => expected,
         Err(message) => {
             push_check(checks, "status-config-current", false);

@@ -1,0 +1,7 @@
+Running as unit: molten-startup-baseline.service; invocation ID: 8f5d877469784eab8d16c878bd0877c0
+error: could not find `Cargo.toml` in `/home/brittonr` or any parent directory
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=101/n/a
+               Service runtime: 45ms
+             CPU time consumed: 24ms
+                   Memory peak: 4.4M (swap: 0B)

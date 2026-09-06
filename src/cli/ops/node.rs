@@ -15,6 +15,8 @@ mod health;
 mod iroh;
 #[path = "node/lifecycle.rs"]
 mod lifecycle;
+#[path = "node/startup.rs"]
+mod startup;
 #[path = "node/workflow.rs"]
 mod workflow;
 
@@ -27,6 +29,7 @@ pub(crate) fn run(command: Command) -> molten::error::Result<()> {
         command::Top::RunLoop(input) => lifecycle::run_loop(input),
         command::Top::Serve(input) => lifecycle::serve(input),
         command::Top::Content(input) => content::run(input),
+        command::Top::StartupEvidence(input) => startup::run(input),
         command::Top::Status(input) => lifecycle::status(input),
         command::Top::Stop(input) => lifecycle::stop(input),
         command::Top::Show(input) => lifecycle::show(input),

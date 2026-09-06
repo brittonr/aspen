@@ -79,6 +79,10 @@ fn load_workspace_octet_config(workspace_root: &Path) -> std::result::Result<Wor
     let manifest_path = workspace_root.join("Cargo.toml");
     let source =
         fs::read_to_string(&manifest_path).map_err(|error| format!("read {}: {error}", manifest_path.display()))?;
+    parse_workspace_octet_config(&source, &manifest_path)
+}
+
+fn parse_workspace_octet_config(source: &str, manifest_path: &Path) -> std::result::Result<WorkspaceOctetConfig, String> {
     let document = source
         .parse::<toml::Table>()
         .map_err(|error| format!("parse {}: {error}", manifest_path.display()))?;
@@ -91,8 +95,8 @@ fn load_workspace_octet_config(workspace_root: &Path) -> std::result::Result<Wor
         .and_then(toml::Value::as_table)
         .ok_or_else(|| format!("missing [workspace.metadata.octet] in {}", manifest_path.display()))?;
     Ok(WorkspaceOctetConfig {
-        default_scope: string_array_field(octet, "default_scope", &manifest_path)?,
-        cargo_check_args: string_array_field(octet, "cargo_check_args", &manifest_path)?,
+        default_scope: string_array_field(octet, "default_scope", manifest_path)?,
+        cargo_check_args: string_array_field(octet, "cargo_check_args", manifest_path)?,
     })
 }
 

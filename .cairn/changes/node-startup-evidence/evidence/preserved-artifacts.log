@@ -1,0 +1,4 @@
+/home/brittonr/.local/share/onix/native-runtime-fixtures/3e429fca9829a73ecba22f711b67c11baaa9e8958737ed781b8ec3181a66bac9.archive: OK
+/home/brittonr/.cargo-target/debug/examples/content-blob-vm: OK
+/nix/store/18vn6hgnhamb9cvql780kbkwpm2qi1g8-mantle-0.1.0/bin/mantle: OK
+8c57ac0c15b5b69465f5ec17031f90571edc86fe05d0254a2841528f2e8cef6b  /home/brittonr/.cargo-target/molten-node97/debug/molten

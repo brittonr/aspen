@@ -1,0 +1,97 @@
+Running as unit: molten-startup-final.service; invocation ID: 8ecc98e6b0b64fb1820628b2b16f0b2a
+    Finished `test` profile [unoptimized] target(s) in 0.39s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/molten_core-7a5c4cbd2780236d)
+
+running 5 tests
+test node_startup::tests::policy_and_descriptor_deny_before_member_plan ... ok
+test node_startup::tests::source_binary_and_tool_roles_do_not_alias ... ok
+test node_startup::tests::membership_order_and_bounds_are_exact ... ok
+test node_startup::tests::exact_plan_and_measured_members ... ok
+test node_startup::tests::source_context_and_raw_inventory_are_bound ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 364 filtered out; finished in 0.00s
+
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `test` profile [unoptimized] target(s) in 1m 01s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/molten-ac10259884d47bce)
+
+running 36 tests
+test quality::startup_snapshot::tests::metadata_formula_matches_existing_owner ... ok
+test quality::startup_snapshot::tests::replay_command_is_not_source_coverage ... ok
+test quality::startup_snapshot::tests::stale_context_is_not_repaired_by_receipt_or_cwd ... ok
+test quality::startup_snapshot::tests::missing_source_and_changed_member_deny ... ok
+test quality::tests::malformed_object_corpus_denies ... ok
+test quality::tests::noncanonical_command_denies ... ok
+test quality::tests::octet_metadata_hash_changes_when_effective_input_changes ... ok
+test quality::tests::object_corpus_with_malformed_object_set_hash_denies ... ok
+test quality::tests::strict_profile_denies_missing_replay_inventory_critical_paths ... ok
+test quality::tests::missing_object_corpus_denies_clean_status ... ok
+test quality::tests::source_gate_validation_denies_noncanonical_artifact_ref ... ok
+test quality::tests::missing_status_denies_with_receipt ... ok
+test quality::tests::stale_status_metadata_denies_clean_status ... ok
+test quality::startup_snapshot::tests::explicit_snapshot_is_deterministic_and_strict ... ok
+test quality::tests::imports_raw_octet_artifacts_and_derived_evidence_to_ledger ... ok
+test quality::tests::octet_metadata_payloads_match_pinned_canonical_field_order ... ok
+test quality::tests::baseline_check_passes_identical_noncritical_warning ... ok
+test quality::tests::source_gate_validation_denies_receipt_without_source_scope_coverage_check ... ok
+test quality::tests::object_corpus_without_fingerprint_or_critical_paths_denies ... ok
+test quality::tests::malformed_status_denies_with_receipt ... ok
+test quality::tests::baseline_check_denies_unreviewed_critical_warning ... ok
+test quality::tests::baseline_check_denies_new_warning ... ok
+test quality::tests::gate_receipt_binds_structured_findings_ref_to_summary_index ... ok
+test quality::tests::source_gate_validation_accepts_clean_strict_receipt ... ok
+test quality::tests::baseline_check_accepts_exact_review_manifest_for_critical_warning ... ok
+test quality::tests::baseline_check_allows_removed_warning ... ok
+test quality::tests::strict_profile_accepts_replay_inventory_for_shell_critical_paths ... ok
+test quality::tests::strict_profile_denies_warning_only_status ... ok
+test quality::tests::strict_profile_passes_clean_status_with_required_artifacts ... ok
+test quality::tests::source_gate_validation_denies_unsupported_custom_source_scope ... ok
+test quality::tests::source_gate_validation_denies_stale_or_tampered_receipt ... ok
+test quality::tests::unsupported_tool_version_denies_clean_status ... ok
+test quality::startup_snapshot::tests::narrowed_scope_baselines_and_suppression_are_rejected ... ok
+test quality::tests::baseline_check_denies_expired_baseline ... ok
+test quality::tests::source_gate_validation_denies_warning_or_missing_receipts ... ok
+test quality::startup_snapshot::tests::synthetic_toolchain_findings_and_inconsistent_summary_deny ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 1414 filtered out; finished in 0.11s
+
+    Finished `test` profile [unoptimized] target(s) in 1.43s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/molten-ac10259884d47bce)
+
+running 5 tests
+test node_startup_evidence::tests::symlinks_directories_and_oversized_leaves_fail_closed ... ok
+test node_startup_evidence::tests::unknown_fields_cannot_add_authority_or_paths ... ok
+test node_startup_evidence::tests::wrong_descriptor_is_rejected_before_missing_members ... ok
+test node_startup_evidence::tests::wrong_runtime_binary_is_rejected_before_member_reads ... ok
+test node_startup_evidence::tests::verification_only_report_never_authorizes_startup ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1445 filtered out; finished in 50.76s
+
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `test` profile [unoptimized] target(s) in 53.00s
+     Running tests/node_content_service.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/node_content_service-5498a3c56df8546b)
+
+running 4 tests
+test unknown_json_authority_is_rejected ... ok
+test valid_content_policy_cannot_bypass_missing_real_startup_evidence ... ok
+test denied_policy_precedes_root_and_listener_effects ... ok
+test production_cli_never_manufactures_a_clean_startup_gate ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/node_startup_evidence.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/node_startup_evidence-6bab6d9684935214)
+
+running 2 tests
+test cli_denies_invalid_policy_without_creating_bundle_or_state ... ok
+test cli_checks_descriptor_identity_before_decode_or_member_reads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+    Finished `dev` profile [unoptimized] target(s) in 0.35s
+    Checking molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `dev` profile [unoptimized] target(s) in 45.26s
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 3min 33.313s
+             CPU time consumed: 4min 37.983s
+                   Memory peak: 3.1G (swap: 0B)

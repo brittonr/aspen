@@ -1,0 +1,89 @@
+Running as unit: molten-startup-tests.service; invocation ID: 5210c8a51aba4f6e93ddd6e39faf8411
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core)
+    Finished `test` profile [unoptimized] target(s) in 13.37s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/molten_core-7a5c4cbd2780236d)
+
+running 5 tests
+test node_startup::tests::policy_and_descriptor_deny_before_member_plan ... ok
+test node_startup::tests::source_binary_and_tool_roles_do_not_alias ... ok
+test node_startup::tests::membership_order_and_bounds_are_exact ... ok
+test node_startup::tests::exact_plan_and_measured_members ... ok
+test node_startup::tests::source_context_and_raw_inventory_are_bound ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 364 filtered out; finished in 0.00s
+
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core)
+   Compiling molten-node-host v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-host)
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+error[E0583]: file not found for module `tests`
+   --> src/node/startup_evidence.rs:105:1
+    |
+105 | mod tests;
+    | ^^^^^^^^^^
+    |
+    = help: to create the module `tests`, create file "src/node/tests.rs" or "src/node/tests/mod.rs"
+    = note: if there is a `mod tests` elsewhere in the crate already, import it with `use crate::...` instead
+
+error[E0271]: type mismatch resolving `<[Vec<u8>] as Index<usize>>::Output == [u8]`
+  --> src/octet/startup_snapshot.rs:66:47
+   |
+66 |         artifact_ref: content_ref_from_bytes(&snapshot.members[index]), text: text(index)?.into(),
+   |                                               ^^^^^^^^^^^^^^^^^^^^^^^ expected `[u8]`, found `Vec<u8>`
+   |
+   = note: expected slice `[u8]`
+             found struct `Vec<u8>`
+
+error[E0277]: `?` couldn't convert the error to `std::string::String`
+  --> src/octet/startup_snapshot.rs:92:79
+   |
+85 | fn explicit_metadata(manifest: &str, dylint: &[u8], command: &str) -> std::result::Result<ExpectedMetadata, String> {
+   |                                                                       --------------------------------------------- expected `std::string::String` because of this
+...
+92 |         OctetFileHashEntry { hash: Some(b3_ref_from_bytes(manifest.as_bytes())?), path: "Cargo.toml".into() },
+   |                                         --------------------------------------^ the trait `From<molten_node_host::error::MoltenError>` is not implemented for `std::string::String`
+   |                                         |
+   |                                         this can't be annotated with `?` because it has type `Result<_, molten_node_host::error::MoltenError>`
+   |
+   = note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait
+   = help: `std::string::String` implements trait `From<T>`:
+             From<&mut str>
+             From<&nickel_lang_core::term::string::NickelString>
+             From<&std::string::String>
+             From<&str>
+             From<Box<str>>
+             From<KebabString>
+             From<aliasable::string::AliasableString>
+             From<char>
+           and 12 others
+
+error[E0277]: `?` couldn't convert the error to `std::string::String`
+  --> src/octet/startup_snapshot.rs:93:66
+   |
+85 | fn explicit_metadata(manifest: &str, dylint: &[u8], command: &str) -> std::result::Result<ExpectedMetadata, String> {
+   |                                                                       --------------------------------------------- expected `std::string::String` because of this
+...
+93 |         OctetFileHashEntry { hash: Some(b3_ref_from_bytes(dylint)?), path: "dylint.toml".into() },
+   |                                         -------------------------^ the trait `From<molten_node_host::error::MoltenError>` is not implemented for `std::string::String`
+   |                                         |
+   |                                         this can't be annotated with `?` because it has type `Result<_, molten_node_host::error::MoltenError>`
+   |
+   = note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait
+   = help: `std::string::String` implements trait `From<T>`:
+             From<&mut str>
+             From<&nickel_lang_core::term::string::NickelString>
+             From<&std::string::String>
+             From<&str>
+             From<Box<str>>
+             From<KebabString>
+             From<aliasable::string::AliasableString>
+             From<char>
+           and 12 others
+
+Some errors have detailed explanations: E0271, E0277, E0583.
+For more information about an error, try `rustc --explain E0271`.
+error: could not compile `molten` (lib test) due to 4 previous errors
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=101/n/a
+               Service runtime: 55.399s
+             CPU time consumed: 1min 908ms
+                   Memory peak: 2.3G (swap: 0B)

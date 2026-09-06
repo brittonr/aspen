@@ -1,0 +1,43 @@
+Running as unit: molten-startup-baseline-2.service; invocation ID: 6e328f8503ac4b2ab78a7172be339f66
+   Compiling molten v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service)
+    Finished `test` profile [unoptimized] target(s) in 52.90s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/molten-ac10259884d47bce)
+
+running 29 tests
+test quality::tests::octet_metadata_payloads_match_pinned_canonical_field_order ... ok
+test quality::tests::octet_metadata_hash_changes_when_effective_input_changes ... ok
+test quality::tests::malformed_status_denies_with_receipt ... ok
+test quality::tests::missing_status_denies_with_receipt ... ok
+test quality::tests::stale_status_metadata_denies_clean_status ... ok
+test quality::tests::noncanonical_command_denies ... ok
+test quality::tests::malformed_object_corpus_denies ... ok
+test quality::tests::object_corpus_without_fingerprint_or_critical_paths_denies ... ok
+test quality::tests::missing_object_corpus_denies_clean_status ... ok
+test quality::tests::object_corpus_with_malformed_object_set_hash_denies ... ok
+test quality::tests::source_gate_validation_denies_noncanonical_artifact_ref ... ok
+test quality::tests::strict_profile_denies_missing_replay_inventory_critical_paths ... ok
+test quality::tests::imports_raw_octet_artifacts_and_derived_evidence_to_ledger ... ok
+test quality::tests::unsupported_tool_version_denies_clean_status ... ok
+test quality::tests::baseline_check_passes_identical_noncritical_warning ... ok
+test quality::tests::baseline_check_denies_expired_baseline ... ok
+test quality::tests::source_gate_validation_denies_unsupported_custom_source_scope ... ok
+test quality::tests::baseline_check_denies_unreviewed_critical_warning ... ok
+test quality::tests::source_gate_validation_denies_receipt_without_source_scope_coverage_check ... ok
+test quality::tests::source_gate_validation_denies_stale_or_tampered_receipt ... ok
+test quality::tests::gate_receipt_binds_structured_findings_ref_to_summary_index ... ok
+test quality::tests::source_gate_validation_accepts_clean_strict_receipt ... ok
+test quality::tests::baseline_check_accepts_exact_review_manifest_for_critical_warning ... ok
+test quality::tests::strict_profile_passes_clean_status_with_required_artifacts ... ok
+test quality::tests::strict_profile_accepts_replay_inventory_for_shell_critical_paths ... ok
+test quality::tests::baseline_check_allows_removed_warning ... ok
+test quality::tests::source_gate_validation_denies_warning_or_missing_receipts ... ok
+test quality::tests::strict_profile_denies_warning_only_status ... ok
+test quality::tests::baseline_check_denies_new_warning ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 1409 filtered out; finished in 0.01s
+
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 53.006s
+             CPU time consumed: 1min 12.494s
+                   Memory peak: 3.4G (swap: 0B)

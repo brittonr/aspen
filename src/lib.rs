@@ -84,6 +84,8 @@ pub mod mesh;
 compat_module!(federation, mesh);
 pub mod content_replication;
 pub mod content_store_adapter;
+#[path = "node/startup_evidence.rs"]
+pub mod node_startup_evidence;
 pub mod dag_sync;
 #[cfg(feature = "executable-extents")]
 pub mod executable_extent;

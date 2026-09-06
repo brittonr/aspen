@@ -1,3 +1,5 @@
+pub mod startup_snapshot;
+
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/p000/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/octet/parts/gate/p002/body.rs"));
