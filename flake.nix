@@ -76,7 +76,7 @@
       url = "github:OnixResearch/octet/4367300e10740ecc99ba4b2171ace561b4787327";
       flake = false;
     };
-    octet-toolchain.url = "github:OnixResearch/octet?rev=fc38f59330b626961d166febfdf1a5aa6575460f";
+    octet-toolchain.url = "git+ssh://git@github.com/OnixResearch/octet?rev=c9b06bcf565c51d4a77d210e61b69ae51db9df25";
     valence-src = {
       url = "github:OnixResearch/valence/5f1c2ba5072c6f9622fa59b1af20502985f569fd";
       flake = false;
@@ -941,7 +941,7 @@
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
           octetPackages = octet-toolchain.packages.${system};
-          octetRevision = "fc38f59330b626961d166febfdf1a5aa6575460f";
+          octetRevision = "c9b06bcf565c51d4a77d210e61b69ae51db9df25";
           profileDir = ./verification/verified-node-replication-pilot;
           workspaceSource = sourceForConfigChecks;
           savedEvidenceDir = ./.cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence;

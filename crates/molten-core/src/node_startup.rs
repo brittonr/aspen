@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 pub const POLICY_SCHEMA: &str = "molten.node-startup-cohort.v1";
 pub const BUNDLE_SCHEMA: &str = "molten.node-startup-bundle.v1";
-pub const OCTET_REVISION: &str = "fc38f59330b626961d166febfdf1a5aa6575460f";
+pub const OCTET_REVISION: &str = "c9b06bcf565c51d4a77d210e61b69ae51db9df25";
 pub const MAX_DESCRIPTOR_BYTES: usize = 32 * 1024;
 pub const MAX_MEMBER_BYTES: u64 = 8 * 1024 * 1024;
 pub const MAX_BUNDLE_BYTES: u64 = 32 * 1024 * 1024;

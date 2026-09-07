@@ -1476,18 +1476,18 @@
         "rust-overlay": "rust-overlay_12"
       },
       "locked": {
-        "lastModified": 1783822227,
-        "narHash": "sha256-O0jnGZ9cr7bsyZqYTmBEUY0TvRnvMalI19b7eGZu42I=",
-        "owner": "OnixResearch",
-        "repo": "octet",
-        "rev": "fc38f59330b626961d166febfdf1a5aa6575460f",
-        "type": "github"
+        "lastModified": 1788739097,
+        "narHash": "sha256-UrcFiwnUQDAq3viNaNTDrtrydUzRoW0g7ZY32l1YjFE=",
+        "ref": "refs/heads/main",
+        "rev": "c9b06bcf565c51d4a77d210e61b69ae51db9df25",
+        "revCount": 481,
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/octet"
       },
       "original": {
-        "owner": "OnixResearch",
-        "repo": "octet",
-        "rev": "fc38f59330b626961d166febfdf1a5aa6575460f",
-        "type": "github"
+        "rev": "c9b06bcf565c51d4a77d210e61b69ae51db9df25",
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/octet"
       }
     },
     "onix-core-src": {

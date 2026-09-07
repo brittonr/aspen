@@ -30,7 +30,7 @@ fn cli_checks_descriptor_identity_before_decode_or_member_reads() {
     let policy = serde_json::json!({"schema":"molten.node-startup-cohort.v1", "descriptor_blake3":hash,
         "cohort":{"source_revision":"a".repeat(40), "source_inventory_blake3":hash, "executable_blake3":hash,
         "build_rustc_blake3":hash, "build_toolchain":"nightly-2026-05-26",
-        "octet_revision":"fc38f59330b626961d166febfdf1a5aa6575460f", "octet_cli_blake3":hash,
+        "octet_revision":"c9b06bcf565c51d4a77d210e61b69ae51db9df25", "octet_cli_blake3":hash,
         "octet_driver_blake3":hash,"octet_lints_blake3":hash,"octet_rustc_blake3":hash,
         "octet_toolchain":"nightly-2026-03-21-x86_64-unknown-linux-gnu"}});
     root.write("policy.json", serde_json::to_vec(&policy).unwrap()).unwrap();

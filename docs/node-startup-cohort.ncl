@@ -22,9 +22,9 @@ let Revision = Prelude.contract (fun value => std.is_string value && std.string.
         | doc "Repository build compiler cohort. It is distinct from the pinned Octet compiler."
         | default = "nightly-2026-05-26",
       octet_revision
-        | Prelude.contract (Prelude.is_exact_string "fc38f59330b626961d166febfdf1a5aa6575460f")
+        | Prelude.contract (Prelude.is_exact_string "c9b06bcf565c51d4a77d210e61b69ae51db9df25")
         | doc "Immutable Octet toolchain input for this version of the verifier."
-        | default = "fc38f59330b626961d166febfdf1a5aa6575460f",
+        | default = "c9b06bcf565c51d4a77d210e61b69ae51db9df25",
       octet_cli_blake3 | Hash | doc "Observed digest of the Octet CLI used for the run.",
       octet_driver_blake3 | Hash | doc "Observed digest of the Dylint driver used for the run.",
       octet_lints_blake3 | Hash | doc "Observed digest of the pinned Octet lint library.",

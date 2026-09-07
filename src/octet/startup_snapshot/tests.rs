@@ -60,7 +60,7 @@ pub(crate) fn fixture() -> (TrustedCohort, Descriptor, Vec<Vec<u8>>) {
         executable_blake3: "b".repeat(64),
         build_rustc_blake3: "c".repeat(64),
         build_toolchain: "nightly-2026-05-26".into(),
-        octet_revision: "fc38f59330b626961d166febfdf1a5aa6575460f".into(),
+        octet_revision: "c9b06bcf565c51d4a77d210e61b69ae51db9df25".into(),
         octet_cli_blake3: "e".repeat(64),
         octet_driver_blake3: "f".repeat(64),
         octet_lints_blake3: "1".repeat(64),
