@@ -1,0 +1,1 @@
+pub const MAX_NODE_SECRET_BYTES: u64 = 1_024 * 1_024;

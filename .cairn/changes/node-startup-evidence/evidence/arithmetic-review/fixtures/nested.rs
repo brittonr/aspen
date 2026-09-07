@@ -1,0 +1,1 @@
+pub const MAX_NODE_STATE_FILE_BYTES: u64 = 16 * 1_024 * 1_024;
