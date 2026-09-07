@@ -15,10 +15,10 @@ pub(in crate::node_state) fn consume(
     if observed.size > max_bytes {
         return Err(crate::node_state::invalid(format!("{label} size {} exceeds bound {max_bytes}", observed.size)));
     }
-    read_bytes(observed.file, max_bytes, label)
+    collect(observed.file, max_bytes, label)
 }
 
-fn read_bytes(file: cap_std::fs::File, max_bytes: u64, label: &str) -> crate::error::Result<Vec<u8>> {
+fn collect(file: cap_std::fs::File, max_bytes: u64, label: &str) -> crate::error::Result<Vec<u8>> {
     let limit_bytes = max_bytes
         .checked_add(1)
         .ok_or_else(|| crate::node_state::invalid("node state read bound overflow"))?;
