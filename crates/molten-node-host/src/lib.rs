@@ -9,6 +9,7 @@
 
 pub mod error;
 pub mod local_store;
+mod locator;
 #[path = "node/state.rs"]
 pub mod node_state;
 

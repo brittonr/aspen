@@ -106,12 +106,7 @@ fn validate_node_state_locator(value: &str) -> crate::error::Result<()> {
     if has_platform_prefix(value) {
         return Err(super::invalid(format!("platform-prefixed node state path {value} is not relative authority")));
     }
-    if value.contains("://")
-        || value.starts_with("iroh:")
-        || value.starts_with("http:")
-        || value.starts_with("https:")
-        || value.starts_with("blake3:")
-    {
+    if crate::locator::is_remote(value) {
         return Err(super::invalid(format!("remote or content locator {value} cannot become node state authority")));
     }
     Ok(())

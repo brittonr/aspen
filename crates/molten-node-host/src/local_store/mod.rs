@@ -432,12 +432,7 @@ fn validate_local_locator(input: &str) -> Result<()> {
             "platform-prefixed local store path {input} is not portable relative authority"
         )));
     }
-    if input.contains("://")
-        || input.starts_with("iroh:")
-        || input.starts_with("http:")
-        || input.starts_with("https:")
-        || input.starts_with("blake3:")
-    {
+    if crate::locator::is_remote(input) {
         return Err(MoltenError::invalid_harness(format!(
             "remote or content locator {input} cannot be used as a local filesystem path"
         )));
