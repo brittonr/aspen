@@ -1,0 +1,7 @@
+[workspace]
+members = ["app", "core"]
+resolver = "2"
+
+[workspace.metadata.octet]
+default_scope = ["-p", "registration-app"]
+cargo_check_args = ["--all-targets"]
