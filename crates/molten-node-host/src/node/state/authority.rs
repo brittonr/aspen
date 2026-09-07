@@ -114,7 +114,7 @@ impl NodeStateFile {
     }
 
     pub fn read_bounded(self, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
-        super::filesystem::bounded_read::consume(self.file, self.size, max_bytes, "observed node state file")
+        super::filesystem::read::consume(self, max_bytes, "observed node state file")
     }
 }
 

@@ -1,5 +1,7 @@
-#[path = "filesystem/bounded_read.rs"]
-pub(super) mod bounded_read;
+#[path = "filesystem/metadata.rs"]
+mod metadata;
+#[path = "filesystem/read.rs"]
+pub(super) mod read;
 
 use std::io::Write;
 
@@ -94,17 +96,7 @@ pub(super) fn write_regular_file(
     unix_mode: Option<u32>,
 ) -> crate::error::Result<()> {
     let (parent, leaf) = open_parent(dir, path, true)?;
-    match parent.symlink_metadata(leaf) {
-        Ok(metadata) => {
-            if super::enumeration::entry_kind(&metadata.file_type())
-                != super::authority::NodeStateEntryKind::RegularFile
-            {
-                return Err(super::invalid(format!("node state write leaf {} must be a regular file", path.display())));
-            }
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(crate::error::MoltenError::from(error)),
-    }
+    metadata::existing_leaf(&parent, leaf, path, "write")?;
     let mut options = cap_std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true).follow(cap_fs_ext::FollowSymlinks::No);
     #[cfg(unix)]
@@ -115,12 +107,7 @@ pub(super) fn write_regular_file(
     #[cfg(not(unix))]
     let _ = unix_mode;
     let mut file = parent.open_with(leaf, &options).map_err(crate::error::MoltenError::from)?;
-    if !file.metadata().map_err(crate::error::MoltenError::from)?.is_file() {
-        return Err(super::invalid(format!(
-            "node state write leaf {} changed away from a regular file",
-            path.display()
-        )));
-    }
+    metadata::opened_file(&file, path, "write")?;
     file.write_all(bytes).map_err(crate::error::MoltenError::from)?;
     file.flush().map_err(crate::error::MoltenError::from)
 }
@@ -147,13 +134,7 @@ pub(super) fn observe_file(
     let mut options = cap_std::fs::OpenOptions::new();
     options.read(true).follow(cap_fs_ext::FollowSymlinks::No);
     let file = parent.open_with(leaf, &options).map_err(crate::error::MoltenError::from)?;
-    let metadata = file.metadata().map_err(crate::error::MoltenError::from)?;
-    if !metadata.is_file() {
-        return Err(super::invalid(format!(
-            "node state read leaf {} changed away from a regular file",
-            path.display()
-        )));
-    }
+    let metadata = metadata::opened_file(&file, path, "read")?;
     #[cfg(unix)]
     let unix_mode = {
         use cap_std::fs::PermissionsExt;
@@ -217,6 +198,13 @@ fn open_parent_optional<'a>(
     let Some(parent_path) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) else {
         return dir.try_clone().map(|parent| Some((parent, leaf))).map_err(crate::error::MoltenError::from);
     };
+    Ok(open_optional_components(dir, parent_path)?.map(|parent| (parent, leaf)))
+}
+
+fn open_optional_components(
+    dir: &cap_std::fs::Dir,
+    parent_path: &std::path::Path,
+) -> crate::error::Result<Option<cap_std::fs::Dir>> {
     let mut current = dir.try_clone().map_err(crate::error::MoltenError::from)?;
     for component in parent_path.components() {
         let std::path::Component::Normal(segment) = component else {
@@ -228,7 +216,7 @@ fn open_parent_optional<'a>(
             Err(error) => return Err(crate::error::MoltenError::from(error)),
         }
     }
-    Ok(Some((current, leaf)))
+    Ok(Some(current))
 }
 
 pub(super) fn open_database_file(
@@ -236,29 +224,11 @@ pub(super) fn open_database_file(
     path: &std::path::Path,
 ) -> crate::error::Result<std::fs::File> {
     let (parent, leaf) = open_parent(dir, path, true)?;
-    match parent.symlink_metadata(leaf) {
-        Ok(metadata) => {
-            if super::enumeration::entry_kind(&metadata.file_type())
-                != super::authority::NodeStateEntryKind::RegularFile
-            {
-                return Err(super::invalid(format!(
-                    "node state database leaf {} must be a regular file",
-                    path.display()
-                )));
-            }
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(crate::error::MoltenError::from(error)),
-    }
+    metadata::existing_leaf(&parent, leaf, path, "database")?;
     let mut options = cap_std::fs::OpenOptions::new();
     options.read(true).write(true).create(true).follow(cap_fs_ext::FollowSymlinks::No);
     let file = parent.open_with(leaf, &options).map_err(crate::error::MoltenError::from)?;
-    if !file.metadata().map_err(crate::error::MoltenError::from)?.is_file() {
-        return Err(super::invalid(format!(
-            "node state database leaf {} changed away from a regular file",
-            path.display()
-        )));
-    }
+    metadata::opened_file(&file, path, "database")?;
     Ok(file.into_std())
 }
 
