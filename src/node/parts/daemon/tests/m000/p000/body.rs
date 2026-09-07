@@ -26,7 +26,7 @@
             .expect("profile resolution ref is canonical");
         let resolution_text = crate::preserves_rail::to_text(&init.profile_resolution_value).expect("resolution text");
         assert!(resolution_text.contains("local-fixture-config"));
-        let run = run_local(&RunInput { state_root: &root }).expect("run node");
+        let run = run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         crate::preserves_rail::validate_content_ref(&run.startup_ref).expect("startup ref is canonical");
         assert_eq!(run.adapter_receipt_refs.len(), crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
         let startup = crate::node_runtime::parse_node_startup_receipt(&run.startup_value).expect("startup parse");
@@ -37,11 +37,11 @@
         crate::preserves_rail::validate_content_ref(&stop.shutdown_ref).expect("shutdown ref is canonical");
         let stopped = status_local(&StatusInput { state_root: &root }).expect("stopped status");
         assert_eq!(stopped.status, "stopped");
-        let restarted = run_local(&RunInput { state_root: &root }).expect("restart node");
+        let restarted = run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("restart node");
         crate::preserves_rail::validate_content_ref(&restarted.startup_ref).expect("restart startup ref is canonical");
         let restarted_status = status_local(&StatusInput { state_root: &root }).expect("restarted status");
         assert_eq!(restarted_status.status, "running");
-        let stale = run_local(&RunInput { state_root: &root }).expect_err("stale running state denied");
+        let stale = run_local(&RunInput { state_root: &root, startup_evidence: None }).expect_err("stale running state denied");
         assert!(stale.to_string().contains("previous startup has no clean shutdown receipt"));
         let restart = crate::node_runtime::node_restart_health_receipt_value(
             &crate::node_runtime::RestartHealthReceiptValueInput {
@@ -79,7 +79,7 @@
             node_id: "node:running",
         })
         .expect("init running root");
-        run_local(&RunInput { state_root: &running_root }).expect("run root");
+        run_local(&RunInput { state_root: &running_root, startup_evidence: None }).expect("run root");
         let running = init_local(&InitInput {
             state_root: &running_root,
             node_id: "node:running",
@@ -93,7 +93,7 @@
             node_id: "node:stopped",
         })
         .expect("init stopped root");
-        run_local(&RunInput { state_root: &stopped_root }).expect("run stopped root");
+        run_local(&RunInput { state_root: &stopped_root, startup_evidence: None }).expect("run stopped root");
         stop_local(&StopInput { state_root: &stopped_root }).expect("stop root");
         let stopped = init_local(&InitInput {
             state_root: &stopped_root,
@@ -185,7 +185,7 @@
             node_id,
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         root
     }
 
@@ -314,7 +314,7 @@
             node_id: "node:loop",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let status_request = status_request().expect("status request");
         submit_control_request(&ControlSubmitInput {
             state_root: &root,
@@ -381,7 +381,7 @@
             node_id: "node:duplicate",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let status_request = status_request().expect("status request");
         let submitted = submit_control_request(&ControlSubmitInput {
             state_root: &root,

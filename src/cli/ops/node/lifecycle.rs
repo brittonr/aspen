@@ -122,6 +122,19 @@ fn checked_node_profile_from_cli(
     })
 }
 
+fn startup_evidence_paths<'a>(
+    policy: Option<&'a std::path::Path>,
+    bundle: Option<&'a std::path::Path>,
+) -> molten::error::Result<Option<molten::node_daemon::StartupEvidencePaths<'a>>> {
+    match (policy, bundle) {
+        (Some(policy), Some(bundle)) => Ok(Some(molten::node_daemon::StartupEvidencePaths { policy, bundle })),
+        (None, None) => Ok(None),
+        _ => Err(molten::error::MoltenError::invalid_harness(
+            "node startup evidence requires both --startup-policy and --startup-bundle",
+        )),
+    }
+}
+
 fn parse_adapter_profiles(values: &[String]) -> molten::error::Result<Vec<molten::node_runtime::NodeAdapterBinding>> {
     let mut adapters = Vec::with_capacity(values.len());
     for value in values {
@@ -137,9 +150,13 @@ pub(crate) fn run(input: super::command::base::Run) -> molten::error::Result<()>
     let super::command::base::Run {
         state_root,
         startup_out,
+        startup_policy,
+        startup_bundle,
     } = input;
+    let startup_evidence = startup_evidence_paths(startup_policy.as_deref(), startup_bundle.as_deref())?;
     let run = molten::node_daemon::run_local(&molten::node_daemon::RunInput {
         state_root: &state_root,
+        startup_evidence,
     })?;
     if let Some(path) = startup_out.as_ref() {
         super::core::write_file(path, &molten::preserves_rail::to_text(&run.startup_value)?)?;
@@ -191,8 +208,16 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
         service_receipt_out,
         live_ticket_out,
         supervisor_policy,
+        startup_policy,
+        startup_bundle,
         receipt_out,
     } = input;
+    let startup_evidence = startup_evidence_paths(startup_policy.as_deref(), startup_bundle.as_deref())?;
+    if startup_evidence.is_some() && (live_iroh || content_config.is_none()) {
+        return Err(molten::error::MoltenError::invalid_harness(
+            "node serve: startup evidence requires --content-config and excludes --live-iroh",
+        ));
+    }
     let supervisor_policy_value =
         supervisor_policy.as_ref().map(|path| super::core::read_preserves_file(path)).transpose()?;
     if live_iroh {
@@ -209,6 +234,8 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
                 service_receipt_out,
                 live_ticket_out,
                 supervisor_policy,
+                startup_policy: None,
+                startup_bundle: None,
                 receipt_out,
             },
             supervisor_policy_value.as_ref(),
@@ -223,10 +250,14 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
         };
         let served = if let Some(path) = content_config {
             let bytes = super::content::read_input(&path, 16_384)?;
-            let config = serde_json::from_slice(&bytes).map_err(|error|
-                molten::error::MoltenError::invalid_harness(format!("node content config: {error}")))?;
+            let config = serde_json::from_slice(&bytes).map_err(|error| {
+                molten::error::MoltenError::invalid_harness(format!("node content config: {error}"))
+            })?;
             let result = molten::node_daemon::serve_control_content(
-                &request, config, molten::preserves_rail::content_ref_from_bytes(&bytes),
+                &request,
+                config,
+                molten::preserves_rail::content_ref_from_bytes(&bytes),
+                startup_evidence,
             )?;
             if result.decision != "pass" {
                 return Err(molten::error::MoltenError::invalid_harness("node content service lifecycle denied"));

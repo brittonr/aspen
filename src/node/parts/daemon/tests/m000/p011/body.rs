@@ -7,7 +7,7 @@
             node_id: "node:service-shutdown",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let idle = serve_control(&ControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
@@ -65,7 +65,7 @@
             node_id: "node:ops",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         OpCase {
             root,
             authority_refs: vec![local_ref("node-control-authority", "ops").expect("authority ref")],

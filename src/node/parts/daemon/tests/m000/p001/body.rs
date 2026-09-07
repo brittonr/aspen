@@ -123,7 +123,7 @@
             node_id: "node:reproducible-provenance",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
 
         let case = build_case(&root);
         assert_install_passes(&root, &case);
@@ -264,7 +264,7 @@
             node_id: "node:ingress",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let authority_refs = vec![local_ref("node-control-authority", "ingress").expect("authority ref")];
         let policy_refs = vec![local_ref("node-control-policy", "ingress").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "ingress").expect("resource ref")];

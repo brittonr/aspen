@@ -7,7 +7,7 @@
             node_id: "node:live-ticket",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let policy_refs = vec![local_ref("node-control-policy", "live-ticket").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "live-ticket").expect("resource ref")];
         let peer_bootstrap_refs =
@@ -67,7 +67,7 @@
             node_id: "node:live-import",
         })
         .expect("init receiver");
-        run_local(&RunInput { state_root: &receiver }).expect("run receiver");
+        run_local(&RunInput { state_root: &receiver, startup_evidence: None }).expect("run receiver");
         init_local(&InitInput {
             state_root: &sender,
             node_id: "node:live-import-sender",
@@ -296,7 +296,7 @@
 
     fn flow_roots() -> (PathBuf, PathBuf, PathBuf) {
         let receiver = init_flow_root("node-control-live-workflow-bundle-receiver", "node:live-bundle");
-        run_local(&RunInput { state_root: &receiver }).expect("run receiver");
+        run_local(&RunInput { state_root: &receiver, startup_evidence: None }).expect("run receiver");
         let staging = init_flow_root("node-control-live-workflow-bundle-staging", "node:live-bundle-staging");
         let sender = init_flow_root("node-control-live-workflow-bundle-sender", "node:live-bundle-sender");
         (receiver, staging, sender)

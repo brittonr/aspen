@@ -1,5 +1,7 @@
-use molten::content_store_adapter::{NODE_CONTENT_SCHEMA, NodeContentConfig};
-use molten::node_daemon::{ControlServeInput, serve_control_content};
+use molten::content_store_adapter::NODE_CONTENT_SCHEMA;
+use molten::content_store_adapter::NodeContentConfig;
+use molten::node_daemon::ControlServeInput;
+use molten::node_daemon::serve_control_content;
 use serde_json::json;
 
 // r[verify molten.node_content.lifecycle]
@@ -29,7 +31,7 @@ fn denied_policy_precedes_root_and_listener_effects() {
         bind_addr: "192.0.2.1:17888".parse().unwrap(),
         tick_ms: 250,
     };
-    let error = serve_control_content(&request, config, format!("blake3:{}", "c".repeat(64))).unwrap_err();
+    let error = serve_control_content(&request, config, format!("blake3:{}", "c".repeat(64)), None).unwrap_err();
     assert!(error.to_string().contains("read grant denied"));
     assert!(!root.exists());
 }
@@ -52,7 +54,7 @@ fn valid_content_policy_cannot_bypass_missing_real_startup_evidence() {
         bind_addr: "192.0.2.1:17888".parse().unwrap(),
         tick_ms: 250,
     };
-    let error = serve_control_content(&request, config, format!("blake3:{}", "c".repeat(64))).unwrap_err();
+    let error = serve_control_content(&request, config, format!("blake3:{}", "c".repeat(64)), None).unwrap_err();
     assert!(error.to_string().contains("node-startup-source-gate-required"));
     assert!(!root.exists());
 }

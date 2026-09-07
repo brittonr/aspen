@@ -1,4 +1,3 @@
-
 pub fn serve_control(input: &ControlServeInput<'_>) -> Result<ControlServe> {
     let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
@@ -10,10 +9,12 @@ pub fn serve_control_content(
     input: &ControlServeInput<'_>,
     config: crate::content_store_adapter::NodeContentConfig,
     policy_ref: String,
+    startup_evidence: Option<crate::node_daemon::StartupEvidencePaths<'_>>,
 ) -> Result<ControlServe> {
     let plan = crate::content_store_adapter::NodeContentPlan::admit(config, policy_ref, input.max_ticks)
         .map_err(MoltenError::invalid_harness)?;
-    require_real_content_startup_route()?;
+    // Independent pre-effect admission of the same verified startup evidence.
+    crate::node_daemon::run_local_source_gate_for_serve(startup_evidence)?;
     let root = crate::node_state::NodeStateRoot::open_existing(input.state_root)?;
     validate_state_root(input.state_root)?;
     serve_control_with_root(&root, input, Some(&plan))
@@ -61,9 +62,12 @@ fn serve_control_with_root(
         supervisor_policy.as_ref(),
         existing_lock.supervisor_receipt_refs,
     )?;
-    let mut content_session = match content.map(|plan| crate::node_content::Session::start(
-        state_root, plan, &startup.receipt_ref, &start.service_lock_ref,
-    )).transpose() {
+    let mut content_session = match content
+        .map(|plan| {
+            crate::node_content::Session::start(state_root, plan, &startup.receipt_ref, &start.service_lock_ref)
+        })
+        .transpose()
+    {
         Ok(session) => session,
         Err(error) => {
             remove_service_lock(state_root, &start.service_lock_ref)?;
@@ -205,13 +209,7 @@ fn handle_existing_service_lock(
             denied: None,
         });
     }
-    let denied = denied_duplicate_service_run(
-        state_root,
-        input,
-        startup,
-        supervisor_policy,
-        &supervisor_receipt_refs,
-    )?;
+    let denied = denied_duplicate_service_run(state_root, input, startup, supervisor_policy, &supervisor_receipt_refs)?;
     Ok(ExistingServiceLock {
         supervisor_receipt_refs,
         denied: Some(denied),
@@ -301,11 +299,7 @@ fn start_service_run(
         service_run_ref: &service_run_id,
     })?;
     let service_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
-    write_preserves(
-        state_root,
-        &crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?,
-        &lock_value,
-    )?;
+    write_preserves(state_root, &crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?, &lock_value)?;
     import_artifact(state_root, &lock_value)?;
     if let Some(policy) = supervisor_policy {
         let receipt_ref = write_supervisor_receipt(state_root, &SupervisorReceiptValueInput {

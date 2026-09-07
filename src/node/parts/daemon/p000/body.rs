@@ -118,8 +118,16 @@ pub struct ProfileInitInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct StartupEvidencePaths<'a> {
+    pub policy: &'a Path,
+    pub bundle: &'a Path,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct RunInput<'a> {
     pub state_root: &'a Path,
+    /// Explicit operator-owned startup evidence. Absence stays fail-closed in production.
+    pub startup_evidence: Option<StartupEvidencePaths<'a>>,
 }
 
 #[derive(Debug, Clone, Copy)]

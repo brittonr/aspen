@@ -25,10 +25,12 @@
         .expect("init peer node");
         crate::node_daemon::run_local(&crate::node_daemon::RunInput {
             state_root: &roots.requester_node,
+            startup_evidence: None,
         })
         .expect("run requester node");
         crate::node_daemon::run_local(&crate::node_daemon::RunInput {
             state_root: &roots.peer_node,
+            startup_evidence: None,
         })
         .expect("run peer node");
         roots

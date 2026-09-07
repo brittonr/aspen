@@ -1,31 +1,41 @@
 const NODE_STARTUP_SOURCE_GATE_REQUIRED: &str = "node-startup-source-gate-required: real Octet evidence admission is not wired; synthetic startup evidence is forbidden";
 
 #[cfg(test)]
-fn startup_source_gate() -> Result<IoValue> {
+fn fallback_startup_source_gate() -> Result<IoValue> {
     crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()
 }
 
 #[cfg(not(test))]
-fn startup_source_gate() -> Result<IoValue> {
+fn fallback_startup_source_gate() -> Result<IoValue> {
     Err(MoltenError::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED))
 }
 
-// A new real-evidence route must replace this guard with checked admission.
-// There is deliberately no CLI flag, environment override, or manifest fallback.
-fn require_real_content_startup_route() -> Result<()> {
-    Err(MoltenError::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED))
+// Real admission requires explicit operator-owned evidence paths. Absence stays fail-closed:
+// there is deliberately no ambient fallback, CLI flag default, or manifest route.
+fn startup_source_gate(evidence: Option<crate::node_daemon::StartupEvidencePaths<'_>>) -> Result<IoValue> {
+    match evidence {
+        Some(paths) => {
+            let gate = crate::node_startup_evidence::admit_startup_source_gate(paths.policy, paths.bundle)?;
+            if gate.receipt_ref.is_empty() {
+                return Err(MoltenError::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED));
+            }
+            Ok(gate.receipt_value)
+        }
+        None => fallback_startup_source_gate(),
+    }
+}
+
+/// Independent serve-side admission: verifies the same evidence before any serve effect.
+pub fn run_local_source_gate_for_serve(evidence: Option<crate::node_daemon::StartupEvidencePaths<'_>>) -> Result<()> {
+    let paths = evidence.ok_or_else(|| MoltenError::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED))?;
+    crate::node_startup_evidence::admit_startup_source_gate(paths.policy, paths.bundle).map(|_| ())
 }
 
 pub fn run_local(input: &RunInput<'_>) -> Result<Run> {
-    let source_gate_value = startup_source_gate()?;
+    let source_gate_value = startup_source_gate(input.startup_evidence)?;
     validate_state_root(input.state_root)?;
     let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
     run_local_admitted_with_root(&root, source_gate_value)
-}
-
-pub fn run_local_with_root(root: &crate::node_state::NodeStateRoot) -> Result<Run> {
-    let source_gate_value = startup_source_gate()?;
-    run_local_admitted_with_root(root, source_gate_value)
 }
 
 fn run_local_admitted_with_root(root: &crate::node_state::NodeStateRoot, source_gate_value: IoValue) -> Result<Run> {
@@ -110,13 +120,8 @@ fn status_local_node_with_request(
     let health_ref = crate::preserves_rail::canonical_hash(&health_value)?;
     write_preserves(root, &fixed_node_path(HEALTH_FILE)?, &health_value)?;
     import_artifact(root, &health_value)?;
-    let control_receipt_value = control_receipt_for_request(
-        root,
-        request,
-        &startup.receipt_ref,
-        std::slice::from_ref(&health_ref),
-        &[],
-    )?;
+    let control_receipt_value =
+        control_receipt_for_request(root, request, &startup.receipt_ref, std::slice::from_ref(&health_ref), &[])?;
     let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt_value)?;
     write_preserves(root, &fixed_node_path(CONTROL_STATUS_FILE)?, &control_receipt_value)?;
     import_artifact(root, &control_receipt_value)?;
@@ -181,13 +186,8 @@ fn stop_local_node_with_request(
     let shutdown_ref = crate::preserves_rail::canonical_hash(&shutdown_value)?;
     write_preserves(root, &fixed_node_path(SHUTDOWN_FILE)?, &shutdown_value)?;
     import_artifact(root, &shutdown_value)?;
-    let control_receipt_value = control_receipt_for_request(
-        root,
-        request,
-        &startup.receipt_ref,
-        std::slice::from_ref(&shutdown_ref),
-        &[],
-    )?;
+    let control_receipt_value =
+        control_receipt_for_request(root, request, &startup.receipt_ref, std::slice::from_ref(&shutdown_ref), &[])?;
     let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt_value)?;
     write_preserves(root, &fixed_node_path(CONTROL_STOP_FILE)?, &control_receipt_value)?;
     import_artifact(root, &control_receipt_value)?;
@@ -261,9 +261,7 @@ fn compatibility_request_entry<'a>(state_root: &Path, request_path: Option<&'a P
     }
 
     let relative = request_path.strip_prefix(state_root).map_err(|_| {
-        MoltenError::invalid_harness(
-            "node control compatibility request path must name the selected state root inbox",
-        )
+        MoltenError::invalid_harness("node control compatibility request path must name the selected state root inbox")
     })?;
     if relative.parent() != Some(Path::new(CONTROL_INBOX_DIR)) {
         return Err(MoltenError::invalid_harness(
@@ -354,11 +352,7 @@ pub fn run_control_loop_with_root(
         diagnostics: &initial_diagnostics,
     })?;
     let heartbeat_receipt_ref = crate::preserves_rail::canonical_hash(&heartbeat_value)?;
-    write_preserves(
-        root,
-        &control_heartbeat_receipt_path(&heartbeat_receipt_ref)?,
-        &heartbeat_value,
-    )?;
+    write_preserves(root, &control_heartbeat_receipt_path(&heartbeat_receipt_ref)?, &heartbeat_value)?;
     import_artifact(root, &heartbeat_value)?;
 
     let mut processed_request_refs = Vec::with_capacity(max_requests);

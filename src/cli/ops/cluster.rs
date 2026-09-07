@@ -233,6 +233,7 @@ fn start(input: ClusterRoot) -> molten::error::Result<()> {
         }
         let run = molten::node_daemon::run_local(&molten::node_daemon::RunInput {
             state_root: &node.state_root,
+            startup_evidence: None,
         })?;
         println!(
             "cluster node start node={} state_root={} startup={} adapters={}",

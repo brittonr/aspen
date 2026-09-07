@@ -1,5 +1,6 @@
 use super::*;
-use crate::quality::startup_snapshot::tests::{fixture, repin_test_data};
+use crate::quality::startup_snapshot::tests::fixture;
+use crate::quality::startup_snapshot::tests::repin_test_data;
 use crate::test_support::process_workspace;
 
 fn write_fixture(root: &Path, policy_path: &Path) {
@@ -76,4 +77,49 @@ fn symlinks_directories_and_oversized_leaves_fail_closed() {
         assert!(read_regular(&cap, Path::new(name), 3).unwrap_err().to_string().contains("not-bounded-regular"));
     }
     assert_eq!(std::fs::read(outside.join("outside")).unwrap(), b"secret");
+}
+
+// r[verify molten.startup_evidence.scope]
+#[test]
+fn admission_rejects_relative_paths_and_missing_policy() {
+    let root = process_workspace("startup-admit-relative").unwrap();
+    let error = admit_startup_source_gate(Path::new("policy.json"), &root).unwrap_err();
+    assert!(error.to_string().contains("paths-must-be-absolute"));
+    let missing = process_workspace("startup-admit-missing").unwrap();
+    let policy = process_workspace("startup-admit-missing-policy").unwrap().join("cohort.json");
+    assert!(admit_startup_source_gate(&policy, &missing).is_err());
+    assert_eq!(std::fs::read_dir(&missing).unwrap().count(), 0, "failed admission wrote no state");
+}
+
+#[test]
+fn verified_fixture_cannot_authorize_lifecycle_startup() {
+    let root = process_workspace("startup-admit").unwrap();
+    let policy_dir = process_workspace("startup-admit-policy").unwrap();
+    let policy = policy_dir.join("cohort.json");
+    write_fixture(&root, &policy);
+    let (cap, plan) = load_plan(&policy, &root).unwrap();
+    let gate = verified_source_gate(&cap, &plan).unwrap();
+    assert!(
+        admit_startup_source_gate(&policy, &root)
+            .unwrap_err()
+            .to_string()
+            .contains("real-cohort-not-approved")
+    );
+    assert!(gate.receipt_ref.starts_with("blake3:"), "receipt ref {}", gate.receipt_ref);
+    let text = crate::preserves_rail::to_text(&gate.receipt_value).unwrap();
+    assert!(text.contains("pass"), "receipt value: {text}");
+    let state = root.join("must-not-create-state");
+    let paths = crate::node_daemon::StartupEvidencePaths {
+        policy: &policy,
+        bundle: &root,
+    };
+    let error = crate::node_daemon::run_local(&crate::node_daemon::RunInput {
+        state_root: &state,
+        startup_evidence: Some(paths),
+    })
+    .unwrap_err();
+    assert!(error.to_string().contains("real-cohort-not-approved"));
+    assert!(!state.exists());
+    assert!(crate::node_daemon::run_local_source_gate_for_serve(Some(paths)).is_err());
+    assert!(crate::node_daemon::run_local_source_gate_for_serve(None).is_err());
 }

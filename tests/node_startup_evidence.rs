@@ -48,3 +48,33 @@ fn cli_checks_descriptor_identity_before_decode_or_member_reads() {
     assert!(output.stdout.is_empty());
     assert_eq!(root.entries().unwrap().count(), 2);
 }
+
+#[test]
+fn lifecycle_flags_fail_before_state_or_output_creation() {
+    let root = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).unwrap();
+    let path = std::fs::read_link(format!("/proc/self/fd/{}", root.as_raw_fd())).unwrap();
+    root.write("policy.json", b"{\"schema\":\"wrong\"}").unwrap();
+    let cases = [
+        ("run", false, "--startup-bundle"),
+        ("run", true, "startup-evidence-policy-json"),
+        ("serve", true, "startup evidence requires --content-config"),
+    ];
+    for (operation, bundle, diagnostic) in cases {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_molten"));
+        command
+            .current_dir(&path)
+            .args(["node", operation, "--state-root"])
+            .arg(path.join("state"))
+            .arg("--startup-policy")
+            .arg(path.join("policy.json"));
+        if bundle {
+            command.arg("--startup-bundle").arg(path.join("bundle"));
+        }
+        let output = command.output().unwrap();
+        assert!(!output.status.success(), "{operation} unexpectedly succeeded");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(diagnostic), "{operation}: {stderr}");
+        assert!(output.stdout.is_empty());
+        assert_eq!(root.entries().unwrap().count(), 1, "denial created state");
+    }
+}

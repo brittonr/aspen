@@ -239,7 +239,7 @@
             node_id: "node:ingress-deny",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let request = status_request().expect("status request");
         let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:operator").expect("bootstrap ref")];
         let policy_refs = vec![local_ref("node-control-policy", "ingress-deny").expect("policy ref")];

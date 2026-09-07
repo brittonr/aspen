@@ -9,7 +9,7 @@
             node_id: "node:live-ingress",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let policy_refs = vec![local_ref("node-control-policy", "live-ingress").expect("policy ref")];
         let authority_refs = test_live_authority_refs(&root, "peer:live", "node:live-ingress", "status", &policy_refs)
             .expect("authority grant ref");
@@ -68,7 +68,7 @@
             node_id: "node:service-ingress",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let authority_refs = vec![local_ref("node-control-authority", "service-ingress").expect("authority ref")];
         let policy_refs = vec![local_ref("node-control-policy", "service-ingress").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "service-ingress").expect("resource ref")];
@@ -140,7 +140,7 @@
             node_id: "node:service-duplicate",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
         let startup = current_startup_receipt(&state_root).expect("startup");
         let identity = crate::node_identity::parse_identity(

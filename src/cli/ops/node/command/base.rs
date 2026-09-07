@@ -50,6 +50,10 @@ pub(crate) struct Run {
     pub(crate) state_root: std::path::PathBuf,
     #[arg(long)]
     pub(crate) startup_out: Option<std::path::PathBuf>,
+    #[arg(long, requires = "startup_bundle")]
+    pub(crate) startup_policy: Option<std::path::PathBuf>,
+    #[arg(long, requires = "startup_policy")]
+    pub(crate) startup_bundle: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, clap::Args)]
@@ -89,6 +93,10 @@ pub(crate) struct Serve {
     pub(crate) live_ticket_out: Option<std::path::PathBuf>,
     #[arg(long)]
     pub(crate) supervisor_policy: Option<std::path::PathBuf>,
+    #[arg(long, requires = "startup_bundle")]
+    pub(crate) startup_policy: Option<std::path::PathBuf>,
+    #[arg(long, requires = "startup_policy")]
+    pub(crate) startup_bundle: Option<std::path::PathBuf>,
     #[arg(long)]
     pub(crate) receipt_out: Option<std::path::PathBuf>,
 }

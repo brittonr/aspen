@@ -1,10 +1,29 @@
-//! Read-only capability adapter for portable source evidence. Never starts a node.
-use crate::error::{MoltenError, Result};
-use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt, OpenOptionsSyncExt};
-use cap_std::fs::{Dir, OpenOptions};
-use molten_core::node_startup::{Descriptor, EvidencePlan, MAX_DESCRIPTOR_BYTES, TrustedCohort};
+//! Capability adapter for portable source evidence. Verification is read-only;
+//! lifecycle admission remains blocked until a real execution/build cohort is approved.
 use std::io::Read;
 use std::path::Path;
+
+use cap_fs_ext::FollowSymlinks;
+use cap_fs_ext::OpenOptionsFollowExt;
+use cap_fs_ext::OpenOptionsSyncExt;
+use cap_std::fs::Dir;
+use cap_std::fs::OpenOptions;
+use molten_core::node_startup::Descriptor;
+use molten_core::node_startup::EvidencePlan;
+use molten_core::node_startup::MAX_DESCRIPTOR_BYTES;
+use molten_core::node_startup::TrustedCohort;
+
+use crate::error::MoltenError;
+use crate::error::Result;
+
+type IoValue = preserves::IOValue;
+
+/// A verified strict gate value. Verification alone does not authorize startup.
+#[derive(Debug, Clone)]
+pub struct AdmittedSourceGate {
+    pub receipt_ref: String,
+    pub receipt_value: IoValue,
+}
 
 #[derive(Debug, serde::Serialize)]
 pub struct VerificationReport {
@@ -21,6 +40,11 @@ pub struct VerificationReport {
 
 // r[impl molten.startup_evidence.scope]
 pub fn verify(policy_path: &Path, bundle_path: &Path) -> Result<VerificationReport> {
+    let (root, plan) = load_plan(policy_path, bundle_path)?;
+    verify_members(&root, &plan)
+}
+
+fn load_plan(policy_path: &Path, bundle_path: &Path) -> Result<(Dir, EvidencePlan)> {
     if !policy_path.is_absolute() || !bundle_path.is_absolute() {
         return Err(deny("paths-must-be-absolute"));
     }
@@ -37,16 +61,20 @@ pub fn verify(policy_path: &Path, bundle_path: &Path) -> Result<VerificationRepo
     let executable = measure_current_executable()?;
     let plan = EvidencePlan::admit(&policy, descriptor, &executable)
         .map_err(|error| MoltenError::invalid_harness(format!("startup-evidence-plan: {error:?}")))?;
-    verify_members(&root, &plan)
+    Ok((root, plan))
 }
 
-fn verify_members(root: &Dir, plan: &EvidencePlan) -> Result<VerificationReport> {
-    let mut members = Vec::with_capacity(plan.members().len());
-    for (index, member) in plan.members().iter().enumerate() {
-        let bytes = read_regular(root, Path::new(member.role.filename()), member.bytes)?;
-        plan.verify_member(index, &bytes).map_err(|_| deny("member-identity"))?;
-        members.push(bytes);
-    }
+// r[impl molten.startup_evidence.scope]
+pub fn admit_startup_source_gate(policy_path: &Path, bundle_path: &Path) -> Result<AdmittedSourceGate> {
+    let (root, plan) = load_plan(policy_path, bundle_path)?;
+    let _verified = verified_source_gate(&root, &plan)?;
+    // No admitted production cohort exists yet. Caller-supplied policy and clean
+    // snapshot counts cannot establish actual execution or source-to-binary binding.
+    Err(deny("real-cohort-not-approved"))
+}
+
+fn verified_source_gate(root: &Dir, plan: &EvidencePlan) -> Result<AdmittedSourceGate> {
+    let members = read_plan_members(root, plan)?;
     let gate = crate::quality::startup_snapshot::evaluate(crate::quality::startup_snapshot::Snapshot {
         plan,
         members: &members,
@@ -54,6 +82,24 @@ fn verify_members(root: &Dir, plan: &EvidencePlan) -> Result<VerificationReport>
     if gate.decision != "pass" {
         return Err(deny("strict-gate-denied"));
     }
+    Ok(AdmittedSourceGate {
+        receipt_ref: gate.receipt_ref,
+        receipt_value: gate.receipt_value,
+    })
+}
+
+fn read_plan_members(root: &Dir, plan: &EvidencePlan) -> Result<Vec<Vec<u8>>> {
+    let mut members = Vec::with_capacity(plan.members().len());
+    for (index, member) in plan.members().iter().enumerate() {
+        let bytes = read_regular(root, Path::new(member.role.filename()), member.bytes)?;
+        plan.verify_member(index, &bytes).map_err(|_| deny("member-identity"))?;
+        members.push(bytes);
+    }
+    Ok(members)
+}
+
+fn verify_members(root: &Dir, plan: &EvidencePlan) -> Result<VerificationReport> {
+    let gate = verified_source_gate(root, plan)?;
     Ok(VerificationReport {
         schema: "molten.node-startup-verification.v1",
         disposition: "verification-only",
@@ -61,7 +107,7 @@ fn verify_members(root: &Dir, plan: &EvidencePlan) -> Result<VerificationReport>
         executable_blake3: plan.cohort().executable_blake3.clone(),
         source_inventory_blake3: plan.cohort().source_inventory_blake3.clone(),
         strict_gate_ref: gate.receipt_ref,
-        verified_members: members.len(),
+        verified_members: plan.members().len(),
         execution_established: false,
         startup_authorized: false,
     })

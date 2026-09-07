@@ -144,7 +144,7 @@
             node_id: "node:live-send",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
         let identity = crate::node_identity::parse_identity(
             &read_preserves(

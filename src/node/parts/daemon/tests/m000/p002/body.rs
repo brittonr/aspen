@@ -102,7 +102,7 @@
             node_id: "node:ingress-materialized",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         root
     }
 
@@ -221,7 +221,7 @@
             node_id: "node:reconcile",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
         let policy_refs = vec![local_ref("node-control-policy", "reconcile").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "reconcile").expect("resource ref")];
         let peer_bootstrap_refs =

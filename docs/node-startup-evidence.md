@@ -24,7 +24,20 @@ A successful report always contains:
 }
 ```
 
-The report has no path into the node lifecycle. Existing production and VM guards remain unchanged.
+The report grants no lifecycle authority. Production and VM guards remain active.
+
+## Lifecycle input wiring (blocked)
+
+`node run` accepts paired `--startup-policy` and `--startup-bundle` paths.
+`node serve` accepts the same pair only with `--content-config`, without `--live-iroh`.
+Incomplete pairs and incompatible routes fail before state creation.
+
+Both routes re-read the selected evidence before protected effects. They use the same descriptor-first verifier as the read-only command.
+A passing snapshot still fails with `startup-evidence-real-cohort-not-approved`.
+No real execution/build cohort is approved by this implementation.
+
+Unit fixtures test wiring only. They cannot authorize production startup or content serving.
+Missing serve-side evidence also fails in unit tests; it cannot use the test-only startup fallback.
 
 ## Bundle contract
 
