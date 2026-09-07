@@ -2,7 +2,7 @@
 
 ## Scope and ownership
 
-Implementation range: `ff9d0a81441a7fa9fcb80e3e35d60178a670ab9f` through `7aff266a9953d00a7d83e3b1b9658cf2002591f6`.
+Implementation range: `ff9d0a81441a7fa9fcb80e3e35d60178a670ab9f` through `22f3d3a5ebb53050848c6648dfc596481e9e8b12`.
 The baseline is `495145226eda8810846703abb45036640ebfcf12`.
 
 This batch changes only the node-host filesystem adapter and its tests.
@@ -26,7 +26,7 @@ Task 10766 repeated the seven baseline tests against the retained frozen source 
 No compiler was built.
 
 Task 10774 passed nine tests and package-scoped all-target Clippy with `-D warnings` after the first implementation.
-Tasks 10782 and 10788 each passed twelve tests and the same Clippy command after refinement.
+Tasks 10782, 10788, and 10795 each passed twelve tests and the same Clippy command after refinement.
 The tests use the existing Rust 1.97.1 toolchain with `RUSTC_BOOTSTRAP=1`, not the March-21 lint compiler or May-26 production compiler.
 
 Five new tests cover:
@@ -56,6 +56,48 @@ Task 10785 reported 93 errors on commit `dd8f9467d871b0ae5f5a5b4a66ca3d89886d8d0
 One new finding suggested `const fn` for a helper that constructs allocated errors.
 The final reader instead keeps bound admission in `consume` and delegates byte consumption to an effectful helper.
 No function visibility was widened to silence that finding.
+Task 10791 still reported 94 errors, including that suggestion and a repeated helper name.
+The final source uses `collect` inside the read owner. The const suggestion remains a separate tool defect, not a source fix.
+
+## Confirmed const-candidate false positive
+
+Task 10794 ran three direct probes with the existing March-21 compiler and retained driver/library:
+
+| Probe | Exit | Observation |
+| --- | --- | --- |
+| Ordinary helper with nested `Err(format!(...))` | 0 | Rust accepts it |
+| Same helper with `-D missing_const_fn` | 101 | Octet suggests `const fn` |
+| Same helper declared `const fn` | 1 | Rust rejects formatting with E0015 |
+
+The two input files differ only by `const` on the helper.
+Neither input has an allow attribute. The probe flags are diagnostic controls, not the production command.
+
+The pinned Octet owner is `src/purity/effect_lints.rs::function_is_const_candidate`.
+Its string filter excludes `" format!("` but misses nested `Err(format!(...))`.
+The current reader has the same nested allocation shape.
+This evidence does not justify declaring allocating functions const, changing whitespace to evade detection, or suppressing the lint.
+It also does not classify the other remaining source findings as false positives.
+No Octet source, library, driver, compiler, or pin changed during this batch.
+
+## Final observed result
+
+Task 10796 ran the unchanged command on frozen commit `22f3d3a5ebb53050848c6648dfc596481e9e8b12`.
+It reported 93 node-host errors, zero warnings, exit 2, and Cargo exit 101.
+This reduces the reported count from 106 to 93. It is not a passing gate or complete workspace coverage.
+The remaining count includes the confirmed const-candidate defect.
+
+The final attempt took 58.593 seconds, with a 2G memory peak.
+Its systemd invocation was `d0fd44dc54124327873c8a76a4ffc60f`.
+The source archive BLAKE3 is `a75c68d493d4ab7eeb3cbadd23d5e166a9b75d9bf96c5b0200a07028e7d6c58a`.
+All four attempts retained matching before/after input identities and empty tracked-source diffs.
+Their raw status files are copied without modification beside this document.
+
+The tasks gate passed structurally in task 10798, with three tasks done and two open.
+An earlier invocation from the private log directory could not find the relative Cairn policy. That failure is retained.
+Structural passage does not close the behavior tasks.
+
+Next: repair const-candidate detection at its Octet owner, with positive and negative controls, before any lint-tool build or pin promotion.
+The other source findings still need review. No replacement lint-library build is claimed or started.
 
 ## Full command and authority
 
