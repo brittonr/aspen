@@ -1,0 +1,6 @@
+8e14cfcb3f0cfd993c5886e574408e11a49456dbb637b766e3d512e698d4474b  /nix/store/r5bzbvda2ydnz09c6vxvqhxsmh37nhpw-dylint-driver-5.0.0/bin/dylint-driver
+61c02bb43a8c890d13f8f1d212b8ef7082e212bcae9ab86796163af55e09f228  /nix/store/h3zdp7y2wknxxc0krs8x5gl7qhxzzkkv-octet-0.1.0/lib/liboctet.so
+5891756528d0229025735e63e32e2d57e7b49ad5f6fdac09592d623218d3bd8b  /nix/store/1yvh3d6y3fj3xk2dgwczrp1dj5svd92c-rust-default-1.96.0-nightly-2026-03-21/bin/rustc
+ec1adcc9d4bb8c32050e01353a438da0d891a5734df463cc54ab1fd0ef12f6bf  /nix/store/780x05ayqxz76pml1gi5jkar1pg0vk0g-rustc-1.97.1/bin/rustc
+98b2ff403b3685f8eb0ea0af2750d9f05a6a6453fb1423cf1bded0561a2b6671  /home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/.cairn/changes/node-host-closed-domains/evidence/marker-route.rs
+af1a653aa646b5b584ee946e9901b8e8cafce9b1fdd1448c0542486dfdab883d  /home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/.cairn/changes/node-host-closed-domains/evidence/verify-marker-route.sh

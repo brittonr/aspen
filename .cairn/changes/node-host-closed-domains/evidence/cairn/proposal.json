@@ -1,0 +1,39 @@
+{
+  "change": "node-host-closed-domains",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "f015def2dabb8f68c5ff32016cbd65d4f18572707c492ea7c23e9e3aea824d82",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "d504b9473640f58c37425e4c101172bc46fba4e5489dbaecb3a8f5c633722752",
+  "probe_evidence": null,
+  "receipt_hash": "e6d6dc26f473c88098cfb3da889f5deaec6a7ba99c167165fc97ae282518f971",
+  "stage": "proposal",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/node-host-closed-domains/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 26,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "task_ordering": null,
+  "valid": true,
+  "verdict": "PASS"
+}

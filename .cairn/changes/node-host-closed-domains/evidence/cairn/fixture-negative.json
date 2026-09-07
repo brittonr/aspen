@@ -1,0 +1,117 @@
+{
+  "change": "node-host-closed-domains",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "da9fe5bba1bfb0e34747795624e43abef8a37c8a03c3f865ec6cdb717fb9fc75",
+  "issues": [
+    {
+      "code": "cairn.gate.validation",
+      "message": "node-host-closed-domains: 1 task(s) missing concurrency markers",
+      "promoted": "no",
+      "scope": "tasks"
+    },
+    {
+      "code": "lifecycle_validation.task_substance.linkage",
+      "message": "/home/brittonr/.local/state/onix/molten-node-vm/cairn-compat-1/fixture/.cairn/changes/node-host-closed-domains/tasks.md:5: lifecycle_validation.task_substance.linkage: checkbox task requires a known r[...] reference or a valid dependency marker",
+      "promoted": "no",
+      "scope": "tasks"
+    },
+    {
+      "code": "cairn.gate.validation",
+      "message": "/home/brittonr/.local/state/onix/molten-node-vm/cairn-compat-1/fixture/.cairn/changes/node-host-closed-domains/tasks.md: unknown requirement reference r[molten.node_host.undefined_test_requirement]",
+      "promoted": "no",
+      "scope": "tasks"
+    },
+    {
+      "code": "cairn.gate.validation",
+      "message": "/home/brittonr/.local/state/onix/molten-node-vm/cairn-compat-1/fixture/.cairn/changes/node-host-closed-domains/tasks.md:5: task missing known requirement reference",
+      "promoted": "no",
+      "scope": "tasks"
+    }
+  ],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "d504b9473640f58c37425e4c101172bc46fba4e5489dbaecb3a8f5c633722752",
+  "probe_evidence": {
+    "declarations_present": false,
+    "probes": []
+  },
+  "receipt_hash": "22dc2d52c5818447ae81e7c100e85e0ac52815c5a976644e13e8ad0f14a10080",
+  "stage": "tasks",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "/home/brittonr/.local/state/onix/molten-node-vm/cairn-compat-1/fixture/.cairn/changes/node-host-closed-domains/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 57,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "/home/brittonr/.local/state/onix/molten-node-vm/cairn-compat-1/fixture/.cairn/changes/node-host-closed-domains/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 26,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "/home/brittonr/.local/state/onix/molten-node-vm/cairn-compat-1/fixture/.cairn/changes/node-host-closed-domains/specs/node-runtime/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 7,
+      "substantive_lines": 32,
+      "substantive_requirement_blocks": 4,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 7,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "/home/brittonr/.local/state/onix/molten-node-vm/cairn-compat-1/fixture/.cairn/changes/node-host-closed-domains/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 8,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 6,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 7
+    }
+  ],
+  "task_ordering": {
+    "active": false,
+    "edges": [],
+    "issues": [],
+    "nodes": [],
+    "order": [],
+    "ready_tasks": [],
+    "valid": true
+  },
+  "valid": false,
+  "verdict": "FAIL"
+}
