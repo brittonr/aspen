@@ -6,7 +6,6 @@ use super::filesystem::create_dir_components;
 use super::filesystem::entry_kind_optional;
 use super::filesystem::open_database_file;
 use super::filesystem::open_dir_components;
-use super::filesystem::read_open_file_bounded;
 use super::filesystem::read_regular_file_bounded;
 use super::filesystem::remove_regular_file;
 use super::filesystem::validate_bootstrap_metadata;
@@ -115,7 +114,7 @@ impl NodeStateFile {
     }
 
     pub fn read_bounded(self, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
-        read_open_file_bounded(self.file, self.size, max_bytes, "observed node state file")
+        super::filesystem::bounded_read::consume(self.file, self.size, max_bytes, "observed node state file")
     }
 }
 
