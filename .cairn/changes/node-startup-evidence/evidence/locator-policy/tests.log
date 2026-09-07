@@ -1,0 +1,87 @@
+   Compiling molten-node-host v0.1.0 (/home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-host)
+    Finished `test` profile [unoptimized] target(s) in 10.88s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/molten_node_host-4d650c130ecfcb25)
+
+running 1 test
+test locator::tests::recognition_matches_the_previous_guards ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/atomic_namespace.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/atomic_namespace-b1b9dcb0f89cfe5d)
+
+running 2 tests
+test atomic_leaf_replaces_whole_file_and_rejects_other_shapes ... ok
+test concurrent_readers_observe_only_complete_snapshots ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/bounds.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/bounds-71c4528ef1c3a3a7)
+
+running 2 tests
+test growth_after_observation_cannot_bypass_read_bound ... ok
+test reads_preserve_zero_exact_and_hard_bounds ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/classifications.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/classifications-08ef91e45b472fa4)
+
+running 4 tests
+test store_labels_keep_the_fixed_inventory ... ok
+test namespace_registry_keeps_order_and_intentional_aliases ... ok
+test observations_keep_absence_denial_and_acquired_handle_use_distinct ... ok
+test directory_aliases_do_not_share_entry_authority ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/leaves.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/leaves-a49a9caabae06809)
+
+running 3 tests
+test local_store_leaf_links_deny_without_target_changes ... ok
+test local_store_file_operations_keep_regular_leaf_rules ... ok
+test namespace_modes_distinguish_missing_regular_and_nonregular_leaves ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/locators.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/locators-cbf68c10b7791c5f)
+
+running 2 tests
+test earlier_admission_checks_keep_their_precedence ... ok
+test shared_recognition_preserves_boundary_specific_errors ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/nodehostboundary.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/nodehostboundary-2a004254133876fe)
+
+running 5 tests
+test malformed_manifest_fails_before_dependency_classification ... ok
+test missing_core_dependency_is_reported ... ok
+test forbidden_host_dependencies_are_reported_without_partial_admission ... ok
+test production_and_positive_manifests_admit_only_node_host_dependencies ... ok
+test direct_node_host_path_opens_capability_state_and_denies_invalid_locators ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/regular.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/regular-78d2428e3ddf6c8d)
+
+running 3 tests
+test missing_parents_remain_missing_during_observation ... ok
+test regular_writes_and_database_opens_preserve_file_rules ... ok
+test symlink_leaves_and_parents_deny_without_changing_target ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/views.rs (/home/brittonr/.cargo-target/molten-node97/debug/deps/views-7c4d3c85c90d7176)
+
+running 3 tests
+test locators_keep_normalization_and_bounds_without_io ... ok
+test enumeration_rejects_non_utf8_names_without_removing_them ... ok
+test enumeration_is_sorted_and_entries_keep_their_authority ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests molten_node_host
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

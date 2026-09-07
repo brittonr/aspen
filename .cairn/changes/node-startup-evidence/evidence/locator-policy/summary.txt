@@ -1,0 +1,49 @@
+--- octet summary ---
+Status: integration-failure
+Findings: 22
+Warnings: 0
+Errors: 22
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:e32044b5acf7c094834d696f44b79f56d5cac4daaa69f932de60126abc03488c
+Profile hash: b3:0e99a5a4f5f1442b8c0244035b69d30c77eec2ce301286ef91cc50bbf60e8e20
+
+By crate:
+  molten_node_host        22
+
+By effect:
+  unknown         18
+  failure         3
+  resource        1
+
+By lint:
+  path_segment_repetition        18
+  assertion_density              3
+  excessive_file_length          1
+
+Index:
+  F1   path_segment_repetition molten_node_host  crates/molten-node-host/src/error/mod.rs:31
+  F2   excessive_file_length   molten_node_host  crates/molten-node-host/src/local_store/mod.rs:1
+  F3   path_segment_repetition molten_node_host  crates/molten-node-host/src/local_store/mod.rs:20
+  F4   path_segment_repetition molten_node_host  crates/molten-node-host/src/local_store/mod.rs:47
+  F5   path_segment_repetition molten_node_host  crates/molten-node-host/src/local_store/mod.rs:107
+  F6   path_segment_repetition molten_node_host  crates/molten-node-host/src/local_store/mod.rs:115
+  F7   path_segment_repetition molten_node_host  crates/molten-node-host/src/local_store/mod.rs:121
+  F8   path_segment_repetition molten_node_host  crates/molten-node-host/src/local_store/mod.rs:426
+  F9   path_segment_repetition molten_node_host  crates/molten-node-host/src/local_store/mod.rs:462
+  F10  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/authority.rs:7
+  F11  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/authority.rs:62
+  F12  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/authority.rs:73
+  F13  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/authority.rs:79
+  F14  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/authority.rs:109
+  F15  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/authority.rs:114
+  F16  assertion_density       molten_node_host  crates/molten-node-host/src/node/state/enumeration.rs:18
+  F17  assertion_density       molten_node_host  crates/molten-node-host/src/node/state/filesystem.rs:31
+  F18  assertion_density       molten_node_host  crates/molten-node-host/src/node/state/filesystem.rs:118
+  F19  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/locator.rs:11
+  F20  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/locator.rs:96
+  F21  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/namespace.rs:1
+  F22  path_segment_repetition molten_node_host  crates/molten-node-host/src/node/state/namespace.rs:174
+---
