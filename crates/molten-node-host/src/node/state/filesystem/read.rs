@@ -6,12 +6,24 @@ pub(in crate::node_state) fn consume(
     max_bytes: u64,
     label: &str,
 ) -> crate::error::Result<Vec<u8>> {
-    validate_bound(observed.size, label, max_bytes)?;
+    if max_bytes > crate::node_state::MAX_NODE_STATE_FILE_BYTES {
+        return Err(crate::node_state::invalid(format!(
+            "node state read bound {max_bytes} exceeds hard maximum {}",
+            crate::node_state::MAX_NODE_STATE_FILE_BYTES
+        )));
+    }
+    if observed.size > max_bytes {
+        return Err(crate::node_state::invalid(format!("{label} size {} exceeds bound {max_bytes}", observed.size)));
+    }
+    read_bytes(observed.file, max_bytes, label)
+}
+
+fn read_bytes(file: cap_std::fs::File, max_bytes: u64, label: &str) -> crate::error::Result<Vec<u8>> {
     let limit_bytes = max_bytes
         .checked_add(1)
         .ok_or_else(|| crate::node_state::invalid("node state read bound overflow"))?;
     let mut bytes = Vec::new();
-    observed.file.take(limit_bytes).read_to_end(&mut bytes).map_err(crate::error::MoltenError::from)?;
+    file.take(limit_bytes).read_to_end(&mut bytes).map_err(crate::error::MoltenError::from)?;
     if u64::try_from(bytes.len())
         .map_err(|_| crate::node_state::invalid("node state read length conversion overflow"))?
         > max_bytes
@@ -19,17 +31,4 @@ pub(in crate::node_state) fn consume(
         return Err(crate::node_state::invalid(format!("{label} exceeds bound {max_bytes}")));
     }
     Ok(bytes)
-}
-
-fn validate_bound(observed_size: u64, label: &str, max_bytes: u64) -> crate::error::Result<()> {
-    if max_bytes > crate::node_state::MAX_NODE_STATE_FILE_BYTES {
-        return Err(crate::node_state::invalid(format!(
-            "node state read bound {max_bytes} exceeds hard maximum {}",
-            crate::node_state::MAX_NODE_STATE_FILE_BYTES
-        )));
-    }
-    if observed_size > max_bytes {
-        return Err(crate::node_state::invalid(format!("{label} size {observed_size} exceeds bound {max_bytes}")));
-    }
-    Ok(())
 }
