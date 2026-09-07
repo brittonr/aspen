@@ -50,5 +50,18 @@ Create CASES/baseline from the recorded implementation's complete node-host crat
 Retained source diffs identify the exact changes. Reuse a compatible existing dependency corpus; do not bootstrap or acquire a compiler on cache miss.
 
 Private evidence: `~/.local/state/onix/molten-node-vm/closed-domains-implementation/`.
-The next step is freezing this implementation and running the unchanged canonical command.
-The last full gate is still run15 (30 errors); no clean workspace, approved cohort, May-26 build/binding, VM launch, or replay is claimed here.
+## Frozen complete command
+
+Task 10413 ran the unchanged canonical command on implementation `4bf759f9852f5f2c9c96c905b5f9c79cc4635818`, using the same diagnostic tools as run15.
+Source archive BLAKE3: `b09dfcf53e53c98688c8605bdfe82f87883f354a653a13d50c26c1ae78c9b549`.
+Root Cargo.toml, Cargo.lock, dylint.toml, flake.lock, and rust-toolchain.toml are unchanged from ab3efbe97.
+The package's expected-cfg declaration and source annotations are explicit reviewed implementation changes.
+
+Run16 returned integration-failure, exit2/Cargo101, **26 node-host errors, zero warnings** in 50.305 seconds (1.6G peak).
+Only the four reviewed exhaustive-enum findings disappeared. Remaining buckets are naming18, assertion-density5, compound-condition2, and file-length1.
+Config hash remains `b3:e32044b5acf7c094834d696f44b79f56d5cac4daaa69f932de60126abc03488c` and profile hash remains `b3:0e99a5a4f5f1442b8c0244035b69d30c77eec2ce301286ef91cc50bbf60e8e20`.
+Recorded identities matched before/after and the tracked source-after diff is empty. The runner kept isolated source/home/target/offline caches and its existing execution bounds.
+
+This remains incomplete workspace coverage, not a clean source gate. Other findings still require semantic review; do not silence them mechanically.
+Startup tasks4–5 and guards remain unchanged. No approved cohort, May-26 build/binding, normal-node VM launch, or replay is claimed.
+This declaration change still awaits its final spec-integration/lifecycle closeout; it has not been archived or merged to main.

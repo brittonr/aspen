@@ -1,0 +1,22 @@
+{
+  "status": "integration-failure",
+  "exit_code": 2,
+  "output_format": "human",
+  "metadata": {
+    "tool_name": "cargo-octet",
+    "tool_version": "0.1.0",
+    "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+    "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+    "profile_name": "workspace-metadata",
+    "profile_hash": "b3:0e99a5a4f5f1442b8c0244035b69d30c77eec2ce301286ef91cc50bbf60e8e20",
+    "config_hash": "b3:e32044b5acf7c094834d696f44b79f56d5cac4daaa69f932de60126abc03488c"
+  },
+  "total_findings": 26,
+  "warning_findings": 0,
+  "error_findings": 26,
+  "autofixable_findings": 0,
+  "cargo_process_exit": {
+    "classification": "exit-code",
+    "code": 101
+  }
+}
