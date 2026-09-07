@@ -13,7 +13,7 @@ Existing capability-backed tests remain intact, including symlink denial, bounde
 ## Package checks
 
 Task 10399 passed all 22 node-host tests and package all-target Clippy with -D warnings (159.393 seconds, peak 1.5G).
-The existing source-tarball Rust 1.97.1 compiler and matching-version Cargo/Clippy tools were explicitly selected; this is not equivalence to the missing rust-minimal compiler or May-26 production binding.
+The existing source-tarball Rust 1.97.1 compiler, Cargo 1.97.0, and Clippy 0.1.97 were explicitly selected; package labels alone are not tool-version evidence. This is not equivalence to the missing rust-minimal compiler or May-26 production binding.
 The focused environment disables the ambient rustc cache wrapper and ambient encoded rustflags, uses two jobs, existing runtime linker tools, and a private TMPDIR.
 RUSTC_BOOTSTRAP=1 remains the existing focused-package compatibility scope; separate ordinary stable fixture controls did not set it.
 
