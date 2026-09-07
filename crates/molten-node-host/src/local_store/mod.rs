@@ -14,6 +14,8 @@ const MAX_LOCAL_STORE_ENTRIES: usize = 100_000;
 const _: () = assert!(MAX_LOCAL_STORE_COMPONENTS <= 1_000);
 const _: () = assert!(MAX_LOCAL_STORE_ENTRIES <= 1_000_000);
 
+/// Closed storage-directory classification; additions require an explicit mapping.
+#[cfg_attr(dylint_lib = "octet", octet::sealed_enum)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LocalStoreKind {
     Artifact,

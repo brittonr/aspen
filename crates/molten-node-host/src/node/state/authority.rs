@@ -1,5 +1,8 @@
 const NODE_STATE_NAMESPACE_COUNT: usize = 14;
 
+/// Closed namespace inventory; additions require registry and mapping review.
+/// Directory aliases retain distinct kind identities and entry authority.
+#[cfg_attr(dylint_lib = "octet", octet::sealed_enum)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum NodeStateNamespaceKind {
     Identity,
@@ -63,6 +66,9 @@ pub enum NodeStateEntryKind {
     Other,
 }
 
+/// Closed acquired-file classification; each consumer must handle new outcomes.
+/// Missing and non-regular leaves never inherit regular-file read authority.
+#[cfg_attr(dylint_lib = "octet", octet::sealed_enum)]
 #[derive(Debug)]
 pub enum NodeStateFileObservation {
     Missing,

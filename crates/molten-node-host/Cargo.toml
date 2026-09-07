@@ -13,3 +13,6 @@ molten-core = { path = "../molten-core" }
 
 [dev-dependencies]
 toml = "0.9"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(dylint_lib, values("octet"))'] }

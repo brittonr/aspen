@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposal only. Production source, markers, compiler features, source-gate policy, and startup authority are unchanged.
-This proposal requires review before implementation. It does not approve deployment or close `node-startup-evidence`.
+Reviewed for scoped implementation in review.md. Conditional analysis annotations and tests are recorded in implementation.md.
+This change does not approve deployment or close `node-startup-evidence`; source-gate policy and startup authority remain unchanged.
 
 ## Why
 

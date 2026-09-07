@@ -1,6 +1,8 @@
-# Proposal checkpoint
+# Pre-implementation verification history
 
-## Current result
+These checkpoints retain the earlier draft state. See implementation.md and tasks.md for current implementation progress.
+
+## Draft structural result
 
 Structural validation is now unblocked. Task 10448 produced PASS receipts with no issues for proposal, design, and tasks on draft `bbb081328ff9bb4c086c8e841ce170ca02416e02`.
 The tasks receipt records zero done and seven open tasks, four requirement blocks, and seven scenarios.

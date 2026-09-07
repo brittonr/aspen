@@ -1,0 +1,12 @@
+diff --git a/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/baseline/src/local_store/mod.rs b/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/store/src/local_store/mod.rs
+index 1fdf03083..070d68175 100644
+--- a/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/baseline/src/local_store/mod.rs
++++ b/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/store/src/local_store/mod.rs
+@@ -18,6 +18,7 @@ const _: () = assert!(MAX_LOCAL_STORE_ENTRIES <= 1_000_000);
+ #[cfg_attr(dylint_lib = "octet", octet::sealed_enum)]
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum LocalStoreKind {
++    Future,
+     Artifact,
+     Chunk,
+     Retention,

@@ -1,0 +1,2 @@
+# Keep Cargo's raw output byte-for-byte, including its final blank line.
+package-tests.log -whitespace

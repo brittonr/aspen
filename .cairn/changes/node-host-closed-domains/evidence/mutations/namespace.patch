@@ -1,0 +1,12 @@
+diff --git a/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/baseline/src/node/state/authority.rs b/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/namespace/src/node/state/authority.rs
+index bf227a3ab..cd5b04d88 100644
+--- a/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/baseline/src/node/state/authority.rs
++++ b/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/namespace/src/node/state/authority.rs
+@@ -5,6 +5,7 @@ const NODE_STATE_NAMESPACE_COUNT: usize = 14;
+ #[cfg_attr(dylint_lib = "octet", octet::sealed_enum)]
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+ pub enum NodeStateNamespaceKind {
++    Future,
+     Identity,
+     Secrets,
+     Ledger,

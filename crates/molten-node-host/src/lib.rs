@@ -4,6 +4,9 @@
 //! not own CLI parsing, operator presentation, release policy, workload
 //! semantics, or test harness orchestration.
 
+#![cfg_attr(dylint_lib = "octet", feature(register_tool))]
+#![cfg_attr(dylint_lib = "octet", register_tool(octet))]
+
 pub mod error;
 pub mod local_store;
 #[path = "node/state.rs"]

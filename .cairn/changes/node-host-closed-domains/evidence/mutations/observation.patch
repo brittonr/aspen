@@ -1,0 +1,12 @@
+diff --git a/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/baseline/src/node/state/authority.rs b/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/observation/src/node/state/authority.rs
+index bf227a3ab..4ecec466e 100644
+--- a/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/baseline/src/node/state/authority.rs
++++ b/home/brittonr/.local/state/onix/molten-node-vm/closed-domains-implementation/mutations/observation/src/node/state/authority.rs
+@@ -71,6 +71,7 @@ pub enum NodeStateEntryKind {
+ #[cfg_attr(dylint_lib = "octet", octet::sealed_enum)]
+ #[derive(Debug)]
+ pub enum NodeStateFileObservation {
++    Future,
+     Missing,
+     NonRegular(NodeStateEntryKind),
+     Regular(NodeStateFile),

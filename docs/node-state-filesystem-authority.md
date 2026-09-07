@@ -25,6 +25,23 @@ r[impl molten.node.cap_std_namespaces] `NodeStatePath` accepts only bounded rela
 
 Directory enumeration is bounded, sorted, and rejects non-UTF-8 names. Enumerated entries bind the exact root, namespace, and subdirectory view that produced them. Reads are bounded, no-follow, and regular-file-only. Writes and removals reject symlinks and non-regular leaves.
 
+## Deliberately closed classifications
+
+`LocalStoreKind` has eight fixed directory labels. `NodeStateNamespaceKind` has
+14 distinct kinds in its ordered registry. Identity/Secrets share `identity`;
+ControlIngress/Ingress share `control/iroh-ingress`. These directory aliases do
+not make their enum identities or enumerated-entry authority interchangeable.
+
+`NodeStateFileObservation` separates missing leaves, non-regular denial, and an
+acquired regular-file handle. A new classification must receive explicit handling
+in the mapping, read, and mode consumers. Their exhaustive matches intentionally
+have no fallback arm.
+
+These three declarations carry conditional `octet::sealed_enum` annotations during
+Octet analysis. Tool registration uses the driver's existing cfg; ordinary builds
+do not enable that feature through these declarations. No FSM classification,
+filesystem permission, runtime trust, or startup authority follows from a marker.
+
 ## Identity secrets
 
 r[impl molten.node.cap_std_identity_secret] Endpoint secrets are created and loaded through the identity namespace. Unix creation requests owner-only mode. Existing secret leaves are opened without following links; file type, permissions, size, and bytes are observed through the same acquired handle so ambient leaf replacement cannot redirect the read. Receipt evidence binds redacted source metadata and permission decisions, never secret bytes or a host pathname.
