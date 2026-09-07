@@ -1,21 +1,3 @@
-use std::path::Path;
-use std::sync::Arc;
-
-use super::MAX_NODE_STATE_FILE_BYTES;
-use super::filesystem::create_dir_components;
-use super::filesystem::entry_kind_optional;
-use super::filesystem::open_database_file;
-use super::filesystem::open_dir_components;
-use super::filesystem::read_regular_file_bounded;
-use super::filesystem::remove_regular_file;
-use super::filesystem::validate_bootstrap_metadata;
-use super::filesystem::validate_bootstrap_path;
-use super::filesystem::validate_write_size;
-use super::filesystem::write_regular_file;
-use super::invalid;
-use super::locator::NodeStatePath;
-use super::namespace::NodeStateNamespace;
-
 const NODE_STATE_NAMESPACE_COUNT: usize = 14;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -124,7 +106,7 @@ pub(super) struct NodeStateInner {
 
 #[derive(Clone)]
 pub struct NodeStateRoot {
-    inner: Arc<NodeStateInner>,
+    inner: std::sync::Arc<NodeStateInner>,
 }
 
 impl std::fmt::Debug for NodeStateRoot {
@@ -134,10 +116,10 @@ impl std::fmt::Debug for NodeStateRoot {
 }
 
 impl NodeStateRoot {
-    pub fn open(path: &Path) -> crate::error::Result<Self> {
-        validate_bootstrap_path(path)?;
+    pub fn open(path: &std::path::Path) -> crate::error::Result<Self> {
+        super::filesystem::validate_bootstrap_path(path)?;
         match std::fs::symlink_metadata(path) {
-            Ok(metadata) => validate_bootstrap_metadata(&metadata)?,
+            Ok(metadata) => super::filesystem::validate_bootstrap_metadata(&metadata)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 std::fs::create_dir_all(path).map_err(crate::error::MoltenError::from)?;
             }
@@ -146,10 +128,10 @@ impl NodeStateRoot {
         Self::open_existing(path)
     }
 
-    pub fn open_existing(path: &Path) -> crate::error::Result<Self> {
-        validate_bootstrap_path(path)?;
+    pub fn open_existing(path: &std::path::Path) -> crate::error::Result<Self> {
+        super::filesystem::validate_bootstrap_path(path)?;
         let metadata = std::fs::symlink_metadata(path).map_err(crate::error::MoltenError::from)?;
-        validate_bootstrap_metadata(&metadata)?;
+        super::filesystem::validate_bootstrap_metadata(&metadata)?;
         let dir = cap_std::fs::Dir::open_ambient_dir(path, cap_std::ambient_authority())
             .map_err(crate::error::MoltenError::from)?;
         Ok(Self::from_dir(dir))
@@ -157,13 +139,13 @@ impl NodeStateRoot {
 
     pub fn from_dir(dir: cap_std::fs::Dir) -> Self {
         Self {
-            inner: Arc::new(NodeStateInner { dir }),
+            inner: std::sync::Arc::new(NodeStateInner { dir }),
         }
     }
 
     pub fn create_layout(&self) -> crate::error::Result<()> {
         for kind in NodeStateNamespaceKind::ALL {
-            self.create_dir_all(&NodeStatePath::parse(kind.as_str())?)?;
+            self.create_dir_all(&super::locator::NodeStatePath::parse(kind.as_str())?)?;
         }
         for path in [
             "cache",
@@ -174,56 +156,59 @@ impl NodeStateRoot {
             "catalog-mcp",
             "control",
         ] {
-            self.create_dir_all(&NodeStatePath::parse(path)?)?;
+            self.create_dir_all(&super::locator::NodeStatePath::parse(path)?)?;
         }
         Ok(())
     }
 
-    pub fn namespace(&self, kind: NodeStateNamespaceKind) -> crate::error::Result<NodeStateNamespace> {
-        let path = NodeStatePath::parse(kind.as_str())?;
+    pub fn namespace(
+        &self,
+        kind: NodeStateNamespaceKind,
+    ) -> crate::error::Result<super::namespace::NodeStateNamespace> {
+        let path = super::locator::NodeStatePath::parse(kind.as_str())?;
         self.create_dir_all(&path)?;
-        let dir = open_dir_components(&self.inner.dir, path.as_path())?;
-        Ok(NodeStateNamespace {
-            root: Arc::clone(&self.inner),
+        let dir = super::filesystem::open_dir_components(&self.inner.dir, path.as_path())?;
+        Ok(super::namespace::NodeStateNamespace {
+            root: std::sync::Arc::clone(&self.inner),
             kind,
             scope: path.into_path_buf(),
             dir,
         })
     }
 
-    pub fn identity(&self) -> crate::error::Result<NodeStateNamespace> {
+    pub fn identity(&self) -> crate::error::Result<super::namespace::NodeStateNamespace> {
         self.namespace(NodeStateNamespaceKind::Identity)
     }
 
-    pub fn secrets(&self) -> crate::error::Result<NodeStateNamespace> {
+    pub fn secrets(&self) -> crate::error::Result<super::namespace::NodeStateNamespace> {
         self.namespace(NodeStateNamespaceKind::Secrets)
     }
 
-    pub fn ledger(&self) -> crate::error::Result<NodeStateNamespace> {
+    pub fn ledger(&self) -> crate::error::Result<super::namespace::NodeStateNamespace> {
         self.namespace(NodeStateNamespaceKind::Ledger)
     }
 
-    pub fn control_inbox(&self) -> crate::error::Result<NodeStateNamespace> {
+    pub fn control_inbox(&self) -> crate::error::Result<super::namespace::NodeStateNamespace> {
         self.namespace(NodeStateNamespaceKind::ControlInbox)
     }
 
-    pub fn control_outbox(&self) -> crate::error::Result<NodeStateNamespace> {
+    pub fn control_outbox(&self) -> crate::error::Result<super::namespace::NodeStateNamespace> {
         self.namespace(NodeStateNamespaceKind::ControlOutbox)
     }
 
-    pub fn control_ingress(&self) -> crate::error::Result<NodeStateNamespace> {
+    pub fn control_ingress(&self) -> crate::error::Result<super::namespace::NodeStateNamespace> {
         self.namespace(NodeStateNamespaceKind::ControlIngress)
     }
 
-    pub fn control_idempotency(&self) -> crate::error::Result<NodeStateNamespace> {
+    pub fn control_idempotency(&self) -> crate::error::Result<super::namespace::NodeStateNamespace> {
         self.namespace(NodeStateNamespaceKind::ControlIdempotency)
     }
 
-    pub fn control_service(&self) -> crate::error::Result<NodeStateNamespace> {
+    pub fn control_service(&self) -> crate::error::Result<super::namespace::NodeStateNamespace> {
         self.namespace(NodeStateNamespaceKind::ControlService)
     }
 
-    pub fn receipts(&self) -> crate::error::Result<NodeStateNamespace> {
+    pub fn receipts(&self) -> crate::error::Result<super::namespace::NodeStateNamespace> {
         self.namespace(NodeStateNamespaceKind::Receipts)
     }
 
@@ -247,38 +232,38 @@ impl NodeStateRoot {
         Ok(crate::local_store::ChunkStoreRoot::from_dir(namespace.try_clone_dir()?))
     }
 
-    pub fn read(&self, path: &NodeStatePath, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
-        read_regular_file_bounded(&self.inner.dir, path.as_path(), max_bytes)
+    pub fn read(&self, path: &super::locator::NodeStatePath, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
+        super::filesystem::read_regular_file_bounded(&self.inner.dir, path.as_path(), max_bytes)
     }
 
-    pub fn read_to_string(&self, path: &NodeStatePath, max_bytes: u64) -> crate::error::Result<String> {
+    pub fn read_to_string(&self, path: &super::locator::NodeStatePath, max_bytes: u64) -> crate::error::Result<String> {
         String::from_utf8(self.read(path, max_bytes)?)
-            .map_err(|error| invalid(format!("node state file {} is not UTF-8: {error}", path.display())))
+            .map_err(|error| super::invalid(format!("node state file {} is not UTF-8: {error}", path.display())))
     }
 
-    pub fn write(&self, path: &NodeStatePath, bytes: &[u8]) -> crate::error::Result<()> {
-        validate_write_size(bytes, MAX_NODE_STATE_FILE_BYTES)?;
-        write_regular_file(&self.inner.dir, path.as_path(), bytes, None)
+    pub fn write(&self, path: &super::locator::NodeStatePath, bytes: &[u8]) -> crate::error::Result<()> {
+        super::filesystem::validate_write_size(bytes, super::MAX_NODE_STATE_FILE_BYTES)?;
+        super::filesystem::write_regular_file(&self.inner.dir, path.as_path(), bytes, None)
     }
 
-    pub fn try_exists(&self, path: &NodeStatePath) -> crate::error::Result<bool> {
-        entry_kind_optional(&self.inner.dir, path.as_path()).map(|kind| kind.is_some())
+    pub fn try_exists(&self, path: &super::locator::NodeStatePath) -> crate::error::Result<bool> {
+        super::filesystem::entry_kind_optional(&self.inner.dir, path.as_path()).map(|kind| kind.is_some())
     }
 
-    pub fn entry_kind(&self, path: &NodeStatePath) -> crate::error::Result<Option<NodeStateEntryKind>> {
-        entry_kind_optional(&self.inner.dir, path.as_path())
+    pub fn entry_kind(&self, path: &super::locator::NodeStatePath) -> crate::error::Result<Option<NodeStateEntryKind>> {
+        super::filesystem::entry_kind_optional(&self.inner.dir, path.as_path())
     }
 
-    pub fn remove_regular_file(&self, path: &NodeStatePath) -> crate::error::Result<()> {
-        remove_regular_file(&self.inner.dir, path.as_path())
+    pub fn remove_regular_file(&self, path: &super::locator::NodeStatePath) -> crate::error::Result<()> {
+        super::filesystem::remove_regular_file(&self.inner.dir, path.as_path())
     }
 
-    pub fn create_dir_all(&self, path: &NodeStatePath) -> crate::error::Result<()> {
-        create_dir_components(&self.inner.dir, path.as_path())
+    pub fn create_dir_all(&self, path: &super::locator::NodeStatePath) -> crate::error::Result<()> {
+        super::filesystem::create_dir_components(&self.inner.dir, path.as_path())
     }
 
-    pub fn open_database_file(&self, path: &NodeStatePath) -> crate::error::Result<std::fs::File> {
-        open_database_file(&self.inner.dir, path.as_path())
+    pub fn open_database_file(&self, path: &super::locator::NodeStatePath) -> crate::error::Result<std::fs::File> {
+        super::filesystem::open_database_file(&self.inner.dir, path.as_path())
     }
 
     pub(crate) fn try_clone_dir(&self) -> crate::error::Result<cap_std::fs::Dir> {

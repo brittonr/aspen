@@ -1,43 +1,38 @@
-use std::path::Path;
-use std::sync::Arc;
-
-use super::MAX_NODE_STATE_ENTRIES;
-use super::authority::NodeStateEntryKind;
-use super::authority::NodeStateInner;
-use super::authority::NodeStateNamespaceKind;
-use super::invalid;
-use super::locator::NodeStatePath;
-use super::namespace::NodeStateEntry;
-
-pub(super) fn entry_kind(file_type: &cap_std::fs::FileType) -> NodeStateEntryKind {
+pub(super) fn entry_kind(file_type: &cap_std::fs::FileType) -> super::authority::NodeStateEntryKind {
     if file_type.is_file() {
-        NodeStateEntryKind::RegularFile
+        super::authority::NodeStateEntryKind::RegularFile
     } else if file_type.is_dir() {
-        NodeStateEntryKind::Directory
+        super::authority::NodeStateEntryKind::Directory
     } else if file_type.is_symlink() {
-        NodeStateEntryKind::Symlink
+        super::authority::NodeStateEntryKind::Symlink
     } else {
-        NodeStateEntryKind::Other
+        super::authority::NodeStateEntryKind::Other
     }
 }
 
 pub(super) fn list_entries(
     dir: &cap_std::fs::Dir,
-    root: &Arc<NodeStateInner>,
-    namespace: NodeStateNamespaceKind,
-    scope: &Path,
-) -> crate::error::Result<Vec<NodeStateEntry>> {
+    root: &std::sync::Arc<super::authority::NodeStateInner>,
+    namespace: super::authority::NodeStateNamespaceKind,
+    scope: &std::path::Path,
+) -> crate::error::Result<Vec<super::namespace::NodeStateEntry>> {
     let mut entries = Vec::new();
     for entry_result in dir.read_dir(".").map_err(crate::error::MoltenError::from)? {
         let entry = entry_result.map_err(crate::error::MoltenError::from)?;
-        if entries.len() >= MAX_NODE_STATE_ENTRIES {
-            return Err(invalid(format!("node state entry count exceeds maximum {MAX_NODE_STATE_ENTRIES}")));
+        if entries.len() >= super::MAX_NODE_STATE_ENTRIES {
+            return Err(super::invalid(format!(
+                "node state entry count exceeds maximum {}",
+                super::MAX_NODE_STATE_ENTRIES
+            )));
         }
         let file_name = entry.file_name();
-        let name = file_name.to_str().ok_or_else(|| invalid("node state entry name must be valid UTF-8"))?.to_string();
-        let path = NodeStatePath::parse(&name)?;
-        entries.push(NodeStateEntry {
-            root: Arc::clone(root),
+        let name = file_name
+            .to_str()
+            .ok_or_else(|| super::invalid("node state entry name must be valid UTF-8"))?
+            .to_string();
+        let path = super::locator::NodeStatePath::parse(&name)?;
+        entries.push(super::namespace::NodeStateEntry {
+            root: std::sync::Arc::clone(root),
             namespace,
             scope: scope.to_path_buf(),
             name,
