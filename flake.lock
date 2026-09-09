@@ -141,6 +141,23 @@
         "type": "github"
       }
     },
+    "cairn-policy-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1786223974,
+        "narHash": "sha256-OKzh+0SPDKBS8Jr6icvTxuAmTZ79v6Lm6wmgQ6vaY/o=",
+        "owner": "OnixResearch",
+        "repo": "cairn",
+        "rev": "695124d459574ba7aeba6097310d237f393c243c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "OnixResearch",
+        "repo": "cairn",
+        "rev": "695124d459574ba7aeba6097310d237f393c243c",
+        "type": "github"
+      }
+    },
     "cairn-src": {
       "flake": false,
       "locked": {
@@ -1560,6 +1577,7 @@
         "artifact-src": "artifact-src",
         "basalt-src": "basalt-src",
         "bounded-exec-src": "bounded-exec-src",
+        "cairn-policy-src": "cairn-policy-src",
         "cairn-src": "cairn-src",
         "chaoscontrol-src": "chaoscontrol-src",
         "choregraph-src": "choregraph-src",

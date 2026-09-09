@@ -64,6 +64,10 @@
       url = "github:OnixResearch/kamacite/d76fe4abe543724d8fc0ac4b362187caf2e27622";
       flake = false;
     };
+    cairn-policy-src = {
+      url = "github:OnixResearch/cairn/695124d459574ba7aeba6097310d237f393c243c";
+      flake = false;
+    };
     cairn-src = {
       url = "github:OnixResearch/cairn/3b4c280b893f2709aebea21fc51a4f9eeba3fe3b";
       flake = false;
@@ -117,6 +121,7 @@
       mantle-executable-extent-src,
       kamacite-src,
       cairn-src,
+      cairn-policy-src,
       hegel-src,
       octet-cutover-src,
       octet-toolchain,
@@ -693,6 +698,18 @@
             exec cargo nextest run --profile ci "$@"
           '';
         };
+        cairnPolicyExpression = pkgs.writeText "molten-cairn-policy.ncl" ''
+          let customize = import "${./cairn-policy/consumer.ncl}" in
+          customize (import "${cairn-policy-src}/cairn-policy/default.ncl")
+        '';
+        cairnPolicyExport =
+          pkgs.runCommand "molten-cairn-policy.json"
+            {
+              nativeBuildInputs = [ pkgs.nickel ];
+            }
+            ''
+              nickel export ${cairnPolicyExpression} > "$out"
+            '';
         sourceForConfigChecks = pkgs.lib.cleanSourceWith {
           src = ./.;
           filter =
@@ -1020,6 +1037,7 @@
           molten = moltenPkg;
           molten-node-host = moltenNodeHostPkg;
           molten-release-policy = releasePolicyPkg;
+          cairn-policy-export = cairnPolicyExport;
           doltlite-oracle = doltliteOracle;
           molten-kache = kacheWs.workspaceMembers."molten".build;
           molten-kache-rust = kacheWrappedRust;
@@ -3364,8 +3382,7 @@
                   chmod -R u+w source
                   cd source
 
-                  nickel export cairn-policy/default.ncl > "$TMPDIR/cairn-policy.json"
-                  diff -u cairn-policy/generated/cairn-policy.json "$TMPDIR/cairn-policy.json"
+                  diff -u cairn-policy/generated/cairn-policy.json ${cairnPolicyExport}
 
                   nickel export docs/plugin-extension-contracts/storage.contract-envelope.ncl > "$TMPDIR/storage.contract-envelope.json"
                   diff -u docs/plugin-extension-contracts/generated/storage.contract-envelope.json "$TMPDIR/storage.contract-envelope.json"
@@ -3451,6 +3468,7 @@
                     negative_fixture "plugin-$(basename "$fixture" .ncl)" "$fixture"
                   done
                   positive_fixture cairn-policy-default cairn-policy/default.ncl
+                  positive_fixture cairn-policy-consumer ${cairnPolicyExpression}
                   for fixture in cairn-policy/fixtures/*.ncl; do
                     name=$(basename "$fixture" .ncl)
                     case "$name" in
