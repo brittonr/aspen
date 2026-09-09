@@ -1,6 +1,6 @@
 let Contracts = import "../contracts.ncl" in
 (import "../default.ncl") & {
-  determinism_surface_inventory | force = [{
+  determinism_surface_inventory = [{
     id = "status_without_case_coverage",
     command = "status --root <root>",
     surface_kind = "cli",

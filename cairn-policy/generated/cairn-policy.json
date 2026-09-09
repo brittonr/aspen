@@ -66,7 +66,8 @@
       "verification",
       "assurance-review",
       "acceptance",
-      "no-spec-review"
+      "no-spec-review",
+      "outcome-machine"
     ],
     "known_operations": [
       "context",
@@ -75,7 +76,8 @@
     "known_profiles": [
       "spec-driven",
       "assurance",
-      "no-spec-delta"
+      "no-spec-delta",
+      "outcome-machine"
     ],
     "portable_excluded_fields": [
       "text",
@@ -1392,13 +1394,13 @@
   },
   "function_address_gate": {
     "accepted_valence_policy_hashes": [
-      "62c88a0263720dea4c37a48ef46921c46e5dd3e4924fff096b84a65d5738a412"
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     ],
     "allowed_claim_scopes": [
       "function_address.v1.lifecycle_policy_conformance"
     ],
     "mode": "optional",
-    "required_boundary": "Cairn consumed Valence, Mantle, and Kamacite function-address evidence for lifecycle/release policy conformance only; it did not prove Rust semantic correctness, compiler correctness, whole-program safety, verifier soundness, or release eligibility",
+    "required_boundary": "Molten consumes Valence, Mantle, and Kamacite function-address evidence for lifecycle and release policy conformance only; it does not prove Rust semantic correctness, compiler correctness, whole-program safety, verifier soundness, runtime authority, or release eligibility",
     "required_roles": [
       "function-address-evidence-sidecar",
       "valence-function-address-evidence-profile",
@@ -3836,10 +3838,12 @@
         "layout",
         "policy",
         "policy_hash",
+        "policy_selection",
         "probe_evidence",
         "receipt_hash",
         "stage",
         "substance",
+        "task_ordering",
         "valid",
         "verdict"
       ]
@@ -4892,6 +4896,136 @@
         "valid",
         "verdict"
       ]
+    },
+    {
+      "action_keys": [],
+      "artifact_keys": [],
+      "case_keys": [],
+      "command": "evidence function-object validate",
+      "hash_fields": [
+        "object_hash"
+      ],
+      "issue_keys": [
+        "actual",
+        "code",
+        "expected",
+        "field_path"
+      ],
+      "mismatch_keys": [],
+      "replay_evidence_keys": [],
+      "top_level_keys": [
+        "command",
+        "family",
+        "issues",
+        "object_hash",
+        "schema",
+        "valid",
+        "verdict"
+      ]
+    },
+    {
+      "action_keys": [],
+      "artifact_keys": [],
+      "case_keys": [],
+      "command": "evidence name-pointer validate",
+      "hash_fields": [
+        "pointer_hash"
+      ],
+      "issue_keys": [
+        "actual",
+        "code",
+        "expected",
+        "field_path"
+      ],
+      "mismatch_keys": [],
+      "replay_evidence_keys": [],
+      "top_level_keys": [
+        "command",
+        "family",
+        "issues",
+        "pointer_hash",
+        "schema",
+        "valid",
+        "verdict"
+      ]
+    },
+    {
+      "action_keys": [],
+      "artifact_keys": [],
+      "case_keys": [],
+      "command": "evidence export-bundle validate",
+      "hash_fields": [
+        "bundle_hash"
+      ],
+      "issue_keys": [
+        "actual",
+        "code",
+        "expected",
+        "field_path"
+      ],
+      "mismatch_keys": [],
+      "replay_evidence_keys": [],
+      "top_level_keys": [
+        "bundle_hash",
+        "command",
+        "family",
+        "issues",
+        "schema",
+        "valid",
+        "verdict"
+      ]
+    },
+    {
+      "action_keys": [],
+      "artifact_keys": [],
+      "case_keys": [],
+      "command": "evidence downstream-pilot validate",
+      "hash_fields": [
+        "pilot_hash"
+      ],
+      "issue_keys": [
+        "actual",
+        "code",
+        "expected",
+        "field_path"
+      ],
+      "mismatch_keys": [],
+      "replay_evidence_keys": [],
+      "top_level_keys": [
+        "command",
+        "family",
+        "issues",
+        "pilot_hash",
+        "schema",
+        "valid",
+        "verdict"
+      ]
+    },
+    {
+      "action_keys": [],
+      "artifact_keys": [],
+      "case_keys": [],
+      "command": "evidence circuit-primitive validate",
+      "hash_fields": [
+        "graph_hash"
+      ],
+      "issue_keys": [
+        "actual",
+        "code",
+        "expected",
+        "field_path"
+      ],
+      "mismatch_keys": [],
+      "replay_evidence_keys": [],
+      "top_level_keys": [
+        "command",
+        "family",
+        "issues",
+        "graph_hash",
+        "schema",
+        "valid",
+        "verdict"
+      ]
     }
   ],
   "registry_label_policy": {
@@ -4935,7 +5069,11 @@
     ]
   },
   "runtime_evidence_policy": {
-    "aggregation_profiles": [],
+    "aggregation_profiles": [
+      "smoke",
+      "release",
+      "dogfood"
+    ],
     "allowed_capture_origins": [
       "boundary_captured",
       "ingested_telemetry",
@@ -5286,6 +5424,156 @@
           "apply_prerequisites": [],
           "constraints": [
             "Use substantive text without placeholders.",
+            "Keep lifecycle authority and non-claims explicit."
+          ],
+          "generates": "proposal.md",
+          "id": "proposal",
+          "instruction_template": "Write proposal.md for {{change}} with Why, What Changes, Impact, and Out of Scope sections.",
+          "output_path": "proposal.md",
+          "path_kind": "file",
+          "requires": [],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "proposal",
+          "structural_admission": "proposal"
+        },
+        {
+          "apply_prerequisites": [
+            "gate:proposal"
+          ],
+          "constraints": [
+            "Use cairn.outcome-machine-review.v1.",
+            "Replace every placeholder before the design gate.",
+            "Record observed evidence before sync or archive."
+          ],
+          "generates": "outcome-machine.json",
+          "id": "outcome-machine",
+          "instruction_template": "Complete outcome-machine.json for {{change}} with one admitted route, tracked inputs, checks, authority facts, and completion state.",
+          "output_path": "outcome-machine.json",
+          "path_kind": "file",
+          "requires": [
+            "proposal"
+          ],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "design",
+          "structural_admission": "outcome_machine"
+        },
+        {
+          "apply_prerequisites": [
+            "gate:proposal"
+          ],
+          "constraints": [
+            "Use stable r[...] requirement IDs.",
+            "Give every scenario GIVEN, WHEN, and THEN clauses."
+          ],
+          "generates": "specs/**/*.md",
+          "id": "specs",
+          "instruction_template": "Write one or more specs/<spec-id>/spec.md delta files for {{change}} with explicit requirement operations.",
+          "output_path": "specs",
+          "path_kind": "spec_directory",
+          "requires": [
+            "proposal"
+          ],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "design",
+          "structural_admission": "delta_specs"
+        },
+        {
+          "apply_prerequisites": [
+            "gate:proposal",
+            "artifact:outcome-machine"
+          ],
+          "constraints": [
+            "Keep pure decisions separate from shell effects.",
+            "Name deterministic ordering and failure behavior."
+          ],
+          "generates": "design.md",
+          "id": "design",
+          "instruction_template": "Write design.md for {{change}} with decisions, rejected alternatives, tests, risks, and claim boundaries.",
+          "output_path": "design.md",
+          "path_kind": "file",
+          "requires": [
+            "proposal",
+            "outcome-machine"
+          ],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "design",
+          "structural_admission": "design"
+        },
+        {
+          "apply_prerequisites": [
+            "gate:design"
+          ],
+          "constraints": [
+            "Link each task to a delta requirement or valid dependency marker.",
+            "Include completion-evidence and fresh-state tasks."
+          ],
+          "generates": "tasks.md",
+          "id": "tasks",
+          "instruction_template": "Write tasks.md for {{change}} with substantive linked tasks and positive and negative verification coverage.",
+          "output_path": "tasks.md",
+          "path_kind": "file",
+          "requires": [
+            "specs",
+            "design",
+            "outcome-machine"
+          ],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "tasks",
+          "structural_admission": "tasks"
+        }
+      ],
+      "bounds": {
+        "max_artifact_bytes": 1048576,
+        "max_artifacts": 16,
+        "max_constraints": 16,
+        "max_dependencies": 8,
+        "max_directory_depth": 8,
+        "max_directory_entries": 128,
+        "max_files_per_artifact": 64,
+        "max_issues": 64,
+        "max_non_claims": 16,
+        "max_path_bytes": 4096,
+        "max_template_bytes": 4096
+      },
+      "description": "Spec-driven lifecycle with repeatable-capability and completion-evidence obligations",
+      "id": "outcome-machine",
+      "profile_version": 1,
+      "receipt_fields": [
+        "workflow_profile",
+        "workflow_profile_version",
+        "spec_effect",
+        "non_claims"
+      ],
+      "required_non_claims": [
+        "workflow state proves only the selected policy graph and observed structural artifact facts",
+        "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+        "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+        "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+        "outcome-machine profile conformance does not prove product value, evidence truth, semantic correctness, reuse quality, maintenance quality, or release eligibility",
+        "recorded completion and fresh-state references prove only admitted structure and identity, not that the referenced claim is true"
+      ],
+      "review_obligations": [],
+      "schema_version": "cairn.workflow-schema.v1",
+      "spec_effect": "delta",
+      "states": [
+        "done",
+        "ready",
+        "blocked",
+        "skipped"
+      ],
+      "task_link_class": "requirement"
+    },
+    {
+      "artifacts": [
+        {
+          "apply_prerequisites": [],
+          "constraints": [
+            "Use substantive text without placeholders.",
             "Do not claim zero behavior effect."
           ],
           "generates": "proposal.md",
@@ -5444,13 +5732,13 @@
   ],
   "stack_provenance_gate": {
     "accepted_valence_policy_hashes": [
-      "93993e99e87206d232b64efcc8631611aad3b5b0c4b81855e7e1a0cdcc391cff"
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     ],
     "allowed_claim_scopes": [
       "stack_provenance.v1.lifecycle_policy_conformance"
     ],
     "mode": "optional",
-    "required_boundary": "Cairn consumed Valence and Mantle stack provenance receipts for lifecycle/release policy conformance only; it did not prove source-code correctness, Valence verifier soundness, Mantle build correctness, or Trellis/Octet proof validity"
+    "required_boundary": "Molten consumes stack provenance as evidence-only lifecycle and release metadata; it does not prove source-code correctness, upstream verifier soundness, runtime authority, deployment trust, or behavioral correctness by itself"
   },
   "steel_orchestration_policy": {
     "enabled": false,
@@ -5498,6 +5786,16 @@
         "id": "depends",
         "kind": "depends-prefix",
         "token": "[depends:<task-or-id>]"
+      },
+      {
+        "id": "task",
+        "kind": "task-id-prefix",
+        "token": "[task:<id>]"
+      },
+      {
+        "id": "after",
+        "kind": "task-predecessor-prefix",
+        "token": "[after:<task-id>]"
       }
     ],
     "stages": [
@@ -5509,6 +5807,8 @@
     "default_profile": "cairn-default",
     "profiles": [
       {
+        "anchor_kind": "exact_marker_bytes",
+        "assurance_level": "declared",
         "evidence_sources": [
           {
             "extensions": [
@@ -5521,22 +5821,22 @@
             "extensions": [
               "rs"
             ],
-            "root": "crates",
+            "root": "tests",
             "source_kind": "rust_source"
           },
           {
             "extensions": [
               "ncl"
             ],
-            "root": "crates",
+            "root": "docs",
             "source_kind": "nickel_source"
           },
           {
             "extensions": [
               "rs",
-              "ncl"
+              "sh"
             ],
-            "root": "tools",
+            "root": "scripts",
             "source_kind": "tool_source"
           }
         ],
@@ -5552,12 +5852,112 @@
             "extensions": [
               "md"
             ],
-            "root": ".cairn/specs",
+            "root": "cairn/specs",
             "source_kind": "accepted_specs"
           }
         ]
       },
       {
+        "anchor_kind": "exact_marker_bytes",
+        "assurance_level": "declared",
+        "evidence_sources": [
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "crates/molten-core/src/fabric_transport",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "src/fabric_transport",
+            "source_kind": "rust_source"
+          }
+        ],
+        "id": "fabric-transport",
+        "marker_verbs": [
+          "impl",
+          "verify"
+        ],
+        "requirement_sources": [
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs/fabric-transport/spec.md",
+            "source_kind": "accepted_specs"
+          }
+        ]
+      },
+      {
+        "anchor_kind": "exact_marker_bytes",
+        "assurance_level": "declared",
+        "evidence_sources": [
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "crates/molten-core/src/live_binding",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "src/live_binding_adoption.rs",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "docs/live-artifact-binding-and-semantic-effects.md",
+            "source_kind": "tool_source"
+          },
+          {
+            "extensions": [
+              "preserves"
+            ],
+            "root": "schemas/preserves-boundaries",
+            "source_kind": "tool_source"
+          }
+        ],
+        "id": "adopt-artifact-binding-and-semantic-effects",
+        "marker_verbs": [
+          "impl",
+          "verify",
+          "depends",
+          "related"
+        ],
+        "requirement_sources": [
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs/live-artifact-binding",
+            "source_kind": "accepted_specs"
+          },
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs/semantic-operation-adoption",
+            "source_kind": "accepted_specs"
+          },
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs/generation-retirement",
+            "source_kind": "accepted_specs"
+          }
+        ]
+      },
+      {
+        "anchor_kind": "exact_marker_bytes",
+        "assurance_level": "declared",
         "evidence_sources": [
           {
             "extensions": [
@@ -5598,7 +5998,8 @@
     "allowed_profiles": [
       "spec-driven",
       "assurance",
-      "no-spec-delta"
+      "no-spec-delta",
+      "outcome-machine"
     ],
     "default_profile": "spec-driven",
     "forbidden_selection_sources": [

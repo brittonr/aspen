@@ -1,4 +1,4 @@
 let Contracts = import "../contracts.ncl" in
 (import "../default.ncl") & {
-  receipt_hash_policy.algorithm = "SHA256",
+  lifecycle_store_policy.bounds.max_store_id_bytes = 0,
 } | Contracts.Policy
