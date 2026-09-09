@@ -1,4 +1,4 @@
-#[path = "../src/test/support.rs"]
+#[path = "src/test/support.rs"]
 mod test_support;
 
 use std::collections::BTreeMap;
