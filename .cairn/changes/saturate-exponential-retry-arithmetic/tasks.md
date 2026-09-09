@@ -2,8 +2,8 @@
 
 The user authorized implementation and integration into `origin/molten`.
 The verification summary records the remaining checks and evidence limits.
-See [the policy repair report](evidence/policy-resume/report.md) for the passing export gate and the isolated Cargo metadata failures.
-Strict Octet and the full Nix gate remain incomplete.
+See [the final gate report](evidence/final-gates/report.md) for the policy repair, strict-gate denial, and Tracey reader checks.
+Strict Octet and Nix acceptance remain blocked. The changes preserve all baseline and gate requirements.
 
 - [x] [serial] Run `retry_plans_are_bounded_and_jitter_explicit` and the smallest existing retry fixture tests before core edits. Cite r[molten.audit_f12.validation].
 - [x] [serial] Move the base-two, attempt-63, maximum-128 reproduction into normal repository tests with named inputs and ordinary-growth controls. Cite r[molten.audit_f12.saturation].

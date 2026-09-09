@@ -13,7 +13,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-const REQUIREMENT_ROOT: &str = "cairn/specs";
+const REQUIREMENT_ROOT: &str = ".cairn/specs";
 const REQUIREMENT_EXTENSION: &str = "md";
 const OPTION_ROOT: &str = "--root";
 const OPTION_BASELINE: &str = "--baseline";
@@ -189,6 +189,9 @@ fn read_baseline(path: &Path) -> Result<Vec<String>, String> {
 
 fn read_definitions(root: &Path) -> Result<BTreeMap<String, Vec<RequirementDefinition>>, String> {
     let requirement_root = root.join(REQUIREMENT_ROOT);
+    if !requirement_root.is_dir() {
+        return Err(format!("requirement root is not a directory: {}", requirement_root.display()));
+    }
     let mut files = Vec::new();
     walk_files(&requirement_root, &mut files)?;
     files.retain(|path| path.extension().and_then(|extension| extension.to_str()) == Some(REQUIREMENT_EXTENSION));
@@ -255,6 +258,45 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fixture_root(name: &str) -> PathBuf {
+        let root = env::temp_dir().join(format!("molten-tracey-classifier-{name}-{}", std::process::id()));
+        fs::create_dir(&root).expect("create an exclusive test directory");
+        root
+    }
+
+    fn write_fixture(root: &Path, relative: &str, text: &str) {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().expect("fixture has a parent")).expect("create fixture parents");
+        fs::write(path, text).expect("write fixture");
+    }
+
+    #[test]
+    fn native_specs_exclude_legacy_and_pending_definitions() {
+        let root = fixture_root("native");
+        let specification = ".cairn/specs/example/spec.md";
+        write_fixture(&root, specification, "r[molten.alpha.one]\n");
+        write_fixture(&root, "cairn/specs/example/spec.md", "r[molten.beta.two]\n");
+        write_fixture(&root, ".cairn/changes/pending/specs/example/spec.md", "r[molten.gamma.three]\n");
+        let actual = read_definitions(&root);
+        fs::remove_dir_all(&root).expect("remove the test-owned directory");
+        let definitions = actual.expect("read native specifications");
+        assert_eq!(definitions.len(), 1);
+        assert_eq!(definitions["molten.alpha.one"], vec![location(specification, 1)]);
+    }
+
+    #[test]
+    fn missing_or_non_directory_native_root_is_rejected() {
+        let root = fixture_root("invalid");
+        write_fixture(&root, "cairn/specs/example/spec.md", "r[molten.beta.two]\n");
+        let missing = read_definitions(&root);
+        write_fixture(&root, ".cairn/specs", "not a directory");
+        let not_directory = read_definitions(&root);
+        fs::remove_dir_all(&root).expect("remove the test-owned directory");
+        let expected = Err(format!("requirement root is not a directory: {}", root.join(".cairn/specs").display()));
+        assert_eq!(missing, expected);
+        assert_eq!(not_directory, expected);
+    }
 
     fn location(specification: &str, line: usize) -> RequirementDefinition {
         RequirementDefinition {

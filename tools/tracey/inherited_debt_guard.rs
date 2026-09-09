@@ -9,7 +9,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-const REQUIREMENT_ROOT: &str = "cairn/specs";
+const REQUIREMENT_ROOT: &str = ".cairn/specs";
 const ROOT_EVIDENCE_FILE: &str = "flake.nix";
 const EVIDENCE_ROOTS: &[&str] = &["src", "crates", "tests", "tools", "docs", "scripts"];
 const EVIDENCE_EXTENSIONS: &[&str] = &["rs", "ncl", "md", "sh", "nix"];
@@ -122,8 +122,12 @@ fn has_extension(path: &Path, extensions: &[&str]) -> bool {
 }
 
 fn read_requirements(root: &Path) -> Result<BTreeSet<String>, String> {
+    let requirement_root = root.join(REQUIREMENT_ROOT);
+    if !requirement_root.is_dir() {
+        return Err(format!("requirement root is not a directory: {}", requirement_root.display()));
+    }
     let mut files = Vec::new();
-    walk_files(&root.join(REQUIREMENT_ROOT), &mut files)?;
+    walk_files(&requirement_root, &mut files)?;
     files.retain(|path| has_extension(path, &[REQUIREMENT_EXTENSION]));
     let mut requirements = BTreeSet::new();
     for path in files {
@@ -233,6 +237,42 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fixture_root(name: &str) -> PathBuf {
+        let root = env::temp_dir().join(format!("molten-tracey-guard-{name}-{}", std::process::id()));
+        fs::create_dir(&root).expect("create an exclusive test directory");
+        root
+    }
+
+    fn write_fixture(root: &Path, relative: &str, text: &str) {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().expect("fixture has a parent")).expect("create fixture parents");
+        fs::write(path, text).expect("write fixture");
+    }
+
+    #[test]
+    fn native_specs_exclude_legacy_and_pending_definitions() {
+        let root = fixture_root("native");
+        write_fixture(&root, ".cairn/specs/example/spec.md", "r[accepted]\n");
+        write_fixture(&root, "cairn/specs/example/spec.md", "r[legacy]\n");
+        write_fixture(&root, ".cairn/changes/pending/specs/example/spec.md", "r[pending]\n");
+        let actual = read_requirements(&root);
+        fs::remove_dir_all(&root).expect("remove the test-owned directory");
+        assert_eq!(actual.expect("read native specifications"), set(&["accepted"]));
+    }
+
+    #[test]
+    fn missing_or_non_directory_native_root_is_rejected() {
+        let root = fixture_root("invalid");
+        write_fixture(&root, "cairn/specs/example/spec.md", "r[legacy]\n");
+        let missing = read_requirements(&root);
+        write_fixture(&root, ".cairn/specs", "not a directory");
+        let not_directory = read_requirements(&root);
+        fs::remove_dir_all(&root).expect("remove the test-owned directory");
+        let expected = Err(format!("requirement root is not a directory: {}", root.join(".cairn/specs").display()));
+        assert_eq!(missing, expected);
+        assert_eq!(not_directory, expected);
+    }
 
     fn set(values: &[&str]) -> BTreeSet<String> {
         values.iter().map(|value| (*value).to_string()).collect()
