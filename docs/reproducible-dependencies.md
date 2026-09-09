@@ -62,6 +62,31 @@ Floating branches, tags without immutable commits, unreviewed SSH-only release
 sources, manifest/lock/Nix drift, duplicate canonical package identity, stale archive
 bytes, and missing configured distribution evidence fail closed.
 
+## Git source hashes in generated plans
+
+The pinned unit2nix generator at `d4883180de0ce3033b7e4e2ab4216f33134863c5` prefetches Git sources with `--leave-dotGit`.
+Its `lib/fetch-source.nix` builder omits that option.
+These two source trees have different NAR hashes.
+Regeneration alone therefore does not correct this mismatch.
+
+`crate-hashes.json` supplies reviewed, revision-bound hashes for Durable Authority State, Bounded HTTP, ChaosControl, and Kamacite.
+The hashes bind the exact source trees without Git metadata, as required by the builder.
+Direct `fetchgit` builds verify the Durable Authority State and Bounded HTTP hashes with submodules enabled.
+Exact-revision Nix prefetches bind the ChaosControl and Kamacite source trees.
+The dependency URLs and revisions remain unchanged.
+SHA-256 is required here by the existing Nix source-hash format.
+
+The repository consumes these hashes through the native unit2nix input contract.
+The generator applies a revision-bound entry to all packages from that repository and revision.
+The following commands regenerate both plans:
+
+```sh
+nix develop -c nix run github:brittonr/unit2nix/d4883180de0ce3033b7e4e2ab4216f33134863c5 -- --workspace --force --output build-plan.json
+nix develop -c nix run github:brittonr/unit2nix/d4883180de0ce3033b7e4e2ab4216f33134863c5 -- --package molten-release-policy --bin molten-release-policy --force --output release-policy-build-plan.json
+```
+
+Successful source fetches do not establish a passing build or release gate.
+
 ## AGPL distribution profile
 
 `AGPL-3.0-or-later` is an accepted Molten project choice. The profile records

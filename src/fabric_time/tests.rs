@@ -1,3 +1,5 @@
+mod replay;
+
 use super::*;
 use crate::fabric::DeterminismClass;
 use crate::fabric::FabricAuthority;
@@ -333,6 +335,97 @@ fn reference_matrix_preserves_plugin_extension_and_application_authority_boundar
         admission_evidence: Vec::new(),
     };
     assert!(validate_extension_tier(&application).is_ok());
+}
+
+// r[verify molten.audit_f12.validation]
+#[test]
+fn retry_observations_replay_exactly_and_differ_from_wrapped_history() {
+    const AUDIT_BASE: u64 = 2;
+    const AUDIT_ATTEMPT: u64 = 63;
+    let profile = simulation_profile();
+    let now = TimeValue::Virtual(VirtualInstant {
+        profile_ref: profile.profile.profile_ref.clone(),
+        ticks: TIMER_DEADLINE,
+    });
+    let policy = RetryPolicy {
+        maximum_attempts: u64::MAX,
+        base_delay_ticks: AUDIT_BASE,
+        maximum_delay_ticks: PROFILE_LIMIT,
+        backoff: RetryBackoff::Exponential,
+        jitter: RetryJitter::None,
+    };
+    let events = super::fixture::retry_events(&profile, &now, AUDIT_ATTEMPT, policy, None).expect("retry evidence");
+    let expected_deadline = canonical_named_event(
+        &profile.profile_ref,
+        CanonicalTimeEventKind::Deadline,
+        GENERATION,
+        "fixture-retry",
+        "retry-planned",
+        TIMER_DEADLINE + PROFILE_LIMIT,
+    )
+    .expect("deadline");
+    let expected_delay = canonical_named_event(
+        &profile.profile_ref,
+        CanonicalTimeEventKind::Deadline,
+        GENERATION,
+        "fixture-retry",
+        "retry-delay",
+        PROFILE_LIMIT,
+    )
+    .expect("delay");
+    assert_eq!(events, [expected_deadline.clone(), expected_delay]);
+    let replay = super::fixture::retry_events(&profile, &now, AUDIT_ATTEMPT, policy, None).expect("retry replay");
+    assert_eq!(events, replay);
+    let legacy = canonical_named_event(
+        &profile.profile_ref,
+        CanonicalTimeEventKind::Deadline,
+        GENERATION,
+        "fixture-retry",
+        "retry-planned",
+        TIMER_DEADLINE,
+    )
+    .expect("legacy wrapped deadline");
+    assert_ne!(expected_deadline.value, legacy.value);
+    assert_ne!(expected_deadline.evidence_ref, legacy.evidence_ref);
+}
+
+// r[verify molten.audit_f12.compatibility]
+#[test]
+fn retry_observation_denial_preserves_existing_events() {
+    let profile = simulation_profile();
+    let policy = RetryPolicy {
+        maximum_attempts: 1,
+        base_delay_ticks: TIMER_DELAY,
+        maximum_delay_ticks: PROFILE_LIMIT,
+        backoff: RetryBackoff::Fixed,
+        jitter: RetryJitter::None,
+    };
+    let now = TimeValue::Virtual(VirtualInstant {
+        profile_ref: profile.profile.profile_ref.clone(),
+        ticks: TIMER_DEADLINE,
+    });
+    let mut events = Vec::new();
+    events.extend(super::fixture::retry_events(&profile, &now, 0, policy, None).expect("fixed retry"));
+    let original = events.clone();
+    let error = super::fixture::retry_events(&profile, &now, 1, policy, None)
+        .map(|batch| events.extend(batch))
+        .expect_err("exhausted");
+    assert!(error.to_string().contains("RetryExhausted"));
+    assert_eq!(events, original);
+    let error = super::fixture::retry_events(&profile, &now, 0, policy, Some(0))
+        .map(|batch| events.extend(batch))
+        .expect_err("jitter");
+    assert!(error.to_string().contains("JitterOutOfBounds"));
+    assert_eq!(events, original);
+    let overflow = TimeValue::Virtual(VirtualInstant {
+        profile_ref: profile.profile.profile_ref.clone(),
+        ticks: u64::MAX,
+    });
+    let error = super::fixture::retry_events(&profile, &overflow, 0, policy, None)
+        .map(|batch| events.extend(batch))
+        .expect_err("overflow");
+    assert!(error.to_string().contains("Overflow"));
+    assert_eq!(events, original);
 }
 
 #[test]

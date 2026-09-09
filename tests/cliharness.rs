@@ -1,5 +1,7 @@
-#[path = "../src/test/support.rs"]
-mod test_support;
+// Preserve the shared source while avoiding parent components in compiler diagnostics.
+mod test_support {
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/test/support.rs"));
+}
 
 include!("parts/cliharness/p000/body.rs");
 include!("parts/cliharness/p001/body.rs");

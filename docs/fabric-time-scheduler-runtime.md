@@ -83,6 +83,26 @@ Entropy evidence contains purpose, capability-bound stream metadata, generation,
 
 Deadlines use monotonic, logical, or virtual domains; wall-clock deadlines are denied. Decisions are pending, expired, or indeterminate within explicit uncertainty. Retry plans have finite attempts, checked fixed/exponential delay, a maximum delay, and optional entropy-backed bounded jitter. A retry plan does not prove that retrying an application operation is safe.
 
+Exponential retry delay uses a width guard and checked multiplication before the maximum-delay cap.
+Every admitted large attempt saturates without an attempt-sized loop or a narrowing error.
+Jitter addition and target-instant addition retain their existing checked-overflow errors.
+The current coordination-delivery profile uses fixed delay and does not expose the exponential defect.
+Molten fabric-time maintainers own these arithmetic boundary tests.
+
+The correction keeps the profile and event schemas at `v1` because their shapes do not change.
+Fixed-delay and non-overflow exponential plans retain their values.
+Reproduction still requires the exact implementation cohort.
+Historical wrapped delays differ from corrected canonical events and their BLAKE3 references.
+Do not rewrite historical receipts or treat cross-cohort output as an exact replay.
+The fixture records both `retry-planned` target ticks and `retry-delay` ticks after successful admission.
+Rejected plans append no retry observations. These fixture observations do not prove timer execution or safe application retries.
+
+`replay_fixture_retry` recomputes the fixture observations from explicit time, policy, attempt, and jitter inputs.
+It requires the exact canonical deadline and delay events in their original order.
+Missing, extra, altered, or historical wrapped events produce a `retry replay diverged` diagnostic.
+The function borrows the recorded events and never rewrites them.
+Its fixture generation and subject remain fixed. It does not authenticate the historical inputs or replay a live timer.
+
 Lease decisions are local observations unless the request names a reviewed fenced consistency profile and a fresh fencing token. Without both, an exclusive action is denied. Even a passing local decision does not prove global time, synchronized clocks, remote deadline agreement, partition absence, or distributed lease exclusivity.
 
 ## System-extension integration

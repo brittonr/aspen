@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/aspen-retry-drain",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/aspen-retry-drain/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen-retry-drain/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/aspen-retry-drain/crates/molten-release-policy#0.1.0"
   },
   "cargoLockHash": "6393384ce712610bed165680cd20cc1b097a56fbaf8584c46084b44562aed247",
-  "inputsHash": "03f37aae3b6728240778c7d4eacd6eb50facc54eca211835a5aacfcd11c74811",
+  "inputsHash": "04a05460cc9e40a14454e8d92c6a05bc17e69418865c2994cbdc2352a230a85b",
   "crates": {
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
@@ -58,7 +58,7 @@
         "url": "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git",
         "rev": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
         "subDir": "crates/replay-ledger-core",
-        "sha256": "0h1mdpwj8sk5nsklk1qvr0ls1h3yjbbhn6fs5bckv7b532z1q85v"
+        "sha256": "sha256-++GX+wiKkcBDeXtMJnMgpByEEcuAYRgO20Pzb8TJ6pA="
       },
       "features": [],
       "dependencies": [
@@ -95,7 +95,7 @@
         "url": "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git",
         "rev": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
         "subDir": "crates/revocation-view-core",
-        "sha256": "0h1mdpwj8sk5nsklk1qvr0ls1h3yjbbhn6fs5bckv7b532z1q85v"
+        "sha256": "sha256-++GX+wiKkcBDeXtMJnMgpByEEcuAYRgO20Pzb8TJ6pA="
       },
       "features": [],
       "dependencies": [
@@ -132,7 +132,7 @@
         "url": "https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git",
         "rev": "5abc2b93e0f288aba251a0750ce2d716eb9757fc",
         "subDir": "crates/bounded-http-core",
-        "sha256": "0yh25qagallz5s1l5rkhq22mm74hg9pjzfrayaz4chxifx9vzgmn"
+        "sha256": "sha256-FlNyGeN9Bo6/Dv/YqisN+5XSNerpUHM2+6jqHvxYlsA="
       },
       "features": [],
       "dependencies": [
@@ -164,7 +164,7 @@
         "url": "https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git",
         "rev": "5abc2b93e0f288aba251a0750ce2d716eb9757fc",
         "subDir": "crates/bounded-http",
-        "sha256": "0yh25qagallz5s1l5rkhq22mm74hg9pjzfrayaz4chxifx9vzgmn"
+        "sha256": "sha256-FlNyGeN9Bo6/Dv/YqisN+5XSNerpUHM2+6jqHvxYlsA="
       },
       "features": [
         "default",
@@ -689,7 +689,7 @@
         "url": "ssh://git@github.com/OnixResearch/kamacite.git",
         "rev": "d76fe4abe543724d8fc0ac4b362187caf2e27622",
         "subDir": "crates/kamacite-core",
-        "sha256": "1cnyx4n0a2sfbkax5h1j6wd232akkaab1x7ygcc3x3d75ak0791r"
+        "sha256": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc="
       },
       "features": [],
       "dependencies": [
@@ -790,7 +790,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/aspen-retry-drain/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -854,7 +854,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/aspen-retry-drain/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -870,7 +870,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-coordination-delivery-drain-20260828/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen-retry-drain/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
