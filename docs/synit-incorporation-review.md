@@ -376,3 +376,26 @@ The tracey baseline already classifies these runtime-spine requirements as
 `molten.runtime_spine.assertion_lifetimes` and `.observe_patterns`; C3 and C10
 map to `.reference_lifetimes`; C6 maps to `.interaction_tracing`. Those
 candidates close accepted requirements instead of opening new ones.
+
+## 7. Change packages
+
+Reviewing this document produced one Cairn change package per candidate under
+`.cairn/changes/`. All tasks are open. Creating a package is not acceptance, and
+no package implements anything.
+
+| Candidate | Change package | Delta spec |
+|---|---|---|
+| C1 | `coalesce-assertion-notifications` | `runtime-spine` |
+| C2 | `admit-facet-owner-scopes` | `runtime-spine` |
+| C3 | `enforce-introduction-before-reference` | `runtime-spine` |
+| C4 | `review-caveat-attenuation-boundary` | `runtime-spine` |
+| C5 | `admit-record-pattern-subset` | `runtime-spine` |
+| C6 | `record-turn-causality-in-traces` | `runtime-spine` |
+| C7 | `unify-service-state-assertions` | `runtime-spine` |
+| C8 | `publish-withdrawable-service-demand` | `runtime-spine` |
+| C9 | `store-declared-state-as-digest-named-records` | `durable-state-ports` |
+| C10 | `own-remote-assertions-per-session` | `runtime-spine` |
+
+C2, C5, and C9 carry a consumer decision as their first task, because each one
+needs a named user surface before implementation. C4 is review-only and records
+a rule instead of a filter implementation.
