@@ -13,3 +13,16 @@ The files in this directory start from copies of `cairn-policy/*.ncl` from that 
 Note: `cairn policy export` writes evaluator scratch under `target/`. If `target` is a symlink, replace it with a real directory for the export, then restore the symlink.
 
 The generated file `generated/cairn-policy.json` is the runtime input. Refresh it with the reviewed Cairn provider, then run lifecycle validation, lifecycle gates, and traceability checks.
+
+## Consumer fixture adaptations
+
+Molten lifecycle-policy maintainers own the fixture adaptations under `fixtures/`.
+The exemption fixtures use Nickel `force` to replace the default empty array.
+They still apply the complete `Contracts.Policy` contract.
+Negative fixtures cover an empty owner, a missing owner, and an invalid array type.
+The Nix gate requires their contract-specific diagnostics, not only a nonzero exit.
+A positive fixture checks the exact replacement value and the unchanged empty default.
+
+This adaptation changes test inputs and their checks only.
+The vendored defaults, contracts, and generated runtime policy remain unchanged.
+The runtime policy receives no new exemptions.

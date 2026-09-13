@@ -3458,6 +3458,15 @@
                       *) negative_fixture "cairn-$name" "$fixture" ;;
                     esac
                   done
+                  # Reject syntax/import errors that do not exercise the exemption contract.
+                  grep -Fq 'error: contract broken by the value of `owner`' \
+                    "$TMPDIR/cairn-invalid-exemption-owner.err"
+                  grep -Fq 'error: missing definition for `owner`' \
+                    "$TMPDIR/cairn-invalid-exemption-missing-owner.err"
+                  grep -Fq 'error: contract broken by the value of `exemptions`' \
+                    "$TMPDIR/cairn-invalid-exemption-array-type.err"
+                  grep -Fq 'expected an array' \
+                    "$TMPDIR/cairn-invalid-exemption-array-type.err"
 
                   if [ "$failed" -ne 0 ]; then
                     exit 1
