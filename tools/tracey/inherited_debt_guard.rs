@@ -3,11 +3,16 @@
 //! r[impl molten.project.inherited_tracey_debt.growth_denial]
 //! r[impl molten.project.inherited_tracey_debt.non_claims]
 
+mod definition_marker;
+
 use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+
+use definition_marker::requirement_marker;
+use definition_marker::valid_id;
 
 const REQUIREMENT_ROOT: &str = ".cairn/specs";
 const ROOT_EVIDENCE_FILE: &str = "flake.nix";
@@ -32,22 +37,6 @@ struct Coverage {
 struct BaselineComparison {
     unexpected_missing: BTreeSet<String>,
     stale_baseline: BTreeSet<String>,
-}
-
-fn valid_id(value: &str) -> bool {
-    !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
-}
-
-fn requirement_marker(line: &str) -> Option<String> {
-    let trimmed = line.trim();
-    let marker = trimmed.strip_prefix("r[")?;
-    let end = marker.find(']')?;
-    let raw = &marker[..end];
-    if raw.split_whitespace().count() != 1 {
-        return None;
-    }
-    let id = raw.split('+').next().unwrap_or(raw);
-    valid_id(id).then(|| id.to_string())
 }
 
 fn reference_markers(line: &str) -> Vec<String> {
@@ -243,6 +232,8 @@ fn main() {
     }
 }
 
+#[cfg(test)]
+mod definition_marker_tests;
 #[cfg(test)]
 mod input_test_support;
 #[cfg(test)]

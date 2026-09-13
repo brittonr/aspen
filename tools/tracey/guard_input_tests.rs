@@ -53,6 +53,17 @@ fn unknown_references_still_reject_after_native_input_admission() {
     assert_eq!(run(&arguments(&root)), Err("dangling traceability references are not permitted".to_string()));
 }
 
+#[test]
+fn heading_definitions_resolve_without_erasing_unknown_references() {
+    let root = FixtureRoot::new("guard-heading");
+    root.write(NATIVE_SPECIFICATION, &format!("### Requirement: Supplied lease [r[{REQUIREMENT_ID}]]\n"));
+    root.write("src/lib.rs", &format!("r[{} {REQUIREMENT_ID}]\n", "verify"));
+    root.write("baseline.txt", "");
+    assert_eq!(run(&arguments(&root)), Ok(()));
+    root.write("src/lib.rs", &format!("r[{} molten.example.unknown]\n", "verify"));
+    assert_eq!(run(&arguments(&root)), Err("dangling traceability references are not permitted".to_string()));
+}
+
 fn arguments(root: &FixtureRoot) -> Vec<String> {
     vec![
         OPTION_ROOT.to_string(),
