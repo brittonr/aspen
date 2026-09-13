@@ -651,6 +651,10 @@ The Nix toolchain includes a pinned Cargo patch for explicit package identities 
 The compiler cohort and producer revisions remain unchanged.
 [`nix/cargo-pathless/README.md`](nix/cargo-pathless/README.md) records the owner, source revision, checks, and removal conditions.
 
+Cargo optimizes BLAKE3 throughout workspace development and test builds because the shared `pure` feature makes unoptimized executable hashing costly.
+The compiler cohort, producer pins, debug assertions, overflow checks, and nextest limits remain unchanged.
+This configuration does not change release builds or replace exact executable-byte observations.
+
 Optional cross-process function profiling is documented in [`docs/development-function-profiling.md`](docs/development-function-profiling.md). Traces are bounded development observations and never release evidence.
 
 Proof-affecting changes should follow [`docs/proof-workflow.md`](docs/proof-workflow.md) for checklists, receipt-backed traceability, deny-path evidence, layered proof boundaries, and readbacks.

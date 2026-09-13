@@ -6,6 +6,11 @@ resolver = "3"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 
+# UCAN selects BLAKE3's pure-Rust implementation across the dependency graph.
+# Keep exact executable hashing within test bounds without changing producers or timeouts.
+[profile.dev.package.blake3]
+opt-level = 3
+
 [workspace.metadata.octet]
 default_scope = ["-p", "molten", "-p", "molten-node-host"]
 cargo_check_args = ["--all-targets"]
