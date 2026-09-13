@@ -1,0 +1,2 @@
+b8f947a77db7fcb11ee91093df1329e7aa671276a45aea69d15b544f63ffc67f  crates/cargo-util-schemas/src/core/package_id_spec.rs
+9bb1736060d45e75b0c3a0c764e28fc93d233446bdaf75de313236917c7f322e  crates/cargo-util-schemas/src/core/package_id_spec/pathless.rs

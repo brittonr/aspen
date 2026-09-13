@@ -20,6 +20,10 @@
       url = "github:oxalica/rust-overlay/6cddd512fa2bf7231f098d3a2f92f6e4cff71e0a";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    cargo-src = {
+      url = "git+ssh://git@github.com/rust-lang/cargo.git?rev=4d1f984518c77fad6eeef4f40153b002a659e662&shallow=1";
+      flake = false;
+    };
     onix-core-src = {
       url = "git+ssh://git@github.com/onixcomputer/onix-core.git?rev=ae895854eb049ff152d3f1b96cb90a5fa45c3ec6&shallow=1";
       flake = false;
@@ -104,6 +108,7 @@
       doltlite-src,
       unit2nix,
       rust-overlay,
+      cargo-src,
       flake-utils,
       onix-core-src,
       basalt-src,
@@ -495,7 +500,13 @@
           }
         );
 
-        rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        bootstrapRustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        cargoPathless = import ./nix/cargo-pathless {
+          inherit pkgs;
+          bootstrapToolchain = bootstrapRustToolchain;
+          cargoSource = cargo-src;
+        };
+        rustToolchain = cargoPathless.toolchain;
         fluxProfilerRustPlatform = pkgs.makeRustPlatform {
           cargo = rustToolchain;
           rustc = rustToolchain;
@@ -1016,6 +1027,7 @@
       in
       {
         packages = {
+          cargo-pathless = cargoPathless.cargo;
           default = moltenPkg;
           molten = moltenPkg;
           molten-node-host = moltenNodeHostPkg;
@@ -2254,6 +2266,8 @@
                 '';
           in
           rec {
+            cargo-pathless = cargoPathless.cargo;
+            cargo-pathless-toolchain = cargoPathless.selectionCheck;
             # The hermetic nextest check supplies binary metadata for CLI tests
             # using CARGO_BIN_EXE_molten; the raw unit2nix libtest runner does not.
             molten = nextest;

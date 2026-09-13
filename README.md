@@ -647,6 +647,10 @@ NixOS VM evidence is validated by canonical receipts and preserved through the `
 
 ## Development
 
+The Nix toolchain includes a pinned Cargo patch for explicit package identities with pathless source URLs.
+The compiler cohort and producer revisions remain unchanged.
+[`nix/cargo-pathless/README.md`](nix/cargo-pathless/README.md) records the owner, source revision, checks, and removal conditions.
+
 Optional cross-process function profiling is documented in [`docs/development-function-profiling.md`](docs/development-function-profiling.md). Traces are bounded development observations and never release evidence.
 
 Proof-affecting changes should follow [`docs/proof-workflow.md`](docs/proof-workflow.md) for checklists, receipt-backed traceability, deny-path evidence, layered proof boundaries, and readbacks.

@@ -1,0 +1,149 @@
+diff --git a/crates/cargo-util-schemas/src/core/package_id_spec.rs b/crates/cargo-util-schemas/src/core/package_id_spec.rs
+index c1e636c51..f05d8fbf9 100644
+--- a/crates/cargo-util-schemas/src/core/package_id_spec.rs
++++ b/crates/cargo-util-schemas/src/core/package_id_spec.rs
+@@ -155,2 +155,5 @@ impl PackageIdSpec {
+-            let Some(path_name) = url.path_segments().and_then(|mut p| p.next_back()) else {
+-                return Err(ErrorKind::MissingUrlPath(url).into());
++            // A path is necessary only when the package name must be inferred.
++            let path_name = || {
++                url.path_segments()
++                    .and_then(|mut p| p.next_back())
++                    .ok_or_else(|| ErrorKind::MissingUrlPath(url.clone()))
+@@ -170 +173 @@ impl PackageIdSpec {
+-                            (String::from(path_name), Some(version))
++                            (String::from(path_name()?), Some(version))
+@@ -174 +177 @@ impl PackageIdSpec {
+-                None => (String::from(path_name), None),
++                None => (String::from(path_name()?), None),
+@@ -248 +251 @@ impl fmt::Display for PackageIdSpec {
+-                if url.path_segments().unwrap().next_back().unwrap() != &*self.name {
++                if url.path_segments().and_then(|mut p| p.next_back()) != Some(self.name.as_str()) {
+@@ -338,0 +342,4 @@ enum ErrorKind {
++#[cfg(test)]
++#[path = "package_id_spec/pathless.rs"]
++mod pathless;
++
+diff --git a/crates/cargo-util-schemas/src/core/package_id_spec/pathless.rs b/crates/cargo-util-schemas/src/core/package_id_spec/pathless.rs
+new file mode 100644
+index 000000000..5f686036f
+--- /dev/null
++++ b/crates/cargo-util-schemas/src/core/package_id_spec/pathless.rs
+@@ -0,0 +1,117 @@
++use super::{ErrorKind, PackageIdSpec};
++use crate::core::{GitReference, SourceKind};
++
++const PACKAGE_NAME: &str = "vm-cohort-core";
++const PACKAGE_VERSION: &str = "0.1.0";
++const PATHLESS_URL: &str = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3";
++const SECOND_PATHLESS_URL: &str = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB";
++const PATHLESS_SSH_URL: &str = "ssh://git@example.com";
++const REVISION: &str = "31f1696ba9391bfda8577a58af84f72361d5573e";
++const BRANCH: &str = "topic/name";
++const TAG: &str = "release-one";
++
++fn identity(url: &str, reference: GitReference) -> PackageIdSpec {
++    PackageIdSpec::new(PACKAGE_NAME.to_owned())
++        .with_version(PACKAGE_VERSION.parse().unwrap())
++        .with_url(url.parse().unwrap())
++        .with_kind(SourceKind::Git(reference))
++}
++
++#[test]
++fn formats_pathless_sources_with_explicit_names() {
++    for url in [PATHLESS_URL, SECOND_PATHLESS_URL, PATHLESS_SSH_URL] {
++        let spec = identity(url, GitReference::DefaultBranch);
++        let unchanged = spec.clone();
++        let rendered = spec.to_string();
++        assert_eq!(
++            rendered,
++            format!("git+{url}#{PACKAGE_NAME}@{PACKAGE_VERSION}")
++        );
++        assert_eq!(PackageIdSpec::parse(&rendered).unwrap(), spec);
++        assert_eq!(spec, unchanged);
++    }
++}
++
++#[test]
++fn parses_explicit_pathless_names_and_optional_versions() {
++    for version in [None, Some(PACKAGE_VERSION)] {
++        let text = match version {
++            None => format!("git+{PATHLESS_URL}#{PACKAGE_NAME}"),
++            Some(version) => format!("git+{PATHLESS_URL}#{PACKAGE_NAME}@{version}"),
++        };
++        let parsed = PackageIdSpec::parse(&text).unwrap();
++        assert_eq!(parsed.name(), PACKAGE_NAME);
++        assert_eq!(parsed.url().unwrap().as_str(), PATHLESS_URL);
++        assert_eq!(
++            parsed.kind(),
++            Some(&SourceKind::Git(GitReference::DefaultBranch))
++        );
++        assert_eq!(
++            parsed.partial_version(),
++            version.map(|v| v.parse().unwrap()).as_ref()
++        );
++        assert_eq!(parsed.to_string(), text);
++    }
++}
++
++#[test]
++fn preserves_git_references_and_json_round_trips() {
++    for reference in [
++        GitReference::DefaultBranch,
++        GitReference::Branch(BRANCH.to_owned()),
++        GitReference::Tag(TAG.to_owned()),
++        GitReference::Rev(REVISION.to_owned()),
++    ] {
++        let spec = identity(PATHLESS_URL, reference.clone());
++        let rendered = spec.to_string();
++        let parsed = PackageIdSpec::parse(&rendered).unwrap();
++        assert_eq!(parsed, spec);
++        assert_eq!(parsed.kind(), Some(&SourceKind::Git(reference)));
++        let json = serde_json::to_string(&spec).unwrap();
++        assert_eq!(serde_json::from_str::<PackageIdSpec>(&json).unwrap(), spec);
++    }
++}
++
++#[test]
++fn rejects_pathless_sources_that_require_an_inferred_name() {
++    for text in [
++        format!("git+{PATHLESS_URL}"),
++        format!("git+{PATHLESS_URL}#{PACKAGE_VERSION}"),
++    ] {
++        let error = PackageIdSpec::parse(&text).unwrap_err();
++        assert!(matches!(error.0, ErrorKind::MissingUrlPath(_)));
++    }
++}
++
++#[test]
++fn preserves_name_version_protocol_and_query_rejections() {
++    let empty_name = format!("git+{PATHLESS_URL}#@{PACKAGE_VERSION}");
++    let invalid_version = format!("git+{PATHLESS_URL}#{PACKAGE_NAME}@");
++    let forbidden_query = format!("registry+{PATHLESS_URL}?branch=topic#{PACKAGE_NAME}");
++    let unsupported_protocol = format!("unknown+{PATHLESS_URL}#{PACKAGE_NAME}");
++    let unsupported_path_scheme = format!("path+{PATHLESS_URL}#{PACKAGE_NAME}");
++
++    assert!(matches!(
++        PackageIdSpec::parse(&empty_name).unwrap_err().0,
++        ErrorKind::NameValidation(_)
++    ));
++    assert!(matches!(
++        PackageIdSpec::parse(&invalid_version).unwrap_err().0,
++        ErrorKind::PartialVersion(_)
++    ));
++    assert!(matches!(
++        PackageIdSpec::parse(&forbidden_query).unwrap_err().0,
++        ErrorKind::UnexpectedQueryString(_)
++    ));
++    assert!(matches!(
++        PackageIdSpec::parse(&unsupported_protocol).unwrap_err().0,
++        ErrorKind::UnsupportedProtocol(_)
++    ));
++    assert!(matches!(
++        PackageIdSpec::parse(&unsupported_path_scheme)
++            .unwrap_err()
++            .0,
++        ErrorKind::UnsupportedPathPlusScheme(_)
++    ));
++    assert!(PackageIdSpec::parse(&format!("git+{PATHLESS_URL}#")).is_err());
++}

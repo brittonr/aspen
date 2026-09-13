@@ -279,6 +279,24 @@
         "type": "github"
       }
     },
+    "cargo-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778865121,
+        "narHash": "sha256-Ac0NAZ5z+DAgSplAG7Q0oapGI00VgCJlqFo6pvtHLiI=",
+        "ref": "refs/heads/master",
+        "rev": "4d1f984518c77fad6eeef4f40153b002a659e662",
+        "shallow": true,
+        "type": "git",
+        "url": "ssh://git@github.com/rust-lang/cargo.git"
+      },
+      "original": {
+        "rev": "4d1f984518c77fad6eeef4f40153b002a659e662",
+        "shallow": true,
+        "type": "git",
+        "url": "ssh://git@github.com/rust-lang/cargo.git"
+      }
+    },
     "chaoscontrol-src": {
       "flake": false,
       "locked": {
@@ -1561,6 +1579,7 @@
         "basalt-src": "basalt-src",
         "bounded-exec-src": "bounded-exec-src",
         "cairn-src": "cairn-src",
+        "cargo-src": "cargo-src",
         "chaoscontrol-src": "chaoscontrol-src",
         "choregraph-src": "choregraph-src",
         "doltlite-src": "doltlite-src",
