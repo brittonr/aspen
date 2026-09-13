@@ -154,13 +154,13 @@ impl ChaosControlObservationLedger {
             );
             return Ok(ChaosControlIngestStatus::ViolationRecorded);
         }
-        if let Some(highest) = history.highest_index {
-            if observation.command_index > highest + 1 {
-                let gap = observation.command_index - (highest + 1);
-                let next_dropped = current_dropped.saturating_add(gap);
-                if next_dropped > self.max_dropped_events {
-                    return Err(MoltenError::invalid_harness("ChaosControl dropped-event accounting bound exceeded"));
-                }
+        if let Some(highest) = history.highest_index
+            && observation.command_index > highest + 1
+        {
+            let gap = observation.command_index - (highest + 1);
+            let next_dropped = current_dropped.saturating_add(gap);
+            if next_dropped > self.max_dropped_events {
+                return Err(MoltenError::invalid_harness("ChaosControl dropped-event accounting bound exceeded"));
             }
         }
         history.digests.insert(observation.command_index, observation.next_digest.clone());

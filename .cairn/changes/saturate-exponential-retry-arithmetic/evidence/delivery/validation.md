@@ -48,6 +48,18 @@ The later workspace run passed all 1,463 library tests, including the delivery t
 That command reached its eight-minute deadline during a later native integration suite, exit 124.
 It does not establish a passing workspace gate.
 
+## Reproduction commands
+
+Run these commands from the repository worktree.
+The campaign used two Cargo build jobs and an eight-minute command deadline.
+Its target directory was `/tmp/molten-completion-20260913-target`.
+
+```console
+nix develop --no-write-lock-file -c cargo test --locked -p molten --lib coordination_delivery::tests
+nix develop --no-write-lock-file -c cargo test --locked -p molten fabric_time
+nix develop --no-write-lock-file -c cargo clippy --locked --workspace --all-targets -- -D warnings
+```
+
 ## Retained evidence
 
 The campaign retains commands and raw logs under `.pi/molten-completion/logs/`.

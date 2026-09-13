@@ -92,7 +92,7 @@ pub fn admit_proposal_attempts(attempts: &[ChaosControlProposalAttempt]) -> Resu
             ChaosControlProposalOutcome::Acknowledged { committed_index } => match acknowledged_index {
                 None => acknowledged_index = Some(committed_index),
                 Some(observed) if observed == committed_index => {}
-                Some(observed) => {
+                Some(_) => {
                     return Err(MoltenError::invalid_harness(
                         "ChaosControl retry acknowledges a different committed index, operation identity violated",
                     ));

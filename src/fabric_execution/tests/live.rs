@@ -1,12 +1,18 @@
 use super::*;
 
+const ENVIRONMENT_LEAK_EXIT_CODE: i32 = 9;
+const PUBLISHED_OUTPUT_STREAMS: usize = 2;
+// Finish the fixture input write before the child can exit.
+const READ_INPUT_SCRIPT: &str = "IFS= read -r value";
+
 // r[verify molten.fabric_execution.environment]
 // r[verify molten.fabric_execution.output]
 #[test]
 fn live_adapter_clears_environment_round_trips_input_and_publishes_bounded_output() {
-    let script =
-        "if [ \"${HOME+x}\" = x ]; then exit 9; fi; IFS= read -r value; printf '%s:%s' \"$FIXTURE\" \"$value\"";
-    let (profile, request) = canonical_request(ExecutionProfileKind::LiveBoundedProcess, script_arguments(script));
+    let script = format!(
+        "if [ \"${{HOME+x}}\" = x ]; then exit {ENVIRONMENT_LEAK_EXIT_CODE}; fi; {READ_INPUT_SCRIPT}; printf '%s:%s' \"$FIXTURE\" \"$value\""
+    );
+    let (profile, request) = canonical_request(ExecutionProfileKind::LiveBoundedProcess, script_arguments(&script));
     let mut adapter = LiveExecutionAdapter::new(profile, MemoryPublisher::default()).expect("live adapter");
     let receipt = adapter
         .execute(&request, &resolved(Some(INPUT_BYTES.to_vec())), None)
@@ -14,7 +20,7 @@ fn live_adapter_clears_environment_round_trips_input_and_publishes_bounded_outpu
     assert_eq!(receipt.process.lifecycle, ExecutionLifecycleState::Exited);
     assert_eq!(receipt.process.disposition, ExecutionObservedDisposition::ExitPolicyAccepted);
     assert_eq!(receipt.process.stdout.retained_bytes, EXPECTED_STDOUT);
-    assert_eq!(adapter.publisher().published.len(), 2);
+    assert_eq!(adapter.publisher().published.len(), PUBLISHED_OUTPUT_STREAMS);
     assert_eq!(adapter.reconcile(HASH_B, GENERATION), ExecutionReconciliationStatus::Terminal {
         receipt_ref: receipt.receipt_ref,
     });
@@ -23,7 +29,7 @@ fn live_adapter_clears_environment_round_trips_input_and_publishes_bounded_outpu
 // r[verify molten.fabric_execution.output]
 #[test]
 fn live_adapter_bounds_output_and_preserves_publication_failure_receipt() {
-    let mut bounded_request = request(script_arguments(&format!("printf '{FLOOD_OUTPUT}'")));
+    let mut bounded_request = request(script_arguments(&format!("{READ_INPUT_SCRIPT}; printf '{FLOOD_OUTPUT}'")));
     bounded_request.limits.stdout_max_bytes = SMALL_STREAM_BYTES;
     let (profile, request) = canonicalize_request(ExecutionProfileKind::LiveBoundedProcess, bounded_request);
     let mut adapter = LiveExecutionAdapter::new(profile, MemoryPublisher {
@@ -45,7 +51,7 @@ fn live_adapter_bounds_output_and_preserves_publication_failure_receipt() {
 // r[verify molten.fabric_execution.validation]
 #[test]
 fn live_adapter_preserves_rejected_exit_and_descendant_teardown() {
-    let rejected_script = format!("exit {REJECTED_EXIT_CODE}");
+    let rejected_script = format!("{READ_INPUT_SCRIPT}; exit {REJECTED_EXIT_CODE}");
     let (rejected_profile, rejected_request) =
         canonical_request(ExecutionProfileKind::LiveBoundedProcess, script_arguments(&rejected_script));
     let mut rejected_adapter =
@@ -56,7 +62,7 @@ fn live_adapter_preserves_rejected_exit_and_descendant_teardown() {
     assert_eq!(rejected.process.exit_code, Some(REJECTED_EXIT_CODE));
     assert_eq!(rejected.process.disposition, ExecutionObservedDisposition::ExitPolicyRejected);
 
-    let descendant_script = format!("({NON_TERMINATING_SCRIPT}) & printf 'bounded'");
+    let descendant_script = format!("{READ_INPUT_SCRIPT}; ({NON_TERMINATING_SCRIPT}) & printf 'bounded'");
     let (teardown_profile, teardown_request) =
         canonical_request(ExecutionProfileKind::LiveBoundedProcess, script_arguments(&descendant_script));
     let mut teardown_adapter =
