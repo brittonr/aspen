@@ -81,7 +81,13 @@ Entropy evidence contains purpose, capability-bound stream metadata, generation,
 
 ## Deadlines, retries, and local leases
 
-Deadlines use monotonic, logical, or virtual domains; wall-clock deadlines are denied. Decisions are pending, expired, or indeterminate within explicit uncertainty. Retry plans have finite attempts, checked fixed/exponential delay, a maximum delay, and optional entropy-backed bounded jitter. A retry plan does not prove that retrying an application operation is safe.
+Deadlines use monotonic, logical, or virtual domains. Wall-clock deadlines are denied. Decisions are pending, expired, or indeterminate within explicit uncertainty. Retry plans have finite attempts, a maximum delay, and optional entropy-backed bounded jitter.
+
+Exponential retry delay equals `min(base_delay_ticks * 2^attempt, maximum_delay_ticks)` over mathematical integers. The core rejects exhausted attempts before this calculation. A type-width guard and checked multiplication prevent loss of high bits. Large admitted attempts saturate without a loop or narrowing conversion. Fixed delays and non-overflow exponential outputs retain their values.
+
+The core validates supplied jitter before checked addition and the final delay cap. Jitter-addition overflow and deadline overflow remain errors. The core reads no clock or entropy source. A retry plan does not prove that an application operation is safe to repeat.
+
+The current coordination-delivery profile selects fixed backoff with no jitter. F12 demonstrates a generic exponential calculation defect, not a failure through that fixed profile. The arithmetic bound is not a measured performance claim.
 
 Lease decisions are local observations unless the request names a reviewed fenced consistency profile and a fresh fencing token. Without both, an exclusive action is denied. Even a passing local decision does not prove global time, synchronized clocks, remote deadline agreement, partition absence, or distributed lease exclusivity.
 

@@ -1,5 +1,7 @@
 use super::*;
 
+mod retry;
+
 const BLAKE3_HEX_LEN: usize = 64;
 const ACTIVE_GENERATION: u64 = 1;
 const STALE_GENERATION: u64 = 2;
