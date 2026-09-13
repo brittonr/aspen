@@ -4,6 +4,8 @@ use crate::error::Result;
 use crate::fabric::build_fabric_port_registry;
 use crate::fabric::canonical_fabric_port_descriptor;
 
+pub(super) mod retry;
+
 const HASH_A: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HASH_B: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const HASH_C: &str = "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -413,7 +415,7 @@ fn run_simulation_scenarios(
 
     run_scheduler_scenario(profile, events, &mut counters)?;
     run_deterministic_entropy_scenario(profile, events, &mut counters)?;
-    run_deadline_lease_scenario(profile, events, &mut counters)?;
+    run_deadline_lease_scenario(profile, clock, events, &mut counters)?;
     run_clock_partition_faults(profile, clock, events, &mut counters)?;
     Ok(counters)
 }
@@ -578,6 +580,7 @@ fn run_production_entropy_scenario(
 
 fn run_deadline_lease_scenario(
     profile: &CanonicalTimeProfile,
+    clock: &mut VirtualClockAdapter,
     events: &mut Vec<CanonicalTimeEvent>,
     counters: &mut ScenarioCounters,
 ) -> Result<()> {
@@ -643,6 +646,16 @@ fn run_deadline_lease_scenario(
     .map_err(|error| core_error("evaluate fixture lease", error))?;
     events.push(canonical_lease_event(&profile.profile_ref, &lease)?);
     counters.deadline_lease_events = checked_increment(counters.deadline_lease_events, "deadline/lease event count")?;
+    for event in retry::run_saturation_scenario(profile, clock)? {
+        if event.kind == CanonicalTimeEventKind::Deadline {
+            counters.deadline_lease_events =
+                checked_increment(counters.deadline_lease_events, "deadline/lease event count")?;
+        }
+        if event.kind == CanonicalTimeEventKind::Timer {
+            counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
+        }
+        events.push(event);
+    }
     Ok(())
 }
 

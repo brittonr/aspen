@@ -113,6 +113,24 @@ molten fabric-time run-fixture \
 
 `--profile` accepts `live`, `deterministic-simulation`, or `both`. The output directory contains canonical live and simulation profile artifacts, an aggregate run report, and bounded event artifacts under `evidence/`. Validate and render the secret-free operator summary with `molten fabric-time show artifacts/fabric-time-fixture/report.preserves`; the readback parser rejects event artifacts, malformed report shapes, unknown profiles, invalid refs, and wrong field types.
 
+### Retry fixture and replay boundary
+
+The saturation case samples tick 35 from the run's shared virtual clock.
+Base 2 at attempt 63 produces delay 128 and deadline 163.
+The timer delivers at 163, and the report finishes at 164.
+The ordinary jittered case retains deadline 52.
+The selected delivery profile remains fixed backoff without jitter.
+
+Private replay recomputes canonical delay and deadline observations from explicit inputs.
+Matching fixed and saturated observations pass.
+Wrapped, changed, reordered, or missing observations produce visible divergence without history mutation.
+The fixture records `wrapped-replay-rejected` only after it rejects the wrapped counterexample.
+
+The current profile and observation schema remain unchanged because only the corrected arithmetic rule is admitted.
+Replay does not authenticate history, verify timer effects, or authorize another timer.
+The public `show` command checks report shape, not arbitrary event-history replay.
+See the F12 change's `evidence/fixture-replay/validation.md` for commands, artifacts, source identities, and limits.
+
 ## Non-claims
 
 Fabric-time evidence explicitly does not prove:

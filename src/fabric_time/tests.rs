@@ -8,6 +8,8 @@ use crate::fabric::ReplayClass;
 use crate::fabric::build_fabric_port_registry;
 use crate::fabric::resolve_fabric_port_binding;
 
+mod retry;
+
 const HASH_A: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HASH_B: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const GENERATION: u64 = 1;
