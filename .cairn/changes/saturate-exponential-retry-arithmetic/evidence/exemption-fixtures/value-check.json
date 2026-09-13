@@ -1,0 +1,11 @@
+{
+  "replacement": [
+    {
+      "expires": "2099-01-01",
+      "owner": "test",
+      "reason": "fixture demonstrates bounded exemptions",
+      "scope": "fixtures/basic/.cairn/changes/demo/tasks.md"
+    }
+  ],
+  "runtime_default": []
+}
