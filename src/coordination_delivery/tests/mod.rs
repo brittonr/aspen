@@ -2,6 +2,8 @@ mod local;
 mod multiprocess;
 mod profile;
 mod records;
+mod retry;
 mod simulation;
 mod support;
+mod trace;
 mod uncertain;

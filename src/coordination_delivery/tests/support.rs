@@ -2,6 +2,9 @@ use molten_core::coordination_delivery::*;
 use molten_core::fabric_time::*;
 
 use super::super::*;
+use super::trace::DeliveryCallTrace;
+use super::trace::DeliveryPortCall;
+use super::trace::record_port_call;
 
 pub(super) const SERVICE_GENERATION: u64 = 7;
 pub(super) const CONSISTENCY_EPOCH: u64 = 11;
@@ -168,6 +171,7 @@ pub(super) struct MemoryCommitPort {
     pub(super) head: Option<PublishedDeliveryState>,
     pub(super) mode: CommitMode,
     pub(super) compare_calls: u32,
+    pub(super) trace: Option<DeliveryCallTrace>,
 }
 
 impl MemoryCommitPort {
@@ -176,16 +180,19 @@ impl MemoryCommitPort {
             head: None,
             mode,
             compare_calls: 0,
+            trace: None,
         }
     }
 }
 
 impl DeliveryCommitPort for MemoryCommitPort {
     fn load(&self, _queue_id: &str) -> DeliveryPortResult<Option<PublishedDeliveryState>> {
+        record_port_call(&self.trace, DeliveryPortCall::Load);
         Ok(self.head.clone())
     }
 
     fn compare_and_commit(&mut self, request: &DeliveryCommitRequest) -> DeliveryPortResult<DeliveryCommitObservation> {
+        record_port_call(&self.trace, DeliveryPortCall::CompareAndCommit);
         self.compare_calls += 1;
         match self.mode {
             CommitMode::Apply => {
@@ -218,10 +225,14 @@ fn commit_observation(disposition: DeliveryCommitDisposition, state_ref: Option<
 pub(super) struct MemoryTimerPort {
     pub(super) fail: bool,
     pub(super) observed: Vec<String>,
+    pub(super) requested: Vec<Vec<DeliveryTimerIntent>>,
+    pub(super) trace: Option<DeliveryCallTrace>,
 }
 
 impl DeliveryTimerPort for MemoryTimerPort {
     fn apply_timer_intents(&mut self, intents: &[DeliveryTimerIntent]) -> DeliveryPortResult<DeliveryTimerObservation> {
+        record_port_call(&self.trace, DeliveryPortCall::TimerIntents);
+        self.requested.push(intents.to_vec());
         let refs = intents.iter().map(|intent| intent.timer_id.clone()).collect::<Vec<_>>();
         if self.fail {
             return Err(DeliveryPortError::new("scripted-timer-failure", "timer scheduling failed", false));
@@ -238,10 +249,12 @@ impl DeliveryTimerPort for MemoryTimerPort {
 #[derive(Default)]
 pub(super) struct MemoryStatusPort {
     pub(super) status_refs: Vec<String>,
+    pub(super) trace: Option<DeliveryCallTrace>,
 }
 
 impl DeliveryStatusPort for MemoryStatusPort {
     fn publish_status(&mut self, status: &DeliveryStatus) -> DeliveryPortResult<DeliveryStatusObservation> {
+        record_port_call(&self.trace, DeliveryPortCall::PublishStatus);
         let status_ref = identify_canonical_delivery_status(status)
             .map_err(|error| DeliveryPortError::new("status", error.to_string(), false))?;
         self.status_refs.push(status_ref.clone());
@@ -256,5 +269,7 @@ pub(super) fn timer_port(fail: bool) -> MemoryTimerPort {
     MemoryTimerPort {
         fail,
         observed: Vec::new(),
+        requested: Vec::new(),
+        trace: None,
     }
 }

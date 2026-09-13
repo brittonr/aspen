@@ -1,0 +1,8 @@
+148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/saturate-exponential-retry-arithmetic/evidence/delivery/logs/retry-delivery-baseline.exit
+ac96ceecb4e9729be7f1642f40c1b8c15bddf3cb239b426f5e5807e4c4aeb63b  .cairn/changes/saturate-exponential-retry-arithmetic/evidence/delivery/logs/retry-delivery-baseline.log.gz
+148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/saturate-exponential-retry-arithmetic/evidence/delivery/logs/retry-delivery-green.exit
+04e2abe0f4727a5f4107fa3e320fd7eafca463b05cb7a7ef568d309ed54b2e98  .cairn/changes/saturate-exponential-retry-arithmetic/evidence/delivery/logs/retry-delivery-green.log.gz
+16d78a954cb775e521c46341a98c2c6a187ea74a6d018de5efbae328941e87e6  .cairn/changes/saturate-exponential-retry-arithmetic/evidence/delivery/logs/retry-shell-current-baseline.exit
+b44f3505965540135cede008b36bbce6cd6ad7ef91399c461927dad3a5fc8fdd  .cairn/changes/saturate-exponential-retry-arithmetic/evidence/delivery/logs/retry-shell-current-baseline.log.gz
+148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/saturate-exponential-retry-arithmetic/evidence/delivery/logs/retry-shell-current-baseline-warm.exit
+e90d9eb1ed642b5355924987ae33c472127bbcdde986fed7b518486f2dacc111  .cairn/changes/saturate-exponential-retry-arithmetic/evidence/delivery/logs/retry-shell-current-baseline-warm.log.gz
