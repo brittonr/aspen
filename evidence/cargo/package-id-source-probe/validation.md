@@ -2,9 +2,10 @@
 
 ## Result
 
-The probe reproduces two package-ID defects without a Radicle request.
+The probe demonstrates a formatter panic and a separate parser rejection without a Radicle request.
 Cargo schema source `4d1f984518c77fad6eeef4f40153b002a659e662` panics during pathless URL formatting.
 Its parser also rejects an explicit name/version on that URL.
+That rejection is a compatibility barrier, not a separately established violation of the Cargo specification.
 An ordinary SSH round-trip and an invalid-version rejection control pass.
 The formatter leaves the input unchanged.
 
