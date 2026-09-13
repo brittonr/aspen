@@ -9,7 +9,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-const REQUIREMENT_ROOT: &str = "cairn/specs";
+const REQUIREMENT_ROOT: &str = ".cairn/specs";
 const ROOT_EVIDENCE_FILE: &str = "flake.nix";
 const EVIDENCE_ROOTS: &[&str] = &["src", "crates", "tests", "tools", "docs", "scripts"];
 const EVIDENCE_EXTENSIONS: &[&str] = &["rs", "ncl", "md", "sh", "nix"];
@@ -122,8 +122,15 @@ fn has_extension(path: &Path, extensions: &[&str]) -> bool {
 }
 
 fn read_requirements(root: &Path) -> Result<BTreeSet<String>, String> {
+    let requirement_root = root.join(REQUIREMENT_ROOT);
+    let metadata = fs::metadata(&requirement_root).map_err(|error| {
+        format!("cannot read required specification directory {}: {error}", requirement_root.display())
+    })?;
+    if !metadata.is_dir() {
+        return Err(format!("required specification path is not a directory: {}", requirement_root.display()));
+    }
     let mut files = Vec::new();
-    walk_files(&root.join(REQUIREMENT_ROOT), &mut files)?;
+    walk_files(&requirement_root, &mut files)?;
     files.retain(|path| has_extension(path, &[REQUIREMENT_EXTENSION]));
     let mut requirements = BTreeSet::new();
     for path in files {
@@ -133,6 +140,12 @@ fn read_requirements(root: &Path) -> Result<BTreeSet<String>, String> {
                 requirements.insert(requirement);
             }
         }
+    }
+    if requirements.is_empty() {
+        return Err(format!(
+            "required specification tree contains no requirement definitions: {}",
+            requirement_root.display()
+        ));
     }
     Ok(requirements)
 }
@@ -229,6 +242,12 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod input_test_support;
+#[cfg(test)]
+#[path = "guard_input_tests.rs"]
+mod input_tests;
 
 #[cfg(test)]
 mod tests {

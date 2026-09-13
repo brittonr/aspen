@@ -13,7 +13,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-const REQUIREMENT_ROOT: &str = "cairn/specs";
+const REQUIREMENT_ROOT: &str = ".cairn/specs";
 const REQUIREMENT_EXTENSION: &str = "md";
 const OPTION_ROOT: &str = "--root";
 const OPTION_BASELINE: &str = "--baseline";
@@ -189,6 +189,12 @@ fn read_baseline(path: &Path) -> Result<Vec<String>, String> {
 
 fn read_definitions(root: &Path) -> Result<BTreeMap<String, Vec<RequirementDefinition>>, String> {
     let requirement_root = root.join(REQUIREMENT_ROOT);
+    let metadata = fs::metadata(&requirement_root).map_err(|error| {
+        format!("cannot read required specification directory {}: {error}", requirement_root.display())
+    })?;
+    if !metadata.is_dir() {
+        return Err(format!("required specification path is not a directory: {}", requirement_root.display()));
+    }
     let mut files = Vec::new();
     walk_files(&requirement_root, &mut files)?;
     files.retain(|path| path.extension().and_then(|extension| extension.to_str()) == Some(REQUIREMENT_EXTENSION));
@@ -209,6 +215,12 @@ fn read_definitions(root: &Path) -> Result<BTreeMap<String, Vec<RequirementDefin
                 });
             }
         }
+    }
+    if definitions.is_empty() {
+        return Err(format!(
+            "required specification tree contains no requirement definitions: {}",
+            requirement_root.display()
+        ));
     }
     Ok(definitions)
 }
@@ -251,6 +263,12 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod input_test_support;
+#[cfg(test)]
+#[path = "classifier_input_tests.rs"]
+mod input_tests;
 
 #[cfg(test)]
 mod tests {
