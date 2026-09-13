@@ -122,11 +122,14 @@ The ordinary jittered case retains deadline 52.
 The selected delivery profile remains fixed backoff without jitter.
 
 Private replay recomputes canonical delay and deadline observations from explicit inputs.
+Each retry observation records its time domain in the existing details field.
+Equal ticks from virtual and monotonic clocks do not identify the same observation.
 Matching fixed and saturated observations pass.
-Wrapped, changed, reordered, or missing observations produce visible divergence without history mutation.
+Wrapped, domainless, cross-domain, changed, reordered, or missing observations produce visible divergence without history mutation.
 The fixture records `wrapped-replay-rejected` only after it rejects the wrapped counterexample.
 
-The current profile and observation schema remain unchanged because only the corrected arithmetic rule is admitted.
+The current profile and outer observation schema remain unchanged. Only the corrected arithmetic rule is admitted.
+Domain data changes the retry event references. Replay rejects older domainless retry observations instead of silently upgrading them.
 Replay does not authenticate history, verify timer effects, or authorize another timer.
 The public `show` command checks report shape, not arbitrary event-history replay.
 See the F12 change's `evidence/fixture-replay/validation.md` for commands, artifacts, source identities, and limits.

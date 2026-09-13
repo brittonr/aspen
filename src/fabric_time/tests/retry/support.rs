@@ -27,6 +27,66 @@ pub(super) fn input(profile: &CanonicalTimeProfile) -> fixture_retry::RetryFixtu
     }
 }
 
+pub(super) fn expected_plan(
+    profile: &CanonicalTimeProfile,
+    subject: &str,
+    delay_ticks: u64,
+    deadline_ticks: u64,
+) -> RetryPlan {
+    RetryPlan {
+        attempt: ADMITTED_ATTEMPT,
+        delay: CheckedDuration {
+            profile_ref: profile.profile.profile_ref.clone(),
+            domain: TimeDomain::Virtual,
+            ticks: delay_ticks,
+        },
+        deadline: Deadline {
+            profile_ref: profile.profile.profile_ref.clone(),
+            subject_id: subject.to_string(),
+            generation: GENERATION,
+            target: TimeValue::Virtual(VirtualInstant {
+                profile_ref: profile.profile.profile_ref.clone(),
+                ticks: deadline_ticks,
+            }),
+            uncertainty_ticks: 0,
+        },
+        jitter_ticks: 0,
+    }
+}
+
+pub(super) fn expected_timer_event(
+    profile: &CanonicalTimeProfile,
+    subject: &str,
+    deadline_ticks: u64,
+) -> CanonicalTimeEvent {
+    let transition = TimerTransition {
+        next: TimerState {
+            profile_ref: profile.profile.profile_ref.clone(),
+            key: TimerKey {
+                service_id: subject.to_string(),
+                generation: GENERATION,
+                sequence: 0,
+            },
+            domain: TimeDomain::Virtual,
+            next_deadline_ticks: deadline_ticks,
+            kind: TimerKind::OneShot,
+            ordering_key: 0,
+            coalescing: TimerCoalescingPolicy::CoalesceLatest,
+            lateness: TimerLatenessPolicy::DeliverRegardless,
+            overload: TimerOverloadPolicy::RejectAndRetain,
+            resource_charge: TimerResourceCharge::single_slot(),
+            phase: TimerPhase::Completed,
+            fire_count: 1,
+            skipped_count: 0,
+        },
+        action: TimerAction::Deliver,
+        delivery_count: 1,
+        skipped_count: 0,
+        lateness_ticks: 0,
+    };
+    canonical_timer_event(&profile.profile_ref, &transition).expect("expected retry timer")
+}
+
 pub(super) fn sentinel(profile: &CanonicalTimeProfile) -> CanonicalTimeEvent {
     canonical_named_event(
         &profile.profile_ref,
