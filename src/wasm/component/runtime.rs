@@ -6,12 +6,6 @@ pub use shell::ComponentExecutionOutcome;
 pub use shell::ComponentExecutionRequest;
 pub use shell::execute_component;
 
-use super::admission::ComponentArtifactFacts;
-use super::model::ComponentDenial;
-use super::model::ComponentDenialClass;
-use super::model::ComponentResult;
-use super::model::ComponentRuntimeProfile;
-
 type ComponentLinker<T> = wasmtime::component::Linker<T>;
 type RuntimeComponent = wasmtime::component::Component;
 type RuntimeEngine = wasmtime::Engine;
@@ -35,26 +29,28 @@ pub(crate) struct RuntimeExecution {
 }
 
 pub(crate) fn instantiate_component(
-    profile: &ComponentRuntimeProfile,
+    profile: &super::model::ComponentRuntimeProfile,
     component_bytes: &[u8],
-    facts: &ComponentArtifactFacts,
-) -> ComponentResult<ComponentSession> {
+    facts: &super::admission::ComponentArtifactFacts,
+) -> super::model::ComponentResult<ComponentSession> {
     let engine = component_engine(profile)?;
     let component = RuntimeComponent::from_binary(&engine, component_bytes).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ComponentCompilationDenied,
+        super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ComponentCompilationDenied,
             format!("component compilation failed: {error}"),
         )
     })?;
     verify_runtime_shape(&engine, &component, facts)?;
     if !facts.imports.is_empty() {
-        return Err(ComponentDenial::new("initial component runtime cohort has no admitted host linker bindings"));
+        return Err(super::model::ComponentDenial::new(
+            "initial component runtime cohort has no admitted host linker bindings",
+        ));
     }
     let linker = ComponentLinker::new(&engine);
     let mut store = component_store(&engine, profile)?;
     let bindings = bindings::Actor::instantiate(&mut store, &component, &linker).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ComponentInstantiationDenied,
+        super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ComponentInstantiationDenied,
             format!("component world instantiation failed: {error}"),
         )
     })?;
@@ -64,18 +60,21 @@ pub(crate) fn instantiate_component(
 pub(crate) fn invoke_component(
     session: &mut ComponentSession,
     input_bytes: &[u8],
-) -> ComponentResult<RuntimeExecution> {
+) -> super::model::ComponentResult<RuntimeExecution> {
     let guest_input = input_bytes.to_vec();
     let output_bytes = session
         .bindings
         .call_invoke(&mut session.store, &guest_input)
         .map_err(|error| invocation_denial(&session.store, error))?
         .map_err(|error| {
-            ComponentDenial::classified(ComponentDenialClass::GuestDenial, format!("component invoke denied: {error}"))
+            super::model::ComponentDenial::classified(
+                super::model::ComponentDenialClass::GuestDenial,
+                format!("component invoke denied: {error}"),
+            )
         })?;
     let fuel_remaining = session.store.get_fuel().map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ResourceDenial,
+        super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ResourceDenial,
             format!("component fuel observation failed: {error}"),
         )
     })?;
@@ -85,18 +84,21 @@ pub(crate) fn invoke_component(
     })
 }
 
-fn invocation_denial(store: &RuntimeStore<ComponentStoreState>, error: wasmtime::Error) -> ComponentDenial {
+fn invocation_denial(
+    store: &RuntimeStore<ComponentStoreState>,
+    error: wasmtime::Error,
+) -> super::model::ComponentDenial {
     match store.get_fuel() {
-        Ok(0) => ComponentDenial::classified(
-            ComponentDenialClass::FuelExhausted,
+        Ok(0) => super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::FuelExhausted,
             format!("component fuel exhausted during invoke: {error}"),
         ),
-        Ok(_) => ComponentDenial::classified(
-            ComponentDenialClass::ComponentTrap,
+        Ok(_) => super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ComponentTrap,
             format!("component invoke trapped: {error}"),
         ),
-        Err(fuel_error) => ComponentDenial::classified(
-            ComponentDenialClass::ComponentTrap,
+        Err(fuel_error) => super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ComponentTrap,
             format!("component invoke trapped and fuel observation failed ({fuel_error}): {error}"),
         ),
     }
@@ -104,21 +106,21 @@ fn invocation_denial(store: &RuntimeStore<ComponentStoreState>, error: wasmtime:
 
 #[cfg(test)]
 pub(super) fn test_precompile_component(
-    profile: &ComponentRuntimeProfile,
+    profile: &super::model::ComponentRuntimeProfile,
     component_bytes: &[u8],
-) -> ComponentResult<Vec<u8>> {
+) -> super::model::ComponentResult<Vec<u8>> {
     component_engine(profile)?.precompile_component(component_bytes).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ComponentCompilationDenied,
+        super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ComponentCompilationDenied,
             format!("component test precompilation failed: {error}"),
         )
     })
 }
 
-fn component_engine(profile: &ComponentRuntimeProfile) -> ComponentResult<RuntimeEngine> {
+fn component_engine(profile: &super::model::ComponentRuntimeProfile) -> super::model::ComponentResult<RuntimeEngine> {
     let stack_size = usize::try_from(profile.resources.max_stack_bytes).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ResourceDenial,
+        super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ResourceDenial,
             format!("component stack bound is unsupported: {error}"),
         )
     })?;
@@ -145,8 +147,8 @@ fn component_engine(profile: &ComponentRuntimeProfile) -> ComponentResult<Runtim
         .wasm_wide_arithmetic(false)
         .max_wasm_stack(stack_size);
     RuntimeEngine::new(&config).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ProfileDenial,
+        super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ProfileDenial,
             format!("component engine configuration failed: {error}"),
         )
     })
@@ -154,8 +156,8 @@ fn component_engine(profile: &ComponentRuntimeProfile) -> ComponentResult<Runtim
 
 fn component_store(
     engine: &RuntimeEngine,
-    profile: &ComponentRuntimeProfile,
-) -> ComponentResult<RuntimeStore<ComponentStoreState>> {
+    profile: &super::model::ComponentRuntimeProfile,
+) -> super::model::ComponentResult<RuntimeStore<ComponentStoreState>> {
     let limits = RuntimeStoreLimitsBuilder::new()
         .memory_size(to_usize("memory", profile.resources.max_memory_bytes)?)
         .table_elements(to_usize("table", profile.resources.max_table_elements)?)
@@ -167,8 +169,8 @@ fn component_store(
     let mut store = RuntimeStore::new(engine, ComponentStoreState { limits });
     store.limiter(|state| &mut state.limits);
     store.set_fuel(profile.resources.fuel).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ResourceDenial,
+        super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ResourceDenial,
             format!("component fuel setup failed: {error}"),
         )
     })?;
@@ -178,8 +180,8 @@ fn component_store(
 fn verify_runtime_shape(
     engine: &RuntimeEngine,
     component: &RuntimeComponent,
-    facts: &ComponentArtifactFacts,
-) -> ComponentResult<()> {
+    facts: &super::admission::ComponentArtifactFacts,
+) -> super::model::ComponentResult<()> {
     let import_limit = facts.imports.len().saturating_add(1);
     let mut imports = component
         .component_type()
@@ -197,18 +199,18 @@ fn verify_runtime_shape(
         .collect::<Vec<_>>();
     exports.sort();
     if imports != facts.imports {
-        return Err(ComponentDenial::new("runtime component imports differ from materialization facts"));
+        return Err(super::model::ComponentDenial::new("runtime component imports differ from materialization facts"));
     }
     if exports != facts.exports {
-        return Err(ComponentDenial::new("runtime component exports differ from materialization facts"));
+        return Err(super::model::ComponentDenial::new("runtime component exports differ from materialization facts"));
     }
     Ok(())
 }
 
-fn to_usize(label: &str, value: u64) -> ComponentResult<usize> {
+fn to_usize(label: &str, value: u64) -> super::model::ComponentResult<usize> {
     usize::try_from(value).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ResourceDenial,
+        super::model::ComponentDenial::classified(
+            super::model::ComponentDenialClass::ResourceDenial,
             format!("component {label} bound is unsupported: {error}"),
         )
     })

@@ -172,6 +172,8 @@ struct Scope {
     offset: usize,
     /// The binding's own span, which is never rewritten.
     declaration: Range<usize>,
+    /// True when a refutable pattern can also name a constant.
+    ambiguous: bool,
 }
 
 /// A name that a second pass resolves to its own scope.
@@ -370,6 +372,7 @@ fn build_scopes(
             range,
             offset: candidate.offset,
             declaration: candidate.declaration.clone(),
+            ambiguous: candidate.ambiguous,
         });
     }
     scopes
@@ -382,6 +385,18 @@ fn is_hidden(scopes: &[Scope], name: &str, offset: usize) -> bool {
             && (scope.declaration.contains(&offset)
                 || (scope.range.contains(&offset) && offset >= scope.offset))
     })
+}
+
+/// True when a pattern that can name a constant must be qualified instead.
+///
+/// Rust requires a non-snake-case name for a constant, so an uppercase name in
+/// a refutable pattern names the constant and a snake-case name binds a fresh
+/// value.
+fn pattern_names_constant(name: &str, scopes: &[Scope], offset: usize) -> bool {
+    name.chars().any(char::is_uppercase)
+        && scopes.iter().any(|scope| {
+            scope.ambiguous && scope.name == name && scope.declaration.contains(&offset)
+        })
 }
 
 struct FileBindings<'a> {
@@ -760,14 +775,6 @@ fn rewrite_descendant(
         if bindings.extra_use_bindings.contains(name) {
             return Err(format!("descendant {path} imports `{name}` again"));
         }
-        if bindings
-            .bindings
-            .candidates
-            .iter()
-            .any(|candidate| candidate.ambiguous && &candidate.name == name)
-        {
-            return Err(format!("descendant {path} matches `{name}` as a possible constant"));
-        }
     }
     let scopes = build_scopes(&syntax, &lines, &bindings.bindings.candidates, 0..source.len());
     let mut modules = InlineModules {
@@ -846,7 +853,9 @@ fn collect_descendant_edits(
                     let hidden = previous == "."
                         || is_macro_name(source, range.end)
                         || followed_by_colon(source, range.end);
-                    if !hidden && !is_hidden(scopes, &name, range.start) {
+                    let shadowed = !pattern_names_constant(&name, scopes, range.start)
+                        && is_hidden(scopes, &name, range.start);
+                    if !hidden && !shadowed {
                         record_reference(owner, &segments, depth, module_ranges, edits)?;
                     }
                 }
@@ -899,9 +908,13 @@ fn record_reference(
         return Ok(());
     }
     let supers = segments.iter().take_while(|(name, _)| name == "super").count();
-    if lead == "self" || supers > depth {
+    if supers > depth {
+        // The path lands above the parent, so it names something else.
+        return Ok(());
+    }
+    if lead == "self" {
         return Err(format!(
-            "qualified reference through `{lead}` to `{}` needs a manual path",
+            "qualified reference through `self` to `{}` needs a manual path",
             segments.last().map(|(name, _)| name.clone()).unwrap_or_default()
         ));
     }
@@ -1090,14 +1103,6 @@ fn qualify_source(
         if file_bindings.bindings.shorthands.contains(name) {
             skipped.push(format!("field shorthand reads `{name}`"));
         }
-        if file_bindings
-            .bindings
-            .candidates
-            .iter()
-            .any(|candidate| candidate.ambiguous && &candidate.name == name)
-        {
-            skipped.push(format!("match pattern `{name}` can name a constant"));
-        }
     }
     if !skipped.is_empty() {
         return Err(format!("manual repair required: {}", skipped.join("; ")));
@@ -1242,7 +1247,11 @@ fn collect_reference_edits(
                 if !in_import && !is_qualified && !is_field {
                     if let Some(owner) = owners.get(&name) {
                         let depth = module_depth(module_ranges, start);
-                        if is_hidden(scopes, &name, start) {
+                        if pattern_names_constant(&name, scopes, start) {
+                            // A constant pattern over an uppercase name: qualify
+                            // it so the pattern keeps naming the constant.
+                            edits.push((range, qualify_owner(owner, depth)));
+                        } else if is_hidden(scopes, &name, start) {
                             // A later binding or item owns this name here, so the
                             // reference resolves to it, not to the import.
                         } else if owner.starts_with("self::") && depth > 0 {
@@ -1466,8 +1475,9 @@ impl Holder {
         return Err(format!("self test did not replace a qualified descendant path in\n{output}"));
     }
     let outer = "fn f(value: super::super::Addr) -> usize {\n    let _ = value;\n    0\n}\n";
-    if rewrite_descendant("src/addr/route/child.rs", 1, outer, &owners).is_ok() {
-        return Err(String::from("self test accepted a path above the parent"));
+    let (output, edits) = rewrite_descendant("src/addr/route/child.rs", 1, outer, &owners)?;
+    if edits != 0 || !output.contains("value: super::super::Addr") {
+        return Err(format!("self test rewrote a path above the parent in\n{output}"));
     }
     let unrelated = "fn f(value: crate::addr::Addr) -> usize {\n    let _ = value;\n    0\n}\n";
     let (output, edits) = rewrite_descendant("src/addr/route/child.rs", 1, unrelated, &owners)?;
@@ -1497,6 +1507,20 @@ impl Holder {
     let formatted = "use crate::addr::Addr;\n\nfn f(value: Addr) -> String {\n    format!(\"{Addr}\")\n}\n";
     if qualify_source("src/addr/route.rs", formatted, &[1]).is_ok() {
         return Err(String::from("self test accepted an inline format argument"));
+    }
+    // An uppercase name in a match arm names the imported constant, so the
+    // pattern keeps its meaning only when it is qualified.
+    let constant = "use crate::addr::ADDR;\n\nfn f(value: u32) -> u32 {\n    match value {\n        ADDR => 1,\n        _ => 2,\n    }\n}\n";
+    let output = qualify_source("src/addr/route.rs", constant, &[1])?.output;
+    if !output.contains("crate::addr::ADDR => 1") {
+        return Err(format!("self test left a constant pattern unqualified in\n{output}"));
+    }
+    // A snake-case name in the same position binds a fresh value instead, so
+    // the pattern keeps the import's meaning only as a local binding.
+    let bound = "use crate::addr::addr;\n\nfn f(value: u32) -> u32 {\n    match value {\n        addr => addr,\n        _ => 2,\n    }\n}\n";
+    let output = qualify_source("src/addr/route.rs", bound, &[1])?.output;
+    if !output.contains("addr => addr") || output.contains("crate::addr::addr =>") {
+        return Err(format!("self test rewrote a snake-case binding pattern in\n{output}"));
     }
     println!("self test passed");
     Ok(())

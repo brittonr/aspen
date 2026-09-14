@@ -5,20 +5,24 @@ const NODE_B_SECRET_BYTE: u8 = 43;
 const NODE_C_SECRET_BYTE: u8 = 47;
 const EVENT_POLL_MILLISECONDS: u64 = 100;
 
-pub(super) async fn run(node_id: String, run_directory: PathBuf, mode: ChildMode) -> Result<()> {
+pub(super) async fn run(
+    node_id: String,
+    run_directory: std::path::PathBuf,
+    mode: ChildMode,
+) -> crate::error::Result<()> {
     let listener = crate::fabric_transport::cross_process::tests::listener_with_secret(secret_byte(&node_id)?).await;
     write_value(&endpoint_path(&run_directory, &node_id), &listener.handoff().value)?;
     wait_for_nodes(&run_directory, "endpoint")?;
     let endpoints = read_endpoints(&run_directory)?;
     let endpoint_identity = endpoints
         .get(&node_id)
-        .ok_or_else(|| MoltenError::invalid_harness("child endpoint identity is absent"))?
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("child endpoint identity is absent"))?
         .descriptor
         .public_endpoint_identity
         .clone();
     let group = super::super::tests::active_group();
     let durability_root = durability_path(&run_directory, &node_id);
-    std::fs::create_dir_all(&durability_root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(&durability_root).map_err(crate::error::MoltenError::from)?;
     let node = match mode {
         ChildMode::Fresh => {
             crate::fabric_consistency::raft::live_cluster::build_node_at_root(
@@ -51,21 +55,31 @@ async fn run_fresh_node(
     node_id: String,
     endpoint_identity: String,
     mut node: crate::fabric_consistency::raft::live_cluster::LiveNode,
-    run_directory: &Path,
-) -> Result<()> {
-    let listener = node.listener.take().ok_or_else(|| MoltenError::invalid_harness("child live listener is absent"))?;
+    run_directory: &std::path::Path,
+) -> crate::error::Result<()> {
+    let listener = node
+        .listener
+        .take()
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("child live listener is absent"))?;
     let mut ingress = IrohReplicaIngressPump::spawn(listener, IrohReplicaIngressConfig {
         session_ref: node.session_ref.clone(),
-        accept_timeout: Duration::from_secs(CHILD_TIMEOUT_SECONDS),
+        accept_timeout: std::time::Duration::from_secs(CHILD_TIMEOUT_SECONDS),
         event_capacity: INGRESS_EVENT_CAPACITY,
         delivery_limit: INGRESS_DELIVERY_LIMIT,
     })?;
     write_signal(&run_directory.join(format!("{node_id}-ready.preserves")), "ready")?;
-    if node_id == NODE_A {
+    if node_id == super::super::tests::NODE_A {
         wait_for_file(&run_directory.join(START_FILE))?;
         run_leader(&mut node, &mut ingress, run_directory, &endpoint_identity).await?;
     } else {
-        run_follower(&mut node, &mut ingress, run_directory, &endpoint_identity, node_id == NODE_C).await?;
+        run_follower(
+            &mut node,
+            &mut ingress,
+            run_directory,
+            &endpoint_identity,
+            node_id == super::super::tests::NODE_C,
+        )
+        .await?;
     }
     node.listener = Some(ingress.shutdown().await?);
     finish_node(node_id, endpoint_identity, node, run_directory).await
@@ -75,39 +89,45 @@ pub(super) async fn finish_node(
     node_id: String,
     endpoint_identity: String,
     node: crate::fabric_consistency::raft::live_cluster::LiveNode,
-    run_directory: &Path,
-) -> Result<()> {
+    run_directory: &std::path::Path,
+) -> crate::error::Result<()> {
     let mut receipt = receipt_from_node(&node_id, &endpoint_identity, &node)?;
     crate::fabric_consistency::raft::live_cluster::close_node(node).await;
     receipt.clean_shutdown = true;
     write_value(&receipt_path(run_directory, &node_id), &receipt_value(&receipt))
 }
 
-fn secret_byte(node_id: &str) -> Result<u8> {
+fn secret_byte(node_id: &str) -> crate::error::Result<u8> {
     match node_id {
-        NODE_A => Ok(NODE_A_SECRET_BYTE),
-        NODE_B => Ok(NODE_B_SECRET_BYTE),
-        NODE_C => Ok(NODE_C_SECRET_BYTE),
-        _ => Err(MoltenError::invalid_harness("child secret requested outside static membership")),
+        super::super::tests::NODE_A => Ok(NODE_A_SECRET_BYTE),
+        super::super::tests::NODE_B => Ok(NODE_B_SECRET_BYTE),
+        super::super::tests::NODE_C => Ok(NODE_C_SECRET_BYTE),
+        _ => Err(crate::error::MoltenError::invalid_harness("child secret requested outside static membership")),
     }
 }
 
-fn read_endpoints(run_directory: &Path) -> Result<std::collections::BTreeMap<String, CanonicalCrossProcessEndpoint>> {
-    [NODE_A, NODE_B, NODE_C]
-        .into_iter()
-        .map(|node_id| {
-            let value = read_value(&endpoint_path(run_directory, node_id))?;
-            Ok((node_id.to_string(), crate::fabric_transport::parse_canonical_cross_process_endpoint(&value)?))
-        })
-        .collect()
+fn read_endpoints(
+    run_directory: &std::path::Path,
+) -> crate::error::Result<std::collections::BTreeMap<String, crate::fabric_transport::CanonicalCrossProcessEndpoint>> {
+    [
+        super::super::tests::NODE_A,
+        super::super::tests::NODE_B,
+        super::super::tests::NODE_C,
+    ]
+    .into_iter()
+    .map(|node_id| {
+        let value = read_value(&endpoint_path(run_directory, node_id))?;
+        Ok((node_id.to_string(), crate::fabric_transport::parse_canonical_cross_process_endpoint(&value)?))
+    })
+    .collect()
 }
 
 async fn run_leader(
     node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode,
     ingress: &mut IrohReplicaIngressPump,
-    run_directory: &Path,
+    run_directory: &std::path::Path,
     endpoint_identity: &str,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let timer_ref = node.service.state().active_election_timer_ref.clone();
     require_applied(node.service.handle_event(ReplicaEvent::ElectionTimeout { timer_ref }).await)?;
     let mut is_proposal_started = false;
@@ -139,17 +159,17 @@ async fn run_leader(
         }
         if is_snapshot_started
             && !is_quorum_loss_started
-            && node.service.state().match_index.get(NODE_C) == Some(&INITIAL_LOG_INDEX)
+            && node.service.state().match_index.get(super::super::tests::NODE_C) == Some(&INITIAL_LOG_INDEX)
         {
             begin_quorum_loss(node, run_directory).await?;
             is_quorum_loss_started = true;
             write_signal(&run_directory.join(LEADER_DONE_FILE), "leader-done")?;
         }
     }
-    Err(MoltenError::invalid_harness("leader exhausted its bounded event loop"))
+    Err(crate::error::MoltenError::invalid_harness("leader exhausted its bounded event loop"))
 }
 
-async fn propose(node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode) -> Result<()> {
+async fn propose(node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode) -> crate::error::Result<()> {
     require_applied(
         node.service
             .handle_event(ReplicaEvent::Propose {
@@ -161,7 +181,7 @@ async fn propose(node: &mut crate::fabric_consistency::raft::live_cluster::LiveN
     )
 }
 
-async fn begin_read(node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode) -> Result<()> {
+async fn begin_read(node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode) -> crate::error::Result<()> {
     require_applied(
         node.service
             .handle_event(ReplicaEvent::Read {
@@ -174,8 +194,8 @@ async fn begin_read(node: &mut crate::fabric_consistency::raft::live_cluster::Li
 
 async fn begin_quorum_loss(
     node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode,
-    run_directory: &Path,
-) -> Result<()> {
+    run_directory: &std::path::Path,
+) -> crate::error::Result<()> {
     write_signal(&run_directory.join(PARTITION_FILE), "partition")?;
     require_applied(
         node.service
@@ -196,7 +216,9 @@ async fn begin_quorum_loss(
     )
 }
 
-async fn begin_snapshot_catch_up(node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode) -> Result<()> {
+async fn begin_snapshot_catch_up(
+    node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode,
+) -> crate::error::Result<()> {
     require_applied(
         node.service
             .handle_event(ReplicaEvent::CreateSnapshot {
@@ -210,10 +232,10 @@ async fn begin_snapshot_catch_up(node: &mut crate::fabric_consistency::raft::liv
 async fn run_follower(
     node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode,
     ingress: &mut IrohReplicaIngressPump,
-    run_directory: &Path,
+    run_directory: &std::path::Path,
     endpoint_identity: &str,
     is_lag_until_snapshot: bool,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     for _step in 0..EVENT_LOOP_LIMIT {
         if run_directory.join(STOP_FILE).is_file() {
             return Ok(());
@@ -230,7 +252,7 @@ async fn run_follower(
         }
         require_applied(node.service.handle_event(event.event).await)?;
     }
-    Err(MoltenError::invalid_harness("follower exhausted its bounded event loop"))
+    Err(crate::error::MoltenError::invalid_harness("follower exhausted its bounded event loop"))
 }
 
 fn should_drop_before_snapshot(state: &ReplicaState, event: &ReplicaEvent) -> bool {
@@ -252,10 +274,10 @@ fn should_drop_before_snapshot(state: &ReplicaState, event: &ReplicaEvent) -> bo
 }
 
 fn write_checkpoint_if_requested(
-    run_directory: &Path,
+    run_directory: &std::path::Path,
     endpoint_identity: &str,
     node: &crate::fabric_consistency::raft::live_cluster::LiveNode,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let output = checkpoint_path(run_directory, &node.service.state().node_id);
     if !run_directory.join(CHECKPOINT_FILE).is_file() || output.is_file() {
         return Ok(());
@@ -264,10 +286,12 @@ fn write_checkpoint_if_requested(
     write_value(&output, &receipt_value(&receipt))
 }
 
-pub(super) async fn poll_event(ingress: &mut IrohReplicaIngressPump) -> Result<Option<ReceivedReplicaEvent>> {
+pub(super) async fn poll_event(
+    ingress: &mut IrohReplicaIngressPump,
+) -> crate::error::Result<Option<ReceivedReplicaEvent>> {
     tokio::select! {
         result = ingress.next() => result.map(Some),
-        () = tokio::time::sleep(Duration::from_millis(EVENT_POLL_MILLISECONDS)) => Ok(None),
+        () = tokio::time::sleep(std::time::Duration::from_millis(EVENT_POLL_MILLISECONDS)) => Ok(None),
     }
 }
 
@@ -276,13 +300,13 @@ fn has_read_outcome(outcome: &ReplicaExecutionOutcome) -> bool {
         if applied.observations.iter().any(|observation| observation.kind == ReplicaEffectKind::ReadOutcome))
 }
 
-pub(super) fn require_applied(outcome: ReplicaExecutionOutcome) -> Result<()> {
+pub(super) fn require_applied(outcome: ReplicaExecutionOutcome) -> crate::error::Result<()> {
     match outcome {
         ReplicaExecutionOutcome::Applied(_) => Ok(()),
         ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-            Err(MoltenError::invalid_harness(format!("distinct-process turn denied: {diagnostic}")))
+            Err(crate::error::MoltenError::invalid_harness(format!("distinct-process turn denied: {diagnostic}")))
         }
-        ReplicaExecutionOutcome::Failed(failed) => Err(MoltenError::invalid_harness(format!(
+        ReplicaExecutionOutcome::Failed(failed) => Err(crate::error::MoltenError::invalid_harness(format!(
             "distinct-process effect {} failed: {}",
             failed.failed_kind.as_str(),
             failed.diagnostic

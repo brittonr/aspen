@@ -4,17 +4,20 @@ pub(super) async fn run(
     node_id: String,
     endpoint_identity: String,
     mut node: crate::fabric_consistency::raft::live_cluster::LiveNode,
-    run_directory: &Path,
-) -> Result<()> {
-    let listener = node.listener.take().ok_or_else(|| MoltenError::invalid_harness("recovered listener is absent"))?;
+    run_directory: &std::path::Path,
+) -> crate::error::Result<()> {
+    let listener = node
+        .listener
+        .take()
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("recovered listener is absent"))?;
     let mut ingress = IrohReplicaIngressPump::spawn(listener, IrohReplicaIngressConfig {
         session_ref: node.session_ref.clone(),
-        accept_timeout: Duration::from_secs(CHILD_TIMEOUT_SECONDS),
+        accept_timeout: std::time::Duration::from_secs(CHILD_TIMEOUT_SECONDS),
         event_capacity: INGRESS_EVENT_CAPACITY,
         delivery_limit: INGRESS_DELIVERY_LIMIT,
     })?;
     write_signal(&run_directory.join(format!("{node_id}-ready.preserves")), "recovered-ready")?;
-    if node_id == NODE_B {
+    if node_id == super::super::tests::NODE_B {
         wait_for_file(&run_directory.join(RESTART_START_FILE))?;
         let timer_ref = node.service.state().active_election_timer_ref.clone();
         child::require_applied(node.service.handle_event(ReplicaEvent::ElectionTimeout { timer_ref }).await)?;
@@ -25,7 +28,10 @@ pub(super) async fn run(
             node.listener = Some(ingress.shutdown().await?);
             return child::finish_node(node_id, endpoint_identity, node, run_directory).await;
         }
-        if node_id == NODE_A && !is_stale_frame_sent && run_directory.join(RECOVERED_LEADER_FILE).is_file() {
+        if node_id == super::super::tests::NODE_A
+            && !is_stale_frame_sent
+            && run_directory.join(RECOVERED_LEADER_FILE).is_file()
+        {
             send_stale_leader_frame(&mut node).await?;
             is_stale_frame_sent = true;
         }
@@ -37,26 +43,28 @@ pub(super) async fn run(
             _ => None,
         };
         child::require_applied(node.service.handle_event(event.event).await)?;
-        if node_id == NODE_B && node.service.state().role == ReplicaRole::Leader {
+        if node_id == super::super::tests::NODE_B && node.service.state().role == ReplicaRole::Leader {
             write_signal(&run_directory.join(RECOVERED_LEADER_FILE), "recovered-leader")?;
             if message_term == Some(STALE_LEADER_TERM) && node.service.state().current_term == RECOVERED_LEADER_TERM {
                 write_signal(&run_directory.join(STALE_FENCED_FILE), "stale-fenced")?;
             }
         }
     }
-    Err(MoltenError::invalid_harness("recovered replica exhausted its bounded event loop"))
+    Err(crate::error::MoltenError::invalid_harness("recovered replica exhausted its bounded event loop"))
 }
 
-async fn send_stale_leader_frame(node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode) -> Result<()> {
+async fn send_stale_leader_frame(
+    node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode,
+) -> crate::error::Result<()> {
     let state = node.service.state();
     let envelope = ReplicaMessageEnvelope {
         group_binding_ref: state.profile.group_binding_ref.clone(),
         service_generation: state.profile.service_generation,
-        from: NODE_A.to_string(),
-        to: NODE_B.to_string(),
+        from: super::super::tests::NODE_A.to_string(),
+        to: super::super::tests::NODE_B.to_string(),
         message: RaftMessage::AppendEntries {
             term: STALE_LEADER_TERM,
-            leader_id: NODE_A.to_string(),
+            leader_id: super::super::tests::NODE_A.to_string(),
             prev_log_index: INITIAL_LOG_INDEX,
             prev_log_term: STALE_LEADER_TERM,
             entries: Vec::new(),

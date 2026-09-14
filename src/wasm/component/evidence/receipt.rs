@@ -1,10 +1,3 @@
-use super::super::model::ComponentConsumer;
-use super::super::model::ComponentDenial;
-use super::super::model::ComponentResult;
-use super::super::model::EvidenceScope;
-use super::super::model::sorted_unique;
-use super::super::profile::COMPONENT_NON_CLAIMS;
-
 mod validation;
 
 pub const COMPONENT_RECEIPT_SCHEMA: &str = "molten.wasm-component-receipt.v1";
@@ -51,8 +44,8 @@ impl ComponentReceiptDecision {
 pub struct ComponentReceiptInput {
     pub stage: ComponentReceiptStage,
     pub decision: ComponentReceiptDecision,
-    pub evidence_scope: EvidenceScope,
-    pub consumer: ComponentConsumer,
+    pub evidence_scope: super::super::model::EvidenceScope,
+    pub consumer: super::super::model::ComponentConsumer,
     pub component_ref: String,
     pub wit_ref: String,
     pub profile_ref: String,
@@ -83,27 +76,33 @@ pub struct ComponentReceipt {
     pub receipt_ref: String,
 }
 
-pub fn build_component_receipt(input: ComponentReceiptInput) -> ComponentResult<ComponentReceipt> {
+pub fn build_component_receipt(input: ComponentReceiptInput) -> super::super::model::ComponentResult<ComponentReceipt> {
     validation::validate_input_bounds(&input)?;
-    let non_claims = COMPONENT_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
+    let non_claims = super::super::profile::COMPONENT_NON_CLAIMS
+        .iter()
+        .map(|value| (*value).to_string())
+        .collect::<Vec<_>>();
     let mut receipt = ComponentReceipt {
         input: normalize_input(input),
         non_claims,
         receipt_ref: String::new(),
     };
     validation::validate_receipt_shape(&receipt)?;
-    receipt.receipt_ref = crate::preserves_rail::canonical_hash(&component_receipt_value(&receipt))
-        .map_err(|error| ComponentDenial::new(format!("component receipt hashing failed: {error}")))?;
+    receipt.receipt_ref =
+        crate::preserves_rail::canonical_hash(&component_receipt_value(&receipt)).map_err(|error| {
+            super::super::model::ComponentDenial::new(format!("component receipt hashing failed: {error}"))
+        })?;
     Ok(receipt)
 }
 
-pub fn validate_component_receipt(receipt: &ComponentReceipt) -> ComponentResult<()> {
+pub fn validate_component_receipt(receipt: &ComponentReceipt) -> super::super::model::ComponentResult<()> {
     validation::validate_input_bounds(&receipt.input)?;
     validation::validate_receipt_shape(receipt)?;
-    let expected = crate::preserves_rail::canonical_hash(&component_receipt_value(receipt))
-        .map_err(|error| ComponentDenial::new(format!("component receipt hashing failed: {error}")))?;
+    let expected = crate::preserves_rail::canonical_hash(&component_receipt_value(receipt)).map_err(|error| {
+        super::super::model::ComponentDenial::new(format!("component receipt hashing failed: {error}"))
+    })?;
     if receipt.receipt_ref != expected {
-        return Err(ComponentDenial::new("component receipt identity is stale or cross-profile"));
+        return Err(super::super::model::ComponentDenial::new("component receipt identity is stale or cross-profile"));
     }
     Ok(())
 }
@@ -111,27 +110,29 @@ pub fn validate_component_receipt(receipt: &ComponentReceipt) -> ComponentResult
 pub fn validate_component_receipt_against(
     receipt: &ComponentReceipt,
     expected_input: &ComponentReceiptInput,
-) -> ComponentResult<()> {
+) -> super::super::model::ComponentResult<()> {
     validate_component_receipt(receipt)?;
     let expected = build_component_receipt(expected_input.clone())?;
     if receipt != &expected {
-        return Err(ComponentDenial::new(
+        return Err(super::super::model::ComponentDenial::new(
             "component receipt differs from the expected inspected bytes or execution plan",
         ));
     }
     Ok(())
 }
 
-pub fn validate_component_receipt_chain(receipts: &[ComponentReceipt]) -> ComponentResult<()> {
+pub fn validate_component_receipt_chain(receipts: &[ComponentReceipt]) -> super::super::model::ComponentResult<()> {
     if receipts.is_empty() {
-        return Err(ComponentDenial::new("component receipt chain cannot be empty"));
+        return Err(super::super::model::ComponentDenial::new("component receipt chain cannot be empty"));
     }
     let mut previous_ref = None;
     for receipt in receipts {
         validate_component_receipt(receipt)?;
         let expected_parent_refs = previous_ref.iter().cloned().collect::<Vec<_>>();
         if receipt.input.parent_refs != expected_parent_refs {
-            return Err(ComponentDenial::new("component receipt parent does not match the preceding canonical stage"));
+            return Err(super::super::model::ComponentDenial::new(
+                "component receipt parent does not match the preceding canonical stage",
+            ));
         }
         previous_ref = Some(receipt.receipt_ref.clone());
     }
@@ -202,17 +203,17 @@ pub fn replay_receipts_match(left: &[ComponentReceipt], right: &[ComponentReceip
 }
 
 fn normalize_input(mut input: ComponentReceiptInput) -> ComponentReceiptInput {
-    input.imports = sorted_unique(&input.imports);
-    input.capabilities = sorted_unique(&input.capabilities);
-    input.mantle_evidence_refs = sorted_unique(&input.mantle_evidence_refs);
-    input.valence_evidence_refs = sorted_unique(&input.valence_evidence_refs);
-    input.cairn_evidence_refs = sorted_unique(&input.cairn_evidence_refs);
-    input.policy_refs = sorted_unique(&input.policy_refs);
-    input.authority_refs = sorted_unique(&input.authority_refs);
-    input.resource_refs = sorted_unique(&input.resource_refs);
-    input.recorded_effect_refs = sorted_unique(&input.recorded_effect_refs);
-    input.parent_refs = sorted_unique(&input.parent_refs);
-    input.diagnostics = sorted_unique(&input.diagnostics);
+    input.imports = super::super::model::sorted_unique(&input.imports);
+    input.capabilities = super::super::model::sorted_unique(&input.capabilities);
+    input.mantle_evidence_refs = super::super::model::sorted_unique(&input.mantle_evidence_refs);
+    input.valence_evidence_refs = super::super::model::sorted_unique(&input.valence_evidence_refs);
+    input.cairn_evidence_refs = super::super::model::sorted_unique(&input.cairn_evidence_refs);
+    input.policy_refs = super::super::model::sorted_unique(&input.policy_refs);
+    input.authority_refs = super::super::model::sorted_unique(&input.authority_refs);
+    input.resource_refs = super::super::model::sorted_unique(&input.resource_refs);
+    input.recorded_effect_refs = super::super::model::sorted_unique(&input.recorded_effect_refs);
+    input.parent_refs = super::super::model::sorted_unique(&input.parent_refs);
+    input.diagnostics = super::super::model::sorted_unique(&input.diagnostics);
     input
 }
 

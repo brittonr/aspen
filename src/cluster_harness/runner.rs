@@ -1,26 +1,4 @@
-use std::collections::BTreeSet;
-use std::ffi::OsString;
-use std::path::Path;
-use std::path::PathBuf;
-use std::process::Command;
-use std::process::Stdio;
-use std::time::Duration;
-use std::time::Instant;
-
-use molten_core::cluster_harness::ARTIFACT_FORMAT_PRESERVES;
-use molten_core::cluster_harness::ARTIFACT_FORMAT_TEXT;
-use molten_core::cluster_harness::FirstDivergence;
-use molten_core::cluster_harness::REQUIRED_CLUSTER_RUN_ARTIFACT_KINDS;
-use molten_core::cluster_harness::RUN_DIRECTORY_DENY;
-use molten_core::cluster_harness::RUN_DIRECTORY_PASS;
-use molten_core::cluster_harness::RunArtifactIndexEntry;
-use molten_core::cluster_harness::RunArtifactObservation;
-use molten_core::cluster_harness::RunDirectoryAssessment;
-use molten_core::cluster_harness::assess_run_directory;
-
 use super::canonical::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 pub const DEFAULT_CLUSTER_CHILD_TIMEOUT_MS: u64 = 30_000;
 pub const MAX_CLUSTER_CHILD_TIMEOUT_MS: u64 = 300_000;
@@ -54,10 +32,10 @@ const WORKFLOW_MAX_REQUESTS: &str = "1";
 
 #[derive(Debug, Clone)]
 pub struct ClusterHarnessExecutionInput {
-    pub fixture_path: PathBuf,
-    pub state_root: PathBuf,
-    pub output_directory: PathBuf,
-    pub node_binary: PathBuf,
+    pub fixture_path: std::path::PathBuf,
+    pub state_root: std::path::PathBuf,
+    pub output_directory: std::path::PathBuf,
+    pub node_binary: std::path::PathBuf,
     pub child_timeout_ms: u64,
     pub force: bool,
 }
@@ -69,7 +47,7 @@ pub struct ClusterHarnessExecution {
     pub verification_ref: String,
     pub failure_bundle_ref: Option<String>,
     pub diagnostics: Vec<String>,
-    pub output_directory: PathBuf,
+    pub output_directory: std::path::PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -106,7 +84,7 @@ struct NodeArtifacts {
 
 #[derive(Debug)]
 struct PreparedArtifact {
-    entry: RunArtifactIndexEntry,
+    entry: molten_core::cluster_harness::RunArtifactIndexEntry,
     value: IoValue,
 }
 
@@ -114,10 +92,10 @@ struct PreparedArtifact {
 // r[impl molten.testing.receipt_first_cluster_harness.fixture_executable_runner]
 // r[impl molten.testing.fixture_driven_cluster_execution.fixture_source_of_truth]
 // r[impl molten.testing.local_multiprocess_cluster_tier.middle_tier]
-pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<ClusterHarnessExecution> {
+pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::error::Result<ClusterHarnessExecution> {
     validate_execution_input(input)?;
     prepare_output_roots(input)?;
-    let fixture_source = std::fs::read_to_string(&input.fixture_path).map_err(MoltenError::from)?;
+    let fixture_source = std::fs::read_to_string(&input.fixture_path).map_err(crate::error::MoltenError::from)?;
     let node_names = crate::cluster::parse_cluster_manifest(&fixture_source)?;
     let plan = crate::cluster::plan_cluster(&input.state_root, &node_names)?;
     let node_ids = plan.nodes.iter().map(|node| node.node_id.clone()).collect::<Vec<_>>();
@@ -140,20 +118,20 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let is_init_passed =
         execute_phase_for_nodes(input, &plan, "init", &mut child_executions, &mut artifacts, |node| {
             vec![
-                OsString::from("node"),
-                OsString::from("init"),
-                OsString::from("--state-root"),
+                std::ffi::OsString::from("node"),
+                std::ffi::OsString::from("init"),
+                std::ffi::OsString::from("--state-root"),
                 node.state_root.as_os_str().to_os_string(),
-                OsString::from("--node-id"),
-                OsString::from(&node.node_id),
+                std::ffi::OsString::from("--node-id"),
+                std::ffi::OsString::from(&node.node_id),
             ]
         })?;
     let is_start_passed = if is_init_passed {
         execute_phase_for_nodes(input, &plan, "start", &mut child_executions, &mut artifacts, |node| {
             vec![
-                OsString::from("node"),
-                OsString::from("run"),
-                OsString::from("--state-root"),
+                std::ffi::OsString::from("node"),
+                std::ffi::OsString::from("run"),
+                std::ffi::OsString::from("--state-root"),
                 node.state_root.as_os_str().to_os_string(),
             ]
         })?
@@ -164,15 +142,15 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let is_workflow_passed = if is_start_passed {
         execute_phase_for_nodes(input, &plan, "workflow", &mut child_executions, &mut artifacts, |node| {
             vec![
-                OsString::from("node"),
-                OsString::from("run-loop"),
-                OsString::from("--state-root"),
+                std::ffi::OsString::from("node"),
+                std::ffi::OsString::from("run-loop"),
+                std::ffi::OsString::from("--state-root"),
                 node.state_root.as_os_str().to_os_string(),
-                OsString::from("--max-requests"),
-                OsString::from(WORKFLOW_MAX_REQUESTS),
-                OsString::from("--receipt-out"),
+                std::ffi::OsString::from("--max-requests"),
+                std::ffi::OsString::from(WORKFLOW_MAX_REQUESTS),
+                std::ffi::OsString::from("--receipt-out"),
                 node.state_root.join("cluster-harness-workflow.preserves").into_os_string(),
-                OsString::from("--heartbeat-out"),
+                std::ffi::OsString::from("--heartbeat-out"),
                 node.state_root.join("cluster-harness-heartbeat.preserves").into_os_string(),
             ]
         })?
@@ -183,9 +161,9 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let is_status_passed = if is_workflow_passed {
         execute_phase_for_nodes(input, &plan, "status", &mut child_executions, &mut artifacts, |node| {
             vec![
-                OsString::from("node"),
-                OsString::from("status"),
-                OsString::from("--state-root"),
+                std::ffi::OsString::from("node"),
+                std::ffi::OsString::from("status"),
+                std::ffi::OsString::from("--state-root"),
                 node.state_root.as_os_str().to_os_string(),
             ]
         })?
@@ -197,9 +175,9 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let is_stop_passed = if is_start_passed {
         execute_phase_for_nodes_reverse(input, &plan, "stop", &mut child_executions, &mut artifacts, |node| {
             vec![
-                OsString::from("node"),
-                OsString::from("stop"),
-                OsString::from("--state-root"),
+                std::ffi::OsString::from("node"),
+                std::ffi::OsString::from("stop"),
+                std::ffi::OsString::from("--state-root"),
                 node.state_root.as_os_str().to_os_string(),
             ]
         })?
@@ -271,7 +249,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
             caveats: caveats.clone(),
         },
     )?;
-    if local_executable.decision != RUN_DIRECTORY_PASS {
+    if local_executable.decision != molten_core::cluster_harness::RUN_DIRECTORY_PASS {
         diagnostics.extend(local_executable.diagnostics.iter().map(|item| format!("local-run:{item}")));
     }
     push_artifact(&mut artifacts, LOCAL_EXECUTABLE_RUN_FILE, LOCAL_EXECUTABLE_RUN_KIND, local_executable.value)?;
@@ -279,7 +257,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let diagnostic_log_refs = child_executions
         .iter()
         .map(|child| child_log_ref(child, &input.output_directory, &plan))
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<crate::error::Result<Vec<_>>>()?;
     let mut observed_kinds = artifacts.iter().map(|artifact| artifact.entry.artifact_kind.clone()).collect::<Vec<_>>();
     observed_kinds.push(CLUSTER_RUN_KIND.to_string());
     observed_kinds.sort();
@@ -309,14 +287,16 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
         append_log_entries(&input.output_directory, artifacts.into_iter().map(|item| item.entry).collect(), &plan)?;
     let index_text = render_run_index(&entries);
     let index_path = input.output_directory.join(RUN_INDEX_FILE);
-    std::fs::write(&index_path, &index_text).map_err(MoltenError::from)?;
+    std::fs::write(&index_path, &index_text).map_err(crate::error::MoltenError::from)?;
     let index_ref = content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &index_text);
     let assessment = assess_indexed_run_directory(&input.output_directory, &entries);
     let verification = cluster_run_verification_value(&index_ref, &assessment)?;
     write_preserves_path(&input.output_directory.join(VERIFICATION_FILE), &verification.value)?;
 
     let mut failure_bundle_ref = None;
-    if parent.decision != RUN_DIRECTORY_PASS || verification.decision != RUN_DIRECTORY_PASS {
+    if parent.decision != molten_core::cluster_harness::RUN_DIRECTORY_PASS
+        || verification.decision != molten_core::cluster_harness::RUN_DIRECTORY_PASS
+    {
         let failure_input = crate::multinode_core::FailureReproBundleInput {
             scenario_fixture_ref: fixture_ref,
             topology_ref: local_executable.plan_ref,
@@ -350,10 +330,12 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
         failure_bundle_ref = Some(bundle.bundle_ref);
     }
 
-    let decision = if parent.decision == RUN_DIRECTORY_PASS && verification.decision == RUN_DIRECTORY_PASS {
-        RUN_DIRECTORY_PASS.to_string()
+    let decision = if parent.decision == molten_core::cluster_harness::RUN_DIRECTORY_PASS
+        && verification.decision == molten_core::cluster_harness::RUN_DIRECTORY_PASS
+    {
+        molten_core::cluster_harness::RUN_DIRECTORY_PASS.to_string()
     } else {
-        RUN_DIRECTORY_DENY.to_string()
+        molten_core::cluster_harness::RUN_DIRECTORY_DENY.to_string()
     };
     let mut final_diagnostics = parent.diagnostics;
     final_diagnostics.extend(verification.diagnostics.clone());
@@ -370,15 +352,17 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
 }
 
 // r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]
-pub fn verify_cluster_run_directory(run_directory: &Path) -> Result<ClusterRunDirectoryVerification> {
+pub fn verify_cluster_run_directory(
+    run_directory: &std::path::Path,
+) -> crate::error::Result<ClusterRunDirectoryVerification> {
     let index_path = run_directory.join(RUN_INDEX_FILE);
-    let index_text = std::fs::read_to_string(&index_path).map_err(MoltenError::from)?;
+    let index_text = std::fs::read_to_string(&index_path).map_err(crate::error::MoltenError::from)?;
     let entries = parse_run_index(&index_text)?;
     let index_ref = content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &index_text);
     let mut assessment = assess_indexed_run_directory(run_directory, &entries);
     let expected_receipt = cluster_run_verification_value(&index_ref, &assessment)?;
     let companion_path = run_directory.join(VERIFICATION_FILE);
-    if assessment.decision == RUN_DIRECTORY_PASS {
+    if assessment.decision == molten_core::cluster_harness::RUN_DIRECTORY_PASS {
         match read_preserves_path(&companion_path) {
             Ok(companion) if companion == expected_receipt.value => {}
             Ok(_) => add_verification_companion_diagnostic(
@@ -401,9 +385,9 @@ pub fn verify_cluster_run_directory(run_directory: &Path) -> Result<ClusterRunDi
     })
 }
 
-fn validate_execution_input(input: &ClusterHarnessExecutionInput) -> Result<()> {
+fn validate_execution_input(input: &ClusterHarnessExecutionInput) -> crate::error::Result<()> {
     if input.child_timeout_ms == 0 || input.child_timeout_ms > MAX_CLUSTER_CHILD_TIMEOUT_MS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "cluster child timeout must be between 1 and {MAX_CLUSTER_CHILD_TIMEOUT_MS} milliseconds"
         )));
     }
@@ -414,36 +398,43 @@ fn validate_execution_input(input: &ClusterHarnessExecutionInput) -> Result<()> 
         ("node binary", &input.node_binary),
     ] {
         if path.as_os_str().is_empty() {
-            return Err(MoltenError::invalid_harness(format!("cluster harness requires explicit {label}")));
+            return Err(crate::error::MoltenError::invalid_harness(format!(
+                "cluster harness requires explicit {label}"
+            )));
         }
     }
     if input.state_root == input.output_directory
         || input.state_root.starts_with(&input.output_directory)
         || input.output_directory.starts_with(&input.state_root)
     {
-        return Err(MoltenError::invalid_harness("cluster harness state root and output directory must be isolated"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "cluster harness state root and output directory must be isolated",
+        ));
     }
     Ok(())
 }
 
-fn prepare_output_roots(input: &ClusterHarnessExecutionInput) -> Result<()> {
+fn prepare_output_roots(input: &ClusterHarnessExecutionInput) -> crate::error::Result<()> {
     for path in [&input.state_root, &input.output_directory] {
         if path.exists() {
             if !input.force {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::MoltenError::invalid_harness(format!(
                     "cluster harness path already exists: {}; pass --force to replace it",
                     path.display()
                 )));
             }
-            std::fs::remove_dir_all(path).map_err(MoltenError::from)?;
+            std::fs::remove_dir_all(path).map_err(crate::error::MoltenError::from)?;
         }
-        std::fs::create_dir_all(path).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(path).map_err(crate::error::MoltenError::from)?;
     }
     Ok(())
 }
 
 fn expected_artifact_kinds() -> Vec<String> {
-    REQUIRED_CLUSTER_RUN_ARTIFACT_KINDS.iter().map(|kind| (*kind).to_string()).collect()
+    molten_core::cluster_harness::REQUIRED_CLUSTER_RUN_ARTIFACT_KINDS
+        .iter()
+        .map(|kind| (*kind).to_string())
+        .collect()
 }
 
 fn cluster_harness_caveats() -> Vec<String> {
@@ -489,9 +480,9 @@ fn execute_phase_for_nodes<F>(
     executions: &mut Vec<ChildExecution>,
     artifacts: &mut Vec<PreparedArtifact>,
     arguments: F,
-) -> Result<bool>
+) -> crate::error::Result<bool>
 where
-    F: Fn(&crate::cluster::ClusterNodePlan) -> Vec<OsString>,
+    F: Fn(&crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString>,
 {
     let mut is_passed = true;
     for node in &plan.nodes {
@@ -515,9 +506,9 @@ fn execute_phase_for_nodes_reverse<F>(
     executions: &mut Vec<ChildExecution>,
     artifacts: &mut Vec<PreparedArtifact>,
     arguments: F,
-) -> Result<bool>
+) -> crate::error::Result<bool>
 where
-    F: Fn(&crate::cluster::ClusterNodePlan) -> Vec<OsString>,
+    F: Fn(&crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString>,
 {
     let mut is_passed = true;
     for node in plan.nodes.iter().rev() {
@@ -538,10 +529,10 @@ fn execute_child(
     input: &ClusterHarnessExecutionInput,
     node: &crate::cluster::ClusterNodePlan,
     phase: &str,
-    arguments: Vec<OsString>,
-) -> Result<ChildExecution> {
-    let mut command = Command::new(&input.node_binary);
-    command.args(&arguments).stdout(Stdio::piped()).stderr(Stdio::piped());
+    arguments: Vec<std::ffi::OsString>,
+) -> crate::error::Result<ChildExecution> {
+    let mut command = std::process::Command::new(&input.node_binary);
+    command.args(&arguments).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
@@ -555,8 +546,8 @@ fn execute_child(
             });
         }
     };
-    let started = Instant::now();
-    let timeout = Duration::from_millis(input.child_timeout_ms);
+    let started = std::time::Instant::now();
+    let timeout = std::time::Duration::from_millis(input.child_timeout_ms);
     let mut is_timed_out = false;
     let mut is_orphaned = false;
     let mut process_error = None;
@@ -579,7 +570,7 @@ fn execute_child(
             }
             break;
         }
-        std::thread::sleep(Duration::from_millis(CHILD_POLL_INTERVAL_MS));
+        std::thread::sleep(std::time::Duration::from_millis(CHILD_POLL_INTERVAL_MS));
     }
     match child.wait_with_output() {
         Ok(output) => {
@@ -622,7 +613,7 @@ fn finalize_child_execution(
     node: &crate::cluster::ClusterNodePlan,
     phase: &str,
     observation: ChildProcessObservation,
-) -> Result<ChildExecution> {
+) -> crate::error::Result<ChildExecution> {
     let log = format!(
         "phase={phase}\nnode={}\nsuccess={}\ntimed_out={}\norphaned={}\nexit_code={}\nstdout:\n{}\nstderr:\n{}",
         node.node_id,
@@ -635,9 +626,9 @@ fn finalize_child_execution(
     );
     let log_path = input.output_directory.join(format!("logs/{phase}-{}.log", node.path_component));
     if let Some(parent) = log_path.parent() {
-        std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
     }
-    std::fs::write(&log_path, &log).map_err(MoltenError::from)?;
+    std::fs::write(&log_path, &log).map_err(crate::error::MoltenError::from)?;
     let diagnostic_log_ref = content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &log);
     let command_profile_ref = content_ref_for_text(COMMAND_PROFILE_DOMAIN, &format!("{phase}:{}", node.node_id));
     let value = child_process_value(&ClusterHarnessChildProcessInput {
@@ -676,7 +667,7 @@ fn capture_node_artifacts(
     node: &crate::cluster::ClusterNodePlan,
     artifacts: &mut Vec<PreparedArtifact>,
     child_receipt_refs: &mut Vec<String>,
-) -> Result<NodeArtifacts> {
+) -> crate::error::Result<NodeArtifacts> {
     let mut observed = NodeArtifacts::default();
     for (file, assign) in [
         ("config.preserves", NodeArtifactField::Config),
@@ -760,12 +751,12 @@ fn build_lifecycle_artifacts(
     diagnostics: &[String],
     phases_passed: bool,
     caveats: &[String],
-) -> Result<LifecycleArtifacts> {
+) -> crate::error::Result<LifecycleArtifacts> {
     let is_complete = phases_passed && nodes.len() == node_ids.len() && nodes.iter().all(NodeArtifacts::complete);
     let (lifecycle_value, drift_summary) = if is_complete {
         let phase = |name: &str| crate::cluster::ClusterLifecyclePhaseObservation {
             phase: name.to_string(),
-            decision: RUN_DIRECTORY_PASS.to_string(),
+            decision: molten_core::cluster_harness::RUN_DIRECTORY_PASS.to_string(),
             receipt_refs: child_executions
                 .iter()
                 .filter(|child| child.phase == name)
@@ -818,7 +809,7 @@ fn build_lifecycle_artifacts(
             workflow: WORKFLOW_ID.to_string(),
             fields: vec![crate::drift_core::EvidenceField {
                 path: "lifecycle-status".to_string(),
-                value: RUN_DIRECTORY_DENY.to_string(),
+                value: molten_core::cluster_harness::RUN_DIRECTORY_DENY.to_string(),
                 is_ref: false,
             }],
         };
@@ -841,7 +832,7 @@ struct CleanupObservation {
     succeeded: bool,
 }
 
-fn cleanup_state_roots(plan: &crate::cluster::ClusterPlan) -> Result<CleanupObservation> {
+fn cleanup_state_roots(plan: &crate::cluster::ClusterPlan) -> crate::error::Result<CleanupObservation> {
     let mut ticket_paths = Vec::new();
     for node in &plan.nodes {
         collect_ticket_paths(&node.state_root, &node.state_root, &mut ticket_paths)?;
@@ -867,19 +858,23 @@ fn cleanup_state_roots(plan: &crate::cluster::ClusterPlan) -> Result<CleanupObse
     })
 }
 
-fn collect_ticket_paths(root: &Path, current: &Path, paths: &mut Vec<PathBuf>) -> Result<()> {
+fn collect_ticket_paths(
+    root: &std::path::Path,
+    current: &std::path::Path,
+    paths: &mut Vec<std::path::PathBuf>,
+) -> crate::error::Result<()> {
     if !current.exists() {
         return Ok(());
     }
     if paths.len() >= MAX_TICKET_FILES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "cluster harness ticket file count exceeds bound {MAX_TICKET_FILES} under {}",
             root.display()
         )));
     }
-    for entry in std::fs::read_dir(current).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        let file_type = entry.file_type().map_err(MoltenError::from)?;
+    for entry in std::fs::read_dir(current).map_err(crate::error::MoltenError::from)? {
+        let entry = entry.map_err(crate::error::MoltenError::from)?;
+        let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
         if file_type.is_dir() {
             collect_ticket_paths(root, &entry.path(), paths)?;
         } else if file_type.is_file() && entry.file_name().to_string_lossy().to_ascii_lowercase().contains("ticket") {
@@ -889,21 +884,29 @@ fn collect_ticket_paths(root: &Path, current: &Path, paths: &mut Vec<PathBuf>) -
     Ok(())
 }
 
-fn push_artifact(artifacts: &mut Vec<PreparedArtifact>, relative_path: &str, kind: &str, value: IoValue) -> Result<()> {
+fn push_artifact(
+    artifacts: &mut Vec<PreparedArtifact>,
+    relative_path: &str,
+    kind: &str,
+    value: IoValue,
+) -> crate::error::Result<()> {
     let expected_ref = crate::preserves_rail::canonical_hash(&value)?;
     artifacts.push(PreparedArtifact {
-        entry: RunArtifactIndexEntry {
+        entry: molten_core::cluster_harness::RunArtifactIndexEntry {
             relative_path: relative_path.to_string(),
             artifact_kind: kind.to_string(),
             expected_ref,
-            format: ARTIFACT_FORMAT_PRESERVES.to_string(),
+            format: molten_core::cluster_harness::ARTIFACT_FORMAT_PRESERVES.to_string(),
         },
         value,
     });
     Ok(())
 }
 
-fn write_prepared_artifacts(output_directory: &Path, artifacts: &[PreparedArtifact]) -> Result<()> {
+fn write_prepared_artifacts(
+    output_directory: &std::path::Path,
+    artifacts: &[PreparedArtifact],
+) -> crate::error::Result<()> {
     for artifact in artifacts {
         write_preserves_path(&output_directory.join(&artifact.entry.relative_path), &artifact.value)?;
     }
@@ -911,10 +914,10 @@ fn write_prepared_artifacts(output_directory: &Path, artifacts: &[PreparedArtifa
 }
 
 fn append_log_entries(
-    output_directory: &Path,
-    mut entries: Vec<RunArtifactIndexEntry>,
+    output_directory: &std::path::Path,
+    mut entries: Vec<molten_core::cluster_harness::RunArtifactIndexEntry>,
     plan: &crate::cluster::ClusterPlan,
-) -> Result<Vec<RunArtifactIndexEntry>> {
+) -> crate::error::Result<Vec<molten_core::cluster_harness::RunArtifactIndexEntry>> {
     for phase in ["init", "start", "workflow", "status", "stop"] {
         for node in &plan.nodes {
             let relative_path = format!("logs/{phase}-{}.log", node.path_component);
@@ -922,12 +925,12 @@ fn append_log_entries(
             if !path.exists() {
                 continue;
             }
-            let text = std::fs::read_to_string(path).map_err(MoltenError::from)?;
-            entries.push(RunArtifactIndexEntry {
+            let text = std::fs::read_to_string(path).map_err(crate::error::MoltenError::from)?;
+            entries.push(molten_core::cluster_harness::RunArtifactIndexEntry {
                 relative_path,
                 artifact_kind: DIAGNOSTIC_LOG_KIND.to_string(),
                 expected_ref: content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &text),
-                format: ARTIFACT_FORMAT_TEXT.to_string(),
+                format: molten_core::cluster_harness::ARTIFACT_FORMAT_TEXT.to_string(),
             });
         }
     }
@@ -937,21 +940,23 @@ fn append_log_entries(
 
 fn child_log_ref(
     child: &ChildExecution,
-    output_directory: &Path,
+    output_directory: &std::path::Path,
     plan: &crate::cluster::ClusterPlan,
-) -> Result<String> {
+) -> crate::error::Result<String> {
     let component = plan
         .nodes
         .iter()
         .find(|node| node.node_id == child.node_id)
         .map(|node| node.path_component.as_str())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("missing cluster plan node {}", child.node_id)))?;
+        .ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness(format!("missing cluster plan node {}", child.node_id))
+        })?;
     let text = std::fs::read_to_string(output_directory.join(format!("logs/{}-{component}.log", child.phase)))
-        .map_err(MoltenError::from)?;
+        .map_err(crate::error::MoltenError::from)?;
     Ok(content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &text))
 }
 
-fn render_run_index(entries: &[RunArtifactIndexEntry]) -> String {
+fn render_run_index(entries: &[molten_core::cluster_harness::RunArtifactIndexEntry]) -> String {
     let mut output = String::from(RUN_INDEX_HEADER);
     output.push('\n');
     for entry in entries {
@@ -967,11 +972,13 @@ fn render_run_index(entries: &[RunArtifactIndexEntry]) -> String {
     output
 }
 
-fn parse_run_index(source: &str) -> Result<Vec<RunArtifactIndexEntry>> {
+fn parse_run_index(source: &str) -> crate::error::Result<Vec<molten_core::cluster_harness::RunArtifactIndexEntry>> {
     let mut lines = source.lines();
-    let header = lines.next().ok_or_else(|| MoltenError::invalid_harness("cluster run index is empty"))?;
+    let header = lines
+        .next()
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("cluster run index is empty"))?;
     if header != RUN_INDEX_HEADER {
-        return Err(MoltenError::invalid_harness("cluster run index has unsupported header"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster run index has unsupported header"));
     }
     let mut entries = Vec::new();
     for (line_index, line) in lines.enumerate() {
@@ -980,12 +987,12 @@ fn parse_run_index(source: &str) -> Result<Vec<RunArtifactIndexEntry>> {
         }
         let fields = line.split('\t').collect::<Vec<_>>();
         if fields.len() != RUN_INDEX_FIELD_COUNT {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::MoltenError::invalid_harness(format!(
                 "cluster run index line {} must have four tab-separated fields",
                 line_index.saturating_add(RUN_INDEX_ENTRY_LINE_OFFSET)
             )));
         }
-        entries.push(RunArtifactIndexEntry {
+        entries.push(molten_core::cluster_harness::RunArtifactIndexEntry {
             relative_path: fields[0].to_string(),
             artifact_kind: fields[1].to_string(),
             expected_ref: fields[RUN_INDEX_REF_FIELD].to_string(),
@@ -995,10 +1002,14 @@ fn parse_run_index(source: &str) -> Result<Vec<RunArtifactIndexEntry>> {
     Ok(entries)
 }
 
-fn assess_indexed_run_directory(run_directory: &Path, entries: &[RunArtifactIndexEntry]) -> RunDirectoryAssessment {
+fn assess_indexed_run_directory(
+    run_directory: &std::path::Path,
+    entries: &[molten_core::cluster_harness::RunArtifactIndexEntry],
+) -> molten_core::cluster_harness::RunDirectoryAssessment {
     let mut observations =
         entries.iter().map(|entry| observe_indexed_artifact(run_directory, entry)).collect::<Vec<_>>();
-    let indexed_paths = entries.iter().map(|entry| entry.relative_path.as_str()).collect::<BTreeSet<_>>();
+    let indexed_paths =
+        entries.iter().map(|entry| entry.relative_path.as_str()).collect::<std::collections::BTreeSet<_>>();
     if let Ok(files) = collect_run_files(run_directory) {
         for relative_path in files {
             if indexed_paths.contains(relative_path.as_str()) || allowed_unindexed_file(&relative_path) {
@@ -1007,19 +1018,25 @@ fn assess_indexed_run_directory(run_directory: &Path, entries: &[RunArtifactInde
             observations.push(observe_unexpected_artifact(run_directory, &relative_path));
         }
     }
-    assess_run_directory(entries, &observations)
+    molten_core::cluster_harness::assess_run_directory(entries, &observations)
 }
 
-fn observe_indexed_artifact(run_directory: &Path, entry: &RunArtifactIndexEntry) -> RunArtifactObservation {
+fn observe_indexed_artifact(
+    run_directory: &std::path::Path,
+    entry: &molten_core::cluster_harness::RunArtifactIndexEntry,
+) -> molten_core::cluster_harness::RunArtifactObservation {
     let path = run_directory.join(&entry.relative_path);
     match entry.format.as_str() {
-        ARTIFACT_FORMAT_PRESERVES => observe_preserves_artifact(&path, entry),
-        ARTIFACT_FORMAT_TEXT => observe_text_artifact(&path, entry),
+        molten_core::cluster_harness::ARTIFACT_FORMAT_PRESERVES => observe_preserves_artifact(&path, entry),
+        molten_core::cluster_harness::ARTIFACT_FORMAT_TEXT => observe_text_artifact(&path, entry),
         _ => missing_observation(entry),
     }
 }
 
-fn observe_preserves_artifact(path: &Path, entry: &RunArtifactIndexEntry) -> RunArtifactObservation {
+fn observe_preserves_artifact(
+    path: &std::path::Path,
+    entry: &molten_core::cluster_harness::RunArtifactIndexEntry,
+) -> molten_core::cluster_harness::RunArtifactObservation {
     if !is_regular_file_without_symlink(path) {
         return missing_observation(entry);
     }
@@ -1027,11 +1044,11 @@ fn observe_preserves_artifact(path: &Path, entry: &RunArtifactIndexEntry) -> Run
         return missing_observation(entry);
     };
     let Ok(value) = crate::preserves_rail::parse_text(&text) else {
-        return RunArtifactObservation {
+        return molten_core::cluster_harness::RunArtifactObservation {
             relative_path: entry.relative_path.clone(),
             artifact_kind: entry.artifact_kind.clone(),
             observed_ref: None,
-            format: ARTIFACT_FORMAT_PRESERVES.to_string(),
+            format: molten_core::cluster_harness::ARTIFACT_FORMAT_PRESERVES.to_string(),
             canonical: false,
             pass_eligible: false,
         };
@@ -1042,27 +1059,30 @@ fn observe_preserves_artifact(path: &Path, entry: &RunArtifactIndexEntry) -> Run
     let is_pass_eligible = artifact_decision(&value, &actual_kind)
         .ok()
         .flatten()
-        .is_none_or(|decision| decision == RUN_DIRECTORY_PASS);
-    RunArtifactObservation {
+        .is_none_or(|decision| decision == molten_core::cluster_harness::RUN_DIRECTORY_PASS);
+    molten_core::cluster_harness::RunArtifactObservation {
         relative_path: entry.relative_path.clone(),
         artifact_kind: actual_kind,
         observed_ref,
-        format: ARTIFACT_FORMAT_PRESERVES.to_string(),
+        format: molten_core::cluster_harness::ARTIFACT_FORMAT_PRESERVES.to_string(),
         canonical: is_canonical,
         pass_eligible: is_pass_eligible,
     }
 }
 
-fn observe_text_artifact(path: &Path, entry: &RunArtifactIndexEntry) -> RunArtifactObservation {
+fn observe_text_artifact(
+    path: &std::path::Path,
+    entry: &molten_core::cluster_harness::RunArtifactIndexEntry,
+) -> molten_core::cluster_harness::RunArtifactObservation {
     if !is_regular_file_without_symlink(path) {
         return missing_observation(entry);
     }
     match std::fs::read_to_string(path) {
-        Ok(text) => RunArtifactObservation {
+        Ok(text) => molten_core::cluster_harness::RunArtifactObservation {
             relative_path: entry.relative_path.clone(),
             artifact_kind: entry.artifact_kind.clone(),
             observed_ref: Some(content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &text)),
-            format: ARTIFACT_FORMAT_TEXT.to_string(),
+            format: molten_core::cluster_harness::ARTIFACT_FORMAT_TEXT.to_string(),
             canonical: true,
             pass_eligible: true,
         },
@@ -1070,8 +1090,10 @@ fn observe_text_artifact(path: &Path, entry: &RunArtifactIndexEntry) -> RunArtif
     }
 }
 
-fn missing_observation(entry: &RunArtifactIndexEntry) -> RunArtifactObservation {
-    RunArtifactObservation {
+fn missing_observation(
+    entry: &molten_core::cluster_harness::RunArtifactIndexEntry,
+) -> molten_core::cluster_harness::RunArtifactObservation {
+    molten_core::cluster_harness::RunArtifactObservation {
         relative_path: entry.relative_path.clone(),
         artifact_kind: entry.artifact_kind.clone(),
         observed_ref: None,
@@ -1081,49 +1103,56 @@ fn missing_observation(entry: &RunArtifactIndexEntry) -> RunArtifactObservation 
     }
 }
 
-fn observe_unexpected_artifact(run_directory: &Path, relative_path: &str) -> RunArtifactObservation {
+fn observe_unexpected_artifact(
+    run_directory: &std::path::Path,
+    relative_path: &str,
+) -> molten_core::cluster_harness::RunArtifactObservation {
     let path = run_directory.join(relative_path);
     if relative_path.ends_with(".preserves")
         && let Ok(value) = read_preserves_path(&path)
     {
-        return RunArtifactObservation {
+        return molten_core::cluster_harness::RunArtifactObservation {
             relative_path: relative_path.to_string(),
             artifact_kind: crate::ledger::artifact_kind(&value).to_string(),
             observed_ref: crate::preserves_rail::canonical_hash(&value).ok(),
-            format: ARTIFACT_FORMAT_PRESERVES.to_string(),
+            format: molten_core::cluster_harness::ARTIFACT_FORMAT_PRESERVES.to_string(),
             canonical: true,
             pass_eligible: false,
         };
     }
     let text = std::fs::read_to_string(path).unwrap_or_default();
-    RunArtifactObservation {
+    molten_core::cluster_harness::RunArtifactObservation {
         relative_path: relative_path.to_string(),
         artifact_kind: "unexpected".to_string(),
         observed_ref: Some(content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &text)),
-        format: ARTIFACT_FORMAT_TEXT.to_string(),
+        format: molten_core::cluster_harness::ARTIFACT_FORMAT_TEXT.to_string(),
         canonical: true,
         pass_eligible: false,
     }
 }
 
-fn collect_run_files(root: &Path) -> Result<Vec<String>> {
+fn collect_run_files(root: &std::path::Path) -> crate::error::Result<Vec<String>> {
     let mut files = Vec::new();
     collect_run_files_from(root, root, &mut files)?;
     files.sort();
     Ok(files)
 }
 
-fn collect_run_files_from(root: &Path, current: &Path, files: &mut Vec<String>) -> Result<()> {
-    for entry in std::fs::read_dir(current).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        let file_type = entry.file_type().map_err(MoltenError::from)?;
+fn collect_run_files_from(
+    root: &std::path::Path,
+    current: &std::path::Path,
+    files: &mut Vec<String>,
+) -> crate::error::Result<()> {
+    for entry in std::fs::read_dir(current).map_err(crate::error::MoltenError::from)? {
+        let entry = entry.map_err(crate::error::MoltenError::from)?;
+        let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
         if file_type.is_dir() {
             collect_run_files_from(root, &entry.path(), files)?;
         } else if file_type.is_file() || file_type.is_symlink() {
             let relative = entry
                 .path()
                 .strip_prefix(root)
-                .map_err(|_| MoltenError::invalid_harness("cluster run file escaped root"))?
+                .map_err(|_| crate::error::MoltenError::invalid_harness("cluster run file escaped root"))?
                 .to_string_lossy()
                 .replace(std::path::MAIN_SEPARATOR, "/");
             files.push(relative);
@@ -1139,12 +1168,16 @@ fn allowed_unindexed_file(relative_path: &str) -> bool {
     )
 }
 
-fn add_verification_companion_diagnostic(assessment: &mut RunDirectoryAssessment, diagnostic: &str, observed: &str) {
-    assessment.decision = RUN_DIRECTORY_DENY.to_string();
+fn add_verification_companion_diagnostic(
+    assessment: &mut molten_core::cluster_harness::RunDirectoryAssessment,
+    diagnostic: &str,
+    observed: &str,
+) {
+    assessment.decision = molten_core::cluster_harness::RUN_DIRECTORY_DENY.to_string();
     assessment.diagnostics.push(diagnostic.to_string());
     assessment.diagnostics.sort();
     assessment.diagnostics.dedup();
-    assessment.first_divergence = Some(FirstDivergence {
+    assessment.first_divergence = Some(molten_core::cluster_harness::FirstDivergence {
         relative_path: VERIFICATION_FILE.to_string(),
         artifact_kind: VERIFICATION_KIND.to_string(),
         expected: "matching-verification-receipt".to_string(),
@@ -1154,25 +1187,25 @@ fn add_verification_companion_diagnostic(assessment: &mut RunDirectoryAssessment
     });
 }
 
-fn write_preserves_path(path: &Path, value: &IoValue) -> Result<()> {
+fn write_preserves_path(path: &std::path::Path, value: &IoValue) -> crate::error::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
     }
-    std::fs::write(path, crate::preserves_rail::to_text(value)?).map_err(MoltenError::from)
+    std::fs::write(path, crate::preserves_rail::to_text(value)?).map_err(crate::error::MoltenError::from)
 }
 
-fn read_preserves_path(path: &Path) -> Result<IoValue> {
+fn read_preserves_path(path: &std::path::Path) -> crate::error::Result<IoValue> {
     if !is_regular_file_without_symlink(path) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "expected regular non-symlink Preserves file at {}",
             path.display()
         )));
     }
-    let text = std::fs::read_to_string(path).map_err(MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(crate::error::MoltenError::from)?;
     crate::preserves_rail::parse_text(&text)
 }
 
-fn is_regular_file_without_symlink(path: &Path) -> bool {
+fn is_regular_file_without_symlink(path: &std::path::Path) -> bool {
     std::fs::symlink_metadata(path)
         .is_ok_and(|metadata| metadata.file_type().is_file() && !metadata.file_type().is_symlink())
 }

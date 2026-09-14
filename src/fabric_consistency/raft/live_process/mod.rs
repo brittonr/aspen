@@ -1,17 +1,4 @@
-use std::collections::BTreeSet;
-use std::path::Path;
-use std::path::PathBuf;
-use std::time::Duration;
-
-use preserves::IOValue;
-
-use super::tests::NODE_A;
-use super::tests::NODE_B;
-use super::tests::NODE_C;
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric_transport::CanonicalCrossProcessEndpoint;
 
 mod child;
 mod process;
@@ -78,11 +65,14 @@ fn three_process_live_raft_elects_commits_reads_and_catches_up() {
     let run_directory = workspace.to_path_buf();
     let executable = std::env::current_exe().expect("current test executable");
     let mut children = [
-        process::ChildGuard::spawn(&executable, &run_directory, NODE_A, ChildMode::Fresh).expect("node A child"),
-        process::ChildGuard::spawn(&executable, &run_directory, NODE_B, ChildMode::Fresh).expect("node B child"),
-        process::ChildGuard::spawn(&executable, &run_directory, NODE_C, ChildMode::Fresh).expect("node C child"),
+        process::ChildGuard::spawn(&executable, &run_directory, super::tests::NODE_A, ChildMode::Fresh)
+            .expect("node A child"),
+        process::ChildGuard::spawn(&executable, &run_directory, super::tests::NODE_B, ChildMode::Fresh)
+            .expect("node B child"),
+        process::ChildGuard::spawn(&executable, &run_directory, super::tests::NODE_C, ChildMode::Fresh)
+            .expect("node C child"),
     ];
-    let child_process_ids = children.iter().map(process::ChildGuard::id).collect::<BTreeSet<_>>();
+    let child_process_ids = children.iter().map(process::ChildGuard::id).collect::<std::collections::BTreeSet<_>>();
     assert_eq!(child_process_ids.len(), STATIC_VOTER_COUNT);
     wait_for_nodes(&run_directory, "ready").expect("child readiness");
     write_signal(&run_directory.join(START_FILE), "start").expect("start signal");
@@ -94,7 +84,7 @@ fn three_process_live_raft_elects_commits_reads_and_catches_up() {
     let active_receipts = read_checkpoint_receipts(&run_directory);
     assert_active_process_receipts(&active_receipts);
     let mut false_quorum = active_receipts[0].clone();
-    false_quorum.commit_quorum_members = vec![NODE_A.to_string(), NODE_A.to_string()];
+    false_quorum.commit_quorum_members = vec![super::tests::NODE_A.to_string(), super::tests::NODE_A.to_string()];
     let false_quorum_error =
         validate_process_commit_quorum(&false_quorum).expect_err("duplicate process quorum evidence must deny");
     assert!(false_quorum_error.to_string().contains("duplicate acknowledgements"));
@@ -104,11 +94,15 @@ fn three_process_live_raft_elects_commits_reads_and_catches_up() {
     clear_phase_files(&run_directory).expect("restart phase cleanup");
 
     let mut recovered = [
-        process::ChildGuard::spawn(&executable, &run_directory, NODE_A, ChildMode::Recover).expect("recovered node A"),
-        process::ChildGuard::spawn(&executable, &run_directory, NODE_B, ChildMode::Recover).expect("recovered node B"),
-        process::ChildGuard::spawn(&executable, &run_directory, NODE_C, ChildMode::Recover).expect("recovered node C"),
+        process::ChildGuard::spawn(&executable, &run_directory, super::tests::NODE_A, ChildMode::Recover)
+            .expect("recovered node A"),
+        process::ChildGuard::spawn(&executable, &run_directory, super::tests::NODE_B, ChildMode::Recover)
+            .expect("recovered node B"),
+        process::ChildGuard::spawn(&executable, &run_directory, super::tests::NODE_C, ChildMode::Recover)
+            .expect("recovered node C"),
     ];
-    let recovered_process_ids = recovered.iter().map(process::ChildGuard::id).collect::<BTreeSet<_>>();
+    let recovered_process_ids =
+        recovered.iter().map(process::ChildGuard::id).collect::<std::collections::BTreeSet<_>>();
     assert_eq!(recovered_process_ids.len(), STATIC_VOTER_COUNT);
     assert!(child_process_ids.is_disjoint(&recovered_process_ids));
     wait_for_nodes(&run_directory, "ready").expect("recovered child readiness");
@@ -119,7 +113,9 @@ fn three_process_live_raft_elects_commits_reads_and_catches_up() {
         panic!("recovery receipts: {error}\n{}", child_diagnostics(&run_directory));
     }
     for child in &mut recovered {
-        child.wait_success(Duration::from_secs(CHILD_TIMEOUT_SECONDS)).expect("clean recovered child exit");
+        child
+            .wait_success(std::time::Duration::from_secs(CHILD_TIMEOUT_SECONDS))
+            .expect("clean recovered child exit");
     }
     let recovery_receipts = read_terminal_receipts(&run_directory);
     assert_recovery_receipts(&recovery_receipts);
@@ -132,28 +128,29 @@ fn distinct_process_receipt_parser_rejects_wrong_schema() {
     assert!(error.to_string().contains("participant receipt"));
 }
 
-fn child_invocation_from_environment() -> Result<Option<(String, PathBuf, ChildMode)>> {
+fn child_invocation_from_environment() -> crate::error::Result<Option<(String, std::path::PathBuf, ChildMode)>> {
     let Some(node_id) = std::env::var_os(CHILD_NODE_ENV) else {
         return Ok(None);
     };
-    let run_directory = std::env::var_os(CHILD_RUN_DIRECTORY_ENV)
-        .ok_or_else(|| MoltenError::invalid_harness("live Raft child is missing its explicit run directory"))?;
+    let run_directory = std::env::var_os(CHILD_RUN_DIRECTORY_ENV).ok_or_else(|| {
+        crate::error::MoltenError::invalid_harness("live Raft child is missing its explicit run directory")
+    })?;
     let node_id = node_id
         .into_string()
-        .map_err(|_| MoltenError::invalid_harness("live Raft child node ID is not UTF-8"))?;
-    if ![NODE_A, NODE_B, NODE_C].contains(&node_id.as_str()) {
-        return Err(MoltenError::invalid_harness("live Raft child node is outside static membership"));
+        .map_err(|_| crate::error::MoltenError::invalid_harness("live Raft child node ID is not UTF-8"))?;
+    if ![super::tests::NODE_A, super::tests::NODE_B, super::tests::NODE_C].contains(&node_id.as_str()) {
+        return Err(crate::error::MoltenError::invalid_harness("live Raft child node is outside static membership"));
     }
     let mode = match std::env::var(CHILD_MODE_ENV).as_deref() {
         Ok("fresh") => ChildMode::Fresh,
         Ok("recover") => ChildMode::Recover,
-        _ => return Err(MoltenError::invalid_harness("live Raft child mode is absent or invalid")),
+        _ => return Err(crate::error::MoltenError::invalid_harness("live Raft child mode is absent or invalid")),
     };
-    Ok(Some((node_id, PathBuf::from(run_directory), mode)))
+    Ok(Some((node_id, std::path::PathBuf::from(run_directory), mode)))
 }
 
-fn child_diagnostics(run_directory: &Path) -> String {
-    [NODE_A, NODE_B, NODE_C]
+fn child_diagnostics(run_directory: &std::path::Path) -> String {
+    [super::tests::NODE_A, super::tests::NODE_B, super::tests::NODE_C]
         .into_iter()
         .map(|node_id| {
             let log_path = run_directory.join(format!("{node_id}-child.log"));
@@ -167,58 +164,58 @@ fn child_diagnostics(run_directory: &Path) -> String {
         .join("\n")
 }
 
-fn wait_for_nodes(run_directory: &Path, suffix: &str) -> Result<()> {
-    for node_id in [NODE_A, NODE_B, NODE_C] {
+fn wait_for_nodes(run_directory: &std::path::Path, suffix: &str) -> crate::error::Result<()> {
+    for node_id in [super::tests::NODE_A, super::tests::NODE_B, super::tests::NODE_C] {
         wait_for_file(&run_directory.join(format!("{node_id}-{suffix}.preserves")))?;
     }
     Ok(())
 }
 
-fn wait_for_file(path: &Path) -> Result<()> {
+fn wait_for_file(path: &std::path::Path) -> crate::error::Result<()> {
     for _attempt in 0..FILE_POLL_LIMIT {
         if path.is_file() {
             return Ok(());
         }
-        std::thread::sleep(Duration::from_millis(FILE_POLL_MILLISECONDS));
+        std::thread::sleep(std::time::Duration::from_millis(FILE_POLL_MILLISECONDS));
     }
-    Err(MoltenError::invalid_harness(format!(
+    Err(crate::error::MoltenError::invalid_harness(format!(
         "timed out waiting for explicit harness file {}",
         path.display()
     )))
 }
 
-fn write_signal(path: &Path, label: &str) -> Result<()> {
+fn write_signal(path: &std::path::Path, label: &str) -> crate::error::Result<()> {
     write_value(
         path,
         &crate::preserves_rail::record("live-raft-harness-signal-v1", vec![crate::preserves_rail::string(label)]),
     )
 }
 
-fn write_value(path: &Path, value: &IOValue) -> Result<()> {
+fn write_value(path: &std::path::Path, value: &preserves::IOValue) -> crate::error::Result<()> {
     let bytes = crate::preserves_rail::canonical_bytes(value)?;
     let temporary = path.with_extension("tmp");
-    std::fs::write(&temporary, bytes).map_err(MoltenError::from)?;
-    std::fs::rename(temporary, path).map_err(MoltenError::from)
+    std::fs::write(&temporary, bytes).map_err(crate::error::MoltenError::from)?;
+    std::fs::rename(temporary, path).map_err(crate::error::MoltenError::from)
 }
 
-fn read_value(path: &Path) -> Result<IOValue> {
-    let metadata = std::fs::metadata(path).map_err(MoltenError::from)?;
+fn read_value(path: &std::path::Path) -> crate::error::Result<preserves::IOValue> {
+    let metadata = std::fs::metadata(path).map_err(crate::error::MoltenError::from)?;
     if metadata.len() > MAX_HARNESS_FILE_BYTES {
-        return Err(MoltenError::invalid_harness("live Raft harness file exceeds its byte bound"));
+        return Err(crate::error::MoltenError::invalid_harness("live Raft harness file exceeds its byte bound"));
     }
-    let bytes = std::fs::read(path).map_err(MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(crate::error::MoltenError::from)?;
     Ok(crate::preserves_rail::strict_canonical_decode(&bytes)?.value)
 }
 
-fn endpoint_path(run_directory: &Path, node_id: &str) -> PathBuf {
+fn endpoint_path(run_directory: &std::path::Path, node_id: &str) -> std::path::PathBuf {
     run_directory.join(format!("{node_id}-endpoint.preserves"))
 }
 
-fn durability_path(run_directory: &Path, node_id: &str) -> PathBuf {
+fn durability_path(run_directory: &std::path::Path, node_id: &str) -> std::path::PathBuf {
     run_directory.join(format!("{node_id}-durability"))
 }
 
-fn clear_phase_files(run_directory: &Path) -> Result<()> {
+fn clear_phase_files(run_directory: &std::path::Path) -> crate::error::Result<()> {
     for name in [
         START_FILE,
         STOP_FILE,
@@ -231,7 +228,7 @@ fn clear_phase_files(run_directory: &Path) -> Result<()> {
     ] {
         remove_file_if_present(&run_directory.join(name))?;
     }
-    for node_id in [NODE_A, NODE_B, NODE_C] {
+    for node_id in [super::tests::NODE_A, super::tests::NODE_B, super::tests::NODE_C] {
         for path in [
             endpoint_path(run_directory, node_id),
             run_directory.join(format!("{node_id}-ready.preserves")),
@@ -244,10 +241,10 @@ fn clear_phase_files(run_directory: &Path) -> Result<()> {
     Ok(())
 }
 
-fn remove_file_if_present(path: &Path) -> Result<()> {
+fn remove_file_if_present(path: &std::path::Path) -> crate::error::Result<()> {
     match std::fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(MoltenError::from(error)),
+        Err(error) => Err(crate::error::MoltenError::from(error)),
     }
 }
