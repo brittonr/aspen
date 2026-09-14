@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn deterministic_durability_commits_or_crashes_before_progress() {
-    let events = Rc::new(RefCell::new(Vec::new()));
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let manifest = manifest();
     let mut facts = FactPorts::admitted(&events);
     let instance = active(manifest.clone(), &mut facts);
@@ -35,7 +35,7 @@ fn deterministic_adapters_classify_transport_content_and_disk_faults() {
         TransferFault::UnavailableAt { call: 0 },
     ];
     for fault in faults {
-        let events = Rc::new(RefCell::new(Vec::new()));
+        let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let manifest = manifest();
         let mut facts = FactPorts::admitted(&events);
         let instance = active(manifest.clone(), &mut facts);
@@ -51,7 +51,7 @@ fn deterministic_adapters_classify_transport_content_and_disk_faults() {
         assert_eq!(transport.call_count(), 1);
     }
 
-    let events = Rc::new(RefCell::new(Vec::new()));
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let manifest = manifest();
     let mut facts = FactPorts::admitted(&events);
     let instance = active(manifest.clone(), &mut facts);
@@ -69,13 +69,13 @@ fn deterministic_adapters_classify_transport_content_and_disk_faults() {
 #[cfg(unix)]
 #[test]
 fn same_core_simulated_content_and_live_iroh_local_content_agree() {
-    let seed_events = Rc::new(RefCell::new(Vec::new()));
+    let seed_events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let mut manifest = manifest();
     let mut local_content = LocalContent::new(&mut manifest, &seed_events).expect("local content adapter");
     let mut simulated_content =
         SimulatedContent::new(&manifest, &seed_events, None).expect("simulated content adapter");
 
-    let simulated_events = Rc::new(RefCell::new(Vec::new()));
+    let simulated_events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let mut simulated_facts = FactPorts::admitted(&simulated_events);
     let simulated_instance = active(manifest.clone(), &mut simulated_facts);
     let mut simulated_effects = EffectPorts::admitted(&manifest, &simulated_events);
@@ -93,7 +93,7 @@ fn same_core_simulated_content_and_live_iroh_local_content_agree() {
     )
     .expect("simulated reconciliation");
 
-    let live_events = Rc::new(RefCell::new(Vec::new()));
+    let live_events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let mut live_facts = FactPorts::admitted(&live_events);
     let live_instance = active(manifest.clone(), &mut live_facts);
     let mut live_effects = EffectPorts::admitted(&manifest, &live_events);

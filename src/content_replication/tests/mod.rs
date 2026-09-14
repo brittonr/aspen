@@ -4,9 +4,6 @@ mod conformance_tests;
 mod content;
 mod support;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use adapters::*;
 #[cfg(unix)]
 use content::*;
@@ -81,7 +78,7 @@ fn active(manifest: Manifest, facts: &mut FactPorts) -> ServiceInstance {
 
 #[test]
 fn receiver_driven_reconcile_pins_verifies_persists_and_receipts_last() {
-    let events = Rc::new(RefCell::new(Vec::new()));
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let manifest = manifest();
     let mut facts = FactPorts::admitted(&events);
     let instance = active(manifest.clone(), &mut facts);
@@ -112,7 +109,7 @@ fn receiver_driven_reconcile_pins_verifies_persists_and_receipts_last() {
 
 #[test]
 fn current_authority_and_placement_deny_before_transfer_effects() {
-    let events = Rc::new(RefCell::new(Vec::new()));
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let manifest = manifest();
     let mut facts = FactPorts::admitted(&events);
     let instance = active(manifest.clone(), &mut facts);
@@ -147,7 +144,7 @@ fn current_authority_and_placement_deny_before_transfer_effects() {
 
 #[test]
 fn cancellation_persists_partial_progress_and_restart_reconciles() {
-    let events = Rc::new(RefCell::new(Vec::new()));
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let manifest = manifest();
     let mut facts = FactPorts::admitted(&events);
     let instance = active(manifest.clone(), &mut facts);
@@ -169,7 +166,7 @@ fn cancellation_persists_partial_progress_and_restart_reconciles() {
 
 #[test]
 fn retention_pin_denial_and_corrupt_envelope_never_advance_state() {
-    let events = Rc::new(RefCell::new(Vec::new()));
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let manifest = manifest();
     let mut facts = FactPorts::admitted(&events);
     let instance = active(manifest.clone(), &mut facts);
@@ -191,7 +188,7 @@ fn retention_pin_denial_and_corrupt_envelope_never_advance_state() {
 
 #[test]
 fn cleanup_requires_explicit_clearance_and_does_not_use_transport() {
-    let events = Rc::new(RefCell::new(Vec::new()));
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let mut manifest = manifest();
     manifest.policy.desired_replicas = 1;
     manifest.policy.minimum_verified_replicas = 1;
@@ -217,7 +214,7 @@ fn cleanup_requires_explicit_clearance_and_does_not_use_transport() {
 
 #[test]
 fn lifecycle_and_canonical_nonclaims_fail_closed() {
-    let events = Rc::new(RefCell::new(Vec::new()));
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let manifest = manifest();
     let mut facts = FactPorts::admitted(&events);
     let active = active(manifest.clone(), &mut facts);

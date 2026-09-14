@@ -8,7 +8,6 @@ mod support;
 mod validation;
 
 use super::*;
-use crate::error::Result;
 
 pub(super) struct MessageTransition {
     pub next: ReplicaState,
@@ -18,7 +17,7 @@ pub(super) struct MessageTransition {
 
 // r[impl molten.fabric_consistency.live_raft]
 // r[impl molten.fabric_consistency.group_isolation]
-pub fn apply_replica_event(state: &ReplicaState, event: ReplicaEvent) -> Result<ReplicaTransition> {
+pub fn apply_replica_event(state: &ReplicaState, event: ReplicaEvent) -> crate::error::Result<ReplicaTransition> {
     validation::validate_replica_state(state)?;
     let transition = match event {
         ReplicaEvent::ElectionTimeout { timer_ref } => election::handle_election_timeout(state, timer_ref)?,
@@ -40,7 +39,7 @@ pub fn apply_replica_event(state: &ReplicaState, event: ReplicaEvent) -> Result<
     Ok(transition)
 }
 
-fn handle_message(state: &ReplicaState, envelope: ReplicaMessageEnvelope) -> Result<ReplicaTransition> {
+fn handle_message(state: &ReplicaState, envelope: ReplicaMessageEnvelope) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_message_envelope(state, &envelope)?;
     let message = envelope.message;
@@ -70,7 +69,7 @@ fn observe_higher_term(transition: &mut MessageTransition, term: u64) {
     transition.persist_hard_state = true;
 }
 
-fn finish_message_transition(mut transition: MessageTransition) -> Result<ReplicaTransition> {
+fn finish_message_transition(mut transition: MessageTransition) -> crate::error::Result<ReplicaTransition> {
     let current_timer_ref = election_timer_ref(
         &transition.next.profile.group_binding_ref,
         &transition.next.node_id,
@@ -91,10 +90,13 @@ fn finish_message_transition(mut transition: MessageTransition) -> Result<Replic
     finish_transition(transition.next, transition.effects)
 }
 
-pub(super) fn finish_transition(next: ReplicaState, effects: Vec<ReplicaEffect>) -> Result<ReplicaTransition> {
+pub(super) fn finish_transition(
+    next: ReplicaState,
+    effects: Vec<ReplicaEffect>,
+) -> crate::error::Result<ReplicaTransition> {
     Ok(ReplicaTransition { next, effects })
 }
 
-pub(super) fn validate_recovered_replica_state(state: &ReplicaState) -> Result<()> {
+pub(super) fn validate_recovered_replica_state(state: &ReplicaState) -> crate::error::Result<()> {
     validation::validate_replica_state(state)
 }

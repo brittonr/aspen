@@ -613,6 +613,8 @@ fn collect_descendant_edits(
     edits: &mut Vec<(Range<usize>, String)>,
 ) -> Result<(), String> {
     let mut previous = String::new();
+    let mut colon_run = 0_usize;
+    let mut segments: Vec<(String, Range<usize>)> = Vec::new();
     for token in stream {
         match token {
             proc_macro2::TokenTree::Group(group) => {
@@ -626,35 +628,83 @@ fn collect_descendant_edits(
                     edits,
                 )?;
                 previous.clear();
+                colon_run = 0;
+                segments.clear();
             }
             proc_macro2::TokenTree::Ident(ident) => {
                 let name = ident.to_string();
                 let range = lines.range(ident.span());
+                // Two colons continue one path, and a single colon ends it.
+                if colon_run < 2 {
+                    segments.clear();
+                }
+                segments.push((name.clone(), range.clone()));
                 if let Some(owner) = owners.get(&name) {
-                    if previous == "::" {
-                        return Err(format!("qualified reference to `{name}` needs a manual path"));
-                    }
-                    let hidden = previous == "::"
-                        || previous == "."
+                    let hidden = previous == "."
                         || is_macro_name(source, range.end)
                         || followed_by_colon(source, range.end);
                     if !hidden {
-                        let depth = depth + module_depth(module_ranges, range.start);
-                        edits.push((range, qualify_owner(owner, depth)));
+                        record_reference(owner, &segments, depth, module_ranges, edits)?;
                     }
                 }
                 previous = name;
+                colon_run = 0;
             }
             proc_macro2::TokenTree::Punct(punct) => {
-                previous = if punct.as_char() == ':' && previous == ":" {
-                    String::from("::")
+                let character = punct.as_char();
+                previous = character.to_string();
+                if character == ':' {
+                    colon_run += 1;
                 } else {
-                    punct.as_char().to_string()
-                };
+                    colon_run = 0;
+                    segments.clear();
+                }
             }
-            proc_macro2::TokenTree::Literal(_) => previous.clear(),
+            proc_macro2::TokenTree::Literal(_) => {
+                previous.clear();
+                colon_run = 0;
+                segments.clear();
+            }
         }
     }
+    Ok(())
+}
+
+/// Record one reference to a parent import from inside a descendant module.
+///
+/// A single segment is a bare reference through `use super::*`. A path that
+/// starts at `super` and lands inside the parent tree also names the import,
+/// so the whole path is replaced. A path that climbs above the parent, or one
+/// that starts at `self`, can name something else, so it is reported.
+fn record_reference(
+    owner: &str,
+    segments: &[(String, Range<usize>)],
+    depth: usize,
+    module_ranges: &[Range<usize>],
+    edits: &mut Vec<(Range<usize>, String)>,
+) -> Result<(), String> {
+    let Some((_, last)) = segments.last() else {
+        return Ok(());
+    };
+    if segments.len() == 1 {
+        let adjusted = depth + module_depth(module_ranges, last.start);
+        edits.push((last.clone(), qualify_owner(owner, adjusted)));
+        return Ok(());
+    }
+    let lead = segments[0].0.as_str();
+    if lead != "super" && lead != "self" {
+        return Ok(());
+    }
+    let supers = segments.iter().take_while(|(name, _)| name == "super").count();
+    if lead == "self" || supers > depth {
+        return Err(format!(
+            "qualified reference through `{lead}` to `{}` needs a manual path",
+            segments.last().map(|(name, _)| name.clone()).unwrap_or_default()
+        ));
+    }
+    let start = segments[0].1.start;
+    let adjusted = depth + module_depth(module_ranges, start);
+    edits.push((start..last.end, qualify_owner(owner, adjusted)));
     Ok(())
 }
 
@@ -1183,8 +1233,18 @@ impl Holder {
         return Err(format!("self test used the wrong descendant depth in\n{output}"));
     }
     let qualified = "fn f(value: super::Addr) -> usize {\n    let _ = value;\n    0\n}\n";
-    if rewrite_descendant("src/addr/route/child.rs", 1, qualified, &owners).is_ok() {
-        return Err(String::from("self test accepted a qualified descendant reference"));
+    let (output, edits) = rewrite_descendant("src/addr/route/child.rs", 1, qualified, &owners)?;
+    if edits != 1 || !output.contains("value: super::super::Addr") {
+        return Err(format!("self test did not replace a qualified descendant path in\n{output}"));
+    }
+    let outer = "fn f(value: super::super::Addr) -> usize {\n    let _ = value;\n    0\n}\n";
+    if rewrite_descendant("src/addr/route/child.rs", 1, outer, &owners).is_ok() {
+        return Err(String::from("self test accepted a path above the parent"));
+    }
+    let unrelated = "fn f(value: crate::addr::Addr) -> usize {\n    let _ = value;\n    0\n}\n";
+    let (output, edits) = rewrite_descendant("src/addr/route/child.rs", 1, unrelated, &owners)?;
+    if edits != 0 || !output.contains("value: crate::addr::Addr") {
+        return Err(format!("self test rewrote an unrelated absolute path in\n{output}"));
     }
     let shadowed_child = "fn f() {\n    let Addr = 1;\n    let _ = Addr;\n}\n";
     if rewrite_descendant("src/addr/route/child.rs", 1, shadowed_child, &owners).is_ok() {
