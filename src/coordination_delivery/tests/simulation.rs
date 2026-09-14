@@ -1,5 +1,4 @@
 use molten_core::coordination_delivery::*;
-use molten_core::fabric_simulation::SimulationFaultKind;
 
 use super::super::*;
 use super::support::*;
@@ -47,7 +46,7 @@ fn crash_restart_preserves_claim_and_partitioned_ack_cannot_complete_it() {
     let trace = run_delivery_simulation(&manifest, &policy, &time, state, &[
         DeliverySimulationAction::CrashRestart,
         DeliverySimulationAction::FaultedRequest {
-            fault: SimulationFaultKind::Partition,
+            fault: molten_core::fabric_simulation::SimulationFaultKind::Partition,
             request: partitioned_ack,
         },
         DeliverySimulationAction::Request(valid_ack),
@@ -70,7 +69,7 @@ fn duplicate_fault_reuses_the_same_core_operation_record() {
     let initial = DeliveryState::empty(QUEUE_ID, manifest.policy_ref.clone(), SERVICE_GENERATION, CONSISTENCY_EPOCH);
     let trace =
         run_delivery_simulation(&manifest, &policy, &time, initial, &[DeliverySimulationAction::FaultedRequest {
-            fault: SimulationFaultKind::Duplicate,
+            fault: molten_core::fabric_simulation::SimulationFaultKind::Duplicate,
             request: enqueue_request(&manifest, '1'),
         }])
         .expect("duplicate simulation");
@@ -87,11 +86,11 @@ fn unsupported_fault_is_a_bounded_error_not_a_private_scheduler() {
     let initial = DeliveryState::empty(QUEUE_ID, manifest.policy_ref.clone(), SERVICE_GENERATION, CONSISTENCY_EPOCH);
     let result =
         run_delivery_simulation(&manifest, &policy, &time, initial, &[DeliverySimulationAction::FaultedRequest {
-            fault: SimulationFaultKind::Reorder,
+            fault: molten_core::fabric_simulation::SimulationFaultKind::Reorder,
             request: enqueue_request(&manifest, '1'),
         }]);
     assert_eq!(
         result.expect_err("unsupported fault"),
-        DeliverySimulationError::UnsupportedFault(SimulationFaultKind::Reorder)
+        DeliverySimulationError::UnsupportedFault(molten_core::fabric_simulation::SimulationFaultKind::Reorder)
     );
 }

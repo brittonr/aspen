@@ -1,8 +1,3 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
-use crate::fabric_consistency::ConsistencyReadMode;
-
 pub const STATIC_VOTER_COUNT: usize = 3;
 pub const STATIC_QUORUM_COUNT: usize = 2;
 pub const MAX_REPLICA_LOG_ENTRIES: usize = 4_096;
@@ -100,7 +95,7 @@ pub struct ReplicaSnapshot {
     pub last_included_index: u64,
     pub last_included_term: u64,
     pub application_state_ref: String,
-    pub completed_requests: BTreeMap<String, u64>,
+    pub completed_requests: std::collections::BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -218,7 +213,7 @@ pub struct PendingReplicaRead {
     pub request_ref: String,
     pub term: u64,
     pub required_index: u64,
-    pub acknowledgements: BTreeSet<String>,
+    pub acknowledgements: std::collections::BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -246,7 +241,7 @@ pub enum ReplicaEvent {
     },
     Read {
         request_ref: String,
-        mode: ConsistencyReadMode,
+        mode: crate::fabric_consistency::ConsistencyReadMode,
     },
     CreateSnapshot {
         application_state_ref: String,
@@ -334,7 +329,7 @@ pub enum ReplicaEffect {
     },
     ReadOutcome {
         request_ref: String,
-        mode: ConsistencyReadMode,
+        mode: crate::fabric_consistency::ConsistencyReadMode,
         disposition: ReadDisposition,
         observed_index: u64,
     },
@@ -359,11 +354,11 @@ pub struct ReplicaState {
     pub commit_index: u64,
     pub last_applied: u64,
     pub snapshot: Option<ReplicaSnapshot>,
-    pub completed_requests: BTreeMap<String, u64>,
-    pub pending_reads: BTreeMap<String, PendingReplicaRead>,
-    pub votes_received: BTreeSet<String>,
-    pub next_index: BTreeMap<String, u64>,
-    pub match_index: BTreeMap<String, u64>,
+    pub completed_requests: std::collections::BTreeMap<String, u64>,
+    pub pending_reads: std::collections::BTreeMap<String, PendingReplicaRead>,
+    pub votes_received: std::collections::BTreeSet<String>,
+    pub next_index: std::collections::BTreeMap<String, u64>,
+    pub match_index: std::collections::BTreeMap<String, u64>,
     pub quorum_confirmed_term: Option<u64>,
 }
 

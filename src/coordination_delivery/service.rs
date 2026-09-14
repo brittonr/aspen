@@ -1,5 +1,4 @@
 use molten_core::coordination_delivery::*;
-use molten_core::fabric_time::AdmittedTimeProfile;
 
 use super::*;
 
@@ -7,7 +6,7 @@ use super::*;
 pub struct DeliveryServiceRequest<'a> {
     pub manifest: &'a DeliveryManifest,
     pub policy: &'a DeliveryPolicy,
-    pub time_profile: &'a AdmittedTimeProfile,
+    pub time_profile: &'a molten_core::fabric_time::AdmittedTimeProfile,
     pub host_binding: &'a DeliveryHostBindingFacts,
     pub expected: ExpectedDeliveryState,
     pub request: &'a DeliveryRequest,

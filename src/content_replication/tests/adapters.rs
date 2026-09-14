@@ -2,7 +2,6 @@ use molten_core::content_replication::*;
 
 use super::super::*;
 use super::support::*;
-use crate::error::Result;
 
 pub struct Content {
     pub inventory: Inventory,
@@ -12,12 +11,16 @@ pub struct Content {
 }
 
 impl ContentPort for Content {
-    fn inventory(&mut self, _manifest: &Manifest) -> Result<Inventory> {
+    fn inventory(&mut self, _manifest: &Manifest) -> crate::error::Result<Inventory> {
         self.events.borrow_mut().push("inventory");
         Ok(self.inventory.clone())
     }
 
-    fn verify(&mut self, action: &Action, envelope: &TransferEnvelope) -> Result<VerificationObservation> {
+    fn verify(
+        &mut self,
+        action: &Action,
+        envelope: &TransferEnvelope,
+    ) -> crate::error::Result<VerificationObservation> {
         self.events.borrow_mut().push("verify");
         Ok(VerificationObservation {
             verification_ref: digest('1'),
@@ -41,7 +44,7 @@ impl ContentPort for Content {
         })
     }
 
-    fn cleanup(&mut self, _action: &Action, _admission: &CleanupObservation) -> Result<String> {
+    fn cleanup(&mut self, _action: &Action, _admission: &CleanupObservation) -> crate::error::Result<String> {
         self.events.borrow_mut().push("cleanup");
         self.cleanup_count = self.cleanup_count.saturating_add(1);
         Ok(digest('2'))
@@ -57,7 +60,7 @@ pub struct Transport {
 }
 
 impl TransportPort for Transport {
-    fn fetch(&mut self, action: &Action) -> Result<TransferOutcome> {
+    fn fetch(&mut self, action: &Action) -> crate::error::Result<TransferOutcome> {
         self.events.borrow_mut().push("transport");
         self.calls = self.calls.saturating_add(1);
         let reference = digest('3');
@@ -113,19 +116,19 @@ pub struct Durable {
 }
 
 impl DurablePort for Durable {
-    fn load_history(&mut self, _manifest: &Manifest) -> Result<Vec<PriorOperation>> {
+    fn load_history(&mut self, _manifest: &Manifest) -> crate::error::Result<Vec<PriorOperation>> {
         self.events.borrow_mut().push("history");
         Ok(self.history.clone())
     }
 
-    fn store_operation(&mut self, operation: &PriorOperation) -> Result<String> {
+    fn store_operation(&mut self, operation: &PriorOperation) -> crate::error::Result<String> {
         self.events.borrow_mut().push("store-operation");
         self.stored.push(operation.clone());
         self.history.push(operation.clone());
         Ok(digest('4'))
     }
 
-    fn store_status(&mut self, _status: &CanonicalReplicationRecord) -> Result<String> {
+    fn store_status(&mut self, _status: &CanonicalReplicationRecord) -> crate::error::Result<String> {
         self.events.borrow_mut().push("store-status");
         self.status_count = self.status_count.saturating_add(1);
         Ok(digest('5'))
@@ -139,7 +142,7 @@ pub struct Retention {
 }
 
 impl RetentionPort for Retention {
-    fn acquire_pin(&mut self, action: &Action) -> Result<PinObservation> {
+    fn acquire_pin(&mut self, action: &Action) -> crate::error::Result<PinObservation> {
         self.events.borrow_mut().push("pin");
         Ok(PinObservation {
             pin_ref: digest('6'),
@@ -150,7 +153,7 @@ impl RetentionPort for Retention {
         })
     }
 
-    fn authorize_cleanup(&mut self, action: &Action) -> Result<CleanupObservation> {
+    fn authorize_cleanup(&mut self, action: &Action) -> crate::error::Result<CleanupObservation> {
         self.events.borrow_mut().push("authorize-cleanup");
         Ok(CleanupObservation {
             cleanup_ref: digest('7'),
@@ -167,17 +170,17 @@ pub struct Observations {
 }
 
 impl ObservationPort for Observations {
-    fn publish_plan(&mut self, _plan: &CanonicalReplicationRecord) -> Result<()> {
+    fn publish_plan(&mut self, _plan: &CanonicalReplicationRecord) -> crate::error::Result<()> {
         self.events.borrow_mut().push("publish-plan");
         Ok(())
     }
 
-    fn publish_operation(&mut self, _operation: &CanonicalReplicationRecord) -> Result<()> {
+    fn publish_operation(&mut self, _operation: &CanonicalReplicationRecord) -> crate::error::Result<()> {
         self.events.borrow_mut().push("publish-operation");
         Ok(())
     }
 
-    fn publish_status(&mut self, _status: &CanonicalReplicationRecord) -> Result<()> {
+    fn publish_status(&mut self, _status: &CanonicalReplicationRecord) -> crate::error::Result<()> {
         self.events.borrow_mut().push("publish-status");
         Ok(())
     }
@@ -189,7 +192,7 @@ pub struct Receipts {
 }
 
 impl ReceiptPort for Receipts {
-    fn publish_receipt(&mut self, _receipt: &CanonicalReplicationRecord) -> Result<()> {
+    fn publish_receipt(&mut self, _receipt: &CanonicalReplicationRecord) -> crate::error::Result<()> {
         self.events.borrow_mut().push("publish-receipt");
         self.count = self.count.saturating_add(1);
         Ok(())

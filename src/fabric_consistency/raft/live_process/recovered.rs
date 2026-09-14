@@ -1,10 +1,9 @@
 use super::*;
-use crate::fabric_consistency::raft::live_cluster;
 
 pub(super) async fn run(
     node_id: String,
     endpoint_identity: String,
-    mut node: live_cluster::LiveNode,
+    mut node: crate::fabric_consistency::raft::live_cluster::LiveNode,
     run_directory: &Path,
 ) -> Result<()> {
     let listener = node.listener.take().ok_or_else(|| MoltenError::invalid_harness("recovered listener is absent"))?;
@@ -48,7 +47,7 @@ pub(super) async fn run(
     Err(MoltenError::invalid_harness("recovered replica exhausted its bounded event loop"))
 }
 
-async fn send_stale_leader_frame(node: &mut live_cluster::LiveNode) -> Result<()> {
+async fn send_stale_leader_frame(node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode) -> Result<()> {
     let state = node.service.state();
     let envelope = ReplicaMessageEnvelope {
         group_binding_ref: state.profile.group_binding_ref.clone(),

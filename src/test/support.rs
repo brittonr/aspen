@@ -1,10 +1,3 @@
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::path::Component;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
-
 const MAX_WORKSPACE_LABEL_BYTES: usize = 64;
 const MAX_WORKSPACE_PATH_COMPONENTS: usize = 32;
 const WORKSPACE_ROLE_COUNT: usize = 7;
@@ -76,18 +69,18 @@ workspace_role_marker!(AdversarialRole, WorkspaceRole::Adversarial);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WorkspacePath {
-    relative: PathBuf,
+    relative: std::path::PathBuf,
 }
 
 impl WorkspacePath {
     pub(crate) fn parse(value: &str) -> TestSupportResult<Self> {
         validate_workspace_path(value)?;
         Ok(Self {
-            relative: PathBuf::from(value),
+            relative: std::path::PathBuf::from(value),
         })
     }
 
-    fn as_path(&self) -> &Path {
+    fn as_path(&self) -> &std::path::Path {
         &self.relative
     }
 
@@ -100,7 +93,7 @@ struct WorkspaceInner {
     temp_dir: cap_tempfile::TempDir,
     workspace_id: blake3::Hash,
     logical_label: String,
-    diagnostic_host_path: PathBuf,
+    diagnostic_host_path: std::path::PathBuf,
 }
 
 impl std::fmt::Debug for WorkspaceInner {
@@ -115,7 +108,7 @@ impl std::fmt::Debug for WorkspaceInner {
 
 #[derive(Clone)]
 pub(crate) struct TestWorkspace {
-    inner: Arc<WorkspaceInner>,
+    inner: std::sync::Arc<WorkspaceInner>,
 }
 
 impl std::fmt::Debug for TestWorkspace {
@@ -139,7 +132,7 @@ impl TestWorkspace {
             temp_dir.create_dir_all(role.as_str())?;
         }
         Ok(Self {
-            inner: Arc::new(WorkspaceInner {
+            inner: std::sync::Arc::new(WorkspaceInner {
                 temp_dir,
                 workspace_id,
                 logical_label: logical_label.to_string(),
@@ -211,16 +204,16 @@ impl TestWorkspace {
         let dir = self.inner.temp_dir.open_dir(R::ROLE.as_str())?;
         Ok(TestRoot {
             dir,
-            inner: Arc::clone(&self.inner),
-            marker: PhantomData,
+            inner: std::sync::Arc::clone(&self.inner),
+            marker: std::marker::PhantomData,
         })
     }
 }
 
 pub(crate) struct TestRoot<R: WorkspaceRoleMarker> {
     dir: cap_std::fs::Dir,
-    inner: Arc<WorkspaceInner>,
-    marker: PhantomData<R>,
+    inner: std::sync::Arc<WorkspaceInner>,
+    marker: std::marker::PhantomData<R>,
 }
 
 impl<R: WorkspaceRoleMarker> std::fmt::Debug for TestRoot<R> {
@@ -294,12 +287,12 @@ impl ProcessPathBridge<'_> {
 
 #[derive(Clone)]
 pub(crate) struct ChildProcessPlan {
-    diagnostic_path: PathBuf,
+    diagnostic_path: std::path::PathBuf,
     logical_root: String,
 }
 
 impl ChildProcessPlan {
-    pub(crate) fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &std::path::Path {
         &self.diagnostic_path
     }
 
@@ -348,16 +341,16 @@ impl std::fmt::Debug for ProcessWorkspace {
     }
 }
 
-impl Deref for ProcessWorkspace {
-    type Target = Path;
+impl std::ops::Deref for ProcessWorkspace {
+    type Target = std::path::Path;
 
     fn deref(&self) -> &Self::Target {
         self.plan.path()
     }
 }
 
-impl AsRef<Path> for ProcessWorkspace {
-    fn as_ref(&self) -> &Path {
+impl AsRef<std::path::Path> for ProcessWorkspace {
+    fn as_ref(&self) -> &std::path::Path {
         self.plan.path()
     }
 }
@@ -435,7 +428,7 @@ impl AdversarialSetup<'_> {
         &self,
         target: &TestRoot<R>,
         link: &WorkspacePath,
-        destination: &Path,
+        destination: &std::path::Path,
     ) -> TestSupportResult<()> {
         ensure_workspace_owns_root(self.workspace, target)?;
         create_parent(&target.dir, link.as_path())?;
@@ -444,7 +437,10 @@ impl AdversarialSetup<'_> {
     }
 }
 
-pub(crate) fn validate_portable_evidence(fields: &[&str], diagnostic_paths: &[&Path]) -> TestSupportResult<()> {
+pub(crate) fn validate_portable_evidence(
+    fields: &[&str],
+    diagnostic_paths: &[&std::path::Path],
+) -> TestSupportResult<()> {
     for field in fields {
         for diagnostic_path in diagnostic_paths {
             let rendered = diagnostic_path.to_string_lossy();
@@ -500,9 +496,9 @@ fn validate_workspace_path(value: &str) -> TestSupportResult<()> {
         return Err(invalid_input("test workspace path must be a portable relative path"));
     }
     let mut component_count = 0usize;
-    for component in Path::new(value).components() {
+    for component in std::path::Path::new(value).components() {
         match component {
-            Component::Normal(_) => {
+            std::path::Component::Normal(_) => {
                 component_count = component_count
                     .checked_add(1)
                     .ok_or_else(|| invalid_input("test workspace path component count overflow"))?;
@@ -510,8 +506,8 @@ fn validate_workspace_path(value: &str) -> TestSupportResult<()> {
                     return Err(invalid_input("test workspace path has too many components"));
                 }
             }
-            Component::CurDir => {}
-            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_) => {
                 return Err(invalid_input("test workspace path must not escape its typed root"));
             }
         }
@@ -522,7 +518,7 @@ fn validate_workspace_path(value: &str) -> TestSupportResult<()> {
     Ok(())
 }
 
-fn create_parent(dir: &cap_std::fs::Dir, path: &Path) -> TestSupportResult<()> {
+fn create_parent(dir: &cap_std::fs::Dir, path: &std::path::Path) -> TestSupportResult<()> {
     let Some(parent) = path.parent() else {
         return Ok(());
     };
@@ -532,7 +528,7 @@ fn create_parent(dir: &cap_std::fs::Dir, path: &Path) -> TestSupportResult<()> {
     dir.create_dir_all(parent)
 }
 
-fn workspace_identity(logical_label: &str, diagnostic_host_path: &Path) -> blake3::Hash {
+fn workspace_identity(logical_label: &str, diagnostic_host_path: &std::path::Path) -> blake3::Hash {
     let mut hasher = blake3::Hasher::new();
     hasher.update(logical_label.as_bytes());
     hasher.update(&[0]);
@@ -541,15 +537,15 @@ fn workspace_identity(logical_label: &str, diagnostic_host_path: &Path) -> blake
 }
 
 #[cfg(unix)]
-fn diagnostic_host_path(dir: &cap_std::fs::Dir) -> TestSupportResult<PathBuf> {
+fn diagnostic_host_path(dir: &cap_std::fs::Dir) -> TestSupportResult<std::path::PathBuf> {
     use std::os::fd::AsRawFd;
 
-    let descriptor_path = PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd()));
+    let descriptor_path = std::path::PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd()));
     std::fs::read_link(descriptor_path)
 }
 
 #[cfg(not(unix))]
-fn diagnostic_host_path(_dir: &cap_std::fs::Dir) -> TestSupportResult<PathBuf> {
+fn diagnostic_host_path(_dir: &cap_std::fs::Dir) -> TestSupportResult<std::path::PathBuf> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "test child-process path bridge is not implemented for this host",

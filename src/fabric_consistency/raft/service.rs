@@ -1,14 +1,8 @@
-use std::time::Duration;
-
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric_transport::CrossProcessFrameEvidence;
-use crate::fabric_transport::IrohCrossProcessListener;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaIngressExecution {
-    pub transport_evidence: CrossProcessFrameEvidence,
+    pub transport_evidence: crate::fabric_transport::CrossProcessFrameEvidence,
     pub execution: ReplicaExecutionOutcome,
 }
 
@@ -26,17 +20,19 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplicaService<P> {
         plan: ReplicaStartPlan,
         mut ports: P,
         inbox: tokio::sync::mpsc::UnboundedReceiver<ReplicaEvent>,
-    ) -> Result<Self> {
+    ) -> crate::error::Result<Self> {
         ports.validate_start(&plan)?;
         let evidence = ReplicaEvidenceLedger::new(&plan)?;
         let startup = execute_scoped_replica_start(&plan, &mut ports).await;
         let (state, startup_observations) = match startup {
             ReplicaExecutionOutcome::Applied(executed) => (executed.next, executed.observations),
             ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-                return Err(MoltenError::invalid_harness(format!("live Raft startup denied: {diagnostic}")));
+                return Err(crate::error::MoltenError::invalid_harness(format!(
+                    "live Raft startup denied: {diagnostic}"
+                )));
             }
             ReplicaExecutionOutcome::Failed(failed) => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::MoltenError::invalid_harness(format!(
                     "live Raft startup effect {} failed: {}",
                     failed.failed_kind.as_str(),
                     failed.diagnostic
@@ -77,7 +73,7 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplicaService<P> {
         &self.evidence
     }
 
-    pub fn aggregate_health_evidence(&self) -> Result<ReplicaAggregateHealthEvidence> {
+    pub fn aggregate_health_evidence(&self) -> crate::error::Result<ReplicaAggregateHealthEvidence> {
         self.evidence.aggregate_health(&self.state, self.production_admitted)
     }
 
@@ -94,23 +90,23 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplicaService<P> {
         outcome
     }
 
-    pub async fn run_next(&mut self, timeout: Duration) -> Result<ReplicaExecutionOutcome> {
+    pub async fn run_next(&mut self, timeout: std::time::Duration) -> crate::error::Result<ReplicaExecutionOutcome> {
         if timeout.is_zero() {
-            return Err(MoltenError::invalid_harness("live Raft inbox timeout must be positive"));
+            return Err(crate::error::MoltenError::invalid_harness("live Raft inbox timeout must be positive"));
         }
         let event = tokio::time::timeout(timeout, self.inbox.recv())
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Raft inbox receive timed out"))?
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft inbox closed"))?;
+            .map_err(|_| crate::error::MoltenError::invalid_harness("live Raft inbox receive timed out"))?
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Raft inbox closed"))?;
         Ok(self.handle_event(event).await)
     }
 
     pub async fn accept_one(
         &mut self,
-        listener: &mut IrohCrossProcessListener,
+        listener: &mut crate::fabric_transport::IrohCrossProcessListener,
         session_ref: &str,
-        timeout: Duration,
-    ) -> Result<ReplicaIngressExecution> {
+        timeout: std::time::Duration,
+    ) -> crate::error::Result<ReplicaIngressExecution> {
         let received = receive_replica_event(listener, session_ref, timeout).await?;
         let execution = self.handle_event(received.event).await;
         Ok(ReplicaIngressExecution {

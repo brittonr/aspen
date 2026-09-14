@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use super::*;
 
 const GENERATION_ONE: u64 = 1;
@@ -488,7 +486,7 @@ fn capability_rooted_durable_scan_detects_corruption_partial_and_overbound_witho
 }
 
 struct FixtureContentSource {
-    values: BTreeMap<String, Vec<u8>>,
+    values: std::collections::BTreeMap<String, Vec<u8>>,
 }
 
 impl ReadOnlyContentSource for FixtureContentSource {
@@ -523,7 +521,7 @@ fn content_verification_and_simulation_sources_share_read_only_scan_semantics() 
     let mut plan = integrity_plan(bytes);
     plan.targets[0].kind = IntegrityTargetKind::Content;
     let source = FixtureContentSource {
-        values: BTreeMap::from([(plan.targets[0].item_ref.clone(), bytes.to_vec())]),
+        values: std::collections::BTreeMap::from([(plan.targets[0].item_ref.clone(), bytes.to_vec())]),
     };
     let execution = scan_content_source(&profile(), &plan, &source, &ScanShellControl {
         max_items: MAX_SCAN_ITEMS,

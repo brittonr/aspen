@@ -1,11 +1,4 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::net::SocketAddr;
-use std::time::Duration;
-
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::fabric_transport::*;
 
 const MAX_EFFECT_TIMEOUT_SECONDS: u64 = 300;
@@ -13,11 +6,11 @@ const MAX_EFFECT_TIMEOUT_SECONDS: u64 = 300;
 #[derive(Debug, Clone)]
 pub struct IrohCrossProcessEffectClientConfig {
     pub capability: IrohEndpointCapability,
-    pub bind_addr: SocketAddr,
+    pub bind_addr: std::net::SocketAddr,
     pub endpoint: CanonicalCrossProcessEndpoint,
     pub expected: ExpectedEndpointBinding,
     pub admission: EndpointAdmissionState,
-    pub timeout: Duration,
+    pub timeout: std::time::Duration,
 }
 
 pub struct RegisteredCrossProcessTransportEffectPort {
@@ -25,9 +18,9 @@ pub struct RegisteredCrossProcessTransportEffectPort {
     profile: CanonicalTransportProfile,
     protocol: ProtocolDescriptor,
     client: IrohCrossProcessEffectClientConfig,
-    payloads: BTreeMap<String, Vec<u8>>,
+    payloads: std::collections::BTreeMap<String, Vec<u8>>,
     queued_payload_bytes: u64,
-    routed_requests: BTreeSet<String>,
+    routed_requests: std::collections::BTreeSet<String>,
     latest_frame_evidence: Option<CrossProcessFrameEvidence>,
 }
 
@@ -39,7 +32,7 @@ impl RegisteredCrossProcessTransportEffectPort {
         profile: CanonicalTransportProfile,
         protocol: ProtocolDescriptor,
         client: IrohCrossProcessEffectClientConfig,
-    ) -> Result<Self> {
+    ) -> crate::error::Result<Self> {
         validate_effect_client_config(&profile, &protocol, &client)?;
         let adapter = IrohTransportAdapter::new(profile.clone())?;
         let control = RegisteredTransportEffectPort::new(adapter, context, profile.clone())?;
@@ -48,29 +41,34 @@ impl RegisteredCrossProcessTransportEffectPort {
             profile,
             protocol,
             client,
-            payloads: BTreeMap::new(),
+            payloads: std::collections::BTreeMap::new(),
             queued_payload_bytes: 0,
-            routed_requests: BTreeSet::new(),
+            routed_requests: std::collections::BTreeSet::new(),
             latest_frame_evidence: None,
         })
     }
 
-    pub fn register(&mut self, request_ref: String, command: TransportCommand, payload: Option<Vec<u8>>) -> Result<()> {
+    pub fn register(
+        &mut self,
+        request_ref: String,
+        command: TransportCommand,
+        payload: Option<Vec<u8>>,
+    ) -> crate::error::Result<()> {
         let admitted_payload =
             admit_registered_payload(&self.profile.profile, &request_ref, &command, payload.as_deref())?;
         if let Some(payload) = &admitted_payload {
             let payload_bytes = u64::try_from(payload.len())
-                .map_err(|_| MoltenError::invalid_harness("queued payload size does not fit u64"))?;
+                .map_err(|_| crate::error::MoltenError::invalid_harness("queued payload size does not fit u64"))?;
             let next_queued = self
                 .queued_payload_bytes
                 .checked_add(payload_bytes)
-                .ok_or_else(|| MoltenError::invalid_harness("queued payload accounting overflow"))?;
+                .ok_or_else(|| crate::error::MoltenError::invalid_harness("queued payload accounting overflow"))?;
             let queued_count = u64::try_from(self.payloads.len())
-                .map_err(|_| MoltenError::invalid_harness("queued payload count does not fit u64"))?;
+                .map_err(|_| crate::error::MoltenError::invalid_harness("queued payload count does not fit u64"))?;
             if queued_count >= self.profile.profile.limits.max_queued_events
                 || next_queued > self.profile.profile.limits.max_queued_bytes
             {
-                return Err(MoltenError::invalid_harness(
+                return Err(crate::error::MoltenError::invalid_harness(
                     "cross-process effect payload queue exceeds the admitted profile",
                 ));
             }
@@ -78,13 +76,13 @@ impl RegisteredCrossProcessTransportEffectPort {
         self.control.register(request_ref.clone(), command)?;
         if let Some(payload) = admitted_payload {
             let payload_bytes = u64::try_from(payload.len())
-                .map_err(|_| MoltenError::invalid_harness("queued payload size does not fit u64"))?;
+                .map_err(|_| crate::error::MoltenError::invalid_harness("queued payload size does not fit u64"))?;
             let prior = self.payloads.insert(request_ref, payload);
             debug_assert!(prior.is_none());
             self.queued_payload_bytes = self
                 .queued_payload_bytes
                 .checked_add(payload_bytes)
-                .ok_or_else(|| MoltenError::invalid_harness("queued payload accounting overflow"))?;
+                .ok_or_else(|| crate::error::MoltenError::invalid_harness("queued payload accounting overflow"))?;
         }
         Ok(())
     }
@@ -196,17 +194,21 @@ fn validate_effect_client_config(
     profile: &CanonicalTransportProfile,
     protocol: &ProtocolDescriptor,
     client: &IrohCrossProcessEffectClientConfig,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if profile.profile.adapter_kind != TransportAdapterKind::IrohLive {
-        return Err(MoltenError::invalid_harness("cross-process effect port requires an iroh-live profile"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "cross-process effect port requires an iroh-live profile",
+        ));
     }
-    if client.timeout.is_zero() || client.timeout > Duration::from_secs(MAX_EFFECT_TIMEOUT_SECONDS) {
-        return Err(MoltenError::invalid_harness(format!(
+    if client.timeout.is_zero() || client.timeout > std::time::Duration::from_secs(MAX_EFFECT_TIMEOUT_SECONDS) {
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "cross-process effect timeout must be between one nanosecond and {MAX_EFFECT_TIMEOUT_SECONDS} seconds"
         )));
     }
     admit_endpoint_import(&profile.profile, protocol, &client.endpoint.descriptor, &client.expected, client.admission)
-        .map_err(|issues| MoltenError::invalid_harness(format!("cross-process effect endpoint denied: {issues:?}")))?;
+        .map_err(|issues| {
+            crate::error::MoltenError::invalid_harness(format!("cross-process effect endpoint denied: {issues:?}"))
+        })?;
     Ok(())
 }
 
@@ -215,7 +217,7 @@ fn admit_registered_payload(
     request_ref: &str,
     command: &TransportCommand,
     payload: Option<&[u8]>,
-) -> Result<Option<Vec<u8>>> {
+) -> crate::error::Result<Option<Vec<u8>>> {
     crate::preserves_rail::validate_content_ref(request_ref)?;
     match (command, payload) {
         (
@@ -226,30 +228,31 @@ fn admit_registered_payload(
             },
             Some(payload),
         ) => {
-            let observed_bytes = u64::try_from(payload.len())
-                .map_err(|_| MoltenError::invalid_harness("cross-process effect payload size does not fit u64"))?;
+            let observed_bytes = u64::try_from(payload.len()).map_err(|_| {
+                crate::error::MoltenError::invalid_harness("cross-process effect payload size does not fit u64")
+            })?;
             if observed_bytes == 0
                 || observed_bytes != *payload_bytes
                 || observed_bytes > profile.limits.max_frame_bytes
             {
-                return Err(MoltenError::invalid_harness(
+                return Err(crate::error::MoltenError::invalid_harness(
                     "cross-process effect payload length does not match its admitted command",
                 ));
             }
             let expected_ref = cross_process_frame_ref(request_ref, payload);
             if payload_ref != &expected_ref {
-                return Err(MoltenError::invalid_harness(
+                return Err(crate::error::MoltenError::invalid_harness(
                     "cross-process effect payload ref does not match its request-bound bytes",
                 ));
             }
             Ok(Some(payload.to_vec()))
         }
-        (TransportCommand::SendFrame { .. }, None) => Err(MoltenError::invalid_harness(
+        (TransportCommand::SendFrame { .. }, None) => Err(crate::error::MoltenError::invalid_harness(
             "cross-process send effect requires explicitly registered payload bytes",
         )),
-        (_, Some(_)) => {
-            Err(MoltenError::invalid_harness("cross-process non-send effect must not register payload bytes"))
-        }
+        (_, Some(_)) => Err(crate::error::MoltenError::invalid_harness(
+            "cross-process non-send effect must not register payload bytes",
+        )),
         (_, None) => Ok(None),
     }
 }
@@ -261,7 +264,7 @@ fn run_effect_exchange(
     session_id: &ScopedTransportId,
     request_ref: &str,
     payload: &[u8],
-) -> Result<CrossProcessFrameEvidence> {
+) -> crate::error::Result<CrossProcessFrameEvidence> {
     let input = IrohCrossProcessClientInput {
         profile: profile.clone(),
         protocol: protocol.clone(),
@@ -277,12 +280,12 @@ fn run_effect_exchange(
     let timeout = client.timeout;
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Runtime::new().map_err(|error| {
-            MoltenError::invalid_harness(format!("cross-process effect runtime creation failed: {error}"))
+            crate::error::MoltenError::invalid_harness(format!("cross-process effect runtime creation failed: {error}"))
         })?;
         runtime.block_on(exchange_cross_process_frame(input, &payload, timeout))
     })
     .join()
-    .map_err(|_| MoltenError::invalid_harness("cross-process effect worker panicked"))?
+    .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process effect worker panicked"))?
 }
 
 fn matching_exchange_evidence(

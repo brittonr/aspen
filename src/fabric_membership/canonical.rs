@@ -1,27 +1,5 @@
-use std::collections::BTreeMap;
-
-use preserves::IOValue;
-
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric::DeterminismClass;
-use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
-use crate::fabric::FabricAuthority;
-use crate::fabric::FabricPortClass;
-use crate::fabric::FabricPortDescriptor;
-use crate::fabric::FabricPortKey;
-use crate::fabric::FabricResource;
-use crate::fabric::REQUIRED_FABRIC_NON_CLAIMS;
-use crate::fabric::ReplayClass;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
 use crate::system_extension::SystemExtensionExecutor;
-use crate::system_extension::SystemExtensionHost;
 
 pub const FABRIC_MEMBERSHIP_PORT_ID: &str = "molten.fabric.membership.views";
 pub const FABRIC_FAILURE_OBSERVATION_PORT_ID: &str = "molten.fabric.membership.failure-observations";
@@ -41,28 +19,28 @@ const MEMBERSHIP_PORT_COUNT: usize = 4;
 pub struct CanonicalMembershipProfile {
     pub profile: MembershipSourceProfile,
     pub admission_ref: String,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanonicalMembershipView {
     pub admitted: AdmittedMembershipView,
     pub view_ref: String,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanonicalFailureObservationSet {
     pub observations_ref: String,
-    pub observations: BTreeMap<String, ReducedFailureObservation>,
-    pub value: IOValue,
+    pub observations: std::collections::BTreeMap<String, ReducedFailureObservation>,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanonicalPlacementOutcome {
     pub outcome_ref: String,
     pub outcome: PlacementOutcome,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +50,7 @@ pub struct CanonicalAssignmentTransition {
     pub intent_ref: String,
     pub role_effect_ref: Option<String>,
     pub persistence_ref: String,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,24 +66,26 @@ pub struct MembershipStatusReadback {
     pub uncertain_assignments: u64,
     pub assignment_refs: Vec<String>,
     pub non_claims: Vec<MembershipNonClaim>,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 // r[impl molten.fabric_membership.membership_views]
 // r[impl molten.fabric_membership.evidence]
-pub fn canonical_membership_profile(profile: &MembershipSourceProfile) -> Result<CanonicalMembershipProfile> {
+pub fn canonical_membership_profile(
+    profile: &MembershipSourceProfile,
+) -> crate::error::Result<CanonicalMembershipProfile> {
     let issues = validate_source_profile(profile);
     if !issues.is_empty() {
         return Err(validation_error("membership source profile", &issues));
     }
-    let value = record(MEMBERSHIP_PROFILE_RECORD, vec![
-        string(MEMBERSHIP_SOURCE_PROFILE_SCHEMA),
-        field("profile-id", string(&profile.profile_id)),
-        field("declared-profile-ref", string(&profile.profile_ref)),
-        field("provider-kind", string(profile.provider_kind.as_str())),
-        field("authority-strength", string(profile.authority_strength.as_str())),
-        field("authority-scope", string(&profile.authority_scope)),
-        field("max-view-age-ticks", u64_value(profile.max_view_age_ticks)),
+    let value = crate::preserves_rail::record(MEMBERSHIP_PROFILE_RECORD, vec![
+        crate::preserves_rail::string(MEMBERSHIP_SOURCE_PROFILE_SCHEMA),
+        field("profile-id", crate::preserves_rail::string(&profile.profile_id)),
+        field("declared-profile-ref", crate::preserves_rail::string(&profile.profile_ref)),
+        field("provider-kind", crate::preserves_rail::string(profile.provider_kind.as_str())),
+        field("authority-strength", crate::preserves_rail::string(profile.authority_strength.as_str())),
+        field("authority-scope", crate::preserves_rail::string(&profile.authority_scope)),
+        field("max-view-age-ticks", crate::preserves_rail::u64_value(profile.max_view_age_ticks)),
         field("non-claims", strings_value(profile.non_claims.iter().map(|claim| claim.as_str()))),
         checks(&[
             "source-scope-explicit",
@@ -115,7 +95,7 @@ pub fn canonical_membership_profile(profile: &MembershipSourceProfile) -> Result
             "placement-not-assignment",
         ]),
     ]);
-    let admission_ref = canonical_hash(&value)?;
+    let admission_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(CanonicalMembershipProfile {
         profile: profile.clone(),
         admission_ref,
@@ -132,7 +112,7 @@ pub fn canonical_membership_view(
     descriptors: &[NodeDescriptor],
     now_ticks: u64,
     required_compatibility_ref: &str,
-) -> Result<CanonicalMembershipView> {
+) -> crate::error::Result<CanonicalMembershipView> {
     let admitted = validate_membership_view(&profile.profile, view, descriptors, now_ticks, required_compatibility_ref)
         .map_err(|issues| validation_error("membership view", &issues))?;
     let members = admitted
@@ -141,24 +121,24 @@ pub fn canonical_membership_view(
         .iter()
         .map(|member| {
             let descriptor = &admitted.descriptors[&member.node_id];
-            record("fabric-membership-member-v1", vec![
-                field("node-id", string(&member.node_id)),
-                field("descriptor-ref", string(&member.descriptor_ref)),
-                field("eligibility-ref", string(&member.eligibility_ref)),
-                field("compatibility-ref", string(&descriptor.compatibility_ref)),
+            crate::preserves_rail::record("fabric-membership-member-v1", vec![
+                field("node-id", crate::preserves_rail::string(&member.node_id)),
+                field("descriptor-ref", crate::preserves_rail::string(&member.descriptor_ref)),
+                field("eligibility-ref", crate::preserves_rail::string(&member.eligibility_ref)),
+                field("compatibility-ref", crate::preserves_rail::string(&descriptor.compatibility_ref)),
                 field("capacity", resource_value(descriptor.capacity)),
                 field(
                     "labels",
-                    sequence(
+                    crate::preserves_rail::sequence(
                         descriptor
                             .labels
                             .iter()
                             .map(|label| {
-                                record("fabric-membership-label-v1", vec![
-                                    string(&label.key),
-                                    string(&label.value),
-                                    string(label.authority.as_str()),
-                                    string(&label.evidence_ref),
+                                crate::preserves_rail::record("fabric-membership-label-v1", vec![
+                                    crate::preserves_rail::string(&label.key),
+                                    crate::preserves_rail::string(&label.value),
+                                    crate::preserves_rail::string(label.authority.as_str()),
+                                    crate::preserves_rail::string(&label.evidence_ref),
                                 ])
                             })
                             .collect(),
@@ -168,18 +148,18 @@ pub fn canonical_membership_view(
             ])
         })
         .collect();
-    let value = record(MEMBERSHIP_VIEW_RECORD, vec![
-        string(MEMBERSHIP_VIEW_SCHEMA),
-        field("profile-admission-ref", string(&profile.admission_ref)),
-        field("source-profile-ref", string(&admitted.profile.profile_ref)),
-        field("view-id", string(&admitted.view.view_id)),
-        field("epoch", u64_value(admitted.view.epoch)),
-        field("source-evidence-ref", string(&admitted.view.source_evidence_ref)),
-        field("authority-ref", string(&admitted.view.authority_ref)),
-        field("eligibility-policy-ref", string(&admitted.view.eligibility_policy_ref)),
-        field("observed-at-ticks", u64_value(admitted.view.observed_at_ticks)),
-        field("valid-until-ticks", u64_value(admitted.view.valid_until_ticks)),
-        field("members", sequence(members)),
+    let value = crate::preserves_rail::record(MEMBERSHIP_VIEW_RECORD, vec![
+        crate::preserves_rail::string(MEMBERSHIP_VIEW_SCHEMA),
+        field("profile-admission-ref", crate::preserves_rail::string(&profile.admission_ref)),
+        field("source-profile-ref", crate::preserves_rail::string(&admitted.profile.profile_ref)),
+        field("view-id", crate::preserves_rail::string(&admitted.view.view_id)),
+        field("epoch", crate::preserves_rail::u64_value(admitted.view.epoch)),
+        field("source-evidence-ref", crate::preserves_rail::string(&admitted.view.source_evidence_ref)),
+        field("authority-ref", crate::preserves_rail::string(&admitted.view.authority_ref)),
+        field("eligibility-policy-ref", crate::preserves_rail::string(&admitted.view.eligibility_policy_ref)),
+        field("observed-at-ticks", crate::preserves_rail::u64_value(admitted.view.observed_at_ticks)),
+        field("valid-until-ticks", crate::preserves_rail::u64_value(admitted.view.valid_until_ticks)),
+        field("members", crate::preserves_rail::sequence(members)),
         field("non-claims", strings_value(admitted.profile.non_claims.iter().map(|claim| claim.as_str()))),
         checks(&[
             "source-scoped-snapshot",
@@ -189,7 +169,7 @@ pub fn canonical_membership_view(
             "freshness-checked",
         ]),
     ]);
-    let view_ref = canonical_hash(&value)?;
+    let view_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(CanonicalMembershipView {
         admitted,
         view_ref,
@@ -204,17 +184,17 @@ pub fn canonical_failure_observations(
     profiles: &[FailureDetectorProfile],
     observations: &[FailureObservation],
     now_ticks: u64,
-) -> Result<CanonicalFailureObservationSet> {
+) -> crate::error::Result<CanonicalFailureObservationSet> {
     let reduced = reduce_failure_observations(&view.admitted, profiles, observations, now_ticks)
         .map_err(|issues| validation_error("failure observations", &issues))?;
     let values = reduced
         .values()
         .map(|observation| {
-            record("fabric-reduced-failure-observation-v1", vec![
-                field("subject-node-id", string(&observation.subject_node_id)),
-                field("class", string(observation.class.as_str())),
-                field("observed-at-ticks", u64_value(observation.observed_at_ticks)),
-                field("detector-profile-ref", string(&observation.detector_profile_ref)),
+            crate::preserves_rail::record("fabric-reduced-failure-observation-v1", vec![
+                field("subject-node-id", crate::preserves_rail::string(&observation.subject_node_id)),
+                field("class", crate::preserves_rail::string(observation.class.as_str())),
+                field("observed-at-ticks", crate::preserves_rail::u64_value(observation.observed_at_ticks)),
+                field("detector-profile-ref", crate::preserves_rail::string(&observation.detector_profile_ref)),
             ])
         })
         .collect();
@@ -229,13 +209,16 @@ pub fn canonical_failure_observations(
     let raw_values = raw_observations
         .into_iter()
         .map(|observation| {
-            record("fabric-failure-observation-v1", vec![
-                field("subject-node-id", string(&observation.subject_node_id)),
-                field("class", string(observation.class.as_str())),
-                field("observed-at-ticks", u64_value(observation.observed_at_ticks)),
-                field("valid-until-ticks", u64_value(observation.valid_until_ticks)),
-                field("confidence-basis-points", u64_value(u64::from(observation.confidence_basis_points))),
-                field("detector-profile-ref", string(&observation.detector_profile_ref)),
+            crate::preserves_rail::record("fabric-failure-observation-v1", vec![
+                field("subject-node-id", crate::preserves_rail::string(&observation.subject_node_id)),
+                field("class", crate::preserves_rail::string(observation.class.as_str())),
+                field("observed-at-ticks", crate::preserves_rail::u64_value(observation.observed_at_ticks)),
+                field("valid-until-ticks", crate::preserves_rail::u64_value(observation.valid_until_ticks)),
+                field(
+                    "confidence-basis-points",
+                    crate::preserves_rail::u64_value(u64::from(observation.confidence_basis_points)),
+                ),
+                field("detector-profile-ref", crate::preserves_rail::string(&observation.detector_profile_ref)),
                 field(
                     "supporting-event-refs",
                     sorted_strings_value(observation.supporting_event_refs.iter().map(String::as_str)),
@@ -243,15 +226,15 @@ pub fn canonical_failure_observations(
             ])
         })
         .collect();
-    let value = record(FAILURE_OBSERVATION_RECORD, vec![
-        string(FAILURE_OBSERVATION_SCHEMA),
-        field("view-ref", string(&view.view_ref)),
+    let value = crate::preserves_rail::record(FAILURE_OBSERVATION_RECORD, vec![
+        crate::preserves_rail::string(FAILURE_OBSERVATION_SCHEMA),
+        field("view-ref", crate::preserves_rail::string(&view.view_ref)),
         field(
             "detector-profile-refs",
             sorted_strings_value(profiles.iter().map(|profile| profile.profile_ref.as_str())),
         ),
-        field("raw-observations", sequence(raw_values)),
-        field("reduced-observations", sequence(values)),
+        field("raw-observations", crate::preserves_rail::sequence(raw_values)),
+        field("reduced-observations", crate::preserves_rail::sequence(values)),
         field("non-claims", strings_value(REQUIRED_FAILURE_NON_CLAIMS.iter().map(|claim| claim.as_str()))),
         checks(&[
             "observation-only",
@@ -260,7 +243,7 @@ pub fn canonical_failure_observations(
             "authority-unchanged",
         ]),
     ]);
-    let observations_ref = canonical_hash(&value)?;
+    let observations_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(CanonicalFailureObservationSet {
         observations_ref,
         observations: reduced,
@@ -274,7 +257,7 @@ pub fn canonical_failure_observations(
 pub fn canonical_placement_outcome(
     view: &CanonicalMembershipView,
     request: &PlacementRequest,
-) -> Result<CanonicalPlacementOutcome> {
+) -> crate::error::Result<CanonicalPlacementOutcome> {
     let outcome =
         plan_placement(&view.admitted, request).map_err(|issues| validation_error("placement request", &issues))?;
     let outcome_value = match &outcome {
@@ -283,12 +266,12 @@ pub fn canonical_placement_outcome(
                 .roles
                 .iter()
                 .map(|role| {
-                    record("fabric-planned-role-v1", vec![
-                        field("role-ordinal", u64_value(u64::from(role.role_ordinal))),
-                        field("node-id", string(&role.node_id)),
-                        field("descriptor-ref", string(&role.descriptor_ref)),
+                    crate::preserves_rail::record("fabric-planned-role-v1", vec![
+                        field("role-ordinal", crate::preserves_rail::u64_value(u64::from(role.role_ordinal))),
+                        field("node-id", crate::preserves_rail::string(&role.node_id)),
+                        field("descriptor-ref", crate::preserves_rail::string(&role.descriptor_ref)),
                         field("resources", resource_value(role.resources)),
-                        field("preference-score", u64_value(role.preference_score)),
+                        field("preference-score", crate::preserves_rail::u64_value(role.preference_score)),
                         field("reasons", strings_value(role.reasons.iter().map(String::as_str))),
                     ])
                 })
@@ -297,15 +280,18 @@ pub fn canonical_placement_outcome(
                 .residual_capacity
                 .iter()
                 .map(|(node_id, resources)| {
-                    record("fabric-residual-capacity-v1", vec![string(node_id), resource_value(*resources)])
+                    crate::preserves_rail::record("fabric-residual-capacity-v1", vec![
+                        crate::preserves_rail::string(node_id),
+                        resource_value(*resources),
+                    ])
                 })
                 .collect();
-            record("fabric-placement-plan-v1", vec![
-                field("schema", string(&plan.schema)),
-                field("roles", sequence(roles)),
-                field("residual-capacity", sequence(residual)),
-                field("degraded", bool_value(plan.degraded)),
-                field("advisory-only", bool_value(plan.advisory_only)),
+            crate::preserves_rail::record("fabric-placement-plan-v1", vec![
+                field("schema", crate::preserves_rail::string(&plan.schema)),
+                field("roles", crate::preserves_rail::sequence(roles)),
+                field("residual-capacity", crate::preserves_rail::sequence(residual)),
+                field("degraded", crate::preserves_rail::bool_value(plan.degraded)),
+                field("advisory-only", crate::preserves_rail::bool_value(plan.advisory_only)),
             ])
         }
         PlacementOutcome::Unsatisfied(unsatisfied) => {
@@ -313,25 +299,25 @@ pub fn canonical_placement_outcome(
                 .constraints
                 .iter()
                 .map(|constraint| {
-                    record("fabric-unsatisfied-constraint-v1", vec![
-                        string(constraint.kind.as_str()),
-                        string(&constraint.subject),
-                        string(&constraint.detail),
+                    crate::preserves_rail::record("fabric-unsatisfied-constraint-v1", vec![
+                        crate::preserves_rail::string(constraint.kind.as_str()),
+                        crate::preserves_rail::string(&constraint.subject),
+                        crate::preserves_rail::string(&constraint.detail),
                     ])
                 })
                 .collect();
-            record("fabric-unsatisfied-placement-v1", vec![
-                field("constraints", sequence(constraints)),
+            crate::preserves_rail::record("fabric-unsatisfied-placement-v1", vec![
+                field("constraints", crate::preserves_rail::sequence(constraints)),
                 field("partial-selection", strings_value(unsatisfied.partial_selection.iter().map(String::as_str))),
             ])
         }
     };
-    let value = record(PLACEMENT_OUTCOME_RECORD, vec![
-        string(PLACEMENT_PLAN_SCHEMA),
-        field("view-ref", string(&view.view_ref)),
-        field("view-id", string(&view.admitted.view.view_id)),
-        field("view-epoch", u64_value(view.admitted.view.epoch)),
-        field("policy-ref", string(&request.requirements.policy_ref)),
+    let value = crate::preserves_rail::record(PLACEMENT_OUTCOME_RECORD, vec![
+        crate::preserves_rail::string(PLACEMENT_PLAN_SCHEMA),
+        field("view-ref", crate::preserves_rail::string(&view.view_ref)),
+        field("view-id", crate::preserves_rail::string(&view.admitted.view.view_id)),
+        field("view-epoch", crate::preserves_rail::u64_value(view.admitted.view.epoch)),
+        field("policy-ref", crate::preserves_rail::string(&request.requirements.policy_ref)),
         field("role-requirements", role_requirements_value(&request.requirements)),
         field(
             "current-assignment-refs",
@@ -372,7 +358,7 @@ pub fn canonical_placement_outcome(
             "plan-advisory-until-committed",
         ]),
     ]);
-    let outcome_ref = canonical_hash(&value)?;
+    let outcome_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(CanonicalPlacementOutcome {
         outcome_ref,
         outcome,
@@ -388,7 +374,7 @@ pub fn canonical_assignment_transition(
     intent_ref: &str,
     role_effect_ref: Option<&str>,
     persistence_ref: &str,
-) -> Result<CanonicalAssignmentTransition> {
+) -> crate::error::Result<CanonicalAssignmentTransition> {
     let issues = validate_assignment(&transition.next);
     if !issues.is_empty() {
         return Err(validation_error("assignment transition", &issues));
@@ -399,28 +385,28 @@ pub fn canonical_assignment_transition(
     }
     validate_evidence_ref("assignment persistence", persistence_ref)?;
     let assignment = &transition.next;
-    let value = record(ASSIGNMENT_TRANSITION_RECORD, vec![
-        string(ROLE_ASSIGNMENT_SCHEMA),
-        field("assignment-id", string(&assignment.assignment_id)),
-        field("extension-id", string(&assignment.extension_id)),
-        field("service-id", string(&assignment.service_id)),
-        field("role-id", string(&assignment.role_id)),
-        field("role-kind", string(&assignment.role_kind)),
-        field("node-id", string(&assignment.node_id)),
-        field("service-generation", u64_value(assignment.service_generation)),
-        field("assignment-epoch", u64_value(assignment.assignment_epoch)),
-        field("fencing-token", u64_value(assignment.fencing_token)),
-        field("fencing-profile-ref", string(&assignment.fencing_profile_ref)),
-        field("resource-reservation-ref", string(&assignment.resource_reservation_ref)),
-        field("placement-plan-ref", string(&assignment.placement_plan_ref)),
-        field("authority-ref", string(&assignment.authority_ref)),
-        field("previous-state", string(transition.previous_state.as_str())),
-        field("command", string(transition.kind.as_str())),
-        field("next-state", string(assignment.state.as_str())),
-        field("uncertain-old-owner", bool_value(assignment.uncertain_old_owner)),
-        field("intent-ref", string(intent_ref)),
+    let value = crate::preserves_rail::record(ASSIGNMENT_TRANSITION_RECORD, vec![
+        crate::preserves_rail::string(ROLE_ASSIGNMENT_SCHEMA),
+        field("assignment-id", crate::preserves_rail::string(&assignment.assignment_id)),
+        field("extension-id", crate::preserves_rail::string(&assignment.extension_id)),
+        field("service-id", crate::preserves_rail::string(&assignment.service_id)),
+        field("role-id", crate::preserves_rail::string(&assignment.role_id)),
+        field("role-kind", crate::preserves_rail::string(&assignment.role_kind)),
+        field("node-id", crate::preserves_rail::string(&assignment.node_id)),
+        field("service-generation", crate::preserves_rail::u64_value(assignment.service_generation)),
+        field("assignment-epoch", crate::preserves_rail::u64_value(assignment.assignment_epoch)),
+        field("fencing-token", crate::preserves_rail::u64_value(assignment.fencing_token)),
+        field("fencing-profile-ref", crate::preserves_rail::string(&assignment.fencing_profile_ref)),
+        field("resource-reservation-ref", crate::preserves_rail::string(&assignment.resource_reservation_ref)),
+        field("placement-plan-ref", crate::preserves_rail::string(&assignment.placement_plan_ref)),
+        field("authority-ref", crate::preserves_rail::string(&assignment.authority_ref)),
+        field("previous-state", crate::preserves_rail::string(transition.previous_state.as_str())),
+        field("command", crate::preserves_rail::string(transition.kind.as_str())),
+        field("next-state", crate::preserves_rail::string(assignment.state.as_str())),
+        field("uncertain-old-owner", crate::preserves_rail::bool_value(assignment.uncertain_old_owner)),
+        field("intent-ref", crate::preserves_rail::string(intent_ref)),
         field("role-effect-ref", optional_string(role_effect_ref)),
-        field("persistence-ref", string(persistence_ref)),
+        field("persistence-ref", crate::preserves_rail::string(persistence_ref)),
         checks(&[
             "generation-and-epoch-fenced",
             "placement-plan-remains-separate",
@@ -428,7 +414,7 @@ pub fn canonical_assignment_transition(
             "role-effect-and-persistence-explicit",
         ]),
     ]);
-    let transition_ref = canonical_hash(&value)?;
+    let transition_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(CanonicalAssignmentTransition {
         transition_ref,
         transition: transition.clone(),
@@ -443,9 +429,9 @@ pub fn canonical_assignment_transition(
 pub fn membership_status_readback(
     view: &CanonicalMembershipView,
     assignments: &[(String, RoleAssignment)],
-) -> Result<MembershipStatusReadback> {
+) -> crate::error::Result<MembershipStatusReadback> {
     if assignments.len() > MAX_MEMBERSHIP_ITEMS {
-        return Err(MoltenError::invalid_harness("membership readback assignment limit exceeded"));
+        return Err(crate::error::MoltenError::invalid_harness("membership readback assignment limit exceeded"));
     }
     let member_ids = view.admitted.view.members.iter().map(|member| member.node_id.clone()).collect::<Vec<_>>();
     let mut active_assignments = 0u64;
@@ -471,16 +457,16 @@ pub fn membership_status_readback(
         assignment_refs.push(assignment_ref.clone());
     }
     assignment_refs.sort();
-    let value = record(MEMBERSHIP_STATUS_RECORD, vec![
-        string(MEMBERSHIP_EVIDENCE_SCHEMA),
-        field("view-ref", string(&view.view_ref)),
-        field("view-id", string(&view.admitted.view.view_id)),
-        field("view-epoch", u64_value(view.admitted.view.epoch)),
-        field("provider-kind", string(view.admitted.profile.provider_kind.as_str())),
+    let value = crate::preserves_rail::record(MEMBERSHIP_STATUS_RECORD, vec![
+        crate::preserves_rail::string(MEMBERSHIP_EVIDENCE_SCHEMA),
+        field("view-ref", crate::preserves_rail::string(&view.view_ref)),
+        field("view-id", crate::preserves_rail::string(&view.admitted.view.view_id)),
+        field("view-epoch", crate::preserves_rail::u64_value(view.admitted.view.epoch)),
+        field("provider-kind", crate::preserves_rail::string(view.admitted.profile.provider_kind.as_str())),
         field("member-ids", strings_value(member_ids.iter().map(String::as_str))),
-        field("active-assignments", u64_value(active_assignments)),
-        field("draining-assignments", u64_value(draining_assignments)),
-        field("uncertain-assignments", u64_value(uncertain_assignments)),
+        field("active-assignments", crate::preserves_rail::u64_value(active_assignments)),
+        field("draining-assignments", crate::preserves_rail::u64_value(draining_assignments)),
+        field("uncertain-assignments", crate::preserves_rail::u64_value(uncertain_assignments)),
         field("assignment-refs", strings_value(assignment_refs.iter().map(String::as_str))),
         field("non-claims", strings_value(view.admitted.profile.non_claims.iter().map(|claim| claim.as_str()))),
         checks(&[
@@ -490,7 +476,7 @@ pub fn membership_status_readback(
             "observations-not-promoted",
         ]),
     ]);
-    let status_ref = canonical_hash(&value)?;
+    let status_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(MembershipStatusReadback {
         status_ref,
         view_ref: view.view_ref.clone(),
@@ -518,18 +504,18 @@ pub struct ExtensionMembershipPlacementContext {
 
 impl ExtensionMembershipPlacementContext {
     pub fn from_host<E: SystemExtensionExecutor>(
-        host: &SystemExtensionHost<E>,
+        host: &crate::system_extension::SystemExtensionHost<E>,
         profile: &CanonicalMembershipProfile,
-    ) -> Result<Self> {
+    ) -> crate::error::Result<Self> {
         let mut bound_ports = Vec::with_capacity(MEMBERSHIP_PORT_COUNT);
         for port_id in membership_port_ids() {
-            let key = FabricPortKey {
+            let key = crate::fabric::FabricPortKey {
                 port_id: port_id.to_string(),
                 version: FABRIC_MEMBERSHIP_PORT_VERSION.to_string(),
             };
             if let Some(binding) = host.manifest().binding_for(&key) {
                 if binding.binding.implementation_profile != profile.profile.profile_id {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(crate::error::MoltenError::invalid_harness(format!(
                         "system-extension membership profile {} does not match {}",
                         binding.binding.implementation_profile, profile.profile.profile_id
                     )));
@@ -538,7 +524,7 @@ impl ExtensionMembershipPlacementContext {
             }
         }
         if bound_ports.is_empty() {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::MoltenError::invalid_harness(
                 "system extension has no admitted membership or placement fabric port binding",
             ));
         }
@@ -573,15 +559,21 @@ impl ExtensionMembershipPlacementContext {
         view: &CanonicalMembershipView,
         service_id: &str,
         generation: u64,
-    ) -> Result<()> {
+    ) -> crate::error::Result<()> {
         self.admit_scope(profile, FABRIC_PLACEMENT_PORT_ID, service_id, generation)?;
         if view.admitted.profile.profile_ref != self.source_profile_ref {
-            return Err(MoltenError::invalid_harness("placement view uses a substituted membership source profile"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "placement view uses a substituted membership source profile",
+            ));
         }
         Ok(())
     }
 
-    pub fn admit_assignment(&self, profile: &CanonicalMembershipProfile, assignment: &RoleAssignment) -> Result<()> {
+    pub fn admit_assignment(
+        &self,
+        profile: &CanonicalMembershipProfile,
+        assignment: &RoleAssignment,
+    ) -> crate::error::Result<()> {
         self.admit_scope(profile, FABRIC_ASSIGNMENT_PORT_ID, &assignment.service_id, assignment.service_generation)?;
         let issues = validate_assignment(assignment);
         if !issues.is_empty() {
@@ -596,20 +588,20 @@ impl ExtensionMembershipPlacementContext {
         port_id: &str,
         service_id: &str,
         generation: u64,
-    ) -> Result<()> {
+    ) -> crate::error::Result<()> {
         if self.profile_id != profile.profile.profile_id {
-            return Err(MoltenError::invalid_harness("membership profile substitution denied"));
+            return Err(crate::error::MoltenError::invalid_harness("membership profile substitution denied"));
         }
         if !self.bound_ports.iter().any(|bound| bound == port_id) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::MoltenError::invalid_harness(format!(
                 "membership or placement port {port_id} is not bound to the system extension"
             )));
         }
         if self.service_id != service_id {
-            return Err(MoltenError::invalid_harness("membership service identity mismatch"));
+            return Err(crate::error::MoltenError::invalid_harness("membership service identity mismatch"));
         }
         if self.generation != generation {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::MoltenError::invalid_harness(
                 "membership or placement operation uses a stale service generation",
             ));
         }
@@ -618,51 +610,63 @@ impl ExtensionMembershipPlacementContext {
 }
 
 // r[impl molten.fabric_membership.live_sim_parity]
-pub fn fabric_membership_port_descriptors(profile: &CanonicalMembershipProfile) -> Vec<FabricPortDescriptor> {
+pub fn fabric_membership_port_descriptors(
+    profile: &CanonicalMembershipProfile,
+) -> Vec<crate::fabric::FabricPortDescriptor> {
     let (provider_determinism, provider_replay) = match profile.profile.provider_kind {
-        MembershipProviderKind::DeterministicSimulation => {
-            (DeterminismClass::DeterministicWithRecordedInputs, ReplayClass::Recompute)
-        }
-        MembershipProviderKind::Static => (DeterminismClass::DeterministicWithRecordedInputs, ReplayClass::Recompute),
+        MembershipProviderKind::DeterministicSimulation => (
+            crate::fabric::DeterminismClass::DeterministicWithRecordedInputs,
+            crate::fabric::ReplayClass::Recompute,
+        ),
+        MembershipProviderKind::Static => (
+            crate::fabric::DeterminismClass::DeterministicWithRecordedInputs,
+            crate::fabric::ReplayClass::Recompute,
+        ),
         MembershipProviderKind::PolicyManaged | MembershipProviderKind::ConsistencyBacked => {
-            (DeterminismClass::ExternalEffect, ReplayClass::RecordedEffectRequired)
+            (crate::fabric::DeterminismClass::ExternalEffect, crate::fabric::ReplayClass::RecordedEffectRequired)
         }
     };
     let definitions = [
         (
             FABRIC_MEMBERSHIP_PORT_ID,
-            FabricPortClass::Membership,
+            crate::fabric::FabricPortClass::Membership,
             vec!["snapshot", "eligible-members", "readback"],
             MEMBERSHIP_VIEW_SCHEMA,
             provider_determinism,
             provider_replay,
-            vec![FabricAuthority::Membership, FabricAuthority::Policy],
+            vec![
+                crate::fabric::FabricAuthority::Membership,
+                crate::fabric::FabricAuthority::Policy,
+            ],
         ),
         (
             FABRIC_FAILURE_OBSERVATION_PORT_ID,
-            FabricPortClass::Membership,
+            crate::fabric::FabricPortClass::Membership,
             vec!["observe", "reduce", "readback"],
             FAILURE_OBSERVATION_SCHEMA,
             provider_determinism,
             provider_replay,
-            vec![FabricAuthority::Membership, FabricAuthority::Time],
+            vec![
+                crate::fabric::FabricAuthority::Membership,
+                crate::fabric::FabricAuthority::Time,
+            ],
         ),
         (
             FABRIC_PLACEMENT_PORT_ID,
-            FabricPortClass::Placement,
+            crate::fabric::FabricPortClass::Placement,
             vec!["plan", "explain", "compare"],
             PLACEMENT_PLAN_SCHEMA,
-            DeterminismClass::Pure,
-            ReplayClass::Recompute,
+            crate::fabric::DeterminismClass::Pure,
+            crate::fabric::ReplayClass::Recompute,
             vec![
-                FabricAuthority::Placement,
-                FabricAuthority::Policy,
-                FabricAuthority::Resources,
+                crate::fabric::FabricAuthority::Placement,
+                crate::fabric::FabricAuthority::Policy,
+                crate::fabric::FabricAuthority::Resources,
             ],
         ),
         (
             FABRIC_ASSIGNMENT_PORT_ID,
-            FabricPortClass::Placement,
+            crate::fabric::FabricPortClass::Placement,
             vec![
                 "propose",
                 "reserve",
@@ -674,19 +678,19 @@ pub fn fabric_membership_port_descriptors(profile: &CanonicalMembershipProfile) 
                 "release",
             ],
             ROLE_ASSIGNMENT_SCHEMA,
-            DeterminismClass::ExternalEffect,
-            ReplayClass::RecordedEffectRequired,
+            crate::fabric::DeterminismClass::ExternalEffect,
+            crate::fabric::ReplayClass::RecordedEffectRequired,
             vec![
-                FabricAuthority::Placement,
-                FabricAuthority::Supervision,
-                FabricAuthority::DurableState,
+                crate::fabric::FabricAuthority::Placement,
+                crate::fabric::FabricAuthority::Supervision,
+                crate::fabric::FabricAuthority::DurableState,
             ],
         ),
     ];
     let mut descriptors = Vec::with_capacity(MEMBERSHIP_PORT_COUNT);
     for (port_id, class, operations, output_schema, determinism, replay, authorities) in definitions {
-        descriptors.push(FabricPortDescriptor {
-            schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+        descriptors.push(crate::fabric::FabricPortDescriptor {
+            schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
             port_id: port_id.to_string(),
             version: FABRIC_MEMBERSHIP_PORT_VERSION.to_string(),
             class,
@@ -694,12 +698,15 @@ pub fn fabric_membership_port_descriptors(profile: &CanonicalMembershipProfile) 
             input_schema_refs: vec![MEMBERSHIP_SOURCE_PROFILE_SCHEMA.to_string()],
             output_schema_refs: vec![output_schema.to_string()],
             authority_requirements: authorities,
-            resource_requirements: vec![FabricResource::Memory, FabricResource::LogicalTime],
+            resource_requirements: vec![
+                crate::fabric::FabricResource::Memory,
+                crate::fabric::FabricResource::LogicalTime,
+            ],
             determinism,
             replay,
             implementation_profile: profile.profile.profile_id.clone(),
             conformance_refs: vec![profile.admission_ref.clone(), profile.profile.profile_ref.clone()],
-            non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+            non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
             enabled: true,
         });
     }
@@ -715,15 +722,15 @@ fn membership_port_ids() -> [&'static str; MEMBERSHIP_PORT_COUNT] {
     ]
 }
 
-fn role_requirements_value(requirements: &RoleRequirements) -> IOValue {
+fn role_requirements_value(requirements: &RoleRequirements) -> preserves::IOValue {
     let required_labels = requirements
         .required_labels
         .iter()
         .map(|constraint| {
-            record("fabric-required-label-v1", vec![
-                string(&constraint.key),
+            crate::preserves_rail::record("fabric-required-label-v1", vec![
+                crate::preserves_rail::string(&constraint.key),
                 optional_string(constraint.value.as_deref()),
-                string(constraint.minimum_authority.as_str()),
+                crate::preserves_rail::string(constraint.minimum_authority.as_str()),
             ])
         })
         .collect();
@@ -731,42 +738,42 @@ fn role_requirements_value(requirements: &RoleRequirements) -> IOValue {
         .preferred_labels
         .iter()
         .map(|preference| {
-            record("fabric-preferred-label-v1", vec![
-                string(&preference.key),
-                string(&preference.value),
-                string(preference.minimum_authority.as_str()),
-                u64_value(u64::from(preference.weight)),
+            crate::preserves_rail::record("fabric-preferred-label-v1", vec![
+                crate::preserves_rail::string(&preference.key),
+                crate::preserves_rail::string(&preference.value),
+                crate::preserves_rail::string(preference.minimum_authority.as_str()),
+                crate::preserves_rail::u64_value(u64::from(preference.weight)),
             ])
         })
         .collect();
-    record("fabric-role-requirements-v1", vec![
-        field("extension-id", string(&requirements.extension_id)),
-        field("service-id", string(&requirements.service_id)),
-        field("role-kind", string(&requirements.role_kind)),
-        field("replica-count", u64_value(u64::from(requirements.replica_count))),
+    crate::preserves_rail::record("fabric-role-requirements-v1", vec![
+        field("extension-id", crate::preserves_rail::string(&requirements.extension_id)),
+        field("service-id", crate::preserves_rail::string(&requirements.service_id)),
+        field("role-kind", crate::preserves_rail::string(&requirements.role_kind)),
+        field("replica-count", crate::preserves_rail::u64_value(u64::from(requirements.replica_count))),
         field("per-replica", resource_value(requirements.per_replica)),
         field("required-features", strings_value(requirements.required_features.iter().map(String::as_str))),
-        field("required-labels", sequence(required_labels)),
-        field("preferred-labels", sequence(preferred_labels)),
+        field("required-labels", crate::preserves_rail::sequence(required_labels)),
+        field("preferred-labels", crate::preserves_rail::sequence(preferred_labels)),
         field(
             "anti-affinity-label-keys",
             strings_value(requirements.anti_affinity_label_keys.iter().map(String::as_str)),
         ),
-        field("distinct-nodes", bool_value(requirements.distinct_nodes)),
-        field("avoid-suspected", bool_value(requirements.avoid_suspected)),
-        field("allow-degraded", bool_value(requirements.allow_degraded)),
+        field("distinct-nodes", crate::preserves_rail::bool_value(requirements.distinct_nodes)),
+        field("avoid-suspected", crate::preserves_rail::bool_value(requirements.avoid_suspected)),
+        field("allow-degraded", crate::preserves_rail::bool_value(requirements.allow_degraded)),
     ])
 }
 
-fn resource_value(resources: ResourceAmount) -> IOValue {
-    record("fabric-resource-amount-v1", vec![
-        field("cpu-millis", u64_value(resources.cpu_millis)),
-        field("memory-bytes", u64_value(resources.memory_bytes)),
-        field("storage-bytes", u64_value(resources.storage_bytes)),
+fn resource_value(resources: ResourceAmount) -> preserves::IOValue {
+    crate::preserves_rail::record("fabric-resource-amount-v1", vec![
+        field("cpu-millis", crate::preserves_rail::u64_value(resources.cpu_millis)),
+        field("memory-bytes", crate::preserves_rail::u64_value(resources.memory_bytes)),
+        field("storage-bytes", crate::preserves_rail::u64_value(resources.storage_bytes)),
     ])
 }
 
-fn validate_evidence_ref(label: &str, value: &str) -> Result<()> {
+fn validate_evidence_ref(label: &str, value: &str) -> crate::error::Result<()> {
     const BLAKE3_PREFIX: &str = "blake3:";
     const BLAKE3_HEX_LENGTH: usize = 64;
     let is_valid = value.strip_prefix(BLAKE3_PREFIX).is_some_and(|hex| {
@@ -775,38 +782,41 @@ fn validate_evidence_ref(label: &str, value: &str) -> Result<()> {
     if is_valid {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} ref is malformed")))
+        Err(crate::error::MoltenError::invalid_harness(format!("{label} ref is malformed")))
     }
 }
 
-fn checked_increment(value: u64) -> Result<u64> {
+fn checked_increment(value: u64) -> crate::error::Result<u64> {
     value
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("membership readback count overflow"))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("membership readback count overflow"))
 }
 
-fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} validation failed: {issues:?}"))
+fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("{label} validation failed: {issues:?}"))
 }
 
-fn field(name: &str, value: IOValue) -> IOValue {
-    record("field", vec![string(name), value])
+fn field(name: &str, value: preserves::IOValue) -> preserves::IOValue {
+    crate::preserves_rail::record("field", vec![crate::preserves_rail::string(name), value])
 }
 
-fn strings_value<'a>(values: impl IntoIterator<Item = &'a str>) -> IOValue {
-    sequence(values.into_iter().map(string).collect())
+fn strings_value<'a>(values: impl IntoIterator<Item = &'a str>) -> preserves::IOValue {
+    crate::preserves_rail::sequence(values.into_iter().map(crate::preserves_rail::string).collect())
 }
 
-fn optional_string(value: Option<&str>) -> IOValue {
-    value.map_or_else(|| sequence(Vec::new()), |value| sequence(vec![string(value)]))
+fn optional_string(value: Option<&str>) -> preserves::IOValue {
+    value.map_or_else(
+        || crate::preserves_rail::sequence(Vec::new()),
+        |value| crate::preserves_rail::sequence(vec![crate::preserves_rail::string(value)]),
+    )
 }
 
-fn sorted_strings_value<'a>(values: impl IntoIterator<Item = &'a str>) -> IOValue {
+fn sorted_strings_value<'a>(values: impl IntoIterator<Item = &'a str>) -> preserves::IOValue {
     let mut values = values.into_iter().collect::<Vec<_>>();
     values.sort_unstable();
     strings_value(values)
 }
 
-fn checks(values: &[&str]) -> IOValue {
+fn checks(values: &[&str]) -> preserves::IOValue {
     strings_value(values.iter().copied())
 }

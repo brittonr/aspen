@@ -1,7 +1,4 @@
-use std::collections::VecDeque;
-
 use molten_core::addressable_actor::*;
-use molten_core::system_extension::LifecyclePhase;
 
 use super::super::*;
 
@@ -143,15 +140,15 @@ pub(super) fn host_binding(profile: &AddressableActorProfile, state: &ActorState
     }
 }
 
-fn extension_phase(phase: ActorPhase) -> LifecyclePhase {
+fn extension_phase(phase: ActorPhase) -> molten_core::system_extension::LifecyclePhase {
     match phase {
-        ActorPhase::Dormant => LifecyclePhase::Drained,
-        ActorPhase::Starting => LifecyclePhase::Starting,
-        ActorPhase::Running => LifecyclePhase::Running,
-        ActorPhase::Draining => LifecyclePhase::Draining,
-        ActorPhase::Stopped => LifecyclePhase::Stopped,
-        ActorPhase::Degraded => LifecyclePhase::Failed,
-        ActorPhase::Recovering => LifecyclePhase::Recovering,
+        ActorPhase::Dormant => molten_core::system_extension::LifecyclePhase::Drained,
+        ActorPhase::Starting => molten_core::system_extension::LifecyclePhase::Starting,
+        ActorPhase::Running => molten_core::system_extension::LifecyclePhase::Running,
+        ActorPhase::Draining => molten_core::system_extension::LifecyclePhase::Draining,
+        ActorPhase::Stopped => molten_core::system_extension::LifecyclePhase::Stopped,
+        ActorPhase::Degraded => molten_core::system_extension::LifecyclePhase::Failed,
+        ActorPhase::Recovering => molten_core::system_extension::LifecyclePhase::Recovering,
     }
 }
 
@@ -215,7 +212,7 @@ fn commit_observation(disposition: ActorCommitDisposition, state_ref: Option<Str
 }
 
 pub(super) struct MemoryEffectPort {
-    pub(super) scripted: VecDeque<ActorEffectDisposition>,
+    pub(super) scripted: std::collections::VecDeque<ActorEffectDisposition>,
     pub(super) deny_admission_at: Option<usize>,
     pub(super) admission_calls: usize,
     pub(super) execution_calls: usize,

@@ -1,9 +1,3 @@
-use molten_core::cluster_harness::FirstDivergence;
-use molten_core::cluster_harness::RunDirectoryAssessment;
-
-use crate::error::MoltenError;
-use crate::error::Result;
-
 pub type IoValue = preserves::IOValue;
 
 pub const FIXTURE_METADATA_KIND: &str = "cluster-harness-fixture-metadata";
@@ -94,7 +88,11 @@ pub struct ClusterRunVerificationReceipt {
 }
 
 // r[impl molten.testing.fixture_driven_cluster_execution.fixture_source_of_truth]
-pub fn fixture_metadata_value(fixture_ref: &str, node_ids: &[String], caveats: &[String]) -> Result<IoValue> {
+pub fn fixture_metadata_value(
+    fixture_ref: &str,
+    node_ids: &[String],
+    caveats: &[String],
+) -> crate::error::Result<IoValue> {
     crate::preserves_rail::validate_content_ref(fixture_ref)?;
     validate_non_empty_strings("fixture node", node_ids)?;
     validate_non_empty_strings("fixture caveat", caveats)?;
@@ -117,10 +115,10 @@ pub fn command_plan_value(
     node_ids: &[String],
     child_timeout_ms: u64,
     expected_artifact_kinds: &[String],
-) -> Result<IoValue> {
+) -> crate::error::Result<IoValue> {
     crate::preserves_rail::validate_content_ref(fixture_ref)?;
     if child_timeout_ms == 0 {
-        return Err(MoltenError::invalid_harness("cluster harness child timeout must be positive"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster harness child timeout must be positive"));
     }
     validate_non_empty_strings("command plan node", node_ids)?;
     validate_non_empty_strings("expected artifact kind", expected_artifact_kinds)?;
@@ -147,7 +145,7 @@ pub fn unavailable_cluster_lifecycle_value(
     node_ids: &[String],
     diagnostics: &[String],
     caveats: &[String],
-) -> Result<IoValue> {
+) -> crate::error::Result<IoValue> {
     crate::preserves_rail::validate_content_ref(fixture_ref)?;
     validate_non_empty_strings("unavailable lifecycle node", node_ids)?;
     validate_non_empty_strings("unavailable lifecycle diagnostic", diagnostics)?;
@@ -172,9 +170,9 @@ pub fn unavailable_cluster_lifecycle_value(
 }
 
 // r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]
-pub fn drift_summary_value(summary: &crate::drift_core::EvidenceSummary) -> Result<IoValue> {
+pub fn drift_summary_value(summary: &crate::drift_core::EvidenceSummary) -> crate::error::Result<IoValue> {
     if summary.workflow.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("cluster drift summary workflow must be non-empty"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster drift summary workflow must be non-empty"));
     }
     let fields = summary
         .fields
@@ -217,9 +215,9 @@ pub fn drift_summary_value(summary: &crate::drift_core::EvidenceSummary) -> Resu
 
 // r[impl molten.testing.local_multiprocess_cluster_tier.middle_tier]
 // r[impl molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
-pub fn child_process_value(input: &ClusterHarnessChildProcessInput) -> Result<IoValue> {
+pub fn child_process_value(input: &ClusterHarnessChildProcessInput) -> crate::error::Result<IoValue> {
     if input.node_id.trim().is_empty() || input.phase.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("cluster child process requires node and phase"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster child process requires node and phase"));
     }
     crate::preserves_rail::validate_content_ref(&input.command_profile_ref)?;
     crate::preserves_rail::validate_content_ref(&input.diagnostic_log_ref)?;
@@ -254,7 +252,7 @@ pub fn child_process_value(input: &ClusterHarnessChildProcessInput) -> Result<Io
 }
 
 // r[impl molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
-pub fn cleanup_value(input: &ClusterHarnessCleanupInput) -> Result<IoValue> {
+pub fn cleanup_value(input: &ClusterHarnessCleanupInput) -> crate::error::Result<IoValue> {
     validate_refs("cleanup child process", &input.child_process_refs)?;
     validate_refs("cleanup removed ticket", &input.removed_ticket_refs)?;
     validate_non_empty_strings("cleanup caveat", &input.caveats)?;
@@ -283,7 +281,9 @@ pub fn cleanup_value(input: &ClusterHarnessCleanupInput) -> Result<IoValue> {
 
 // r[impl molten.testing.receipt_first_cluster_harness.cli_receipt_surface]
 // r[impl molten.testing.fixture_driven_cluster_execution.observation_gate]
-pub fn build_cluster_harness_parent(input: &ClusterHarnessParentInput) -> Result<ClusterHarnessParentReceipt> {
+pub fn build_cluster_harness_parent(
+    input: &ClusterHarnessParentInput,
+) -> crate::error::Result<ClusterHarnessParentReceipt> {
     let bound_refs = [
         &input.fixture_ref,
         &input.command_plan_ref,
@@ -364,8 +364,8 @@ pub fn build_cluster_harness_parent(input: &ClusterHarnessParentInput) -> Result
 // r[impl molten.testing.receipt_first_cluster_harness.failure_triage]
 pub fn cluster_run_verification_value(
     index_ref: &str,
-    assessment: &RunDirectoryAssessment,
-) -> Result<ClusterRunVerificationReceipt> {
+    assessment: &molten_core::cluster_harness::RunDirectoryAssessment,
+) -> crate::error::Result<ClusterRunVerificationReceipt> {
     crate::preserves_rail::validate_content_ref(index_ref)?;
     let divergence = first_divergence_value(assessment.first_divergence.as_ref());
     let value = crate::preserves_rail::record("cluster-run-verification-v1", vec![
@@ -389,7 +389,7 @@ pub fn cluster_run_verification_value(
     })
 }
 
-pub fn artifact_decision(value: &IoValue, artifact_kind: &str) -> Result<Option<String>> {
+pub fn artifact_decision(value: &IoValue, artifact_kind: &str) -> crate::error::Result<Option<String>> {
     let (record_label, arity) = match artifact_kind {
         CLUSTER_RUN_KIND => ("cluster-harness-run-v1", CLUSTER_RUN_RECORD_ARITY),
         LOCAL_PLAN_KIND => ("local-multiprocess-plan-v1", LOCAL_PLAN_RECORD_ARITY),
@@ -413,7 +413,7 @@ pub fn content_ref_for_text(domain: &str, text: &str) -> String {
     format!("blake3:{}", hasher.finalize().to_hex())
 }
 
-fn first_divergence_value(divergence: Option<&FirstDivergence>) -> IoValue {
+fn first_divergence_value(divergence: Option<&molten_core::cluster_harness::FirstDivergence>) -> IoValue {
     let Some(divergence) = divergence else {
         return crate::preserves_rail::record("none", Vec::new());
     };
@@ -435,20 +435,23 @@ fn strings_sequence(values: &[String]) -> IoValue {
     crate::preserves_rail::sequence(values.iter().map(crate::preserves_rail::string).collect())
 }
 
-fn validate_refs(label: &str, refs: &[String]) -> Result<()> {
+fn validate_refs(label: &str, refs: &[String]) -> crate::error::Result<()> {
     for reference in refs {
-        crate::preserves_rail::validate_content_ref(reference)
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))?;
+        crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}"))
+        })?;
     }
     Ok(())
 }
 
-fn validate_non_empty_strings(label: &str, values: &[String]) -> Result<()> {
+fn validate_non_empty_strings(label: &str, values: &[String]) -> crate::error::Result<()> {
     if values.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{label} values must not be empty")));
+        return Err(crate::error::MoltenError::invalid_harness(format!("{label} values must not be empty")));
     }
     if values.iter().any(|value| value.trim().is_empty() || value.trim() != value) {
-        return Err(MoltenError::invalid_harness(format!("{label} values must be non-empty and unpadded")));
+        return Err(crate::error::MoltenError::invalid_harness(format!(
+            "{label} values must be non-empty and unpadded"
+        )));
     }
     Ok(())
 }

@@ -1,16 +1,4 @@
-use preserves::IOValue;
-
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric::DeterminismClass;
-use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
-use crate::fabric::FabricAuthority;
-use crate::fabric::FabricPortClass;
-use crate::fabric::FabricPortDescriptor;
-use crate::fabric::FabricResource;
-use crate::fabric::REQUIRED_FABRIC_NON_CLAIMS;
-use crate::fabric::ReplayClass;
 
 pub const FABRIC_OBSERVATION_PORT_ID: &str = "molten.fabric.observability";
 pub const FABRIC_INTEGRITY_PORT_ID: &str = "molten.fabric.integrity";
@@ -36,11 +24,13 @@ const SNAPSHOT_RECORD: &str = "fabric-observation-snapshot-v1";
 pub struct CanonicalArtifact<T> {
     pub artifact: T,
     pub artifact_ref: String,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 // r[impl molten.fabric_observability.model]
-pub fn canonical_observation_profile(profile: &ObservationProfile) -> Result<CanonicalArtifact<ObservationProfile>> {
+pub fn canonical_observation_profile(
+    profile: &ObservationProfile,
+) -> crate::error::Result<CanonicalArtifact<ObservationProfile>> {
     let issues = validate_observation_profile(profile);
     require_valid("observation profile", &issues)?;
     canonical_artifact(profile.clone(), observation_profile_value(profile))
@@ -49,7 +39,7 @@ pub fn canonical_observation_profile(profile: &ObservationProfile) -> Result<Can
 pub fn canonical_metric_descriptor(
     profile: &ObservationProfile,
     descriptor: &MetricDescriptor,
-) -> Result<CanonicalArtifact<MetricDescriptor>> {
+) -> crate::error::Result<CanonicalArtifact<MetricDescriptor>> {
     let issues = validate_metric_descriptor(profile, descriptor);
     require_valid("metric descriptor", &issues)?;
     canonical_artifact(descriptor.clone(), metric_descriptor_value(descriptor))
@@ -60,7 +50,7 @@ pub fn canonical_metric_sample(
     descriptor: &MetricDescriptor,
     sample: &MetricSample,
     as_of_tick: u64,
-) -> Result<CanonicalArtifact<MetricSample>> {
+) -> crate::error::Result<CanonicalArtifact<MetricSample>> {
     let sanitized = validate_metric_sample(profile, descriptor, sample, as_of_tick)
         .map_err(|issues| validation_error("metric sample", &issues))?;
     canonical_artifact(sanitized.clone(), metric_sample_value(&sanitized))
@@ -70,7 +60,7 @@ pub fn canonical_observation_event(
     profile: &ObservationProfile,
     event: &ObservationEvent,
     as_of_tick: u64,
-) -> Result<CanonicalArtifact<ObservationEvent>> {
+) -> crate::error::Result<CanonicalArtifact<ObservationEvent>> {
     let sanitized =
         validate_event(profile, event, as_of_tick).map_err(|issues| validation_error("observation event", &issues))?;
     canonical_artifact(sanitized.clone(), observation_event_value(&sanitized))
@@ -81,7 +71,7 @@ pub fn canonical_health_input(
     profile: &ObservationProfile,
     input: &HealthInput,
     as_of_tick: u64,
-) -> Result<CanonicalArtifact<HealthInput>> {
+) -> crate::error::Result<CanonicalArtifact<HealthInput>> {
     let mut issues = validate_observation_profile(profile);
     validate_health_input(profile, input, &mut issues);
     if as_of_tick > input.context.valid_until_tick {
@@ -94,14 +84,14 @@ pub fn canonical_health_input(
 pub fn canonical_readiness_policy(
     profile: &ObservationProfile,
     policy: &ReadinessPolicy,
-) -> Result<CanonicalArtifact<ReadinessPolicy>> {
+) -> crate::error::Result<CanonicalArtifact<ReadinessPolicy>> {
     let mut issues = validate_observation_profile(profile);
     validate_readiness_policy(profile, policy, &mut issues);
     require_valid("readiness policy", &issues)?;
     canonical_artifact(policy.clone(), readiness_policy_value(policy))
 }
 
-pub fn canonical_health_decision(decision: &HealthDecision) -> Result<CanonicalArtifact<HealthDecision>> {
+pub fn canonical_health_decision(decision: &HealthDecision) -> crate::error::Result<CanonicalArtifact<HealthDecision>> {
     canonical_artifact(decision.clone(), health_decision_value(decision))
 }
 
@@ -109,7 +99,7 @@ pub fn canonical_health_decision(decision: &HealthDecision) -> Result<CanonicalA
 pub fn canonical_integrity_plan(
     profile: &ObservationProfile,
     plan: &IntegrityPlan,
-) -> Result<CanonicalArtifact<IntegrityPlan>> {
+) -> crate::error::Result<CanonicalArtifact<IntegrityPlan>> {
     let probe = evaluate_integrity_plan(profile, plan, &[], &ScanCompletion {
         scanned_items: 0,
         declared_items: plan.targets.len(),
@@ -130,7 +120,7 @@ pub fn canonical_integrity_plan(
 pub fn canonical_scan_observation(
     plan: &IntegrityPlan,
     observation: &ScanObservation,
-) -> Result<CanonicalArtifact<ScanObservation>> {
+) -> crate::error::Result<CanonicalArtifact<ScanObservation>> {
     let issues = validate_scan_observation(plan, observation);
     require_valid("scan observation", &issues)?;
     canonical_artifact(observation.clone(), scan_observation_value(observation))
@@ -139,7 +129,7 @@ pub fn canonical_scan_observation(
 pub fn canonical_integrity_result(
     profile: &ObservationProfile,
     result: &IntegrityResult,
-) -> Result<CanonicalArtifact<IntegrityResult>> {
+) -> crate::error::Result<CanonicalArtifact<IntegrityResult>> {
     let issues = validate_integrity_result(profile, result);
     require_valid("integrity result", &issues)?;
     canonical_artifact(result.clone(), integrity_result_value(result))
@@ -149,7 +139,7 @@ pub fn canonical_integrity_result(
 pub fn canonical_observation_adapter_profile(
     observation_profile: &ObservationProfile,
     adapter: &ObservationAdapterProfile,
-) -> Result<CanonicalArtifact<ObservationAdapterProfile>> {
+) -> crate::error::Result<CanonicalArtifact<ObservationAdapterProfile>> {
     let issues = validate_adapter_profile(observation_profile, adapter);
     require_valid("observation adapter profile", &issues)?;
     canonical_artifact(adapter.clone(), adapter_profile_value(adapter))
@@ -159,7 +149,7 @@ pub fn canonical_adapter_outcome(
     profile: &ObservationProfile,
     adapter: &ObservationAdapterProfile,
     outcome: &AdapterOutcome,
-) -> Result<CanonicalArtifact<AdapterOutcome>> {
+) -> crate::error::Result<CanonicalArtifact<AdapterOutcome>> {
     let issues = validate_adapter_outcome(profile, adapter, outcome);
     require_valid("adapter outcome", &issues)?;
     canonical_artifact(outcome.clone(), adapter_outcome_value(outcome))
@@ -169,7 +159,7 @@ pub fn canonical_adapter_status(
     profile: &ObservationProfile,
     adapter: &ObservationAdapterProfile,
     status: &ObservationAdapterStatus,
-) -> Result<CanonicalArtifact<ObservationAdapterStatus>> {
+) -> crate::error::Result<CanonicalArtifact<ObservationAdapterStatus>> {
     let issues = validate_adapter_status(profile, adapter, status);
     require_valid("adapter status", &issues)?;
     canonical_artifact(status.clone(), adapter_status_value(status))
@@ -180,19 +170,19 @@ pub fn canonical_observation_snapshot(
     profile: &ObservationProfile,
     snapshot: &ObservationSnapshot,
     as_of_tick: u64,
-) -> Result<CanonicalArtifact<ObservationSnapshot>> {
+) -> crate::error::Result<CanonicalArtifact<ObservationSnapshot>> {
     let issues = validate_snapshot(profile, snapshot, as_of_tick);
     require_valid("observation snapshot", &issues)?;
     canonical_artifact(snapshot.clone(), observation_snapshot_value(snapshot))
 }
 
-pub fn fabric_observability_port_descriptors(profile_ref: &str) -> Vec<FabricPortDescriptor> {
+pub fn fabric_observability_port_descriptors(profile_ref: &str) -> Vec<crate::fabric::FabricPortDescriptor> {
     vec![
-        FabricPortDescriptor {
-            schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+        crate::fabric::FabricPortDescriptor {
+            schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
             port_id: FABRIC_OBSERVATION_PORT_ID.to_string(),
             version: FABRIC_OBSERVABILITY_PORT_VERSION.to_string(),
-            class: FabricPortClass::Evidence,
+            class: crate::fabric::FabricPortClass::Evidence,
             operation_classes: vec![
                 "emit-event".to_string(),
                 "emit-sample".to_string(),
@@ -207,29 +197,29 @@ pub fn fabric_observability_port_descriptors(profile_ref: &str) -> Vec<FabricPor
                 OBSERVATION_SNAPSHOT_SCHEMA.to_string(),
             ],
             authority_requirements: vec![
-                FabricAuthority::Time,
-                FabricAuthority::Resources,
-                FabricAuthority::Evidence,
+                crate::fabric::FabricAuthority::Time,
+                crate::fabric::FabricAuthority::Resources,
+                crate::fabric::FabricAuthority::Evidence,
             ],
             resource_requirements: vec![
-                FabricResource::Memory,
-                FabricResource::NetworkBytes,
-                FabricResource::QueueDepth,
-                FabricResource::LogicalTime,
-                FabricResource::Diagnostics,
+                crate::fabric::FabricResource::Memory,
+                crate::fabric::FabricResource::NetworkBytes,
+                crate::fabric::FabricResource::QueueDepth,
+                crate::fabric::FabricResource::LogicalTime,
+                crate::fabric::FabricResource::Diagnostics,
             ],
-            determinism: DeterminismClass::ExternalEffect,
-            replay: ReplayClass::RecordedEffectRequired,
+            determinism: crate::fabric::DeterminismClass::ExternalEffect,
+            replay: crate::fabric::ReplayClass::RecordedEffectRequired,
             implementation_profile: "bounded-canonical-observation-adapter".to_string(),
             conformance_refs: vec![profile_ref.to_string()],
-            non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+            non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
             enabled: true,
         },
-        FabricPortDescriptor {
-            schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+        crate::fabric::FabricPortDescriptor {
+            schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
             port_id: FABRIC_INTEGRITY_PORT_ID.to_string(),
             version: FABRIC_OBSERVABILITY_PORT_VERSION.to_string(),
-            class: FabricPortClass::Evidence,
+            class: crate::fabric::FabricPortClass::Evidence,
             operation_classes: vec![
                 "plan".to_string(),
                 "scan".to_string(),
@@ -242,26 +232,26 @@ pub fn fabric_observability_port_descriptors(profile_ref: &str) -> Vec<FabricPor
                 SCAN_OBSERVATION_SCHEMA.to_string(),
             ],
             authority_requirements: vec![
-                FabricAuthority::DurableState,
-                FabricAuthority::Resources,
-                FabricAuthority::Evidence,
+                crate::fabric::FabricAuthority::DurableState,
+                crate::fabric::FabricAuthority::Resources,
+                crate::fabric::FabricAuthority::Evidence,
             ],
             resource_requirements: vec![
-                FabricResource::Memory,
-                FabricResource::StorageBytes,
-                FabricResource::Diagnostics,
+                crate::fabric::FabricResource::Memory,
+                crate::fabric::FabricResource::StorageBytes,
+                crate::fabric::FabricResource::Diagnostics,
             ],
-            determinism: DeterminismClass::ExternalEffect,
-            replay: ReplayClass::RecordedEffectRequired,
+            determinism: crate::fabric::DeterminismClass::ExternalEffect,
+            replay: crate::fabric::ReplayClass::RecordedEffectRequired,
             implementation_profile: "read-only-capability-rooted-scan".to_string(),
             conformance_refs: vec![profile_ref.to_string()],
-            non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+            non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
             enabled: true,
         },
     ]
 }
 
-fn observation_profile_value(profile: &ObservationProfile) -> IOValue {
+fn observation_profile_value(profile: &ObservationProfile) -> preserves::IOValue {
     record(PROFILE_RECORD, vec![
         string(OBSERVATION_PROFILE_SCHEMA),
         field("profile-id", string(&profile.profile_id)),
@@ -277,7 +267,7 @@ fn observation_profile_value(profile: &ObservationProfile) -> IOValue {
     ])
 }
 
-fn metric_descriptor_value(descriptor: &MetricDescriptor) -> IOValue {
+fn metric_descriptor_value(descriptor: &MetricDescriptor) -> preserves::IOValue {
     record(DESCRIPTOR_RECORD, vec![
         string(METRIC_DESCRIPTOR_SCHEMA),
         field("descriptor-id", string(&descriptor.descriptor_id)),
@@ -293,7 +283,7 @@ fn metric_descriptor_value(descriptor: &MetricDescriptor) -> IOValue {
     ])
 }
 
-fn metric_sample_value(sample: &MetricSample) -> IOValue {
+fn metric_sample_value(sample: &MetricSample) -> preserves::IOValue {
     record(SAMPLE_RECORD, vec![
         string(METRIC_SAMPLE_SCHEMA),
         field("declared-sample-ref", string(&sample.sample_ref)),
@@ -305,7 +295,7 @@ fn metric_sample_value(sample: &MetricSample) -> IOValue {
     ])
 }
 
-fn observation_event_value(event: &ObservationEvent) -> IOValue {
+fn observation_event_value(event: &ObservationEvent) -> preserves::IOValue {
     record(EVENT_RECORD, vec![
         string(OBSERVATION_EVENT_SCHEMA),
         field("declared-event-ref", string(&event.event_ref)),
@@ -318,7 +308,7 @@ fn observation_event_value(event: &ObservationEvent) -> IOValue {
     ])
 }
 
-fn health_input_value(input: &HealthInput) -> IOValue {
+fn health_input_value(input: &HealthInput) -> preserves::IOValue {
     record(HEALTH_INPUT_RECORD, vec![
         string(HEALTH_INPUT_SCHEMA),
         field("declared-health-ref", string(&input.health_ref)),
@@ -329,7 +319,7 @@ fn health_input_value(input: &HealthInput) -> IOValue {
     ])
 }
 
-fn readiness_policy_value(policy: &ReadinessPolicy) -> IOValue {
+fn readiness_policy_value(policy: &ReadinessPolicy) -> preserves::IOValue {
     record(READINESS_POLICY_RECORD, vec![
         string(READINESS_POLICY_SCHEMA),
         field("policy-ref", string(&policy.policy_ref)),
@@ -342,7 +332,7 @@ fn readiness_policy_value(policy: &ReadinessPolicy) -> IOValue {
     ])
 }
 
-fn health_decision_value(decision: &HealthDecision) -> IOValue {
+fn health_decision_value(decision: &HealthDecision) -> preserves::IOValue {
     record(HEALTH_DECISION_RECORD, vec![
         string(HEALTH_DECISION_SCHEMA),
         field("prior-state", string(decision.prior_state.as_str())),
@@ -359,7 +349,7 @@ fn health_decision_value(decision: &HealthDecision) -> IOValue {
     ])
 }
 
-fn integrity_plan_value(plan: &IntegrityPlan) -> IOValue {
+fn integrity_plan_value(plan: &IntegrityPlan) -> preserves::IOValue {
     record(INTEGRITY_PLAN_RECORD, vec![
         string(INTEGRITY_PLAN_SCHEMA),
         field("declared-plan-ref", string(&plan.plan_ref)),
@@ -379,7 +369,7 @@ fn integrity_plan_value(plan: &IntegrityPlan) -> IOValue {
     ])
 }
 
-fn scan_observation_value(observation: &ScanObservation) -> IOValue {
+fn scan_observation_value(observation: &ScanObservation) -> preserves::IOValue {
     record(SCAN_OBSERVATION_RECORD, vec![
         string(SCAN_OBSERVATION_SCHEMA),
         field("declared-observation-ref", string(&observation.observation_ref)),
@@ -394,7 +384,7 @@ fn scan_observation_value(observation: &ScanObservation) -> IOValue {
     ])
 }
 
-fn integrity_result_value(result: &IntegrityResult) -> IOValue {
+fn integrity_result_value(result: &IntegrityResult) -> preserves::IOValue {
     record(INTEGRITY_RESULT_RECORD, vec![
         string(INTEGRITY_RESULT_SCHEMA),
         field("plan-ref", string(&result.plan_ref)),
@@ -413,7 +403,7 @@ fn integrity_result_value(result: &IntegrityResult) -> IOValue {
     ])
 }
 
-fn adapter_profile_value(adapter: &ObservationAdapterProfile) -> IOValue {
+fn adapter_profile_value(adapter: &ObservationAdapterProfile) -> preserves::IOValue {
     record(ADAPTER_PROFILE_RECORD, vec![
         string(OBSERVATION_ADAPTER_PROFILE_SCHEMA),
         field("adapter-id", string(&adapter.adapter_id)),
@@ -430,7 +420,7 @@ fn adapter_profile_value(adapter: &ObservationAdapterProfile) -> IOValue {
     ])
 }
 
-fn adapter_outcome_value(outcome: &AdapterOutcome) -> IOValue {
+fn adapter_outcome_value(outcome: &AdapterOutcome) -> preserves::IOValue {
     record(ADAPTER_OUTCOME_RECORD, vec![
         string(OBSERVATION_ADAPTER_OUTCOME_SCHEMA),
         field("operation-ref", string(&outcome.operation_ref)),
@@ -444,7 +434,7 @@ fn adapter_outcome_value(outcome: &AdapterOutcome) -> IOValue {
     ])
 }
 
-fn adapter_status_value(status: &ObservationAdapterStatus) -> IOValue {
+fn adapter_status_value(status: &ObservationAdapterStatus) -> preserves::IOValue {
     record(ADAPTER_STATUS_RECORD, vec![
         string(OBSERVATION_ADAPTER_STATUS_SCHEMA),
         field("adapter-ref", string(&status.adapter_ref)),
@@ -459,7 +449,7 @@ fn adapter_status_value(status: &ObservationAdapterStatus) -> IOValue {
     ])
 }
 
-fn observation_snapshot_value(snapshot: &ObservationSnapshot) -> IOValue {
+fn observation_snapshot_value(snapshot: &ObservationSnapshot) -> preserves::IOValue {
     record(SNAPSHOT_RECORD, vec![
         string(OBSERVATION_SNAPSHOT_SCHEMA),
         field("snapshot-id", string(&snapshot.snapshot_id)),
@@ -483,7 +473,7 @@ fn observation_snapshot_value(snapshot: &ObservationSnapshot) -> IOValue {
     ])
 }
 
-fn bounds_value(bounds: &ObservationBounds) -> IOValue {
+fn bounds_value(bounds: &ObservationBounds) -> preserves::IOValue {
     record("observation-bounds", vec![
         field("max-descriptors", usize_value(bounds.max_descriptors)),
         field("max-labels-per-sample", usize_value(bounds.max_labels_per_sample)),
@@ -501,7 +491,7 @@ fn bounds_value(bounds: &ObservationBounds) -> IOValue {
     ])
 }
 
-fn context_value(context: &ObservationContext) -> IOValue {
+fn context_value(context: &ObservationContext) -> preserves::IOValue {
     record("observation-context", vec![
         field("source-id", string(&context.source_id)),
         field("source-ref", string(&context.source_ref)),
@@ -516,7 +506,7 @@ fn context_value(context: &ObservationContext) -> IOValue {
     ])
 }
 
-fn redaction_rule_value(rule: &RedactionRule) -> IOValue {
+fn redaction_rule_value(rule: &RedactionRule) -> preserves::IOValue {
     record("redaction-rule", vec![
         field("label-name", string(&rule.label_name)),
         field("class", string(rule.class.as_str())),
@@ -524,7 +514,7 @@ fn redaction_rule_value(rule: &RedactionRule) -> IOValue {
     ])
 }
 
-fn labels_value(labels: &[MetricLabel]) -> IOValue {
+fn labels_value(labels: &[MetricLabel]) -> preserves::IOValue {
     sequence(
         labels
             .iter()
@@ -539,7 +529,7 @@ fn labels_value(labels: &[MetricLabel]) -> IOValue {
     )
 }
 
-fn integrity_target_value(target: &IntegrityTarget) -> IOValue {
+fn integrity_target_value(target: &IntegrityTarget) -> preserves::IOValue {
     record("integrity-target", vec![
         field("item-ref", string(&target.item_ref)),
         field("kind", string(target.kind.as_str())),
@@ -548,7 +538,7 @@ fn integrity_target_value(target: &IntegrityTarget) -> IOValue {
     ])
 }
 
-fn integrity_finding_value(finding: &IntegrityFinding) -> IOValue {
+fn integrity_finding_value(finding: &IntegrityFinding) -> preserves::IOValue {
     record(INTEGRITY_FINDING_RECORD, vec![
         string(INTEGRITY_FINDING_SCHEMA),
         field("finding-id", string(&finding.finding_id)),
@@ -561,7 +551,7 @@ fn integrity_finding_value(finding: &IntegrityFinding) -> IOValue {
     ])
 }
 
-fn aggregated_series_value(series: &AggregatedSeries) -> IOValue {
+fn aggregated_series_value(series: &AggregatedSeries) -> preserves::IOValue {
     record("aggregated-series", vec![
         field("descriptor-ref", string(&series.identity.descriptor_ref)),
         field("labels", labels_value(&series.identity.labels)),
@@ -576,11 +566,11 @@ fn aggregated_series_value(series: &AggregatedSeries) -> IOValue {
     ])
 }
 
-fn non_claims_value(non_claims: &[ObservabilityNonClaim]) -> IOValue {
+fn non_claims_value(non_claims: &[ObservabilityNonClaim]) -> preserves::IOValue {
     strings_value(non_claims.iter().map(|claim| claim.as_str()))
 }
 
-fn issues_value(issues: &[ObservabilityIssue]) -> IOValue {
+fn issues_value(issues: &[ObservabilityIssue]) -> preserves::IOValue {
     strings_value(issues.iter().map(issue_code))
 }
 
@@ -630,7 +620,7 @@ fn issue_code(issue: &ObservabilityIssue) -> &'static str {
     }
 }
 
-fn canonical_artifact<T>(artifact: T, value: IOValue) -> Result<CanonicalArtifact<T>> {
+fn canonical_artifact<T>(artifact: T, value: preserves::IOValue) -> crate::error::Result<CanonicalArtifact<T>> {
     let artifact_ref = canonical_hash(&value)?;
     Ok(CanonicalArtifact {
         artifact,
@@ -639,7 +629,7 @@ fn canonical_artifact<T>(artifact: T, value: IOValue) -> Result<CanonicalArtifac
     })
 }
 
-fn require_valid(label: &str, issues: &[ObservabilityIssue]) -> Result<()> {
+fn require_valid(label: &str, issues: &[ObservabilityIssue]) -> crate::error::Result<()> {
     if issues.is_empty() {
         Ok(())
     } else {
@@ -647,70 +637,70 @@ fn require_valid(label: &str, issues: &[ObservabilityIssue]) -> Result<()> {
     }
 }
 
-fn validation_error(label: &str, issues: &[ObservabilityIssue]) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn validation_error(label: &str, issues: &[ObservabilityIssue]) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
 }
 
-fn checks(names: &[&str]) -> IOValue {
+fn checks(names: &[&str]) -> preserves::IOValue {
     field(
         "checks",
         sequence(names.iter().map(|name| record("check", vec![string(name), string("pass")])).collect()),
     )
 }
 
-fn strings_value<'a>(values: impl Iterator<Item = &'a str>) -> IOValue {
+fn strings_value<'a>(values: impl Iterator<Item = &'a str>) -> preserves::IOValue {
     sequence(values.map(string).collect())
 }
 
-fn optional_string(value: Option<&str>) -> IOValue {
+fn optional_string(value: Option<&str>) -> preserves::IOValue {
     match value {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn optional_u64(value: Option<u64>) -> IOValue {
+fn optional_u64(value: Option<u64>) -> preserves::IOValue {
     match value {
         Some(value) => record("some", vec![u64_value(value)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn usize_value(value: usize) -> IOValue {
+fn usize_value(value: usize) -> preserves::IOValue {
     match u64::try_from(value) {
         Ok(value) => u64_value(value),
         Err(_) => record("usize-overflow", Vec::new()),
     }
 }
 
-fn i64_value(value: i64) -> IOValue {
-    IOValue::new(value)
+fn i64_value(value: i64) -> preserves::IOValue {
+    preserves::IOValue::new(value)
 }
 
-fn bool_value(value: bool) -> IOValue {
+fn bool_value(value: bool) -> preserves::IOValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &preserves::IOValue) -> crate::error::Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn field(label: &'static str, value: IOValue) -> IOValue {
+fn field(label: &'static str, value: preserves::IOValue) -> preserves::IOValue {
     record(label, vec![value])
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> preserves::IOValue {
     crate::preserves_rail::string(value.as_ref())
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> preserves::IOValue {
     crate::preserves_rail::u64_value(value)
 }

@@ -1,13 +1,9 @@
-use super::super::model::ComponentRuntimeProfile;
-use super::super::model::sorted_unique;
-use super::ComponentArtifactFacts;
-
 pub(crate) fn validate_features(
-    profile: &ComponentRuntimeProfile,
-    facts: &ComponentArtifactFacts,
+    profile: &super::super::model::ComponentRuntimeProfile,
+    facts: &super::ComponentArtifactFacts,
     blockers: &mut Vec<String>,
 ) {
-    if sorted_unique(&facts.enabled_features) != facts.enabled_features {
+    if super::super::model::sorted_unique(&facts.enabled_features) != facts.enabled_features {
         blockers.push("component feature facts must be sorted and unique".to_string());
         return;
     }

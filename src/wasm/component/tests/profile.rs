@@ -1,6 +1,4 @@
 use super::super::*;
-use super::support::fixture_ref;
-use super::support::identity_component_bytes;
 
 #[test]
 fn component_profile_export_binds_exact_toolchain_wit_and_determinism() {
@@ -44,10 +42,10 @@ fn component_profile_rejects_stale_partial_or_authority_bearing_cohort() {
 fn artifact_classifier_keeps_core_and_component_profiles_distinct_without_fallback() {
     // r[verify molten.wasm_component.migration]
     let core = wat::parse_str("(module)").expect("core module");
-    let component = identity_component_bytes();
+    let component = super::support::identity_component_bytes();
     assert_eq!(classify_wasm_artifact(&core).expect("classify core"), WasmArtifactKind::CoreModule);
     assert_eq!(classify_wasm_artifact(&component).expect("classify component"), WasmArtifactKind::Component);
     assert!(classify_for_profile(RequestedExecutionProfile::ComponentV1, &core).is_err());
     assert!(classify_for_profile(RequestedExecutionProfile::LegacyCoreV1, &component).is_err());
-    assert!(classify_wasm_artifact(fixture_ref("not-wasm").as_bytes()).is_err());
+    assert!(classify_wasm_artifact(super::support::fixture_ref("not-wasm").as_bytes()).is_err());
 }

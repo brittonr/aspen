@@ -1,32 +1,5 @@
-use std::collections::BTreeMap;
-
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric::DeterminismClass;
-use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
-use crate::fabric::FabricAuthority;
-use crate::fabric::FabricPortClass;
-use crate::fabric::FabricPortDescriptor;
-use crate::fabric::FabricPortKey;
-use crate::fabric::FabricPortRequirement;
-use crate::fabric::FabricResource;
-use crate::fabric::REQUIRED_FABRIC_NON_CLAIMS;
-use crate::fabric::ReferenceSystemKind;
-use crate::fabric::ReplayClass;
-use crate::system_extension::CallbackInvocation;
-use crate::system_extension::CallbackKind;
-use crate::system_extension::CallbackOutcome;
-use crate::system_extension::EffectTarget;
-use crate::system_extension::ExecutionProfile;
-use crate::system_extension::HealthState;
-use crate::system_extension::OverloadPolicy;
-use crate::system_extension::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS;
-use crate::system_extension::ResourceEnvelope;
-use crate::system_extension::SYSTEM_EXTENSION_MANIFEST_SCHEMA;
 use crate::system_extension::SystemExtensionExecutor;
-use crate::system_extension::SystemExtensionManifestInput;
-use crate::system_extension::TypedEffectRequest;
 
 const REFERENCE_MAX_CONCURRENT_CALLBACKS: u64 = 1;
 const REFERENCE_MAX_QUEUED_EVENTS: u64 = 64;
@@ -44,19 +17,19 @@ const REFERENCE_PORT_OPERATION: &str = "apply";
 #[derive(Debug, Clone)]
 pub struct ReferenceServiceExecutor {
     state: ReferenceServiceState,
-    operations: BTreeMap<String, ReferenceServiceOperation>,
-    port_profiles: BTreeMap<FabricPortClass, SimulatedPortProfile>,
+    operations: std::collections::BTreeMap<String, ReferenceServiceOperation>,
+    port_profiles: std::collections::BTreeMap<crate::fabric::FabricPortClass, SimulatedPortProfile>,
     last_transition: Option<ReferenceServiceTransition>,
 }
 
 impl ReferenceServiceExecutor {
     pub fn new(
-        kind: ReferenceSystemKind,
-        operations: BTreeMap<String, ReferenceServiceOperation>,
+        kind: crate::fabric::ReferenceSystemKind,
+        operations: std::collections::BTreeMap<String, ReferenceServiceOperation>,
         port_profiles: &[SimulatedPortProfile],
-    ) -> Result<Self> {
+    ) -> crate::error::Result<Self> {
         if operations.values().any(|operation| operation.kind() != kind) {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::MoltenError::invalid_harness(
                 "reference executor operation kind does not match its extension service",
             ));
         }
@@ -83,24 +56,27 @@ impl ReferenceServiceExecutor {
 }
 
 impl SystemExtensionExecutor for ReferenceServiceExecutor {
-    fn execution_profile(&self) -> ExecutionProfile {
-        ExecutionProfile::InProcessNative
+    fn execution_profile(&self) -> crate::system_extension::ExecutionProfile {
+        crate::system_extension::ExecutionProfile::InProcessNative
     }
 
-    fn invoke(&mut self, invocation: &CallbackInvocation) -> std::result::Result<CallbackOutcome, String> {
-        if invocation.callback != CallbackKind::Request {
+    fn invoke(
+        &mut self,
+        invocation: &crate::system_extension::CallbackInvocation,
+    ) -> std::result::Result<crate::system_extension::CallbackOutcome, String> {
+        if invocation.callback != crate::system_extension::CallbackKind::Request {
             let state_ref = self.current_state_ref();
-            let checkpoint_ref = if invocation.callback == CallbackKind::Checkpoint {
+            let checkpoint_ref = if invocation.callback == crate::system_extension::CallbackKind::Checkpoint {
                 Some(state_ref.clone())
             } else {
                 None
             };
-            return Ok(CallbackOutcome {
+            return Ok(crate::system_extension::CallbackOutcome {
                 output_refs: vec![state_ref.clone()],
                 effects: Vec::new(),
                 state_ref: Some(state_ref),
                 checkpoint_ref,
-                health: HealthState::Healthy,
+                health: crate::system_extension::HealthState::Healthy,
             });
         }
         let payload_ref = invocation
@@ -122,12 +98,12 @@ impl SystemExtensionExecutor for ReferenceServiceExecutor {
         let state_ref = blake3_ref(transition.state_material.as_bytes());
         let decision_ref = blake3_ref(transition.decision.as_str().as_bytes());
         self.last_transition = Some(transition);
-        Ok(CallbackOutcome {
+        Ok(crate::system_extension::CallbackOutcome {
             output_refs: vec![decision_ref],
             effects,
             state_ref: Some(state_ref),
             checkpoint_ref: None,
-            health: HealthState::Healthy,
+            health: crate::system_extension::HealthState::Healthy,
         })
     }
 }
@@ -135,17 +111,17 @@ impl SystemExtensionExecutor for ReferenceServiceExecutor {
 impl ReferenceServiceExecutor {
     fn effect_for(
         &self,
-        class: FabricPortClass,
+        class: crate::fabric::FabricPortClass,
         payload_ref: &str,
         generation: u64,
-    ) -> std::result::Result<TypedEffectRequest, String> {
+    ) -> std::result::Result<crate::system_extension::TypedEffectRequest, String> {
         let profile = self
             .port_profiles
             .get(&class)
             .ok_or_else(|| format!("reference service has no deterministic {} port profile", class.as_str()))?;
         let request_material = format!("{payload_ref}:{}:{generation}", class.as_str());
-        Ok(TypedEffectRequest {
-            target: EffectTarget::FabricPort(FabricPortKey {
+        Ok(crate::system_extension::TypedEffectRequest {
+            target: crate::system_extension::EffectTarget::FabricPort(crate::fabric::FabricPortKey {
                 port_id: profile.port_id.clone(),
                 version: profile.version.clone(),
             }),
@@ -180,11 +156,11 @@ pub fn reference_port_profiles() -> Vec<SimulatedPortProfile> {
         .collect()
 }
 
-pub fn reference_port_descriptors(profiles: &[SimulatedPortProfile]) -> Vec<FabricPortDescriptor> {
+pub fn reference_port_descriptors(profiles: &[SimulatedPortProfile]) -> Vec<crate::fabric::FabricPortDescriptor> {
     profiles
         .iter()
-        .map(|profile| FabricPortDescriptor {
-            schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+        .map(|profile| crate::fabric::FabricPortDescriptor {
+            schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
             port_id: profile.port_id.clone(),
             version: profile.version.clone(),
             class: profile.class,
@@ -193,28 +169,28 @@ pub fn reference_port_descriptors(profiles: &[SimulatedPortProfile]) -> Vec<Fabr
             output_schema_refs: vec![profile.event_schema_ref.clone()],
             authority_requirements: vec![authority_for_class(profile.class)],
             resource_requirements: vec![resource_for_class(profile.class)],
-            determinism: DeterminismClass::DeterministicWithRecordedInputs,
-            replay: ReplayClass::Recompute,
+            determinism: crate::fabric::DeterminismClass::DeterministicWithRecordedInputs,
+            replay: crate::fabric::ReplayClass::Recompute,
             implementation_profile: profile.implementation_profile.clone(),
             conformance_refs: vec![profile.descriptor_ref.clone()],
-            non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+            non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
             enabled: true,
         })
         .collect()
 }
 
 pub fn reference_manifest_input(
-    kind: ReferenceSystemKind,
+    kind: crate::fabric::ReferenceSystemKind,
     implementation_ref: String,
     profiles: &[SimulatedPortProfile],
-) -> Result<SystemExtensionManifestInput> {
+) -> crate::error::Result<crate::system_extension::SystemExtensionManifestInput> {
     let required_classes = reference_required_ports(kind);
     let mut required_ports = Vec::with_capacity(required_classes.len());
     for class in required_classes {
         let profile = profiles.iter().find(|profile| profile.class == class).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("missing {} reference port profile", class.as_str()))
+            crate::error::MoltenError::invalid_harness(format!("missing {} reference port profile", class.as_str()))
         })?;
-        required_ports.push(FabricPortRequirement {
+        required_ports.push(crate::fabric::FabricPortRequirement {
             port_id: profile.port_id.clone(),
             version: profile.version.clone(),
             class,
@@ -223,14 +199,14 @@ pub fn reference_manifest_input(
             output_schema_refs: vec![profile.event_schema_ref.clone()],
             allowed_authorities: vec![authority_for_class(class)],
             available_resources: vec![resource_for_class(class)],
-            expected_determinism: DeterminismClass::DeterministicWithRecordedInputs,
-            expected_replay: ReplayClass::Recompute,
+            expected_determinism: crate::fabric::DeterminismClass::DeterministicWithRecordedInputs,
+            expected_replay: crate::fabric::ReplayClass::Recompute,
             expected_profile: profile.implementation_profile.clone(),
         });
     }
     let service = kind.as_str();
-    Ok(SystemExtensionManifestInput {
-        schema: SYSTEM_EXTENSION_MANIFEST_SCHEMA.to_string(),
+    Ok(crate::system_extension::SystemExtensionManifestInput {
+        schema: crate::system_extension::SYSTEM_EXTENSION_MANIFEST_SCHEMA.to_string(),
         extension_id: format!("molten.reference.{service}.extension"),
         service_id: format!("molten.reference.{service}"),
         implementation_ref,
@@ -249,7 +225,7 @@ pub fn reference_manifest_input(
         capability_refs: vec![blake3_ref(format!("capability:{service}").as_bytes())],
         policy_refs: vec![blake3_ref(format!("policy:{service}").as_bytes())],
         provenance_refs: vec![blake3_ref(format!("provenance:{service}").as_bytes())],
-        resources: ResourceEnvelope {
+        resources: crate::system_extension::ResourceEnvelope {
             max_concurrent_callbacks: REFERENCE_MAX_CONCURRENT_CALLBACKS,
             max_queued_events: REFERENCE_MAX_QUEUED_EVENTS,
             max_inflight_bytes: REFERENCE_MAX_INFLIGHT_BYTES,
@@ -259,29 +235,29 @@ pub fn reference_manifest_input(
             callback_deadline_ticks: REFERENCE_CALLBACK_DEADLINE_TICKS,
             shutdown_grace_ticks: REFERENCE_SHUTDOWN_GRACE_TICKS,
             max_restart_attempts: REFERENCE_MAX_RESTART_ATTEMPTS,
-            overload_policy: OverloadPolicy::UpstreamBackpressure,
+            overload_policy: crate::system_extension::OverloadPolicy::UpstreamBackpressure,
         },
-        execution_profile: ExecutionProfile::InProcessNative,
+        execution_profile: crate::system_extension::ExecutionProfile::InProcessNative,
         state_schema: format!("molten.reference.{service}.state.v1"),
         compatible_state_schemas: vec![format!("molten.reference.{service}.state.v1")],
         evidence_profile_ref: blake3_ref(format!("evidence:{service}").as_bytes()),
         initial_generation: REFERENCE_INITIAL_GENERATION,
-        non_claims: REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
+        non_claims: crate::system_extension::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
     })
 }
 
-pub fn reference_required_ports(_kind: ReferenceSystemKind) -> Vec<FabricPortClass> {
+pub fn reference_required_ports(_kind: crate::fabric::ReferenceSystemKind) -> Vec<crate::fabric::FabricPortClass> {
     REQUIRED_SIMULATION_PORT_CLASSES.to_vec()
 }
 
-pub fn all_reference_authorities() -> Vec<FabricAuthority> {
+pub fn all_reference_authorities() -> Vec<crate::fabric::FabricAuthority> {
     let mut authorities = REQUIRED_SIMULATION_PORT_CLASSES.into_iter().map(authority_for_class).collect::<Vec<_>>();
     authorities.sort();
     authorities.dedup();
     authorities
 }
 
-pub fn default_reference_operations() -> Vec<(ReferenceSystemKind, String, ReferenceServiceOperation)> {
+pub fn default_reference_operations() -> Vec<(crate::fabric::ReferenceSystemKind, String, ReferenceServiceOperation)> {
     let kv_request = blake3_ref(b"reference-kv-commit");
     let log_append_request = blake3_ref(b"reference-log-append");
     let log_replicate_request = blake3_ref(b"reference-log-replicate");
@@ -290,7 +266,7 @@ pub fn default_reference_operations() -> Vec<(ReferenceSystemKind, String, Refer
     let scheduler_complete_request = blake3_ref(b"reference-scheduler-complete");
     vec![
         (
-            ReferenceSystemKind::TransactionalKeyValue,
+            crate::fabric::ReferenceSystemKind::TransactionalKeyValue,
             kv_request,
             ReferenceServiceOperation::TransactionalKeyValue(TransactionalKeyValueOperation::Commit {
                 expected_version: initial_transaction_version(),
@@ -298,26 +274,26 @@ pub fn default_reference_operations() -> Vec<(ReferenceSystemKind, String, Refer
             }),
         ),
         (
-            ReferenceSystemKind::ReplicatedLog,
+            crate::fabric::ReferenceSystemKind::ReplicatedLog,
             log_append_request,
             ReferenceServiceOperation::ReplicatedLog(ReplicatedLogOperation::Append {
                 payload_ref: blake3_ref(b"log-entry-a"),
             }),
         ),
         (
-            ReferenceSystemKind::ReplicatedLog,
+            crate::fabric::ReferenceSystemKind::ReplicatedLog,
             log_replicate_request,
             ReferenceServiceOperation::ReplicatedLog(ReplicatedLogOperation::ReplicateThrough { offset: 0 }),
         ),
         (
-            ReferenceSystemKind::DistributedScheduler,
+            crate::fabric::ReferenceSystemKind::DistributedScheduler,
             scheduler_submit_request,
             ReferenceServiceOperation::DistributedScheduler(DistributedSchedulerOperation::Submit {
                 job_id: "job-a".to_string(),
             }),
         ),
         (
-            ReferenceSystemKind::DistributedScheduler,
+            crate::fabric::ReferenceSystemKind::DistributedScheduler,
             scheduler_lease_request,
             ReferenceServiceOperation::DistributedScheduler(DistributedSchedulerOperation::Lease {
                 job_id: "job-a".to_string(),
@@ -325,7 +301,7 @@ pub fn default_reference_operations() -> Vec<(ReferenceSystemKind, String, Refer
             }),
         ),
         (
-            ReferenceSystemKind::DistributedScheduler,
+            crate::fabric::ReferenceSystemKind::DistributedScheduler,
             scheduler_complete_request,
             ReferenceServiceOperation::DistributedScheduler(DistributedSchedulerOperation::Complete {
                 job_id: "job-a".to_string(),
@@ -337,9 +313,9 @@ pub fn default_reference_operations() -> Vec<(ReferenceSystemKind, String, Refer
 }
 
 pub fn operations_for_kind(
-    operations: &[(ReferenceSystemKind, String, ReferenceServiceOperation)],
-    kind: ReferenceSystemKind,
-) -> BTreeMap<String, ReferenceServiceOperation> {
+    operations: &[(crate::fabric::ReferenceSystemKind, String, ReferenceServiceOperation)],
+    kind: crate::fabric::ReferenceSystemKind,
+) -> std::collections::BTreeMap<String, ReferenceServiceOperation> {
     operations
         .iter()
         .filter(|(operation_kind, _, _)| *operation_kind == kind)
@@ -347,15 +323,15 @@ pub fn operations_for_kind(
         .collect()
 }
 
-pub fn simulation_port_id(class: FabricPortClass) -> String {
+pub fn simulation_port_id(class: crate::fabric::FabricPortClass) -> String {
     format!("molten.fabric.simulation.{}", class.as_str())
 }
 
-pub fn simulation_command_schema(class: FabricPortClass) -> String {
+pub fn simulation_command_schema(class: crate::fabric::FabricPortClass) -> String {
     format!("molten.fabric.simulation.{}.command.v1", class.as_str())
 }
 
-pub fn simulation_event_schema(class: FabricPortClass) -> String {
+pub fn simulation_event_schema(class: crate::fabric::FabricPortClass) -> String {
     format!("molten.fabric.simulation.{}.event.v1", class.as_str())
 }
 
@@ -363,46 +339,48 @@ pub fn blake3_ref(bytes: &[u8]) -> String {
     format!("blake3:{}", blake3::hash(bytes).to_hex())
 }
 
-fn authority_for_class(class: FabricPortClass) -> FabricAuthority {
+fn authority_for_class(class: crate::fabric::FabricPortClass) -> crate::fabric::FabricAuthority {
     match class {
-        FabricPortClass::Authority => FabricAuthority::ProtocolOwnership,
-        FabricPortClass::Transport => FabricAuthority::Transport,
-        FabricPortClass::DurableState => FabricAuthority::DurableState,
-        FabricPortClass::Execution => FabricAuthority::Execution,
-        FabricPortClass::Time => FabricAuthority::Time,
-        FabricPortClass::Scheduling => FabricAuthority::Scheduling,
-        FabricPortClass::Membership => FabricAuthority::Membership,
-        FabricPortClass::Placement => FabricAuthority::Placement,
-        FabricPortClass::Consistency => FabricAuthority::Consistency,
-        FabricPortClass::Supervision => FabricAuthority::Supervision,
-        FabricPortClass::Policy => FabricAuthority::Policy,
-        FabricPortClass::Resources => FabricAuthority::Resources,
-        FabricPortClass::Simulation => FabricAuthority::Simulation,
-        FabricPortClass::Evidence => FabricAuthority::Evidence,
+        crate::fabric::FabricPortClass::Authority => crate::fabric::FabricAuthority::ProtocolOwnership,
+        crate::fabric::FabricPortClass::Transport => crate::fabric::FabricAuthority::Transport,
+        crate::fabric::FabricPortClass::DurableState => crate::fabric::FabricAuthority::DurableState,
+        crate::fabric::FabricPortClass::Execution => crate::fabric::FabricAuthority::Execution,
+        crate::fabric::FabricPortClass::Time => crate::fabric::FabricAuthority::Time,
+        crate::fabric::FabricPortClass::Scheduling => crate::fabric::FabricAuthority::Scheduling,
+        crate::fabric::FabricPortClass::Membership => crate::fabric::FabricAuthority::Membership,
+        crate::fabric::FabricPortClass::Placement => crate::fabric::FabricAuthority::Placement,
+        crate::fabric::FabricPortClass::Consistency => crate::fabric::FabricAuthority::Consistency,
+        crate::fabric::FabricPortClass::Supervision => crate::fabric::FabricAuthority::Supervision,
+        crate::fabric::FabricPortClass::Policy => crate::fabric::FabricAuthority::Policy,
+        crate::fabric::FabricPortClass::Resources => crate::fabric::FabricAuthority::Resources,
+        crate::fabric::FabricPortClass::Simulation => crate::fabric::FabricAuthority::Simulation,
+        crate::fabric::FabricPortClass::Evidence => crate::fabric::FabricAuthority::Evidence,
     }
 }
 
-fn resource_for_class(class: FabricPortClass) -> FabricResource {
+fn resource_for_class(class: crate::fabric::FabricPortClass) -> crate::fabric::FabricResource {
     match class {
-        FabricPortClass::Transport => FabricResource::NetworkBytes,
-        FabricPortClass::DurableState => FabricResource::StorageBytes,
-        FabricPortClass::Execution => FabricResource::ExecutionMillis,
-        FabricPortClass::Time | FabricPortClass::Scheduling => FabricResource::LogicalTime,
-        FabricPortClass::Evidence => FabricResource::Diagnostics,
-        FabricPortClass::Authority
-        | FabricPortClass::Membership
-        | FabricPortClass::Placement
-        | FabricPortClass::Consistency
-        | FabricPortClass::Supervision
-        | FabricPortClass::Policy
-        | FabricPortClass::Resources
-        | FabricPortClass::Simulation => FabricResource::Memory,
+        crate::fabric::FabricPortClass::Transport => crate::fabric::FabricResource::NetworkBytes,
+        crate::fabric::FabricPortClass::DurableState => crate::fabric::FabricResource::StorageBytes,
+        crate::fabric::FabricPortClass::Execution => crate::fabric::FabricResource::ExecutionMillis,
+        crate::fabric::FabricPortClass::Time | crate::fabric::FabricPortClass::Scheduling => {
+            crate::fabric::FabricResource::LogicalTime
+        }
+        crate::fabric::FabricPortClass::Evidence => crate::fabric::FabricResource::Diagnostics,
+        crate::fabric::FabricPortClass::Authority
+        | crate::fabric::FabricPortClass::Membership
+        | crate::fabric::FabricPortClass::Placement
+        | crate::fabric::FabricPortClass::Consistency
+        | crate::fabric::FabricPortClass::Supervision
+        | crate::fabric::FabricPortClass::Policy
+        | crate::fabric::FabricPortClass::Resources
+        | crate::fabric::FabricPortClass::Simulation => crate::fabric::FabricResource::Memory,
     }
 }
 
-fn declared_faults(class: FabricPortClass) -> Vec<SimulationFaultKind> {
+fn declared_faults(class: crate::fabric::FabricPortClass) -> Vec<SimulationFaultKind> {
     match class {
-        FabricPortClass::Transport => vec![
+        crate::fabric::FabricPortClass::Transport => vec![
             SimulationFaultKind::Delay,
             SimulationFaultKind::Drop,
             SimulationFaultKind::Duplicate,
@@ -410,37 +388,43 @@ fn declared_faults(class: FabricPortClass) -> Vec<SimulationFaultKind> {
             SimulationFaultKind::Partition,
             SimulationFaultKind::Reset,
         ],
-        FabricPortClass::DurableState => vec![
+        crate::fabric::FabricPortClass::DurableState => vec![
             SimulationFaultKind::Delay,
             SimulationFaultKind::BoundedCorruption,
             SimulationFaultKind::CapacityExhaustion,
             SimulationFaultKind::Crash,
         ],
-        FabricPortClass::Execution => vec![
+        crate::fabric::FabricPortClass::Execution => vec![
             SimulationFaultKind::Delay,
             SimulationFaultKind::CapacityExhaustion,
             SimulationFaultKind::Pause,
             SimulationFaultKind::Crash,
         ],
-        FabricPortClass::Time | FabricPortClass::Scheduling => vec![
+        crate::fabric::FabricPortClass::Time | crate::fabric::FabricPortClass::Scheduling => vec![
             SimulationFaultKind::Delay,
             SimulationFaultKind::ClockSkew,
             SimulationFaultKind::ClockJump,
             SimulationFaultKind::Pause,
         ],
-        FabricPortClass::Membership => vec![SimulationFaultKind::MembershipChange, SimulationFaultKind::Partition],
-        FabricPortClass::Placement => vec![SimulationFaultKind::PlacementReplacement],
-        FabricPortClass::Consistency => vec![
+        crate::fabric::FabricPortClass::Membership => {
+            vec![SimulationFaultKind::MembershipChange, SimulationFaultKind::Partition]
+        }
+        crate::fabric::FabricPortClass::Placement => vec![SimulationFaultKind::PlacementReplacement],
+        crate::fabric::FabricPortClass::Consistency => vec![
             SimulationFaultKind::ConsistencyQuorumLoss,
             SimulationFaultKind::Partition,
         ],
-        FabricPortClass::Authority | FabricPortClass::Policy => vec![SimulationFaultKind::AuthorityRevocation],
-        FabricPortClass::Supervision => vec![
+        crate::fabric::FabricPortClass::Authority | crate::fabric::FabricPortClass::Policy => {
+            vec![SimulationFaultKind::AuthorityRevocation]
+        }
+        crate::fabric::FabricPortClass::Supervision => vec![
             SimulationFaultKind::Pause,
             SimulationFaultKind::Crash,
             SimulationFaultKind::Restart,
         ],
-        FabricPortClass::Resources => vec![SimulationFaultKind::CapacityExhaustion],
-        FabricPortClass::Simulation | FabricPortClass::Evidence => vec![SimulationFaultKind::Delay],
+        crate::fabric::FabricPortClass::Resources => vec![SimulationFaultKind::CapacityExhaustion],
+        crate::fabric::FabricPortClass::Simulation | crate::fabric::FabricPortClass::Evidence => {
+            vec![SimulationFaultKind::Delay]
+        }
     }
 }

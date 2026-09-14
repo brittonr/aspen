@@ -1,8 +1,4 @@
-use std::process::Command;
-
 use molten_core::addressable_actor::*;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
 
 use super::super::*;
 use super::support::*;
@@ -24,9 +20,11 @@ fn multiprocess_restart_recovers_state_and_fences_stale_generation() {
     let workspace_path: &std::path::Path = workspace.as_ref();
     let directory = cap_std::fs::Dir::open_ambient_dir(workspace_path, cap_std::ambient_authority())
         .expect("open actor process workspace");
-    let root = NodeStateRoot::from_dir(directory);
+    let root = molten_node_host::node_state::NodeStateRoot::from_dir(directory);
     root.create_layout().expect("node state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let storage = root
+        .namespace(molten_node_host::node_state::NodeStateNamespaceKind::Storage)
+        .expect("storage namespace");
     let profile = profile();
     let actor_key = actor_key();
     let initial = initial_state(&profile, &actor_key);
@@ -71,8 +69,10 @@ fn multiprocess_restart_recovers_state_and_fences_stale_generation() {
 
     let directory = cap_std::fs::Dir::open_ambient_dir(workspace_path, cap_std::ambient_authority())
         .expect("reopen actor process workspace");
-    let root = NodeStateRoot::from_dir(directory);
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("reopened storage namespace");
+    let root = molten_node_host::node_state::NodeStateRoot::from_dir(directory);
+    let storage = root
+        .namespace(molten_node_host::node_state::NodeStateNamespaceKind::Storage)
+        .expect("reopened storage namespace");
     let store = LocalActorStore::open(&storage, ENGINE_EPOCH).expect("reopened actor store");
     let observed = store.load(&actor_key_ref).expect("read final actor state").expect("final actor state");
     assert_eq!(observed.state.extension_generation, current_generation);
@@ -89,8 +89,10 @@ fn child_actor_process() {
         cap_std::ambient_authority(),
     )
     .expect("open child actor root");
-    let root = NodeStateRoot::from_dir(directory);
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("child storage namespace");
+    let root = molten_node_host::node_state::NodeStateRoot::from_dir(directory);
+    let storage = root
+        .namespace(molten_node_host::node_state::NodeStateNamespaceKind::Storage)
+        .expect("child storage namespace");
     let profile = profile();
     let actor_key = actor_key();
     let actor_key_ref = identify_actor_key(&actor_key);
@@ -135,7 +137,7 @@ fn child_actor_process() {
 }
 
 fn run_child(root: &std::path::Path, mode: &str) {
-    let output = Command::new(std::env::current_exe().expect("current actor test executable"))
+    let output = std::process::Command::new(std::env::current_exe().expect("current actor test executable"))
         .arg(TEST_EXACT_ARGUMENT)
         .arg(CHILD_TEST_NAME)
         .arg(TEST_NOCAPTURE_ARGUMENT)

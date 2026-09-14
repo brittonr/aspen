@@ -1,5 +1,4 @@
 use super::*;
-use crate::fabric_consistency::raft::ReplicaEvidenceKind;
 
 const MAX_COMMAND_BYTES: u64 = 4_096;
 const MAX_IN_FLIGHT: u32 = 8;
@@ -109,7 +108,7 @@ fn operator_readback_is_bounded_and_rejects_substituted_group_identity() {
     let records = (0..(MAX_OPERATOR_EVIDENCE_REFS + 1))
         .map(|offset| ReplicaEvidenceRecord {
             sequence: u64::try_from(offset + 1).expect("bounded evidence sequence"),
-            kind: ReplicaEvidenceKind::Commit,
+            kind: crate::fabric_consistency::raft::ReplicaEvidenceKind::Commit,
             term: INITIAL_CONSISTENCY_EPOCH,
             index: INITIAL_CONSISTENCY_EPOCH,
             source_ref: test_ref(&format!("operator-source-{offset}")),

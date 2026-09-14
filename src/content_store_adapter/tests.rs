@@ -1,6 +1,3 @@
-use std::collections::BTreeMap;
-use std::time::Duration;
-
 use super::*;
 
 const GENERATION_ONE: u64 = 1;
@@ -86,7 +83,7 @@ fn fixture_store(
     (workspace, root, manifest)
 }
 
-fn fixture_chunks(manifest: &ContentManifestDescriptor) -> BTreeMap<String, Vec<u8>> {
+fn fixture_chunks(manifest: &ContentManifestDescriptor) -> std::collections::BTreeMap<String, Vec<u8>> {
     manifest
         .chunks
         .iter()
@@ -343,7 +340,7 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
         &get,
         GENERATION_ONE,
         None,
-        Duration::from_secs(LIVE_TIMEOUT_SECONDS),
+        std::time::Duration::from_secs(LIVE_TIMEOUT_SECONDS),
     )
     .await
     .expect("live Iroh stream");
@@ -362,7 +359,7 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
         &get,
         GENERATION_ONE,
         None,
-        Duration::from_secs(LIVE_TIMEOUT_SECONDS),
+        std::time::Duration::from_secs(LIVE_TIMEOUT_SECONDS),
     )
     .await
     .expect("stale ticket outcome");

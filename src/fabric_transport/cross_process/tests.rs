@@ -1,7 +1,3 @@
-use std::net::Ipv4Addr;
-use std::net::SocketAddr;
-use std::time::Duration;
-
 use preserves::ValueImpl;
 
 use super::*;
@@ -137,8 +133,8 @@ fn capability(byte: u8, capability_ref: &str) -> IrohEndpointCapability {
         .expect("endpoint capability")
 }
 
-fn bind_addr() -> SocketAddr {
-    SocketAddr::from((Ipv4Addr::LOCALHOST, 0))
+fn bind_addr() -> std::net::SocketAddr {
+    std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0))
 }
 
 fn expected(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpointBinding {
@@ -283,7 +279,7 @@ async fn live_listener_and_client_exchange_one_bounded_frame_and_clean_up() {
     assert_eq!(listener.profile().profile.adapter_kind, TransportAdapterKind::IrohLive);
     assert_eq!(listener.admission(), EndpointAdmissionState::fully_active());
     let endpoint = listener.handoff().clone();
-    let timeout = Duration::from_secs(TEST_TIMEOUT_SECONDS);
+    let timeout = std::time::Duration::from_secs(TEST_TIMEOUT_SECONDS);
     let server = listener.accept_one_frame(SESSION_REF, REQUEST_REF, timeout);
     let client = exchange_cross_process_frame(client_input(endpoint), PAYLOAD, timeout);
     let (server, client) = tokio::join!(server, client);
@@ -323,17 +319,21 @@ async fn client_preflight_denies_wrong_protocol_and_oversized_payload_before_dia
     let endpoint = listener.handoff().clone();
     let mut wrong_protocol = client_input(endpoint.clone());
     wrong_protocol.expected.alpn = "molten/wrong/1".to_string();
-    let error = exchange_cross_process_frame(wrong_protocol, PAYLOAD, Duration::from_secs(TEST_TIMEOUT_SECONDS))
-        .await
-        .expect_err("wrong ALPN must deny");
+    let error =
+        exchange_cross_process_frame(wrong_protocol, PAYLOAD, std::time::Duration::from_secs(TEST_TIMEOUT_SECONDS))
+            .await
+            .expect_err("wrong ALPN must deny");
     assert!(error.to_string().contains("AlpnMismatch"));
 
     let oversized_len = usize::try_from(FRAME_LIMIT + 1).expect("oversized payload length");
     let oversized = vec![0_u8; oversized_len];
-    let error =
-        exchange_cross_process_frame(client_input(endpoint), &oversized, Duration::from_secs(TEST_TIMEOUT_SECONDS))
-            .await
-            .expect_err("oversized payload must deny");
+    let error = exchange_cross_process_frame(
+        client_input(endpoint),
+        &oversized,
+        std::time::Duration::from_secs(TEST_TIMEOUT_SECONDS),
+    )
+    .await
+    .expect_err("oversized payload must deny");
     assert!(error.to_string().contains("exceeds the admitted frame bound"));
 
     let cleanup = listener.drain_and_close(ListenerDrainReason::Cancellation).await.expect("cancel listener");
@@ -347,7 +347,7 @@ async fn client_preflight_denies_wrong_protocol_and_oversized_payload_before_dia
 async fn listener_accept_timeout_is_bounded_and_does_not_publish_a_false_session() {
     let mut listener = listener().await;
     let error = listener
-        .accept_one(SESSION_REF, REQUEST_REF, Duration::from_millis(ACCEPT_TIMEOUT_MILLISECONDS))
+        .accept_one(SESSION_REF, REQUEST_REF, std::time::Duration::from_millis(ACCEPT_TIMEOUT_MILLISECONDS))
         .await
         .expect_err("accept without a client must time out");
     assert!(error.to_string().contains("accept timed out"));
@@ -396,7 +396,7 @@ async fn registered_effect_port_routes_a_live_cross_process_frame_without_consum
     let endpoint = listener.handoff().clone();
     let listener_task = tokio::spawn(async move {
         let frame = listener
-            .accept_one(SESSION_REF, REQUEST_REF, Duration::from_secs(TEST_TIMEOUT_SECONDS))
+            .accept_one(SESSION_REF, REQUEST_REF, std::time::Duration::from_secs(TEST_TIMEOUT_SECONDS))
             .await
             .expect("effect-port listener frame");
         let cleanup = listener
@@ -414,7 +414,7 @@ async fn registered_effect_port_routes_a_live_cross_process_frame_without_consum
         expected: expected(&endpoint),
         endpoint,
         admission: EndpointAdmissionState::fully_active(),
-        timeout: Duration::from_secs(TEST_TIMEOUT_SECONDS),
+        timeout: std::time::Duration::from_secs(TEST_TIMEOUT_SECONDS),
     };
     let mut port = RegisteredCrossProcessTransportEffectPort::new(context, live_profile.clone(), protocol(), client)
         .expect("cross-process effect port");

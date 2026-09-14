@@ -1,7 +1,4 @@
 use molten_core::coordination_delivery::*;
-use molten_node_host::node_state::NodeStateNamespace;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStatePath;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
@@ -19,8 +16,11 @@ pub struct LocalDeliveryStore {
 }
 
 impl LocalDeliveryStore {
-    pub fn open(storage: &NodeStateNamespace, engine_epoch: u64) -> DeliveryPortResult<Self> {
-        if storage.kind() != NodeStateNamespaceKind::Storage {
+    pub fn open(
+        storage: &molten_node_host::node_state::NodeStateNamespace,
+        engine_epoch: u64,
+    ) -> DeliveryPortResult<Self> {
+        if storage.kind() != molten_node_host::node_state::NodeStateNamespaceKind::Storage {
             return Err(port_error(
                 "delivery-storage-namespace",
                 "coordination delivery store requires the storage namespace",
@@ -29,7 +29,8 @@ impl LocalDeliveryStore {
         if engine_epoch == 0 {
             return Err(port_error("delivery-engine-epoch", "coordination delivery engine epoch must be positive"));
         }
-        let path = NodeStatePath::parse(DELIVERY_DATABASE_FILE).map_err(node_state_error)?;
+        let path =
+            molten_node_host::node_state::NodeStatePath::parse(DELIVERY_DATABASE_FILE).map_err(node_state_error)?;
         let file = storage.open_database_file(&path).map_err(node_state_error)?;
         let database = redb::Database::builder().create_file(file).map_err(redb_error)?;
         initialize(&database)?;

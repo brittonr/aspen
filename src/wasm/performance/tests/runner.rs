@@ -1,13 +1,4 @@
-use std::ffi::OsString;
-use std::path::Path;
-
-use serde_json::json;
-
 use super::super::*;
-use super::support::FIXTURE_ARCHITECTURE;
-use super::support::FIXTURE_EVENT;
-use super::support::fixture_bytes_ref;
-use super::support::fixture_ref;
 
 const RAW_SAMPLE_BASE_COUNT: u64 = 1_000;
 const RAW_FAST_PROCESSES: u32 = 1;
@@ -24,7 +15,7 @@ fn raw_measurements_with_sampling(architecture: &str, processes: u32, iterations
     for phase in ["Compilation", "Instantiation", "Execution"] {
         for process in 0..processes {
             for iteration in 0..iterations {
-                values.push(json!({
+                values.push(serde_json::json!({
                     "arch": architecture,
                     "engine": "/diagnostic/path/libengine.so",
                     "engine_flags": null,
@@ -32,7 +23,7 @@ fn raw_measurements_with_sampling(architecture: &str, processes: u32, iterations
                     "process": process,
                     "iteration": iteration,
                     "phase": phase,
-                    "event": FIXTURE_EVENT,
+                    "event": super::support::FIXTURE_EVENT,
                     "count": RAW_SAMPLE_BASE_COUNT + u64::from(iteration),
                 }));
             }
@@ -49,8 +40,8 @@ fn sightglass_raw_json_preserves_separate_bounded_phase_samples() {
     let phases = parse_sightglass_measurements(
         &profile,
         &profile.fast,
-        FIXTURE_ARCHITECTURE,
-        &raw_measurements(FIXTURE_ARCHITECTURE),
+        super::support::FIXTURE_ARCHITECTURE,
+        &raw_measurements(super::support::FIXTURE_ARCHITECTURE),
     )
     .expect("Sightglass measurements parse");
     assert_eq!(phases.len(), PerformancePhase::ALL.len());
@@ -60,14 +51,14 @@ fn sightglass_raw_json_preserves_separate_bounded_phase_samples() {
             .iter()
             .all(|phase| phase.samples.len() == profile.fast.sampling.min_samples_per_phase as usize)
     );
-    assert!(phases.iter().all(|phase| phase.event == FIXTURE_EVENT));
+    assert!(phases.iter().all(|phase| phase.event == super::support::FIXTURE_EVENT));
 
     let deep = parse_sightglass_measurements(
         &profile,
         &profile.deep,
-        FIXTURE_ARCHITECTURE,
+        super::support::FIXTURE_ARCHITECTURE,
         &raw_measurements_with_sampling(
-            FIXTURE_ARCHITECTURE,
+            super::support::FIXTURE_ARCHITECTURE,
             profile.deep.sampling.processes,
             profile.deep.sampling.iterations_per_process,
         ),
@@ -86,7 +77,7 @@ fn sightglass_raw_json_preserves_separate_bounded_phase_samples() {
         "json",
         "--pin",
     ] {
-        assert!(arguments.contains(&OsString::from(required)));
+        assert!(arguments.contains(&std::ffi::OsString::from(required)));
     }
     let process_flag =
         arguments.iter().position(|argument| argument == "--processes").expect("Sightglass process flag");
@@ -101,7 +92,7 @@ fn sightglass_process_ids_are_normalized_out_of_canonical_samples() {
     // r[verify molten.wasm_performance.validation]
     let profile = supported_performance_profile().expect("supported performance profile");
     let mut raw: Vec<serde_json::Value> = serde_json::from_slice(&raw_measurements_with_sampling(
-        FIXTURE_ARCHITECTURE,
+        super::support::FIXTURE_ARCHITECTURE,
         profile.deep.sampling.processes,
         profile.deep.sampling.iterations_per_process,
     ))
@@ -109,10 +100,10 @@ fn sightglass_process_ids_are_normalized_out_of_canonical_samples() {
     for measurement in &mut raw {
         let diagnostic_process =
             measurement.get("process").and_then(serde_json::Value::as_u64).expect("diagnostic process id");
-        measurement["process"] = json!(diagnostic_process + DIAGNOSTIC_PROCESS_ID_OFFSET);
+        measurement["process"] = serde_json::json!(diagnostic_process + DIAGNOSTIC_PROCESS_ID_OFFSET);
     }
     let bytes = serde_json::to_vec(&raw).expect("diagnostic process fixture");
-    let phases = parse_sightglass_measurements(&profile, &profile.deep, FIXTURE_ARCHITECTURE, &bytes)
+    let phases = parse_sightglass_measurements(&profile, &profile.deep, super::support::FIXTURE_ARCHITECTURE, &bytes)
         .expect("diagnostic process ids normalize");
     let maximum_process = phases
         .iter()
@@ -131,9 +122,9 @@ fn process_shell_validates_profile_and_suite_before_spawning() {
     let profile = supported_performance_profile().expect("supported performance profile");
     let mut invalid_suite = profile.fast.clone();
     invalid_suite.sampling.processes = profile.deep.sampling.processes;
-    let missing_program = Path::new("/definitely-missing-sightglass");
-    let missing_engine = Path::new("/diagnostic/mantle-engine.so");
-    let missing_benchmark = Path::new("/diagnostic/mantle-benchmark.wasm");
+    let missing_program = std::path::Path::new("/definitely-missing-sightglass");
+    let missing_engine = std::path::Path::new("/diagnostic/mantle-engine.so");
+    let missing_benchmark = std::path::Path::new("/diagnostic/mantle-benchmark.wasm");
     let invalid = run_sightglass_process(&SightglassProcessInvocation {
         program: missing_program,
         engine: missing_engine,
@@ -141,7 +132,7 @@ fn process_shell_validates_profile_and_suite_before_spawning() {
         benchmark_ref: &invalid_suite.workload_refs[0],
         profile: &profile,
         suite: &invalid_suite,
-        expected_architecture: FIXTURE_ARCHITECTURE,
+        expected_architecture: super::support::FIXTURE_ARCHITECTURE,
         max_output_bytes: profile.comparison.max_sightglass_output_bytes,
     })
     .expect_err("invalid suite denies before process spawn");
@@ -155,7 +146,7 @@ fn process_shell_validates_profile_and_suite_before_spawning() {
         benchmark_ref: &profile.fast.workload_refs[0],
         profile: &profile,
         suite: &profile.fast,
-        expected_architecture: FIXTURE_ARCHITECTURE,
+        expected_architecture: super::support::FIXTURE_ARCHITECTURE,
         max_output_bytes: profile.comparison.max_sightglass_output_bytes,
     })
     .expect_err("missing pinned runner denies diagnostically");
@@ -175,29 +166,29 @@ fn process_shell_remeasures_runner_bytes_before_any_execution() {
     let process_root = workspace.process_bridge().plan(&state).expect("diagnostic process bridge");
     let runner_path = process_root.path().join("runner");
     let mut suite = profile.fast.clone();
-    suite.runner_artifact_ref = fixture_ref("different-runner-bytes");
+    suite.runner_artifact_ref = super::support::fixture_ref("different-runner-bytes");
     let denial = run_sightglass_process(&SightglassProcessInvocation {
         program: &runner_path,
-        engine: Path::new("/unused-engine"),
-        benchmark: Path::new("/unused-benchmark"),
+        engine: std::path::Path::new("/unused-engine"),
+        benchmark: std::path::Path::new("/unused-benchmark"),
         benchmark_ref: &suite.workload_refs[0],
         profile: &profile,
         suite: &suite,
-        expected_architecture: FIXTURE_ARCHITECTURE,
+        expected_architecture: super::support::FIXTURE_ARCHITECTURE,
         max_output_bytes: profile.comparison.max_sightglass_output_bytes,
     })
     .expect_err("runner byte mismatch denies before execution");
     assert!(denial.blockers.iter().any(|blocker| blocker.contains("differs from its admitted content identity")));
 
-    suite.runner_artifact_ref = fixture_bytes_ref(MUTABLE_RUNNER_BYTES);
+    suite.runner_artifact_ref = super::support::fixture_bytes_ref(MUTABLE_RUNNER_BYTES);
     let mutable_denial = run_sightglass_process(&SightglassProcessInvocation {
         program: &runner_path,
-        engine: Path::new("/unused-engine"),
-        benchmark: Path::new("/unused-benchmark"),
+        engine: std::path::Path::new("/unused-engine"),
+        benchmark: std::path::Path::new("/unused-benchmark"),
         benchmark_ref: &suite.workload_refs[0],
         profile: &profile,
         suite: &suite,
-        expected_architecture: FIXTURE_ARCHITECTURE,
+        expected_architecture: super::support::FIXTURE_ARCHITECTURE,
         max_output_bytes: profile.comparison.max_sightglass_output_bytes,
     })
     .expect_err("mutable runner denies after content admission");
@@ -208,41 +199,67 @@ fn process_shell_remeasures_runner_bytes_before_any_execution() {
 fn malformed_cross_architecture_missing_phase_and_wrong_event_outputs_deny() {
     // r[verify molten.wasm_performance.validation]
     let profile = supported_performance_profile().expect("supported performance profile");
-    assert!(parse_sightglass_measurements(&profile, &profile.fast, FIXTURE_ARCHITECTURE, b"not-json").is_err());
     assert!(
-        parse_sightglass_measurements(&profile, &profile.fast, FIXTURE_ARCHITECTURE, &raw_measurements("aarch64"),)
+        parse_sightglass_measurements(&profile, &profile.fast, super::support::FIXTURE_ARCHITECTURE, b"not-json")
+            .is_err()
+    );
+    assert!(
+        parse_sightglass_measurements(
+            &profile,
+            &profile.fast,
+            super::support::FIXTURE_ARCHITECTURE,
+            &raw_measurements("aarch64"),
+        )
+        .is_err()
+    );
+
+    let mut missing =
+        serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(super::support::FIXTURE_ARCHITECTURE))
+            .expect("Sightglass fixture values");
+    missing.retain(|value| value["phase"] != "Execution");
+    let missing = serde_json::to_vec(&missing).expect("missing phase fixture");
+    assert!(
+        parse_sightglass_measurements(&profile, &profile.fast, super::support::FIXTURE_ARCHITECTURE, &missing).is_err()
+    );
+
+    let mut wrong_event =
+        serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(super::support::FIXTURE_ARCHITECTURE))
+            .expect("Sightglass fixture values");
+    for value in &mut wrong_event {
+        value["event"] = serde_json::json!("nanoseconds");
+    }
+    let wrong_event = serde_json::to_vec(&wrong_event).expect("wrong event fixture");
+    assert!(
+        parse_sightglass_measurements(&profile, &profile.fast, super::support::FIXTURE_ARCHITECTURE, &wrong_event)
             .is_err()
     );
 
-    let mut missing = serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(FIXTURE_ARCHITECTURE))
-        .expect("Sightglass fixture values");
-    missing.retain(|value| value["phase"] != "Execution");
-    let missing = serde_json::to_vec(&missing).expect("missing phase fixture");
-    assert!(parse_sightglass_measurements(&profile, &profile.fast, FIXTURE_ARCHITECTURE, &missing).is_err());
-
-    let mut wrong_event = serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(FIXTURE_ARCHITECTURE))
-        .expect("Sightglass fixture values");
-    for value in &mut wrong_event {
-        value["event"] = json!("nanoseconds");
-    }
-    let wrong_event = serde_json::to_vec(&wrong_event).expect("wrong event fixture");
-    assert!(parse_sightglass_measurements(&profile, &profile.fast, FIXTURE_ARCHITECTURE, &wrong_event).is_err());
-
-    let mut mixed_identity = serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(FIXTURE_ARCHITECTURE))
-        .expect("Sightglass fixture values");
-    mixed_identity[0]["engine"] = json!("/diagnostic/path/other-engine.so");
+    let mut mixed_identity =
+        serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(super::support::FIXTURE_ARCHITECTURE))
+            .expect("Sightglass fixture values");
+    mixed_identity[0]["engine"] = serde_json::json!("/diagnostic/path/other-engine.so");
     let mixed_identity = serde_json::to_vec(&mixed_identity).expect("mixed identity fixture");
-    assert!(parse_sightglass_measurements(&profile, &profile.fast, FIXTURE_ARCHITECTURE, &mixed_identity).is_err());
+    assert!(
+        parse_sightglass_measurements(&profile, &profile.fast, super::support::FIXTURE_ARCHITECTURE, &mixed_identity)
+            .is_err()
+    );
 
-    let mut duplicate = serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(FIXTURE_ARCHITECTURE))
-        .expect("Sightglass fixture values");
+    let mut duplicate =
+        serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(super::support::FIXTURE_ARCHITECTURE))
+            .expect("Sightglass fixture values");
     duplicate.push(duplicate[0].clone());
     let duplicate = serde_json::to_vec(&duplicate).expect("duplicate sample fixture");
-    assert!(parse_sightglass_measurements(&profile, &profile.fast, FIXTURE_ARCHITECTURE, &duplicate).is_err());
+    assert!(
+        parse_sightglass_measurements(&profile, &profile.fast, super::support::FIXTURE_ARCHITECTURE, &duplicate)
+            .is_err()
+    );
 
-    let mut zero = serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(FIXTURE_ARCHITECTURE))
-        .expect("Sightglass fixture values");
-    zero[0]["count"] = json!(0);
+    let mut zero =
+        serde_json::from_slice::<Vec<serde_json::Value>>(&raw_measurements(super::support::FIXTURE_ARCHITECTURE))
+            .expect("Sightglass fixture values");
+    zero[0]["count"] = serde_json::json!(0);
     let zero = serde_json::to_vec(&zero).expect("zero sample fixture");
-    assert!(parse_sightglass_measurements(&profile, &profile.fast, FIXTURE_ARCHITECTURE, &zero).is_err());
+    assert!(
+        parse_sightglass_measurements(&profile, &profile.fast, super::support::FIXTURE_ARCHITECTURE, &zero).is_err()
+    );
 }

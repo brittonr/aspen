@@ -1,25 +1,13 @@
-use super::model::CapacityDecision;
-use super::model::CompilationStrategy;
-use super::model::OptimizationProfile;
-use super::model::PerformanceDenial;
-use super::model::PerformanceProfile;
-use super::model::PerformanceResult;
-use super::model::content_ref;
-use super::model::sorted_unique;
-use super::model::valid_content_ref;
-use super::model::valid_ref_collection;
-use super::profile::validate_performance_profile;
-
 pub const BASELINE_OPTIMIZATION_PROFILE_ID: &str = "molten.wasm.optimization.baseline.v1";
 pub const POOLING_OPTIMIZATION_PROFILE_ID: &str = "molten.wasm.optimization.pooling.v1";
 pub const COW_OPTIMIZATION_PROFILE_ID: &str = "molten.wasm.optimization.cow.v1";
 pub const INSTANCE_PRE_OPTIMIZATION_PROFILE_ID: &str = "molten.wasm.optimization.instance-pre.v1";
 
 pub fn validate_optimization_profile(
-    performance_profile: &PerformanceProfile,
-    optimization: &OptimizationProfile,
-) -> PerformanceResult<()> {
-    validate_performance_profile(performance_profile)?;
+    performance_profile: &super::model::PerformanceProfile,
+    optimization: &super::model::OptimizationProfile,
+) -> super::model::PerformanceResult<()> {
+    super::profile::validate_performance_profile(performance_profile)?;
     let mut blockers = Vec::new();
     if !performance_profile
         .optimization_limits
@@ -40,26 +28,26 @@ pub fn validate_optimization_profile(
     {
         blockers.push("Wasm optimization profile exceeds a reviewed resource or capacity bound".to_string());
     }
-    if !valid_content_ref(&optimization.deterministic_conformance_ref) {
+    if !super::model::valid_content_ref(&optimization.deterministic_conformance_ref) {
         blockers.push("Wasm optimization profile lacks a deterministic conformance receipt".to_string());
     }
     validate_named_shape(optimization, &mut blockers);
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(PerformanceDenial::from_blockers(blockers))
+        Err(super::model::PerformanceDenial::from_blockers(blockers))
     }
 }
 
-pub fn optimization_profile_ref(optimization: &OptimizationProfile) -> String {
+pub fn optimization_profile_ref(optimization: &super::model::OptimizationProfile) -> String {
     let lines = [
         format!("configuration-ref:{}", optimization_configuration_ref(optimization)),
         format!("deterministic-conformance-ref:{}", optimization.deterministic_conformance_ref),
     ];
-    content_ref(lines.join("\n").as_bytes())
+    super::model::content_ref(lines.join("\n").as_bytes())
 }
 
-pub fn optimization_configuration_ref(optimization: &OptimizationProfile) -> String {
+pub fn optimization_configuration_ref(optimization: &super::model::OptimizationProfile) -> String {
     let lines = [
         format!("profile-id:{}", optimization.profile_id),
         format!("pooling:{}", optimization.pooling_allocator),
@@ -71,7 +59,7 @@ pub fn optimization_configuration_ref(optimization: &OptimizationProfile) -> Str
         format!("max-pool-memories:{}", optimization.max_pool_memories),
         format!("max-pool-tables:{}", optimization.max_pool_tables),
     ];
-    content_ref(lines.join("\n").as_bytes())
+    super::model::content_ref(lines.join("\n").as_bytes())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,19 +92,21 @@ pub fn optimization_conformance_record_ref(record: &OptimizationConformanceRecor
         format!("passed:{}", record.passed),
     ];
     lines.extend(
-        sorted_unique(&record.recorded_effect_refs)
+        super::model::sorted_unique(&record.recorded_effect_refs)
             .into_iter()
             .map(|value| format!("recorded-effect-ref:{value}")),
     );
-    content_ref(lines.join("\n").as_bytes())
+    super::model::content_ref(lines.join("\n").as_bytes())
 }
 
 pub fn validate_optimization_conformance(
-    optimization: &OptimizationProfile,
+    optimization: &super::model::OptimizationProfile,
     record: &OptimizationConformanceRecord,
-) -> PerformanceResult<()> {
+) -> super::model::PerformanceResult<()> {
     let component_profile = crate::wasm_component::supported_component_profile().map_err(|error| {
-        PerformanceDenial::new(format!("component profile required by optimization conformance is invalid: {error}"))
+        super::model::PerformanceDenial::new(format!(
+            "component profile required by optimization conformance is invalid: {error}"
+        ))
     })?;
     let expected_component_profile_ref = crate::wasm_component::component_profile_ref(&component_profile);
     let mut blockers = Vec::new();
@@ -137,11 +127,11 @@ pub fn validate_optimization_conformance(
         ("baseline execution receipt", record.baseline_execution_receipt_ref.as_str()),
         ("optimized execution receipt", record.optimized_execution_receipt_ref.as_str()),
     ] {
-        if !valid_content_ref(value) {
+        if !super::model::valid_content_ref(value) {
             blockers.push(format!("optimization conformance {label} ref is malformed"));
         }
     }
-    if !valid_ref_collection(&record.recorded_effect_refs) {
+    if !super::model::valid_ref_collection(&record.recorded_effect_refs) {
         blockers.push("optimization conformance recorded-effect refs are missing, duplicate, or malformed".to_string());
     }
     if !record.passed
@@ -154,45 +144,49 @@ pub fn validate_optimization_conformance(
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(PerformanceDenial::from_blockers(blockers))
+        Err(super::model::PerformanceDenial::from_blockers(blockers))
     }
 }
 
-pub fn admit_capacity(optimization: &OptimizationProfile, running: u32, queued: u32) -> CapacityDecision {
+pub fn admit_capacity(
+    optimization: &super::model::OptimizationProfile,
+    running: u32,
+    queued: u32,
+) -> super::model::CapacityDecision {
     if running < optimization.max_concurrency {
-        CapacityDecision::Start
+        super::model::CapacityDecision::Start
     } else if queued < optimization.max_queue_depth {
-        CapacityDecision::Backpressure
+        super::model::CapacityDecision::Backpressure
     } else {
-        CapacityDecision::Deny
+        super::model::CapacityDecision::Deny
     }
 }
 
-fn validate_named_shape(optimization: &OptimizationProfile, blockers: &mut Vec<String>) {
+fn validate_named_shape(optimization: &super::model::OptimizationProfile, blockers: &mut Vec<String>) {
     let shape_matches_name = match optimization.profile_id.as_str() {
         BASELINE_OPTIMIZATION_PROFILE_ID => {
             !optimization.pooling_allocator
                 && !optimization.copy_on_write_heap_images
                 && !optimization.instance_pre
-                && optimization.compilation_strategy == CompilationStrategy::Cranelift
+                && optimization.compilation_strategy == super::model::CompilationStrategy::Cranelift
         }
         POOLING_OPTIMIZATION_PROFILE_ID => {
             optimization.pooling_allocator
                 && !optimization.copy_on_write_heap_images
                 && !optimization.instance_pre
-                && optimization.compilation_strategy == CompilationStrategy::Cranelift
+                && optimization.compilation_strategy == super::model::CompilationStrategy::Cranelift
         }
         COW_OPTIMIZATION_PROFILE_ID => {
             optimization.copy_on_write_heap_images
                 && !optimization.pooling_allocator
                 && !optimization.instance_pre
-                && optimization.compilation_strategy == CompilationStrategy::Cranelift
+                && optimization.compilation_strategy == super::model::CompilationStrategy::Cranelift
         }
         INSTANCE_PRE_OPTIMIZATION_PROFILE_ID => {
             optimization.instance_pre
                 && !optimization.pooling_allocator
                 && !optimization.copy_on_write_heap_images
-                && optimization.compilation_strategy == CompilationStrategy::Cranelift
+                && optimization.compilation_strategy == super::model::CompilationStrategy::Cranelift
         }
         _ => true,
     };

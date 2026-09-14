@@ -1,23 +1,7 @@
-use std::collections::BTreeSet;
-use std::fs::File;
 use std::io::Write;
-use std::net::Ipv4Addr;
-use std::net::SocketAddr;
-use std::path::Path;
-use std::path::PathBuf;
-use std::process::Child;
-use std::process::Command;
-use std::process::ExitStatus;
-use std::process::Stdio;
-use std::time::Duration;
-use std::time::Instant;
 
-use preserves::IOValue;
-use preserves::Value;
 use preserves::ValueImpl;
 
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::fabric_transport::*;
 
 pub const DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS: u64 = 30_000;
@@ -88,8 +72,8 @@ const EXPECTED_MEMBER_COUNT: usize = 13;
 
 #[derive(Debug, Clone)]
 pub struct DistinctProcessTransportRunInput {
-    pub run_directory: PathBuf,
-    pub process_binary: PathBuf,
+    pub run_directory: std::path::PathBuf,
+    pub process_binary: std::path::PathBuf,
     pub child_timeout_ms: u64,
     pub force: bool,
     pub request_ref: String,
@@ -102,7 +86,7 @@ pub struct DistinctProcessTransportRun {
     pub parent_ref: String,
     pub verification_ref: String,
     pub diagnostics: Vec<String>,
-    pub run_directory: PathBuf,
+    pub run_directory: std::path::PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,7 +95,7 @@ pub struct DistinctProcessTransportVerification {
     pub parent_ref: String,
     pub verification_ref: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,7 +120,7 @@ struct ParticipantArtifact {
     session_cleanup_ref: String,
     endpoint_cleanup_ref: String,
     drain_reason: String,
-    value: IOValue,
+    value: preserves::IOValue,
     artifact_ref: String,
 }
 
@@ -146,7 +130,7 @@ struct StartArtifact {
     invocation_ref: String,
     command_profile_ref: String,
     parent_observed: bool,
-    value: IOValue,
+    value: preserves::IOValue,
     artifact_ref: String,
 }
 
@@ -159,7 +143,7 @@ struct CleanupArtifact {
     listener_exited: bool,
     client_exited: bool,
     no_orphans: bool,
-    value: IOValue,
+    value: preserves::IOValue,
     artifact_ref: String,
 }
 
@@ -172,24 +156,29 @@ struct IndexedArtifact {
 }
 
 struct ReapingChild {
-    child: Child,
+    child: std::process::Child,
     finished: bool,
 }
 
 impl ReapingChild {
-    fn spawn(binary: &Path, role_command: &str, run_directory: &Path, log_path: &Path) -> Result<Self> {
+    fn spawn(
+        binary: &std::path::Path,
+        role_command: &str,
+        run_directory: &std::path::Path,
+        log_path: &std::path::Path,
+    ) -> crate::error::Result<Self> {
         if let Some(parent) = log_path.parent() {
-            std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
         }
-        let stdout = File::create(log_path).map_err(MoltenError::from)?;
-        let stderr = stdout.try_clone().map_err(MoltenError::from)?;
-        let child = Command::new(binary)
+        let stdout = std::fs::File::create(log_path).map_err(crate::error::MoltenError::from)?;
+        let stderr = stdout.try_clone().map_err(crate::error::MoltenError::from)?;
+        let child = std::process::Command::new(binary)
             .args(["cluster", role_command, "--run-dir"])
             .arg(run_directory)
-            .stdout(Stdio::from(stdout))
-            .stderr(Stdio::from(stderr))
+            .stdout(std::process::Stdio::from(stdout))
+            .stderr(std::process::Stdio::from(stderr))
             .spawn()
-            .map_err(MoltenError::from)?;
+            .map_err(crate::error::MoltenError::from)?;
         Ok(Self { child, finished: false })
     }
 
@@ -197,12 +186,16 @@ impl ReapingChild {
         self.child.id()
     }
 
-    fn try_wait(&mut self) -> Result<Option<ExitStatus>> {
-        self.child.try_wait().map_err(MoltenError::from)
+    fn try_wait(&mut self) -> crate::error::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait().map_err(crate::error::MoltenError::from)
     }
 
-    fn wait_bounded(&mut self, timeout: Duration, label: &str) -> Result<ExitStatus> {
-        let started = Instant::now();
+    fn wait_bounded(
+        &mut self,
+        timeout: std::time::Duration,
+        label: &str,
+    ) -> crate::error::Result<std::process::ExitStatus> {
+        let started = std::time::Instant::now();
         loop {
             if let Some(status) = self.try_wait()? {
                 self.finished = true;
@@ -212,9 +205,11 @@ impl ReapingChild {
                 let _kill = self.child.kill();
                 let _wait = self.child.wait();
                 self.finished = true;
-                return Err(MoltenError::invalid_harness(format!("distinct-process {label} child timed out")));
+                return Err(crate::error::MoltenError::invalid_harness(format!(
+                    "distinct-process {label} child timed out"
+                )));
             }
-            std::thread::sleep(Duration::from_millis(CHILD_POLL_INTERVAL_MS));
+            std::thread::sleep(std::time::Duration::from_millis(CHILD_POLL_INTERVAL_MS));
         }
     }
 }
@@ -233,7 +228,7 @@ impl Drop for ReapingChild {
 // r[impl molten.fabric_transport.cross_process_validation]
 pub fn execute_distinct_process_transport_run(
     input: &DistinctProcessTransportRunInput,
-) -> Result<DistinctProcessTransportRun> {
+) -> crate::error::Result<DistinctProcessTransportRun> {
     validate_run_input(input)?;
     prepare_run_directory(&input.run_directory, input.force)?;
     match execute_prepared_distinct_process_transport_run(input) {
@@ -249,8 +244,8 @@ pub fn execute_distinct_process_transport_run(
 
 fn execute_prepared_distinct_process_transport_run(
     input: &DistinctProcessTransportRunInput,
-) -> Result<DistinctProcessTransportRun> {
-    let timeout = Duration::from_millis(input.child_timeout_ms);
+) -> crate::error::Result<DistinctProcessTransportRun> {
+    let timeout = std::time::Duration::from_millis(input.child_timeout_ms);
     write_transport_input(&input.run_directory, &input.request_ref, &input.payload)?;
     let listener_invocation_ref = invocation_ref(LISTENER_ROLE);
     let client_invocation_ref = invocation_ref(CLIENT_ROLE);
@@ -279,11 +274,13 @@ fn execute_prepared_distinct_process_transport_run(
 
     let client_status = client.wait_bounded(timeout, CLIENT_ROLE)?;
     if !client_status.success() {
-        return Err(MoltenError::invalid_harness(format!("distinct-process client child exited with {client_status}")));
+        return Err(crate::error::MoltenError::invalid_harness(format!(
+            "distinct-process client child exited with {client_status}"
+        )));
     }
     let listener_status = listener.wait_bounded(timeout, LISTENER_ROLE)?;
     if !listener_status.success() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "distinct-process listener child exited with {listener_status}"
         )));
     }
@@ -325,16 +322,17 @@ fn execute_prepared_distinct_process_transport_run(
 }
 
 // r[impl molten.fabric_transport.cross_process_listener]
-pub fn run_distinct_process_listener_child(run_directory: &Path) -> Result<()> {
+pub fn run_distinct_process_listener_child(run_directory: &std::path::Path) -> crate::error::Result<()> {
     validate_child_directory(run_directory)?;
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|error| MoltenError::invalid_harness(format!("listener runtime creation failed: {error}")))?;
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| {
+        crate::error::MoltenError::invalid_harness(format!("listener runtime creation failed: {error}"))
+    })?;
     runtime.block_on(async {
         let mut listener = IrohCrossProcessListener::bind(IrohCrossProcessListenerInput {
             profile: fixture_profile(),
             protocol: fixture_protocol(),
             capability: fixture_capability(LISTENER_SECRET_BYTE, LISTENER_CAPABILITY_REF)?,
-            bind_addr: SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+            bind_addr: std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0)),
             listener_identity_ref: LISTENER_IDENTITY_REF.to_string(),
             expected_peer_context_ref: PEER_CONTEXT_REF.to_string(),
             locator_cohort_ref: LOCATOR_COHORT_REF.to_string(),
@@ -347,7 +345,11 @@ pub fn run_distinct_process_listener_child(run_directory: &Path) -> Result<()> {
         write_preserves_atomic(&run_directory.join(HANDOFF_FILE), &listener.handoff().value)?;
         let (request_ref, _payload) = read_transport_input(run_directory)?;
         let frame = listener
-            .accept_one(SESSION_REF, &request_ref, Duration::from_millis(DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS))
+            .accept_one(
+                SESSION_REF,
+                &request_ref,
+                std::time::Duration::from_millis(DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS),
+            )
             .await?;
         let endpoint_cleanup = listener.drain_and_close(ListenerDrainReason::OperatorRequest).await?;
         let participant = participant_artifact(
@@ -365,20 +367,21 @@ pub fn run_distinct_process_listener_child(run_directory: &Path) -> Result<()> {
 }
 
 // r[impl molten.fabric_transport.cross_process_session]
-pub fn run_distinct_process_client_child(run_directory: &Path) -> Result<()> {
+pub fn run_distinct_process_client_child(run_directory: &std::path::Path) -> crate::error::Result<()> {
     validate_child_directory(run_directory)?;
     let handoff = read_endpoint_handoff(&run_directory.join(HANDOFF_FILE))?;
     validate_fixture_endpoint(&handoff)?;
     let (request_ref, payload) = read_transport_input(run_directory)?;
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|error| MoltenError::invalid_harness(format!("client runtime creation failed: {error}")))?;
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| {
+        crate::error::MoltenError::invalid_harness(format!("client runtime creation failed: {error}"))
+    })?;
     runtime.block_on(async {
         let frame = exchange_cross_process_frame(
             IrohCrossProcessClientInput {
                 profile: fixture_profile(),
                 protocol: fixture_protocol(),
                 capability: fixture_capability(CLIENT_SECRET_BYTE, CLIENT_CAPABILITY_REF)?,
-                bind_addr: SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+                bind_addr: std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0)),
                 expected: expected_binding(&handoff),
                 endpoint: handoff.clone(),
                 admission: EndpointAdmissionState::fully_active(),
@@ -386,7 +389,7 @@ pub fn run_distinct_process_client_child(run_directory: &Path) -> Result<()> {
                 request_ref,
             },
             &payload,
-            Duration::from_millis(DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS),
+            std::time::Duration::from_millis(DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS),
         )
         .await?;
         let participant = participant_artifact(
@@ -404,14 +407,16 @@ pub fn run_distinct_process_client_child(run_directory: &Path) -> Result<()> {
 }
 
 // r[impl molten.fabric_transport.distinct_process_evidence]
-pub fn verify_distinct_process_transport_run(run_directory: &Path) -> Result<DistinctProcessTransportVerification> {
+pub fn verify_distinct_process_transport_run(
+    run_directory: &std::path::Path,
+) -> crate::error::Result<DistinctProcessTransportVerification> {
     verify_distinct_process_run_directory_inner(run_directory, true)
 }
 
 fn verify_distinct_process_run_directory_inner(
-    run_directory: &Path,
+    run_directory: &std::path::Path,
     require_companion: bool,
-) -> Result<DistinctProcessTransportVerification> {
+) -> crate::error::Result<DistinctProcessTransportVerification> {
     let mut diagnostics = validate_run_membership(run_directory, require_companion)?;
     let listener_start = read_start(&run_directory.join(LISTENER_START_FILE))?;
     let client_start = read_start(&run_directory.join(CLIENT_START_FILE))?;
@@ -440,7 +445,8 @@ fn verify_distinct_process_run_directory_inner(
         diagnostics.push("parent-run-artifact-mismatch".to_string());
     }
     let parent_ref = crate::preserves_rail::canonical_hash(&actual_parent)?;
-    let index_text = std::fs::read_to_string(run_directory.join(INDEX_FILE)).map_err(MoltenError::from)?;
+    let index_text =
+        std::fs::read_to_string(run_directory.join(INDEX_FILE)).map_err(crate::error::MoltenError::from)?;
     let expected_index = render_index(&collect_indexed_artifacts(run_directory)?);
     if index_text != expected_index {
         diagnostics.push("artifact-index-mismatch".to_string());
@@ -479,79 +485,97 @@ fn verify_distinct_process_run_directory_inner(
     })
 }
 
-fn validate_run_input(input: &DistinctProcessTransportRunInput) -> Result<()> {
+fn validate_run_input(input: &DistinctProcessTransportRunInput) -> crate::error::Result<()> {
     if input.child_timeout_ms == 0 || input.child_timeout_ms > MAX_DISTINCT_PROCESS_TIMEOUT_MS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "distinct-process child timeout must be between 1 and {MAX_DISTINCT_PROCESS_TIMEOUT_MS} milliseconds"
         )));
     }
     if input.run_directory.as_os_str().is_empty() || input.process_binary.as_os_str().is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "distinct-process run requires explicit run directory and process binary",
         ));
     }
     crate::preserves_rail::validate_content_ref(&input.request_ref)?;
     let payload_bytes = u64::try_from(input.payload.len())
-        .map_err(|_| MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
     if input.payload.is_empty() || payload_bytes > FRAME_LIMIT {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "distinct-process payload must be nonempty and within the frame bound",
         ));
     }
     Ok(())
 }
 
-fn write_transport_input(run_directory: &Path, request_ref: &str, payload: &[u8]) -> Result<()> {
-    std::fs::write(run_directory.join(REQUEST_INPUT_FILE), request_ref.as_bytes()).map_err(MoltenError::from)?;
-    std::fs::write(run_directory.join(PAYLOAD_INPUT_FILE), payload).map_err(MoltenError::from)
+fn write_transport_input(
+    run_directory: &std::path::Path,
+    request_ref: &str,
+    payload: &[u8],
+) -> crate::error::Result<()> {
+    std::fs::write(run_directory.join(REQUEST_INPUT_FILE), request_ref.as_bytes())
+        .map_err(crate::error::MoltenError::from)?;
+    std::fs::write(run_directory.join(PAYLOAD_INPUT_FILE), payload).map_err(crate::error::MoltenError::from)
 }
 
-fn read_transport_input(run_directory: &Path) -> Result<(String, Vec<u8>)> {
-    let request_ref = std::fs::read_to_string(run_directory.join(REQUEST_INPUT_FILE)).map_err(MoltenError::from)?;
+fn read_transport_input(run_directory: &std::path::Path) -> crate::error::Result<(String, Vec<u8>)> {
+    let request_ref =
+        std::fs::read_to_string(run_directory.join(REQUEST_INPUT_FILE)).map_err(crate::error::MoltenError::from)?;
     crate::preserves_rail::validate_content_ref(&request_ref)?;
-    let payload = std::fs::read(run_directory.join(PAYLOAD_INPUT_FILE)).map_err(MoltenError::from)?;
+    let payload = std::fs::read(run_directory.join(PAYLOAD_INPUT_FILE)).map_err(crate::error::MoltenError::from)?;
     let payload_bytes = u64::try_from(payload.len())
-        .map_err(|_| MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
     if payload.is_empty() || payload_bytes > FRAME_LIMIT {
-        return Err(MoltenError::invalid_harness("distinct-process payload input is empty or over-bound"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "distinct-process payload input is empty or over-bound",
+        ));
     }
     Ok((request_ref, payload))
 }
 
-fn prepare_run_directory(run_directory: &Path, force: bool) -> Result<()> {
+fn prepare_run_directory(run_directory: &std::path::Path, force: bool) -> crate::error::Result<()> {
     if run_directory.exists() {
         if !force {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::MoltenError::invalid_harness(format!(
                 "distinct-process run directory already exists: {}",
                 run_directory.display()
             )));
         }
-        std::fs::remove_dir_all(run_directory).map_err(MoltenError::from)?;
+        std::fs::remove_dir_all(run_directory).map_err(crate::error::MoltenError::from)?;
     }
-    std::fs::create_dir_all(run_directory).map_err(MoltenError::from)
+    std::fs::create_dir_all(run_directory).map_err(crate::error::MoltenError::from)
 }
 
-fn validate_child_directory(run_directory: &Path) -> Result<()> {
+fn validate_child_directory(run_directory: &std::path::Path) -> crate::error::Result<()> {
     if !run_directory.is_dir() {
-        return Err(MoltenError::invalid_harness("distinct-process child requires an existing run directory"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "distinct-process child requires an existing run directory",
+        ));
     }
     Ok(())
 }
 
-fn wait_for_handoff(child: &mut ReapingChild, handoff_path: &Path, timeout: Duration) -> Result<()> {
-    let started = Instant::now();
+fn wait_for_handoff(
+    child: &mut ReapingChild,
+    handoff_path: &std::path::Path,
+    timeout: std::time::Duration,
+) -> crate::error::Result<()> {
+    let started = std::time::Instant::now();
     loop {
         if handoff_path.is_file() {
             return Ok(());
         }
         if let Some(status) = child.try_wait()? {
             child.finished = true;
-            return Err(MoltenError::invalid_harness(format!("listener exited before endpoint handoff with {status}")));
+            return Err(crate::error::MoltenError::invalid_harness(format!(
+                "listener exited before endpoint handoff with {status}"
+            )));
         }
         if started.elapsed() >= timeout {
-            return Err(MoltenError::invalid_harness("listener did not publish endpoint handoff before timeout"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "listener did not publish endpoint handoff before timeout",
+            ));
         }
-        std::thread::sleep(Duration::from_millis(CHILD_POLL_INTERVAL_MS));
+        std::thread::sleep(std::time::Duration::from_millis(CHILD_POLL_INTERVAL_MS));
     }
 }
 
@@ -625,7 +649,7 @@ fn fixture_validity() -> EndpointValidityCohort {
     }
 }
 
-fn fixture_capability(secret_byte: u8, capability_ref: &str) -> Result<IrohEndpointCapability> {
+fn fixture_capability(secret_byte: u8, capability_ref: &str) -> crate::error::Result<IrohEndpointCapability> {
     IrohEndpointCapability::from_secret_bytes([secret_byte; IROH_SECRET_KEY_BYTES_LOCAL], capability_ref.to_string())
 }
 
@@ -647,9 +671,9 @@ fn expected_binding(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpoin
     }
 }
 
-fn validate_fixture_endpoint(endpoint: &CanonicalCrossProcessEndpoint) -> Result<()> {
+fn validate_fixture_endpoint(endpoint: &CanonicalCrossProcessEndpoint) -> crate::error::Result<()> {
     validate_cross_process_endpoint(&fixture_profile().profile, &fixture_protocol(), &endpoint.descriptor)
-        .map_err(|issues| MoltenError::invalid_harness(format!("fixture endpoint denied: {issues:?}")))
+        .map_err(|issues| crate::error::MoltenError::invalid_harness(format!("fixture endpoint denied: {issues:?}")))
 }
 
 fn participant_artifact(
@@ -661,7 +685,7 @@ fn participant_artifact(
     profile: &TransportProfile,
     protocol: &ProtocolDescriptor,
     handoff_ref: &str,
-) -> Result<ParticipantArtifact> {
+) -> crate::error::Result<ParticipantArtifact> {
     for reference in [invocation_ref, endpoint_cleanup_ref, handoff_ref] {
         crate::preserves_rail::validate_content_ref(reference)?;
     }
@@ -723,7 +747,7 @@ fn participant_artifact(
     })
 }
 
-fn start_artifact(role: EndpointParticipantRole, invocation_ref: &str) -> Result<StartArtifact> {
+fn start_artifact(role: EndpointParticipantRole, invocation_ref: &str) -> crate::error::Result<StartArtifact> {
     crate::preserves_rail::validate_content_ref(invocation_ref)?;
     let command_profile_ref = command_profile_ref(role.as_str());
     let value = crate::preserves_rail::record("fabric-transport-child-start-v1", vec![
@@ -751,7 +775,7 @@ fn cleanup_artifact(
     listener_exited: bool,
     client_exited: bool,
     no_orphans: bool,
-) -> Result<CleanupArtifact> {
+) -> crate::error::Result<CleanupArtifact> {
     let value = crate::preserves_rail::record("fabric-transport-distinct-cleanup-v1", vec![
         crate::preserves_rail::string(CLEANUP_SCHEMA),
         crate::preserves_rail::string(&listener.artifact_ref),
@@ -848,12 +872,14 @@ fn parent_run_value(
     cleanup: &CleanupArtifact,
     input: &DistinctProcessTransportEvidenceInput,
     assessment: &DistinctProcessTransportAssessment,
-) -> Result<IOValue> {
+) -> crate::error::Result<preserves::IOValue> {
     if listener.handoff_ref != client.handoff_ref {
-        return Err(MoltenError::invalid_harness("participant handoff refs do not match"));
+        return Err(crate::error::MoltenError::invalid_harness("participant handoff refs do not match"));
     }
     if listener.drain_reason == NOT_APPLICABLE || client.drain_reason != NOT_APPLICABLE {
-        return Err(MoltenError::invalid_harness("participant drain reason does not match its listener/client role"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "participant drain reason does not match its listener/client role",
+        ));
     }
     let decision = if assessment.admitted {
         PASS_DECISION
@@ -895,7 +921,7 @@ fn parent_run_value(
     ]))
 }
 
-fn verification_value(decision: &str, index_ref: &str, parent_ref: &str, diagnostics: &[String]) -> IOValue {
+fn verification_value(decision: &str, index_ref: &str, parent_ref: &str, diagnostics: &[String]) -> preserves::IOValue {
     crate::preserves_rail::record("fabric-transport-distinct-process-verification-v1", vec![
         crate::preserves_rail::string(VERIFICATION_SCHEMA),
         crate::preserves_rail::string(decision),
@@ -910,7 +936,7 @@ fn verification_value(decision: &str, index_ref: &str, parent_ref: &str, diagnos
     ])
 }
 
-fn failure_value(error_ref: &str) -> IOValue {
+fn failure_value(error_ref: &str) -> preserves::IOValue {
     crate::preserves_rail::record("fabric-transport-distinct-process-failure-v1", vec![
         crate::preserves_rail::string("molten.fabric.transport.distinct-process-failure.v1"),
         crate::preserves_rail::string(DENY_DECISION),
@@ -926,7 +952,7 @@ fn failure_value(error_ref: &str) -> IOValue {
     ])
 }
 
-fn read_participant(path: &Path) -> Result<ParticipantArtifact> {
+fn read_participant(path: &std::path::Path) -> crate::error::Result<ParticipantArtifact> {
     let value = read_preserves(path)?;
     let fields = simple_record(&value, "fabric-transport-participant-terminal-v1", PARTICIPANT_FIELD_COUNT)?;
     let mut fields = fields.as_slice().iter();
@@ -981,7 +1007,7 @@ fn read_participant(path: &Path) -> Result<ParticipantArtifact> {
     })
 }
 
-fn read_start(path: &Path) -> Result<StartArtifact> {
+fn read_start(path: &std::path::Path) -> crate::error::Result<StartArtifact> {
     let value = read_preserves(path)?;
     let fields = simple_record(&value, "fabric-transport-child-start-v1", START_FIELD_COUNT)?;
     let mut fields = fields.as_slice().iter();
@@ -1002,7 +1028,7 @@ fn read_start(path: &Path) -> Result<StartArtifact> {
     })
 }
 
-fn read_cleanup(path: &Path) -> Result<CleanupArtifact> {
+fn read_cleanup(path: &std::path::Path) -> crate::error::Result<CleanupArtifact> {
     let value = read_preserves(path)?;
     let fields = simple_record(&value, "fabric-transport-distinct-cleanup-v1", CLEANUP_FIELD_COUNT)?;
     let mut fields = fields.as_slice().iter();
@@ -1029,43 +1055,43 @@ fn read_cleanup(path: &Path) -> Result<CleanupArtifact> {
     })
 }
 
-fn read_endpoint_handoff(path: &Path) -> Result<CanonicalCrossProcessEndpoint> {
+fn read_endpoint_handoff(path: &std::path::Path) -> crate::error::Result<CanonicalCrossProcessEndpoint> {
     parse_canonical_cross_process_endpoint(&read_preserves(path)?)
 }
 
-fn read_preserves(path: &Path) -> Result<IOValue> {
+fn read_preserves(path: &std::path::Path) -> crate::error::Result<preserves::IOValue> {
     ensure_regular_file(path)?;
-    let bytes = std::fs::read(path).map_err(MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(crate::error::MoltenError::from)?;
     crate::preserves_rail::parse_canonical_bytes(&bytes)
 }
 
-fn write_preserves(path: &Path, value: &IOValue) -> Result<()> {
+fn write_preserves(path: &std::path::Path, value: &preserves::IOValue) -> crate::error::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
     }
     let bytes = crate::preserves_rail::canonical_bytes(value)?;
-    std::fs::write(path, bytes).map_err(MoltenError::from)
+    std::fs::write(path, bytes).map_err(crate::error::MoltenError::from)
 }
 
-fn write_preserves_atomic(path: &Path, value: &IOValue) -> Result<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| MoltenError::invalid_harness("endpoint handoff path requires a parent directory"))?;
-    std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+fn write_preserves_atomic(path: &std::path::Path, value: &preserves::IOValue) -> crate::error::Result<()> {
+    let parent = path.parent().ok_or_else(|| {
+        crate::error::MoltenError::invalid_harness("endpoint handoff path requires a parent directory")
+    })?;
+    std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
     let temporary = path.with_extension("preserves.tmp");
     let bytes = crate::preserves_rail::canonical_bytes(value)?;
-    let mut file = File::create(&temporary).map_err(MoltenError::from)?;
-    file.write_all(&bytes).map_err(MoltenError::from)?;
-    file.sync_all().map_err(MoltenError::from)?;
-    std::fs::rename(&temporary, path).map_err(MoltenError::from)
+    let mut file = std::fs::File::create(&temporary).map_err(crate::error::MoltenError::from)?;
+    file.write_all(&bytes).map_err(crate::error::MoltenError::from)?;
+    file.sync_all().map_err(crate::error::MoltenError::from)?;
+    std::fs::rename(&temporary, path).map_err(crate::error::MoltenError::from)
 }
 
-fn write_index(run_directory: &Path) -> Result<()> {
+fn write_index(run_directory: &std::path::Path) -> crate::error::Result<()> {
     let entries = collect_indexed_artifacts(run_directory)?;
-    std::fs::write(run_directory.join(INDEX_FILE), render_index(&entries)).map_err(MoltenError::from)
+    std::fs::write(run_directory.join(INDEX_FILE), render_index(&entries)).map_err(crate::error::MoltenError::from)
 }
 
-fn collect_indexed_artifacts(run_directory: &Path) -> Result<Vec<IndexedArtifact>> {
+fn collect_indexed_artifacts(run_directory: &std::path::Path) -> crate::error::Result<Vec<IndexedArtifact>> {
     let definitions = [
         (CLIENT_START_FILE, "parent-client-start", "preserves"),
         (CLIENT_TERMINAL_FILE, "client-terminal", "preserves"),
@@ -1083,7 +1109,7 @@ fn collect_indexed_artifacts(run_directory: &Path) -> Result<Vec<IndexedArtifact
     for (relative_path, artifact_kind, format) in definitions {
         let path = run_directory.join(relative_path);
         ensure_regular_file(&path)?;
-        let bytes = std::fs::read(&path).map_err(MoltenError::from)?;
+        let bytes = std::fs::read(&path).map_err(crate::error::MoltenError::from)?;
         let expected_ref = if format == "preserves" {
             let value = crate::preserves_rail::parse_canonical_bytes(&bytes)?;
             crate::preserves_rail::canonical_hash(&value)?
@@ -1121,12 +1147,15 @@ fn render_index(entries: &[IndexedArtifact]) -> String {
     output
 }
 
-fn validate_run_membership(run_directory: &Path, require_companion: bool) -> Result<Vec<String>> {
+fn validate_run_membership(
+    run_directory: &std::path::Path,
+    require_companion: bool,
+) -> crate::error::Result<Vec<String>> {
     let mut expected = expected_members();
     if !require_companion {
         expected.remove(VERIFICATION_FILE);
     }
-    let mut observed = BTreeSet::new();
+    let mut observed = std::collections::BTreeSet::new();
     collect_relative_files(run_directory, run_directory, &mut observed)?;
     let mut diagnostics = Vec::new();
     for missing in expected.difference(&observed) {
@@ -1145,7 +1174,7 @@ fn validate_run_membership(run_directory: &Path, require_companion: bool) -> Res
     Ok(diagnostics)
 }
 
-fn expected_members() -> BTreeSet<String> {
+fn expected_members() -> std::collections::BTreeSet<String> {
     let members = [
         HANDOFF_FILE,
         LISTENER_START_FILE,
@@ -1165,15 +1194,23 @@ fn expected_members() -> BTreeSet<String> {
     members.into_iter().map(str::to_string).collect()
 }
 
-fn collect_relative_files(root: &Path, current: &Path, output: &mut BTreeSet<String>) -> Result<()> {
+fn collect_relative_files(
+    root: &std::path::Path,
+    current: &std::path::Path,
+    output: &mut std::collections::BTreeSet<String>,
+) -> crate::error::Result<()> {
     if output.len() > MAX_RUN_FILES {
-        return Err(MoltenError::invalid_harness("distinct-process run directory file count exceeds bound"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "distinct-process run directory file count exceeds bound",
+        ));
     }
-    for entry in std::fs::read_dir(current).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        let file_type = entry.file_type().map_err(MoltenError::from)?;
+    for entry in std::fs::read_dir(current).map_err(crate::error::MoltenError::from)? {
+        let entry = entry.map_err(crate::error::MoltenError::from)?;
+        let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
         if file_type.is_symlink() {
-            return Err(MoltenError::invalid_harness("distinct-process run directory must not contain symlinks"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "distinct-process run directory must not contain symlinks",
+            ));
         }
         if file_type.is_dir() {
             collect_relative_files(root, &entry.path(), output)?;
@@ -1181,27 +1218,29 @@ fn collect_relative_files(root: &Path, current: &Path, output: &mut BTreeSet<Str
             let relative = entry
                 .path()
                 .strip_prefix(root)
-                .map_err(|error| MoltenError::invalid_harness(format!("run path strip failed: {error}")))?
+                .map_err(|error| crate::error::MoltenError::invalid_harness(format!("run path strip failed: {error}")))?
                 .to_string_lossy()
                 .into_owned();
             output.insert(relative);
         } else {
-            return Err(MoltenError::invalid_harness("distinct-process run directory contains a non-regular entry"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "distinct-process run directory contains a non-regular entry",
+            ));
         }
     }
     Ok(())
 }
 
-fn ensure_regular_file(path: &Path) -> Result<()> {
-    let metadata = std::fs::symlink_metadata(path).map_err(MoltenError::from)?;
+fn ensure_regular_file(path: &std::path::Path) -> crate::error::Result<()> {
+    let metadata = std::fs::symlink_metadata(path).map_err(crate::error::MoltenError::from)?;
     if !metadata.file_type().is_file() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "distinct-process artifact is not a regular file: {}",
             path.display()
         )));
     }
     if metadata.len() > MAX_ARTIFACT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "distinct-process artifact exceeds {MAX_ARTIFACT_BYTES} bytes: {}",
             path.display()
         )));
@@ -1224,92 +1263,105 @@ fn text_ref(domain: &str, text: &str) -> String {
     format!("blake3:{}", hasher.finalize().to_hex())
 }
 
-fn strings_value<'a>(values: impl Iterator<Item = &'a str>) -> IOValue {
+fn strings_value<'a>(values: impl Iterator<Item = &'a str>) -> preserves::IOValue {
     crate::preserves_rail::sequence(values.map(crate::preserves_rail::string).collect())
 }
 
-fn checks(names: &[&str]) -> IOValue {
+fn checks(names: &[&str]) -> preserves::IOValue {
     crate::preserves_rail::record("checks", vec![strings_value(names.iter().copied())])
 }
 
-fn simple_record(value: &IOValue, label: &str, field_count: usize) -> Result<Vec<Value<IOValue>>> {
+fn simple_record(
+    value: &preserves::IOValue,
+    label: &str,
+    field_count: usize,
+) -> crate::error::Result<Vec<preserves::Value<preserves::IOValue>>> {
     let fields = value
         .collect_simple_record(label, Some(field_count))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
     Ok(fields.iter().collect())
 }
 
-fn next<'a>(fields: &mut impl Iterator<Item = &'a Value<IOValue>>, label: &str) -> Result<&'a Value<IOValue>> {
-    fields.next().ok_or_else(|| MoltenError::invalid_harness(format!("missing {label}")))
+fn next<'a>(
+    fields: &mut impl Iterator<Item = &'a preserves::Value<preserves::IOValue>>,
+    label: &str,
+) -> crate::error::Result<&'a preserves::Value<preserves::IOValue>> {
+    fields.next().ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("missing {label}")))
 }
 
-fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn required_string(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected string for {label}")))
 }
 
-fn required_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn required_ref(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<String> {
     let reference = required_string(value, label)?;
     crate::preserves_rail::validate_content_ref(&reference)?;
     Ok(reference)
 }
 
-fn required_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn required_u64(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
-fn required_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
-    value.as_boolean().ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
+fn required_bool(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<bool> {
+    value
+        .as_boolean()
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected bool for {label}")))
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str) -> Result<()> {
+fn require_schema(value: &preserves::Value<preserves::IOValue>, expected: &str) -> crate::error::Result<()> {
     let actual = required_string(value, "schema")?;
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("schema mismatch: expected {expected}, got {actual}")))
+        Err(crate::error::MoltenError::invalid_harness(format!(
+            "schema mismatch: expected {expected}, got {actual}"
+        )))
     }
 }
 
-fn require_decision(value: &Value<IOValue>) -> Result<()> {
+fn require_decision(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<()> {
     let decision = required_string(value, "decision")?;
     if decision == PASS_DECISION {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("participant decision must pass, got {decision}")))
+        Err(crate::error::MoltenError::invalid_harness(format!(
+            "participant decision must pass, got {decision}"
+        )))
     }
 }
 
-fn parse_role(value: &str) -> Result<EndpointParticipantRole> {
+fn parse_role(value: &str) -> crate::error::Result<EndpointParticipantRole> {
     match value {
         LISTENER_ROLE => Ok(EndpointParticipantRole::Listener),
         CLIENT_ROLE => Ok(EndpointParticipantRole::Client),
-        other => Err(MoltenError::invalid_harness(format!("unsupported participant role {other}"))),
+        other => Err(crate::error::MoltenError::invalid_harness(format!("unsupported participant role {other}"))),
     }
 }
 
-fn parse_delivery(value: &str) -> Result<DeliveryOutcome> {
+fn parse_delivery(value: &str) -> crate::error::Result<DeliveryOutcome> {
     match value {
         "not-attempted" => Ok(DeliveryOutcome::NotAttempted),
         "pending" => Ok(DeliveryOutcome::Pending),
         "delivered" => Ok(DeliveryOutcome::Delivered),
         "not-delivered" => Ok(DeliveryOutcome::NotDelivered),
         "uncertain" => Ok(DeliveryOutcome::Uncertain),
-        other => Err(MoltenError::invalid_harness(format!("unsupported delivery outcome {other}"))),
+        other => Err(crate::error::MoltenError::invalid_harness(format!("unsupported delivery outcome {other}"))),
     }
 }
 
-fn parse_retry(value: &str) -> Result<RetryDisposition> {
+fn parse_retry(value: &str) -> crate::error::Result<RetryDisposition> {
     match value {
         "not-applicable" => Ok(RetryDisposition::NotApplicable),
         "higher-level-policy-required" => Ok(RetryDisposition::HigherLevelPolicyRequired),
         "unsafe-without-reconciliation" => Ok(RetryDisposition::UnsafeWithoutReconciliation),
-        other => Err(MoltenError::invalid_harness(format!("unsupported retry disposition {other}"))),
+        other => Err(crate::error::MoltenError::invalid_harness(format!("unsupported retry disposition {other}"))),
     }
 }
 

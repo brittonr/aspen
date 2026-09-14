@@ -1,13 +1,4 @@
-use super::tests::NODE_A;
-use super::tests::active_group;
-use super::tests::elect_node_a;
-use super::tests::sent_envelope_to;
-use super::tests::started_state;
-use super::tests::test_ref;
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric_consistency::ConsistencyReadMode;
 
 #[derive(Debug, Default)]
 struct RecordingPorts {
@@ -16,33 +7,37 @@ struct RecordingPorts {
 }
 
 impl RecordingPorts {
-    fn record(&mut self, kind: ReplicaEffectKind) -> Result<String> {
+    fn record(&mut self, kind: ReplicaEffectKind) -> crate::error::Result<String> {
         self.executed.push(kind);
         if self.fail_on == Some(kind) {
-            return Err(MoltenError::invalid_harness(format!("injected {} failure", kind.as_str())));
+            return Err(crate::error::MoltenError::invalid_harness(format!("injected {} failure", kind.as_str())));
         }
-        Ok(test_ref(kind.as_str()))
+        Ok(super::tests::test_ref(kind.as_str()))
     }
 }
 
 impl ReplicaDurabilityEffects for RecordingPorts {
-    fn persist_hard_state(&mut self, _term: u64, _voted_for: Option<&str>) -> Result<String> {
+    fn persist_hard_state(&mut self, _term: u64, _voted_for: Option<&str>) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::PersistHardState)
     }
 
-    fn persist_entries(&mut self, _truncate_from: Option<u64>, _entries: &[ReplicatedEntry]) -> Result<String> {
+    fn persist_entries(
+        &mut self,
+        _truncate_from: Option<u64>,
+        _entries: &[ReplicatedEntry],
+    ) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::PersistEntries)
     }
 
-    fn flush_log(&mut self, _through_index: u64) -> Result<String> {
+    fn flush_log(&mut self, _through_index: u64) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::FlushLog)
     }
 
-    fn persist_commit(&mut self, _through_index: u64) -> Result<String> {
+    fn persist_commit(&mut self, _through_index: u64) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::PersistCommit)
     }
 
-    fn persist_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+    fn persist_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::PersistSnapshot)
     }
 }
@@ -54,21 +49,21 @@ impl ReplicaTransportEffects for RecordingPorts {
 }
 
 impl ReplicaTimeEffects for RecordingPorts {
-    fn arm_election_timer(&mut self, _timer_ref: &str) -> Result<String> {
+    fn arm_election_timer(&mut self, _timer_ref: &str) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::ArmElectionTimer)
     }
 
-    fn arm_heartbeat_timer(&mut self) -> Result<String> {
+    fn arm_heartbeat_timer(&mut self) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::ArmHeartbeatTimer)
     }
 }
 
 impl ReplicaApplicationEffects for RecordingPorts {
-    fn restore_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+    fn restore_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::RestoreApplicationSnapshot)
     }
 
-    fn apply_committed(&mut self, _entries: &[ReplicatedEntry]) -> Result<String> {
+    fn apply_committed(&mut self, _entries: &[ReplicatedEntry]) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::ApplyCommitted)
     }
 }
@@ -79,21 +74,21 @@ impl ReplicaControlEffects for RecordingPorts {
         _request_ref: &str,
         _disposition: ProposalDisposition,
         _committed_index: Option<u64>,
-    ) -> Result<String> {
+    ) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::ProposalOutcome)
     }
 
     fn read_outcome(
         &mut self,
         _request_ref: &str,
-        _mode: ConsistencyReadMode,
+        _mode: crate::fabric_consistency::ConsistencyReadMode,
         _disposition: ReadDisposition,
         _observed_index: u64,
-    ) -> Result<String> {
+    ) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::ReadOutcome)
     }
 
-    fn lifecycle_changed(&mut self, _lifecycle: ReplicaLifecycle) -> Result<String> {
+    fn lifecycle_changed(&mut self, _lifecycle: ReplicaLifecycle) -> crate::error::Result<String> {
         self.record(ReplicaEffectKind::LifecycleChanged)
     }
 }
@@ -101,8 +96,8 @@ impl ReplicaControlEffects for RecordingPorts {
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
 async fn effect_shell_executes_election_effects_in_declared_order() {
-    let group = active_group();
-    let state = started_state(&group, NODE_A);
+    let group = super::tests::active_group();
+    let state = super::tests::started_state(&group, super::tests::NODE_A);
     let mut ports = RecordingPorts::default();
     let outcome = execute_replica_event(
         &state,
@@ -130,7 +125,7 @@ async fn effect_shell_executes_election_effects_in_declared_order() {
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
 async fn effect_shell_stops_before_transport_when_log_flush_fails() {
-    let (leader, _follower) = elect_node_a();
+    let (leader, _follower) = super::tests::elect_node_a();
     let mut ports = RecordingPorts {
         executed: Vec::new(),
         fail_on: Some(ReplicaEffectKind::FlushLog),
@@ -138,9 +133,9 @@ async fn effect_shell_stops_before_transport_when_log_flush_fails() {
     let outcome = execute_replica_event(
         &leader,
         ReplicaEvent::Propose {
-            request_ref: test_ref("shell-failure-request"),
-            command_ref: test_ref("shell-failure-command"),
-            command_schema_ref: test_ref("shell-failure-schema"),
+            request_ref: super::tests::test_ref("shell-failure-request"),
+            command_ref: super::tests::test_ref("shell-failure-command"),
+            command_schema_ref: super::tests::test_ref("shell-failure-schema"),
         },
         &mut ports,
     )
@@ -160,17 +155,17 @@ async fn effect_shell_stops_before_transport_when_log_flush_fails() {
 // r[verify molten.fabric_consistency.live_raft]
 #[tokio::test]
 async fn durable_commit_failure_prevents_application_and_state_publication() {
-    let (leader, follower) = elect_node_a();
+    let (leader, follower) = super::tests::elect_node_a();
     let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
-        request_ref: test_ref("commit-failure-request"),
-        command_ref: test_ref("commit-failure-command"),
-        command_schema_ref: test_ref("commit-failure-schema"),
+        request_ref: super::tests::test_ref("commit-failure-request"),
+        command_ref: super::tests::test_ref("commit-failure-command"),
+        command_schema_ref: super::tests::test_ref("commit-failure-schema"),
     })
     .expect("proposal plan");
-    let append = sent_envelope_to(&proposal, &follower.node_id);
+    let append = super::tests::sent_envelope_to(&proposal, &follower.node_id);
     let replicated =
         apply_replica_event(&follower, ReplicaEvent::Message { envelope: append }).expect("follower replication");
-    let response = sent_envelope_to(&replicated, &leader.node_id);
+    let response = super::tests::sent_envelope_to(&replicated, &leader.node_id);
     let mut ports = RecordingPorts {
         executed: Vec::new(),
         fail_on: Some(ReplicaEffectKind::PersistCommit),

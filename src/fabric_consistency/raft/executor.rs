@@ -1,11 +1,8 @@
 use std::future::Future;
-use std::pin::Pin;
 
 use super::*;
-use crate::error::Result;
 
-pub type ReplicaTransportFuture<'a> = Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
-use crate::fabric_consistency::ConsistencyReadMode;
+pub type ReplicaTransportFuture<'a> = std::pin::Pin<Box<dyn Future<Output = crate::error::Result<String>> + Send + 'a>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplicaEffectKind {
@@ -74,15 +71,19 @@ pub enum ReplicaExecutionOutcome {
 }
 
 pub trait ReplicaDurabilityEffects {
-    fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> Result<String>;
+    fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> crate::error::Result<String>;
 
-    fn persist_entries(&mut self, truncate_from: Option<u64>, entries: &[ReplicatedEntry]) -> Result<String>;
+    fn persist_entries(
+        &mut self,
+        truncate_from: Option<u64>,
+        entries: &[ReplicatedEntry],
+    ) -> crate::error::Result<String>;
 
-    fn flush_log(&mut self, through_index: u64) -> Result<String>;
+    fn flush_log(&mut self, through_index: u64) -> crate::error::Result<String>;
 
-    fn persist_commit(&mut self, through_index: u64) -> Result<String>;
+    fn persist_commit(&mut self, through_index: u64) -> crate::error::Result<String>;
 
-    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String>;
+    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> crate::error::Result<String>;
 }
 
 pub trait ReplicaTransportEffects {
@@ -90,15 +91,15 @@ pub trait ReplicaTransportEffects {
 }
 
 pub trait ReplicaTimeEffects {
-    fn arm_election_timer(&mut self, timer_ref: &str) -> Result<String>;
+    fn arm_election_timer(&mut self, timer_ref: &str) -> crate::error::Result<String>;
 
-    fn arm_heartbeat_timer(&mut self) -> Result<String>;
+    fn arm_heartbeat_timer(&mut self) -> crate::error::Result<String>;
 }
 
 pub trait ReplicaApplicationEffects {
-    fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String>;
+    fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> crate::error::Result<String>;
 
-    fn apply_committed(&mut self, entries: &[ReplicatedEntry]) -> Result<String>;
+    fn apply_committed(&mut self, entries: &[ReplicatedEntry]) -> crate::error::Result<String>;
 }
 
 pub trait ReplicaControlEffects {
@@ -107,17 +108,17 @@ pub trait ReplicaControlEffects {
         request_ref: &str,
         disposition: ProposalDisposition,
         committed_index: Option<u64>,
-    ) -> Result<String>;
+    ) -> crate::error::Result<String>;
 
     fn read_outcome(
         &mut self,
         request_ref: &str,
-        mode: ConsistencyReadMode,
+        mode: crate::fabric_consistency::ConsistencyReadMode,
         disposition: ReadDisposition,
         observed_index: u64,
-    ) -> Result<String>;
+    ) -> crate::error::Result<String>;
 
-    fn lifecycle_changed(&mut self, lifecycle: ReplicaLifecycle) -> Result<String>;
+    fn lifecycle_changed(&mut self, lifecycle: ReplicaLifecycle) -> crate::error::Result<String>;
 }
 
 pub trait LiveReplicaEffectPorts:
@@ -224,7 +225,10 @@ async fn execute_planned_transition<P: LiveReplicaEffectPorts>(
     })
 }
 
-async fn execute_effect<P: LiveReplicaEffectPorts>(ports: &mut P, effect: &ReplicaEffect) -> Result<String> {
+async fn execute_effect<P: LiveReplicaEffectPorts>(
+    ports: &mut P,
+    effect: &ReplicaEffect,
+) -> crate::error::Result<String> {
     match effect {
         ReplicaEffect::PersistHardState { term, voted_for } => ports.persist_hard_state(*term, voted_for.as_deref()),
         ReplicaEffect::PersistEntries { truncate_from, entries } => ports.persist_entries(*truncate_from, entries),

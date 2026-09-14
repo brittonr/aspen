@@ -1,5 +1,4 @@
 use super::*;
-use crate::error::MoltenError;
 
 const TEST_PROFILE_REF: &str = "blake3:1111111111111111111111111111111111111111111111111111111111111111";
 const TEST_INITIAL_STATE_REF: &str = "blake3:2222222222222222222222222222222222222222222222222222222222222222";
@@ -119,7 +118,7 @@ fn projection_denies_an_observation_that_bypasses_the_committed_application_path
     let mut fabricated = committed_apply(1);
     fabricated.application_receipt_ref = "not-a-content-ref".to_string();
     let error = projector.project(&fabricated).expect_err("fabricated observation is denied");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
@@ -129,7 +128,7 @@ fn projection_denies_noncontiguous_committed_apply_order() {
         ChaosControlChainProjector::bind(lossless_profile(), TEST_INITIAL_STATE_REF).expect("projector binds");
     projector.project(&committed_apply(1)).expect("projection succeeds");
     let error = projector.project(&committed_apply(3)).expect_err("changed order is denied");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
     assert_eq!(projector.next_command_index(), 2);
 }
 
@@ -140,7 +139,7 @@ fn projection_denies_duplicated_committed_apply() {
         ChaosControlChainProjector::bind(lossless_profile(), TEST_INITIAL_STATE_REF).expect("projector binds");
     projector.project(&committed_apply(1)).expect("projection succeeds");
     let error = projector.project(&committed_apply(1)).expect_err("duplicate apply is denied");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
     assert_eq!(projector.projected_count(), 1);
 }
 
@@ -153,7 +152,7 @@ fn projection_denies_rollback_to_an_earlier_command_index() {
     let mut rollback = committed_apply(1);
     rollback.command_bytes = b"rewritten-command".to_vec();
     let error = projector.project(&rollback).expect_err("rollback is denied");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
@@ -164,7 +163,7 @@ fn projection_denies_malformed_references() {
     let mut malformed = committed_apply(1);
     malformed.application_state_ref = "blake3:NOTHEX".to_string();
     let error = projector.project(&malformed).expect_err("malformed ref is denied");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
@@ -176,7 +175,7 @@ fn projection_denies_a_stale_lifecycle_generation() {
     let mut stale = committed_apply(2);
     stale.lifecycle_generation = 0;
     let error = projector.project(&stale).expect_err("stale generation is denied");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
@@ -186,7 +185,7 @@ fn sampled_profile_cannot_support_conformance_projection() {
     profile.observation_mode = ChaosControlObservationMode::Sampled;
     let mut projector = ChaosControlChainProjector::bind(profile, TEST_INITIAL_STATE_REF).expect("projector binds");
     let error = projector.project(&committed_apply(1)).expect_err("sampled projection cannot support conformance");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
@@ -308,7 +307,7 @@ fn retry_with_changed_identity_is_an_invalid_idempotency_input() {
         },
     ];
     let error = admit_proposal_attempts(&attempts).expect_err("changed identity is rejected");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_operation_identity]
@@ -331,7 +330,7 @@ fn indefinite_outcome_cannot_become_definite_rejection() {
         },
     ];
     let error = admit_proposal_attempts(&attempts).expect_err("timeout cannot become definite non-execution evidence");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_operation_identity]
@@ -354,5 +353,5 @@ fn acknowledged_retry_names_the_same_committed_index() {
         },
     ];
     let error = admit_proposal_attempts(&attempts).expect_err("one logical operation applies at most once");
-    assert!(matches!(error, MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
 }

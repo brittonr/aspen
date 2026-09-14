@@ -1,15 +1,3 @@
-use std::ffi::OsString;
-
-use bounded_exec::CommandSpec;
-use bounded_exec::Completion;
-use bounded_exec::Disposition;
-use bounded_exec::EnvironmentMode;
-use bounded_exec::ExecutionLimits;
-use bounded_exec::Input;
-use bounded_exec::OutcomePolicy;
-use bounded_exec::RunRequest;
-use bounded_exec::TerminationScope;
-
 use super::*;
 
 const STDOUT_ROLE: &str = "stdout-retained-prefix";
@@ -58,7 +46,7 @@ pub(super) fn validate_resolved_context(
 pub(super) fn bounded_request(
     request: &CanonicalExecutionRequest,
     resolved: &ResolvedExecutionContext,
-) -> Result<RunRequest, String> {
+) -> Result<bounded_exec::RunRequest, String> {
     let limits = request.plan.request.limits;
     let stdin_max_bytes = usize::try_from(limits.stdin_max_bytes)
         .map_err(|_| "stdin byte bound does not fit the host platform".to_string())?;
@@ -66,29 +54,29 @@ pub(super) fn bounded_request(
         .map_err(|_| "stdout byte bound does not fit the host platform".to_string())?;
     let stderr_max_bytes = usize::try_from(limits.stderr_max_bytes)
         .map_err(|_| "stderr byte bound does not fit the host platform".to_string())?;
-    let outcome_policy = OutcomePolicy::new(
+    let outcome_policy = bounded_exec::OutcomePolicy::new(
         request.plan.request.accepted_exit_codes.clone(),
         request.plan.request.reject_stdout_truncation,
         request.plan.request.reject_stderr_truncation,
     )
     .map_err(|error| format!("execution outcome policy is invalid: {error:?}"))?;
-    let input = resolved.stdin_bytes.clone().map_or(Input::Null, Input::Bytes);
-    Ok(RunRequest {
-        command: CommandSpec {
+    let input = resolved.stdin_bytes.clone().map_or(bounded_exec::Input::Null, bounded_exec::Input::Bytes);
+    Ok(bounded_exec::RunRequest {
+        command: bounded_exec::CommandSpec {
             program: resolved.executable_path.clone(),
-            args: request.plan.request.arguments.iter().map(OsString::from).collect(),
+            args: request.plan.request.arguments.iter().map(std::ffi::OsString::from).collect(),
             current_dir: resolved.workspace_path.clone(),
-            environment_mode: EnvironmentMode::Clear,
+            environment_mode: bounded_exec::EnvironmentMode::Clear,
             environment: request
                 .plan
                 .request
                 .environment
                 .iter()
-                .map(|entry| (OsString::from(&entry.name), OsString::from(&entry.value)))
+                .map(|entry| (std::ffi::OsString::from(&entry.name), std::ffi::OsString::from(&entry.value)))
                 .collect(),
             input,
         },
-        limits: ExecutionLimits {
+        limits: bounded_exec::ExecutionLimits {
             timeout_ms: limits.timeout_ms,
             stdin_max_bytes,
             stdout_max_bytes,
@@ -97,8 +85,8 @@ pub(super) fn bounded_request(
             teardown_timeout_ms: limits.teardown_timeout_ms,
         },
         termination_scope: match request.plan.request.termination_scope {
-            ExecutionTerminationScope::DirectChild => TerminationScope::Child,
-            ExecutionTerminationScope::ProcessGroup => TerminationScope::ProcessGroup,
+            ExecutionTerminationScope::DirectChild => bounded_exec::TerminationScope::Child,
+            ExecutionTerminationScope::ProcessGroup => bounded_exec::TerminationScope::ProcessGroup,
         },
         outcome_policy,
     })
@@ -108,16 +96,16 @@ pub(super) fn process_observation(
     output: bounded_exec::ExecutionOutput,
 ) -> Result<ExecutionProcessObservation, String> {
     let lifecycle = match output.completion {
-        Completion::Exited => ExecutionLifecycleState::Exited,
-        Completion::TimedOut => ExecutionLifecycleState::TimedOut,
-        Completion::Cancelled => ExecutionLifecycleState::Cancelled,
+        bounded_exec::Completion::Exited => ExecutionLifecycleState::Exited,
+        bounded_exec::Completion::TimedOut => ExecutionLifecycleState::TimedOut,
+        bounded_exec::Completion::Cancelled => ExecutionLifecycleState::Cancelled,
     };
     let disposition = match output.disposition {
-        Disposition::Succeeded => ExecutionObservedDisposition::ExitPolicyAccepted,
-        Disposition::ExitFailed => ExecutionObservedDisposition::ExitPolicyRejected,
-        Disposition::TimedOut => ExecutionObservedDisposition::TimedOut,
-        Disposition::Cancelled => ExecutionObservedDisposition::Cancelled,
-        Disposition::OutputLimitExceeded(_) => ExecutionObservedDisposition::OutputPolicyRejected,
+        bounded_exec::Disposition::Succeeded => ExecutionObservedDisposition::ExitPolicyAccepted,
+        bounded_exec::Disposition::ExitFailed => ExecutionObservedDisposition::ExitPolicyRejected,
+        bounded_exec::Disposition::TimedOut => ExecutionObservedDisposition::TimedOut,
+        bounded_exec::Disposition::Cancelled => ExecutionObservedDisposition::Cancelled,
+        bounded_exec::Disposition::OutputLimitExceeded(_) => ExecutionObservedDisposition::OutputPolicyRejected,
     };
     Ok(ExecutionProcessObservation {
         lifecycle,

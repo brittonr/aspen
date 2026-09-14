@@ -1,6 +1,3 @@
-use crate::error::MoltenError;
-use crate::error::Result;
-
 pub(crate) trait VecSink<T> {
     fn item_count(&self) -> usize;
     fn reserve_items(&mut self, additional: usize);
@@ -28,22 +25,29 @@ impl<T> VecSink<T> for Vec<T> {
     }
 }
 
-pub(crate) fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
+pub(crate) fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> crate::error::Result<()> {
     if count <= maximum {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+    Err(crate::error::MoltenError::invalid_harness(format!(
+        "{label} count {count} exceeds maximum {maximum}"
+    )))
 }
 
-pub(crate) fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> Result<usize> {
+pub(crate) fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> crate::error::Result<usize> {
     let total = left
         .checked_add(right)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(total, maximum, label)?;
     Ok(total)
 }
 
-pub(crate) fn push_bounded<T>(values: &mut impl VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
+pub(crate) fn push_bounded<T>(
+    values: &mut impl VecSink<T>,
+    value: T,
+    maximum: usize,
+    label: &str,
+) -> crate::error::Result<()> {
     checked_count_sum(values.item_count(), 1, maximum, label)?;
     values.push_item(value);
     Ok(())
@@ -54,7 +58,7 @@ pub(crate) fn extend_bounded<T>(
     incoming: &[T],
     maximum: usize,
     label: &str,
-) -> Result<()>
+) -> crate::error::Result<()>
 where
     T: Clone,
 {
@@ -65,13 +69,13 @@ where
 }
 
 pub(crate) trait PushLimited<T>: VecSink<T> {
-    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> Result<()>;
+    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> crate::error::Result<()>;
 }
 
 impl<T, S> PushLimited<T> for S
 where S: VecSink<T>
 {
-    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> Result<()> {
+    fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> crate::error::Result<()> {
         push_bounded(self, value, maximum, label)
     }
 }
@@ -89,7 +93,7 @@ where S: VecSink<String>
         Self { sink, maximum, label }
     }
 
-    pub(crate) fn push(&mut self, diagnostic: impl Into<String>) -> Result<()> {
+    pub(crate) fn push(&mut self, diagnostic: impl Into<String>) -> crate::error::Result<()> {
         push_bounded(self.sink, diagnostic.into(), self.maximum, self.label)
     }
 }

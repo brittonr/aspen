@@ -1,5 +1,3 @@
-use std::path::Path;
-
 const MAX_BOUNDARY_FILES: usize = 1_024;
 const MAX_BOUNDARY_FILE_BYTES: u64 = 1_048_576;
 const NODE_ROOT: &str = "src/node";
@@ -51,7 +49,7 @@ fn find_boundary_violations(files: &[SourceFile], forbidden_terms: &[&str]) -> V
     violations
 }
 
-fn read_bounded_rust_sources(root: &Path) -> BoundaryResult<Vec<SourceFile>> {
+fn read_bounded_rust_sources(root: &std::path::Path) -> BoundaryResult<Vec<SourceFile>> {
     let mut pending = vec![root.to_path_buf()];
     let mut files = Vec::new();
     while let Some(path) = pending.pop() {
@@ -92,7 +90,7 @@ fn read_bounded_rust_sources(root: &Path) -> BoundaryResult<Vec<SourceFile>> {
 // r[verify molten.fabric_simulation.final_validation]
 #[test]
 fn node_core_has_no_reference_service_domain_branch() -> BoundaryResult<()> {
-    let sources = read_bounded_rust_sources(Path::new(NODE_ROOT))?;
+    let sources = read_bounded_rust_sources(std::path::Path::new(NODE_ROOT))?;
     let violations = find_boundary_violations(&sources, &FORBIDDEN_NODE_TERMS);
 
     assert!(!sources.is_empty());
@@ -105,7 +103,7 @@ fn node_core_has_no_reference_service_domain_branch() -> BoundaryResult<()> {
 // r[verify molten.fabric_simulation.final_validation]
 #[test]
 fn pure_simulation_core_has_no_ambient_io_dependency() -> BoundaryResult<()> {
-    let sources = read_bounded_rust_sources(Path::new(CORE_ROOT))?;
+    let sources = read_bounded_rust_sources(std::path::Path::new(CORE_ROOT))?;
     let violations = find_boundary_violations(&sources, &FORBIDDEN_CORE_TERMS);
 
     assert!(!sources.is_empty());

@@ -1,11 +1,3 @@
-use super::tests::NODE_A;
-use super::tests::NODE_C;
-use super::tests::active_group;
-use super::tests::committed_leader;
-use super::tests::elect_node_a;
-use super::tests::sent_envelope_to;
-use super::tests::started_state;
-use super::tests::test_ref;
 use super::*;
 
 const TRAILING_SENTINEL_BYTE: u8 = 0xff;
@@ -14,59 +6,62 @@ const NODE_B: &str = "node-b";
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
 fn canonical_raft_vote_and_append_envelopes_roundtrip_exactly() {
-    let group = active_group();
-    let node_a = started_state(&group, NODE_A);
+    let group = super::tests::active_group();
+    let node_a = super::tests::started_state(&group, super::tests::NODE_A);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
         timer_ref: node_a.active_election_timer_ref.clone(),
     })
     .expect("election transition");
-    let vote = sent_envelope_to(&election, NODE_B);
+    let vote = super::tests::sent_envelope_to(&election, NODE_B);
     assert_roundtrip(&vote);
 
-    let (leader, follower) = elect_node_a();
+    let (leader, follower) = super::tests::elect_node_a();
     let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
-        request_ref: test_ref("canonical-proposal-request"),
-        command_ref: test_ref("canonical-proposal-command"),
-        command_schema_ref: test_ref("canonical-proposal-schema"),
+        request_ref: super::tests::test_ref("canonical-proposal-request"),
+        command_ref: super::tests::test_ref("canonical-proposal-command"),
+        command_schema_ref: super::tests::test_ref("canonical-proposal-schema"),
     })
     .expect("proposal transition");
-    let append = sent_envelope_to(&proposal, NODE_B);
+    let append = super::tests::sent_envelope_to(&proposal, NODE_B);
     assert_roundtrip(&append);
 
     let read = apply_replica_event(&leader, ReplicaEvent::Read {
-        request_ref: test_ref("canonical-read-request"),
+        request_ref: super::tests::test_ref("canonical-read-request"),
         mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
     })
     .expect("read transition");
-    let probe = sent_envelope_to(&read, NODE_B);
+    let probe = super::tests::sent_envelope_to(&read, NODE_B);
     assert_roundtrip(&probe);
     let acknowledgement =
         apply_replica_event(&follower, ReplicaEvent::Message { envelope: probe }).expect("read acknowledgement");
-    assert_roundtrip(&sent_envelope_to(&acknowledgement, NODE_A));
+    assert_roundtrip(&super::tests::sent_envelope_to(&acknowledgement, super::tests::NODE_A));
 
-    let committed = committed_leader();
+    let committed = super::tests::committed_leader();
     let snapshot = apply_replica_event(&committed, ReplicaEvent::CreateSnapshot {
-        application_state_ref: test_ref("canonical-snapshot-state"),
+        application_state_ref: super::tests::test_ref("canonical-snapshot-state"),
     })
     .expect("canonical snapshot");
     let heartbeat = apply_replica_event(&snapshot.next, ReplicaEvent::HeartbeatTimeout).expect("snapshot heartbeat");
-    let install = sent_envelope_to(&heartbeat, NODE_C);
+    let install = super::tests::sent_envelope_to(&heartbeat, super::tests::NODE_C);
     assert_roundtrip(&install);
-    let installed = apply_replica_event(&started_state(&group, NODE_C), ReplicaEvent::Message { envelope: install })
+    let installed =
+        apply_replica_event(&super::tests::started_state(&group, super::tests::NODE_C), ReplicaEvent::Message {
+            envelope: install,
+        })
         .expect("canonical snapshot install");
-    assert_roundtrip(&sent_envelope_to(&installed, NODE_A));
+    assert_roundtrip(&super::tests::sent_envelope_to(&installed, super::tests::NODE_A));
 }
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
 fn canonical_raft_decoder_rejects_trailing_bytes_and_sender_substitution() {
-    let group = active_group();
-    let node_a = started_state(&group, NODE_A);
+    let group = super::tests::active_group();
+    let node_a = super::tests::started_state(&group, super::tests::NODE_A);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
         timer_ref: node_a.active_election_timer_ref.clone(),
     })
     .expect("negative election transition");
-    let envelope = sent_envelope_to(&election, NODE_B);
+    let envelope = super::tests::sent_envelope_to(&election, NODE_B);
     let mut bytes = canonical_replica_message(&envelope).expect("canonical envelope").bytes;
     bytes.push(TRAILING_SENTINEL_BYTE);
     assert!(parse_canonical_replica_message(&bytes).is_err());
@@ -80,8 +75,8 @@ fn canonical_raft_decoder_rejects_trailing_bytes_and_sender_substitution() {
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
 fn canonical_raft_encoder_rejects_over_bound_append_batches() {
-    let group = active_group();
-    let state = started_state(&group, NODE_A);
+    let group = super::tests::active_group();
+    let state = super::tests::started_state(&group, super::tests::NODE_A);
     let entry_count = MAX_REPLICA_MESSAGE_ENTRIES + 1;
     let entries = (0..entry_count)
         .map(|offset| {
@@ -89,20 +84,20 @@ fn canonical_raft_encoder_rejects_over_bound_append_batches() {
             ReplicatedEntry {
                 index,
                 term: INITIAL_LOG_INDEX,
-                request_ref: test_ref(&format!("over-bound-request-{offset}")),
-                command_ref: test_ref(&format!("over-bound-command-{offset}")),
-                command_schema_ref: test_ref("over-bound-schema"),
+                request_ref: super::tests::test_ref(&format!("over-bound-request-{offset}")),
+                command_ref: super::tests::test_ref(&format!("over-bound-command-{offset}")),
+                command_schema_ref: super::tests::test_ref("over-bound-schema"),
             }
         })
         .collect();
     let envelope = ReplicaMessageEnvelope {
         group_binding_ref: state.profile.group_binding_ref,
         service_generation: state.profile.service_generation,
-        from: NODE_A.to_string(),
+        from: super::tests::NODE_A.to_string(),
         to: NODE_B.to_string(),
         message: RaftMessage::AppendEntries {
             term: INITIAL_LOG_INDEX,
-            leader_id: NODE_A.to_string(),
+            leader_id: super::tests::NODE_A.to_string(),
             prev_log_index: INITIAL_COMMIT_INDEX,
             prev_log_term: INITIAL_COMMIT_INDEX,
             entries,

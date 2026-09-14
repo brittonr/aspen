@@ -1,121 +1,139 @@
-use super::super::admission::ComponentArtifactFacts;
-use super::super::admission::ComponentExecutionPlan;
-use super::super::admission::ComponentImportGrant;
-use super::super::admission::plan_component_execution;
-use super::super::evidence::materialization::ComponentArtifactSource;
-use super::super::evidence::materialization::verify_materialization;
-use super::super::evidence::receipt::ComponentReceipt;
-use super::super::evidence::receipt::ComponentReceiptDecision;
-use super::super::evidence::receipt::ComponentReceiptInput;
-use super::super::evidence::receipt::ComponentReceiptStage;
-use super::super::evidence::receipt::build_component_receipt;
-use super::super::migration::classify_for_profile;
-use super::super::model::ComponentDenial;
-use super::super::model::ComponentDenialClass;
-use super::super::model::ComponentResult;
-use super::super::model::ComponentRuntimeProfile;
-use super::super::model::EvidenceScope;
-use super::super::model::RequestedExecutionProfile;
-use super::super::profile::validate_component_profile;
-use super::denial::denied_outcome;
-use super::denial::plan_denied_outcome;
-
 pub struct ComponentExecutionRequest<'a> {
-    pub profile: &'a ComponentRuntimeProfile,
-    pub requested_profile: RequestedExecutionProfile,
-    pub evidence_scope: EvidenceScope,
-    pub source: ComponentArtifactSource<'a>,
-    pub facts: &'a ComponentArtifactFacts,
-    pub import_grants: &'a [ComponentImportGrant],
+    pub profile: &'a super::super::model::ComponentRuntimeProfile,
+    pub requested_profile: super::super::model::RequestedExecutionProfile,
+    pub evidence_scope: super::super::model::EvidenceScope,
+    pub source: super::super::evidence::materialization::ComponentArtifactSource<'a>,
+    pub facts: &'a super::super::admission::ComponentArtifactFacts,
+    pub import_grants: &'a [super::super::admission::ComponentImportGrant],
     pub input: &'a preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComponentExecutionOutcome {
-    pub decision: ComponentReceiptDecision,
+    pub decision: super::super::evidence::receipt::ComponentReceiptDecision,
     pub output: Option<preserves::IOValue>,
-    pub receipts: Vec<ComponentReceipt>,
+    pub receipts: Vec<super::super::evidence::receipt::ComponentReceipt>,
     pub diagnostics: Vec<String>,
 }
 
 impl ComponentExecutionOutcome {
     pub fn is_pass(&self) -> bool {
-        self.decision == ComponentReceiptDecision::Pass
+        self.decision == super::super::evidence::receipt::ComponentReceiptDecision::Pass
     }
 }
 
 pub fn execute_component(request: &ComponentExecutionRequest<'_>) -> ComponentExecutionOutcome {
     match execute_component_inner(request) {
         Ok(outcome) => outcome,
-        Err(denial) => denied_outcome(request, denial),
+        Err(denial) => super::denial::denied_outcome(request, denial),
     }
 }
 
-fn execute_component_inner(request: &ComponentExecutionRequest<'_>) -> ComponentResult<ComponentExecutionOutcome> {
-    validate_component_profile(request.profile)?;
-    classify_for_profile(request.requested_profile, request.source.component_bytes())?;
-    let materialization = verify_materialization(request.profile, request.evidence_scope, request.source)?;
+fn execute_component_inner(
+    request: &ComponentExecutionRequest<'_>,
+) -> super::super::model::ComponentResult<ComponentExecutionOutcome> {
+    super::super::profile::validate_component_profile(request.profile)?;
+    super::super::migration::classify_for_profile(request.requested_profile, request.source.component_bytes())?;
+    let materialization = super::super::evidence::materialization::verify_materialization(
+        request.profile,
+        request.evidence_scope,
+        request.source,
+    )?;
     super::super::admission::inspection::verify_component_artifact_facts(
         request.source.component_bytes(),
         request.facts,
     )?;
-    let plan = plan_component_execution(request.profile, materialization, request.facts, request.import_grants)?;
+    let plan = super::super::admission::plan_component_execution(
+        request.profile,
+        materialization,
+        request.facts,
+        request.import_grants,
+    )?;
     let input_bytes = crate::preserves_rail::canonical_bytes(request.input).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::InvalidPreservesPayload,
+        super::super::model::ComponentDenial::classified(
+            super::super::model::ComponentDenialClass::InvalidPreservesPayload,
             format!("component input is not canonical Preserves: {error}"),
         )
     })?;
     let input_length = u64::try_from(input_bytes.len()).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ResourceDenial,
+        super::super::model::ComponentDenial::classified(
+            super::super::model::ComponentDenialClass::ResourceDenial,
             format!("component input length is unsupported: {error}"),
         )
     })?;
     if input_length > request.profile.resources.max_hostcall_bytes {
-        return Err(ComponentDenial::classified(
-            ComponentDenialClass::ResourceDenial,
+        return Err(super::super::model::ComponentDenial::classified(
+            super::super::model::ComponentDenialClass::ResourceDenial,
             "component input exceeds the admitted canonical payload bound",
         ));
     }
-    let input_ref = crate::preserves_rail::canonical_hash(request.input)
-        .map_err(|error| ComponentDenial::new(format!("component input identity failed: {error}")))?;
+    let input_ref = crate::preserves_rail::canonical_hash(request.input).map_err(|error| {
+        super::super::model::ComponentDenial::new(format!("component input identity failed: {error}"))
+    })?;
     execute_admitted_component(request, &plan, &input_bytes, input_ref)
 }
 
 fn execute_admitted_component(
     request: &ComponentExecutionRequest<'_>,
-    plan: &ComponentExecutionPlan,
+    plan: &super::super::admission::ComponentExecutionPlan,
     input_bytes: &[u8],
     input_ref: String,
-) -> ComponentResult<ComponentExecutionOutcome> {
-    let inspection =
-        plan_receipt(request, plan, ComponentReceiptStage::Inspection, None, None, None, None, Vec::new())?;
+) -> super::super::model::ComponentResult<ComponentExecutionOutcome> {
+    let inspection = plan_receipt(
+        request,
+        plan,
+        super::super::evidence::receipt::ComponentReceiptStage::Inspection,
+        None,
+        None,
+        None,
+        None,
+        Vec::new(),
+    )?;
     let mut session =
         match super::instantiate_component(request.profile, request.source.component_bytes(), request.facts) {
             Ok(session) => session,
-            Err(denial) => return plan_denied_outcome(request, plan, denial, vec![inspection], Some(input_ref)),
+            Err(denial) => {
+                return super::denial::plan_denied_outcome(request, plan, denial, vec![inspection], Some(input_ref));
+            }
         };
-    let instantiation =
-        plan_receipt(request, plan, ComponentReceiptStage::Instantiation, None, None, None, None, vec![
-            inspection.receipt_ref.clone(),
-        ])?;
+    let instantiation = plan_receipt(
+        request,
+        plan,
+        super::super::evidence::receipt::ComponentReceiptStage::Instantiation,
+        None,
+        None,
+        None,
+        None,
+        vec![inspection.receipt_ref.clone()],
+    )?;
     let runtime = match super::invoke_component(&mut session, input_bytes) {
         Ok(runtime) => runtime,
         Err(denial) => {
-            return plan_denied_outcome(request, plan, denial, vec![inspection, instantiation], Some(input_ref));
+            return super::denial::plan_denied_outcome(
+                request,
+                plan,
+                denial,
+                vec![inspection, instantiation],
+                Some(input_ref),
+            );
         }
     };
     let (output, output_ref) = match decode_component_output(request.profile, &runtime.output_bytes) {
         Ok(output) => output,
         Err(denial) => {
-            return plan_denied_outcome(request, plan, denial, vec![inspection, instantiation], Some(input_ref));
+            return super::denial::plan_denied_outcome(
+                request,
+                plan,
+                denial,
+                vec![inspection, instantiation],
+                Some(input_ref),
+            );
         }
     };
     let execution = plan_receipt(
         request,
         plan,
-        ComponentReceiptStage::Execution,
+        super::super::evidence::receipt::ComponentReceiptStage::Execution,
         Some(input_ref),
         Some(output_ref),
         Some(request.profile.resources.fuel),
@@ -123,7 +141,7 @@ fn execute_admitted_component(
         vec![instantiation.receipt_ref.clone()],
     )?;
     Ok(ComponentExecutionOutcome {
-        decision: ComponentReceiptDecision::Pass,
+        decision: super::super::evidence::receipt::ComponentReceiptDecision::Pass,
         output: Some(output),
         receipts: vec![inspection, instantiation, execution],
         diagnostics: Vec::new(),
@@ -131,45 +149,46 @@ fn execute_admitted_component(
 }
 
 fn decode_component_output(
-    profile: &ComponentRuntimeProfile,
+    profile: &super::super::model::ComponentRuntimeProfile,
     output_bytes: &[u8],
-) -> ComponentResult<(preserves::IOValue, String)> {
+) -> super::super::model::ComponentResult<(preserves::IOValue, String)> {
     let output_length = u64::try_from(output_bytes.len()).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::ResourceDenial,
+        super::super::model::ComponentDenial::classified(
+            super::super::model::ComponentDenialClass::ResourceDenial,
             format!("component output length is unsupported: {error}"),
         )
     })?;
     if output_length > profile.resources.max_result_bytes {
-        return Err(ComponentDenial::classified(
-            ComponentDenialClass::ResourceDenial,
+        return Err(super::super::model::ComponentDenial::classified(
+            super::super::model::ComponentDenialClass::ResourceDenial,
             "component output exceeds the admitted canonical result bound",
         ));
     }
     let output = crate::preserves_rail::parse_canonical_bytes(output_bytes).map_err(|error| {
-        ComponentDenial::classified(
-            ComponentDenialClass::InvalidPreservesPayload,
+        super::super::model::ComponentDenial::classified(
+            super::super::model::ComponentDenialClass::InvalidPreservesPayload,
             format!("component output is not canonical Preserves: {error}"),
         )
     })?;
-    let output_ref = crate::preserves_rail::canonical_hash(&output)
-        .map_err(|error| ComponentDenial::new(format!("component output identity failed: {error}")))?;
+    let output_ref = crate::preserves_rail::canonical_hash(&output).map_err(|error| {
+        super::super::model::ComponentDenial::new(format!("component output identity failed: {error}"))
+    })?;
     Ok((output, output_ref))
 }
 
 fn plan_receipt(
     request: &ComponentExecutionRequest<'_>,
-    plan: &ComponentExecutionPlan,
-    stage: ComponentReceiptStage,
+    plan: &super::super::admission::ComponentExecutionPlan,
+    stage: super::super::evidence::receipt::ComponentReceiptStage,
     input_ref: Option<String>,
     output_ref: Option<String>,
     fuel_limit: Option<u64>,
     fuel_remaining: Option<u64>,
     parent_refs: Vec<String>,
-) -> ComponentResult<ComponentReceipt> {
-    build_component_receipt(ComponentReceiptInput {
+) -> super::super::model::ComponentResult<super::super::evidence::receipt::ComponentReceipt> {
+    super::super::evidence::receipt::build_component_receipt(super::super::evidence::receipt::ComponentReceiptInput {
         stage,
-        decision: ComponentReceiptDecision::Pass,
+        decision: super::super::evidence::receipt::ComponentReceiptDecision::Pass,
         evidence_scope: request.evidence_scope,
         consumer: plan.materialization.consumer,
         component_ref: plan.component_ref.clone(),

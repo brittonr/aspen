@@ -1,5 +1,4 @@
 use std::os::fd::AsRawFd;
-use std::path::PathBuf;
 
 use super::super::*;
 use super::*;
@@ -277,7 +276,7 @@ fn memory_and_redb_journals_roundtrip_exact_instance_across_restart() {
     assert_eq!(memory.latest_instance("native-fixture").expect("memory latest"), Some(instance()));
 
     let temporary = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).expect("temporary capability root");
-    let descriptor_path = PathBuf::from(format!("/proc/self/fd/{}", temporary.as_raw_fd()));
+    let descriptor_path = std::path::PathBuf::from(format!("/proc/self/fd/{}", temporary.as_raw_fd()));
     let host_path = std::fs::read_link(descriptor_path).expect("temporary host path");
     {
         let adapter = RedbDurableStateAdapter::open(&host_path, durability_profile(), durability_descriptor())

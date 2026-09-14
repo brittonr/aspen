@@ -1,8 +1,4 @@
 use molten_core::addressable_actor::*;
-use preserves::IOValue;
-
-use crate::error::MoltenError;
-use crate::error::Result;
 
 pub const ACTOR_COMMIT_RECEIPT_SCHEMA: &str = "molten.addressable-actor.commit-receipt.v1";
 pub const ACTOR_COMMIT_RECEIPT_RECORD: &str = "molten-addressable-actor-commit-receipt-v1";
@@ -78,11 +74,13 @@ pub struct ActorCommitReceipt {
 pub struct CanonicalActorCommitReceipt {
     pub receipt_ref: String,
     pub status: ActorServiceStatus,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
     pub bytes: Vec<u8>,
 }
 
-pub fn canonical_actor_commit_receipt(receipt: &ActorCommitReceipt) -> Result<CanonicalActorCommitReceipt> {
+pub fn canonical_actor_commit_receipt(
+    receipt: &ActorCommitReceipt,
+) -> crate::error::Result<CanonicalActorCommitReceipt> {
     if receipt.actor_key_ref.is_empty()
         || receipt.request_ref.is_empty()
         || receipt.operation_ref.is_empty()
@@ -96,7 +94,7 @@ pub fn canonical_actor_commit_receipt(receipt: &ActorCommitReceipt) -> Result<Ca
         || receipt.claims_runtime_survival
         || receipt.non_claims != required_addressable_actor_non_claims()
     {
-        return Err(MoltenError::invalid_harness("addressable actor receipt is invalid"));
+        return Err(crate::error::MoltenError::invalid_harness("addressable actor receipt is invalid"));
     }
     let effect_observations = receipt
         .effect_observations
@@ -135,7 +133,7 @@ pub fn canonical_actor_commit_receipt(receipt: &ActorCommitReceipt) -> Result<Ca
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_ACTOR_RECEIPT_BYTES {
-        return Err(MoltenError::invalid_harness("addressable actor receipt exceeds its byte bound"));
+        return Err(crate::error::MoltenError::invalid_harness("addressable actor receipt exceeds its byte bound"));
     }
     Ok(CanonicalActorCommitReceipt {
         receipt_ref: hash_bytes(ACTOR_RECEIPT_DOMAIN, &bytes),
@@ -145,9 +143,11 @@ pub fn canonical_actor_commit_receipt(receipt: &ActorCommitReceipt) -> Result<Ca
     })
 }
 
-pub fn identify_canonical_actor_status(status: &ActorStatus) -> Result<String> {
+pub fn identify_canonical_actor_status(status: &ActorStatus) -> crate::error::Result<String> {
     if status.payloads_rendered || status.authorizes_mutation {
-        return Err(MoltenError::invalid_harness("addressable actor status exceeds its authority boundary"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "addressable actor status exceeds its authority boundary",
+        ));
     }
     let value = record(ACTOR_STATUS_RECORD, vec![
         field("schema", string(&status.schema)),
@@ -173,7 +173,7 @@ pub fn identify_canonical_actor_status(status: &ActorStatus) -> Result<String> {
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_ACTOR_STATUS_BYTES {
-        return Err(MoltenError::invalid_harness("addressable actor status exceeds its byte bound"));
+        return Err(crate::error::MoltenError::invalid_harness("addressable actor status exceeds its byte bound"));
     }
     Ok(hash_bytes(ACTOR_STATUS_DOMAIN, &bytes))
 }
@@ -184,30 +184,30 @@ fn hash_bytes(domain: &'static str, bytes: &[u8]) -> String {
     format!("blake3:{}", hasher.finalize().to_hex())
 }
 
-fn optional_text(value: Option<&str>) -> IOValue {
+fn optional_text(value: Option<&str>) -> preserves::IOValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn boolean(value: bool) -> IOValue {
+fn boolean(value: bool) -> preserves::IOValue {
     record(if value { "true" } else { "false" }, Vec::new())
 }
 
-fn number(value: u64) -> IOValue {
+fn number(value: u64) -> preserves::IOValue {
     crate::preserves_rail::u64_value(value)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> preserves::IOValue {
     crate::preserves_rail::string(value.as_ref())
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn field(label: &'static str, value: IOValue) -> IOValue {
+fn field(label: &'static str, value: preserves::IOValue) -> preserves::IOValue {
     record(label, vec![value])
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::record(label, fields)
 }

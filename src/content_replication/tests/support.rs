@@ -1,10 +1,6 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use molten_core::content_replication::*;
 
 use super::super::*;
-use crate::error::Result;
 
 pub const DIGEST_HEX_LENGTH: usize = 64;
 pub const GENERATION: u64 = 1;
@@ -18,7 +14,7 @@ pub const QUEUE_LIMIT: usize = 16;
 pub const TIMER_LIMIT: usize = 4;
 pub const DIAGNOSTIC_LIMIT: usize = 16;
 
-pub type Events = Rc<RefCell<Vec<&'static str>>>;
+pub type Events = std::rc::Rc<std::cell::RefCell<Vec<&'static str>>>;
 
 pub fn digest(byte: char) -> String {
     format!("blake3:{}", byte.to_string().repeat(DIGEST_HEX_LENGTH))
@@ -100,7 +96,7 @@ pub struct Authority {
 }
 
 impl AuthorityPort for Authority {
-    fn observe(&mut self, manifest: &Manifest) -> Result<AuthorityObservation> {
+    fn observe(&mut self, manifest: &Manifest) -> crate::error::Result<AuthorityObservation> {
         self.events.borrow_mut().push("authority");
         Ok(AuthorityObservation {
             observation_ref: digest('b'),
@@ -118,7 +114,7 @@ pub struct Identity {
 }
 
 impl IdentityPort for Identity {
-    fn observe(&mut self, manifest: &Manifest) -> Result<IdentityObservation> {
+    fn observe(&mut self, manifest: &Manifest) -> crate::error::Result<IdentityObservation> {
         self.events.borrow_mut().push("identity");
         Ok(IdentityObservation {
             observation_ref: digest('c'),
@@ -137,7 +133,7 @@ pub struct Membership {
 }
 
 impl MembershipPort for Membership {
-    fn observe(&mut self, manifest: &Manifest) -> Result<MembershipObservation> {
+    fn observe(&mut self, manifest: &Manifest) -> crate::error::Result<MembershipObservation> {
         self.events.borrow_mut().push("membership");
         Ok(MembershipObservation {
             observation_ref: digest('d'),
@@ -155,7 +151,7 @@ pub struct Placement {
 }
 
 impl PlacementPort for Placement {
-    fn observe(&mut self, manifest: &Manifest) -> Result<PlacementObservation> {
+    fn observe(&mut self, manifest: &Manifest) -> crate::error::Result<PlacementObservation> {
         self.events.borrow_mut().push("placement");
         Ok(PlacementObservation {
             observation_ref: digest('e'),
@@ -171,7 +167,7 @@ pub struct Clock {
 }
 
 impl TimePort for Clock {
-    fn observe(&mut self, _manifest: &Manifest) -> Result<TimeObservation> {
+    fn observe(&mut self, _manifest: &Manifest) -> crate::error::Result<TimeObservation> {
         self.events.borrow_mut().push("time");
         Ok(TimeObservation {
             observation_ref: digest('f'),
@@ -186,7 +182,7 @@ pub struct Resources {
 }
 
 impl ResourcePort for Resources {
-    fn reserve(&mut self, plan: &Plan) -> Result<ResourceObservation> {
+    fn reserve(&mut self, plan: &Plan) -> crate::error::Result<ResourceObservation> {
         self.events.borrow_mut().push("resources");
         Ok(ResourceObservation {
             reservation_ref: digest('0'),

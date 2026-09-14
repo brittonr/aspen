@@ -1,18 +1,9 @@
-use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-
-use super::CanonicalExecutionProfile;
-use super::CanonicalExecutionReceipt;
-use super::CanonicalExecutionRequest;
-use super::ExecutionLifecycleState;
-use super::ExecutionNonClaim;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedExecutionContext {
-    pub executable_path: PathBuf,
+    pub executable_path: std::path::PathBuf,
     pub executable_artifact_ref: String,
     pub executable_identity_ref: String,
-    pub workspace_path: PathBuf,
+    pub workspace_path: std::path::PathBuf,
     pub workspace_ref: String,
     pub stdin_ref: Option<String>,
     pub stdin_bytes: Option<Vec<u8>>,
@@ -50,7 +41,7 @@ pub struct RetainedExecutionStream {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionProcessObservation {
-    pub lifecycle: ExecutionLifecycleState,
+    pub lifecycle: super::ExecutionLifecycleState,
     pub start_observed: bool,
     pub terminal_observed: bool,
     pub teardown_observed: bool,
@@ -106,8 +97,8 @@ pub struct ExecutionPortFailure {
     pub diagnostic_code: &'static str,
     pub detail: String,
     pub process_observation: Option<ExecutionProcessObservation>,
-    pub receipt: Option<CanonicalExecutionReceipt>,
-    pub non_claims: Vec<ExecutionNonClaim>,
+    pub receipt: Option<super::CanonicalExecutionReceipt>,
+    pub non_claims: Vec<super::ExecutionNonClaim>,
 }
 
 pub type ExecutionPortResult<T> = Result<T, Box<ExecutionPortFailure>>;
@@ -122,14 +113,14 @@ pub enum ExecutionReconciliationStatus {
 
 // r[impl molten.fabric_execution.port_contract]
 pub trait ExecutionFabricPort {
-    fn profile(&self) -> &CanonicalExecutionProfile;
+    fn profile(&self) -> &super::CanonicalExecutionProfile;
 
     fn execute(
         &mut self,
-        request: &CanonicalExecutionRequest,
+        request: &super::CanonicalExecutionRequest,
         resolved: &ResolvedExecutionContext,
-        cancellation: Option<&AtomicBool>,
-    ) -> ExecutionPortResult<CanonicalExecutionReceipt>;
+        cancellation: Option<&std::sync::atomic::AtomicBool>,
+    ) -> ExecutionPortResult<super::CanonicalExecutionReceipt>;
 
     fn reconcile(&self, operation_ref: &str, generation: u64) -> ExecutionReconciliationStatus;
 }

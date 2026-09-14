@@ -1,9 +1,4 @@
-use std::collections::BTreeSet;
-
-use super::tests::test_ref;
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 const FIRST_INDEX: u64 = 1;
 const SECOND_INDEX: u64 = 2;
@@ -16,27 +11,27 @@ struct RecordingBatchHandler {
 }
 
 impl CommittedBatchHandler for RecordingBatchHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> Result<String> {
+    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> crate::error::Result<String> {
         self.calls += 1;
         if self.fail {
-            return Err(MoltenError::invalid_harness("injected application failure"));
+            return Err(crate::error::MoltenError::invalid_harness("injected application failure"));
         }
-        Ok(test_ref("application-snapshot-handler-evidence"))
+        Ok(super::tests::test_ref("application-snapshot-handler-evidence"))
     }
 
-    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> Result<String> {
+    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> crate::error::Result<String> {
         self.calls += 1;
         if self.fail {
-            return Err(MoltenError::invalid_harness("injected application failure"));
+            return Err(crate::error::MoltenError::invalid_harness("injected application failure"));
         }
-        Ok(test_ref("application-handler-evidence"))
+        Ok(super::tests::test_ref("application-handler-evidence"))
     }
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
 fn application_port_applies_one_contiguous_admitted_batch() {
-    let schema_ref = test_ref("application-command-schema");
+    let schema_ref = super::tests::test_ref("application-command-schema");
     let handler = RecordingBatchHandler::default();
     let mut port = application_port(schema_ref.clone(), handler).expect("application port");
     let entries = vec![entry(FIRST_INDEX, &schema_ref), entry(SECOND_INDEX, &schema_ref)];
@@ -50,19 +45,22 @@ fn application_port_applies_one_contiguous_admitted_batch() {
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
 fn application_port_restores_bound_snapshot_once() {
-    let schema_ref = test_ref("snapshot-command-schema");
+    let schema_ref = super::tests::test_ref("snapshot-command-schema");
     let handler = RecordingBatchHandler::default();
     let mut port = application_port(schema_ref, handler).expect("application port");
     let mut snapshot = ReplicaSnapshot {
         snapshot_ref: String::new(),
-        group_binding_ref: test_ref("application-group"),
-        membership_ref: test_ref("application-snapshot-membership"),
+        group_binding_ref: super::tests::test_ref("application-group"),
+        membership_ref: super::tests::test_ref("application-snapshot-membership"),
         config_epoch: SERVICE_GENERATION,
         fencing_epoch: SERVICE_GENERATION,
         last_included_index: FIRST_INDEX,
         last_included_term: SERVICE_GENERATION,
-        application_state_ref: test_ref("application-snapshot-state"),
-        completed_requests: std::collections::BTreeMap::from([(test_ref("application-snapshot-request"), FIRST_INDEX)]),
+        application_state_ref: super::tests::test_ref("application-snapshot-state"),
+        completed_requests: std::collections::BTreeMap::from([(
+            super::tests::test_ref("application-snapshot-request"),
+            FIRST_INDEX,
+        )]),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("snapshot identity");
 
@@ -78,7 +76,7 @@ fn application_port_restores_bound_snapshot_once() {
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
 fn application_port_denies_gap_and_handler_failure_without_advancing_index() {
-    let schema_ref = test_ref("application-command-schema-negative");
+    let schema_ref = super::tests::test_ref("application-command-schema-negative");
     let handler = RecordingBatchHandler::default();
     let mut gap_port = application_port(schema_ref.clone(), handler).expect("application port");
     let gap_error = gap_port.apply_committed(&[entry(SECOND_INDEX, &schema_ref)]).expect_err("gap must deny");
@@ -102,7 +100,7 @@ fn channel_control_port_publishes_bound_receipt_and_reports_closed_supervisor() 
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let config = control_config();
     let mut port = ChannelReplicaControlPort::new(config.clone(), sender).expect("control port");
-    let request_ref = test_ref("proposal-control-request");
+    let request_ref = super::tests::test_ref("proposal-control-request");
     let receipt_ref = port
         .proposal_outcome(&request_ref, ProposalDisposition::Committed, Some(FIRST_INDEX))
         .expect("proposal observation");
@@ -133,13 +131,13 @@ fn channel_control_port_denies_zero_generation_before_publication() {
 fn application_port(
     schema_ref: String,
     handler: RecordingBatchHandler,
-) -> Result<AdmittedReplicaApplicationPort<RecordingBatchHandler>> {
+) -> crate::error::Result<AdmittedReplicaApplicationPort<RecordingBatchHandler>> {
     AdmittedReplicaApplicationPort::new(
         ReplicaApplicationConfig {
-            group_binding_ref: test_ref("application-group"),
-            application_manifest_ref: test_ref("application-manifest"),
-            handler_ref: test_ref("application-handler"),
-            command_schema_refs: BTreeSet::from([schema_ref]),
+            group_binding_ref: super::tests::test_ref("application-group"),
+            application_manifest_ref: super::tests::test_ref("application-manifest"),
+            handler_ref: super::tests::test_ref("application-handler"),
+            command_schema_refs: std::collections::BTreeSet::from([schema_ref]),
             initial_applied_index: 0,
         },
         handler,
@@ -150,8 +148,8 @@ fn entry(index: u64, schema_ref: &str) -> ReplicatedEntry {
     ReplicatedEntry {
         index,
         term: SERVICE_GENERATION,
-        request_ref: test_ref(&format!("application-request-{index}")),
-        command_ref: test_ref(&format!("application-command-{index}")),
+        request_ref: super::tests::test_ref(&format!("application-request-{index}")),
+        command_ref: super::tests::test_ref(&format!("application-command-{index}")),
         command_schema_ref: schema_ref.to_string(),
     }
 }
@@ -160,6 +158,6 @@ fn control_config() -> ReplicaControlConfig {
     ReplicaControlConfig {
         service_id: "raft-service".to_string(),
         service_generation: SERVICE_GENERATION,
-        supervision_ref: test_ref("raft-supervision-binding"),
+        supervision_ref: super::tests::test_ref("raft-supervision-binding"),
     }
 }

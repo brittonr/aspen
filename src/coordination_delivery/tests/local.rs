@@ -1,6 +1,4 @@
 use molten_core::coordination_delivery::*;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
 
 use super::super::*;
 use super::support::*;
@@ -75,9 +73,11 @@ fn stopped_or_mismatched_system_extension_host_denies_before_storage() {
 #[test]
 fn capability_rooted_store_reopens_exact_committed_state() {
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone root"));
+    let root = molten_node_host::node_state::NodeStateRoot::from_dir(temporary.try_clone().expect("clone root"));
     root.create_layout().expect("node state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let storage = root
+        .namespace(molten_node_host::node_state::NodeStateNamespaceKind::Storage)
+        .expect("storage namespace");
     let policy = policy();
     let manifest = manifest(&policy);
     let time = time_profile(&manifest);

@@ -1,18 +1,5 @@
-use std::collections::BTreeMap;
-use std::sync::atomic::AtomicBool;
-
-use crate::fabric_execution::CanonicalExecutionProfile;
-use crate::fabric_execution::CanonicalExecutionReceipt;
-use crate::fabric_execution::CanonicalExecutionRequest;
 use crate::fabric_execution::ExecutionFabricPort;
 use crate::fabric_execution::ExecutionOutputPublisher;
-use crate::fabric_execution::ExecutionPortResult;
-use crate::fabric_execution::ExecutionProfileKind;
-use crate::fabric_execution::ExecutionReconciliationStatus;
-use crate::fabric_execution::LiveExecutionAdapter;
-use crate::fabric_execution::ResolvedExecutionContext;
-use crate::fabric_execution::ScriptedExecutionObservation;
-use crate::fabric_execution::SimulatedExecutionAdapter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemExtensionExecutionFabricSelectionError {
@@ -21,27 +8,27 @@ pub enum SystemExtensionExecutionFabricSelectionError {
 }
 
 pub enum SystemExtensionExecutionFabric<P: ExecutionOutputPublisher> {
-    Live(LiveExecutionAdapter<P>),
-    Simulation(SimulatedExecutionAdapter<P>),
+    Live(crate::fabric_execution::LiveExecutionAdapter<P>),
+    Simulation(crate::fabric_execution::SimulatedExecutionAdapter<P>),
 }
 
 // r[impl molten.fabric_execution.port_contract]
 pub fn compose_system_extension_execution_fabric<P: ExecutionOutputPublisher>(
-    profile: CanonicalExecutionProfile,
+    profile: crate::fabric_execution::CanonicalExecutionProfile,
     publisher: P,
-    scripts: BTreeMap<String, ScriptedExecutionObservation>,
+    scripts: std::collections::BTreeMap<String, crate::fabric_execution::ScriptedExecutionObservation>,
 ) -> Result<SystemExtensionExecutionFabric<P>, SystemExtensionExecutionFabricSelectionError> {
     match profile.profile.descriptor.kind {
-        ExecutionProfileKind::LiveBoundedProcess => {
+        crate::fabric_execution::ExecutionProfileKind::LiveBoundedProcess => {
             if !scripts.is_empty() {
                 return Err(SystemExtensionExecutionFabricSelectionError::LiveProfileHasSimulationScripts);
             }
-            let adapter = LiveExecutionAdapter::new(profile, publisher)
+            let adapter = crate::fabric_execution::LiveExecutionAdapter::new(profile, publisher)
                 .map_err(|_| SystemExtensionExecutionFabricSelectionError::AdapterProfileMismatch)?;
             Ok(SystemExtensionExecutionFabric::Live(adapter))
         }
-        ExecutionProfileKind::DeterministicSimulation => {
-            let adapter = SimulatedExecutionAdapter::new(profile, publisher, scripts)
+        crate::fabric_execution::ExecutionProfileKind::DeterministicSimulation => {
+            let adapter = crate::fabric_execution::SimulatedExecutionAdapter::new(profile, publisher, scripts)
                 .map_err(|_| SystemExtensionExecutionFabricSelectionError::AdapterProfileMismatch)?;
             Ok(SystemExtensionExecutionFabric::Simulation(adapter))
         }
@@ -49,7 +36,7 @@ pub fn compose_system_extension_execution_fabric<P: ExecutionOutputPublisher>(
 }
 
 impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SystemExtensionExecutionFabric<P> {
-    fn profile(&self) -> &CanonicalExecutionProfile {
+    fn profile(&self) -> &crate::fabric_execution::CanonicalExecutionProfile {
         match self {
             Self::Live(adapter) => adapter.profile(),
             Self::Simulation(adapter) => adapter.profile(),
@@ -58,17 +45,21 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SystemExtensionExecuti
 
     fn execute(
         &mut self,
-        request: &CanonicalExecutionRequest,
-        resolved: &ResolvedExecutionContext,
-        cancellation: Option<&AtomicBool>,
-    ) -> ExecutionPortResult<CanonicalExecutionReceipt> {
+        request: &crate::fabric_execution::CanonicalExecutionRequest,
+        resolved: &crate::fabric_execution::ResolvedExecutionContext,
+        cancellation: Option<&std::sync::atomic::AtomicBool>,
+    ) -> crate::fabric_execution::ExecutionPortResult<crate::fabric_execution::CanonicalExecutionReceipt> {
         match self {
             Self::Live(adapter) => adapter.execute(request, resolved, cancellation),
             Self::Simulation(adapter) => adapter.execute(request, resolved, cancellation),
         }
     }
 
-    fn reconcile(&self, operation_ref: &str, generation: u64) -> ExecutionReconciliationStatus {
+    fn reconcile(
+        &self,
+        operation_ref: &str,
+        generation: u64,
+    ) -> crate::fabric_execution::ExecutionReconciliationStatus {
         match self {
             Self::Live(adapter) => adapter.reconcile(operation_ref, generation),
             Self::Simulation(adapter) => adapter.reconcile(operation_ref, generation),

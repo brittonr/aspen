@@ -3,10 +3,6 @@
     reason = "the integration cohort keeps all exact profile, manifest, authority, and executable fixtures together"
 )]
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use molten::fabric::*;
 use molten::fabric_execution::*;
 use molten::system_extension::*;
@@ -121,13 +117,13 @@ pub struct Cohort {
     pub admitted: CanonicalAdmittedSystemExtensionManifest,
     pub execution_profile: CanonicalExecutionProfile,
     pub template: NativeExecutionTemplate,
-    pub journal: Arc<Mutex<Journal>>,
+    pub journal: std::sync::Arc<std::sync::Mutex<Journal>>,
     pub values: SharedNativeCallbackValuePort,
 }
 
 impl Cohort {
     pub fn new() -> Self {
-        let executable_path = PathBuf::from(env!("CARGO_BIN_EXE_molten-native-extension-fixture"));
+        let executable_path = std::path::PathBuf::from(env!("CARGO_BIN_EXE_molten-native-extension-fixture"));
         let executable_bytes = std::fs::read(&executable_path).expect("read native fixture executable");
         let executable_bytes_ref = molten::preserves_rail::content_ref_from_bytes(&executable_bytes);
         let execution_profile =
@@ -160,12 +156,18 @@ impl Cohort {
             admitted,
             execution_profile,
             template,
-            journal: Arc::new(Mutex::new(Journal::default())),
+            journal: std::sync::Arc::new(std::sync::Mutex::new(Journal::default())),
             values: shared_native_callback_value_port(InMemoryNativeCallbackValuePort::default()),
         }
     }
 
-    pub fn replace_program(&mut self, path: PathBuf, arguments: Vec<String>, timeout_ms: u64, stdout_max_bytes: u64) {
+    pub fn replace_program(
+        &mut self,
+        path: std::path::PathBuf,
+        arguments: Vec<String>,
+        timeout_ms: u64,
+        stdout_max_bytes: u64,
+    ) {
         let executable_bytes_ref = std::fs::read(&path).map_or_else(
             |_| molten::preserves_rail::content_ref_from_bytes(b"missing-native-fixture"),
             |bytes| molten::preserves_rail::content_ref_from_bytes(&bytes),
@@ -197,7 +199,7 @@ impl Cohort {
     }
 
     pub fn recovered(&self, instance: NativeInstanceRecord) -> Service {
-        let instance = Arc::new(Mutex::new(instance));
+        let instance = std::sync::Arc::new(std::sync::Mutex::new(instance));
         let port = LiveExecutionAdapter::new(self.execution_profile.clone(), Publisher::default())
             .expect("live execution adapter");
         let executor = NativeProcessSystemExtensionExecutor::new(
@@ -329,7 +331,7 @@ fn execution_template(
     native_profile: &AdmittedNativeHostProfile,
     executable: &AdmittedNativeExecutable,
     execution: &CanonicalExecutionProfile,
-    executable_path: PathBuf,
+    executable_path: std::path::PathBuf,
     instance_id: String,
     admitted: &CanonicalAdmittedSystemExtensionManifest,
 ) -> NativeExecutionTemplate {
@@ -404,7 +406,7 @@ fn execution_template(
             executable_path,
             executable_artifact_ref: executable.executable.executable_ref.clone(),
             executable_identity_ref: executable.executable.executable_bytes_ref.clone(),
-            workspace_path: PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+            workspace_path: std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")),
             workspace_ref: HASH_D.to_string(),
             stdin_ref: None,
             stdin_bytes: None,

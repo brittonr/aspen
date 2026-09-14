@@ -1,6 +1,4 @@
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 pub(super) struct InstallSnapshotInput {
     pub from: String,
@@ -17,9 +15,12 @@ pub(super) struct SnapshotResponseInput {
     pub is_accepted: bool,
 }
 
-pub(super) fn handle_install_snapshot(transition: &mut MessageTransition, input: InstallSnapshotInput) -> Result<()> {
+pub(super) fn handle_install_snapshot(
+    transition: &mut MessageTransition,
+    input: InstallSnapshotInput,
+) -> crate::error::Result<()> {
     if input.leader_id != input.from {
-        return Err(MoltenError::invalid_harness("Raft snapshot leader does not match its sender"));
+        return Err(crate::error::MoltenError::invalid_harness("Raft snapshot leader does not match its sender"));
     }
     if input.term < transition.next.current_term {
         transition.effects.push(snapshot_response(
@@ -32,10 +33,10 @@ pub(super) fn handle_install_snapshot(transition: &mut MessageTransition, input:
     }
     validate_snapshot_binding(&transition.next, &input.snapshot)?;
     if input.snapshot.last_included_term > transition.next.current_term {
-        return Err(MoltenError::invalid_harness("Raft installed snapshot term exceeds the leader term"));
+        return Err(crate::error::MoltenError::invalid_harness("Raft installed snapshot term exceeds the leader term"));
     }
     if transition.next.role == ReplicaRole::Leader && input.leader_id != transition.next.node_id {
-        return Err(MoltenError::invalid_harness("Raft snapshot observed two leaders in one term"));
+        return Err(crate::error::MoltenError::invalid_harness("Raft snapshot observed two leaders in one term"));
     }
     let snapshot_index = input.snapshot.last_included_index;
     transition.next.role = ReplicaRole::Follower;
@@ -50,21 +51,21 @@ pub(super) fn handle_install_snapshot(transition: &mut MessageTransition, input:
     Ok(())
 }
 
-fn validate_snapshot_binding(state: &ReplicaState, snapshot: &ReplicaSnapshot) -> Result<()> {
+fn validate_snapshot_binding(state: &ReplicaState, snapshot: &ReplicaSnapshot) -> crate::error::Result<()> {
     if snapshot.group_binding_ref != state.profile.group_binding_ref
         || snapshot.membership_ref != state.membership.membership_ref
         || snapshot.config_epoch != state.membership.config_epoch
         || snapshot.fencing_epoch != state.profile.fencing_epoch
         || snapshot.snapshot_ref != snapshot_ref(snapshot)?
     {
-        return Err(MoltenError::invalid_harness("Raft installed snapshot binding or identity mismatch"));
+        return Err(crate::error::MoltenError::invalid_harness("Raft installed snapshot binding or identity mismatch"));
     }
     Ok(())
 }
 
-fn install_snapshot(transition: &mut MessageTransition, snapshot: ReplicaSnapshot) -> Result<()> {
+fn install_snapshot(transition: &mut MessageTransition, snapshot: ReplicaSnapshot) -> crate::error::Result<()> {
     if snapshot.last_included_index == INITIAL_COMMIT_INDEX || snapshot.last_included_term == INITIAL_TERM {
-        return Err(MoltenError::invalid_harness("Raft installed snapshot boundary must be positive"));
+        return Err(crate::error::MoltenError::invalid_harness("Raft installed snapshot boundary must be positive"));
     }
     transition.next.log.clear();
     transition.next.commit_index = snapshot.last_included_index;
@@ -89,12 +90,17 @@ fn snapshot_response(state: &ReplicaState, to: String, snapshot_index: u64, is_a
     })
 }
 
-pub(super) fn handle_snapshot_response(transition: &mut MessageTransition, input: SnapshotResponseInput) -> Result<()> {
+pub(super) fn handle_snapshot_response(
+    transition: &mut MessageTransition,
+    input: SnapshotResponseInput,
+) -> crate::error::Result<()> {
     if input.term < transition.next.current_term || transition.next.role != ReplicaRole::Leader || !input.is_accepted {
         return Ok(());
     }
     if input.follower_id != input.from {
-        return Err(MoltenError::invalid_harness("Raft snapshot response follower does not match its sender"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "Raft snapshot response follower does not match its sender",
+        ));
     }
     let local_snapshot_index = transition
         .next
@@ -108,7 +114,7 @@ pub(super) fn handle_snapshot_response(transition: &mut MessageTransition, input
     let next_index = input
         .snapshot_index
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft snapshot response index overflow"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft snapshot response index overflow"))?;
     transition.next.match_index.insert(input.follower_id.clone(), input.snapshot_index);
     transition.next.next_index.insert(input.follower_id.clone(), next_index);
     transition.effects.push(support::append_effect_for(&transition.next, input.follower_id)?);

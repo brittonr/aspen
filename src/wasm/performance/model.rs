@@ -1,6 +1,3 @@
-use serde::Deserialize;
-use serde::Serialize;
-
 pub const BLAKE3_REF_PREFIX: &str = "blake3:";
 pub const BLAKE3_HEX_LENGTH: usize = 64;
 pub const CONTENT_REF_LENGTH: usize = BLAKE3_REF_PREFIX.len() + BLAKE3_HEX_LENGTH;
@@ -36,7 +33,17 @@ impl std::error::Error for PerformanceDenial {}
 
 pub type PerformanceResult<T> = std::result::Result<T, PerformanceDenial>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum BenchmarkLane {
     Fast,
@@ -52,7 +59,17 @@ impl BenchmarkLane {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum PerformancePhase {
     Compilation,
@@ -81,7 +98,7 @@ impl PerformancePhase {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PerformanceEvidenceRole {
     RecordedOnly,
@@ -95,14 +112,14 @@ impl PerformanceEvidenceRole {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SightglassCohort {
     pub revision: String,
     pub runner: String,
     pub raw_schema: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SamplingProfile {
     pub processes: u32,
     pub iterations_per_process: u32,
@@ -118,7 +135,7 @@ impl SamplingProfile {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BenchmarkSuite {
     pub lane: BenchmarkLane,
     pub suite_id: String,
@@ -135,7 +152,7 @@ pub struct BenchmarkSuite {
     pub sampling: SamplingProfile,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ComparisonProfile {
     pub parts_per_million: u64,
     pub basis_points: u32,
@@ -149,7 +166,7 @@ pub struct ComparisonProfile {
     pub max_sightglass_run_seconds: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OptimizationLimits {
     pub max_concurrency: u32,
     pub max_queue_depth: u32,
@@ -158,7 +175,7 @@ pub struct OptimizationLimits {
     pub reviewed_profile_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PerformanceProfile {
     pub profile_id: String,
     pub evidence_role: PerformanceEvidenceRole,
@@ -172,7 +189,7 @@ pub struct PerformanceProfile {
     pub non_claims: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PerformanceProfileExport {
     pub schema_id: String,
     pub schema_version: u32,
@@ -180,7 +197,17 @@ pub struct PerformanceProfileExport {
     pub profile: PerformanceProfile,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum PerformanceArtifactKind {
     PortableComponent,

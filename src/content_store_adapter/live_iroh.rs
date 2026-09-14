@@ -1,38 +1,25 @@
-use std::time::Duration;
-
-use bao_tree::io::BaoContentItem;
-use iroh::protocol::Router;
-use iroh_blobs::BlobFormat;
-use iroh_blobs::BlobsProtocol;
-use iroh_blobs::get::request::GetBlobItem;
-use iroh_blobs::store::mem::MemStore;
-use iroh_blobs::ticket::BlobTicket;
 use molten_core::content_store_adapter::*;
 use n0_future::StreamExt;
 
 use super::*;
-use crate::chunk_store::CapabilityChunkRoot;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::node_state::NodeStateNamespace;
 
 #[derive(Debug, Clone)]
 struct LiveChunkLocator {
     chunk_ref: String,
     position: usize,
-    ticket: BlobTicket,
+    ticket: iroh_blobs::ticket::BlobTicket,
 }
 
 pub struct LiveIrohIdentity<'a> {
-    pub namespace: &'a NodeStateNamespace,
+    pub namespace: &'a crate::node_state::NodeStateNamespace,
     pub endpoint_id: &'a str,
     pub handle_ref: &'a str,
     pub backend_ref: &'a str,
 }
 
 pub struct LiveIrohPublication {
-    router: Router,
-    _store: MemStore,
+    router: iroh::protocol::Router,
+    _store: iroh_blobs::store::mem::MemStore,
     manifest: ContentManifestDescriptor,
     locators: Vec<LiveChunkLocator>,
     backend_hint_ref: String,
@@ -58,19 +45,18 @@ impl LiveIrohPublication {
     #[cfg(test)]
     pub(crate) fn invalidate_first_locator(&mut self) {
         if let Some(locator) = self.locators.first_mut() {
-            locator.ticket = BlobTicket::new(
+            locator.ticket = iroh_blobs::ticket::BlobTicket::new(
                 locator.ticket.addr().clone(),
                 iroh_blobs::Hash::new(b"missing-live-iroh-blob"),
-                BlobFormat::Raw,
+                iroh_blobs::BlobFormat::Raw,
             );
         }
     }
 
-    pub async fn shutdown(self) -> Result<()> {
-        self.router
-            .shutdown()
-            .await
-            .map_err(|error| MoltenError::invalid_harness(format!("live Iroh blob router shutdown failed: {error}")))
+    pub async fn shutdown(self) -> crate::error::Result<()> {
+        self.router.shutdown().await.map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("live Iroh blob router shutdown failed: {error}"))
+        })
     }
 }
 
@@ -82,26 +68,32 @@ impl LiveIrohPublication {
 )]
 pub async fn publish_live_iroh_chunks(
     profile: &ContentAdapterProfile,
-    root: &CapabilityChunkRoot,
+    root: &crate::chunk_store::CapabilityChunkRoot,
     manifest_ref: &str,
     identity: LiveIrohIdentity<'_>,
-) -> Result<LiveIrohPublication> {
+) -> crate::error::Result<LiveIrohPublication> {
     if profile.class != ContentAdapterClass::IrohBlobs {
-        return Err(MoltenError::invalid_harness("live Iroh publication requires iroh-blobs adapter profile"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "live Iroh publication requires iroh-blobs adapter profile",
+        ));
     }
     let source_manifest = crate::chunk_store::read_manifest_with_root(root, manifest_ref)?;
     let manifest = manifest_descriptor(&source_manifest);
     let profile_issues = validate_content_profile(profile);
     if !profile_issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("live Iroh profile denied: {profile_issues:?}")));
+        return Err(crate::error::MoltenError::invalid_harness(format!(
+            "live Iroh profile denied: {profile_issues:?}"
+        )));
     }
     let manifest_issues = validate_manifest_descriptor(&manifest);
     if !manifest_issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("live Iroh manifest denied: {manifest_issues:?}")));
+        return Err(crate::error::MoltenError::invalid_harness(format!(
+            "live Iroh manifest denied: {manifest_issues:?}"
+        )));
     }
     if manifest.total_length > profile.bounds.max_total_bytes || manifest.chunks.len() > profile.bounds.max_chunk_count
     {
-        return Err(MoltenError::invalid_harness("live Iroh publication exceeds adapter bounds"));
+        return Err(crate::error::MoltenError::invalid_harness("live Iroh publication exceeds adapter bounds"));
     }
     let secret_key = crate::fabric_crypto_identity::load_transport_secret_for_identity(
         identity.namespace,
@@ -115,25 +107,24 @@ pub async fn publish_live_iroh_chunks(
         .bind()
         .await
         .map_err(iroh_error)?;
-    let store = MemStore::new();
+    let store = iroh_blobs::store::mem::MemStore::new();
     let mut locators = Vec::with_capacity(source_manifest.chunks.len());
     for (position, chunk) in source_manifest.chunks.iter().enumerate() {
-        let manifest_chunk_size = usize::try_from(source_manifest.chunk_size)
-            .map_err(|_| MoltenError::invalid_harness("live Iroh manifest chunk size does not fit usize"))?;
+        let manifest_chunk_size = usize::try_from(source_manifest.chunk_size).map_err(|_| {
+            crate::error::MoltenError::invalid_harness("live Iroh manifest chunk size does not fit usize")
+        })?;
         let bytes = crate::chunk_store::read_verified_chunk(root, chunk, manifest_chunk_size)?;
-        let tag = store
-            .blobs()
-            .add_bytes(bytes)
-            .await
-            .map_err(|error| MoltenError::invalid_harness(format!("live Iroh blob import failed: {error}")))?;
+        let tag = store.blobs().add_bytes(bytes).await.map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("live Iroh blob import failed: {error}"))
+        })?;
         locators.push(LiveChunkLocator {
             chunk_ref: chunk.chunk_ref.clone(),
             position,
-            ticket: BlobTicket::new(endpoint.addr(), tag.hash, BlobFormat::Raw),
+            ticket: iroh_blobs::ticket::BlobTicket::new(endpoint.addr(), tag.hash, iroh_blobs::BlobFormat::Raw),
         });
     }
-    let blobs = BlobsProtocol::new(&store, None);
-    let router = Router::builder(endpoint).accept(iroh_blobs::ALPN, blobs).spawn();
+    let blobs = iroh_blobs::BlobsProtocol::new(&store, None);
+    let router = iroh::protocol::Router::builder(endpoint).accept(iroh_blobs::ALPN, blobs).spawn();
     let backend_hint_ref = backend_hint_ref(
         ContentAdapterClass::IrohBlobs,
         &format!("{}\0{}", identity.endpoint_id, identity.backend_ref),
@@ -159,17 +150,22 @@ pub async fn execute_live_iroh_stream_get(
     command: &ContentCommand,
     generation: u64,
     retained: Option<&ContentPartialState>,
-    timeout: Duration,
-) -> Result<LiveIrohContentExecution> {
+    timeout: std::time::Duration,
+) -> crate::error::Result<LiveIrohContentExecution> {
     if profile.class != ContentAdapterClass::IrohBlobs {
-        return Err(MoltenError::invalid_harness("live Iroh get requires iroh-blobs adapter profile"));
+        return Err(crate::error::MoltenError::invalid_harness("live Iroh get requires iroh-blobs adapter profile"));
     }
     let preflight = preflight_content_operation(profile, &publication.manifest, command, 0, 0);
     if preflight.terminal != ContentTerminal::Accepted || !preflight.issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("live Iroh preflight denied: {:?}", preflight.issues)));
+        return Err(crate::error::MoltenError::invalid_harness(format!(
+            "live Iroh preflight denied: {:?}",
+            preflight.issues
+        )));
     }
-    let mut state = begin_partial_state(profile, &publication.manifest, command, generation, retained)
-        .map_err(|issues| MoltenError::invalid_harness(format!("live Iroh partial state denied: {issues:?}")))?;
+    let mut state =
+        begin_partial_state(profile, &publication.manifest, command, generation, retained).map_err(|issues| {
+            crate::error::MoltenError::invalid_harness(format!("live Iroh partial state denied: {issues:?}"))
+        })?;
     let client = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
         .relay_mode(iroh::RelayMode::Disabled)
         .bind()
@@ -261,11 +257,12 @@ pub async fn execute_live_iroh_stream_get(
             position: descriptor.position,
             observed_content_ref: crate::chunk_store::hash_chunk(
                 &bytes,
-                usize::try_from(publication.manifest.chunk_size)
-                    .map_err(|_| MoltenError::invalid_harness("live Iroh chunk size does not fit usize"))?,
+                usize::try_from(publication.manifest.chunk_size).map_err(|_| {
+                    crate::error::MoltenError::invalid_harness("live Iroh chunk size does not fit usize")
+                })?,
             ),
             observed_length: u64::try_from(bytes.len())
-                .map_err(|_| MoltenError::invalid_harness("live Iroh chunk length does not fit u64"))?,
+                .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh chunk length does not fit u64"))?,
         };
         match apply_chunk_observation(profile, &publication.manifest, &state, &observation) {
             Ok(next) => state = next,
@@ -303,7 +300,7 @@ pub async fn execute_live_iroh_stream_get(
     }
     client.close().await;
     if !content_is_available(&publication.manifest, &state) {
-        return Err(MoltenError::invalid_harness("live Iroh transfer ended before full verification"));
+        return Err(crate::error::MoltenError::invalid_harness("live Iroh transfer ended before full verification"));
     }
     finish_live_execution(profile, publication, state, events, verified_chunks)
 }
@@ -314,7 +311,7 @@ fn finish_live_execution(
     state: ContentPartialState,
     events: Vec<CanonicalContentArtifact<ContentEvent>>,
     verified_chunks: Vec<VerifiedChunkPayload>,
-) -> Result<LiveIrohContentExecution> {
+) -> crate::error::Result<LiveIrohContentExecution> {
     Ok(LiveIrohContentExecution {
         state: canonical_partial_state(profile, &publication.manifest, &state)?,
         events,
@@ -329,10 +326,10 @@ fn terminal_event(
     manifest: &ContentManifestDescriptor,
     state: &ContentPartialState,
     chunk_ref: Option<String>,
-) -> Result<CanonicalContentArtifact<ContentEvent>> {
+) -> crate::error::Result<CanonicalContentArtifact<ContentEvent>> {
     let sequence = state
         .last_sequence
-        .ok_or_else(|| MoltenError::invalid_harness("terminal live Iroh state lacks event sequence"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("terminal live Iroh state lacks event sequence"))?;
     canonical_content_event(
         profile,
         &content_event(command, sequence, state.terminal, chunk_ref, 0, state.failure, &manifest.evidence_refs),
@@ -351,49 +348,57 @@ fn verification_failure(issues: &[ContentIssue]) -> ContentFailure {
     }
 }
 
-fn transition_error(issue: ContentIssue) -> MoltenError {
-    MoltenError::invalid_harness(format!("live Iroh transition denied: {issue:?}"))
+fn transition_error(issue: ContentIssue) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("live Iroh transition denied: {issue:?}"))
 }
 
 async fn receive_bounded_blob(
     connection: iroh::endpoint::Connection,
     hash: iroh_blobs::Hash,
     maximum_bytes: u64,
-) -> Result<Vec<u8>> {
+) -> crate::error::Result<Vec<u8>> {
     let maximum = usize::try_from(maximum_bytes)
-        .map_err(|_| MoltenError::invalid_harness("live Iroh receive bound does not fit usize"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh receive bound does not fit usize"))?;
     let mut bytes = Vec::new();
     let mut progress = iroh_blobs::get::request::get_blob(connection, hash);
     loop {
         match progress.next().await {
-            Some(GetBlobItem::Item(BaoContentItem::Leaf(leaf))) => {
+            Some(iroh_blobs::get::request::GetBlobItem::Item(bao_tree::io::BaoContentItem::Leaf(leaf))) => {
                 let next_length = bytes
                     .len()
                     .checked_add(leaf.data.len())
-                    .ok_or_else(|| MoltenError::invalid_harness("live Iroh receive length overflow"))?;
+                    .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Iroh receive length overflow"))?;
                 if next_length > maximum {
-                    return Err(MoltenError::invalid_harness("live Iroh blob exceeds admitted chunk bound"));
+                    return Err(crate::error::MoltenError::invalid_harness(
+                        "live Iroh blob exceeds admitted chunk bound",
+                    ));
                 }
                 bytes.extend_from_slice(&leaf.data);
             }
-            Some(GetBlobItem::Item(BaoContentItem::Parent(_))) => {}
-            Some(GetBlobItem::Done(_)) => break,
-            Some(GetBlobItem::Error(error)) => {
-                return Err(MoltenError::invalid_harness(format!("live Iroh blob stream failed: {error}")));
+            Some(iroh_blobs::get::request::GetBlobItem::Item(bao_tree::io::BaoContentItem::Parent(_))) => {}
+            Some(iroh_blobs::get::request::GetBlobItem::Done(_)) => break,
+            Some(iroh_blobs::get::request::GetBlobItem::Error(error)) => {
+                return Err(crate::error::MoltenError::invalid_harness(format!(
+                    "live Iroh blob stream failed: {error}"
+                )));
             }
-            None => return Err(MoltenError::invalid_harness("live Iroh blob stream ended without terminal item")),
+            None => {
+                return Err(crate::error::MoltenError::invalid_harness(
+                    "live Iroh blob stream ended without terminal item",
+                ));
+            }
         }
     }
     Ok(bytes)
 }
 
-fn next_sequence(state: &ContentPartialState) -> Result<u64> {
+fn next_sequence(state: &ContentPartialState) -> crate::error::Result<u64> {
     state
         .last_sequence
         .map_or(Some(0), |sequence| sequence.checked_add(1))
-        .ok_or_else(|| MoltenError::invalid_harness("live Iroh event sequence overflow"))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Iroh event sequence overflow"))
 }
 
-fn iroh_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("live Iroh content adapter failed: {error}"))
+fn iroh_error(error: impl std::fmt::Display) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("live Iroh content adapter failed: {error}"))
 }

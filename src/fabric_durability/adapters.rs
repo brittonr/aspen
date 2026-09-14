@@ -1,12 +1,9 @@
 // r[impl molten.modularity.fabric_boundary.adapters]
-use std::path::Path;
 
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 #[allow(
     tigerstyle::non_trait_imports,
     reason = "durability mechanisms implement the application-owned typed port contract"
@@ -17,8 +14,6 @@ use crate::fabric::FabricPortError;
     reason = "durability mechanisms implement the application-owned typed port contract"
 )]
 use crate::fabric::FabricPortResult;
-use crate::local_store::DurableStoreRoot;
-use crate::local_store::LocalStorePath;
 
 const STORE_FILE: &str = "fabric-durability.redb";
 const SNAPSHOT_DIRECTORY: &str = "snapshots";
@@ -44,7 +39,7 @@ const LENGTH_PREFIX_BYTES: usize = std::mem::size_of::<u64>();
 pub struct RedbDurableStateAdapter {
     profile: CanonicalDurableProfile,
     state: DurableState,
-    root: DurableStoreRoot,
+    root: crate::local_store::DurableStoreRoot,
     database: redb::Database,
 }
 
@@ -62,17 +57,19 @@ impl std::fmt::Debug for RedbDurableStateAdapter {
 impl RedbDurableStateAdapter {
     // r[impl molten.fabric_durability.live_sim_parity]
     pub fn open(
-        root_path: &Path,
+        root_path: &std::path::Path,
         profile: CanonicalDurableProfile,
         descriptor: DurableNamespaceDescriptor,
-    ) -> Result<Self> {
+    ) -> crate::error::Result<Self> {
         if profile.profile.adapter_kind != DurableAdapterKind::LiveRedb {
-            return Err(MoltenError::invalid_harness("Redb durability adapter requires a live Redb profile"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "Redb durability adapter requires a live Redb profile",
+            ));
         }
         validate_namespace_descriptor(&profile.profile, &descriptor)
             .map_err(|issues| adapter_validation_error("namespace", &issues))?;
-        let root = DurableStoreRoot::open(root_path)?;
-        let database_file = root.root().open_database_file(&LocalStorePath::parse(STORE_FILE)?)?;
+        let root = crate::local_store::DurableStoreRoot::open(root_path)?;
+        let database_file = root.root().open_database_file(&crate::local_store::LocalStorePath::parse(STORE_FILE)?)?;
         let database = redb::Database::builder().create_file(database_file).map_err(adapter_error)?;
         initialize_tables(&database)?;
         let state = load_state(&database, descriptor)?;
@@ -93,7 +90,7 @@ impl RedbDurableStateAdapter {
     }
 
     // r[impl molten.fabric_durability.durable_log]
-    pub fn append(&mut self, request: &AppendRequest) -> Result<CanonicalDurableTransition> {
+    pub fn append(&mut self, request: &AppendRequest) -> crate::error::Result<CanonicalDurableTransition> {
         let transition = append_log(&self.profile.profile, &self.state, request)
             .map_err(|issues| adapter_validation_error("append", &issues))?;
         if transition.outcome == MutationOutcome::Durable {
@@ -104,7 +101,11 @@ impl RedbDurableStateAdapter {
         Ok(canonical)
     }
 
-    pub fn flush(&mut self, generation: u64, durability: DurabilityLevel) -> Result<CanonicalDurableTransition> {
+    pub fn flush(
+        &mut self,
+        generation: u64,
+        durability: DurabilityLevel,
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         let transition = flush_log(&self.profile.profile, &self.state, generation, durability)
             .map_err(|issues| adapter_validation_error("flush", &issues))?;
         persist_log(&self.database, &transition.next.durable_log)?;
@@ -118,7 +119,7 @@ impl RedbDurableStateAdapter {
         generation: u64,
         retain_from_sequence: u64,
         authority_ref: Option<&str>,
-    ) -> Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         let transition =
             truncate_log(&self.profile.profile, &self.state, generation, retain_from_sequence, authority_ref)
                 .map_err(|issues| adapter_validation_error("truncate", &issues))?;
@@ -132,13 +133,13 @@ impl RedbDurableStateAdapter {
         read_log(&self.state, sequence)
     }
 
-    pub fn scan_log(&self, start_sequence: u64, limit: u64) -> Result<LogScanPage> {
+    pub fn scan_log(&self, start_sequence: u64, limit: u64) -> crate::error::Result<LogScanPage> {
         scan_log(&self.state, start_sequence, limit).map_err(|issue| adapter_validation_error("log scan", &[issue]))
     }
 
     // r[impl molten.fabric_durability.ordered_store]
     // r[impl molten.fabric_durability.atomic_batch]
-    pub fn apply_batch(&mut self, request: &AtomicBatchRequest) -> Result<CanonicalDurableTransition> {
+    pub fn apply_batch(&mut self, request: &AtomicBatchRequest) -> crate::error::Result<CanonicalDurableTransition> {
         let transition = apply_atomic_batch(&self.profile.profile, &self.state, request)
             .map_err(|issues| adapter_validation_error("ordered batch", &issues))?;
         persist_ordered_batch(&self.database, request, &transition.next)?;
@@ -148,10 +149,14 @@ impl RedbDurableStateAdapter {
     }
 
     // r[impl molten.fabric_durability.snapshot_recovery]
-    pub fn create_snapshot(&mut self, request: &SnapshotRequest, bytes: &[u8]) -> Result<CanonicalDurableTransition> {
+    pub fn create_snapshot(
+        &mut self,
+        request: &SnapshotRequest,
+        bytes: &[u8],
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         let actual_ref = blake3_ref(bytes);
         if actual_ref != request.content_ref {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::MoltenError::invalid_harness(format!(
                 "snapshot content ref mismatch: expected={} actual={actual_ref}",
                 request.content_ref
             )));
@@ -164,7 +169,11 @@ impl RedbDurableStateAdapter {
         Ok(canonical)
     }
 
-    pub fn restore_snapshot(&self, snapshot_ref: &str, target_generation: u64) -> Result<SnapshotRestorePlan> {
+    pub fn restore_snapshot(
+        &self,
+        snapshot_ref: &str,
+        target_generation: u64,
+    ) -> crate::error::Result<SnapshotRestorePlan> {
         Ok(self.load_snapshot_bytes(snapshot_ref, target_generation)?.0)
     }
 
@@ -172,14 +181,14 @@ impl RedbDurableStateAdapter {
         &self,
         snapshot_ref: &str,
         target_generation: u64,
-    ) -> Result<(SnapshotRestorePlan, Vec<u8>)> {
+    ) -> crate::error::Result<(SnapshotRestorePlan, Vec<u8>)> {
         let snapshot = self
             .state
             .snapshots
             .get(snapshot_ref)
             .ok_or_else(|| adapter_validation_error("snapshot restore", &[DurabilityIssue::SnapshotNotFound]))?;
         let relative = format!("{SNAPSHOT_DIRECTORY}/{}.bin", snapshot_file_stem(&snapshot.content_ref)?);
-        let bytes = self.root.root().read(&LocalStorePath::parse(&relative)?)?;
+        let bytes = self.root.root().read(&crate::local_store::LocalStorePath::parse(&relative)?)?;
         let actual_ref = blake3_ref(&bytes);
         let plan = plan_snapshot_restore(&self.state, snapshot_ref, target_generation, &actual_ref)
             .map_err(|issues| adapter_validation_error("snapshot restore", &issues))?;
@@ -187,7 +196,10 @@ impl RedbDurableStateAdapter {
     }
 
     // r[impl molten.fabric_durability.effect_transaction]
-    pub fn apply_effect(&mut self, command: &EffectTransactionCommand) -> Result<CanonicalDurableTransition> {
+    pub fn apply_effect(
+        &mut self,
+        command: &EffectTransactionCommand,
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         let transition = apply_effect_transaction(&self.profile.profile, &self.state, command)
             .map_err(|issues| adapter_validation_error("effect transaction", &issues))?;
         persist_effect(&self.database, command, &transition.next)?;
@@ -196,11 +208,11 @@ impl RedbDurableStateAdapter {
         Ok(canonical)
     }
 
-    pub fn recovery(&self, inventory: &RecoveryInventory) -> Result<CanonicalRecoveryDecision> {
+    pub fn recovery(&self, inventory: &RecoveryInventory) -> crate::error::Result<CanonicalRecoveryDecision> {
         canonical_recovery_decision(&self.profile, &self.state, evaluate_recovery(&self.state, inventory))
     }
 
-    pub fn status(&self) -> Result<DurableStatusReadback> {
+    pub fn status(&self) -> crate::error::Result<DurableStatusReadback> {
         durable_status_readback(&self.profile, &self.state)
     }
 }
@@ -224,9 +236,9 @@ pub struct SimulatedDurableStateAdapter {
 
 impl SimulatedDurableStateAdapter {
     // r[impl molten.fabric_durability.live_sim_parity]
-    pub fn new(profile: CanonicalDurableProfile, descriptor: DurableNamespaceDescriptor) -> Result<Self> {
+    pub fn new(profile: CanonicalDurableProfile, descriptor: DurableNamespaceDescriptor) -> crate::error::Result<Self> {
         if profile.profile.adapter_kind != DurableAdapterKind::DeterministicSimulation {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::MoltenError::invalid_harness(
                 "simulated durability adapter requires a deterministic-simulation profile",
             ));
         }
@@ -251,7 +263,7 @@ impl SimulatedDurableStateAdapter {
         &mut self,
         request: &AppendRequest,
         fault: Option<&SimulatedDurabilityFault>,
-    ) -> Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         if matches!(
             fault,
             Some(SimulatedDurabilityFault::CrashBeforeMutation | SimulatedDurabilityFault::CapacityExhausted)
@@ -276,7 +288,11 @@ impl SimulatedDurableStateAdapter {
         Ok(canonical)
     }
 
-    pub fn flush(&mut self, generation: u64, durability: DurabilityLevel) -> Result<CanonicalDurableTransition> {
+    pub fn flush(
+        &mut self,
+        generation: u64,
+        durability: DurabilityLevel,
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         let transition = flush_log(&self.profile.profile, &self.state, generation, durability)
             .map_err(|issues| adapter_validation_error("simulated flush", &issues))?;
         let canonical = canonical_durable_transition(&self.profile, &transition)?;
@@ -288,7 +304,7 @@ impl SimulatedDurableStateAdapter {
         &mut self,
         request: &AtomicBatchRequest,
         fault: Option<&SimulatedDurabilityFault>,
-    ) -> Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         if matches!(
             fault,
             Some(SimulatedDurabilityFault::CrashBeforeMutation | SimulatedDurabilityFault::CapacityExhausted)
@@ -318,7 +334,7 @@ impl SimulatedDurableStateAdapter {
         generation: u64,
         retain_from_sequence: u64,
         authority_ref: Option<&str>,
-    ) -> Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         let transition =
             truncate_log(&self.profile.profile, &self.state, generation, retain_from_sequence, authority_ref)
                 .map_err(|issues| adapter_validation_error("simulated truncate", &issues))?;
@@ -327,7 +343,7 @@ impl SimulatedDurableStateAdapter {
         Ok(canonical)
     }
 
-    pub fn create_snapshot(&mut self, request: &SnapshotRequest) -> Result<CanonicalDurableTransition> {
+    pub fn create_snapshot(&mut self, request: &SnapshotRequest) -> crate::error::Result<CanonicalDurableTransition> {
         let transition = create_snapshot(&self.profile.profile, &self.state, request)
             .map_err(|issues| adapter_validation_error("simulated snapshot", &issues))?;
         let canonical = canonical_durable_transition(&self.profile, &transition)?;
@@ -335,7 +351,10 @@ impl SimulatedDurableStateAdapter {
         Ok(canonical)
     }
 
-    pub fn apply_effect(&mut self, command: &EffectTransactionCommand) -> Result<CanonicalDurableTransition> {
+    pub fn apply_effect(
+        &mut self,
+        command: &EffectTransactionCommand,
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         let transition = apply_effect_transaction(&self.profile.profile, &self.state, command)
             .map_err(|issues| adapter_validation_error("simulated effect", &issues))?;
         let canonical = canonical_durable_transition(&self.profile, &transition)?;
@@ -343,13 +362,16 @@ impl SimulatedDurableStateAdapter {
         Ok(canonical)
     }
 
-    pub fn inject_fault(&mut self, fault: &SimulatedDurabilityFault) -> Result<CanonicalDurableTransition> {
+    pub fn inject_fault(
+        &mut self,
+        fault: &SimulatedDurabilityFault,
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         let transition = match fault {
             SimulatedDurabilityFault::DelayCompletion { ticks } => {
                 self.simulated_ticks = self
                     .simulated_ticks
                     .checked_add(*ticks)
-                    .ok_or_else(|| MoltenError::invalid_harness("simulated durability time overflow"))?;
+                    .ok_or_else(|| crate::error::MoltenError::invalid_harness("simulated durability time overflow"))?;
                 DurableTransition {
                     next: self.state.clone(),
                     outcome: MutationOutcome::Validated,
@@ -377,7 +399,7 @@ impl SimulatedDurableStateAdapter {
             SimulatedDurabilityFault::CrashBeforeMutation
             | SimulatedDurabilityFault::ResponseLostAfterCommit
             | SimulatedDurabilityFault::CapacityExhausted => {
-                return Err(MoltenError::invalid_harness(
+                return Err(crate::error::MoltenError::invalid_harness(
                     "operation-scoped durability fault requires append or batch execution",
                 ));
             }
@@ -387,7 +409,7 @@ impl SimulatedDurableStateAdapter {
         Ok(canonical)
     }
 
-    pub fn recovery(&self, inventory: &RecoveryInventory) -> Result<CanonicalRecoveryDecision> {
+    pub fn recovery(&self, inventory: &RecoveryInventory) -> crate::error::Result<CanonicalRecoveryDecision> {
         canonical_recovery_decision(&self.profile, &self.state, evaluate_recovery(&self.state, inventory))
     }
 
@@ -397,7 +419,7 @@ impl SimulatedDurableStateAdapter {
         operation: &str,
         retry_safe: bool,
         reconciliation_required: bool,
-    ) -> Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<CanonicalDurableTransition> {
         canonical_durable_transition(&self.profile, &DurableTransition {
             next: self.state.clone(),
             outcome,
@@ -454,7 +476,7 @@ impl DurableCommandShell for SimulatedDurableStateAdapter {
     }
 }
 
-fn initialize_tables(database: &redb::Database) -> Result<()> {
+fn initialize_tables(database: &redb::Database) -> crate::error::Result<()> {
     let write = database.begin_write().map_err(adapter_error)?;
     {
         write.open_table(LOG_TABLE).map_err(adapter_error)?;
@@ -465,7 +487,7 @@ fn initialize_tables(database: &redb::Database) -> Result<()> {
     write.commit().map_err(adapter_error)
 }
 
-fn load_state(database: &redb::Database, descriptor: DurableNamespaceDescriptor) -> Result<DurableState> {
+fn load_state(database: &redb::Database, descriptor: DurableNamespaceDescriptor) -> crate::error::Result<DurableState> {
     let mut state = DurableState::empty(descriptor);
     let read = database.begin_read().map_err(adapter_error)?;
     {
@@ -506,7 +528,7 @@ fn load_state(database: &redb::Database, descriptor: DurableNamespaceDescriptor)
     Ok(state)
 }
 
-fn persist_log(database: &redb::Database, records: &[LogRecord]) -> Result<()> {
+fn persist_log(database: &redb::Database, records: &[LogRecord]) -> crate::error::Result<()> {
     let write = database.begin_write().map_err(adapter_error)?;
     {
         let mut table = write.open_table(LOG_TABLE).map_err(adapter_error)?;
@@ -518,7 +540,7 @@ fn persist_log(database: &redb::Database, records: &[LogRecord]) -> Result<()> {
     write.commit().map_err(adapter_error)
 }
 
-fn replace_log(database: &redb::Database, records: &[LogRecord]) -> Result<()> {
+fn replace_log(database: &redb::Database, records: &[LogRecord]) -> crate::error::Result<()> {
     let write = database.begin_write().map_err(adapter_error)?;
     {
         let mut table = write.open_table(LOG_TABLE).map_err(adapter_error)?;
@@ -526,7 +548,7 @@ fn replace_log(database: &redb::Database, records: &[LogRecord]) -> Result<()> {
             .iter()
             .map_err(adapter_error)?
             .map(|item| item.map(|(key, _value)| key.value()).map_err(adapter_error))
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<crate::error::Result<Vec<_>>>()?;
         for key in keys {
             table.remove(key).map_err(adapter_error)?;
         }
@@ -538,17 +560,20 @@ fn replace_log(database: &redb::Database, records: &[LogRecord]) -> Result<()> {
     write.commit().map_err(adapter_error)
 }
 
-fn persist_ordered_batch(database: &redb::Database, request: &AtomicBatchRequest, next: &DurableState) -> Result<()> {
+fn persist_ordered_batch(
+    database: &redb::Database,
+    request: &AtomicBatchRequest,
+    next: &DurableState,
+) -> crate::error::Result<()> {
     let write = database.begin_write().map_err(adapter_error)?;
     {
         let mut table = write.open_table(ORDERED_TABLE).map_err(adapter_error)?;
         for mutation in &request.mutations {
             match mutation {
                 OrderedMutation::Put { key, .. } => {
-                    let value = next
-                        .ordered
-                        .get(key)
-                        .ok_or_else(|| MoltenError::invalid_harness("admitted ordered mutation produced no value"))?;
+                    let value = next.ordered.get(key).ok_or_else(|| {
+                        crate::error::MoltenError::invalid_harness("admitted ordered mutation produced no value")
+                    })?;
                     let bytes = encode_versioned_value(value)?;
                     table.insert(key.as_slice(), bytes.as_slice()).map_err(adapter_error)?;
                 }
@@ -562,18 +587,17 @@ fn persist_ordered_batch(database: &redb::Database, request: &AtomicBatchRequest
 }
 
 fn persist_snapshot(
-    root: &DurableStoreRoot,
+    root: &crate::local_store::DurableStoreRoot,
     database: &redb::Database,
     request: &SnapshotRequest,
     bytes: &[u8],
     next: &DurableState,
-) -> Result<()> {
-    let snapshot = next
-        .snapshots
-        .get(&request.snapshot_ref)
-        .ok_or_else(|| MoltenError::invalid_harness("admitted snapshot transition produced no snapshot"))?;
+) -> crate::error::Result<()> {
+    let snapshot = next.snapshots.get(&request.snapshot_ref).ok_or_else(|| {
+        crate::error::MoltenError::invalid_harness("admitted snapshot transition produced no snapshot")
+    })?;
     let relative = format!("{SNAPSHOT_DIRECTORY}/{}.bin", snapshot_file_stem(&request.content_ref)?);
-    root.root().write(&LocalStorePath::parse(&relative)?, bytes)?;
+    root.root().write(&crate::local_store::LocalStorePath::parse(&relative)?, bytes)?;
     let encoded = encode_snapshot(snapshot)?;
     let write = database.begin_write().map_err(adapter_error)?;
     {
@@ -583,12 +607,15 @@ fn persist_snapshot(
     write.commit().map_err(adapter_error)
 }
 
-fn persist_effect(database: &redb::Database, command: &EffectTransactionCommand, next: &DurableState) -> Result<()> {
+fn persist_effect(
+    database: &redb::Database,
+    command: &EffectTransactionCommand,
+    next: &DurableState,
+) -> crate::error::Result<()> {
     let transaction_id = effect_transaction_id(command);
-    let effect = next
-        .effects
-        .get(transaction_id)
-        .ok_or_else(|| MoltenError::invalid_harness("admitted effect transition produced no effect state"))?;
+    let effect = next.effects.get(transaction_id).ok_or_else(|| {
+        crate::error::MoltenError::invalid_harness("admitted effect transition produced no effect state")
+    })?;
     let encoded = encode_effect(effect)?;
     let write = database.begin_write().map_err(adapter_error)?;
     {
@@ -609,7 +636,7 @@ fn effect_transaction_id(command: &EffectTransactionCommand) -> &str {
     }
 }
 
-fn encode_log_record(record: &LogRecord) -> Result<Vec<u8>> {
+fn encode_log_record(record: &LogRecord) -> crate::error::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     push_byte(&mut bytes, encode_level(record.durability));
     push_blob(&mut bytes, record.value_ref.as_bytes())?;
@@ -617,7 +644,7 @@ fn encode_log_record(record: &LogRecord) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn decode_log_record(sequence: u64, bytes: &[u8]) -> Result<LogRecord> {
+fn decode_log_record(sequence: u64, bytes: &[u8]) -> crate::error::Result<LogRecord> {
     let mut cursor = ByteCursor::new(bytes);
     let durability = decode_level(cursor.take_byte()?)?;
     let value_ref = cursor.take_string()?;
@@ -631,7 +658,7 @@ fn decode_log_record(sequence: u64, bytes: &[u8]) -> Result<LogRecord> {
     })
 }
 
-fn encode_versioned_value(value: &VersionedValue) -> Result<Vec<u8>> {
+fn encode_versioned_value(value: &VersionedValue) -> crate::error::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     push_u64(&mut bytes, value.version);
     push_blob(&mut bytes, value.value_ref.as_bytes())?;
@@ -639,7 +666,7 @@ fn encode_versioned_value(value: &VersionedValue) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn decode_versioned_value(bytes: &[u8]) -> Result<VersionedValue> {
+fn decode_versioned_value(bytes: &[u8]) -> crate::error::Result<VersionedValue> {
     let mut cursor = ByteCursor::new(bytes);
     let version = cursor.take_u64()?;
     let value_ref = cursor.take_string()?;
@@ -652,7 +679,7 @@ fn decode_versioned_value(bytes: &[u8]) -> Result<VersionedValue> {
     })
 }
 
-fn encode_snapshot(snapshot: &SnapshotRecord) -> Result<Vec<u8>> {
+fn encode_snapshot(snapshot: &SnapshotRecord) -> crate::error::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     push_byte(&mut bytes, encode_snapshot_kind(snapshot.kind));
     push_blob(&mut bytes, snapshot.content_ref.as_bytes())?;
@@ -666,7 +693,7 @@ fn encode_snapshot(snapshot: &SnapshotRecord) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn decode_snapshot(snapshot_ref: &str, bytes: &[u8]) -> Result<SnapshotRecord> {
+fn decode_snapshot(snapshot_ref: &str, bytes: &[u8]) -> crate::error::Result<SnapshotRecord> {
     let mut cursor = ByteCursor::new(bytes);
     let kind = decode_snapshot_kind(cursor.take_byte()?)?;
     let content_ref = cursor.take_string()?;
@@ -692,7 +719,7 @@ fn decode_snapshot(snapshot_ref: &str, bytes: &[u8]) -> Result<SnapshotRecord> {
     })
 }
 
-fn encode_effect(effect: &EffectTransactionState) -> Result<Vec<u8>> {
+fn encode_effect(effect: &EffectTransactionState) -> crate::error::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     push_u64(&mut bytes, effect.generation);
     push_blob(&mut bytes, effect.operation_ref.as_bytes())?;
@@ -710,7 +737,7 @@ fn encode_effect(effect: &EffectTransactionState) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn decode_effect(transaction_id: &str, bytes: &[u8]) -> Result<EffectTransactionState> {
+fn decode_effect(transaction_id: &str, bytes: &[u8]) -> crate::error::Result<EffectTransactionState> {
     let mut cursor = ByteCursor::new(bytes);
     let generation = cursor.take_u64()?;
     let operation_ref = cursor.take_string()?;
@@ -746,12 +773,12 @@ fn encode_level(level: DurabilityLevel) -> u8 {
     }
 }
 
-fn decode_level(value: u8) -> Result<DurabilityLevel> {
+fn decode_level(value: u8) -> crate::error::Result<DurabilityLevel> {
     match value {
         LEVEL_BUFFERED => Ok(DurabilityLevel::Buffered),
         LEVEL_PROCESS_LOSS => Ok(DurabilityLevel::ProcessLoss),
         LEVEL_MACHINE_LOSS => Ok(DurabilityLevel::MachineLoss),
-        _ => Err(MoltenError::invalid_harness(format!("unknown durability level code {value}"))),
+        _ => Err(crate::error::MoltenError::invalid_harness(format!("unknown durability level code {value}"))),
     }
 }
 
@@ -762,11 +789,11 @@ fn encode_snapshot_kind(kind: SnapshotKind) -> u8 {
     }
 }
 
-fn decode_snapshot_kind(value: u8) -> Result<SnapshotKind> {
+fn decode_snapshot_kind(value: u8) -> crate::error::Result<SnapshotKind> {
     match value {
         SNAPSHOT_KIND_SNAPSHOT => Ok(SnapshotKind::Snapshot),
         SNAPSHOT_KIND_CHECKPOINT => Ok(SnapshotKind::Checkpoint),
-        _ => Err(MoltenError::invalid_harness(format!("unknown snapshot kind code {value}"))),
+        _ => Err(crate::error::MoltenError::invalid_harness(format!("unknown snapshot kind code {value}"))),
     }
 }
 
@@ -782,7 +809,7 @@ fn encode_phase(phase: EffectTransactionPhase) -> u8 {
     }
 }
 
-fn decode_phase(value: u8) -> Result<EffectTransactionPhase> {
+fn decode_phase(value: u8) -> crate::error::Result<EffectTransactionPhase> {
     match value {
         PHASE_RESERVED => Ok(EffectTransactionPhase::Reserved),
         PHASE_COMMITTED => Ok(EffectTransactionPhase::Committed),
@@ -791,7 +818,7 @@ fn decode_phase(value: u8) -> Result<EffectTransactionPhase> {
         PHASE_UNCERTAIN => Ok(EffectTransactionPhase::Uncertain),
         PHASE_RECONCILED_COMMITTED => Ok(EffectTransactionPhase::ReconciledCommitted),
         PHASE_RECONCILED_ABORTED => Ok(EffectTransactionPhase::ReconciledAborted),
-        _ => Err(MoltenError::invalid_harness(format!("unknown effect phase code {value}"))),
+        _ => Err(crate::error::MoltenError::invalid_harness(format!("unknown effect phase code {value}"))),
     }
 }
 
@@ -810,7 +837,7 @@ fn push_optional_u64(bytes: &mut Vec<u8>, value: Option<u64>) {
     }
 }
 
-fn push_blob(bytes: &mut Vec<u8>, value: &[u8]) -> Result<()> {
+fn push_blob(bytes: &mut Vec<u8>, value: &[u8]) -> crate::error::Result<()> {
     push_u64(bytes, byte_count(value.len())?);
     bytes.extend_from_slice(value);
     Ok(())
@@ -826,56 +853,57 @@ impl<'a> ByteCursor<'a> {
         Self { bytes, offset: 0 }
     }
 
-    fn take_byte(&mut self) -> Result<u8> {
+    fn take_byte(&mut self) -> crate::error::Result<u8> {
         let value = self
             .bytes
             .get(self.offset)
             .copied()
-            .ok_or_else(|| MoltenError::invalid_harness("truncated durable adapter record"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("truncated durable adapter record"))?;
         self.offset = self
             .offset
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("durable adapter cursor overflow"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("durable adapter cursor overflow"))?;
         Ok(value)
     }
 
-    fn take_u64(&mut self) -> Result<u64> {
+    fn take_u64(&mut self) -> crate::error::Result<u64> {
         let end = self
             .offset
             .checked_add(LENGTH_PREFIX_BYTES)
-            .ok_or_else(|| MoltenError::invalid_harness("durable adapter cursor overflow"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("durable adapter cursor overflow"))?;
         let bytes = self
             .bytes
             .get(self.offset..end)
-            .ok_or_else(|| MoltenError::invalid_harness("truncated durable adapter integer"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("truncated durable adapter integer"))?;
         let array: [u8; LENGTH_PREFIX_BYTES] = bytes
             .try_into()
-            .map_err(|_| MoltenError::invalid_harness("invalid durable adapter integer width"))?;
+            .map_err(|_| crate::error::MoltenError::invalid_harness("invalid durable adapter integer width"))?;
         self.offset = end;
         Ok(u64::from_be_bytes(array))
     }
 
-    fn take_blob(&mut self) -> Result<&'a [u8]> {
+    fn take_blob(&mut self) -> crate::error::Result<&'a [u8]> {
         let length = usize::try_from(self.take_u64()?)
-            .map_err(|_| MoltenError::invalid_harness("durable adapter blob length overflow"))?;
+            .map_err(|_| crate::error::MoltenError::invalid_harness("durable adapter blob length overflow"))?;
         let end = self
             .offset
             .checked_add(length)
-            .ok_or_else(|| MoltenError::invalid_harness("durable adapter cursor overflow"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("durable adapter cursor overflow"))?;
         let value = self
             .bytes
             .get(self.offset..end)
-            .ok_or_else(|| MoltenError::invalid_harness("truncated durable adapter blob"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("truncated durable adapter blob"))?;
         self.offset = end;
         Ok(value)
     }
 
-    fn take_string(&mut self) -> Result<String> {
-        String::from_utf8(self.take_blob()?.to_vec())
-            .map_err(|error| MoltenError::invalid_harness(format!("durable adapter string is not UTF-8: {error}")))
+    fn take_string(&mut self) -> crate::error::Result<String> {
+        String::from_utf8(self.take_blob()?.to_vec()).map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("durable adapter string is not UTF-8: {error}"))
+        })
     }
 
-    fn take_optional_u64(&mut self) -> Result<Option<u64>> {
+    fn take_optional_u64(&mut self) -> crate::error::Result<Option<u64>> {
         if decode_bool(self.take_byte()?)? {
             self.take_u64().map(Some)
         } else {
@@ -883,46 +911,46 @@ impl<'a> ByteCursor<'a> {
         }
     }
 
-    fn finish(&self) -> Result<()> {
+    fn finish(&self) -> crate::error::Result<()> {
         if self.offset == self.bytes.len() {
             Ok(())
         } else {
-            Err(MoltenError::invalid_harness("durable adapter record contains trailing bytes"))
+            Err(crate::error::MoltenError::invalid_harness("durable adapter record contains trailing bytes"))
         }
     }
 }
 
-fn decode_bool(value: u8) -> Result<bool> {
+fn decode_bool(value: u8) -> crate::error::Result<bool> {
     match value {
         0 => Ok(false),
         1 => Ok(true),
-        _ => Err(MoltenError::invalid_harness(format!("invalid durable adapter boolean {value}"))),
+        _ => Err(crate::error::MoltenError::invalid_harness(format!("invalid durable adapter boolean {value}"))),
     }
 }
 
-fn snapshot_file_stem(snapshot_ref: &str) -> Result<&str> {
+fn snapshot_file_stem(snapshot_ref: &str) -> crate::error::Result<&str> {
     snapshot_ref
         .strip_prefix("blake3:")
-        .ok_or_else(|| MoltenError::invalid_harness("snapshot ref must be a BLAKE3 content ref"))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("snapshot ref must be a BLAKE3 content ref"))
 }
 
 fn blake3_ref(bytes: &[u8]) -> String {
     format!("blake3:{}", blake3::hash(bytes).to_hex())
 }
 
-fn byte_count(value: usize) -> Result<u64> {
-    u64::try_from(value).map_err(|_| MoltenError::invalid_harness("durable adapter byte count overflow"))
+fn byte_count(value: usize) -> crate::error::Result<u64> {
+    u64::try_from(value).map_err(|_| crate::error::MoltenError::invalid_harness("durable adapter byte count overflow"))
 }
 
-fn checked_adapter_add(left: u64, right: u64) -> Result<u64> {
+fn checked_adapter_add(left: u64, right: u64) -> crate::error::Result<u64> {
     left.checked_add(right)
-        .ok_or_else(|| MoltenError::invalid_harness("durable adapter byte accounting overflow"))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("durable adapter byte accounting overflow"))
 }
 
-fn adapter_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("durable adapter error: {error}"))
+fn adapter_error(error: impl std::fmt::Display) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("durable adapter error: {error}"))
 }
 
-fn adapter_validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("durable adapter {label} denied: {issues:?}"))
+fn adapter_validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("durable adapter {label} denied: {issues:?}"))
 }

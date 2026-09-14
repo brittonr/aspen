@@ -1,6 +1,4 @@
 use super::*;
-use crate::fabric::FabricPortClass;
-use crate::fabric::ReferenceSystemKind;
 
 const EXPECTED_REFERENCE_SERVICES: usize = 3;
 const EXPECTED_WORKLOAD_STEPS: usize = 6;
@@ -48,12 +46,8 @@ fn three_reference_services_run_through_host_callbacks_and_named_ports() {
     assert_eq!(fixture.port_events.len(), EXPECTED_PORT_EVENTS);
     assert_eq!(fixture.run.summary.final_state_refs.len(), EXPECTED_REFERENCE_SERVICES);
     assert!(fixture.run.summary.invariant_results.iter().all(|result| result.passed));
-    assert!(
-        fixture
-            .port_events
-            .iter()
-            .any(|event| event.class == FabricPortClass::Transport && event.fault == Some(SimulationFaultKind::Delay))
-    );
+    assert!(fixture.port_events.iter().any(|event| event.class == crate::fabric::FabricPortClass::Transport
+        && event.fault == Some(SimulationFaultKind::Delay)));
     assert!(fixture.port_events.iter().all(|event| event.event_ref.starts_with("blake3:")));
     assert!(fixture.host_evidence_refs.iter().all(|reference| reference.starts_with("blake3:")));
     assert!(fixture.bundle.bundle_ref.starts_with("blake3:"));
@@ -62,9 +56,9 @@ fn three_reference_services_run_through_host_callbacks_and_named_ports() {
         .iter()
         .filter_map(|observation| observation.observation.service)
         .collect::<std::collections::BTreeSet<_>>();
-    assert!(services.contains(&ReferenceSystemKind::TransactionalKeyValue));
-    assert!(services.contains(&ReferenceSystemKind::ReplicatedLog));
-    assert!(services.contains(&ReferenceSystemKind::DistributedScheduler));
+    assert!(services.contains(&crate::fabric::ReferenceSystemKind::TransactionalKeyValue));
+    assert!(services.contains(&crate::fabric::ReferenceSystemKind::ReplicatedLog));
+    assert!(services.contains(&crate::fabric::ReferenceSystemKind::DistributedScheduler));
 }
 
 // r[verify molten.fabric_simulation.scheduler]
@@ -155,7 +149,9 @@ fn malformed_run_decision_and_missing_adapter_fail_closed() {
     let malformed = crate::preserves_rail::parse_text(&malformed_text).expect("malformed syntax remains valid");
     let readback_error = parse_simulation_run_readback(&malformed).expect_err("unknown decision must deny");
     let mut manifest = fixture.world.admitted.manifest.clone();
-    manifest.port_profiles.retain(|profile| profile.class != FabricPortClass::DurableState);
+    manifest
+        .port_profiles
+        .retain(|profile| profile.class != crate::fabric::FabricPortClass::DurableState);
     let world_error = canonical_admit_simulated_world(&manifest).expect_err("missing port must deny");
 
     assert!(readback_error.to_string().contains("unsupported simulation decision"));

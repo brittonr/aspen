@@ -1,29 +1,5 @@
-use std::time::Duration;
-
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric_time::AdmittedTimeProfile;
 use crate::fabric_time::CryptographicEntropySource;
-use crate::fabric_time::EntropyMode;
-use crate::fabric_time::EntropyRequest;
-use crate::fabric_time::EntropyStreamRequest;
-use crate::fabric_time::EntropyStreamState;
-use crate::fabric_time::EntropyValue;
-use crate::fabric_time::OperatingSystemEntropySource;
-use crate::fabric_time::ProductionEntropyAdapter;
-use crate::fabric_time::TimeDomain;
-use crate::fabric_time::TimeProfileKind;
-use crate::fabric_time::TimerCoalescingPolicy;
-use crate::fabric_time::TimerKey;
-use crate::fabric_time::TimerKind;
-use crate::fabric_time::TimerLatenessPolicy;
-use crate::fabric_time::TimerOverloadPolicy;
-use crate::fabric_time::TimerResourceCharge;
-use crate::fabric_time::TimerScheduleRequest;
-use crate::fabric_time::canonical_entropy_event;
-use crate::fabric_time::open_entropy_stream;
-use crate::fabric_time::schedule_timer;
 
 const ELECTION_STREAM_ID: &str = "raft-election";
 const ELECTION_PURPOSE: &str = "raft-election-timeout";
@@ -32,28 +8,28 @@ const NEXT_TIMER_SEQUENCE: u64 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokioReplicaTimeConfig {
-    pub profile: AdmittedTimeProfile,
+    pub profile: crate::fabric_time::AdmittedTimeProfile,
     pub generation: u64,
     pub service_id: String,
     pub capability_ref: String,
     pub entropy_binding_ref: String,
-    pub tick_duration: Duration,
+    pub tick_duration: std::time::Duration,
     pub heartbeat_ticks: u64,
     pub election_min_ticks: u64,
     pub election_max_ticks: u64,
 }
 
 pub struct TokioReplicaTimePort<S: CryptographicEntropySource> {
-    profile: AdmittedTimeProfile,
+    profile: crate::fabric_time::AdmittedTimeProfile,
     generation: u64,
     service_id: String,
-    tick_duration: Duration,
+    tick_duration: std::time::Duration,
     heartbeat_ticks: u64,
     election_min_ticks: u64,
     election_max_ticks: u64,
     entropy_binding_ref: String,
-    entropy: ProductionEntropyAdapter<S>,
-    entropy_stream: EntropyStreamState,
+    entropy: crate::fabric_time::ProductionEntropyAdapter<S>,
+    entropy_stream: crate::fabric_time::EntropyStreamState,
     sender: tokio::sync::mpsc::UnboundedSender<ReplicaEvent>,
     next_timer_sequence: u64,
     election_handle: Option<tokio::task::JoinHandle<()>>,
@@ -65,19 +41,25 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
         config: TokioReplicaTimeConfig,
         source: S,
         sender: tokio::sync::mpsc::UnboundedSender<ReplicaEvent>,
-    ) -> Result<Self> {
+    ) -> crate::error::Result<Self> {
         validate_time_configuration(&config)?;
-        let entropy_stream = open_entropy_stream(&config.profile, config.generation, &EntropyStreamRequest {
-            profile_ref: config.profile.profile_ref.clone(),
-            stream_id: ELECTION_STREAM_ID.to_string(),
-            purpose: ELECTION_PURPOSE.to_string(),
-            capability_ref: config.capability_ref,
-            generation: config.generation,
-            mode: EntropyMode::ProductionCryptographic,
-            explicit_simulation_seed: None,
-            explicit_simulation_seed_ref: None,
-        })
-        .map_err(|error| MoltenError::invalid_harness(format!("live Raft entropy stream denied: {error:?}")))?;
+        let entropy_stream = crate::fabric_time::open_entropy_stream(
+            &config.profile,
+            config.generation,
+            &crate::fabric_time::EntropyStreamRequest {
+                profile_ref: config.profile.profile_ref.clone(),
+                stream_id: ELECTION_STREAM_ID.to_string(),
+                purpose: ELECTION_PURPOSE.to_string(),
+                capability_ref: config.capability_ref,
+                generation: config.generation,
+                mode: crate::fabric_time::EntropyMode::ProductionCryptographic,
+                explicit_simulation_seed: None,
+                explicit_simulation_seed_ref: None,
+            },
+        )
+        .map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("live Raft entropy stream denied: {error:?}"))
+        })?;
         Ok(Self {
             profile: config.profile,
             generation: config.generation,
@@ -87,7 +69,7 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
             election_min_ticks: config.election_min_ticks,
             election_max_ticks: config.election_max_ticks,
             entropy_binding_ref: config.entropy_binding_ref,
-            entropy: ProductionEntropyAdapter::new(source),
+            entropy: crate::fabric_time::ProductionEntropyAdapter::new(source),
             entropy_stream,
             sender,
             next_timer_sequence: FIRST_TIMER_SEQUENCE,
@@ -113,50 +95,60 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
         abort(&mut self.heartbeat_handle);
     }
 
-    fn election_delay(&mut self) -> Result<(u64, String)> {
+    fn election_delay(&mut self) -> crate::error::Result<(u64, String)> {
         let span = self
             .election_max_ticks
             .checked_sub(self.election_min_ticks)
             .and_then(|difference| difference.checked_add(1))
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft election span overflow"))?;
-        let (transition, metadata) =
-            self.entropy
-                .draw(&self.profile, self.generation, &self.entropy_stream, EntropyRequest::BoundedChoice {
-                    upper_exclusive: span,
-                })?;
-        let EntropyValue::Choice(choice) = transition.value else {
-            return Err(MoltenError::invalid_harness("live Raft election entropy did not produce a bounded choice"));
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Raft election span overflow"))?;
+        let (transition, metadata) = self.entropy.draw(
+            &self.profile,
+            self.generation,
+            &self.entropy_stream,
+            crate::fabric_time::EntropyRequest::BoundedChoice { upper_exclusive: span },
+        )?;
+        let crate::fabric_time::EntropyValue::Choice(choice) = transition.value else {
+            return Err(crate::error::MoltenError::invalid_harness(
+                "live Raft election entropy did not produce a bounded choice",
+            ));
         };
         self.entropy_stream = transition.next;
         let delay = self
             .election_min_ticks
             .checked_add(choice)
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft election delay overflow"))?;
-        Ok((delay, canonical_entropy_event(&metadata)?.evidence_ref))
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Raft election delay overflow"))?;
+        Ok((delay, crate::fabric_time::canonical_entropy_event(&metadata)?.evidence_ref))
     }
 
-    fn timer_evidence(&mut self, delay_ticks: u64, ordering_key: u64) -> Result<String> {
-        let timer = schedule_timer(&self.profile, self.generation, 0, &TimerScheduleRequest {
-            profile_ref: self.profile.profile_ref.clone(),
-            key: TimerKey {
-                service_id: self.service_id.clone(),
-                generation: self.generation,
-                sequence: self.next_timer_sequence,
+    fn timer_evidence(&mut self, delay_ticks: u64, ordering_key: u64) -> crate::error::Result<String> {
+        let timer = crate::fabric_time::schedule_timer(
+            &self.profile,
+            self.generation,
+            0,
+            &crate::fabric_time::TimerScheduleRequest {
+                profile_ref: self.profile.profile_ref.clone(),
+                key: crate::fabric_time::TimerKey {
+                    service_id: self.service_id.clone(),
+                    generation: self.generation,
+                    sequence: self.next_timer_sequence,
+                },
+                domain: crate::fabric_time::TimeDomain::Monotonic,
+                deadline_ticks: delay_ticks,
+                kind: crate::fabric_time::TimerKind::OneShot,
+                ordering_key,
+                coalescing: crate::fabric_time::TimerCoalescingPolicy::CoalesceLatest,
+                lateness: crate::fabric_time::TimerLatenessPolicy::DeliverRegardless,
+                overload: crate::fabric_time::TimerOverloadPolicy::RejectAndRetain,
+                resource_charge: crate::fabric_time::TimerResourceCharge::single_slot(),
             },
-            domain: TimeDomain::Monotonic,
-            deadline_ticks: delay_ticks,
-            kind: TimerKind::OneShot,
-            ordering_key,
-            coalescing: TimerCoalescingPolicy::CoalesceLatest,
-            lateness: TimerLatenessPolicy::DeliverRegardless,
-            overload: TimerOverloadPolicy::RejectAndRetain,
-            resource_charge: TimerResourceCharge::single_slot(),
-        })
-        .map_err(|error| MoltenError::invalid_harness(format!("live Raft timer plan denied: {error:?}")))?;
+        )
+        .map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("live Raft timer plan denied: {error:?}"))
+        })?;
         self.next_timer_sequence = self
             .next_timer_sequence
             .checked_add(NEXT_TIMER_SEQUENCE)
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft timer sequence overflow"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Raft timer sequence overflow"))?;
         crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-timer-plan-v1", vec![
             crate::preserves_rail::string(&self.profile.profile_ref),
             crate::preserves_rail::string(&timer.key.service_id),
@@ -167,26 +159,26 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
         ]))
     }
 
-    fn duration(&self, ticks: u64) -> Result<Duration> {
-        let multiplier =
-            u32::try_from(ticks).map_err(|_| MoltenError::invalid_harness("live Raft timer ticks exceed u32"))?;
+    fn duration(&self, ticks: u64) -> crate::error::Result<std::time::Duration> {
+        let multiplier = u32::try_from(ticks)
+            .map_err(|_| crate::error::MoltenError::invalid_harness("live Raft timer ticks exceed u32"))?;
         self.tick_duration
             .checked_mul(multiplier)
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft timer duration overflow"))
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Raft timer duration overflow"))
     }
 }
 
-impl TokioReplicaTimePort<OperatingSystemEntropySource> {
+impl TokioReplicaTimePort<crate::fabric_time::OperatingSystemEntropySource> {
     pub fn new_operating_system(
         config: TokioReplicaTimeConfig,
         sender: tokio::sync::mpsc::UnboundedSender<ReplicaEvent>,
-    ) -> Result<Self> {
-        Self::new(config, OperatingSystemEntropySource, sender)
+    ) -> crate::error::Result<Self> {
+        Self::new(config, crate::fabric_time::OperatingSystemEntropySource, sender)
     }
 }
 
 impl<S: CryptographicEntropySource> ReplicaTimeEffects for TokioReplicaTimePort<S> {
-    fn arm_election_timer(&mut self, timer_ref: &str) -> Result<String> {
+    fn arm_election_timer(&mut self, timer_ref: &str) -> crate::error::Result<String> {
         crate::preserves_rail::validate_content_ref(timer_ref)?;
         let (delay_ticks, entropy_evidence_ref) = self.election_delay()?;
         let timer_evidence_ref = self.timer_evidence(delay_ticks, self.next_timer_sequence)?;
@@ -211,7 +203,7 @@ impl<S: CryptographicEntropySource> ReplicaTimeEffects for TokioReplicaTimePort<
         )
     }
 
-    fn arm_heartbeat_timer(&mut self) -> Result<String> {
+    fn arm_heartbeat_timer(&mut self) -> crate::error::Result<String> {
         let timer_evidence_ref = self.timer_evidence(self.heartbeat_ticks, self.next_timer_sequence)?;
         let duration = self.duration(self.heartbeat_ticks)?;
         abort(&mut self.heartbeat_handle);
@@ -230,13 +222,13 @@ impl<S: CryptographicEntropySource> Drop for TokioReplicaTimePort<S> {
     }
 }
 
-fn validate_time_configuration(config: &TokioReplicaTimeConfig) -> Result<()> {
-    if config.profile.kind != TimeProfileKind::Live {
-        return Err(MoltenError::invalid_harness("Tokio Raft time port requires a live time profile"));
+fn validate_time_configuration(config: &TokioReplicaTimeConfig) -> crate::error::Result<()> {
+    if config.profile.kind != crate::fabric_time::TimeProfileKind::Live {
+        return Err(crate::error::MoltenError::invalid_harness("Tokio Raft time port requires a live time profile"));
     }
     crate::preserves_rail::validate_content_ref(&config.entropy_binding_ref)?;
     if config.generation == 0 || config.service_id.is_empty() || config.tick_duration.is_zero() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "Tokio Raft time port requires generation, service id, and positive tick duration",
         ));
     }
@@ -244,12 +236,14 @@ fn validate_time_configuration(config: &TokioReplicaTimeConfig) -> Result<()> {
         || config.election_min_ticks <= config.heartbeat_ticks
         || config.election_max_ticks < config.election_min_ticks
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "Tokio Raft time bounds require heartbeat < election minimum <= election maximum",
         ));
     }
     if config.election_max_ticks > config.profile.max_duration_ticks {
-        return Err(MoltenError::invalid_harness("Tokio Raft election bound exceeds the admitted time profile"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "Tokio Raft election bound exceeds the admitted time profile",
+        ));
     }
     Ok(())
 }
@@ -266,7 +260,7 @@ fn combined_timer_ref(
     protocol_timer_ref: Option<&str>,
     entropy_binding_ref: &str,
     entropy_evidence_ref: Option<&str>,
-) -> Result<String> {
+) -> crate::error::Result<String> {
     let protocol_timer = optional_ref(protocol_timer_ref);
     let entropy_evidence = optional_ref(entropy_evidence_ref);
     crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-timer-arm-v1", vec![

@@ -1,14 +1,4 @@
 use super::*;
-use crate::fabric_consistency::ConsistencyGroupBindingInput;
-use crate::fabric_consistency::ConsistencyOperation;
-use crate::fabric_consistency::ConsistencyOutcomeInput;
-use crate::fabric_consistency::ConsistencyOutcomeKind;
-use crate::fabric_consistency::ConsistencyPortCommandInput;
-use crate::fabric_consistency::GroupOpenMode;
-use crate::fabric_consistency::apply_consistency_outcome;
-use crate::fabric_consistency::canonical_consistency_group_binding;
-use crate::fabric_consistency::normalize_consistency_outcome;
-use crate::fabric_consistency::plan_consistency_operation;
 
 const SERVICE_GENERATION: u64 = 1;
 const CONFIG_EPOCH: u64 = 1;
@@ -35,64 +25,73 @@ pub(super) fn test_ref(label: &str) -> String {
 }
 
 pub(super) fn active_group() -> crate::fabric_consistency::ConsistencyGroupBinding {
-    let declared = canonical_consistency_group_binding(ConsistencyGroupBindingInput {
-        group_id: "group:live-raft".to_string(),
-        extension_id: "extension-live-raft".to_string(),
-        service_id: "service-live-raft".to_string(),
-        service_generation: SERVICE_GENERATION,
-        application_manifest_ref: test_ref("application-manifest"),
-        engine_algorithm_profile: LIVE_RAFT_ALGORITHM_PROFILE.to_string(),
-        engine_implementation_profile: LIVE_RAFT_IMPLEMENTATION_PROFILE.to_string(),
-        membership_ref: test_ref("membership"),
-        config_epoch: CONFIG_EPOCH,
-        placement_ref: test_ref("placement"),
-        fencing_ref: test_ref("fencing"),
-        fencing_epoch: FENCING_EPOCH,
-        resource_profile_ref: test_ref("resources"),
-        policy_refs: vec![test_ref("policy")],
-        non_claims: vec!["live-startup-does-not-prove-production-consensus".to_string()],
-        supported_read_modes: vec![crate::fabric_consistency::ConsistencyReadMode::Linearizable],
-        max_command_bytes: COMMAND_BYTE_LIMIT,
-        max_in_flight_operations: IN_FLIGHT_LIMIT,
-    })
-    .expect("declared group");
-    let plan = plan_consistency_operation(&declared, ConsistencyPortCommandInput {
-        request_ref: test_ref("open-request"),
-        binding_ref: declared.binding_ref.clone(),
-        group_id: declared.group_id.clone(),
-        extension_id: declared.extension_id.clone(),
-        service_id: declared.service_id.clone(),
-        service_generation: declared.service_generation,
-        application_manifest_ref: declared.application_manifest_ref.clone(),
-        engine_algorithm_profile: declared.engine_algorithm_profile.clone(),
-        engine_implementation_profile: declared.engine_implementation_profile.clone(),
-        membership_ref: declared.membership_ref.clone(),
-        config_epoch: declared.config_epoch,
-        placement_ref: declared.placement_ref.clone(),
-        fencing_ref: declared.fencing_ref.clone(),
-        fencing_epoch: declared.fencing_epoch,
-        resource_profile_ref: declared.resource_profile_ref.clone(),
-        policy_refs: declared.policy_refs.clone(),
-        authority_refs: vec![test_ref("authority")],
-        observed_in_flight_operations: 0,
-        operation: ConsistencyOperation::Open {
-            mode: GroupOpenMode::Create,
+    let declared = crate::fabric_consistency::canonical_consistency_group_binding(
+        crate::fabric_consistency::ConsistencyGroupBindingInput {
+            group_id: "group:live-raft".to_string(),
+            extension_id: "extension-live-raft".to_string(),
+            service_id: "service-live-raft".to_string(),
+            service_generation: SERVICE_GENERATION,
+            application_manifest_ref: test_ref("application-manifest"),
+            engine_algorithm_profile: LIVE_RAFT_ALGORITHM_PROFILE.to_string(),
+            engine_implementation_profile: LIVE_RAFT_IMPLEMENTATION_PROFILE.to_string(),
+            membership_ref: test_ref("membership"),
+            config_epoch: CONFIG_EPOCH,
+            placement_ref: test_ref("placement"),
+            fencing_ref: test_ref("fencing"),
+            fencing_epoch: FENCING_EPOCH,
+            resource_profile_ref: test_ref("resources"),
+            policy_refs: vec![test_ref("policy")],
+            non_claims: vec!["live-startup-does-not-prove-production-consensus".to_string()],
+            supported_read_modes: vec![crate::fabric_consistency::ConsistencyReadMode::Linearizable],
+            max_command_bytes: COMMAND_BYTE_LIMIT,
+            max_in_flight_operations: IN_FLIGHT_LIMIT,
         },
-    })
+    )
+    .expect("declared group");
+    let plan = crate::fabric_consistency::plan_consistency_operation(
+        &declared,
+        crate::fabric_consistency::ConsistencyPortCommandInput {
+            request_ref: test_ref("open-request"),
+            binding_ref: declared.binding_ref.clone(),
+            group_id: declared.group_id.clone(),
+            extension_id: declared.extension_id.clone(),
+            service_id: declared.service_id.clone(),
+            service_generation: declared.service_generation,
+            application_manifest_ref: declared.application_manifest_ref.clone(),
+            engine_algorithm_profile: declared.engine_algorithm_profile.clone(),
+            engine_implementation_profile: declared.engine_implementation_profile.clone(),
+            membership_ref: declared.membership_ref.clone(),
+            config_epoch: declared.config_epoch,
+            placement_ref: declared.placement_ref.clone(),
+            fencing_ref: declared.fencing_ref.clone(),
+            fencing_epoch: declared.fencing_epoch,
+            resource_profile_ref: declared.resource_profile_ref.clone(),
+            policy_refs: declared.policy_refs.clone(),
+            authority_refs: vec![test_ref("authority")],
+            observed_in_flight_operations: 0,
+            operation: crate::fabric_consistency::ConsistencyOperation::Open {
+                mode: crate::fabric_consistency::GroupOpenMode::Create,
+            },
+        },
+    )
     .expect("open plan");
-    let outcome = normalize_consistency_outcome(&declared, &plan, ConsistencyOutcomeInput {
-        request_ref: plan.request_ref.clone(),
-        binding_ref: declared.binding_ref.clone(),
-        service_generation: declared.service_generation,
-        config_epoch: declared.config_epoch,
-        fencing_epoch: declared.fencing_epoch,
-        kind: ConsistencyOutcomeKind::Opened,
-        result_ref: Some(test_ref("open-result")),
-        evidence_refs: vec![test_ref("open-evidence")],
-        diagnostics: Vec::new(),
-    })
+    let outcome = crate::fabric_consistency::normalize_consistency_outcome(
+        &declared,
+        &plan,
+        crate::fabric_consistency::ConsistencyOutcomeInput {
+            request_ref: plan.request_ref.clone(),
+            binding_ref: declared.binding_ref.clone(),
+            service_generation: declared.service_generation,
+            config_epoch: declared.config_epoch,
+            fencing_epoch: declared.fencing_epoch,
+            kind: crate::fabric_consistency::ConsistencyOutcomeKind::Opened,
+            result_ref: Some(test_ref("open-result")),
+            evidence_refs: vec![test_ref("open-evidence")],
+            diagnostics: Vec::new(),
+        },
+    )
     .expect("open outcome");
-    apply_consistency_outcome(&declared, &plan, &outcome).expect("active group")
+    crate::fabric_consistency::apply_consistency_outcome(&declared, &plan, &outcome).expect("active group")
 }
 
 fn profile(group: &crate::fabric_consistency::ConsistencyGroupBinding) -> ReplicaProfile {

@@ -1,18 +1,11 @@
-use super::super::evidence::materialization::MaterializationAdmission;
-use super::super::model::ComponentRuntimeProfile;
-use super::super::model::content_ref;
-use super::super::profile::component_profile_ref;
-use super::ComponentArtifactFacts;
-use super::GrantPlan;
-
 pub(super) fn runtime_configuration_ref(
-    profile: &ComponentRuntimeProfile,
-    facts: &ComponentArtifactFacts,
-    materialization: &MaterializationAdmission,
-    grants: &GrantPlan,
+    profile: &super::super::model::ComponentRuntimeProfile,
+    facts: &super::ComponentArtifactFacts,
+    materialization: &super::super::evidence::materialization::MaterializationAdmission,
+    grants: &super::GrantPlan,
 ) -> String {
     let mut lines = vec![
-        format!("profile-ref:{}", component_profile_ref(profile)),
+        format!("profile-ref:{}", super::super::profile::component_profile_ref(profile)),
         format!("component-ref:{}", materialization.component_ref),
         format!("wit-ref:{}", materialization.wit_ref),
         format!("artifact-kind:{}", facts.artifact_kind.as_str()),
@@ -40,5 +33,5 @@ pub(super) fn runtime_configuration_ref(
     lines.extend(grants.authority_refs.iter().map(|value| format!("grant-authority:{value}")));
     lines.extend(grants.resource_refs.iter().map(|value| format!("grant-resource:{value}")));
     lines.extend(grants.recorded_effect_refs.iter().map(|value| format!("effect:{value}")));
-    content_ref(lines.join("\n").as_bytes())
+    super::super::model::content_ref(lines.join("\n").as_bytes())
 }

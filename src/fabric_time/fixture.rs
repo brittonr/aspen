@@ -1,8 +1,4 @@
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric::build_fabric_port_registry;
-use crate::fabric::canonical_fabric_port_descriptor;
 
 const HASH_A: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HASH_B: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -77,7 +73,7 @@ pub struct ExecutableFabricTimeFixtureRun {
 // r[impl molten.fabric_time.final_validation]
 pub fn run_executable_fabric_time_fixture(
     selection: FabricTimeFixtureSelection,
-) -> Result<ExecutableFabricTimeFixtureRun> {
+) -> crate::error::Result<ExecutableFabricTimeFixtureRun> {
     let live_profile =
         canonical_admit_time_profile(&fixture_profile("molten.fabric-time.live", HASH_A, TimeProfileKind::Live, None))?;
     let simulation_profile = canonical_admit_time_profile(&fixture_profile(
@@ -237,7 +233,7 @@ pub fn run_executable_fabric_time_fixture(
     })
 }
 
-fn run_live_scheduler_scenario(profile: &CanonicalTimeProfile) -> Result<CanonicalTimeEvent> {
+fn run_live_scheduler_scenario(profile: &CanonicalTimeProfile) -> crate::error::Result<CanonicalTimeEvent> {
     let key = RunnableKey {
         service_id: FIXTURE_SERVICE_ID.to_string(),
         generation: FIXTURE_GENERATION,
@@ -259,9 +255,11 @@ fn run_live_scheduler_scenario(profile: &CanonicalTimeProfile) -> Result<Canonic
     let mut wake_adapter = ThreadSchedulerWakeAdapter::default();
     wake_adapter.register(key.clone(), parked.thread().clone())?;
     wake_adapter.route(&woken)?;
-    parked.join().map_err(|_| MoltenError::invalid_harness("live scheduler wake target panicked"))?;
+    parked
+        .join()
+        .map_err(|_| crate::error::MoltenError::invalid_harness("live scheduler wake target panicked"))?;
     if !wake_adapter.unregister(&key) {
-        return Err(MoltenError::invalid_harness("live scheduler wake target cleanup failed"));
+        return Err(crate::error::MoltenError::invalid_harness("live scheduler wake target cleanup failed"));
     }
     let selected = choose_runnable(
         &profile.profile,
@@ -287,7 +285,7 @@ fn run_simulation_scenarios(
     profile: &CanonicalTimeProfile,
     clock: &mut VirtualClockAdapter,
     events: &mut Vec<CanonicalTimeEvent>,
-) -> Result<ScenarioCounters> {
+) -> crate::error::Result<ScenarioCounters> {
     let mut counters = ScenarioCounters::default();
     let periodic = schedule_timer(
         &profile.profile,
@@ -399,7 +397,7 @@ fn run_simulation_scenarios(
 
     let cleaned = cleanup_generation(&[periodic_transition.next, delayed_transition.next], FIXTURE_GENERATION);
     if cleaned.iter().any(|timer| timer.phase != TimerPhase::Cancelled) {
-        return Err(MoltenError::invalid_harness("fixture generation cleanup leaked an active timer"));
+        return Err(crate::error::MoltenError::invalid_harness("fixture generation cleanup leaked an active timer"));
     }
     events.push(canonical_named_event(
         &profile.profile_ref,
@@ -422,7 +420,7 @@ fn run_scheduler_scenario(
     profile: &CanonicalTimeProfile,
     events: &mut Vec<CanonicalTimeEvent>,
     counters: &mut ScenarioCounters,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let policy = SchedulerPolicy {
         ordering: SchedulerOrdering::PriorityThenFifo,
         replay: SchedulerReplayPolicy::Deterministic,
@@ -447,13 +445,15 @@ fn run_scheduler_scenario(
     let replay = choose_runnable(&profile.profile, policy, &state, FIXTURE_GENERATION, Some(&selection.selected))
         .map_err(|error| core_error("replay fixture selection", error))?;
     if replay.selected != selection.selected {
-        return Err(MoltenError::invalid_harness("deterministic scheduler replay selected a different runnable"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "deterministic scheduler replay selected a different runnable",
+        ));
     }
     if !matches!(
         choose_runnable(&profile.profile, policy, &state, FIXTURE_GENERATION, Some(&low),),
         Err(SchedulerError::UnexpectedReplayChoice { .. })
     ) {
-        return Err(MoltenError::invalid_harness("fixture scheduler accepted a divergent replay choice"));
+        return Err(crate::error::MoltenError::invalid_harness("fixture scheduler accepted a divergent replay choice"));
     }
     events.push(canonical_named_event(
         &profile.profile_ref,
@@ -521,7 +521,7 @@ fn run_deterministic_entropy_scenario(
     profile: &CanonicalTimeProfile,
     events: &mut Vec<CanonicalTimeEvent>,
     counters: &mut ScenarioCounters,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let mut stream = open_entropy_stream(
         &profile.profile,
         FIXTURE_GENERATION,
@@ -555,7 +555,7 @@ fn run_deterministic_entropy_scenario(
 fn run_production_entropy_scenario(
     profile: &CanonicalTimeProfile,
     events: &mut Vec<CanonicalTimeEvent>,
-) -> Result<String> {
+) -> crate::error::Result<String> {
     let stream = open_entropy_stream(
         &profile.profile,
         FIXTURE_GENERATION,
@@ -580,7 +580,7 @@ fn run_deadline_lease_scenario(
     profile: &CanonicalTimeProfile,
     events: &mut Vec<CanonicalTimeEvent>,
     counters: &mut ScenarioCounters,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let target = virtual_value(&profile.profile, DEADLINE_TARGET);
     let deadline = Deadline {
         profile_ref: profile.profile.profile_ref.clone(),
@@ -651,11 +651,11 @@ fn run_clock_partition_faults(
     clock: &mut VirtualClockAdapter,
     events: &mut Vec<CanonicalTimeEvent>,
     counters: &mut ScenarioCounters,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let previous = clock.observe_wall()?;
     let backward = FabricTimeFault::BackwardWallJump { ticks: WALL_JUMP_FAULT };
     if !apply_clock_fault(clock, &backward)? {
-        return Err(MoltenError::invalid_harness("backward clock fault was not applied"));
+        return Err(crate::error::MoltenError::invalid_harness("backward clock fault was not applied"));
     }
     clock.advance(1)?;
     let observed = clock.observe_wall()?;
@@ -678,13 +678,13 @@ fn run_clock_partition_faults(
     let partition_until = clock
         .now_ticks()?
         .checked_add(TIMER_PERIOD)
-        .ok_or_else(|| MoltenError::invalid_harness("partition deadline overflow"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("partition deadline overflow"))?;
     let partition = FabricTimeFault::PartitionWindow {
         until_ticks: partition_until,
     };
     let partition_deadline_ticks = partition_until
         .checked_add(TIMER_PERIOD)
-        .ok_or_else(|| MoltenError::invalid_harness("partition-coupled deadline overflow"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("partition-coupled deadline overflow"))?;
     let partition_decision = evaluate_deadline_with_fault(
         &profile.profile,
         FIXTURE_GENERATION,
@@ -699,7 +699,9 @@ fn run_clock_partition_faults(
         Some(&partition),
     )?;
     if !matches!(partition_decision, FaultedDeadlineDecision::PartitionIndeterminate { .. }) {
-        return Err(MoltenError::invalid_harness("partition fault did not make the coupled deadline indeterminate"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "partition fault did not make the coupled deadline indeterminate",
+        ));
     }
     events.push(canonical_named_event(
         &profile.profile_ref,
@@ -757,13 +759,17 @@ fn fixture_profile(
     }
 }
 
-fn validate_fixture_ports(live: &CanonicalTimeProfile, simulation: &CanonicalTimeProfile) -> Result<Vec<String>> {
+fn validate_fixture_ports(
+    live: &CanonicalTimeProfile,
+    simulation: &CanonicalTimeProfile,
+) -> crate::error::Result<Vec<String>> {
     let mut refs = Vec::new();
     for profile in [live, simulation] {
         let descriptors = fabric_time_port_descriptors(profile);
-        build_fabric_port_registry(&descriptors).map_err(|issues| core_error("validate fixture time ports", issues))?;
+        crate::fabric::build_fabric_port_registry(&descriptors)
+            .map_err(|issues| core_error("validate fixture time ports", issues))?;
         for descriptor in &descriptors {
-            let (descriptor_ref, _) = canonical_fabric_port_descriptor(descriptor)?;
+            let (descriptor_ref, _) = crate::fabric::canonical_fabric_port_descriptor(descriptor)?;
             refs.push(descriptor_ref);
         }
     }
@@ -773,7 +779,7 @@ fn validate_fixture_ports(live: &CanonicalTimeProfile, simulation: &CanonicalTim
 fn ensure_shared_conformance(
     live: &AdapterConformanceObservation,
     simulation: &AdapterConformanceObservation,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if live.timer_action != simulation.timer_action
         || live.delivery_count != simulation.delivery_count
         || live.stale_generation_discarded != simulation.stale_generation_discarded
@@ -782,7 +788,7 @@ fn ensure_shared_conformance(
         || live.scheduler_cancellation_recorded != simulation.scheduler_cancellation_recorded
         || live.entropy_bound_rejected != simulation.entropy_bound_rejected
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "live and simulation adapters diverged: live={live:?} simulation={simulation:?}"
         )));
     }
@@ -852,7 +858,7 @@ fn select_boundary_ref(
     live_ref: &str,
     simulation_ref: &str,
     trace_kind: &str,
-) -> Result<String> {
+) -> crate::error::Result<String> {
     match selection {
         FabricTimeFixtureSelection::Live => Ok(live_ref.to_string()),
         FabricTimeFixtureSelection::DeterministicSimulation => Ok(simulation_ref.to_string()),
@@ -866,7 +872,7 @@ fn trace_for_kinds(
     events: &[&CanonicalTimeEvent],
     kinds: &[CanonicalTimeEventKind],
     trace_kind: &str,
-) -> Result<String> {
+) -> crate::error::Result<String> {
     let refs = events
         .iter()
         .filter(|event| kinds.contains(&event.kind))
@@ -875,15 +881,17 @@ fn trace_for_kinds(
     canonical_time_trace_ref(trace_kind, &refs)
 }
 
-fn count_events(events: &[&CanonicalTimeEvent], kinds: &[CanonicalTimeEventKind]) -> Result<u64> {
+fn count_events(events: &[&CanonicalTimeEvent], kinds: &[CanonicalTimeEventKind]) -> crate::error::Result<u64> {
     u64::try_from(events.iter().filter(|event| kinds.contains(&event.kind)).count())
-        .map_err(|_| MoltenError::invalid_harness("fabric-time event count overflow"))
+        .map_err(|_| crate::error::MoltenError::invalid_harness("fabric-time event count overflow"))
 }
 
-fn checked_increment(value: u64, label: &str) -> Result<u64> {
-    value.checked_add(1).ok_or_else(|| MoltenError::invalid_harness(format!("{label} overflow")))
+fn checked_increment(value: u64, label: &str) -> crate::error::Result<u64> {
+    value
+        .checked_add(1)
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} overflow")))
 }
 
-fn core_error(label: &str, error: impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label}: {error:?}"))
+fn core_error(label: &str, error: impl std::fmt::Debug) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("{label}: {error:?}"))
 }

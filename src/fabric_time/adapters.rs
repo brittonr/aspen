@@ -1,41 +1,8 @@
 // r[impl molten.modularity.fabric_boundary.adapters]
 use std::io::Read;
-use std::time::Duration;
-use std::time::Instant;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
-use super::AdmittedTimeProfile;
 use super::CryptographicEntropySource;
-use super::EntropyEvidenceMetadata;
-use super::EntropyRequest;
-use super::EntropyStreamRequest;
-use super::EntropyStreamState;
-use super::EntropyTransition;
-use super::MonotonicInstant;
-use super::RunnableKey;
-use super::SchedulerCommand;
-use super::SchedulerTransition;
-use super::TimeDomain;
-use super::TimeProfileKind;
-use super::TimerAction;
 use super::TimerClockAdapter;
-use super::TimerError;
-use super::TimerKey;
-use super::TimerKind;
-use super::TimerScheduleRequest;
-use super::TimerState;
-use super::TimerTransition;
-use super::VirtualInstant;
-use super::WallClockObservation;
-use super::cancel_timer;
-use super::consume_production_entropy;
-use super::entropy_evidence_metadata;
-use super::open_entropy_stream;
-use super::poll_timer;
-use super::schedule_timer;
-use crate::error::MoltenError;
-use crate::error::Result;
 #[allow(
     tigerstyle::non_trait_imports,
     reason = "time mechanisms implement the application-owned typed port contracts"
@@ -58,26 +25,28 @@ const CONFORMANCE_CAPABILITY_REF: &str = "blake3:ccccccccccccccccccccccccccccccc
 #[derive(Debug)]
 pub struct LiveClockAdapter {
     profile_ref: String,
-    monotonic_origin: Instant,
+    monotonic_origin: std::time::Instant,
     wall_uncertainty_nanos: u64,
     observation_sequence: u64,
     last_monotonic_ticks: u64,
 }
 
 impl LiveClockAdapter {
-    pub fn new(profile: &AdmittedTimeProfile, wall_uncertainty_nanos: u64) -> Result<Self> {
-        if profile.kind != TimeProfileKind::Live {
-            return Err(MoltenError::invalid_harness("live clock requires an admitted live time profile"));
+    pub fn new(profile: &super::AdmittedTimeProfile, wall_uncertainty_nanos: u64) -> crate::error::Result<Self> {
+        if profile.kind != super::TimeProfileKind::Live {
+            return Err(crate::error::MoltenError::invalid_harness(
+                "live clock requires an admitted live time profile",
+            ));
         }
         if wall_uncertainty_nanos > profile.max_uncertainty_ticks {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::MoltenError::invalid_harness(format!(
                 "wall uncertainty {wall_uncertainty_nanos} exceeds profile maximum {}",
                 profile.max_uncertainty_ticks
             )));
         }
         Ok(Self {
             profile_ref: profile.profile_ref.clone(),
-            monotonic_origin: Instant::now(),
+            monotonic_origin: std::time::Instant::now(),
             wall_uncertainty_nanos,
             observation_sequence: 0,
             last_monotonic_ticks: 0,
@@ -85,15 +54,15 @@ impl LiveClockAdapter {
     }
 
     // r[impl molten.fabric_time.live_sim_parity]
-    pub fn observe_wall(&mut self) -> Result<WallClockObservation> {
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|error| MoltenError::invalid_harness(format!("system clock predates Unix epoch: {error}")))?;
+    pub fn observe_wall(&mut self) -> crate::error::Result<super::WallClockObservation> {
+        let duration = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("system clock predates Unix epoch: {error}"))
+        })?;
         self.observation_sequence = self
             .observation_sequence
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("wall observation sequence overflow"))?;
-        Ok(WallClockObservation {
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("wall observation sequence overflow"))?;
+        Ok(super::WallClockObservation {
             profile_ref: self.profile_ref.clone(),
             unix_nanos: duration_to_u64_nanos(duration)?,
             uncertainty_nanos: self.wall_uncertainty_nanos,
@@ -101,13 +70,13 @@ impl LiveClockAdapter {
         })
     }
 
-    pub fn observe_monotonic(&mut self) -> Result<MonotonicInstant> {
+    pub fn observe_monotonic(&mut self) -> crate::error::Result<super::MonotonicInstant> {
         let ticks = duration_to_u64_nanos(self.monotonic_origin.elapsed())?;
         if ticks < self.last_monotonic_ticks {
-            return Err(MoltenError::invalid_harness("live monotonic clock moved backwards"));
+            return Err(crate::error::MoltenError::invalid_harness("live monotonic clock moved backwards"));
         }
         self.last_monotonic_ticks = ticks;
-        Ok(MonotonicInstant {
+        Ok(super::MonotonicInstant {
             profile_ref: self.profile_ref.clone(),
             ticks,
         })
@@ -119,8 +88,8 @@ impl TimerClockAdapter for LiveClockAdapter {
         &self.profile_ref
     }
 
-    fn timer_domain(&self) -> TimeDomain {
-        TimeDomain::Monotonic
+    fn timer_domain(&self) -> super::TimeDomain {
+        super::TimeDomain::Monotonic
     }
 
     fn now_ticks(&mut self) -> FabricPortResult<u64> {
@@ -128,9 +97,9 @@ impl TimerClockAdapter for LiveClockAdapter {
     }
 
     fn await_ticks(&mut self, target_ticks: u64) -> FabricPortResult<u64> {
-        let wait_started = Instant::now();
-        let maximum_wait = Duration::from_millis(LIVE_CONFORMANCE_TIMEOUT_MILLIS);
-        let wait_slice = Duration::from_micros(LIVE_WAIT_SLICE_MICROS);
+        let wait_started = std::time::Instant::now();
+        let maximum_wait = std::time::Duration::from_millis(LIVE_CONFORMANCE_TIMEOUT_MILLIS);
+        let wait_slice = std::time::Duration::from_micros(LIVE_WAIT_SLICE_MICROS);
         loop {
             let now = self.now_ticks()?;
             if now >= target_ticks {
@@ -161,9 +130,13 @@ pub struct VirtualClockAdapter {
 }
 
 impl VirtualClockAdapter {
-    pub fn new(profile: &AdmittedTimeProfile, initial_virtual_ticks: u64, wall_base_nanos: u64) -> Result<Self> {
-        if profile.kind != TimeProfileKind::DeterministicSimulation {
-            return Err(MoltenError::invalid_harness(
+    pub fn new(
+        profile: &super::AdmittedTimeProfile,
+        initial_virtual_ticks: u64,
+        wall_base_nanos: u64,
+    ) -> crate::error::Result<Self> {
+        if profile.kind != super::TimeProfileKind::DeterministicSimulation {
+            return Err(crate::error::MoltenError::invalid_harness(
                 "virtual clock requires an admitted deterministic simulation profile",
             ));
         }
@@ -179,41 +152,41 @@ impl VirtualClockAdapter {
     }
 
     // r[impl molten.fabric_time.live_sim_parity]
-    pub fn advance(&mut self, delta_ticks: u64) -> Result<VirtualInstant> {
+    pub fn advance(&mut self, delta_ticks: u64) -> crate::error::Result<super::VirtualInstant> {
         self.virtual_ticks = self
             .virtual_ticks
             .checked_add(delta_ticks)
-            .ok_or_else(|| MoltenError::invalid_harness("virtual time overflow"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("virtual time overflow"))?;
         Ok(self.observe_virtual())
     }
 
-    pub fn advance_logical(&mut self) -> Result<u64> {
+    pub fn advance_logical(&mut self) -> crate::error::Result<u64> {
         self.logical_position = self
             .logical_position
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("logical time overflow"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("logical time overflow"))?;
         Ok(self.logical_position)
     }
 
-    pub fn observe_virtual(&self) -> VirtualInstant {
-        VirtualInstant {
+    pub fn observe_virtual(&self) -> super::VirtualInstant {
+        super::VirtualInstant {
             profile_ref: self.profile_ref.clone(),
             ticks: self.virtual_ticks,
         }
     }
 
-    pub fn observe_wall(&mut self) -> Result<WallClockObservation> {
+    pub fn observe_wall(&mut self) -> crate::error::Result<super::WallClockObservation> {
         self.observation_sequence = self
             .observation_sequence
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("virtual wall observation sequence overflow"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("virtual wall observation sequence overflow"))?;
         let base = i128::from(self.wall_base_nanos)
             .checked_add(i128::from(self.virtual_ticks))
             .and_then(|value| value.checked_add(self.wall_offset_nanos))
-            .ok_or_else(|| MoltenError::invalid_harness("virtual wall clock overflow"))?;
-        let unix_nanos =
-            u64::try_from(base).map_err(|_| MoltenError::invalid_harness("virtual wall clock underflow"))?;
-        Ok(WallClockObservation {
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("virtual wall clock overflow"))?;
+        let unix_nanos = u64::try_from(base)
+            .map_err(|_| crate::error::MoltenError::invalid_harness("virtual wall clock underflow"))?;
+        Ok(super::WallClockObservation {
             profile_ref: self.profile_ref.clone(),
             unix_nanos,
             uncertainty_nanos: self.wall_uncertainty_nanos,
@@ -221,11 +194,11 @@ impl VirtualClockAdapter {
         })
     }
 
-    pub fn inject_wall_jump(&mut self, signed_delta_nanos: i128) -> Result<()> {
+    pub fn inject_wall_jump(&mut self, signed_delta_nanos: i128) -> crate::error::Result<()> {
         self.wall_offset_nanos = self
             .wall_offset_nanos
             .checked_add(signed_delta_nanos)
-            .ok_or_else(|| MoltenError::invalid_harness("virtual wall fault offset overflow"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("virtual wall fault offset overflow"))?;
         Ok(())
     }
 
@@ -239,8 +212,8 @@ impl TimerClockAdapter for VirtualClockAdapter {
         &self.profile_ref
     }
 
-    fn timer_domain(&self) -> TimeDomain {
-        TimeDomain::Virtual
+    fn timer_domain(&self) -> super::TimeDomain {
+        super::TimeDomain::Virtual
     }
 
     fn now_ticks(&mut self) -> FabricPortResult<u64> {
@@ -261,8 +234,8 @@ impl TimerClockAdapter for VirtualClockAdapter {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdapterConformanceObservation {
-    pub domain: TimeDomain,
-    pub timer_action: TimerAction,
+    pub domain: super::TimeDomain,
+    pub timer_action: super::TimerAction,
     pub delivery_count: u64,
     pub stale_generation_discarded: bool,
     pub cancellation_prevented_delivery: bool,
@@ -273,33 +246,33 @@ pub struct AdapterConformanceObservation {
 
 // r[impl molten.fabric_time.live_sim_parity]
 pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
-    profile: &AdmittedTimeProfile,
+    profile: &super::AdmittedTimeProfile,
     adapter: &mut A,
     service_id: &str,
     generation: u64,
-) -> Result<AdapterConformanceObservation> {
+) -> crate::error::Result<AdapterConformanceObservation> {
     if adapter.profile_ref() != profile.profile_ref {
-        return Err(MoltenError::invalid_harness("timer adapter profile mismatch"));
+        return Err(crate::error::MoltenError::invalid_harness("timer adapter profile mismatch"));
     }
     let start = adapter.now_ticks()?;
     let delay = match profile.kind {
-        TimeProfileKind::Live => LIVE_CONFORMANCE_DELAY_NANOS,
-        TimeProfileKind::DeterministicSimulation => 1,
+        super::TimeProfileKind::Live => LIVE_CONFORMANCE_DELAY_NANOS,
+        super::TimeProfileKind::DeterministicSimulation => 1,
     };
     let deadline = start
         .checked_add(delay)
-        .ok_or_else(|| MoltenError::invalid_harness("conformance deadline overflow"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("conformance deadline overflow"))?;
     let request = conformance_timer_request(profile, service_id, generation, adapter.timer_domain(), deadline, 0);
-    let timer = schedule_timer(profile, generation, 0, &request)
+    let timer = super::schedule_timer(profile, generation, 0, &request)
         .map_err(|error| core_error("schedule conformance timer", error))?;
     let observed = adapter.await_ticks(deadline)?;
-    let fired =
-        poll_timer(&timer, generation, observed, 1).map_err(|error| core_error("poll conformance timer", error))?;
+    let fired = super::poll_timer(&timer, generation, observed, 1)
+        .map_err(|error| core_error("poll conformance timer", error))?;
 
     let stale_request = conformance_timer_request(profile, service_id, generation, adapter.timer_domain(), deadline, 1);
-    let stale_timer = schedule_timer(profile, generation, 0, &stale_request)
+    let stale_timer = super::schedule_timer(profile, generation, 0, &stale_request)
         .map_err(|error| core_error("schedule stale probe", error))?;
-    let stale = poll_timer(&stale_timer, generation.saturating_add(1), observed, 1)
+    let stale = super::poll_timer(&stale_timer, generation.saturating_add(1), observed, 1)
         .map_err(|error| core_error("poll stale probe", error))?;
 
     let cancel_request = conformance_timer_request(
@@ -310,11 +283,14 @@ pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
         deadline,
         CANCELLATION_TIMER_SEQUENCE,
     );
-    let cancel_timer_state = schedule_timer(profile, generation, 0, &cancel_request)
+    let cancel_timer_state = super::schedule_timer(profile, generation, 0, &cancel_request)
         .map_err(|error| core_error("schedule cancellation probe", error))?;
-    let cancelled = cancel_timer(&cancel_timer_state, generation).map_err(|error| core_error("cancel probe", error))?;
-    let cancellation_prevented_delivery =
-        matches!(poll_timer(&cancelled.next, generation, observed, 1), Err(TimerError::TerminalTimer(_)));
+    let cancelled =
+        super::cancel_timer(&cancel_timer_state, generation).map_err(|error| core_error("cancel probe", error))?;
+    let cancellation_prevented_delivery = matches!(
+        super::poll_timer(&cancelled.next, generation, observed, 1),
+        Err(super::TimerError::TerminalTimer(_))
+    );
 
     let (scheduler_selected, scheduler_cancellation_recorded) =
         run_scheduler_conformance(profile, service_id, generation)?;
@@ -324,7 +300,7 @@ pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
         domain: adapter.timer_domain(),
         timer_action: fired.action,
         delivery_count: fired.delivery_count,
-        stale_generation_discarded: stale.action == TimerAction::DiscardedStaleGeneration,
+        stale_generation_discarded: stale.action == super::TimerAction::DiscardedStaleGeneration,
         cancellation_prevented_delivery,
         scheduler_selected,
         scheduler_cancellation_recorded,
@@ -334,13 +310,13 @@ pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
 
 #[derive(Debug, Default)]
 pub struct ThreadSchedulerWakeAdapter {
-    targets: std::collections::BTreeMap<RunnableKey, std::thread::Thread>,
+    targets: std::collections::BTreeMap<super::RunnableKey, std::thread::Thread>,
 }
 
 impl ThreadSchedulerWakeAdapter {
-    pub fn register(&mut self, key: RunnableKey, thread: std::thread::Thread) -> Result<()> {
+    pub fn register(&mut self, key: super::RunnableKey, thread: std::thread::Thread) -> crate::error::Result<()> {
         if self.targets.insert(key.clone(), thread).is_some() {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::MoltenError::invalid_harness(format!(
                 "scheduler wake target {}:{}:{} is already registered",
                 key.service_id, key.generation, key.runnable_id
             )));
@@ -348,18 +324,20 @@ impl ThreadSchedulerWakeAdapter {
         Ok(())
     }
 
-    pub fn unregister(&mut self, key: &RunnableKey) -> bool {
+    pub fn unregister(&mut self, key: &super::RunnableKey) -> bool {
         self.targets.remove(key).is_some()
     }
 
     // The canonical core has already admitted the transition. This shell only
     // translates an admitted wake into the host thread wake primitive.
-    pub fn route(&self, transition: &SchedulerTransition) -> Result<()> {
+    pub fn route(&self, transition: &super::SchedulerTransition) -> crate::error::Result<()> {
         if !matches!(transition.action, super::SchedulerAction::Woken | super::SchedulerAction::Yielded) {
-            return Err(MoltenError::invalid_harness("thread wake adapter received a non-wake scheduler transition"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "thread wake adapter received a non-wake scheduler transition",
+            ));
         }
         let thread = self.targets.get(&transition.runnable).ok_or_else(|| {
-            MoltenError::invalid_harness(format!(
+            crate::error::MoltenError::invalid_harness(format!(
                 "no live scheduler wake target for {}:{}:{}",
                 transition.runnable.service_id, transition.runnable.generation, transition.runnable.runnable_id
             ))
@@ -369,8 +347,12 @@ impl ThreadSchedulerWakeAdapter {
     }
 }
 
-fn run_scheduler_conformance(profile: &AdmittedTimeProfile, service_id: &str, generation: u64) -> Result<(bool, bool)> {
-    let runnable = RunnableKey {
+fn run_scheduler_conformance(
+    profile: &super::AdmittedTimeProfile,
+    service_id: &str,
+    generation: u64,
+) -> crate::error::Result<(bool, bool)> {
+    let runnable = super::RunnableKey {
         service_id: service_id.to_string(),
         generation,
         runnable_id: "adapter-conformance-runnable".to_string(),
@@ -381,7 +363,7 @@ fn run_scheduler_conformance(profile: &AdmittedTimeProfile, service_id: &str, ge
         profile.scheduler_policy,
         &state,
         generation,
-        &SchedulerCommand::Wake {
+        &super::SchedulerCommand::Wake {
             key: runnable.clone(),
             priority: 0,
         },
@@ -390,7 +372,7 @@ fn run_scheduler_conformance(profile: &AdmittedTimeProfile, service_id: &str, ge
     let selected = super::choose_runnable(profile, profile.scheduler_policy, &woken.next, generation, Some(&runnable))
         .map_err(|error| core_error("select conformance runnable", error))?;
 
-    let cancellation_key = RunnableKey {
+    let cancellation_key = super::RunnableKey {
         runnable_id: "adapter-conformance-cancellation".to_string(),
         ..runnable.clone()
     };
@@ -399,7 +381,7 @@ fn run_scheduler_conformance(profile: &AdmittedTimeProfile, service_id: &str, ge
         profile.scheduler_policy,
         &state,
         generation,
-        &SchedulerCommand::Wake {
+        &super::SchedulerCommand::Wake {
             key: cancellation_key.clone(),
             priority: 0,
         },
@@ -410,18 +392,18 @@ fn run_scheduler_conformance(profile: &AdmittedTimeProfile, service_id: &str, ge
         profile.scheduler_policy,
         &cancellation_wake.next,
         generation,
-        &SchedulerCommand::Cancel { key: cancellation_key },
+        &super::SchedulerCommand::Cancel { key: cancellation_key },
     )
     .map_err(|error| core_error("cancel conformance runnable", error))?;
     Ok((selected.selected == runnable, cancelled.action == super::SchedulerAction::Cancelled))
 }
 
-fn run_entropy_conformance(profile: &AdmittedTimeProfile, generation: u64) -> Result<bool> {
+fn run_entropy_conformance(profile: &super::AdmittedTimeProfile, generation: u64) -> crate::error::Result<bool> {
     let (mode, seed) = match profile.kind {
-        TimeProfileKind::Live => (super::EntropyMode::ProductionCryptographic, None),
-        TimeProfileKind::DeterministicSimulation => (super::EntropyMode::DeterministicSimulation, Some(1)),
+        super::TimeProfileKind::Live => (super::EntropyMode::ProductionCryptographic, None),
+        super::TimeProfileKind::DeterministicSimulation => (super::EntropyMode::DeterministicSimulation, Some(1)),
     };
-    let stream = open_entropy_stream(profile, generation, &EntropyStreamRequest {
+    let stream = super::open_entropy_stream(profile, generation, &super::EntropyStreamRequest {
         profile_ref: profile.profile_ref.clone(),
         stream_id: "adapter-conformance-stream".to_string(),
         purpose: "adapter-conformance-bound".to_string(),
@@ -435,15 +417,15 @@ fn run_entropy_conformance(profile: &AdmittedTimeProfile, generation: u64) -> Re
     let over_limit = profile
         .max_entropy_request_bytes
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("conformance entropy bound overflow"))?;
-    let request = EntropyRequest::Bytes { count: over_limit };
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("conformance entropy bound overflow"))?;
+    let request = super::EntropyRequest::Bytes { count: over_limit };
     let rejected = match mode {
         super::EntropyMode::DeterministicSimulation => matches!(
             super::draw_deterministic_entropy(profile, generation, &stream, request),
             Err(super::EntropyError::RequestLimitExceeded { .. })
         ),
         super::EntropyMode::ProductionCryptographic => matches!(
-            consume_production_entropy(profile, generation, &stream, request, Vec::new()),
+            super::consume_production_entropy(profile, generation, &stream, request, Vec::new()),
             Err(super::EntropyError::RequestLimitExceeded { .. })
         ),
     };
@@ -490,18 +472,18 @@ impl<S: CryptographicEntropySource> ProductionEntropyAdapter<S> {
 
     pub fn draw(
         &mut self,
-        profile: &AdmittedTimeProfile,
+        profile: &super::AdmittedTimeProfile,
         active_generation: u64,
-        state: &EntropyStreamState,
-        request: EntropyRequest,
-    ) -> Result<(EntropyTransition, EntropyEvidenceMetadata)> {
+        state: &super::EntropyStreamState,
+        request: super::EntropyRequest,
+    ) -> crate::error::Result<(super::EntropyTransition, super::EntropyEvidenceMetadata)> {
         let output_len = usize::try_from(request.requested_bytes())
-            .map_err(|_| MoltenError::invalid_harness("entropy request length overflow"))?;
+            .map_err(|_| crate::error::MoltenError::invalid_harness("entropy request length overflow"))?;
         let mut secret = vec![0; output_len];
         self.source.fill_secret(&mut secret)?;
-        let transition = consume_production_entropy(profile, active_generation, state, request, secret)
+        let transition = super::consume_production_entropy(profile, active_generation, state, request, secret)
             .map_err(|error| core_error("consume production entropy", error))?;
-        let metadata = entropy_evidence_metadata(state, &transition);
+        let metadata = super::entropy_evidence_metadata(state, &transition);
         Ok((transition, metadata))
     }
 }
@@ -510,14 +492,14 @@ impl<S: CryptographicEntropySource> ProductionEntropyAdapter<S> {
 pub enum FabricTimeFault {
     BackwardWallJump { ticks: u64 },
     ForwardWallJump { ticks: u64 },
-    DelayTimer { key: TimerKey, ticks: u64 },
-    DropTimerDelivery { key: TimerKey },
+    DelayTimer { key: super::TimerKey, ticks: u64 },
+    DropTimerDelivery { key: super::TimerKey },
     SaturateSchedulerQueue,
-    CancelTimer { key: TimerKey },
+    CancelTimer { key: super::TimerKey },
     PartitionWindow { until_ticks: u64 },
 }
 
-pub fn apply_clock_fault(clock: &mut VirtualClockAdapter, fault: &FabricTimeFault) -> Result<bool> {
+pub fn apply_clock_fault(clock: &mut VirtualClockAdapter, fault: &FabricTimeFault) -> crate::error::Result<bool> {
     match fault {
         FabricTimeFault::BackwardWallJump { ticks } => {
             clock.inject_wall_jump(-i128::from(*ticks))?;
@@ -531,11 +513,14 @@ pub fn apply_clock_fault(clock: &mut VirtualClockAdapter, fault: &FabricTimeFaul
     }
 }
 
-pub fn validate_scheduler_fault_outcome(fault: &FabricTimeFault, transition: &SchedulerTransition) -> Result<()> {
+pub fn validate_scheduler_fault_outcome(
+    fault: &FabricTimeFault,
+    transition: &super::SchedulerTransition,
+) -> crate::error::Result<()> {
     if matches!(fault, FabricTimeFault::SaturateSchedulerQueue)
         && !matches!(transition.action, super::SchedulerAction::RejectedOverload | super::SchedulerAction::Backpressure)
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "scheduler saturation fault did not produce an explicit overload outcome",
         ));
     }
@@ -543,12 +528,12 @@ pub fn validate_scheduler_fault_outcome(fault: &FabricTimeFault, transition: &Sc
 }
 
 pub fn poll_timer_with_fault(
-    state: &TimerState,
+    state: &super::TimerState,
     active_generation: u64,
     now_ticks: u64,
     delivery_capacity: u64,
     fault: Option<&FabricTimeFault>,
-) -> Result<TimerTransition> {
+) -> crate::error::Result<super::TimerTransition> {
     let mut faulted = state.clone();
     let mut capacity = delivery_capacity;
     if let Some(fault) = fault {
@@ -557,20 +542,20 @@ pub fn poll_timer_with_fault(
                 faulted.next_deadline_ticks = faulted
                     .next_deadline_ticks
                     .checked_add(*ticks)
-                    .ok_or_else(|| MoltenError::invalid_harness("faulted timer deadline overflow"))?;
+                    .ok_or_else(|| crate::error::MoltenError::invalid_harness("faulted timer deadline overflow"))?;
             }
             FabricTimeFault::DropTimerDelivery { key } if key == &state.key => {
                 faulted.overload = super::TimerOverloadPolicy::DropDue;
                 capacity = 0;
             }
             FabricTimeFault::CancelTimer { key } if key == &state.key => {
-                return cancel_timer(&faulted, active_generation)
+                return super::cancel_timer(&faulted, active_generation)
                     .map_err(|error| core_error("cancel faulted timer", error));
             }
             _ => {}
         }
     }
-    poll_timer(&faulted, active_generation, now_ticks, capacity)
+    super::poll_timer(&faulted, active_generation, now_ticks, capacity)
         .map_err(|error| core_error("poll faulted timer", error))
 }
 
@@ -581,12 +566,12 @@ pub enum FaultedDeadlineDecision {
 }
 
 pub fn evaluate_deadline_with_fault(
-    profile: &AdmittedTimeProfile,
+    profile: &super::AdmittedTimeProfile,
     active_generation: u64,
     deadline: &super::Deadline,
     observed: &super::TimeValue,
     fault: Option<&FabricTimeFault>,
-) -> Result<FaultedDeadlineDecision> {
+) -> crate::error::Result<FaultedDeadlineDecision> {
     if let Some(FabricTimeFault::PartitionWindow { until_ticks }) = fault
         && observed.ticks() <= *until_ticks
     {
@@ -601,23 +586,23 @@ pub fn evaluate_deadline_with_fault(
 }
 
 fn conformance_timer_request(
-    profile: &AdmittedTimeProfile,
+    profile: &super::AdmittedTimeProfile,
     service_id: &str,
     generation: u64,
-    domain: TimeDomain,
+    domain: super::TimeDomain,
     deadline_ticks: u64,
     sequence: u64,
-) -> TimerScheduleRequest {
-    TimerScheduleRequest {
+) -> super::TimerScheduleRequest {
+    super::TimerScheduleRequest {
         profile_ref: profile.profile_ref.clone(),
-        key: TimerKey {
+        key: super::TimerKey {
             service_id: service_id.to_string(),
             generation,
             sequence,
         },
         domain,
         deadline_ticks,
-        kind: TimerKind::OneShot,
+        kind: super::TimerKind::OneShot,
         ordering_key: sequence,
         coalescing: super::TimerCoalescingPolicy::CoalesceLatest,
         lateness: super::TimerLatenessPolicy::DeliverRegardless,
@@ -626,16 +611,16 @@ fn conformance_timer_request(
     }
 }
 
-fn duration_to_u64_nanos(duration: Duration) -> Result<u64> {
+fn duration_to_u64_nanos(duration: std::time::Duration) -> crate::error::Result<u64> {
     let seconds = duration
         .as_secs()
         .checked_mul(NANOS_PER_SECOND)
-        .ok_or_else(|| MoltenError::invalid_harness("duration seconds overflow"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("duration seconds overflow"))?;
     seconds
         .checked_add(u64::from(duration.subsec_nanos()))
-        .ok_or_else(|| MoltenError::invalid_harness("duration nanoseconds overflow"))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("duration nanoseconds overflow"))
 }
 
-fn core_error(label: &str, error: impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label}: {error:?}"))
+fn core_error(label: &str, error: impl std::fmt::Debug) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("{label}: {error:?}"))
 }

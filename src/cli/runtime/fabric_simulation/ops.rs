@@ -1,19 +1,3 @@
-use std::path::Component;
-use std::path::Path;
-use std::path::PathBuf;
-
-use molten::error::MoltenError;
-use molten::error::Result;
-use molten::fabric_simulation::CanonicalSimulatedWorld;
-use molten::fabric_simulation::CanonicalSimulationDifferential;
-use molten::fabric_simulation::CanonicalSimulationObservation;
-use molten::fabric_simulation::CanonicalSimulationPortEvent;
-use molten::fabric_simulation::CanonicalSimulationReproBundle;
-use molten::fabric_simulation::CanonicalSimulationRun;
-use molten::fabric_simulation::CanonicalSimulationShrink;
-use molten::fabric_simulation::ReferenceShrinkFixture;
-use molten::fabric_simulation::ReferenceSimulationFixtureRun;
-
 const ARTIFACT_INDEX_WIDTH: usize = 4;
 const RUN_FIXED_ARTIFACT_COUNT: usize = 4;
 const EXPORT_ARTIFACT_COUNT: usize = 4;
@@ -24,11 +8,11 @@ const MAX_ARTIFACT_CONTENT_BYTES: usize = 1_048_576;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PlannedArtifact {
-    relative_path: PathBuf,
+    relative_path: std::path::PathBuf,
     content: String,
 }
 
-pub(super) fn preflight() -> Result<()> {
+pub(super) fn preflight() -> molten::error::Result<()> {
     let world = molten::fabric_simulation::build_reference_simulated_world()?;
     println!(
         "fabric-simulation preflight ok world={} nodes={} ports={} workload={} faults={} profile={}",
@@ -42,7 +26,7 @@ pub(super) fn preflight() -> Result<()> {
     Ok(())
 }
 
-pub(super) fn run(out: PathBuf) -> Result<()> {
+pub(super) fn run(out: std::path::PathBuf) -> molten::error::Result<()> {
     let fixture = molten::fabric_simulation::run_reference_simulation_fixture()?;
     let plan = plan_run_artifacts(&fixture)?;
     write_artifacts(&out, &plan)?;
@@ -60,18 +44,18 @@ pub(super) fn run(out: PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn replay(report: PathBuf) -> Result<()> {
+pub(super) fn replay(report: std::path::PathBuf) -> molten::error::Result<()> {
     let value = read_report(&report)?;
     let expected = molten::fabric_simulation::parse_simulation_run_readback(&value)?;
     let replay = molten::fabric_simulation::run_reference_simulation_fixture()?;
     if expected.world_ref != replay.world.world_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(molten::error::MoltenError::invalid_harness(format!(
             "fabric-simulation replay world mismatch: expected={} actual={}",
             expected.world_ref, replay.world.world_ref
         )));
     }
     if expected.run_ref != replay.run.run_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(molten::error::MoltenError::invalid_harness(format!(
             "fabric-simulation replay diverged: expected={} actual={}",
             expected.run_ref, replay.run.run_ref
         )));
@@ -87,7 +71,7 @@ pub(super) fn replay(report: PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn shrink(out: PathBuf) -> Result<()> {
+pub(super) fn shrink(out: std::path::PathBuf) -> molten::error::Result<()> {
     let fixture = molten::fabric_simulation::run_reference_shrink_fixture()?;
     let plan = plan_shrink_artifacts(&fixture)?;
     write_artifacts(&out, &plan)?;
@@ -104,7 +88,7 @@ pub(super) fn shrink(out: PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn inspect(report: PathBuf) -> Result<()> {
+pub(super) fn inspect(report: std::path::PathBuf) -> molten::error::Result<()> {
     let value = read_report(&report)?;
     let readback = molten::fabric_simulation::parse_simulation_run_readback(&value)?;
     println!(
@@ -124,7 +108,7 @@ pub(super) fn inspect(report: PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn export(out: PathBuf) -> Result<()> {
+pub(super) fn export(out: std::path::PathBuf) -> molten::error::Result<()> {
     let fixture = molten::fabric_simulation::run_reference_simulation_fixture()?;
     let plan = plan_export_artifacts(&fixture)?;
     write_artifacts(&out, &plan)?;
@@ -140,15 +124,17 @@ pub(super) fn export(out: PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn plan_run_artifacts(fixture: &ReferenceSimulationFixtureRun) -> Result<Vec<PlannedArtifact>> {
+fn plan_run_artifacts(
+    fixture: &molten::fabric_simulation::ReferenceSimulationFixtureRun,
+) -> molten::error::Result<Vec<PlannedArtifact>> {
     let artifact_count = fixture
         .observations
         .len()
         .checked_add(fixture.port_events.len())
         .and_then(|count| count.checked_add(RUN_FIXED_ARTIFACT_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("fabric-simulation artifact count overflow"))?;
+        .ok_or_else(|| molten::error::MoltenError::invalid_harness("fabric-simulation artifact count overflow"))?;
     if artifact_count > MAX_ARTIFACTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(molten::error::MoltenError::invalid_harness(format!(
             "fabric-simulation artifact count {artifact_count} exceeds {MAX_ARTIFACTS}"
         )));
     }
@@ -171,7 +157,9 @@ fn plan_run_artifacts(fixture: &ReferenceSimulationFixtureRun) -> Result<Vec<Pla
     Ok(artifacts)
 }
 
-fn plan_export_artifacts(fixture: &ReferenceSimulationFixtureRun) -> Result<Vec<PlannedArtifact>> {
+fn plan_export_artifacts(
+    fixture: &molten::fabric_simulation::ReferenceSimulationFixtureRun,
+) -> molten::error::Result<Vec<PlannedArtifact>> {
     let artifacts = vec![
         world_artifact("world.preserves", &fixture.world)?,
         run_artifact("report.preserves", &fixture.run)?,
@@ -179,63 +167,80 @@ fn plan_export_artifacts(fixture: &ReferenceSimulationFixtureRun) -> Result<Vec<
         differential_artifact("differential.preserves", &fixture.differential)?,
     ];
     if artifacts.len() != EXPORT_ARTIFACT_COUNT {
-        return Err(MoltenError::invalid_harness("fabric-simulation export artifact count drifted"));
+        return Err(molten::error::MoltenError::invalid_harness("fabric-simulation export artifact count drifted"));
     }
     validate_artifact_plan(&artifacts)?;
     Ok(artifacts)
 }
 
-fn plan_shrink_artifacts(fixture: &ReferenceShrinkFixture) -> Result<Vec<PlannedArtifact>> {
+fn plan_shrink_artifacts(
+    fixture: &molten::fabric_simulation::ReferenceShrinkFixture,
+) -> molten::error::Result<Vec<PlannedArtifact>> {
     let artifacts = vec![
         world_artifact("original-world.preserves", &fixture.original_world)?,
         world_artifact("shrunk-world.preserves", &fixture.shrunk_world)?,
         shrink_artifact("shrink.preserves", &fixture.shrink)?,
     ];
     if artifacts.len() != SHRINK_ARTIFACT_COUNT {
-        return Err(MoltenError::invalid_harness("fabric-simulation shrink artifact count drifted"));
+        return Err(molten::error::MoltenError::invalid_harness("fabric-simulation shrink artifact count drifted"));
     }
     validate_artifact_plan(&artifacts)?;
     Ok(artifacts)
 }
 
-fn world_artifact(path: impl Into<PathBuf>, world: &CanonicalSimulatedWorld) -> Result<PlannedArtifact> {
+fn world_artifact(
+    path: impl Into<std::path::PathBuf>,
+    world: &molten::fabric_simulation::CanonicalSimulatedWorld,
+) -> molten::error::Result<PlannedArtifact> {
     planned(path, &world.value)
 }
 
-fn run_artifact(path: impl Into<PathBuf>, run: &CanonicalSimulationRun) -> Result<PlannedArtifact> {
+fn run_artifact(
+    path: impl Into<std::path::PathBuf>,
+    run: &molten::fabric_simulation::CanonicalSimulationRun,
+) -> molten::error::Result<PlannedArtifact> {
     planned(path, &run.value)
 }
 
-fn bundle_artifact(path: impl Into<PathBuf>, bundle: &CanonicalSimulationReproBundle) -> Result<PlannedArtifact> {
+fn bundle_artifact(
+    path: impl Into<std::path::PathBuf>,
+    bundle: &molten::fabric_simulation::CanonicalSimulationReproBundle,
+) -> molten::error::Result<PlannedArtifact> {
     planned(path, &bundle.value)
 }
 
 fn differential_artifact(
-    path: impl Into<PathBuf>,
-    differential: &CanonicalSimulationDifferential,
-) -> Result<PlannedArtifact> {
+    path: impl Into<std::path::PathBuf>,
+    differential: &molten::fabric_simulation::CanonicalSimulationDifferential,
+) -> molten::error::Result<PlannedArtifact> {
     planned(path, &differential.value)
 }
 
 fn observation_artifact(
-    path: impl Into<PathBuf>,
-    observation: &CanonicalSimulationObservation,
-) -> Result<PlannedArtifact> {
+    path: impl Into<std::path::PathBuf>,
+    observation: &molten::fabric_simulation::CanonicalSimulationObservation,
+) -> molten::error::Result<PlannedArtifact> {
     planned(path, &observation.value)
 }
 
-fn port_event_artifact(path: impl Into<PathBuf>, event: &CanonicalSimulationPortEvent) -> Result<PlannedArtifact> {
+fn port_event_artifact(
+    path: impl Into<std::path::PathBuf>,
+    event: &molten::fabric_simulation::CanonicalSimulationPortEvent,
+) -> molten::error::Result<PlannedArtifact> {
     planned(path, &event.value)
 }
 
-fn shrink_artifact(path: impl Into<PathBuf>, shrink: &CanonicalSimulationShrink) -> Result<PlannedArtifact> {
+fn shrink_artifact(
+    path: impl Into<std::path::PathBuf>,
+    shrink: &molten::fabric_simulation::CanonicalSimulationShrink,
+) -> molten::error::Result<PlannedArtifact> {
     planned(path, &shrink.value)
 }
 
-fn planned(path: impl Into<PathBuf>, value: &preserves::IOValue) -> Result<PlannedArtifact> {
+fn planned(path: impl Into<std::path::PathBuf>, value: &preserves::IOValue) -> molten::error::Result<PlannedArtifact> {
     let content = molten::preserves_rail::to_text(value)?;
     if content.len() > MAX_ARTIFACT_CONTENT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(molten::error::MoltenError::invalid_harness(format!(
             "fabric-simulation artifact is {} bytes; maximum is {MAX_ARTIFACT_CONTENT_BYTES}",
             content.len()
         )));
@@ -246,9 +251,9 @@ fn planned(path: impl Into<PathBuf>, value: &preserves::IOValue) -> Result<Plann
     })
 }
 
-fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> Result<()> {
+fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> molten::error::Result<()> {
     if artifacts.len() > MAX_ARTIFACTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(molten::error::MoltenError::invalid_harness(format!(
             "fabric-simulation artifact plan exceeds {MAX_ARTIFACTS} entries"
         )));
     }
@@ -256,7 +261,7 @@ fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> Result<()> {
     for artifact in artifacts {
         validate_relative_artifact_path(&artifact.relative_path)?;
         if !paths.insert(artifact.relative_path.clone()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(molten::error::MoltenError::invalid_harness(format!(
                 "duplicate fabric-simulation artifact path {}",
                 artifact.relative_path.display()
             )));
@@ -265,15 +270,19 @@ fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> Result<()> {
     Ok(())
 }
 
-fn validate_relative_artifact_path(path: &Path) -> Result<()> {
+fn validate_relative_artifact_path(path: &std::path::Path) -> molten::error::Result<()> {
     if path.as_os_str().is_empty() || path.is_absolute() {
-        return Err(MoltenError::invalid_harness("fabric-simulation artifact path must be non-empty and relative"));
+        return Err(molten::error::MoltenError::invalid_harness(
+            "fabric-simulation artifact path must be non-empty and relative",
+        ));
     }
-    if path
-        .components()
-        .any(|component| matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_)))
-    {
-        return Err(MoltenError::invalid_harness(format!(
+    if path.components().any(|component| {
+        matches!(
+            component,
+            std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)
+        )
+    }) {
+        return Err(molten::error::MoltenError::invalid_harness(format!(
             "fabric-simulation artifact path escapes output root: {}",
             path.display()
         )));
@@ -281,27 +290,27 @@ fn validate_relative_artifact_path(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn write_artifacts(root: &Path, artifacts: &[PlannedArtifact]) -> Result<()> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
+fn write_artifacts(root: &std::path::Path, artifacts: &[PlannedArtifact]) -> molten::error::Result<()> {
+    std::fs::create_dir_all(root).map_err(molten::error::MoltenError::from)?;
     for artifact in artifacts {
         let path = root.join(&artifact.relative_path);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
         }
-        std::fs::write(path, artifact.content.as_bytes()).map_err(MoltenError::from)?;
+        std::fs::write(path, artifact.content.as_bytes()).map_err(molten::error::MoltenError::from)?;
     }
     Ok(())
 }
 
-fn read_report(path: &Path) -> Result<preserves::IOValue> {
-    let metadata = std::fs::metadata(path).map_err(MoltenError::from)?;
+fn read_report(path: &std::path::Path) -> molten::error::Result<preserves::IOValue> {
+    let metadata = std::fs::metadata(path).map_err(molten::error::MoltenError::from)?;
     if metadata.len() > MAX_REPORT_ARTIFACT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(molten::error::MoltenError::invalid_harness(format!(
             "fabric-simulation report is {} bytes; maximum is {MAX_REPORT_ARTIFACT_BYTES}",
             metadata.len()
         )));
     }
-    let source = std::fs::read_to_string(path).map_err(MoltenError::from)?;
+    let source = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
     molten::preserves_rail::parse_text(&source)
 }
 
@@ -319,21 +328,21 @@ mod tests {
         assert_eq!(export.len(), EXPORT_ARTIFACT_COUNT);
         assert!(run.iter().all(|artifact| artifact.relative_path.is_relative()));
         assert!(run.iter().all(|artifact| !artifact.content.contains("private-key")));
-        assert!(run.iter().any(|artifact| artifact.relative_path == Path::new("report.preserves")));
-        assert!(run.iter().any(|artifact| artifact.relative_path == Path::new("bundle.preserves")));
+        assert!(run.iter().any(|artifact| artifact.relative_path == std::path::Path::new("report.preserves")));
+        assert!(run.iter().any(|artifact| artifact.relative_path == std::path::Path::new("bundle.preserves")));
     }
 
     #[test]
     fn artifact_plan_rejects_parent_escape_and_duplicate_paths() {
-        let escape =
-            validate_relative_artifact_path(Path::new("../escape.preserves")).expect_err("parent escape must deny");
+        let escape = validate_relative_artifact_path(std::path::Path::new("../escape.preserves"))
+            .expect_err("parent escape must deny");
         let duplicate = vec![
             PlannedArtifact {
-                relative_path: PathBuf::from("same.preserves"),
+                relative_path: std::path::PathBuf::from("same.preserves"),
                 content: "one".to_string(),
             },
             PlannedArtifact {
-                relative_path: PathBuf::from("same.preserves"),
+                relative_path: std::path::PathBuf::from("same.preserves"),
                 content: "two".to_string(),
             },
         ];
@@ -351,8 +360,11 @@ mod tests {
         assert_eq!(plan.len(), SHRINK_ARTIFACT_COUNT);
         assert!(fixture.shrink.result.failure_preserved);
         assert!(fixture.shrink.result.removed_workload_steps > 0);
-        assert!(plan.iter().any(|artifact| artifact.relative_path == Path::new("original-world.preserves")));
-        assert!(plan.iter().any(|artifact| artifact.relative_path == Path::new("shrunk-world.preserves")));
-        assert!(plan.iter().any(|artifact| artifact.relative_path == Path::new("shrink.preserves")));
+        assert!(
+            plan.iter()
+                .any(|artifact| artifact.relative_path == std::path::Path::new("original-world.preserves"))
+        );
+        assert!(plan.iter().any(|artifact| artifact.relative_path == std::path::Path::new("shrunk-world.preserves")));
+        assert!(plan.iter().any(|artifact| artifact.relative_path == std::path::Path::new("shrink.preserves")));
     }
 }

@@ -1,6 +1,4 @@
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaControlConfig {
@@ -42,7 +40,7 @@ impl ChannelReplicaControlPort {
     pub fn new(
         config: ReplicaControlConfig,
         sender: tokio::sync::mpsc::UnboundedSender<ReplicaControlObservation>,
-    ) -> Result<Self> {
+    ) -> crate::error::Result<Self> {
         validate_control_config(&config)?;
         Ok(Self { config, sender })
     }
@@ -59,14 +57,14 @@ impl ChannelReplicaControlPort {
         self.config.service_generation
     }
 
-    fn publish(&self, kind: ReplicaControlObservationKind) -> Result<String> {
+    fn publish(&self, kind: ReplicaControlObservationKind) -> crate::error::Result<String> {
         let receipt_ref = control_receipt_ref(&self.config, &kind)?;
         self.sender
             .send(ReplicaControlObservation {
                 receipt_ref: receipt_ref.clone(),
                 kind,
             })
-            .map_err(|_| MoltenError::invalid_harness("live Raft supervision receiver is unavailable"))?;
+            .map_err(|_| crate::error::MoltenError::invalid_harness("live Raft supervision receiver is unavailable"))?;
         Ok(receipt_ref)
     }
 }
@@ -77,7 +75,7 @@ impl ReplicaControlEffects for ChannelReplicaControlPort {
         request_ref: &str,
         disposition: ProposalDisposition,
         committed_index: Option<u64>,
-    ) -> Result<String> {
+    ) -> crate::error::Result<String> {
         self.publish(ReplicaControlObservationKind::Proposal {
             request_ref: request_ref.to_string(),
             disposition,
@@ -91,7 +89,7 @@ impl ReplicaControlEffects for ChannelReplicaControlPort {
         mode: crate::fabric_consistency::ConsistencyReadMode,
         disposition: ReadDisposition,
         observed_index: u64,
-    ) -> Result<String> {
+    ) -> crate::error::Result<String> {
         self.publish(ReplicaControlObservationKind::Read {
             request_ref: request_ref.to_string(),
             mode,
@@ -100,27 +98,32 @@ impl ReplicaControlEffects for ChannelReplicaControlPort {
         })
     }
 
-    fn lifecycle_changed(&mut self, lifecycle: ReplicaLifecycle) -> Result<String> {
+    fn lifecycle_changed(&mut self, lifecycle: ReplicaLifecycle) -> crate::error::Result<String> {
         self.publish(ReplicaControlObservationKind::Lifecycle { lifecycle })
     }
 }
 
-fn validate_control_config(config: &ReplicaControlConfig) -> Result<()> {
+fn validate_control_config(config: &ReplicaControlConfig) -> crate::error::Result<()> {
     if config.service_id.is_empty()
         || !config
             .service_id
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
     {
-        return Err(MoltenError::invalid_harness("live Raft supervision service id is empty or malformed"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "live Raft supervision service id is empty or malformed",
+        ));
     }
     if config.service_generation == 0 {
-        return Err(MoltenError::invalid_harness("live Raft supervision generation must be positive"));
+        return Err(crate::error::MoltenError::invalid_harness("live Raft supervision generation must be positive"));
     }
     crate::preserves_rail::validate_content_ref(&config.supervision_ref)
 }
 
-fn control_receipt_ref(config: &ReplicaControlConfig, kind: &ReplicaControlObservationKind) -> Result<String> {
+fn control_receipt_ref(
+    config: &ReplicaControlConfig,
+    kind: &ReplicaControlObservationKind,
+) -> crate::error::Result<String> {
     let outcome = match kind {
         ReplicaControlObservationKind::Proposal {
             request_ref,

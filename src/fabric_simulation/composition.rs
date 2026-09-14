@@ -1,11 +1,4 @@
-use std::collections::BTreeMap;
-
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric::ExtensionTier;
-use crate::fabric::ExtensionTierRequest;
-use crate::fabric::FabricPortClass;
 #[allow(
     tigerstyle::non_trait_imports,
     reason = "the simulation shell implements the application-owned typed effect-port boundary"
@@ -16,15 +9,7 @@ use crate::fabric::FabricPortError;
     reason = "the simulation shell implements the application-owned typed effect-port boundary"
 )]
 use crate::fabric::FabricPortResult;
-use crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE;
-use crate::fabric::ReferenceSystemKind;
-use crate::fabric::canonical_extension_tier_admission;
 use crate::system_extension::FabricEffectPort;
-use crate::system_extension::HostDispatchResult;
-use crate::system_extension::PortEffectOutput;
-use crate::system_extension::SystemExtensionHost;
-use crate::system_extension::TypedEffectRequest;
-use crate::system_extension::canonical_admit_system_extension_manifest;
 
 const REFERENCE_WORLD_MAX_CHOICES: u64 = 256;
 const REFERENCE_WORLD_MAX_EVENTS: u64 = 256;
@@ -66,12 +51,12 @@ pub struct ReferenceShrinkFixture {
 
 struct PreparedReferenceWorld {
     world: CanonicalSimulatedWorld,
-    hosts: BTreeMap<String, SystemExtensionHost<ReferenceServiceExecutor>>,
+    hosts: std::collections::BTreeMap<String, crate::system_extension::SystemExtensionHost<ReferenceServiceExecutor>>,
 }
 
 #[derive(Debug)]
 struct DeterministicSimulationPortRouter {
-    profiles: BTreeMap<String, SimulatedPortProfile>,
+    profiles: std::collections::BTreeMap<String, SimulatedPortProfile>,
     faults: Vec<SimulationFaultAction>,
     current_choice_position: u64,
     resource_units: u64,
@@ -135,8 +120,8 @@ impl FabricEffectPort for DeterministicSimulationPortRouter {
     fn route(
         &mut self,
         binding: &crate::fabric::CanonicalFabricPortBinding,
-        effect: &TypedEffectRequest,
-    ) -> FabricPortResult<PortEffectOutput> {
+        effect: &crate::system_extension::TypedEffectRequest,
+    ) -> FabricPortResult<crate::system_extension::PortEffectOutput> {
         let profile = self
             .profiles
             .get(&binding.binding.key.port_id)
@@ -191,7 +176,7 @@ impl FabricEffectPort for DeterministicSimulationPortRouter {
         .map_err(FabricPortError::from)?;
         self.resource_units = next_units;
         self.events.push(event);
-        Ok(PortEffectOutput {
+        Ok(crate::system_extension::PortEffectOutput {
             output_schema_ref: effect.output_schema_ref.clone(),
             output_ref,
             materialized_output: None,
@@ -202,7 +187,7 @@ impl FabricEffectPort for DeterministicSimulationPortRouter {
 // r[impl molten.fabric_simulation.same_core]
 // r[impl molten.fabric_simulation.reference_services]
 // r[impl molten.fabric_simulation.fabric_sufficiency]
-pub fn build_reference_simulated_world() -> Result<CanonicalSimulatedWorld> {
+pub fn build_reference_simulated_world() -> crate::error::Result<CanonicalSimulatedWorld> {
     Ok(prepare_reference_world()?.world)
 }
 
@@ -211,16 +196,18 @@ pub fn build_reference_simulated_world() -> Result<CanonicalSimulatedWorld> {
 // r[impl molten.fabric_simulation.reference_services]
 // r[impl molten.fabric_simulation.evidence]
 // r[impl molten.fabric_simulation.final_validation]
-pub fn run_reference_simulation_fixture() -> Result<ReferenceSimulationFixtureRun> {
+pub fn run_reference_simulation_fixture() -> crate::error::Result<ReferenceSimulationFixtureRun> {
     let prepared = prepare_reference_world()?;
     run_prepared_reference_world(prepared)
 }
 
 // r[impl molten.fabric_simulation.replay_shrink]
-pub fn replay_reference_simulation_fixture(expected: &CanonicalSimulationRun) -> Result<ReferenceReplayResult> {
+pub fn replay_reference_simulation_fixture(
+    expected: &CanonicalSimulationRun,
+) -> crate::error::Result<ReferenceReplayResult> {
     let replay = run_reference_simulation_fixture()?;
     if replay.world.world_ref != expected.world_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "reference simulation replay world identity differs from the expected run",
         ));
     }
@@ -229,12 +216,12 @@ pub fn replay_reference_simulation_fixture(expected: &CanonicalSimulationRun) ->
 }
 
 // r[impl molten.fabric_simulation.replay_shrink]
-pub fn run_reference_shrink_fixture() -> Result<ReferenceShrinkFixture> {
+pub fn run_reference_shrink_fixture() -> crate::error::Result<ReferenceShrinkFixture> {
     let mut original_manifest = build_reference_simulated_world()?.admitted.manifest;
     let first = original_manifest
         .workload
         .first_mut()
-        .ok_or_else(|| MoltenError::invalid_harness("reference shrink fixture requires a workload"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("reference shrink fixture requires a workload"))?;
     first.expected_failure_class = Some("fixture-invariant-failure".to_string());
     let original_world = canonical_admit_simulated_world(&original_manifest)?;
     let result = shrink_simulation_failure(&original_world.admitted.manifest, |candidate| {
@@ -244,7 +231,9 @@ pub fn run_reference_shrink_fixture() -> Result<ReferenceShrinkFixture> {
             .iter()
             .any(|step| step.expected_failure_class.as_deref() == Some("fixture-invariant-failure"))
     })
-    .map_err(|error| MoltenError::invalid_harness(format!("reference shrink fixture denied: {error:?}")))?;
+    .map_err(|error| {
+        crate::error::MoltenError::invalid_harness(format!("reference shrink fixture denied: {error:?}"))
+    })?;
     let shrunk_world = canonical_admit_simulated_world(&result.world)?;
     let shrink = canonical_simulation_shrink(&original_world.world_ref, &shrunk_world, result)?;
     Ok(ReferenceShrinkFixture {
@@ -254,28 +243,29 @@ pub fn run_reference_shrink_fixture() -> Result<ReferenceShrinkFixture> {
     })
 }
 
-fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
+fn prepare_reference_world() -> crate::error::Result<PreparedReferenceWorld> {
     let profiles = reference_port_profiles();
     let descriptors = reference_port_descriptors(&profiles);
     let operations = default_reference_operations();
-    let tier = canonical_extension_tier_admission(&ExtensionTierRequest {
-        tier: ExtensionTier::SystemExtension,
+    let tier = crate::fabric::canonical_extension_tier_admission(&crate::fabric::ExtensionTierRequest {
+        tier: crate::fabric::ExtensionTier::SystemExtension,
         requested_authorities: all_reference_authorities(),
-        admission_evidence: REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
+        admission_evidence: crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
     })?;
     let kinds = [
-        ReferenceSystemKind::TransactionalKeyValue,
-        ReferenceSystemKind::ReplicatedLog,
-        ReferenceSystemKind::DistributedScheduler,
+        crate::fabric::ReferenceSystemKind::TransactionalKeyValue,
+        crate::fabric::ReferenceSystemKind::ReplicatedLog,
+        crate::fabric::ReferenceSystemKind::DistributedScheduler,
     ];
-    let mut hosts = BTreeMap::new();
+    let mut hosts = std::collections::BTreeMap::new();
     let mut nodes = Vec::new();
     for kind in kinds {
         let implementation_ref = blake3_ref(format!("reference-implementation:{}", kind.as_str()).as_bytes());
         let input = reference_manifest_input(kind, implementation_ref.clone(), &profiles)?;
-        let admitted = canonical_admit_system_extension_manifest(&input, &descriptors, &tier, &[
-            crate::system_extension::ExecutionProfile::InProcessNative,
-        ])?;
+        let admitted =
+            crate::system_extension::canonical_admit_system_extension_manifest(&input, &descriptors, &tier, &[
+                crate::system_extension::ExecutionProfile::InProcessNative,
+            ])?;
         let manifest_ref = admitted.manifest_ref().to_string();
         let node_id = reference_node_id(kind);
         let identity = ExtensionCoreIdentity {
@@ -289,7 +279,7 @@ fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
         };
         let executor = ReferenceServiceExecutor::new(kind, operations_for_kind(&operations, kind), &profiles)?;
         let initial_state_ref = blake3_ref(format!("{:?}", executor.state()).as_bytes());
-        let mut host = SystemExtensionHost::new(admitted, executor)?;
+        let mut host = crate::system_extension::SystemExtensionHost::new(admitted, executor)?;
         host.activate(FIRST_VIRTUAL_TICK)?;
         nodes.push(SimulatedNode {
             node_id: node_id.clone(),
@@ -307,7 +297,7 @@ fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
             required_port_classes: reference_required_ports(kind),
         });
         if hosts.insert(node_id.clone(), host).is_some() {
-            return Err(MoltenError::invalid_harness(format!("duplicate reference node {node_id}")));
+            return Err(crate::error::MoltenError::invalid_harness(format!("duplicate reference node {node_id}")));
         }
     }
     let workload = operations
@@ -315,7 +305,7 @@ fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
         .enumerate()
         .map(|(index, (kind, request_ref, _))| {
             let sequence = u64::try_from(index)
-                .map_err(|_| MoltenError::invalid_harness("reference workload sequence overflow"))?;
+                .map_err(|_| crate::error::MoltenError::invalid_harness("reference workload sequence overflow"))?;
             Ok(SimulationWorkloadStep {
                 sequence,
                 node_id: reference_node_id(*kind),
@@ -324,12 +314,12 @@ fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
                 expected_failure_class: None,
             })
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<crate::error::Result<Vec<_>>>()?;
     let transport_port_id = profiles
         .iter()
-        .find(|profile| profile.class == FabricPortClass::Transport)
+        .find(|profile| profile.class == crate::fabric::FabricPortClass::Transport)
         .map(|profile| profile.port_id.clone())
-        .ok_or_else(|| MoltenError::invalid_harness("reference world lacks its transport profile"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("reference world lacks its transport profile"))?;
     let manifest = SimulatedWorldManifest {
         schema: FABRIC_SIMULATION_WORLD_SCHEMA.to_string(),
         runtime_ref: blake3_ref(b"molten-runtime-reference-simulation"),
@@ -349,7 +339,7 @@ fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
             fault_id: "transport-delay-at-choice-one".to_string(),
             kind: SimulationFaultKind::Delay,
             target: transport_port_id,
-            boundary: FabricPortClass::Transport,
+            boundary: crate::fabric::FabricPortClass::Transport,
             activate_at_choice: REFERENCE_FAULT_ACTIVATION_CHOICE,
             duration_choices: Some(REFERENCE_FAULT_DURATION_CHOICES),
             resource_cost: REFERENCE_FAULT_RESOURCE_COST,
@@ -375,7 +365,9 @@ fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
     })
 }
 
-fn run_prepared_reference_world(mut prepared: PreparedReferenceWorld) -> Result<ReferenceSimulationFixtureRun> {
+fn run_prepared_reference_world(
+    mut prepared: PreparedReferenceWorld,
+) -> crate::error::Result<ReferenceSimulationFixtureRun> {
     let mut pending = prepared.world.admitted.manifest.workload.clone();
     let mut scheduler = SimulationSchedulerState::default();
     let mut router = DeterministicSimulationPortRouter::new(&prepared.world);
@@ -384,47 +376,47 @@ fn run_prepared_reference_world(mut prepared: PreparedReferenceWorld) -> Result<
     let mut history_material = FIRST_HISTORY_MATERIAL.to_string();
     while !pending.is_empty() {
         let eligible = pending.iter().map(workload_choice).collect::<Vec<_>>();
-        let transition = select_simulation_choice(&prepared.world.admitted, &scheduler, &eligible, None)
-            .map_err(|error| MoltenError::invalid_harness(format!("reference scheduler denied: {error:?}")))?;
+        let transition =
+            select_simulation_choice(&prepared.world.admitted, &scheduler, &eligible, None).map_err(|error| {
+                crate::error::MoltenError::invalid_harness(format!("reference scheduler denied: {error:?}"))
+            })?;
         let selected_id = &transition.record.selected.choice_id;
-        let selected_index = pending
-            .iter()
-            .position(|step| workload_choice_id(step.sequence) == *selected_id)
-            .ok_or_else(|| MoltenError::invalid_harness("selected reference workload choice disappeared"))?;
+        let selected_index =
+            pending.iter().position(|step| workload_choice_id(step.sequence) == *selected_id).ok_or_else(|| {
+                crate::error::MoltenError::invalid_harness("selected reference workload choice disappeared")
+            })?;
         let step = pending.remove(selected_index);
         router.begin_choice(transition.record.position);
-        let host = prepared
-            .hosts
-            .get_mut(&step.node_id)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("missing reference host {}", step.node_id)))?;
+        let host = prepared.hosts.get_mut(&step.node_id).ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness(format!("missing reference host {}", step.node_id))
+        })?;
         let (receipt, outcome) =
             match host.dispatch_request(&step.request_ref, REFERENCE_REQUEST_BYTES, transition.next.virtual_tick)? {
-                HostDispatchResult::Executed { receipt, outcome, .. } => (receipt, outcome),
+                crate::system_extension::HostDispatchResult::Executed { receipt, outcome, .. } => (receipt, outcome),
                 other => {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(crate::error::MoltenError::invalid_harness(format!(
                         "reference request did not execute through the system-extension host: {other:?}"
                     )));
                 }
             };
         let completions = host.route_approved_effects(&receipt, &mut router)?;
         if completions.is_empty() {
-            return Err(MoltenError::invalid_harness("reference request did not cross a deterministic fabric port"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "reference request did not cross a deterministic fabric port",
+            ));
         }
-        let reference_transition = host
-            .executor()
-            .last_transition()
-            .ok_or_else(|| MoltenError::invalid_harness("reference executor did not retain its pure transition"))?;
+        let reference_transition = host.executor().last_transition().ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness("reference executor did not retain its pure transition")
+        })?;
         let state_ref = outcome
             .state_ref
-            .ok_or_else(|| MoltenError::invalid_harness("reference callback returned no state ref"))?;
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("reference callback returned no state ref"))?;
         history_material.push_str(&state_ref);
         history_material.push_str(&transition.record.selected.choice_id);
         let history_ref = blake3_ref(history_material.as_bytes());
-        let port_event_ref = router
-            .events()
-            .last()
-            .map(|event| event.event_ref.clone())
-            .ok_or_else(|| MoltenError::invalid_harness("reference route emitted no canonical port event"))?;
+        let port_event_ref = router.events().last().map(|event| event.event_ref.clone()).ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness("reference route emitted no canonical port event")
+        })?;
         let observation = canonical_simulation_observation(SimulationObservation {
             sequence: step.sequence,
             node_id: step.node_id,
@@ -448,8 +440,9 @@ fn run_prepared_reference_world(mut prepared: PreparedReferenceWorld) -> Result<
         choice_records.push(transition.record);
         scheduler = transition.next;
     }
-    scheduler = finish_simulation_scheduler(&prepared.world.admitted, &scheduler)
-        .map_err(|error| MoltenError::invalid_harness(format!("reference scheduler finish denied: {error:?}")))?;
+    scheduler = finish_simulation_scheduler(&prepared.world.admitted, &scheduler).map_err(|error| {
+        crate::error::MoltenError::invalid_harness(format!("reference scheduler finish denied: {error:?}"))
+    })?;
     let mut final_state_refs = Vec::new();
     let mut host_evidence_refs = Vec::new();
     for host in prepared.hosts.values_mut() {
@@ -468,15 +461,17 @@ fn run_prepared_reference_world(mut prepared: PreparedReferenceWorld) -> Result<
         SimulationDecision::InvariantFailed
     };
     let choice_resource_units = u64::try_from(choice_records.len())
-        .map_err(|_| MoltenError::invalid_harness("reference choice resource count overflow"))?
+        .map_err(|_| crate::error::MoltenError::invalid_harness("reference choice resource count overflow"))?
         .checked_mul(RUN_RESOURCE_INCREMENT)
-        .ok_or_else(|| MoltenError::invalid_harness("reference choice resource multiplication overflow"))?;
+        .ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness("reference choice resource multiplication overflow")
+        })?;
     let resource_units = router
         .resource_units()
         .checked_add(choice_resource_units)
-        .ok_or_else(|| MoltenError::invalid_harness("reference run resource count overflow"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("reference run resource count overflow"))?;
     if resource_units > prepared.world.admitted.manifest.bounds.max_resource_units {
-        return Err(MoltenError::invalid_harness("reference run exceeded its resource envelope"));
+        return Err(crate::error::MoltenError::invalid_harness("reference run exceeded its resource envelope"));
     }
     let summary = SimulationRunSummary {
         decision,
@@ -509,7 +504,9 @@ fn run_prepared_reference_world(mut prepared: PreparedReferenceWorld) -> Result<
     })
 }
 
-fn reference_contract_differential(world: &CanonicalSimulatedWorld) -> Result<CanonicalSimulationDifferential> {
+fn reference_contract_differential(
+    world: &CanonicalSimulatedWorld,
+) -> crate::error::Result<CanonicalSimulationDifferential> {
     let simulation_profile_ref = blake3_ref(FABRIC_SIMULATION_PROFILE_ID.as_bytes());
     let live_profile_ref = blake3_ref(b"reviewed-live-port-contract-profile-v1");
     let shared_contract_ref = blake3_ref(b"fabric-port-command-event-contract-set-v1");
@@ -555,7 +552,7 @@ fn workload_choice_id(sequence: u64) -> String {
     format!("workload-{sequence:0width$}", width = REFERENCE_CHOICE_ID_WIDTH)
 }
 
-fn reference_node_id(kind: ReferenceSystemKind) -> String {
+fn reference_node_id(kind: crate::fabric::ReferenceSystemKind) -> String {
     format!("node-{}", kind.as_str())
 }
 
@@ -564,27 +561,27 @@ fn reference_invariants() -> Vec<SimulationInvariant> {
         REQUIRED_UNIVERSAL_INVARIANTS.into_iter().map(SimulationInvariant::Universal).collect::<Vec<_>>();
     invariants.extend([
         SimulationInvariant::ExtensionSemantic {
-            service: ReferenceSystemKind::TransactionalKeyValue,
+            service: crate::fabric::ReferenceSystemKind::TransactionalKeyValue,
             invariant_id: "transaction-version-monotonic".to_string(),
         },
         SimulationInvariant::ExtensionSemantic {
-            service: ReferenceSystemKind::TransactionalKeyValue,
+            service: crate::fabric::ReferenceSystemKind::TransactionalKeyValue,
             invariant_id: "conflict-does-not-mutate".to_string(),
         },
         SimulationInvariant::ExtensionSemantic {
-            service: ReferenceSystemKind::ReplicatedLog,
+            service: crate::fabric::ReferenceSystemKind::ReplicatedLog,
             invariant_id: "log-offsets-contiguous".to_string(),
         },
         SimulationInvariant::ExtensionSemantic {
-            service: ReferenceSystemKind::ReplicatedLog,
+            service: crate::fabric::ReferenceSystemKind::ReplicatedLog,
             invariant_id: "retention-follows-replication".to_string(),
         },
         SimulationInvariant::ExtensionSemantic {
-            service: ReferenceSystemKind::DistributedScheduler,
+            service: crate::fabric::ReferenceSystemKind::DistributedScheduler,
             invariant_id: "single-authoritative-completion".to_string(),
         },
         SimulationInvariant::ExtensionSemantic {
-            service: ReferenceSystemKind::DistributedScheduler,
+            service: crate::fabric::ReferenceSystemKind::DistributedScheduler,
             invariant_id: "completion-requires-current-lease".to_string(),
         },
     ]);

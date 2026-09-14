@@ -1,0 +1,859 @@
+#!/usr/bin/env -S nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#gcc --command cargo -q -Zscript
+---
+[dependencies]
+proc-macro2 = { version = "=1.0.107", features = ["span-locations"] }
+syn = { version = "=3.0.5", features = ["full", "visit"] }
+---
+// Octet `non_trait_imports` source repair.
+//
+// The Octet `non_trait_imports` lint rejects a private `use` of a concrete
+// owner item because the import hides the owner path. The supported repair is
+// the qualified owner path at every use site. This tool applies exactly that
+// repair to the imports named by an Octet summary index:
+//
+//   1. Read the flagged `non_trait_imports` rows from an Octet summary.
+//   2. For each flagged file, resolve the flagged lines back to their `use`
+//      leaf and compute the owner path plus the locally bound name.
+//   3. Delete the flagged leaf and rewrite every identifier reference to the
+//      bound name with the qualified owner path, adjusting `super::` owners for
+//      the inline-module depth of each use site.
+//   4. Re-parse the result so a syntactically broken file is never written.
+//
+// The tool is deliberately conservative. A file is reported and skipped when
+// the imports cannot be repaired by a textual, scope-local rewrite:
+//
+//   * a module parent that declares `mod child;` shares private imports with
+//     children that write `use super::*;`;
+//   * a `parts/**/body.rs` tree is spliced into one module with `include!`;
+//   * the bound name is also bound by a local, parameter, item, field, generic
+//     parameter, or a second `use` in the same file;
+//   * the bound name is the anonymous `_` import;
+//   * the leaf is an alias-free group member that shares a `use` group with an
+//     unflagged leaf, or the leaf carries attributes.
+//
+// Compilation and tests stay the acceptance oracle for the files it rewrites.
+//
+// Usage:
+//   scripts/octet-qualify-imports.rs --findings target/octet/summary.txt [--dry-run] [FILE...]
+//   scripts/octet-qualify-imports.rs --self-test
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
+use std::path::Path as FsPath;
+
+use syn::spanned::Spanned;
+use syn::visit::Visit;
+
+const LINT_NAME: &str = "non_trait_imports";
+const SUMMARY_INDEX_PREFIX: &str = "  F";
+const SELF_TEST_EXPECTED_EDITS: usize = 6;
+
+/// Source geometry for one file: byte offset of every line start.
+struct LineIndex {
+    offsets: Vec<usize>,
+}
+
+impl LineIndex {
+    fn new(source: &str) -> Self {
+        let mut offsets = vec![0_usize];
+        for (index, byte) in source.bytes().enumerate() {
+            if byte == b'\n' {
+                offsets.push(index + 1);
+            }
+        }
+        Self { offsets }
+    }
+
+    fn offset(&self, position: proc_macro2::LineColumn) -> usize {
+        self.offsets[position.line - 1] + position.column
+    }
+
+    fn range(&self, span: proc_macro2::Span) -> Range<usize> {
+        self.offset(span.start())..self.offset(span.end())
+    }
+}
+
+fn flatten_tree(prefix: &str, tree: &syn::UseTree, names: &mut Vec<String>) {
+    match tree {
+        syn::UseTree::Path(path) => {
+            flatten_tree(&format!("{prefix}{}::", path.ident), &path.tree, names);
+        }
+        syn::UseTree::Name(name) => names.push(name.ident.to_string()),
+        syn::UseTree::Rename(rename) => names.push(rename.rename.to_string()),
+        syn::UseTree::Group(group) => {
+            for item in &group.items {
+                flatten_tree(prefix, item, names);
+            }
+        }
+        syn::UseTree::Glob(_) => {}
+    }
+}
+
+/// Collect every bound name of a `use` item, in source order.
+fn bound_names(tree: &syn::UseTree) -> Vec<String> {
+    let mut names = Vec::new();
+    flatten_tree("", tree, &mut names);
+    names
+}
+
+/// Resolve the owner path and the locally bound name of the leaf named `target`.
+fn resolve_leaf(
+    prefix: &str,
+    tree: &syn::UseTree,
+    target: &str,
+) -> Option<(String, String)> {
+    match tree {
+        syn::UseTree::Path(path) => {
+            let next = format!("{prefix}{}::", path.ident);
+            resolve_leaf(&next, &path.tree, target)
+        }
+        syn::UseTree::Name(name) => {
+            let leaf = name.ident.to_string();
+            if leaf == target {
+                Some((format!("{prefix}{leaf}"), leaf))
+            } else {
+                None
+            }
+        }
+        syn::UseTree::Rename(rename) => {
+            let leaf = rename.ident.to_string();
+            if rename.rename == target {
+                Some((format!("{prefix}{leaf}"), rename.rename.to_string()))
+            } else {
+                None
+            }
+        }
+        syn::UseTree::Glob(_) => None,
+        syn::UseTree::Group(group) => {
+            for item in &group.items {
+                if let Some(found) = resolve_leaf(prefix, item, target) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+    }
+}
+
+/// The flagged leaf's own span, used to delete one leaf from a `use` group.
+fn leaf_span<'ast>(tree: &'ast syn::UseTree, target: &str) -> Option<syn::UseTree> {
+    match tree {
+        syn::UseTree::Path(path) => leaf_span(&path.tree, target),
+        syn::UseTree::Name(name) if name.ident == target => Some(tree.clone()),
+        syn::UseTree::Rename(rename) if rename.rename == target => Some(tree.clone()),
+        syn::UseTree::Group(group) => {
+            for item in &group.items {
+                if let Some(found) = leaf_span(item, target) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn is_group_tree(tree: &syn::UseTree) -> bool {
+    match tree {
+        syn::UseTree::Group(_) => true,
+        syn::UseTree::Path(path) => is_group_tree(&path.tree),
+        _ => false,
+    }
+}
+
+/// Collect every identifier the file binds outside its own `use` items.
+///
+/// A binding that matches a bound import name would make the token rewrite
+/// change an unrelated name, so any collision skips the file.
+#[derive(Default)]
+struct Bindings {
+    names: BTreeSet<String>,
+}
+
+impl Bindings {
+    fn pattern(&mut self, pat: &syn::Pat) {
+        let mut collector = PatternNames::default();
+        collector.visit_pat(pat);
+        self.names.extend(collector.names);
+    }
+}
+
+#[derive(Default)]
+struct PatternNames {
+    names: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for PatternNames {
+    fn visit_pat_ident(&mut self, node: &'ast syn::PatIdent) {
+        self.names.insert(node.ident.to_string());
+        syn::visit::visit_pat_ident(self, node);
+    }
+    fn visit_pat_struct(&mut self, node: &'ast syn::PatStruct) {
+        for field in &node.fields {
+            if let syn::Member::Named(name) = &field.member {
+                if field.colon_token.is_none() {
+                    self.names.insert(name.to_string());
+                }
+            }
+        }
+        syn::visit::visit_pat_struct(self, node);
+    }
+}
+
+struct FileBindings<'a> {
+    bindings: Bindings,
+    extra_use_bindings: BTreeSet<String>,
+    lines: &'a LineIndex,
+    flagged_ranges: &'a [Range<usize>],
+}
+
+impl<'ast> Visit<'ast> for FileBindings<'_> {
+    fn visit_item(&mut self, node: &'ast syn::Item) {
+        match node {
+            syn::Item::Fn(item) => {
+                self.bindings.names.insert(item.sig.ident.to_string());
+            }
+            syn::Item::Struct(item) => {
+                self.bindings.names.insert(item.ident.to_string());
+            }
+            syn::Item::Enum(item) => {
+                self.bindings.names.insert(item.ident.to_string());
+            }
+            syn::Item::Union(item) => {
+                self.bindings.names.insert(item.ident.to_string());
+            }
+            syn::Item::Trait(item) => {
+                self.bindings.names.insert(item.ident.to_string());
+            }
+            syn::Item::Type(item) => {
+                self.bindings.names.insert(item.ident.to_string());
+            }
+            syn::Item::Const(item) => {
+                self.bindings.names.insert(item.ident.to_string());
+            }
+            syn::Item::Static(item) => {
+                self.bindings.names.insert(item.ident.to_string());
+            }
+            syn::Item::Mod(item) => {
+                self.bindings.names.insert(item.ident.to_string());
+            }
+            syn::Item::Macro(item) => {
+                if let Some(ident) = &item.ident {
+                    self.bindings.names.insert(ident.to_string());
+                }
+            }
+            syn::Item::ExternCrate(item) => {
+                self.bindings.names.insert(item.ident.to_string());
+            }
+            syn::Item::Use(item) => {
+                let range = self.lines.range(item.span());
+                if !self
+                    .flagged_ranges
+                    .iter()
+                    .any(|flagged| flagged.contains(&range.start))
+                {
+                    for name in bound_names(&item.tree) {
+                        self.extra_use_bindings.insert(name);
+                    }
+                }
+            }
+            _ => {}
+        }
+        syn::visit::visit_item(self, node);
+    }
+    fn visit_variant(&mut self, node: &'ast syn::Variant) {
+        self.bindings.names.insert(node.ident.to_string());
+        syn::visit::visit_variant(self, node);
+    }
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        self.bindings.names.insert(node.sig.ident.to_string());
+        syn::visit::visit_impl_item_fn(self, node);
+    }
+    fn visit_trait_item_fn(&mut self, node: &'ast syn::TraitItemFn) {
+        self.bindings.names.insert(node.sig.ident.to_string());
+        syn::visit::visit_trait_item_fn(self, node);
+    }
+    fn visit_field(&mut self, node: &'ast syn::Field) {
+        if let Some(ident) = &node.ident {
+            self.bindings.names.insert(ident.to_string());
+        }
+        syn::visit::visit_field(self, node);
+    }
+    fn visit_generic_param(&mut self, node: &'ast syn::GenericParam) {
+        match node {
+            syn::GenericParam::Type(param) => {
+                self.bindings.names.insert(param.ident.to_string());
+            }
+            syn::GenericParam::Const(param) => {
+                self.bindings.names.insert(param.ident.to_string());
+            }
+            syn::GenericParam::Lifetime(_) => {}
+        }
+        syn::visit::visit_generic_param(self, node);
+    }
+    fn visit_fn_arg(&mut self, node: &'ast syn::FnArg) {
+        if let syn::FnArg::Typed(typed) = node {
+            self.bindings.pattern(&typed.pat);
+        }
+        syn::visit::visit_fn_arg(self, node);
+    }
+    fn visit_local(&mut self, node: &'ast syn::Local) {
+        self.bindings.pattern(&node.pat);
+        syn::visit::visit_local(self, node);
+    }
+    fn visit_arm(&mut self, node: &'ast syn::Arm) {
+        self.bindings.pattern(&node.pat);
+        syn::visit::visit_arm(self, node);
+    }
+    fn visit_expr_closure(&mut self, node: &'ast syn::ExprClosure) {
+        for input in &node.inputs {
+            self.bindings.pattern(input);
+        }
+        syn::visit::visit_expr_closure(self, node);
+    }
+    fn visit_expr_for_loop(&mut self, node: &'ast syn::ExprForLoop) {
+        self.bindings.pattern(&node.pat);
+        syn::visit::visit_expr_for_loop(self, node);
+    }
+    fn visit_field_value(&mut self, node: &'ast syn::FieldValue) {
+        if node.colon_token.is_none() {
+            if let syn::Member::Named(name) = &node.member {
+                self.bindings.names.insert(name.to_string());
+            }
+        }
+        syn::visit::visit_field_value(self, node);
+    }
+}
+
+/// Byte ranges of every inline `mod name { ... }` body in the file.
+struct InlineModules<'a> {
+    ranges: Vec<Range<usize>>,
+    lines: &'a LineIndex,
+}
+
+impl<'ast> Visit<'ast> for InlineModules<'_> {
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        if node.content.is_some() {
+            self.ranges.push(self.lines.range(node.span()));
+        }
+        syn::visit::visit_item_mod(self, node);
+    }
+}
+
+/// Detect scopes that the token rewrite cannot repair safely.
+///
+/// A module parent that declares `mod child;` shares its private imports with
+/// every child that writes `use super::*;`. A `parts/**/body.rs` tree is
+/// spliced into one module with `include!`, so each part sees the imports of
+/// its siblings. Removing an import from such a file can break a different file
+/// that the summary never flagged.
+fn shared_scope_hazard(path: &str, syntax: &syn::File) -> Option<String> {
+    if path.contains("/parts/") {
+        return Some(String::from("include! part body shares one module scope"));
+    }
+    for item in &syntax.items {
+        match item {
+            syn::Item::Mod(item_mod) if item_mod.content.is_none() => {
+                return Some(format!("module parent declares `mod {};`", item_mod.ident));
+            }
+            syn::Item::Macro(item_macro)
+                if item_macro
+                    .mac
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "include") =>
+            {
+                return Some(String::from("include! splice shares one module scope"));
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Parse `  F123   non_trait_imports   crate   path:line` index rows.
+fn read_flagged_lines(summary: &str) -> BTreeMap<String, Vec<usize>> {
+    let mut flagged: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for line in summary.lines() {
+        if !line.starts_with(SUMMARY_INDEX_PREFIX) {
+            continue;
+        }
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if fields.len() < 4 || fields[1] != LINT_NAME {
+            continue;
+        }
+        let location = fields[3];
+        let Some((path, number)) = location.rsplit_once(':') else {
+            continue;
+        };
+        let Ok(line_number) = number.parse::<usize>() else {
+            continue;
+        };
+        let entry = flagged.entry(path.to_owned()).or_default();
+        if !entry.contains(&line_number) {
+            entry.push(line_number);
+        }
+    }
+    flagged
+}
+
+/// Extend a whole-item removal across its whole source lines.
+fn line_deletion_range(source: &str, item: Range<usize>) -> Range<usize> {
+    let bytes = source.as_bytes();
+    let mut start = item.start;
+    while start > 0 && bytes[start - 1] != b'\n' {
+        start -= 1;
+    }
+    if source[start..item.start]
+        .bytes()
+        .any(|byte| byte != b' ' && byte != b'\t')
+    {
+        start = item.start;
+    }
+    let mut end = item.end;
+    while end < bytes.len() && (bytes[end] == b' ' || bytes[end] == b'\t' || bytes[end] == b'\r') {
+        end += 1;
+    }
+    if end < bytes.len() && bytes[end] == b'\n' {
+        end += 1;
+    }
+    start..end
+}
+
+/// Extend a leaf range across a following comma so the group stays valid.
+fn leaf_deletion_range(source: &str, leaf: Range<usize>) -> Range<usize> {
+    let tail = source[leaf.end..].trim_start();
+    match tail.strip_prefix(',') {
+        Some(_) => leaf.start..leaf.end + source[leaf.end..].len() - tail.len() + 1,
+        None => leaf,
+    }
+}
+
+/// Rewrite flagged imports in `source`, returning the new text and edit count.
+fn qualify_source(
+    path: &str,
+    source: &str,
+    flagged_lines: &[usize],
+) -> Result<(String, usize), String> {
+    let syntax = syn::parse_file(source).map_err(|error| format!("parse failed: {error}"))?;
+    if let Some(hazard) = shared_scope_hazard(path, &syntax) {
+        return Err(format!("manual repair required: {hazard}"));
+    }
+    let lines = LineIndex::new(source);
+    let mut owners: BTreeMap<String, String> = BTreeMap::new();
+    let mut removals: Vec<Range<usize>> = Vec::new();
+    let mut flagged_ranges: Vec<Range<usize>> = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
+
+    for item in &syntax.items {
+        let syn::Item::Use(item_use) = item else {
+            continue;
+        };
+        let item_range = lines.range(item_use.span());
+        let start_line = item_use.span().start().line;
+        if !flagged_lines.contains(&start_line) {
+            continue;
+        }
+        if !item_use.attrs.is_empty() {
+            skipped.push(format!("attributes on line {start_line}"));
+            continue;
+        }
+        if !matches!(item_use.vis, syn::Visibility::Inherited) {
+            skipped.push(format!("public import on line {start_line}"));
+            continue;
+        }
+        if matches!(item_use.tree, syn::UseTree::Glob(_)) {
+            skipped.push(format!("glob import on line {start_line}"));
+            continue;
+        }
+        let names = bound_names(&item_use.tree);
+        let is_group = is_group_tree(&item_use.tree);
+        if is_group && names.len() != 1 {
+            skipped.push(format!("shared use group on line {start_line}"));
+            continue;
+        }
+        let colon = if item_use.leading_colon.is_some() {
+            "::"
+        } else {
+            ""
+        };
+        let mut planned: Vec<String> = Vec::new();
+        for target in &names {
+            if target == "_" {
+                skipped.push(format!("anonymous import on line {start_line}"));
+                continue;
+            }
+            let Some((owner, bound)) = resolve_leaf(colon, &item_use.tree, target) else {
+                skipped.push(format!("unresolved leaf `{target}` on line {start_line}"));
+                continue;
+            };
+            if let Some(existing) = owners.get(&bound) {
+                if existing != &owner {
+                    skipped.push(format!("ambiguous owner for `{bound}` on line {start_line}"));
+                    continue;
+                }
+            }
+            owners.insert(bound.clone(), owner);
+            planned.push(bound);
+        }
+        if planned.is_empty() {
+            continue;
+        }
+        if is_group {
+            let Some(leaf) = leaf_span(&item_use.tree, &planned[0]) else {
+                skipped.push(format!("unresolved group leaf on line {start_line}"));
+                continue;
+            };
+            removals.push(leaf_deletion_range(source, lines.range(leaf.span())));
+        } else {
+            removals.push(line_deletion_range(source, item_range.clone()));
+        }
+        flagged_ranges.push(item_range);
+    }
+
+    if !skipped.is_empty() {
+        return Err(format!("manual repair required: {}", skipped.join("; ")));
+    }
+    if owners.is_empty() {
+        return Ok((source.to_string(), 0));
+    }
+
+    let mut file_bindings = FileBindings {
+        bindings: Bindings::default(),
+        extra_use_bindings: BTreeSet::new(),
+        lines: &lines,
+        flagged_ranges: &flagged_ranges,
+    };
+    file_bindings.visit_file(&syntax);
+    for name in owners.keys() {
+        if file_bindings.bindings.names.contains(name) {
+            skipped.push(format!("local binding shadows `{name}`"));
+        }
+        if file_bindings.extra_use_bindings.contains(name) {
+            skipped.push(format!("second `use` binds `{name}`"));
+        }
+    }
+    if !skipped.is_empty() {
+        return Err(format!("manual repair required: {}", skipped.join("; ")));
+    }
+
+    let mut modules = InlineModules {
+        ranges: Vec::new(),
+        lines: &lines,
+    };
+    modules.visit_file(&syntax);
+    let mut edits: Vec<(Range<usize>, String)> = Vec::new();
+    let mut manual: Vec<String> = Vec::new();
+    let tokens: proc_macro2::TokenStream = source
+        .parse()
+        .map_err(|error| format!("tokenize failed: {error}"))?;
+    collect_reference_edits(
+        tokens.clone(),
+        &owners,
+        &flagged_ranges,
+        &modules.ranges,
+        &lines,
+        &mut edits,
+        &mut manual,
+    );
+    inline_format_references(tokens, &owners, &mut manual);
+    if !manual.is_empty() {
+        manual.sort();
+        manual.dedup();
+        return Err(format!("manual repair required: {}", manual.join("; ")));
+    }
+    for range in removals {
+        edits.push((range, String::new()));
+    }
+    edits.sort_by_key(|(range, _)| range.start);
+    for pair in edits.windows(2) {
+        if pair[0].0.end > pair[1].0.start {
+            return Err(format!(
+                "overlapping edits at bytes {} and {}",
+                pair[0].0.start, pair[1].0.start
+            ));
+        }
+    }
+
+    let edit_count = edits.len();
+    let mut output = source.to_string();
+    for (range, replacement) in edits.into_iter().rev() {
+        output.replace_range(range, &replacement);
+    }
+    syn::parse_file(&output).map_err(|error| format!("rewrite produced invalid syntax: {error}"))?;
+    Ok((output, edit_count))
+}
+
+/// Adjust an owner path for the inline-module depth of one use site.
+///
+/// A `super::` owner was written relative to the file module, so a use site
+/// inside `depth` inline modules needs one more `super::` step per level.
+/// `crate::` and `::` owners are already absolute.
+fn qualify_owner(owner: &str, depth: usize) -> String {
+    match owner.strip_prefix("super::") {
+        Some(rest) if depth > 0 => {
+            let mut prefix = String::new();
+            for _ in 0..=depth {
+                prefix.push_str("super::");
+            }
+            format!("{prefix}{rest}")
+        }
+        _ => owner.to_owned(),
+    }
+}
+
+fn module_depth(ranges: &[Range<usize>], offset: usize) -> usize {
+    ranges.iter().filter(|range| range.contains(&offset)).count()
+}
+
+/// Record one edit per reference identifier, skipping import text and paths.
+#[allow(clippy::too_many_arguments)]
+fn collect_reference_edits(
+    stream: proc_macro2::TokenStream,
+    owners: &BTreeMap<String, String>,
+    flagged_ranges: &[Range<usize>],
+    module_ranges: &[Range<usize>],
+    lines: &LineIndex,
+    edits: &mut Vec<(Range<usize>, String)>,
+    manual: &mut Vec<String>,
+) {
+    let mut previous = String::new();
+    for token in stream {
+        match token {
+            proc_macro2::TokenTree::Group(group) => {
+                collect_reference_edits(
+                    group.stream(),
+                    owners,
+                    flagged_ranges,
+                    module_ranges,
+                    lines,
+                    edits,
+                    manual,
+                );
+                previous.clear();
+            }
+            proc_macro2::TokenTree::Ident(ident) => {
+                let name = ident.to_string();
+                let start = lines.offset(ident.span().start());
+                let range = lines.range(ident.span());
+                let in_import = flagged_ranges.iter().any(|item| item.contains(&start));
+                let is_qualified = previous == "::" || previous == ".";
+                if !in_import && !is_qualified {
+                    if let Some(owner) = owners.get(&name) {
+                        let depth = module_depth(module_ranges, start);
+                        if owner.starts_with("self::") && depth > 0 {
+                            manual.push(format!("`self::` owner for `{name}` inside a nested module"));
+                        } else {
+                            edits.push((range, qualify_owner(owner, depth)));
+                        }
+                    }
+                }
+                previous = name;
+            }
+            proc_macro2::TokenTree::Punct(punct) => {
+                previous = if punct.as_char() == ':' && previous == ":" {
+                    String::from("::")
+                } else {
+                    punct.as_char().to_string()
+                };
+            }
+            proc_macro2::TokenTree::Literal(_) => previous.clear(),
+        }
+    }
+}
+
+/// Detect inline format arguments such as `format!("{NAME}")`.
+///
+/// The identifier lives inside a string literal, so the token rewrite cannot
+/// qualify it. Removing the import would break the call, so the file is
+/// reported for manual repair instead of being rewritten silently.
+fn inline_format_references(
+    stream: proc_macro2::TokenStream,
+    owners: &BTreeMap<String, String>,
+    manual: &mut Vec<String>,
+) {
+    for token in stream {
+        match token {
+            proc_macro2::TokenTree::Group(group) => {
+                inline_format_references(group.stream(), owners, manual);
+            }
+            proc_macro2::TokenTree::Literal(literal) => {
+                let text = literal.to_string();
+                if !text.contains('{') {
+                    continue;
+                }
+                for name in owners.keys() {
+                    let open = format!("{{{name}}}");
+                    let spec = format!("{{{name}:");
+                    if text.contains(&open) || text.contains(&spec) {
+                        manual.push(format!("inline format argument `{name}`"));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn run_summary(summary_path: &str, dry_run: bool, only: &[String]) -> Result<usize, String> {
+    let summary = std::fs::read_to_string(summary_path)
+        .map_err(|error| format!("cannot read {summary_path}: {error}"))?;
+    let flagged = read_flagged_lines(&summary);
+    let mut total_edits = 0_usize;
+    let mut repaired = 0_usize;
+    let mut failed = 0_usize;
+    for (path, lines) in &flagged {
+        if !only.is_empty() && !only.iter().any(|wanted| wanted == path) {
+            continue;
+        }
+        if !path.ends_with(".rs") || !FsPath::new(path).exists() {
+            continue;
+        }
+        let source =
+            std::fs::read_to_string(path).map_err(|error| format!("cannot read {path}: {error}"))?;
+        match qualify_source(path, &source, lines) {
+            Ok((_output, edits)) if edits == 0 => {}
+            Ok((_output, edits)) if dry_run => {
+                println!("{path}: {edits} edits (dry run)");
+                total_edits += edits;
+                repaired += 1;
+            }
+            Ok((output, edits)) => {
+                std::fs::write(path, output)
+                    .map_err(|error| format!("cannot write {path}: {error}"))?;
+                println!("{path}: {edits} edits");
+                total_edits += edits;
+                repaired += 1;
+            }
+            Err(message) => {
+                eprintln!("{path}: SKIP ({message})");
+                failed += 1;
+            }
+        }
+    }
+    println!("files repaired: {repaired}, edits: {total_edits}, skipped: {failed}");
+    Ok(total_edits)
+}
+
+fn self_test() -> Result<(), String> {
+    let source = r#"use std::collections::BTreeMap;
+use crate::addr::Addr;
+use crate::addr::Route as Path;
+use crate::other::Unflagged;
+
+pub struct Holder {
+    table: BTreeMap<String, Addr>,
+}
+
+impl Holder {
+    fn route(&self, addr: &Addr) -> Path {
+        let qualified = crate::addr::Addr;
+        let _ = qualified;
+        Path::new()
+    }
+
+    fn untouched(&self) -> Unflagged {
+        Unflagged
+    }
+}
+"#;
+    let (output, edits) = qualify_source("src/addr/route.rs", source, &[2, 3])?;
+    if edits != SELF_TEST_EXPECTED_EDITS {
+        return Err(format!(
+            "self test expected {SELF_TEST_EXPECTED_EDITS} edits, got {edits}"
+        ));
+    }
+    if output.contains("use crate::addr::Addr;") || output.contains("use crate::addr::Route as Path;")
+    {
+        return Err(String::from("self test kept a flagged import"));
+    }
+    if !output.contains("use std::collections::BTreeMap;") {
+        return Err(String::from("self test removed an unflagged import"));
+    }
+    if !output.contains("use crate::other::Unflagged;") {
+        return Err(String::from("self test removed an unflagged import"));
+    }
+    let expected = [
+        "table: BTreeMap<String, crate::addr::Addr>",
+        "addr: &crate::addr::Addr",
+        "-> crate::addr::Route",
+        "crate::addr::Route::new()",
+    ];
+    for fragment in expected {
+        if !output.contains(fragment) {
+            return Err(format!("self test missing `{fragment}` in\n{output}"));
+        }
+    }
+    if !output.contains("let qualified = crate::addr::Addr;") {
+        return Err(String::from("self test rewrote an already qualified path"));
+    }
+
+    let nested = "use super::Addr;\n\nmod inner {\n    fn f(value: Addr) -> Addr {\n        value\n    }\n}\n";
+    let (output, _edits) = qualify_source("src/addr/route.rs", nested, &[1])?;
+    if !output.contains("fn f(value: super::super::Addr) -> super::super::Addr") {
+        return Err(format!("self test did not adjust inline-module depth in\n{output}"));
+    }
+
+    let absolute = "use ::syndicate::bag::BTreeBag;\n\nfn f() -> BTreeBag {\n    BTreeBag::new()\n}\n";
+    let (output, _edits) = qualify_source("src/addr/route.rs", absolute, &[1])?;
+    if !output.contains("-> ::syndicate::bag::BTreeBag") {
+        return Err(format!("self test lost the absolute path in\n{output}"));
+    }
+
+    let negative = "use crate::addr::Addr;\nuse crate::other::Addr;\n";
+    if qualify_source("src/addr/route.rs", negative, &[1, 2]).is_ok() {
+        return Err(String::from("self test accepted two owners for one name"));
+    }
+    let group = "use crate::addr::{Addr, Route};\n";
+    if qualify_source("src/addr/route.rs", group, &[1]).is_ok() {
+        return Err(String::from("self test accepted a partially flagged group"));
+    }
+    let parent = "use crate::addr::Addr;\nmod child;\n";
+    if qualify_source("src/addr/route.rs", parent, &[1]).is_ok() {
+        return Err(String::from("self test accepted a module parent"));
+    }
+    let part = "use crate::addr::Addr;\n";
+    if qualify_source("src/effects/parts/mod/p000/body.rs", part, &[1]).is_ok() {
+        return Err(String::from("self test accepted an include! part body"));
+    }
+    let shadowed = "use crate::addr::Addr;\n\nfn f() {\n    let Addr = 1;\n    let _ = Addr;\n}\n";
+    if qualify_source("src/addr/route.rs", shadowed, &[1]).is_ok() {
+        return Err(String::from("self test accepted a shadowing binding"));
+    }
+    let anonymous = "use std::hash::Hash as _;\nuse std::hash::Hasher;\n";
+    if qualify_source("src/addr/route.rs", anonymous, &[1]).is_ok() {
+        return Err(String::from("self test accepted an anonymous import"));
+    }
+    let formatted = "use crate::addr::Addr;\n\nfn f(value: Addr) -> String {\n    format!(\"{Addr}\")\n}\n";
+    if qualify_source("src/addr/route.rs", formatted, &[1]).is_ok() {
+        return Err(String::from("self test accepted an inline format argument"));
+    }
+    println!("self test passed");
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut arguments = std::env::args().skip(1);
+    let mut summary: Option<String> = None;
+    let mut dry_run = false;
+    let mut self_check = false;
+    let mut only: Vec<String> = Vec::new();
+    while let Some(argument) = arguments.next() {
+        match argument.as_str() {
+            "--findings" => {
+                summary = Some(arguments.next().ok_or("missing value after --findings")?);
+            }
+            "--dry-run" => dry_run = true,
+            "--self-test" => self_check = true,
+            other if other.starts_with("--") => return Err(format!("unknown flag {other}").into()),
+            other => only.push(other.to_owned()),
+        }
+    }
+    if self_check {
+        return self_test().map_err(Into::into);
+    }
+    let summary = summary.ok_or("missing --findings <octet summary path>")?;
+    run_summary(&summary, dry_run, &only)?;
+    Ok(())
+}

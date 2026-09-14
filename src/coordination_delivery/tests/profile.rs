@@ -1,11 +1,10 @@
 use molten_core::coordination_delivery::*;
-use serde::Deserialize;
 
 use super::support::*;
 
 const GENERATED_PROFILE: &str = "config/coordination-delivery/generated/profile.json";
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 struct ProfileProjection {
     schema: String,
     policy: DeliveryPolicy,

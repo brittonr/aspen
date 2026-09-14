@@ -1,6 +1,4 @@
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 pub(super) struct ReadProbeInput {
     pub from: String,
@@ -17,18 +15,18 @@ pub(super) struct ReadAcknowledgementInput {
     pub request_ref: String,
 }
 
-pub(super) fn handle_read_probe(transition: &mut MessageTransition, input: ReadProbeInput) -> Result<()> {
+pub(super) fn handle_read_probe(transition: &mut MessageTransition, input: ReadProbeInput) -> crate::error::Result<()> {
     if input.term < transition.next.current_term {
         return Ok(());
     }
     if input.leader_id != input.from {
-        return Err(MoltenError::invalid_harness("Raft read probe leader does not match its sender"));
+        return Err(crate::error::MoltenError::invalid_harness("Raft read probe leader does not match its sender"));
     }
     if input.required_index > support::last_log_index(&transition.next) {
-        return Err(MoltenError::invalid_harness("Raft read probe requires an unavailable log boundary"));
+        return Err(crate::error::MoltenError::invalid_harness("Raft read probe requires an unavailable log boundary"));
     }
     if transition.next.role == ReplicaRole::Leader && input.leader_id != transition.next.node_id {
-        return Err(MoltenError::invalid_harness("Raft read probe observed two leaders in one term"));
+        return Err(crate::error::MoltenError::invalid_harness("Raft read probe observed two leaders in one term"));
     }
     transition.next.role = ReplicaRole::Follower;
     transition.next.leader_id = Some(input.leader_id);
@@ -50,12 +48,14 @@ pub(super) fn handle_read_probe(transition: &mut MessageTransition, input: ReadP
 pub(super) fn handle_read_acknowledgement(
     transition: &mut MessageTransition,
     input: ReadAcknowledgementInput,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if input.term < transition.next.current_term || transition.next.role != ReplicaRole::Leader {
         return Ok(());
     }
     if input.follower_id != input.from {
-        return Err(MoltenError::invalid_harness("Raft read acknowledgement follower does not match its sender"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "Raft read acknowledgement follower does not match its sender",
+        ));
     }
     let Some(pending) = transition.next.pending_reads.get_mut(&input.request_ref) else {
         return Ok(());
@@ -67,11 +67,10 @@ pub(super) fn handle_read_acknowledgement(
     if pending.acknowledgements.len() < STATIC_QUORUM_COUNT {
         return Ok(());
     }
-    let completed = transition
-        .next
-        .pending_reads
-        .remove(&input.request_ref)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft pending read disappeared before completion"))?;
+    let completed =
+        transition.next.pending_reads.remove(&input.request_ref).ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness("Raft pending read disappeared before completion")
+        })?;
     transition.next.quorum_confirmed_term = Some(transition.next.current_term);
     transition.effects.push(ReplicaEffect::ReadOutcome {
         request_ref: completed.request_ref,

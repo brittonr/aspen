@@ -1,24 +1,21 @@
 use super::super::*;
-use super::support::fixture_component_profile_ref;
-use super::support::fixture_optimization;
-use super::support::fixture_ref;
 
 fn with_passing_conformance(
     mut optimization: OptimizationProfile,
 ) -> (OptimizationProfile, OptimizationConformanceRecord) {
-    let output_ref = fixture_ref("conformance-output");
+    let output_ref = super::support::fixture_ref("conformance-output");
     let mut record = OptimizationConformanceRecord {
         record_ref: String::new(),
         optimization_configuration_ref: optimization_configuration_ref(&optimization),
-        component_profile_ref: fixture_component_profile_ref(),
-        input_ref: fixture_ref("conformance-input"),
+        component_profile_ref: super::support::fixture_component_profile_ref(),
+        input_ref: super::support::fixture_ref("conformance-input"),
         baseline_output_ref: output_ref.clone(),
         optimized_output_ref: output_ref,
-        baseline_execution_receipt_ref: fixture_ref("baseline-execution"),
-        optimized_execution_receipt_ref: fixture_ref("optimized-execution"),
+        baseline_execution_receipt_ref: super::support::fixture_ref("baseline-execution"),
+        optimized_execution_receipt_ref: super::support::fixture_ref("optimized-execution"),
         baseline_terminal_class: "pass".to_string(),
         optimized_terminal_class: "pass".to_string(),
-        recorded_effect_refs: vec![fixture_ref("conformance-effect")],
+        recorded_effect_refs: vec![super::support::fixture_ref("conformance-effect")],
         passed: true,
     };
     record.record_ref = optimization_conformance_record_ref(&record);
@@ -30,7 +27,7 @@ fn with_passing_conformance(
 fn named_optimization_profiles_bind_conformance_and_capacity() {
     // r[verify molten.wasm_performance.optimizations]
     let profile = supported_performance_profile().expect("supported performance profile");
-    let baseline = fixture_optimization();
+    let baseline = super::support::fixture_optimization();
     validate_optimization_profile(&profile, &baseline).expect("baseline optimization profile");
 
     let mut pooling = baseline.clone();
@@ -38,19 +35,19 @@ fn named_optimization_profiles_bind_conformance_and_capacity() {
     pooling.pooling_allocator = true;
     pooling.max_concurrency = profile.optimization_limits.max_concurrency;
     pooling.max_queue_depth = profile.optimization_limits.max_queue_depth;
-    let output_ref = fixture_ref("conformance-output");
+    let output_ref = super::support::fixture_ref("conformance-output");
     let mut conformance = OptimizationConformanceRecord {
         record_ref: String::new(),
         optimization_configuration_ref: optimization_configuration_ref(&pooling),
-        component_profile_ref: fixture_component_profile_ref(),
-        input_ref: fixture_ref("conformance-input"),
+        component_profile_ref: super::support::fixture_component_profile_ref(),
+        input_ref: super::support::fixture_ref("conformance-input"),
         baseline_output_ref: output_ref.clone(),
         optimized_output_ref: output_ref,
-        baseline_execution_receipt_ref: fixture_ref("baseline-execution"),
-        optimized_execution_receipt_ref: fixture_ref("optimized-execution"),
+        baseline_execution_receipt_ref: super::support::fixture_ref("baseline-execution"),
+        optimized_execution_receipt_ref: super::support::fixture_ref("optimized-execution"),
         baseline_terminal_class: "pass".to_string(),
         optimized_terminal_class: "pass".to_string(),
-        recorded_effect_refs: vec![fixture_ref("conformance-effect")],
+        recorded_effect_refs: vec![super::support::fixture_ref("conformance-effect")],
         passed: true,
     };
     conformance.record_ref = optimization_conformance_record_ref(&conformance);
@@ -82,7 +79,7 @@ fn optimization_over_capacity_missing_conformance_and_cross_named_knobs_deny() {
     // r[verify molten.wasm_performance.optimizations]
     // r[verify molten.wasm_performance.validation]
     let profile = supported_performance_profile().expect("supported performance profile");
-    let baseline = fixture_optimization();
+    let baseline = super::support::fixture_optimization();
 
     let mut over_capacity = baseline.clone();
     over_capacity.max_concurrency = profile.optimization_limits.max_concurrency + 1;
@@ -99,21 +96,21 @@ fn optimization_over_capacity_missing_conformance_and_cross_named_knobs_deny() {
     let mut mislabeled = baseline;
     mislabeled.profile_id = COW_OPTIMIZATION_PROFILE_ID.to_string();
     mislabeled.pooling_allocator = true;
-    mislabeled.deterministic_conformance_ref = fixture_ref("other-conformance");
+    mislabeled.deterministic_conformance_ref = super::support::fixture_ref("other-conformance");
     assert!(validate_optimization_profile(&profile, &mislabeled).is_err());
 
     let mut failed_record = OptimizationConformanceRecord {
         record_ref: String::new(),
         optimization_configuration_ref: optimization_configuration_ref(&mislabeled),
-        component_profile_ref: fixture_component_profile_ref(),
-        input_ref: fixture_ref("conformance-input"),
-        baseline_output_ref: fixture_ref("baseline-output"),
-        optimized_output_ref: fixture_ref("different-output"),
-        baseline_execution_receipt_ref: fixture_ref("baseline-execution"),
-        optimized_execution_receipt_ref: fixture_ref("optimized-execution"),
+        component_profile_ref: super::support::fixture_component_profile_ref(),
+        input_ref: super::support::fixture_ref("conformance-input"),
+        baseline_output_ref: super::support::fixture_ref("baseline-output"),
+        optimized_output_ref: super::support::fixture_ref("different-output"),
+        baseline_execution_receipt_ref: super::support::fixture_ref("baseline-execution"),
+        optimized_execution_receipt_ref: super::support::fixture_ref("optimized-execution"),
         baseline_terminal_class: "pass".to_string(),
         optimized_terminal_class: "trap".to_string(),
-        recorded_effect_refs: vec![fixture_ref("conformance-effect")],
+        recorded_effect_refs: vec![super::support::fixture_ref("conformance-effect")],
         passed: false,
     };
     failed_record.record_ref = optimization_conformance_record_ref(&failed_record);

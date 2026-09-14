@@ -1,9 +1,5 @@
 use molten_core::content_store_adapter::*;
 use molten_core::fabric::*;
-use preserves::IOValue;
-
-use crate::error::MoltenError;
-use crate::error::Result;
 
 const PROFILE_RECORD: &str = "content-store-adapter-profile-v1";
 const COMMAND_RECORD: &str = "content-store-adapter-command-v1";
@@ -15,13 +11,13 @@ const STATUS_RECORD: &str = "content-store-adapter-status-v1";
 pub struct CanonicalContentArtifact<T> {
     pub artifact: T,
     pub artifact_ref: String,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 // r[impl molten.content_store_adapter.port_contract]
 pub fn canonical_content_profile(
     profile: &ContentAdapterProfile,
-) -> Result<CanonicalContentArtifact<ContentAdapterProfile>> {
+) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterProfile>> {
     require_valid("content adapter profile", &validate_content_profile(profile))?;
     canonical_artifact(profile.clone(), profile_value(profile))
 }
@@ -32,7 +28,7 @@ pub fn canonical_content_command(
     command: &ContentCommand,
     active_operations: usize,
     queued_bytes: u64,
-) -> Result<CanonicalContentArtifact<ContentCommand>> {
+) -> crate::error::Result<CanonicalContentArtifact<ContentCommand>> {
     let preflight = preflight_content_operation(profile, manifest, command, active_operations, queued_bytes);
     require_valid("content command", &preflight.issues)?;
     canonical_artifact(command.clone(), command_value(command))
@@ -41,7 +37,7 @@ pub fn canonical_content_command(
 pub fn canonical_content_event(
     profile: &ContentAdapterProfile,
     event: &ContentEvent,
-) -> Result<CanonicalContentArtifact<ContentEvent>> {
+) -> crate::error::Result<CanonicalContentArtifact<ContentEvent>> {
     require_valid("content event", &validate_content_event(profile, event))?;
     canonical_artifact(event.clone(), event_value(event))
 }
@@ -50,7 +46,7 @@ pub fn canonical_partial_state(
     profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     state: &ContentPartialState,
-) -> Result<CanonicalContentArtifact<ContentPartialState>> {
+) -> crate::error::Result<CanonicalContentArtifact<ContentPartialState>> {
     require_valid("content partial state", &validate_partial_state(profile, manifest, state))?;
     canonical_artifact(state.clone(), partial_value(state))
 }
@@ -58,7 +54,7 @@ pub fn canonical_partial_state(
 pub fn canonical_content_status(
     profile: &ContentAdapterProfile,
     status: &ContentAdapterStatus,
-) -> Result<CanonicalContentArtifact<ContentAdapterStatus>> {
+) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterStatus>> {
     require_valid("content adapter status", &validate_adapter_status(profile, status))?;
     canonical_artifact(status.clone(), status_value(status))
 }
@@ -145,7 +141,7 @@ pub fn content_store_port_descriptors(profile_ref: &str) -> Vec<FabricPortDescri
     ]
 }
 
-fn profile_value(profile: &ContentAdapterProfile) -> IOValue {
+fn profile_value(profile: &ContentAdapterProfile) -> preserves::IOValue {
     record(PROFILE_RECORD, vec![
         string(CONTENT_ADAPTER_PROFILE_SCHEMA),
         field("profile-id", string(&profile.profile_id)),
@@ -164,7 +160,7 @@ fn profile_value(profile: &ContentAdapterProfile) -> IOValue {
     ])
 }
 
-fn command_value(command: &ContentCommand) -> IOValue {
+fn command_value(command: &ContentCommand) -> preserves::IOValue {
     record(COMMAND_RECORD, vec![
         string(CONTENT_COMMAND_SCHEMA),
         field("operation-ref", string(&command.operation_ref)),
@@ -183,7 +179,7 @@ fn command_value(command: &ContentCommand) -> IOValue {
     ])
 }
 
-fn event_value(event: &ContentEvent) -> IOValue {
+fn event_value(event: &ContentEvent) -> preserves::IOValue {
     record(EVENT_RECORD, vec![
         string(CONTENT_EVENT_SCHEMA),
         field("operation-ref", string(&event.operation_ref)),
@@ -199,7 +195,7 @@ fn event_value(event: &ContentEvent) -> IOValue {
     ])
 }
 
-fn partial_value(state: &ContentPartialState) -> IOValue {
+fn partial_value(state: &ContentPartialState) -> preserves::IOValue {
     record(PARTIAL_RECORD, vec![
         string(CONTENT_PARTIAL_STATE_SCHEMA),
         field("operation-ref", string(&state.operation_ref)),
@@ -217,7 +213,7 @@ fn partial_value(state: &ContentPartialState) -> IOValue {
     ])
 }
 
-fn status_value(status: &ContentAdapterStatus) -> IOValue {
+fn status_value(status: &ContentAdapterStatus) -> preserves::IOValue {
     record(STATUS_RECORD, vec![
         string(CONTENT_STATUS_SCHEMA),
         field("profile-ref", string(&status.profile_ref)),
@@ -244,7 +240,7 @@ fn status_value(status: &ContentAdapterStatus) -> IOValue {
     ])
 }
 
-fn bounds_value(bounds: &ContentResourceBounds) -> IOValue {
+fn bounds_value(bounds: &ContentResourceBounds) -> preserves::IOValue {
     record("content-resource-bounds", vec![
         field("max-total-bytes", u64_value(bounds.max_total_bytes)),
         field("max-chunk-count", usize_value(bounds.max_chunk_count)),
@@ -297,7 +293,7 @@ fn issue_code(issue: &ContentIssue) -> &'static str {
     }
 }
 
-fn canonical_artifact<T>(artifact: T, value: IOValue) -> Result<CanonicalContentArtifact<T>> {
+fn canonical_artifact<T>(artifact: T, value: preserves::IOValue) -> crate::error::Result<CanonicalContentArtifact<T>> {
     let artifact_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(CanonicalContentArtifact {
         artifact,
@@ -306,15 +302,15 @@ fn canonical_artifact<T>(artifact: T, value: IOValue) -> Result<CanonicalContent
     })
 }
 
-fn require_valid(label: &str, issues: &[ContentIssue]) -> Result<()> {
+fn require_valid(label: &str, issues: &[ContentIssue]) -> crate::error::Result<()> {
     if issues.is_empty() {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} denied: {issues:?}")))
+        Err(crate::error::MoltenError::invalid_harness(format!("{label} denied: {issues:?}")))
     }
 }
 
-fn range_value(range: Option<ContentRange>) -> IOValue {
+fn range_value(range: Option<ContentRange>) -> preserves::IOValue {
     match range {
         Some(range) => record("some", vec![record("content-range", vec![
             field("offset", u64_value(range.offset)),
@@ -324,73 +320,73 @@ fn range_value(range: Option<ContentRange>) -> IOValue {
     }
 }
 
-fn optional_failure(failure: Option<ContentFailure>) -> IOValue {
+fn optional_failure(failure: Option<ContentFailure>) -> preserves::IOValue {
     match failure {
         Some(failure) => record("some", vec![string(failure.as_str())]),
         None => record("none", Vec::new()),
     }
 }
 
-fn optional_string(value: Option<&str>) -> IOValue {
+fn optional_string(value: Option<&str>) -> preserves::IOValue {
     match value {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn optional_u64(value: Option<u64>) -> IOValue {
+fn optional_u64(value: Option<u64>) -> preserves::IOValue {
     match value {
         Some(value) => record("some", vec![u64_value(value)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn non_claims_value(values: &[ContentNonClaim]) -> IOValue {
+fn non_claims_value(values: &[ContentNonClaim]) -> preserves::IOValue {
     strings(values.iter().map(|value| value.as_str()))
 }
 
-fn issues_value(values: &[ContentIssue]) -> IOValue {
+fn issues_value(values: &[ContentIssue]) -> preserves::IOValue {
     strings(values.iter().map(issue_code))
 }
 
-fn checks(names: &[&str]) -> IOValue {
+fn checks(names: &[&str]) -> preserves::IOValue {
     field(
         "checks",
         sequence(names.iter().map(|name| record("check", vec![string(name), string("pass")])).collect()),
     )
 }
 
-fn strings<'a>(values: impl Iterator<Item = &'a str>) -> IOValue {
+fn strings<'a>(values: impl Iterator<Item = &'a str>) -> preserves::IOValue {
     sequence(values.map(string).collect())
 }
 
-fn usize_value(value: usize) -> IOValue {
+fn usize_value(value: usize) -> preserves::IOValue {
     match u64::try_from(value) {
         Ok(value) => u64_value(value),
         Err(_) => record("usize-overflow", Vec::new()),
     }
 }
 
-fn bool_value(value: bool) -> IOValue {
+fn bool_value(value: bool) -> preserves::IOValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn field(label: &'static str, value: IOValue) -> IOValue {
+fn field(label: &'static str, value: preserves::IOValue) -> preserves::IOValue {
     record(label, vec![value])
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> preserves::IOValue {
     crate::preserves_rail::string(value.as_ref())
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> preserves::IOValue {
     crate::preserves_rail::u64_value(value)
 }

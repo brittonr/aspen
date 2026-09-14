@@ -1,47 +1,25 @@
-use std::collections::BTreeSet;
-
-use super::ConfigurationTransition;
-use super::ConsistencyGroupBinding;
-use super::ConsistencyGroupLifecycle;
-use super::ConsistencyOperation;
-use super::ConsistencyPlanDecision;
-use super::ConsistencyPortCommandInput;
-use super::ConsistencyPortPlan;
-use super::ConsistencyReadMode;
-use super::MAX_CONSISTENCY_AUTHORITY_REFS;
-use super::MAX_CONSISTENCY_DIAGNOSTICS;
-use super::MAX_CONSISTENCY_POLICY_REFS;
-use super::NEXT_CONSISTENCY_EPOCH_STEP;
-use super::binding::validate_content_ref;
-use super::binding::validate_content_refs;
-use super::binding::validate_identifier;
-use super::canonical::PlanValueInput;
-use super::canonical::plan_value;
-use crate::error::MoltenError;
-use crate::error::Result;
-
 pub(super) fn plan_consistency_operation(
-    binding: &ConsistencyGroupBinding,
-    input: ConsistencyPortCommandInput,
-) -> Result<ConsistencyPortPlan> {
+    binding: &super::ConsistencyGroupBinding,
+    input: super::ConsistencyPortCommandInput,
+) -> crate::error::Result<super::ConsistencyPortPlan> {
     validate_command_input(&input)?;
-    let mut diagnostics = BTreeSet::new();
+    let mut diagnostics = std::collections::BTreeSet::new();
     collect_binding_diagnostics(binding, &input, &mut diagnostics);
     collect_operation_diagnostics(binding, &input, &mut diagnostics);
     if input.observed_in_flight_operations >= binding.max_in_flight_operations {
         diagnostics.insert("in-flight-operation-bound-exhausted");
     }
-    if diagnostics.len() > MAX_CONSISTENCY_DIAGNOSTICS {
-        return Err(MoltenError::invalid_harness("consistency diagnostics exceeded the bounded maximum"));
+    if diagnostics.len() > super::MAX_CONSISTENCY_DIAGNOSTICS {
+        return Err(crate::error::MoltenError::invalid_harness("consistency diagnostics exceeded the bounded maximum"));
     }
     let decision = if diagnostics.is_empty() {
-        ConsistencyPlanDecision::Admitted
+        super::ConsistencyPlanDecision::Admitted
     } else {
-        ConsistencyPlanDecision::Denied
+        super::ConsistencyPlanDecision::Denied
     };
     let lifecycle_after = planned_lifecycle(binding.lifecycle, &input.operation, decision);
     let diagnostics = diagnostics.into_iter().map(str::to_string).collect::<Vec<_>>();
-    let value = plan_value(PlanValueInput {
+    let value = super::canonical::plan_value(super::canonical::PlanValueInput {
         binding,
         command: &input,
         decision,
@@ -50,7 +28,7 @@ pub(super) fn plan_consistency_operation(
         diagnostics: &diagnostics,
     });
     let plan_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ConsistencyPortPlan {
+    Ok(super::ConsistencyPortPlan {
         plan_ref,
         request_ref: input.request_ref,
         binding_ref: input.binding_ref,
@@ -63,9 +41,9 @@ pub(super) fn plan_consistency_operation(
     })
 }
 
-fn validate_command_input(input: &ConsistencyPortCommandInput) -> Result<()> {
-    validate_content_ref(&input.request_ref, "consistency request ref")?;
-    validate_content_ref(&input.binding_ref, "consistency binding ref")?;
+fn validate_command_input(input: &super::ConsistencyPortCommandInput) -> crate::error::Result<()> {
+    super::binding::validate_content_ref(&input.request_ref, "consistency request ref")?;
+    super::binding::validate_content_ref(&input.binding_ref, "consistency binding ref")?;
     for (value, label) in [
         (&input.group_id, "consistency command group id"),
         (&input.extension_id, "consistency command extension id"),
@@ -73,7 +51,7 @@ fn validate_command_input(input: &ConsistencyPortCommandInput) -> Result<()> {
         (&input.engine_algorithm_profile, "consistency command algorithm profile"),
         (&input.engine_implementation_profile, "consistency command implementation profile"),
     ] {
-        validate_identifier(value, label)?;
+        super::binding::validate_identifier(value, label)?;
     }
     for (reference, label) in [
         (&input.application_manifest_ref, "application manifest ref"),
@@ -82,54 +60,61 @@ fn validate_command_input(input: &ConsistencyPortCommandInput) -> Result<()> {
         (&input.fencing_ref, "fencing ref"),
         (&input.resource_profile_ref, "resource profile ref"),
     ] {
-        validate_content_ref(reference, label)?;
+        super::binding::validate_content_ref(reference, label)?;
     }
-    validate_content_refs(&input.policy_refs, MAX_CONSISTENCY_POLICY_REFS, "consistency command policy refs", true)?;
-    validate_content_refs(
+    super::binding::validate_content_refs(
+        &input.policy_refs,
+        super::MAX_CONSISTENCY_POLICY_REFS,
+        "consistency command policy refs",
+        true,
+    )?;
+    super::binding::validate_content_refs(
         &input.authority_refs,
-        MAX_CONSISTENCY_AUTHORITY_REFS,
+        super::MAX_CONSISTENCY_AUTHORITY_REFS,
         "consistency command authority refs",
         true,
     )?;
     validate_operation(&input.operation)
 }
 
-fn validate_operation(operation: &ConsistencyOperation) -> Result<()> {
+fn validate_operation(operation: &super::ConsistencyOperation) -> crate::error::Result<()> {
     match operation {
-        ConsistencyOperation::Open { .. }
-        | ConsistencyOperation::Health
-        | ConsistencyOperation::Drain
-        | ConsistencyOperation::Status
-        | ConsistencyOperation::Remove => Ok(()),
-        ConsistencyOperation::Propose {
+        super::ConsistencyOperation::Open { .. }
+        | super::ConsistencyOperation::Health
+        | super::ConsistencyOperation::Drain
+        | super::ConsistencyOperation::Status
+        | super::ConsistencyOperation::Remove => Ok(()),
+        super::ConsistencyOperation::Propose {
             command_ref,
             command_schema_ref,
             ..
         } => {
-            validate_content_ref(command_ref, "consistency command ref")?;
-            validate_content_ref(command_schema_ref, "consistency command schema ref")
+            super::binding::validate_content_ref(command_ref, "consistency command ref")?;
+            super::binding::validate_content_ref(command_schema_ref, "consistency command schema ref")
         }
-        ConsistencyOperation::Read { query_ref, .. } => validate_content_ref(query_ref, "consistency query ref"),
-        ConsistencyOperation::Snapshot { snapshot_policy_ref } => {
-            validate_content_ref(snapshot_policy_ref, "snapshot policy ref")
+        super::ConsistencyOperation::Read { query_ref, .. } => {
+            super::binding::validate_content_ref(query_ref, "consistency query ref")
         }
-        ConsistencyOperation::Recover {
+        super::ConsistencyOperation::Snapshot { snapshot_policy_ref } => {
+            super::binding::validate_content_ref(snapshot_policy_ref, "snapshot policy ref")
+        }
+        super::ConsistencyOperation::Recover {
             snapshot_ref,
             durable_boundary_ref,
         } => {
-            validate_content_ref(snapshot_ref, "snapshot ref")?;
-            validate_content_ref(durable_boundary_ref, "durable boundary ref")
+            super::binding::validate_content_ref(snapshot_ref, "snapshot ref")?;
+            super::binding::validate_content_ref(durable_boundary_ref, "durable boundary ref")
         }
-        ConsistencyOperation::Configure { transition } => {
-            validate_content_ref(transition.next_membership_ref(), "next membership ref")
+        super::ConsistencyOperation::Configure { transition } => {
+            super::binding::validate_content_ref(transition.next_membership_ref(), "next membership ref")
         }
     }
 }
 
 fn collect_binding_diagnostics(
-    binding: &ConsistencyGroupBinding,
-    input: &ConsistencyPortCommandInput,
-    diagnostics: &mut BTreeSet<&str>,
+    binding: &super::ConsistencyGroupBinding,
+    input: &super::ConsistencyPortCommandInput,
+    diagnostics: &mut std::collections::BTreeSet<&str>,
 ) {
     for (matches, diagnostic) in [
         (binding.binding_ref == input.binding_ref, "binding-ref-mismatch"),
@@ -158,26 +143,26 @@ fn collect_binding_diagnostics(
 }
 
 fn collect_operation_diagnostics(
-    binding: &ConsistencyGroupBinding,
-    input: &ConsistencyPortCommandInput,
-    diagnostics: &mut BTreeSet<&str>,
+    binding: &super::ConsistencyGroupBinding,
+    input: &super::ConsistencyPortCommandInput,
+    diagnostics: &mut std::collections::BTreeSet<&str>,
 ) {
     if !operation_allowed_for_lifecycle(binding.lifecycle, &input.operation) {
         diagnostics.insert("operation-denied-for-lifecycle");
     }
     match &input.operation {
-        ConsistencyOperation::Propose {
+        super::ConsistencyOperation::Propose {
             estimated_command_bytes,
             ..
         } if *estimated_command_bytes == 0 || *estimated_command_bytes > binding.max_command_bytes => {
             diagnostics.insert("command-byte-bound-denied");
         }
-        ConsistencyOperation::Read { mode, .. }
-            if *mode == ConsistencyReadMode::Lease || !binding.supported_read_modes.contains(mode) =>
+        super::ConsistencyOperation::Read { mode, .. }
+            if *mode == super::ConsistencyReadMode::Lease || !binding.supported_read_modes.contains(mode) =>
         {
             diagnostics.insert("unsupported-read-mode");
         }
-        ConsistencyOperation::Configure { transition } => {
+        super::ConsistencyOperation::Configure { transition } => {
             collect_configuration_diagnostics(binding, transition, diagnostics);
         }
         _ => {}
@@ -185,14 +170,14 @@ fn collect_operation_diagnostics(
 }
 
 fn collect_configuration_diagnostics(
-    binding: &ConsistencyGroupBinding,
-    transition: &ConfigurationTransition,
-    diagnostics: &mut BTreeSet<&str>,
+    binding: &super::ConsistencyGroupBinding,
+    transition: &super::ConfigurationTransition,
+    diagnostics: &mut std::collections::BTreeSet<&str>,
 ) {
-    if !matches!(transition, ConfigurationTransition::StaticMembershipRefresh { .. }) {
+    if !matches!(transition, super::ConfigurationTransition::StaticMembershipRefresh { .. }) {
         diagnostics.insert("unsupported-configuration-transition");
     }
-    let Some(expected_epoch) = binding.config_epoch.checked_add(NEXT_CONSISTENCY_EPOCH_STEP) else {
+    let Some(expected_epoch) = binding.config_epoch.checked_add(super::NEXT_CONSISTENCY_EPOCH_STEP) else {
         diagnostics.insert("config-epoch-overflow");
         return;
     };
@@ -204,38 +189,41 @@ fn collect_configuration_diagnostics(
     }
 }
 
-fn operation_allowed_for_lifecycle(lifecycle: ConsistencyGroupLifecycle, operation: &ConsistencyOperation) -> bool {
+fn operation_allowed_for_lifecycle(
+    lifecycle: super::ConsistencyGroupLifecycle,
+    operation: &super::ConsistencyOperation,
+) -> bool {
     match lifecycle {
-        ConsistencyGroupLifecycle::Declared => {
-            matches!(operation, ConsistencyOperation::Open { .. } | ConsistencyOperation::Status)
+        super::ConsistencyGroupLifecycle::Declared => {
+            matches!(operation, super::ConsistencyOperation::Open { .. } | super::ConsistencyOperation::Status)
         }
-        ConsistencyGroupLifecycle::Active => {
-            !matches!(operation, ConsistencyOperation::Open { .. } | ConsistencyOperation::Remove)
+        super::ConsistencyGroupLifecycle::Active => {
+            !matches!(operation, super::ConsistencyOperation::Open { .. } | super::ConsistencyOperation::Remove)
         }
-        ConsistencyGroupLifecycle::Draining => matches!(
+        super::ConsistencyGroupLifecycle::Draining => matches!(
             operation,
-            ConsistencyOperation::Snapshot { .. }
-                | ConsistencyOperation::Health
-                | ConsistencyOperation::Drain
-                | ConsistencyOperation::Status
-                | ConsistencyOperation::Remove
+            super::ConsistencyOperation::Snapshot { .. }
+                | super::ConsistencyOperation::Health
+                | super::ConsistencyOperation::Drain
+                | super::ConsistencyOperation::Status
+                | super::ConsistencyOperation::Remove
         ),
-        ConsistencyGroupLifecycle::Removed => matches!(operation, ConsistencyOperation::Status),
+        super::ConsistencyGroupLifecycle::Removed => matches!(operation, super::ConsistencyOperation::Status),
     }
 }
 
 fn planned_lifecycle(
-    current: ConsistencyGroupLifecycle,
-    operation: &ConsistencyOperation,
-    decision: ConsistencyPlanDecision,
-) -> ConsistencyGroupLifecycle {
-    if decision == ConsistencyPlanDecision::Denied {
+    current: super::ConsistencyGroupLifecycle,
+    operation: &super::ConsistencyOperation,
+    decision: super::ConsistencyPlanDecision,
+) -> super::ConsistencyGroupLifecycle {
+    if decision == super::ConsistencyPlanDecision::Denied {
         return current;
     }
     match operation {
-        ConsistencyOperation::Open { .. } => ConsistencyGroupLifecycle::Active,
-        ConsistencyOperation::Drain => ConsistencyGroupLifecycle::Draining,
-        ConsistencyOperation::Remove => ConsistencyGroupLifecycle::Removed,
+        super::ConsistencyOperation::Open { .. } => super::ConsistencyGroupLifecycle::Active,
+        super::ConsistencyOperation::Drain => super::ConsistencyGroupLifecycle::Draining,
+        super::ConsistencyOperation::Remove => super::ConsistencyGroupLifecycle::Removed,
         _ => current,
     }
 }

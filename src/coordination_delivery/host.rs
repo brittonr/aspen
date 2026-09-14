@@ -1,8 +1,4 @@
-use std::collections::BTreeSet;
-
 use molten_core::coordination_delivery::*;
-
-use crate::system_extension::CanonicalAdmittedSystemExtensionManifest;
 
 pub const DELIVERY_HOST_BINDING_SCHEMA: &str = "molten.coordination-delivery-host-binding.v1";
 
@@ -19,7 +15,7 @@ pub struct DeliveryHostBindingFacts {
 
 // r[impl molten.coordination_delivery.consistency_durability]
 pub fn project_delivery_host_binding(
-    admitted: &CanonicalAdmittedSystemExtensionManifest,
+    admitted: &crate::system_extension::CanonicalAdmittedSystemExtensionManifest,
     active_generation: u64,
     lifecycle_running: bool,
     delivery: &DeliveryManifest,
@@ -29,7 +25,7 @@ pub fn project_delivery_host_binding(
         .required_port_bindings()
         .iter()
         .map(|binding| binding.binding_ref.as_str())
-        .collect::<BTreeSet<_>>();
+        .collect::<std::collections::BTreeSet<_>>();
     if system.extension_id != delivery.extension_id
         || system.service_id != delivery.service_id
         || system.implementation_ref != delivery.implementation_ref

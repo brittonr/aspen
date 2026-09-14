@@ -2,8 +2,6 @@
 //!
 //! r[impl molten.modularity.fabric_boundary.adapters]
 
-use std::collections::BTreeMap;
-
 use super::*;
 #[allow(
     tigerstyle::non_trait_imports,
@@ -136,7 +134,7 @@ impl MembershipPlacementProvider for DeterministicSimulationMembershipProvider {
 
 #[derive(Debug, Default)]
 pub struct InMemoryAssignmentPersistence {
-    pub assignments: BTreeMap<String, RoleAssignment>,
+    pub assignments: std::collections::BTreeMap<String, RoleAssignment>,
     pub intents: Vec<String>,
     pub commits: Vec<String>,
     pub fail_intent: bool,

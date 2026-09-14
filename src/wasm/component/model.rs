@@ -1,6 +1,3 @@
-use serde::Deserialize;
-use serde::Serialize;
-
 pub const BLAKE3_REF_PREFIX: &str = "blake3:";
 pub const BLAKE3_HEX_LENGTH: usize = 64;
 pub const CONTENT_REF_LENGTH: usize = BLAKE3_REF_PREFIX.len() + BLAKE3_HEX_LENGTH;
@@ -99,7 +96,7 @@ impl std::error::Error for ComponentDenial {}
 
 pub type ComponentResult<T> = std::result::Result<T, ComponentDenial>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum EvidenceScope {
     Production,
@@ -115,7 +112,7 @@ impl EvidenceScope {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WasmArtifactKind {
     CoreModule,
@@ -131,7 +128,7 @@ impl WasmArtifactKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RequestedExecutionProfile {
     LegacyCoreV1,
@@ -154,7 +151,7 @@ impl RequestedExecutionProfile {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ComponentConsumer {
     Actor,
@@ -170,7 +167,7 @@ impl ComponentConsumer {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum GrowthStrategy {
     Fixed,
@@ -186,7 +183,7 @@ impl GrowthStrategy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentToolchainCohort {
     pub wasmtime: String,
@@ -197,7 +194,7 @@ pub struct ComponentToolchainCohort {
     pub wasi_package: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentWitCohort {
     pub package: String,
@@ -205,7 +202,7 @@ pub struct ComponentWitCohort {
     pub source_ref: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentFeatureCohort {
     pub component_model: bool,
@@ -227,7 +224,7 @@ pub struct ComponentFeatureCohort {
     pub component_async: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentDeterminismProfile {
     pub fuel_interruption: bool,
@@ -238,7 +235,7 @@ pub struct ComponentDeterminismProfile {
     pub host_inputs: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentResourceLimits {
     pub fuel: u64,
@@ -257,7 +254,7 @@ pub struct ComponentResourceLimits {
     pub max_exports: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentRuntimeProfile {
     pub profile_id: String,
@@ -273,7 +270,7 @@ pub struct ComponentRuntimeProfile {
     pub non_claims: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentProfileExport {
     pub schema_id: String,

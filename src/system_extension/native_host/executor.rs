@@ -3,11 +3,6 @@
     reason = "the one-shot callback transaction keeps intent, materialization, execution, publication, observation, and reconciliation ordering visible"
 )]
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
-
 use super::super::*;
 use crate::fabric_execution::*;
 
@@ -67,11 +62,11 @@ where
     J: NativeHostJournal,
 {
     port: P,
-    journal: Arc<Mutex<J>>,
+    journal: std::sync::Arc<std::sync::Mutex<J>>,
     values: SharedNativeCallbackValuePort,
-    instance: Arc<Mutex<NativeInstanceRecord>>,
+    instance: std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
     template: NativeExecutionTemplate,
-    cancellation: Arc<AtomicBool>,
+    cancellation: std::sync::Arc<std::sync::atomic::AtomicBool>,
     observations: Vec<NativeInvocationObservation>,
 }
 
@@ -82,9 +77,9 @@ where
 {
     pub fn new(
         port: P,
-        journal: Arc<Mutex<J>>,
+        journal: std::sync::Arc<std::sync::Mutex<J>>,
         values: SharedNativeCallbackValuePort,
-        instance: Arc<Mutex<NativeInstanceRecord>>,
+        instance: std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
         template: NativeExecutionTemplate,
     ) -> Result<Self, NativeExecutorError> {
         if template.request.profile_ref != port.profile().profile.descriptor.profile_ref {
@@ -110,7 +105,7 @@ where
             values,
             instance,
             template,
-            cancellation: Arc::new(AtomicBool::new(false)),
+            cancellation: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             observations: Vec::new(),
         })
     }
@@ -119,11 +114,11 @@ where
         &self.observations
     }
 
-    pub fn cancellation_handle(&self) -> Arc<AtomicBool> {
+    pub fn cancellation_handle(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
         self.cancellation.clone()
     }
 
-    pub fn journal(&self) -> &Arc<Mutex<J>> {
+    pub fn journal(&self) -> &std::sync::Arc<std::sync::Mutex<J>> {
         &self.journal
     }
 
@@ -131,7 +126,7 @@ where
         &self.values
     }
 
-    pub fn instance(&self) -> &Arc<Mutex<NativeInstanceRecord>> {
+    pub fn instance(&self) -> &std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>> {
         &self.instance
     }
 
@@ -452,7 +447,7 @@ where
         callback_operation_ref: &str,
         outcome: &NativeMaterializedCallbackOutcome,
     ) -> Result<(), NativeExecutorError> {
-        let mut values = BTreeMap::<String, (String, &NativeCallbackValue)>::new();
+        let mut values = std::collections::BTreeMap::<String, (String, &NativeCallbackValue)>::new();
         for (position, value) in outcome.outputs.iter().enumerate() {
             let role = format!("output-{position}");
             insert_publication_value(&mut values, role, value)?;
@@ -606,7 +601,7 @@ fn callback_operation_ref(context: &NativeCallbackContext, invocation: &Callback
 }
 
 fn insert_publication_value<'a>(
-    values: &mut BTreeMap<String, (String, &'a NativeCallbackValue)>,
+    values: &mut std::collections::BTreeMap<String, (String, &'a NativeCallbackValue)>,
     role: String,
     value: &'a NativeCallbackValue,
 ) -> Result<(), NativeExecutorError> {

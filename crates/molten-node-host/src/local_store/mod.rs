@@ -1,7 +1,6 @@
 use std::io::Read;
 use std::io::Write;
 
-use cap_fs_ext::FollowSymlinks;
 use cap_fs_ext::OpenOptionsFollowExt;
 
 type MoltenError = crate::error::MoltenError;
@@ -175,7 +174,7 @@ impl LocalStoreRoot {
             )));
         }
         let mut options = cap_std::fs::OpenOptions::new();
-        options.read(true).follow(FollowSymlinks::No);
+        options.read(true).follow(cap_fs_ext::FollowSymlinks::No);
         let mut file = self.dir.open_with(path.as_path(), &options).map_err(MoltenError::from)?;
         if !file.metadata().map_err(MoltenError::from)?.is_file() {
             return Err(MoltenError::invalid_harness(format!(
@@ -213,7 +212,7 @@ impl LocalStoreRoot {
             }
         }
         let mut options = cap_std::fs::OpenOptions::new();
-        options.write(true).create(true).truncate(true).follow(FollowSymlinks::No);
+        options.write(true).create(true).truncate(true).follow(cap_fs_ext::FollowSymlinks::No);
         let mut file = self.dir.open_with(path.as_path(), &options).map_err(MoltenError::from)?;
         if !file.metadata().map_err(MoltenError::from)?.is_file() {
             return Err(MoltenError::invalid_harness(format!(
@@ -303,7 +302,7 @@ impl LocalStoreRoot {
         }
 
         let mut options = cap_std::fs::OpenOptions::new();
-        options.read(true).write(true).create(true).follow(FollowSymlinks::No);
+        options.read(true).write(true).create(true).follow(cap_fs_ext::FollowSymlinks::No);
         let file = self.dir.open_with(path.as_path(), &options).map_err(MoltenError::from)?;
         if !file.metadata().map_err(MoltenError::from)?.is_file() {
             return Err(MoltenError::invalid_harness(format!(

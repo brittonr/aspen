@@ -1,12 +1,4 @@
-use super::tests::NODE_A;
-use super::tests::active_group;
-use super::tests::started_state;
-use super::tests::test_ref;
 use super::*;
-use crate::fabric_durability::DurableAdapterKind;
-use crate::fabric_durability::RedbDurableStateAdapter;
-use crate::fabric_durability::tests::descriptor;
-use crate::fabric_durability::tests::profile;
 
 const TERM: u64 = 1;
 const ENTRY_INDEX: u64 = 1;
@@ -19,11 +11,18 @@ const EXPECTED_SNAPSHOT_ONLY_RECOVERY_EFFECTS: usize = 2;
 #[test]
 fn redb_replica_port_makes_hard_state_and_flushed_entries_durable() {
     let root = crate::test_support::process_workspace("live-raft-redb-port").expect("workspace");
-    let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
-        .expect("Redb adapter");
-    let mut port =
-        RedbReplicaDurabilityPort::new(adapter, test_ref("Redb-durable-log"), test_ref("Redb-snapshot-store"))
-            .expect("Redb replica durability port");
+    let adapter = crate::fabric_durability::RedbDurableStateAdapter::open(
+        &root,
+        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
+        crate::fabric_durability::tests::descriptor(),
+    )
+    .expect("Redb adapter");
+    let mut port = RedbReplicaDurabilityPort::new(
+        adapter,
+        super::tests::test_ref("Redb-durable-log"),
+        super::tests::test_ref("Redb-snapshot-store"),
+    )
+    .expect("Redb replica durability port");
 
     let hard_state = port.persist_hard_state(TERM, Some("node-a")).expect("hard state");
     assert!(hard_state.starts_with("blake3:"));
@@ -40,13 +39,13 @@ fn redb_replica_port_makes_hard_state_and_flushed_entries_durable() {
 
     let mut snapshot = ReplicaSnapshot {
         snapshot_ref: String::new(),
-        group_binding_ref: test_ref("durable-group"),
-        membership_ref: test_ref("durable-membership"),
+        group_binding_ref: super::tests::test_ref("durable-group"),
+        membership_ref: super::tests::test_ref("durable-membership"),
         config_epoch: TERM,
         fencing_epoch: TERM,
         last_included_index: ENTRY_INDEX,
         last_included_term: TERM,
-        application_state_ref: test_ref("durable-application-state"),
+        application_state_ref: super::tests::test_ref("durable-application-state"),
         completed_requests: Default::default(),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("snapshot identity");
@@ -59,12 +58,16 @@ fn redb_replica_port_makes_hard_state_and_flushed_entries_durable() {
 #[test]
 fn durable_installed_snapshot_establishes_its_recovery_commit_boundary() {
     let root = crate::test_support::process_workspace("live-raft-installed-snapshot-recovery").expect("workspace");
-    let group = active_group();
-    let initial = started_state(&group, NODE_A);
-    let durable_log_ref = test_ref("installed-snapshot-durable-log");
-    let snapshot_store_ref = test_ref("installed-snapshot-store");
-    let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
-        .expect("Redb adapter");
+    let group = super::tests::active_group();
+    let initial = super::tests::started_state(&group, super::tests::NODE_A);
+    let durable_log_ref = super::tests::test_ref("installed-snapshot-durable-log");
+    let snapshot_store_ref = super::tests::test_ref("installed-snapshot-store");
+    let adapter = crate::fabric_durability::RedbDurableStateAdapter::open(
+        &root,
+        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
+        crate::fabric_durability::tests::descriptor(),
+    )
+    .expect("Redb adapter");
     let mut port = RedbReplicaDurabilityPort::new(adapter, durable_log_ref.clone(), snapshot_store_ref.clone())
         .expect("Redb replica durability port");
     port.persist_hard_state(TERM, None).expect("snapshot hard state");
@@ -76,15 +79,19 @@ fn durable_installed_snapshot_establishes_its_recovery_commit_boundary() {
         fencing_epoch: initial.profile.fencing_epoch,
         last_included_index: ENTRY_INDEX,
         last_included_term: TERM,
-        application_state_ref: test_ref("installed-snapshot-application-state"),
+        application_state_ref: super::tests::test_ref("installed-snapshot-application-state"),
         completed_requests: Default::default(),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("installed snapshot identity");
     port.persist_snapshot(&snapshot).expect("machine-loss snapshot");
     drop(port);
 
-    let reopened = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
-        .expect("reopened Redb adapter");
+    let reopened = crate::fabric_durability::RedbDurableStateAdapter::open(
+        &root,
+        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
+        crate::fabric_durability::tests::descriptor(),
+    )
+    .expect("reopened Redb adapter");
     let reopened = RedbReplicaDurabilityPort::new(reopened, durable_log_ref, snapshot_store_ref)
         .expect("reopened replica durability port");
     let recovery = reopened.plan_recovery(recovery_start_plan(&group, initial)).expect("snapshot-only recovery");
@@ -99,15 +106,19 @@ fn durable_installed_snapshot_establishes_its_recovery_commit_boundary() {
 #[test]
 fn redb_recovery_restores_snapshot_and_replays_only_committed_suffix() {
     let root = crate::test_support::process_workspace("live-raft-redb-recovery").expect("workspace");
-    let group = active_group();
-    let initial = started_state(&group, NODE_A);
-    let durable_log_ref = test_ref("recovery-durable-log");
-    let snapshot_store_ref = test_ref("recovery-snapshot-store");
-    let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
-        .expect("Redb adapter");
+    let group = super::tests::active_group();
+    let initial = super::tests::started_state(&group, super::tests::NODE_A);
+    let durable_log_ref = super::tests::test_ref("recovery-durable-log");
+    let snapshot_store_ref = super::tests::test_ref("recovery-snapshot-store");
+    let adapter = crate::fabric_durability::RedbDurableStateAdapter::open(
+        &root,
+        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
+        crate::fabric_durability::tests::descriptor(),
+    )
+    .expect("Redb adapter");
     let mut port = RedbReplicaDurabilityPort::new(adapter, durable_log_ref.clone(), snapshot_store_ref.clone())
         .expect("Redb replica durability port");
-    port.persist_hard_state(TERM, Some(NODE_A)).expect("hard state");
+    port.persist_hard_state(TERM, Some(super::tests::NODE_A)).expect("hard state");
     let entries = vec![
         entry(ENTRY_INDEX, "recovery-first"),
         entry(SECOND_ENTRY_INDEX, "recovery-second"),
@@ -123,15 +134,19 @@ fn redb_recovery_restores_snapshot_and_replays_only_committed_suffix() {
         fencing_epoch: initial.profile.fencing_epoch,
         last_included_index: ENTRY_INDEX,
         last_included_term: TERM,
-        application_state_ref: test_ref("recovery-application-state"),
+        application_state_ref: super::tests::test_ref("recovery-application-state"),
         completed_requests: std::collections::BTreeMap::from([(entries[0].request_ref.clone(), ENTRY_INDEX)]),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("recovery snapshot identity");
     port.persist_snapshot(&snapshot).expect("recovery snapshot");
     drop(port);
 
-    let reopened = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
-        .expect("reopened Redb adapter");
+    let reopened = crate::fabric_durability::RedbDurableStateAdapter::open(
+        &root,
+        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
+        crate::fabric_durability::tests::descriptor(),
+    )
+    .expect("reopened Redb adapter");
     let reopened = RedbReplicaDurabilityPort::new(reopened, durable_log_ref, snapshot_store_ref)
         .expect("reopened replica durability port");
     let recovery = reopened.plan_recovery(recovery_start_plan(&group, initial)).expect("recovery plan");
@@ -140,7 +155,7 @@ fn redb_recovery_restores_snapshot_and_replays_only_committed_suffix() {
     assert_eq!(recovery.durable_commit_index, SECOND_ENTRY_INDEX);
     assert_eq!(recovery.replay_entry_count, 1);
     assert_eq!(recovery.start_plan.state.current_term, TERM);
-    assert_eq!(recovery.start_plan.state.voted_for.as_deref(), Some(NODE_A));
+    assert_eq!(recovery.start_plan.state.voted_for.as_deref(), Some(super::tests::NODE_A));
     assert_eq!(recovery.start_plan.state.commit_index, SECOND_ENTRY_INDEX);
     assert_eq!(recovery.start_plan.state.last_applied, SECOND_ENTRY_INDEX);
     assert_eq!(recovery.start_plan.state.snapshot.as_ref(), Some(&snapshot));
@@ -157,17 +172,21 @@ fn redb_recovery_restores_snapshot_and_replays_only_committed_suffix() {
 #[test]
 fn redb_recovery_denies_commit_boundary_beyond_durable_log() {
     let root = crate::test_support::process_workspace("live-raft-redb-invalid-recovery").expect("workspace");
-    let group = active_group();
-    let initial = started_state(&group, NODE_A);
-    let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
-        .expect("Redb adapter");
+    let group = super::tests::active_group();
+    let initial = super::tests::started_state(&group, super::tests::NODE_A);
+    let adapter = crate::fabric_durability::RedbDurableStateAdapter::open(
+        &root,
+        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
+        crate::fabric_durability::tests::descriptor(),
+    )
+    .expect("Redb adapter");
     let mut port = RedbReplicaDurabilityPort::new(
         adapter,
-        test_ref("invalid-recovery-durable-log"),
-        test_ref("invalid-recovery-snapshot-store"),
+        super::tests::test_ref("invalid-recovery-durable-log"),
+        super::tests::test_ref("invalid-recovery-snapshot-store"),
     )
     .expect("Redb replica durability port");
-    port.persist_hard_state(TERM, Some(NODE_A)).expect("hard state");
+    port.persist_hard_state(TERM, Some(super::tests::NODE_A)).expect("hard state");
     port.persist_entries(None, &[entry(ENTRY_INDEX, "invalid-recovery")])
         .expect("single recovery entry");
     port.flush_log(ENTRY_INDEX).expect("single recovery flush");
@@ -183,12 +202,16 @@ fn redb_recovery_denies_commit_boundary_beyond_durable_log() {
 #[test]
 fn redb_replica_port_rejects_over_bound_entry_batch_without_mutation() {
     let root = crate::test_support::process_workspace("live-raft-redb-over-bound").expect("workspace");
-    let adapter = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
-        .expect("Redb adapter");
+    let adapter = crate::fabric_durability::RedbDurableStateAdapter::open(
+        &root,
+        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
+        crate::fabric_durability::tests::descriptor(),
+    )
+    .expect("Redb adapter");
     let mut port = RedbReplicaDurabilityPort::new(
         adapter,
-        test_ref("Redb-negative-durable-log"),
-        test_ref("Redb-negative-snapshot-store"),
+        super::tests::test_ref("Redb-negative-durable-log"),
+        super::tests::test_ref("Redb-negative-snapshot-store"),
     )
     .expect("Redb replica durability port");
     let entries = (0..MAX_REPLICA_MESSAGE_ENTRIES)
@@ -222,8 +245,8 @@ fn entry(index: u64, label: &str) -> ReplicatedEntry {
     ReplicatedEntry {
         index,
         term: TERM,
-        request_ref: test_ref(&format!("{label}-request")),
-        command_ref: test_ref(&format!("{label}-command")),
-        command_schema_ref: test_ref("durable-command-schema"),
+        request_ref: super::tests::test_ref(&format!("{label}-request")),
+        command_ref: super::tests::test_ref(&format!("{label}-command")),
+        command_schema_ref: super::tests::test_ref("durable-command-schema"),
     }
 }

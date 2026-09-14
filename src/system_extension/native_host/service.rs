@@ -3,19 +3,7 @@
     reason = "operator methods keep lifecycle, ingress, effect, journal, and status ordering in one explicit shell"
 )]
 
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use super::super::*;
-use crate::error::MoltenError;
-use crate::fabric::CanonicalFabricPortBinding;
-use crate::fabric::FabricPortResult;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
 
 const STATUS_RECORD: &str = "native-host-status-v2";
 const CLAIM_LEVEL: &str = "local-live-materialized-values-pilot";
@@ -30,8 +18,8 @@ pub enum NativeServiceError {
     MissingCheckpoint,
 }
 
-impl From<MoltenError> for NativeServiceError {
-    fn from(error: MoltenError) -> Self {
+impl From<crate::error::MoltenError> for NativeServiceError {
+    fn from(error: crate::error::MoltenError) -> Self {
         Self::Host(error.to_string())
     }
 }
@@ -86,8 +74,8 @@ where
 {
     profile: AdmittedNativeHostProfile,
     executable: AdmittedNativeExecutable,
-    journal: Arc<Mutex<J>>,
-    instance: Arc<Mutex<NativeInstanceRecord>>,
+    journal: std::sync::Arc<std::sync::Mutex<J>>,
+    instance: std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
     host: SystemExtensionHost<NativeProcessSystemExtensionExecutor<P, J>>,
 }
 
@@ -103,7 +91,7 @@ where
         executable: AdmittedNativeExecutable,
         admitted: CanonicalAdmittedSystemExtensionManifest,
         port: P,
-        journal: Arc<Mutex<J>>,
+        journal: std::sync::Arc<std::sync::Mutex<J>>,
         values: SharedNativeCallbackValuePort,
         template: NativeExecutionTemplate,
     ) -> std::result::Result<Self, NativeServiceError> {
@@ -115,7 +103,7 @@ where
                 "native executable evidence does not match the admitted manifest".to_string(),
             ));
         }
-        let instance = Arc::new(Mutex::new(initial_instance(&profile, &executable, &admitted)));
+        let instance = std::sync::Arc::new(std::sync::Mutex::new(initial_instance(&profile, &executable, &admitted)));
         save_shared(&journal, &lock_instance(&instance)?.clone())?;
         let executor =
             NativeProcessSystemExtensionExecutor::new(port, journal.clone(), values, instance.clone(), template)
@@ -136,8 +124,8 @@ where
         executable: AdmittedNativeExecutable,
         admitted: CanonicalAdmittedSystemExtensionManifest,
         executor: NativeProcessSystemExtensionExecutor<P, J>,
-        journal: Arc<Mutex<J>>,
-        instance: Arc<Mutex<NativeInstanceRecord>>,
+        journal: std::sync::Arc<std::sync::Mutex<J>>,
+        instance: std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
     ) -> std::result::Result<Self, NativeServiceError> {
         let restored = lock_instance(&instance)?.clone();
         admit_native_instance_recovery(&profile, &executable, &restored).map_err(NativeServiceError::Admission)?;
@@ -283,7 +271,7 @@ where
             generation: completion.generation,
         };
         let plan = admit_native_effect_completion(&self.instance()?, &input).map_err(NativeServiceError::Admission)?;
-        let completion_bytes = canonical_bytes(&completion.value)?;
+        let completion_bytes = crate::preserves_rail::canonical_bytes(&completion.value)?;
         let completion_value = NativeCallbackValue {
             value_ref: completion.completion_ref.clone(),
             bytes: completion_bytes,
@@ -360,21 +348,26 @@ where
         let instance = self.instance()?;
         let operator = self.host.operator_status()?;
         let recovery = classify_native_recovery(&instance);
-        let value = record(STATUS_RECORD, vec![
-            string(NATIVE_STATUS_SCHEMA),
-            string(CLAIM_LEVEL),
-            string(&instance.instance_id),
-            string(&operator.status_ref),
-            u64_value(instance.lifecycle.generation),
-            string(instance.lifecycle.phase.as_str()),
-            u64_value(
+        let value = crate::preserves_rail::record(STATUS_RECORD, vec![
+            crate::preserves_rail::string(NATIVE_STATUS_SCHEMA),
+            crate::preserves_rail::string(CLAIM_LEVEL),
+            crate::preserves_rail::string(&instance.instance_id),
+            crate::preserves_rail::string(&operator.status_ref),
+            crate::preserves_rail::u64_value(instance.lifecycle.generation),
+            crate::preserves_rail::string(instance.lifecycle.phase.as_str()),
+            crate::preserves_rail::u64_value(
                 u64::try_from(recovery.len())
                     .map_err(|_| NativeServiceError::Host("native recovery count does not fit u64".to_string()))?,
             ),
-            sequence(REQUIRED_NATIVE_HOST_NON_CLAIMS.iter().map(|claim| string(claim.as_str())).collect()),
+            crate::preserves_rail::sequence(
+                REQUIRED_NATIVE_HOST_NON_CLAIMS
+                    .iter()
+                    .map(|claim| crate::preserves_rail::string(claim.as_str()))
+                    .collect(),
+            ),
         ]);
         Ok(CanonicalNativeServiceStatus {
-            status_ref: canonical_hash(&value)?,
+            status_ref: crate::preserves_rail::canonical_hash(&value)?,
             claim_level: CLAIM_LEVEL.to_string(),
             operator,
             recovery,
@@ -435,8 +428,8 @@ where
     J: NativeHostJournal,
 {
     profile: &'a AdmittedNativeHostProfile,
-    journal: Arc<Mutex<J>>,
-    instance: Arc<Mutex<NativeInstanceRecord>>,
+    journal: std::sync::Arc<std::sync::Mutex<J>>,
+    instance: std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
     delegate: &'a mut E,
 }
 
@@ -447,9 +440,9 @@ where
 {
     fn route(
         &mut self,
-        binding: &CanonicalFabricPortBinding,
+        binding: &crate::fabric::CanonicalFabricPortBinding,
         effect: &TypedEffectRequest,
-    ) -> FabricPortResult<PortEffectOutput> {
+    ) -> crate::fabric::FabricPortResult<PortEffectOutput> {
         let operation_ref = native_identity_ref(&[
             "native-effect-operation-v2",
             &effect.request_ref,
@@ -534,7 +527,7 @@ where
 fn admit_materialized_effect_output(
     profile: &AdmittedNativeHostProfile,
     output: &PortEffectOutput,
-) -> FabricPortResult<()> {
+) -> crate::fabric::FabricPortResult<()> {
     molten_core::system_extension::admit_materialized_native_effect_output(
         profile,
         &output.output_ref,
@@ -587,13 +580,13 @@ fn initial_instance(
 }
 
 fn lock_instance(
-    instance: &Arc<Mutex<NativeInstanceRecord>>,
+    instance: &std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
 ) -> std::result::Result<std::sync::MutexGuard<'_, NativeInstanceRecord>, NativeServiceError> {
     instance.lock().map_err(|_| NativeServiceError::StatePoisoned)
 }
 
 fn save_shared<J: NativeHostJournal>(
-    journal: &Arc<Mutex<J>>,
+    journal: &std::sync::Arc<std::sync::Mutex<J>>,
     instance: &NativeInstanceRecord,
 ) -> std::result::Result<(), NativeServiceError> {
     journal

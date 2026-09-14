@@ -1,7 +1,6 @@
 use preserves::ValueImpl as _;
 
 use super::*;
-use crate::fabric_consistency::raft::live_cluster;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ProcessReceipt {
@@ -113,7 +112,7 @@ fn parse_role(value: &preserves::Value<IOValue>) -> Result<ReplicaRole> {
 pub(super) fn receipt_from_node(
     node_id: &str,
     endpoint_identity: &str,
-    node: &live_cluster::LiveNode,
+    node: &crate::fabric_consistency::raft::live_cluster::LiveNode,
 ) -> Result<ProcessReceipt> {
     let state = node.service.state();
     let application = node.service.ports().application.handler();

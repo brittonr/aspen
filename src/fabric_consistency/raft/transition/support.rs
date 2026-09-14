@@ -1,12 +1,10 @@
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
-pub(super) fn arm_election_timer(state: &mut ReplicaState) -> Result<ReplicaEffect> {
+pub(super) fn arm_election_timer(state: &mut ReplicaState) -> crate::error::Result<ReplicaEffect> {
     let sequence = state
         .election_timer_sequence
         .checked_add(NEXT_ELECTION_TIMER_SEQUENCE_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft election timer sequence overflow"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft election timer sequence overflow"))?;
     let timer_ref = election_timer_ref(
         &state.profile.group_binding_ref,
         &state.node_id,
@@ -19,11 +17,11 @@ pub(super) fn arm_election_timer(state: &mut ReplicaState) -> Result<ReplicaEffe
     Ok(ReplicaEffect::ArmElectionTimer { timer_ref })
 }
 
-pub(super) fn append_effects_for_all(state: &ReplicaState) -> Result<Vec<ReplicaEffect>> {
+pub(super) fn append_effects_for_all(state: &ReplicaState) -> crate::error::Result<Vec<ReplicaEffect>> {
     peers(state).into_iter().map(|peer| append_effect_for(state, peer)).collect()
 }
 
-pub(super) fn append_effect_for(state: &ReplicaState, peer: String) -> Result<ReplicaEffect> {
+pub(super) fn append_effect_for(state: &ReplicaState, peer: String) -> crate::error::Result<ReplicaEffect> {
     let next_index = state.next_index.get(&peer).copied().unwrap_or(INITIAL_LOG_INDEX);
     if let Some(snapshot) = &state.snapshot
         && next_index <= snapshot.last_included_index
@@ -38,7 +36,7 @@ pub(super) fn append_effect_for(state: &ReplicaState, peer: String) -> Result<Re
     }
     let prev_log_index = next_index
         .checked_sub(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft next index is below the initial log index"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft next index is below the initial log index"))?;
     let prev_log_term = term_at(state, prev_log_index).unwrap_or(0);
     let entries = state
         .log
@@ -135,10 +133,10 @@ pub(super) fn last_log_term(state: &ReplicaState) -> u64 {
         .map_or_else(|| state.snapshot.as_ref().map_or(0, |snapshot| snapshot.last_included_term), |entry| entry.term)
 }
 
-pub(super) fn next_conflict_index(state: &ReplicaState) -> Result<u64> {
+pub(super) fn next_conflict_index(state: &ReplicaState) -> crate::error::Result<u64> {
     last_log_index(state)
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft conflict index overflow"))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft conflict index overflow"))
 }
 
 pub(super) fn entries_in_range(state: &ReplicaState, exclusive_start: u64, inclusive_end: u64) -> Vec<ReplicatedEntry> {

@@ -1,6 +1,3 @@
-use ::syndicate::bag::BTreeBag;
-use ::syndicate::syndicate_package_version;
-
 use super::*;
 
 const DEFAULT_SYNDICATE_HARNESS_SEED: u64 = 1;
@@ -102,7 +99,7 @@ pub struct ReferenceRun {
 
 #[derive(Debug)]
 pub struct ReferenceHarness {
-    assertions: BTreeBag<Assertion>,
+    assertions: ::syndicate::bag::BTreeBag<Assertion>,
     observers: OrderedSet<Observer>,
     messages: OrderedSet<Message>,
 }
@@ -116,7 +113,7 @@ impl Default for ReferenceHarness {
 impl ReferenceHarness {
     pub fn new() -> Self {
         Self {
-            assertions: BTreeBag::new(),
+            assertions: ::syndicate::bag::BTreeBag::new(),
             observers: OrderedSet::new(),
             messages: OrderedSet::new(),
         }
@@ -352,7 +349,7 @@ fn flow_control_receipt(step: &Step, fanout: usize, budget: ResourceBudget) -> R
     let account_value = crate::preserves_rail::record("syndicate-account-observation-v1", vec![
         crate::preserves_rail::record("surface", vec![crate::preserves_rail::string(SYNDICATE_REFERENCE_SURFACE)]),
         crate::preserves_rail::record("syndicate-version", vec![crate::preserves_rail::string(
-            syndicate_package_version(),
+            ::syndicate::syndicate_package_version(),
         )]),
         crate::preserves_rail::record("step-ref", vec![crate::preserves_rail::string(&step_ref)]),
         crate::preserves_rail::record("fanout", vec![crate::preserves_rail::u64_value(usize_to_u64(
@@ -411,7 +408,7 @@ fn parity_receipt(molten_events: &[Event], syndicate_events: &[Event]) -> Result
     let value = crate::preserves_rail::record("syndicate-parity-receipt-v1", vec![
         crate::preserves_rail::record("surface", vec![crate::preserves_rail::string(SYNDICATE_REFERENCE_SURFACE)]),
         crate::preserves_rail::record("syndicate-version", vec![crate::preserves_rail::string(
-            syndicate_package_version(),
+            ::syndicate::syndicate_package_version(),
         )]),
         crate::preserves_rail::record("molten-events", vec![refs_value(&molten_event_refs)]),
         crate::preserves_rail::record("syndicate-events", vec![refs_value(&syndicate_event_refs)]),
@@ -443,7 +440,7 @@ fn trace_evidence(events: &[Event]) -> Result<TraceEvidence> {
     let value = crate::preserves_rail::record("syndicate-trace-evidence-v1", vec![
         crate::preserves_rail::record("surface", vec![crate::preserves_rail::string(SYNDICATE_REFERENCE_SURFACE)]),
         crate::preserves_rail::record("syndicate-version", vec![crate::preserves_rail::string(
-            syndicate_package_version(),
+            ::syndicate::syndicate_package_version(),
         )]),
         crate::preserves_rail::record("event-refs", vec![refs_value(&event_refs)]),
         crate::preserves_rail::record("replayability", vec![crate::preserves_rail::string(&replayability_status)]),

@@ -1,15 +1,3 @@
-use super::model::BenchmarkSuite;
-use super::model::MaterializationAdmissionSeal;
-use super::model::MaterializedPerformanceArtifact;
-use super::model::PerformanceArtifactKind;
-use super::model::PerformanceDenial;
-use super::model::PerformanceResult;
-use super::model::content_ref;
-use super::model::sorted_unique;
-use super::model::valid_content_ref;
-use super::model::valid_ref_collection;
-use super::profile::WASMTIME_COMPONENT_COHORT;
-
 pub const PERFORMANCE_MANTLE_BUNDLE_SCHEMA: &str = "mantle.wasm-performance-materialization-bundle.v1";
 pub const PRECOMPILED_ADMISSION_SCHEMA: &str = "molten.wasm-precompiled-admission.v1";
 pub const WIZER_ADMISSION_SCHEMA: &str = "molten.wasm-wizer-admission.v1";
@@ -22,7 +10,7 @@ const REQUIRED_WIZER_NON_CLAIM: &str = "not-semantic-equivalence";
 pub struct PerformanceMaterializationBundle {
     pub schema_id: String,
     pub bundle_ref: String,
-    pub kind: PerformanceArtifactKind,
+    pub kind: super::model::PerformanceArtifactKind,
     pub consumer: crate::wasm_component::ComponentConsumer,
     pub source_component_ref: String,
     pub artifact_ref: String,
@@ -54,33 +42,44 @@ pub fn performance_materialization_bundle_ref(bundle: &PerformanceMaterializatio
         format!("produced-by-mantle:{}", bundle.produced_by_mantle),
         format!("locally-produced-transform:{}", bundle.locally_produced_transform),
     ];
-    lines.extend(sorted_unique(&bundle.cpu_features).into_iter().map(|value| format!("cpu-feature:{value}")));
     lines.extend(
-        sorted_unique(&bundle.mantle_stage_receipt_refs)
+        super::model::sorted_unique(&bundle.cpu_features)
+            .into_iter()
+            .map(|value| format!("cpu-feature:{value}")),
+    );
+    lines.extend(
+        super::model::sorted_unique(&bundle.mantle_stage_receipt_refs)
             .into_iter()
             .map(|value| format!("mantle-stage-ref:{value}")),
     );
     lines.extend(
-        sorted_unique(&bundle.valence_sidecar_refs)
+        super::model::sorted_unique(&bundle.valence_sidecar_refs)
             .into_iter()
             .map(|value| format!("valence-sidecar-ref:{value}")),
     );
-    lines.extend(sorted_unique(&bundle.build_input_refs).into_iter().map(|value| format!("build-input-ref:{value}")));
-    content_ref(lines.join("\n").as_bytes())
+    lines.extend(
+        super::model::sorted_unique(&bundle.build_input_refs)
+            .into_iter()
+            .map(|value| format!("build-input-ref:{value}")),
+    );
+    super::model::content_ref(lines.join("\n").as_bytes())
 }
 
 pub fn verify_performance_materialization(
-    suite: &BenchmarkSuite,
+    suite: &super::model::BenchmarkSuite,
     bundle: &PerformanceMaterializationBundle,
     artifact_bytes: &[u8],
-) -> PerformanceResult<MaterializedPerformanceArtifact> {
+) -> super::model::PerformanceResult<super::model::MaterializedPerformanceArtifact> {
     let component_profile = crate::wasm_component::supported_component_profile().map_err(|error| {
-        PerformanceDenial::new(format!("component profile required by performance admission is invalid: {error}"))
+        super::model::PerformanceDenial::new(format!(
+            "component profile required by performance admission is invalid: {error}"
+        ))
     })?;
     let expected_component_profile_ref = crate::wasm_component::component_profile_ref(&component_profile);
-    let artifact_length = u64::try_from(artifact_bytes.len())
-        .map_err(|error| PerformanceDenial::new(format!("performance artifact length is unsupported: {error}")))?;
-    let measured_artifact_ref = content_ref(artifact_bytes);
+    let artifact_length = u64::try_from(artifact_bytes.len()).map_err(|error| {
+        super::model::PerformanceDenial::new(format!("performance artifact length is unsupported: {error}"))
+    })?;
+    let measured_artifact_ref = super::model::content_ref(artifact_bytes);
     let mut blockers = Vec::new();
     if bundle.schema_id != PERFORMANCE_MANTLE_BUNDLE_SCHEMA {
         blockers.push("performance artifact uses an unsupported Mantle bundle schema".to_string());
@@ -108,19 +107,22 @@ pub fn verify_performance_materialization(
     }
     validate_bundle_identity_fields(bundle, &mut blockers);
     validate_artifact_kind(bundle, &mut blockers);
-    if matches!(bundle.kind, PerformanceArtifactKind::PortableComponent | PerformanceArtifactKind::WizerComponent)
-        && crate::wasm_component::classify_for_profile(
-            crate::wasm_component::RequestedExecutionProfile::ComponentV1,
-            artifact_bytes,
-        )
-        .is_err()
+    if matches!(
+        bundle.kind,
+        super::model::PerformanceArtifactKind::PortableComponent
+            | super::model::PerformanceArtifactKind::WizerComponent
+    ) && crate::wasm_component::classify_for_profile(
+        crate::wasm_component::RequestedExecutionProfile::ComponentV1,
+        artifact_bytes,
+    )
+    .is_err()
     {
         blockers.push("portable or Wizer performance artifact is not a valid component".to_string());
     }
     if !blockers.is_empty() {
-        return Err(PerformanceDenial::from_blockers(blockers));
+        return Err(super::model::PerformanceDenial::from_blockers(blockers));
     }
-    Ok(MaterializedPerformanceArtifact {
+    Ok(super::model::MaterializedPerformanceArtifact {
         kind: bundle.kind,
         consumer: bundle.consumer,
         source_component_ref: bundle.source_component_ref.clone(),
@@ -135,7 +137,7 @@ pub fn verify_performance_materialization(
         wasmtime_revision: bundle.wasmtime_revision.clone(),
         target: bundle.target.clone(),
         cpu_features: bundle.cpu_features.clone(),
-        _admission_seal: MaterializationAdmissionSeal,
+        _admission_seal: super::model::MaterializationAdmissionSeal,
     })
 }
 
@@ -193,9 +195,11 @@ impl AdmittedPrecompiledComponent {
         &self.mantle_bundle_ref
     }
 
-    pub fn verify_bytes_before_deserialization(&self, bytes: &[u8]) -> PerformanceResult<()> {
-        if bytes.is_empty() || content_ref(bytes) != self.output_ref {
-            return Err(PerformanceDenial::new("precompiled bytes differ from the sealed admission identity"));
+    pub fn verify_bytes_before_deserialization(&self, bytes: &[u8]) -> super::model::PerformanceResult<()> {
+        if bytes.is_empty() || super::model::content_ref(bytes) != self.output_ref {
+            return Err(super::model::PerformanceDenial::new(
+                "precompiled bytes differ from the sealed admission identity",
+            ));
         }
         Ok(())
     }
@@ -211,12 +215,12 @@ pub struct PrecompiledRuntimeExpectation {
 }
 
 pub fn admit_precompiled_component(
-    materialized: &MaterializedPerformanceArtifact,
+    materialized: &super::model::MaterializedPerformanceArtifact,
     manifest: &PrecompiledComponentManifest,
     expectation: &PrecompiledRuntimeExpectation,
-) -> PerformanceResult<AdmittedPrecompiledComponent> {
+) -> super::model::PerformanceResult<AdmittedPrecompiledComponent> {
     let mut blockers = Vec::new();
-    if materialized.kind != PerformanceArtifactKind::PrecompiledComponent {
+    if materialized.kind != super::model::PerformanceArtifactKind::PrecompiledComponent {
         blockers.push("precompiled admission received a non-precompiled artifact".to_string());
     }
     if manifest.schema_id != PRECOMPILED_ADMISSION_SCHEMA {
@@ -260,7 +264,7 @@ pub fn admit_precompiled_component(
             _admission_seal: PrecompiledAdmissionSeal,
         })
     } else {
-        Err(PerformanceDenial::from_blockers(blockers))
+        Err(super::model::PerformanceDenial::from_blockers(blockers))
     }
 }
 
@@ -288,11 +292,11 @@ pub struct WizerTransformManifest {
 }
 
 pub fn admit_wizer_artifact(
-    materialized: &MaterializedPerformanceArtifact,
+    materialized: &super::model::MaterializedPerformanceArtifact,
     manifest: &WizerTransformManifest,
-) -> PerformanceResult<()> {
+) -> super::model::PerformanceResult<()> {
     let mut blockers = Vec::new();
-    if materialized.kind != PerformanceArtifactKind::WizerComponent {
+    if materialized.kind != super::model::PerformanceArtifactKind::WizerComponent {
         blockers.push("Wizer admission received a non-Wizer artifact".to_string());
     }
     if manifest.schema_id != WIZER_ADMISSION_SCHEMA {
@@ -303,7 +307,9 @@ pub fn admit_wizer_artifact(
     {
         blockers.push("Wizer transform identities differ from the admitted Mantle artifact".to_string());
     }
-    if manifest.initialization_entrypoint.trim().is_empty() || !valid_content_ref(&manifest.wizer_tool_ref) {
+    if manifest.initialization_entrypoint.trim().is_empty()
+        || !super::model::valid_content_ref(&manifest.wizer_tool_ref)
+    {
         blockers.push("Wizer transform lacks a bounded entrypoint or tool identity".to_string());
     }
     if manifest.observed_ambient_state {
@@ -326,7 +332,7 @@ pub fn admit_wizer_artifact(
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(PerformanceDenial::from_blockers(blockers))
+        Err(super::model::PerformanceDenial::from_blockers(blockers))
     }
 }
 
@@ -337,13 +343,13 @@ fn validate_bundle_identity_fields(bundle: &PerformanceMaterializationBundle, bl
         ("component profile", bundle.component_profile_ref.as_str()),
         ("runtime configuration", bundle.runtime_configuration_ref.as_str()),
     ] {
-        if !valid_content_ref(value) {
+        if !super::model::valid_content_ref(value) {
             blockers.push(format!("performance Mantle bundle {label} ref is malformed"));
         }
     }
-    if bundle.wasmtime_revision != WASMTIME_COMPONENT_COHORT
+    if bundle.wasmtime_revision != super::profile::WASMTIME_COMPONENT_COHORT
         || bundle.target.trim().is_empty()
-        || sorted_unique(&bundle.cpu_features) != bundle.cpu_features
+        || super::model::sorted_unique(&bundle.cpu_features) != bundle.cpu_features
     {
         blockers.push("performance Mantle bundle Wasmtime, target, or CPU features are malformed".to_string());
     }
@@ -354,12 +360,13 @@ fn validate_bundle_identity_fields(bundle: &PerformanceMaterializationBundle, bl
 
 fn validate_artifact_kind(bundle: &PerformanceMaterializationBundle, blockers: &mut Vec<String>) {
     match bundle.kind {
-        PerformanceArtifactKind::PortableComponent => {
+        super::model::PerformanceArtifactKind::PortableComponent => {
             if bundle.source_component_ref != bundle.artifact_ref {
                 blockers.push("portable performance artifact must retain its source component identity".to_string());
             }
         }
-        PerformanceArtifactKind::WizerComponent | PerformanceArtifactKind::PrecompiledComponent => {
+        super::model::PerformanceArtifactKind::WizerComponent
+        | super::model::PerformanceArtifactKind::PrecompiledComponent => {
             if bundle.source_component_ref == bundle.artifact_ref {
                 blockers.push(
                     "transformed performance artifact must retain distinct source and output identities".to_string(),
@@ -370,25 +377,25 @@ fn validate_artifact_kind(bundle: &PerformanceMaterializationBundle, blockers: &
 }
 
 fn validate_ref_set(label: &str, refs: &[String], blockers: &mut Vec<String>) {
-    if refs.len() > MAX_PERFORMANCE_EVIDENCE_REFS || !valid_ref_collection(refs) {
+    if refs.len() > MAX_PERFORMANCE_EVIDENCE_REFS || !super::model::valid_ref_collection(refs) {
         blockers.push(format!("performance {label} refs are missing, malformed, duplicate, or unsorted"));
     }
 }
 
 fn validate_wizer_imports(manifest: &WizerTransformManifest, blockers: &mut Vec<String>) {
     if manifest.declared_imports.len() > MAX_PERFORMANCE_EVIDENCE_REFS
-        || sorted_unique(&manifest.declared_imports) != manifest.declared_imports
-        || sorted_unique(&manifest.denied_imports) != manifest.denied_imports
+        || super::model::sorted_unique(&manifest.declared_imports) != manifest.declared_imports
+        || super::model::sorted_unique(&manifest.denied_imports) != manifest.denied_imports
     {
         blockers.push("Wizer declared and denied imports must be bounded, sorted, and unique".to_string());
     }
     let virtual_names = manifest.virtual_imports.iter().map(|binding| binding.import.clone()).collect::<Vec<_>>();
     if manifest.virtual_imports.len() > MAX_PERFORMANCE_EVIDENCE_REFS
-        || sorted_unique(&virtual_names) != virtual_names
+        || super::model::sorted_unique(&virtual_names) != virtual_names
         || manifest
             .virtual_imports
             .iter()
-            .any(|binding| binding.import.trim().is_empty() || !valid_content_ref(&binding.input_ref))
+            .any(|binding| binding.import.trim().is_empty() || !super::model::valid_content_ref(&binding.input_ref))
     {
         blockers.push("Wizer virtual imports must bind sorted interfaces to exact deterministic inputs".to_string());
     }
@@ -401,7 +408,7 @@ fn validate_wizer_imports(manifest: &WizerTransformManifest, blockers: &mut Vec<
     }
     let mut admitted_imports = manifest.denied_imports.clone();
     admitted_imports.extend(virtual_names);
-    admitted_imports = sorted_unique(&admitted_imports);
+    admitted_imports = super::model::sorted_unique(&admitted_imports);
     if admitted_imports != manifest.declared_imports {
         blockers.push("Wizer imports are not completely denied or deterministically virtualized".to_string());
     }

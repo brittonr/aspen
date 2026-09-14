@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 const AST_GREP_PROFILE_ID: &str = "runtime-authority";
 const AST_GREP_TOOL_PREFIX: &str = "ast-grep ";
 const CONTENT_REF_PREFIX: &str = "blake3:";
@@ -243,7 +241,8 @@ pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditRece
     // r[impl aspen.ast_grep_runtime_authority_audits.identity]
     // r[impl aspen.ast_grep_runtime_authority_audits.evidence_gates]
     let profile_validation = validate_ast_grep_profile(&input.profile);
-    let known_rule_ids = input.profile.rules.iter().map(|rule| rule.id.as_str()).collect::<BTreeSet<_>>();
+    let known_rule_ids =
+        input.profile.rules.iter().map(|rule| rule.id.as_str()).collect::<std::collections::BTreeSet<_>>();
     let finding_rule_ids = finding_rule_ids(&input.findings);
     let findings_known = input.findings.iter().all(|finding| known_rule_ids.contains(finding.rule_id.as_str()));
     let blocking_rule_ids = input
@@ -252,7 +251,7 @@ pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditRece
         .iter()
         .filter(|rule| rule.posture == RulePosture::Blocking)
         .map(|rule| rule.id.as_str())
-        .collect::<BTreeSet<_>>();
+        .collect::<std::collections::BTreeSet<_>>();
     let blocking_findings_absent =
         input.findings.iter().all(|finding| !blocking_rule_ids.contains(finding.rule_id.as_str()));
     let non_claims_bound = has_all_required_non_claims(&input.profile.non_claims);
@@ -446,7 +445,7 @@ fn require_items<'a>(
     actual: impl Iterator<Item = &'a str>,
     diagnostics: &mut Vec<String>,
 ) {
-    let actual = actual.collect::<BTreeSet<_>>();
+    let actual = actual.collect::<std::collections::BTreeSet<_>>();
     for required_item in required {
         if !actual.contains(required_item) {
             diagnostics.push(format!("missing ast-grep audit {label}: {required_item}"));
@@ -455,7 +454,7 @@ fn require_items<'a>(
 }
 
 fn has_all_required_non_claims(non_claims: &[String]) -> bool {
-    let non_claims = non_claims.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let non_claims = non_claims.iter().map(String::as_str).collect::<std::collections::BTreeSet<_>>();
     REQUIRED_NON_CLAIMS.iter().all(|required| non_claims.contains(required))
 }
 
@@ -463,7 +462,7 @@ fn finding_rule_ids(findings: &[AstGrepFinding]) -> Vec<String> {
     findings
         .iter()
         .map(|finding| finding.rule_id.clone())
-        .collect::<BTreeSet<_>>()
+        .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect()
 }

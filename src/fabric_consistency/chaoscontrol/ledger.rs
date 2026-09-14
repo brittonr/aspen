@@ -1,10 +1,3 @@
-use std::collections::BTreeMap;
-
-use super::ChaosControlChainObservation;
-use super::ChaosControlObservationMode;
-use crate::error::MoltenError;
-use crate::error::Result;
-
 // Observer-side accounting over a possibly lossy observation stream. Chain
 // and state conflicts at one index are recorded as safety violations and
 // remain failed regardless of later observations; missing observations are
@@ -59,8 +52,8 @@ pub enum ChaosControlIngestStatus {
 
 #[derive(Debug, Default)]
 struct ReplicaHistory {
-    digests: BTreeMap<u64, String>,
-    state_refs: BTreeMap<u64, String>,
+    digests: std::collections::BTreeMap<u64, String>,
+    state_refs: std::collections::BTreeMap<u64, String>,
     highest_index: Option<u64>,
 }
 
@@ -75,21 +68,21 @@ impl ReplicaHistory {
 
 #[derive(Debug)]
 pub struct ChaosControlObservationLedger {
-    observation_mode: ChaosControlObservationMode,
+    observation_mode: super::ChaosControlObservationMode,
     max_replicas: usize,
     max_dropped_events: u64,
-    replicas: BTreeMap<String, ReplicaHistory>,
+    replicas: std::collections::BTreeMap<String, ReplicaHistory>,
     violations: Vec<ChaosControlSafetyViolation>,
     duplicates_suppressed: u64,
 }
 
 impl ChaosControlObservationLedger {
-    pub fn new(observation_mode: ChaosControlObservationMode) -> Self {
+    pub fn new(observation_mode: super::ChaosControlObservationMode) -> Self {
         Self {
             observation_mode,
             max_replicas: MAX_LEDGER_REPLICAS,
             max_dropped_events: MAX_LEDGER_DROPPED_EVENTS,
-            replicas: BTreeMap::new(),
+            replicas: std::collections::BTreeMap::new(),
             violations: Vec::new(),
             duplicates_suppressed: 0,
         }
@@ -109,11 +102,16 @@ impl ChaosControlObservationLedger {
     // clear. Linkage is checked against whatever neighbors are already
     // observed, so out-of-order arrival is still link-checked once both sides
     // are present.
-    pub fn ingest(&mut self, observation: &ChaosControlChainObservation) -> Result<ChaosControlIngestStatus> {
+    pub fn ingest(
+        &mut self,
+        observation: &super::ChaosControlChainObservation,
+    ) -> crate::error::Result<ChaosControlIngestStatus> {
         crate::preserves_rail::validate_content_ref(&observation.prior_digest)?;
         crate::preserves_rail::validate_content_ref(&observation.next_digest)?;
         if !self.replicas.contains_key(&observation.replica_ref) && self.replicas.len() >= self.max_replicas {
-            return Err(MoltenError::invalid_harness("ChaosControl observation ledger replica bound exceeded"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "ChaosControl observation ledger replica bound exceeded",
+            ));
         }
         let current_dropped = self.dropped_total();
         let history = self.replicas.entry(observation.replica_ref.clone()).or_default();
@@ -154,13 +152,15 @@ impl ChaosControlObservationLedger {
             );
             return Ok(ChaosControlIngestStatus::ViolationRecorded);
         }
-        if let Some(highest) = history.highest_index {
-            if observation.command_index > highest + 1 {
-                let gap = observation.command_index - (highest + 1);
-                let next_dropped = current_dropped.saturating_add(gap);
-                if next_dropped > self.max_dropped_events {
-                    return Err(MoltenError::invalid_harness("ChaosControl dropped-event accounting bound exceeded"));
-                }
+        if let Some(highest) = history.highest_index
+            && observation.command_index > highest + 1
+        {
+            let gap = observation.command_index - (highest + 1);
+            let next_dropped = current_dropped.saturating_add(gap);
+            if next_dropped > self.max_dropped_events {
+                return Err(crate::error::MoltenError::invalid_harness(
+                    "ChaosControl dropped-event accounting bound exceeded",
+                ));
             }
         }
         history.digests.insert(observation.command_index, observation.next_digest.clone());
@@ -179,7 +179,7 @@ impl ChaosControlObservationLedger {
                 violations: self.violations.clone(),
             };
         }
-        if self.observation_mode == ChaosControlObservationMode::Lossless {
+        if self.observation_mode == super::ChaosControlObservationMode::Lossless {
             let missing = self.replicas.values().map(ReplicaHistory::missing_count).sum();
             if missing > 0 {
                 return ChaosControlConformanceVerdict::BlockedByObserverGap {

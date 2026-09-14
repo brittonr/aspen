@@ -1,5 +1,3 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hash;
 use std::hash::Hasher;
 
 use super::*;
@@ -24,8 +22,8 @@ const STORAGE_REQUEST: u64 = 2_000;
 const REPLICA_COUNT: u32 = 2;
 
 fn test_ref(label: &str) -> String {
-    let mut hasher = DefaultHasher::new();
-    label.hash(&mut hasher);
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(label, &mut hasher);
     let digest = hasher.finish();
     let chunk = format!("{digest:0width$x}", width = SYNTHETIC_REF_CHUNK_HEX_CHARS);
     format!("blake3:{}", chunk.repeat(SYNTHETIC_REF_CHUNK_REPETITIONS))

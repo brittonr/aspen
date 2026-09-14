@@ -1,21 +1,9 @@
-use preserves::IOValue;
-
-use super::CONSISTENCY_GROUP_BINDING_SCHEMA;
-use super::CONSISTENCY_PORT_OUTCOME_SCHEMA;
-use super::CONSISTENCY_PORT_PLAN_SCHEMA;
-use super::ConfigurationTransition;
-use super::ConsistencyGroupBinding;
-use super::ConsistencyGroupBindingInput;
-use super::ConsistencyGroupLifecycle;
-use super::ConsistencyOperation;
-use super::ConsistencyOutcomeInput;
-use super::ConsistencyOutcomeKind;
-use super::ConsistencyPlanDecision;
-use super::ConsistencyPortCommandInput;
-
-pub(super) fn binding_value(input: &ConsistencyGroupBindingInput, lifecycle: ConsistencyGroupLifecycle) -> IOValue {
+pub(super) fn binding_value(
+    input: &super::ConsistencyGroupBindingInput,
+    lifecycle: super::ConsistencyGroupLifecycle,
+) -> preserves::IOValue {
     record("fabric-consistency-group-binding-v1", vec![
-        field("schema", string(CONSISTENCY_GROUP_BINDING_SCHEMA)),
+        field("schema", string(super::CONSISTENCY_GROUP_BINDING_SCHEMA)),
         field("group-id", string(&input.group_id)),
         field("extension-id", string(&input.extension_id)),
         field("service-id", string(&input.service_id)),
@@ -42,19 +30,19 @@ pub(super) fn binding_value(input: &ConsistencyGroupBindingInput, lifecycle: Con
 }
 
 pub(super) struct PlanValueInput<'a> {
-    pub binding: &'a ConsistencyGroupBinding,
-    pub command: &'a ConsistencyPortCommandInput,
-    pub decision: ConsistencyPlanDecision,
-    pub lifecycle_before: ConsistencyGroupLifecycle,
-    pub lifecycle_after: ConsistencyGroupLifecycle,
+    pub binding: &'a super::ConsistencyGroupBinding,
+    pub command: &'a super::ConsistencyPortCommandInput,
+    pub decision: super::ConsistencyPlanDecision,
+    pub lifecycle_before: super::ConsistencyGroupLifecycle,
+    pub lifecycle_after: super::ConsistencyGroupLifecycle,
     pub diagnostics: &'a [String],
 }
 
-pub(super) fn plan_value(input: PlanValueInput<'_>) -> IOValue {
+pub(super) fn plan_value(input: PlanValueInput<'_>) -> preserves::IOValue {
     let binding = input.binding;
     let command = input.command;
     record("fabric-consistency-operation-plan-v1", vec![
-        field("schema", string(CONSISTENCY_PORT_PLAN_SCHEMA)),
+        field("schema", string(super::CONSISTENCY_PORT_PLAN_SCHEMA)),
         field("request-ref", string(&command.request_ref)),
         field("binding-ref", string(&command.binding_ref)),
         field("group-id", string(&command.group_id)),
@@ -84,12 +72,12 @@ pub(super) fn plan_value(input: PlanValueInput<'_>) -> IOValue {
 
 pub(super) fn outcome_value(
     plan_ref: &str,
-    binding: &ConsistencyGroupBinding,
-    input: &ConsistencyOutcomeInput,
-    outcome_kind: ConsistencyOutcomeKind,
-) -> IOValue {
+    binding: &super::ConsistencyGroupBinding,
+    input: &super::ConsistencyOutcomeInput,
+    outcome_kind: super::ConsistencyOutcomeKind,
+) -> preserves::IOValue {
     record("fabric-consistency-operation-outcome-v1", vec![
-        field("schema", string(CONSISTENCY_PORT_OUTCOME_SCHEMA)),
+        field("schema", string(super::CONSISTENCY_PORT_OUTCOME_SCHEMA)),
         field("plan-ref", string(plan_ref)),
         field("request-ref", string(&input.request_ref)),
         field("binding-ref", string(&input.binding_ref)),
@@ -105,10 +93,10 @@ pub(super) fn outcome_value(
     ])
 }
 
-fn operation_value(operation: &ConsistencyOperation) -> IOValue {
+fn operation_value(operation: &super::ConsistencyOperation) -> preserves::IOValue {
     match operation {
-        ConsistencyOperation::Open { mode } => record("open", vec![field("mode", string(mode.as_str()))]),
-        ConsistencyOperation::Propose {
+        super::ConsistencyOperation::Open { mode } => record("open", vec![field("mode", string(mode.as_str()))]),
+        super::ConsistencyOperation::Propose {
             command_ref,
             command_schema_ref,
             estimated_command_bytes,
@@ -117,29 +105,29 @@ fn operation_value(operation: &ConsistencyOperation) -> IOValue {
             field("command-schema-ref", string(command_schema_ref)),
             field("estimated-command-bytes", u64_value(*estimated_command_bytes)),
         ]),
-        ConsistencyOperation::Read { query_ref, mode } => record("read", vec![
+        super::ConsistencyOperation::Read { query_ref, mode } => record("read", vec![
             field("query-ref", string(query_ref)),
             field("mode", string(mode.as_str())),
         ]),
-        ConsistencyOperation::Snapshot { snapshot_policy_ref } => {
+        super::ConsistencyOperation::Snapshot { snapshot_policy_ref } => {
             record("snapshot", vec![field("snapshot-policy-ref", string(snapshot_policy_ref))])
         }
-        ConsistencyOperation::Recover {
+        super::ConsistencyOperation::Recover {
             snapshot_ref,
             durable_boundary_ref,
         } => record("recover", vec![
             field("snapshot-ref", string(snapshot_ref)),
             field("durable-boundary-ref", string(durable_boundary_ref)),
         ]),
-        ConsistencyOperation::Configure { transition } => configuration_value(transition),
-        ConsistencyOperation::Health => record("health", Vec::new()),
-        ConsistencyOperation::Drain => record("drain", Vec::new()),
-        ConsistencyOperation::Status => record("status", Vec::new()),
-        ConsistencyOperation::Remove => record("remove", Vec::new()),
+        super::ConsistencyOperation::Configure { transition } => configuration_value(transition),
+        super::ConsistencyOperation::Health => record("health", Vec::new()),
+        super::ConsistencyOperation::Drain => record("drain", Vec::new()),
+        super::ConsistencyOperation::Status => record("status", Vec::new()),
+        super::ConsistencyOperation::Remove => record("remove", Vec::new()),
     }
 }
 
-fn configuration_value(transition: &ConfigurationTransition) -> IOValue {
+fn configuration_value(transition: &super::ConfigurationTransition) -> preserves::IOValue {
     record("configure", vec![
         field("transition", string(transition.as_str())),
         field("next-membership-ref", string(transition.next_membership_ref())),
@@ -147,30 +135,30 @@ fn configuration_value(transition: &ConfigurationTransition) -> IOValue {
     ])
 }
 
-fn field(label: &'static str, value: IOValue) -> IOValue {
+fn field(label: &'static str, value: preserves::IOValue) -> preserves::IOValue {
     record(label, vec![value])
 }
 
-fn optional_string(value: Option<&str>) -> IOValue {
+fn optional_string(value: Option<&str>) -> preserves::IOValue {
     value.map_or_else(|| record("none", Vec::new()), |present| record("some", vec![string(present)]))
 }
 
-fn strings(values: &[String]) -> IOValue {
+fn strings(values: &[String]) -> preserves::IOValue {
     sequence(values.iter().map(string).collect())
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> preserves::IOValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> preserves::IOValue {
     crate::preserves_rail::u64_value(value)
 }

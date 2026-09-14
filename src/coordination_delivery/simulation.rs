@@ -1,12 +1,10 @@
 use molten_core::coordination_delivery::*;
-use molten_core::fabric_simulation::SimulationFaultKind;
-use molten_core::fabric_time::AdmittedTimeProfile;
 
 #[derive(Clone, Debug)]
 pub enum DeliverySimulationAction {
     Request(DeliveryRequest),
     FaultedRequest {
-        fault: SimulationFaultKind,
+        fault: molten_core::fabric_simulation::SimulationFaultKind,
         request: DeliveryRequest,
     },
     CrashRestart,
@@ -23,14 +21,14 @@ pub struct DeliverySimulationTrace {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DeliverySimulationError {
     StateCodec,
-    UnsupportedFault(SimulationFaultKind),
+    UnsupportedFault(molten_core::fabric_simulation::SimulationFaultKind),
 }
 
 // r[impl molten.coordination_delivery.final_validation]
 pub fn run_delivery_simulation(
     manifest: &DeliveryManifest,
     policy: &DeliveryPolicy,
-    time_profile: &AdmittedTimeProfile,
+    time_profile: &molten_core::fabric_time::AdmittedTimeProfile,
     initial: DeliveryState,
     actions: &[DeliverySimulationAction],
 ) -> Result<DeliverySimulationTrace, DeliverySimulationError> {
@@ -54,16 +52,17 @@ pub fn run_delivery_simulation(
             DeliverySimulationAction::FaultedRequest { fault, request } => {
                 let mut faulted = request.clone();
                 match fault {
-                    SimulationFaultKind::Partition | SimulationFaultKind::ConsistencyQuorumLoss => {
+                    molten_core::fabric_simulation::SimulationFaultKind::Partition
+                    | molten_core::fabric_simulation::SimulationFaultKind::ConsistencyQuorumLoss => {
                         faulted.currentness = DeliveryCurrentness::LocalStale;
                     }
-                    SimulationFaultKind::AuthorityRevocation => {
+                    molten_core::fabric_simulation::SimulationFaultKind::AuthorityRevocation => {
                         faulted.authority_refs.clear();
                     }
-                    SimulationFaultKind::CapacityExhaustion => {
+                    molten_core::fabric_simulation::SimulationFaultKind::CapacityExhaustion => {
                         faulted.resource_refs.clear();
                     }
-                    SimulationFaultKind::Duplicate => {}
+                    molten_core::fabric_simulation::SimulationFaultKind::Duplicate => {}
                     other => {
                         return Err(DeliverySimulationError::UnsupportedFault(*other));
                     }
@@ -77,7 +76,7 @@ pub fn run_delivery_simulation(
                     &mut transitions,
                     &mut state_refs,
                 );
-                if *fault == SimulationFaultKind::Duplicate {
+                if *fault == molten_core::fabric_simulation::SimulationFaultKind::Duplicate {
                     apply_simulated_request(
                         manifest,
                         policy,
@@ -94,8 +93,8 @@ pub fn run_delivery_simulation(
                 let bytes = serde_json::to_vec(&state).map_err(|_| DeliverySimulationError::StateCodec)?;
                 state = serde_json::from_slice(&bytes).map_err(|_| DeliverySimulationError::StateCodec)?;
                 state_refs.push(identify_delivery_state(&state));
-                fault_classes.push(SimulationFaultKind::Crash.as_str().to_string());
-                fault_classes.push(SimulationFaultKind::Restart.as_str().to_string());
+                fault_classes.push(molten_core::fabric_simulation::SimulationFaultKind::Crash.as_str().to_string());
+                fault_classes.push(molten_core::fabric_simulation::SimulationFaultKind::Restart.as_str().to_string());
             }
         }
     }
@@ -110,7 +109,7 @@ pub fn run_delivery_simulation(
 fn apply_simulated_request(
     manifest: &DeliveryManifest,
     policy: &DeliveryPolicy,
-    time_profile: &AdmittedTimeProfile,
+    time_profile: &molten_core::fabric_time::AdmittedTimeProfile,
     request: &DeliveryRequest,
     state: &mut DeliveryState,
     transitions: &mut Vec<DeliveryTransition>,

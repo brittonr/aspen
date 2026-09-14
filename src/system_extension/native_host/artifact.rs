@@ -1,15 +1,5 @@
-use std::collections::BTreeSet;
-
-use preserves::IOValue;
-
 use super::super::*;
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
 
 const ARTIFACT_INDEX_RECORD: &str = "native-host-artifact-index-v2";
 const ARTIFACT_MEMBER_RECORD: &str = "native-host-artifact-member-v2";
@@ -60,7 +50,7 @@ pub struct CanonicalNativeArtifactIndex {
     pub manifest_ref: String,
     pub members: Vec<NativeArtifactMember>,
     pub non_claims: Vec<NativeHostNonClaim>,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +70,7 @@ pub fn build_native_artifact_index(
     observations: &[NativeInvocationObservation],
     callback_receipts: &[CanonicalCallbackReceipt],
     effect_completions: &[CanonicalEffectCompletion],
-) -> Result<CanonicalNativeArtifactIndex> {
+) -> crate::error::Result<CanonicalNativeArtifactIndex> {
     let state = canonical_native_instance_record(instance)?;
     let estimated = observations
         .len()
@@ -91,7 +81,7 @@ pub fn build_native_artifact_index(
         .and_then(|value| value.checked_add(instance.completed_operations.len()))
         .and_then(|value| value.checked_add(instance.evidence_refs.len()))
         .and_then(|value| value.checked_add(4))
-        .ok_or_else(|| MoltenError::invalid_harness("native artifact index member count overflow"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("native artifact index member count overflow"))?;
     let mut members = Vec::with_capacity(estimated);
     members.push(NativeArtifactMember {
         role: NativeArtifactRole::Executable,
@@ -170,7 +160,8 @@ pub fn build_native_artifact_index(
             });
         }
     }
-    let mut represented_refs = members.iter().map(|member| member.artifact_ref.clone()).collect::<BTreeSet<_>>();
+    let mut represented_refs =
+        members.iter().map(|member| member.artifact_ref.clone()).collect::<std::collections::BTreeSet<_>>();
     for evidence_ref in &instance.evidence_refs {
         if represented_refs.insert(evidence_ref.clone()) {
             members.push(NativeArtifactMember {
@@ -182,7 +173,7 @@ pub fn build_native_artifact_index(
     }
     members.sort_by(|left, right| (left.role, &left.artifact_ref).cmp(&(right.role, &right.artifact_ref)));
     let value = artifact_index_value(&instance.manifest_ref, &members, &REQUIRED_NATIVE_HOST_NON_CLAIMS);
-    let index_ref = canonical_hash(&value)?;
+    let index_ref = crate::preserves_rail::canonical_hash(&value)?;
     let index = CanonicalNativeArtifactIndex {
         index_ref,
         manifest_ref: instance.manifest_ref.clone(),
@@ -190,8 +181,9 @@ pub fn build_native_artifact_index(
         non_claims: REQUIRED_NATIVE_HOST_NON_CLAIMS.to_vec(),
         value,
     };
-    verify_native_artifact_index(&index)
-        .map_err(|issues| MoltenError::invalid_harness(format!("native artifact index denied: {issues:?}")))?;
+    verify_native_artifact_index(&index).map_err(|issues| {
+        crate::error::MoltenError::invalid_harness(format!("native artifact index denied: {issues:?}"))
+    })?;
     Ok(index)
 }
 
@@ -206,8 +198,8 @@ pub fn verify_native_artifact_index(
             maximum: MAX_ARTIFACT_MEMBERS,
         });
     }
-    let mut members = BTreeSet::new();
-    let mut refs = BTreeSet::new();
+    let mut members = std::collections::BTreeSet::new();
+    let mut refs = std::collections::BTreeSet::new();
     for member in &index.members {
         if !members.insert((member.role, member.artifact_ref.clone())) {
             issues.push(NativeArtifactIndexIssue::DuplicateMember(member.artifact_ref.clone()));
@@ -238,7 +230,9 @@ pub fn verify_native_artifact_index(
         }
     }
     let expected_value = artifact_index_value(&index.manifest_ref, &index.members, &index.non_claims);
-    if canonical_hash(&expected_value).ok().as_deref() != Some(&index.index_ref) || expected_value != index.value {
+    if crate::preserves_rail::canonical_hash(&expected_value).ok().as_deref() != Some(&index.index_ref)
+        || expected_value != index.value
+    {
         issues.push(NativeArtifactIndexIssue::IndexIdentityMismatch);
     }
     if issues.is_empty() { Ok(()) } else { Err(issues) }
@@ -248,23 +242,25 @@ fn artifact_index_value(
     manifest_ref: &str,
     members: &[NativeArtifactMember],
     non_claims: &[NativeHostNonClaim],
-) -> IOValue {
-    record(ARTIFACT_INDEX_RECORD, vec![
-        string(ARTIFACT_INDEX_SCHEMA),
-        string(manifest_ref),
-        sequence(
+) -> preserves::IOValue {
+    crate::preserves_rail::record(ARTIFACT_INDEX_RECORD, vec![
+        crate::preserves_rail::string(ARTIFACT_INDEX_SCHEMA),
+        crate::preserves_rail::string(manifest_ref),
+        crate::preserves_rail::sequence(
             members
                 .iter()
                 .map(|member| {
-                    record(ARTIFACT_MEMBER_RECORD, vec![
-                        string(member.role.as_str()),
-                        string(&member.artifact_ref),
-                        string(&member.parent_ref),
+                    crate::preserves_rail::record(ARTIFACT_MEMBER_RECORD, vec![
+                        crate::preserves_rail::string(member.role.as_str()),
+                        crate::preserves_rail::string(&member.artifact_ref),
+                        crate::preserves_rail::string(&member.parent_ref),
                     ])
                 })
                 .collect(),
         ),
-        sequence(non_claims.iter().map(|claim| string(claim.as_str())).collect()),
+        crate::preserves_rail::sequence(
+            non_claims.iter().map(|claim| crate::preserves_rail::string(claim.as_str())).collect(),
+        ),
     ])
 }
 

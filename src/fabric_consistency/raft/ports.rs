@@ -1,8 +1,4 @@
-use std::collections::BTreeSet;
-
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaRuntimePortIdentity {
@@ -24,7 +20,7 @@ pub struct ReplicaRuntimePortIdentity {
 }
 
 pub trait BoundLiveReplicaEffectPorts: LiveReplicaEffectPorts {
-    fn validate_start(&self, plan: &ReplicaStartPlan) -> Result<()>;
+    fn validate_start(&self, plan: &ReplicaStartPlan) -> crate::error::Result<()>;
 }
 
 pub struct ReplicaPortBundle<D, N, T, A, C> {
@@ -44,7 +40,7 @@ impl<D, N, T, A, C> ReplicaPortBundle<D, N, T, A, C> {
         time: T,
         application: A,
         control: C,
-    ) -> Result<Self> {
+    ) -> crate::error::Result<Self> {
         validate_runtime_identity(&identity)?;
         Ok(Self {
             identity,
@@ -64,14 +60,14 @@ impl<D, N, T, A, C> ReplicaPortBundle<D, N, T, A, C> {
 impl<D, N, T, A, C> BoundLiveReplicaEffectPorts for ReplicaPortBundle<D, N, T, A, C>
 where Self: LiveReplicaEffectPorts
 {
-    fn validate_start(&self, plan: &ReplicaStartPlan) -> Result<()> {
+    fn validate_start(&self, plan: &ReplicaStartPlan) -> crate::error::Result<()> {
         validate_replica_runtime_identity_for_start(&self.identity, plan)
     }
 }
 
-fn validate_runtime_identity(identity: &ReplicaRuntimePortIdentity) -> Result<()> {
+fn validate_runtime_identity(identity: &ReplicaRuntimePortIdentity) -> crate::error::Result<()> {
     if identity.service_id.is_empty() || identity.service_generation == 0 {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "live Raft runtime ports require service identity and positive generation",
         ));
     }
@@ -92,13 +88,15 @@ fn validate_runtime_identity(identity: &ReplicaRuntimePortIdentity) -> Result<()
         crate::preserves_rail::validate_content_ref(reference)?;
     }
     if identity.fabric_binding_refs.len() != REQUIRED_REPLICA_PORTS.len() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "live Raft runtime ports require the complete admitted fabric binding cohort",
         ));
     }
-    let unique = identity.fabric_binding_refs.iter().collect::<BTreeSet<_>>();
+    let unique = identity.fabric_binding_refs.iter().collect::<std::collections::BTreeSet<_>>();
     if unique.len() != identity.fabric_binding_refs.len() {
-        return Err(MoltenError::invalid_harness("live Raft runtime ports contain duplicate fabric bindings"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "live Raft runtime ports contain duplicate fabric bindings",
+        ));
     }
     for reference in &identity.fabric_binding_refs {
         crate::preserves_rail::validate_content_ref(reference)?;
@@ -109,7 +107,7 @@ fn validate_runtime_identity(identity: &ReplicaRuntimePortIdentity) -> Result<()
 pub fn validate_replica_runtime_identity_for_start(
     identity: &ReplicaRuntimePortIdentity,
     plan: &ReplicaStartPlan,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     validate_runtime_identity(identity)?;
     let state = &plan.state;
     let exact = identity.service_id == plan.service_id
@@ -126,10 +124,10 @@ pub fn validate_replica_runtime_identity_for_start(
         && identity.fencing_ref == state.profile.fencing_ref
         && identity.supervision_ref == state.profile.supervision_ref
         && identity.resource_profile_ref == state.profile.resource_profile_ref;
-    let expected_bindings = plan.port_binding_refs.iter().collect::<BTreeSet<_>>();
-    let actual_bindings = identity.fabric_binding_refs.iter().collect::<BTreeSet<_>>();
+    let expected_bindings = plan.port_binding_refs.iter().collect::<std::collections::BTreeSet<_>>();
+    let actual_bindings = identity.fabric_binding_refs.iter().collect::<std::collections::BTreeSet<_>>();
     if !exact || actual_bindings != expected_bindings {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "live Raft runtime port identity does not match the admitted start plan",
         ));
     }
@@ -151,7 +149,7 @@ pub fn assemble_scoped_concrete_replica_ports<S, H>(
     time: TokioReplicaTimePort<S>,
     application: AdmittedReplicaApplicationPort<H>,
     control: ChannelReplicaControlPort,
-) -> Result<ConcreteReplicaPortBundle<S, H>>
+) -> crate::error::Result<ConcreteReplicaPortBundle<S, H>>
 where
     S: crate::fabric_time::CryptographicEntropySource,
     H: CommittedBatchHandler,
@@ -167,7 +165,7 @@ pub fn validate_concrete_replica_port_identity<S, H>(
     time: &TokioReplicaTimePort<S>,
     application: &AdmittedReplicaApplicationPort<H>,
     control: &ChannelReplicaControlPort,
-) -> Result<()>
+) -> crate::error::Result<()>
 where
     S: crate::fabric_time::CryptographicEntropySource,
     H: CommittedBatchHandler,
@@ -184,7 +182,7 @@ where
         && identity.service_generation == control.service_generation()
         && identity.supervision_ref == control.supervision_ref();
     if !exact {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "live Raft concrete adapter identity does not match the runtime port cohort",
         ));
     }
@@ -192,23 +190,27 @@ where
 }
 
 impl<D: ReplicaDurabilityEffects, N, T, A, C> ReplicaDurabilityEffects for ReplicaPortBundle<D, N, T, A, C> {
-    fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> Result<String> {
+    fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> crate::error::Result<String> {
         self.durability.persist_hard_state(term, voted_for)
     }
 
-    fn persist_entries(&mut self, truncate_from: Option<u64>, entries: &[ReplicatedEntry]) -> Result<String> {
+    fn persist_entries(
+        &mut self,
+        truncate_from: Option<u64>,
+        entries: &[ReplicatedEntry],
+    ) -> crate::error::Result<String> {
         self.durability.persist_entries(truncate_from, entries)
     }
 
-    fn flush_log(&mut self, through_index: u64) -> Result<String> {
+    fn flush_log(&mut self, through_index: u64) -> crate::error::Result<String> {
         self.durability.flush_log(through_index)
     }
 
-    fn persist_commit(&mut self, through_index: u64) -> Result<String> {
+    fn persist_commit(&mut self, through_index: u64) -> crate::error::Result<String> {
         self.durability.persist_commit(through_index)
     }
 
-    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String> {
+    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
         self.durability.persist_snapshot(snapshot)
     }
 }
@@ -220,21 +222,21 @@ impl<D, N: ReplicaTransportEffects, T, A, C> ReplicaTransportEffects for Replica
 }
 
 impl<D, N, T: ReplicaTimeEffects, A, C> ReplicaTimeEffects for ReplicaPortBundle<D, N, T, A, C> {
-    fn arm_election_timer(&mut self, timer_ref: &str) -> Result<String> {
+    fn arm_election_timer(&mut self, timer_ref: &str) -> crate::error::Result<String> {
         self.time.arm_election_timer(timer_ref)
     }
 
-    fn arm_heartbeat_timer(&mut self) -> Result<String> {
+    fn arm_heartbeat_timer(&mut self) -> crate::error::Result<String> {
         self.time.arm_heartbeat_timer()
     }
 }
 
 impl<D, N, T, A: ReplicaApplicationEffects, C> ReplicaApplicationEffects for ReplicaPortBundle<D, N, T, A, C> {
-    fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String> {
+    fn restore_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
         self.application.restore_snapshot(snapshot)
     }
 
-    fn apply_committed(&mut self, entries: &[ReplicatedEntry]) -> Result<String> {
+    fn apply_committed(&mut self, entries: &[ReplicatedEntry]) -> crate::error::Result<String> {
         self.application.apply_committed(entries)
     }
 }
@@ -245,7 +247,7 @@ impl<D, N, T, A, C: ReplicaControlEffects> ReplicaControlEffects for ReplicaPort
         request_ref: &str,
         disposition: ProposalDisposition,
         committed_index: Option<u64>,
-    ) -> Result<String> {
+    ) -> crate::error::Result<String> {
         self.control.proposal_outcome(request_ref, disposition, committed_index)
     }
 
@@ -255,11 +257,11 @@ impl<D, N, T, A, C: ReplicaControlEffects> ReplicaControlEffects for ReplicaPort
         mode: crate::fabric_consistency::ConsistencyReadMode,
         disposition: ReadDisposition,
         observed_index: u64,
-    ) -> Result<String> {
+    ) -> crate::error::Result<String> {
         self.control.read_outcome(request_ref, mode, disposition, observed_index)
     }
 
-    fn lifecycle_changed(&mut self, lifecycle: ReplicaLifecycle) -> Result<String> {
+    fn lifecycle_changed(&mut self, lifecycle: ReplicaLifecycle) -> crate::error::Result<String> {
         self.control.lifecycle_changed(lifecycle)
     }
 }

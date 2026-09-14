@@ -1,6 +1,4 @@
 use molten_core::addressable_actor::*;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
 
 use super::super::*;
 use super::support::*;
@@ -74,9 +72,11 @@ fn stale_host_generation_denies_before_storage_or_effects() {
 #[test]
 fn capability_rooted_store_reopens_exact_actor_state() {
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary actor root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone actor root"));
+    let root = molten_node_host::node_state::NodeStateRoot::from_dir(temporary.try_clone().expect("clone actor root"));
     root.create_layout().expect("node state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let storage = root
+        .namespace(molten_node_host::node_state::NodeStateNamespaceKind::Storage)
+        .expect("storage namespace");
     let profile = profile();
     let actor_key = actor_key();
     let initial = initial_state(&profile, &actor_key);

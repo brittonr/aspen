@@ -1,10 +1,3 @@
-use std::collections::BTreeSet;
-use std::path::Path;
-use std::path::PathBuf;
-
-use crate::error::MoltenError;
-use crate::error::Result;
-
 type IoValue = preserves::IOValue;
 
 pub const CLUSTER_MANIFEST_FILE: &str = "cluster.nodes";
@@ -35,30 +28,30 @@ pub struct ClusterNodePlan {
     pub requested_node: String,
     pub node_id: String,
     pub path_component: String,
-    pub state_root: PathBuf,
+    pub state_root: std::path::PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClusterPlan {
-    pub state_root: PathBuf,
+    pub state_root: std::path::PathBuf,
     pub nodes: Vec<ClusterNodePlan>,
 }
 
-pub fn cluster_manifest_path(state_root: &Path) -> PathBuf {
+pub fn cluster_manifest_path(state_root: &std::path::Path) -> std::path::PathBuf {
     state_root.join(CLUSTER_MANIFEST_FILE)
 }
 
-pub fn plan_cluster(state_root: &Path, node_names: &[String]) -> Result<ClusterPlan> {
+pub fn plan_cluster(state_root: &std::path::Path, node_names: &[String]) -> crate::error::Result<ClusterPlan> {
     validate_cluster_state_root(state_root)?;
     if node_names.is_empty() {
-        return Err(MoltenError::invalid_harness("cluster requires at least one --node"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster requires at least one --node"));
     }
-    let mut seen_node_ids = BTreeSet::new();
+    let mut seen_node_ids = std::collections::BTreeSet::new();
     let mut nodes = Vec::with_capacity(node_names.len());
     for node_name in node_names {
         let node = plan_node(state_root, node_name)?;
         if !seen_node_ids.insert(node.node_id.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate cluster node {}", node.node_id)));
+            return Err(crate::error::MoltenError::invalid_harness(format!("duplicate cluster node {}", node.node_id)));
         }
         nodes.push(node);
     }
@@ -78,11 +71,13 @@ pub fn render_cluster_manifest(plan: &ClusterPlan) -> String {
     rendered
 }
 
-pub fn parse_cluster_manifest(source: &str) -> Result<Vec<String>> {
+pub fn parse_cluster_manifest(source: &str) -> crate::error::Result<Vec<String>> {
     let mut lines = source.lines();
-    let header = lines.next().ok_or_else(|| MoltenError::invalid_harness("cluster manifest is empty"))?;
+    let header = lines
+        .next()
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("cluster manifest is empty"))?;
     if header != CLUSTER_MANIFEST_HEADER {
-        return Err(MoltenError::invalid_harness("cluster manifest has unsupported header"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster manifest has unsupported header"));
     }
     let mut nodes = Vec::new();
     for line in lines {
@@ -91,22 +86,26 @@ pub fn parse_cluster_manifest(source: &str) -> Result<Vec<String>> {
         }
     }
     if nodes.is_empty() {
-        return Err(MoltenError::invalid_harness("cluster manifest has no nodes"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster manifest has no nodes"));
     }
     Ok(nodes)
 }
 
-fn validate_cluster_state_root(state_root: &Path) -> Result<()> {
+fn validate_cluster_state_root(state_root: &std::path::Path) -> crate::error::Result<()> {
     if state_root.as_os_str().is_empty() {
-        return Err(MoltenError::invalid_harness("cluster requires explicit state root"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster requires explicit state root"));
     }
-    if state_root == Path::new(CURRENT_DIR_COMPONENT) || state_root == Path::new(PARENT_DIR_COMPONENT) {
-        return Err(MoltenError::invalid_harness("cluster state root must not be ambient current or parent directory"));
+    if state_root == std::path::Path::new(CURRENT_DIR_COMPONENT)
+        || state_root == std::path::Path::new(PARENT_DIR_COMPONENT)
+    {
+        return Err(crate::error::MoltenError::invalid_harness(
+            "cluster state root must not be ambient current or parent directory",
+        ));
     }
     Ok(())
 }
 
-fn plan_node(state_root: &Path, requested_node: &str) -> Result<ClusterNodePlan> {
+fn plan_node(state_root: &std::path::Path, requested_node: &str) -> crate::error::Result<ClusterNodePlan> {
     let path_component = node_path_component(requested_node)?;
     let node_id = if requested_node.starts_with(NODE_ID_PREFIX) {
         requested_node.to_string()
@@ -121,22 +120,24 @@ fn plan_node(state_root: &Path, requested_node: &str) -> Result<ClusterNodePlan>
     })
 }
 
-fn node_path_component(requested_node: &str) -> Result<String> {
+fn node_path_component(requested_node: &str) -> crate::error::Result<String> {
     if requested_node.is_empty() || requested_node.trim() != requested_node {
-        return Err(MoltenError::invalid_harness("cluster node name must be non-empty and unpadded"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster node name must be non-empty and unpadded"));
     }
     let component = requested_node.strip_prefix(NODE_ID_PREFIX).unwrap_or(requested_node);
     if component.is_empty() {
-        return Err(MoltenError::invalid_harness("cluster node path component must be non-empty"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster node path component must be non-empty"));
     }
     if component == CURRENT_DIR_COMPONENT || component == PARENT_DIR_COMPONENT {
-        return Err(MoltenError::invalid_harness("cluster node path component must not be relative syntax"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "cluster node path component must not be relative syntax",
+        ));
     }
     if component.contains(NODE_ID_SEPARATOR) {
-        return Err(MoltenError::invalid_harness("cluster node path component must not contain ':'"));
+        return Err(crate::error::MoltenError::invalid_harness("cluster node path component must not contain ':'"));
     }
     if !component.chars().all(is_safe_node_path_character) {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "cluster node path component must contain only ASCII letters, digits, '-' or '_'",
         ));
     }
@@ -193,7 +194,9 @@ pub struct ClusterLifecycleRunReceipt {
 
 // r[impl molten.testing.cluster_lifecycle_receipt.run_receipt]
 // r[impl molten.testing.cluster_lifecycle_receipt.fail_closed_validation]
-pub fn build_cluster_lifecycle_run_receipt(input: &ClusterLifecycleRunInput) -> Result<ClusterLifecycleRunReceipt> {
+pub fn build_cluster_lifecycle_run_receipt(
+    input: &ClusterLifecycleRunInput,
+) -> crate::error::Result<ClusterLifecycleRunReceipt> {
     let mut diagnostics = cluster_lifecycle_run_diagnostics(input)?;
     diagnostics.sort();
     diagnostics.dedup();
@@ -210,7 +213,9 @@ pub fn build_cluster_lifecycle_run_receipt(input: &ClusterLifecycleRunInput) -> 
 
 // r[impl molten.testing.cluster_lifecycle_summary_drift.receipt_summary]
 // r[impl molten.testing.cluster_lifecycle_summary_drift.negatives]
-pub fn cluster_lifecycle_drift_summary(input: &ClusterLifecycleRunInput) -> Result<crate::drift_core::EvidenceSummary> {
+pub fn cluster_lifecycle_drift_summary(
+    input: &ClusterLifecycleRunInput,
+) -> crate::error::Result<crate::drift_core::EvidenceSummary> {
     let mut fields = Vec::new();
     push_lifecycle_summary_field(&mut fields, "workflow-id", &input.workflow_id, false)?;
     push_lifecycle_summary_field(&mut fields, "manifest", &input.manifest_ref, true)?;
@@ -266,7 +271,7 @@ pub fn cluster_lifecycle_drift_summary(input: &ClusterLifecycleRunInput) -> Resu
     })
 }
 
-fn cluster_lifecycle_run_diagnostics(input: &ClusterLifecycleRunInput) -> Result<Vec<String>> {
+fn cluster_lifecycle_run_diagnostics(input: &ClusterLifecycleRunInput) -> crate::error::Result<Vec<String>> {
     let mut diagnostics = input.diagnostics.clone();
     collect_lifecycle_text_diagnostic("workflow-id", &input.workflow_id, &mut diagnostics)?;
     collect_lifecycle_ref_diagnostic("manifest", &input.manifest_ref, &mut diagnostics)?;
@@ -293,8 +298,11 @@ fn cluster_lifecycle_run_diagnostics(input: &ClusterLifecycleRunInput) -> Result
     Ok(diagnostics)
 }
 
-fn collect_ordered_lifecycle_nodes(node_ids: &[String], diagnostics: &mut Vec<String>) -> Result<BTreeSet<String>> {
-    let mut seen = BTreeSet::new();
+fn collect_ordered_lifecycle_nodes(
+    node_ids: &[String],
+    diagnostics: &mut Vec<String>,
+) -> crate::error::Result<std::collections::BTreeSet<String>> {
+    let mut seen = std::collections::BTreeSet::new();
     for node_id in node_ids {
         collect_lifecycle_text_diagnostic("node-id", node_id, diagnostics)?;
         if !seen.insert(node_id.clone()) {
@@ -306,10 +314,10 @@ fn collect_ordered_lifecycle_nodes(node_ids: &[String], diagnostics: &mut Vec<St
 
 fn collect_summary_node_diagnostics(
     input: &ClusterLifecycleRunInput,
-    ordered_nodes: &BTreeSet<String>,
+    ordered_nodes: &std::collections::BTreeSet<String>,
     diagnostics: &mut Vec<String>,
-) -> Result<BTreeSet<String>> {
-    let mut seen = BTreeSet::new();
+) -> crate::error::Result<std::collections::BTreeSet<String>> {
+    let mut seen = std::collections::BTreeSet::new();
     let has_init = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_INIT);
     let has_start = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_START);
     let has_status = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_STATUS);
@@ -361,7 +369,7 @@ fn collect_summary_node_diagnostics(
 fn collect_summary_optional_ref_diagnostics(
     summary: &ClusterLifecycleNodeSummary,
     diagnostics: &mut Vec<String>,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     for (label, reference) in [
         ("identity", summary.identity_ref.as_deref()),
         ("startup", summary.startup_ref.as_deref()),
@@ -383,14 +391,17 @@ fn collect_required_optional_summary_ref(
     label: &str,
     reference: Option<&str>,
     diagnostics: &mut Vec<String>,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if reference.is_none() {
         push_lifecycle_diagnostic(diagnostics, format!("cluster-lifecycle-missing-{label}:{}", summary.node_id))?;
     }
     Ok(())
 }
 
-fn collect_phase_diagnostics(phase: &ClusterLifecyclePhaseObservation, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_phase_diagnostics(
+    phase: &ClusterLifecyclePhaseObservation,
+    diagnostics: &mut Vec<String>,
+) -> crate::error::Result<()> {
     collect_lifecycle_text_diagnostic("phase", &phase.phase, diagnostics)?;
     collect_lifecycle_decision_diagnostic(&phase.phase, &phase.decision, diagnostics)?;
     collect_lifecycle_ref_diagnostics("phase-receipt", &phase.receipt_refs, diagnostics)?;
@@ -400,7 +411,10 @@ fn collect_phase_diagnostics(phase: &ClusterLifecyclePhaseObservation, diagnosti
     Ok(())
 }
 
-fn collect_stop_order_diagnostics(input: &ClusterLifecycleRunInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_stop_order_diagnostics(
+    input: &ClusterLifecycleRunInput,
+    diagnostics: &mut Vec<String>,
+) -> crate::error::Result<()> {
     let has_stop = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_STOP);
     for node_id in &input.stop_order {
         collect_lifecycle_text_diagnostic("stop-order-node", node_id, diagnostics)?;
@@ -444,7 +458,11 @@ fn cluster_lifecycle_has_phase(input: &ClusterLifecycleRunInput, phase_name: &st
     input.phases.iter().any(|phase| phase.phase == phase_name)
 }
 
-fn collect_lifecycle_decision_diagnostic(phase: &str, decision: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_lifecycle_decision_diagnostic(
+    phase: &str,
+    decision: &str,
+    diagnostics: &mut Vec<String>,
+) -> crate::error::Result<()> {
     match decision {
         CLUSTER_LIFECYCLE_PASS
         | CLUSTER_LIFECYCLE_DENY
@@ -457,16 +475,24 @@ fn collect_lifecycle_decision_diagnostic(phase: &str, decision: &str, diagnostic
     }
 }
 
-fn collect_lifecycle_text_diagnostic(label: &str, value: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_lifecycle_text_diagnostic(
+    label: &str,
+    value: &str,
+    diagnostics: &mut Vec<String>,
+) -> crate::error::Result<()> {
     if value.trim().is_empty() {
         push_lifecycle_diagnostic(diagnostics, format!("cluster-lifecycle-missing-{label}"))?;
     }
     Ok(())
 }
 
-fn collect_lifecycle_ref_diagnostics(label: &str, refs: &[String], diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_lifecycle_ref_diagnostics(
+    label: &str,
+    refs: &[String],
+    diagnostics: &mut Vec<String>,
+) -> crate::error::Result<()> {
     if refs.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "cluster lifecycle {label} ref count {} exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}",
             refs.len()
         )));
@@ -481,30 +507,38 @@ fn collect_lifecycle_optional_ref_diagnostic(
     label: &str,
     reference: Option<&str>,
     diagnostics: &mut Vec<String>,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if let Some(reference) = reference {
         collect_lifecycle_ref_diagnostic(label, reference, diagnostics)?;
     }
     Ok(())
 }
 
-fn collect_lifecycle_ref_diagnostic(label: &str, reference: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_lifecycle_ref_diagnostic(
+    label: &str,
+    reference: &str,
+    diagnostics: &mut Vec<String>,
+) -> crate::error::Result<()> {
     if crate::preserves_rail::validate_content_ref(reference).is_err() {
         push_lifecycle_diagnostic(diagnostics, format!("cluster-lifecycle-invalid-{label}-ref"))?;
     }
     Ok(())
 }
 
-fn push_lifecycle_if(diagnostics: &mut Vec<String>, condition: bool, diagnostic: &'static str) -> Result<()> {
+fn push_lifecycle_if(
+    diagnostics: &mut Vec<String>,
+    condition: bool,
+    diagnostic: &'static str,
+) -> crate::error::Result<()> {
     if condition {
         push_lifecycle_diagnostic(diagnostics, diagnostic)?;
     }
     Ok(())
 }
 
-fn push_lifecycle_diagnostic(diagnostics: &mut Vec<String>, diagnostic: impl Into<String>) -> Result<()> {
+fn push_lifecycle_diagnostic(diagnostics: &mut Vec<String>, diagnostic: impl Into<String>) -> crate::error::Result<()> {
     if diagnostics.len() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "cluster lifecycle diagnostic count exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}"
         )));
     }
@@ -524,7 +558,7 @@ fn cluster_lifecycle_run_value(
     input: &ClusterLifecycleRunInput,
     decision: &str,
     diagnostics: &[String],
-) -> Result<IoValue> {
+) -> crate::error::Result<IoValue> {
     Ok(record("cluster-lifecycle-run-v1", vec![
         string(CLUSTER_LIFECYCLE_RUN_SCHEMA),
         record("decision", vec![string(decision)]),
@@ -566,9 +600,9 @@ fn cluster_lifecycle_decision_status(diagnostics: &[String], prefix: &str) -> &'
     }
 }
 
-fn cluster_lifecycle_phase_values(phases: &[ClusterLifecyclePhaseObservation]) -> Result<Vec<IoValue>> {
+fn cluster_lifecycle_phase_values(phases: &[ClusterLifecyclePhaseObservation]) -> crate::error::Result<Vec<IoValue>> {
     if phases.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "cluster lifecycle phase count {} exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}",
             phases.len()
         )));
@@ -585,9 +619,9 @@ fn cluster_lifecycle_phase_values(phases: &[ClusterLifecyclePhaseObservation]) -
         .collect())
 }
 
-fn cluster_lifecycle_node_values(summaries: &[ClusterLifecycleNodeSummary]) -> Result<Vec<IoValue>> {
+fn cluster_lifecycle_node_values(summaries: &[ClusterLifecycleNodeSummary]) -> crate::error::Result<Vec<IoValue>> {
     if summaries.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "cluster lifecycle node summary count {} exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}",
             summaries.len()
         )));
@@ -626,7 +660,7 @@ fn push_lifecycle_optional_ref_field(
     node_id: &str,
     label: &str,
     reference: Option<&str>,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let path = format!("node:{node_id}:{label}");
     match reference {
         Some(reference) => push_lifecycle_summary_field(fields, &path, reference, true),
@@ -638,7 +672,7 @@ fn push_lifecycle_ref_fields(
     fields: &mut Vec<crate::drift_core::EvidenceField>,
     prefix: &str,
     refs: &[String],
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if refs.is_empty() {
         push_lifecycle_summary_field(fields, prefix, CLUSTER_LIFECYCLE_NONE, false)?;
         return Ok(());
@@ -654,9 +688,9 @@ fn push_lifecycle_summary_field(
     path: &str,
     value: &str,
     is_ref: bool,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if fields.len() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::MoltenError::invalid_harness(format!(
             "cluster lifecycle drift field count exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}"
         )));
     }
@@ -873,7 +907,7 @@ mod tests {
     fn plans_cluster_nodes_and_round_trips_manifest() {
         const EXPECTED_CLUSTER_NODE_COUNT: usize = 2;
 
-        let root = PathBuf::from("target/cluster");
+        let root = std::path::PathBuf::from("target/cluster");
         let plan = plan_cluster(&root, &node_names(&["node-a", "node_b"])).expect("cluster plan");
         assert_eq!(plan.nodes.len(), EXPECTED_CLUSTER_NODE_COUNT);
         assert_eq!(plan.nodes[0].node_id, "node:node-a");
@@ -893,7 +927,7 @@ mod tests {
 
     #[test]
     fn denies_empty_duplicate_and_unsafe_nodes() {
-        let root = PathBuf::from("target/cluster");
+        let root = std::path::PathBuf::from("target/cluster");
         let empty = plan_cluster(&root, &[]).expect_err("empty denied");
         assert!(empty.to_string().contains("at least one"));
 
@@ -906,10 +940,12 @@ mod tests {
         let colon = plan_cluster(&root, &node_names(&["node:a:b"])).expect_err("colon denied");
         assert!(colon.to_string().contains("must not contain ':'"));
 
-        let current_root = plan_cluster(Path::new("."), &node_names(&["node-a"])).expect_err("current root denied");
+        let current_root =
+            plan_cluster(std::path::Path::new("."), &node_names(&["node-a"])).expect_err("current root denied");
         assert!(current_root.to_string().contains("must not be ambient"));
 
-        let parent_root = plan_cluster(Path::new(".."), &node_names(&["node-a"])).expect_err("parent root denied");
+        let parent_root =
+            plan_cluster(std::path::Path::new(".."), &node_names(&["node-a"])).expect_err("parent root denied");
         assert!(parent_root.to_string().contains("must not be ambient"));
     }
 

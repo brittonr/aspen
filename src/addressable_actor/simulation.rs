@@ -1,7 +1,4 @@
-use std::collections::VecDeque;
-
 use molten_core::addressable_actor::*;
-use molten_core::system_extension::LifecyclePhase;
 
 use super::*;
 
@@ -186,7 +183,7 @@ impl ActorCommitPort for SimulationCommitPort {
 }
 
 struct SimulationEffectPort {
-    scripted: VecDeque<ActorEffectDisposition>,
+    scripted: std::collections::VecDeque<ActorEffectDisposition>,
 }
 
 impl ActorEffectPort for SimulationEffectPort {
@@ -242,15 +239,15 @@ impl ActorStatusPort for SimulationStatusPort {
     }
 }
 
-fn extension_phase(phase: ActorPhase) -> LifecyclePhase {
+fn extension_phase(phase: ActorPhase) -> molten_core::system_extension::LifecyclePhase {
     match phase {
-        ActorPhase::Dormant => LifecyclePhase::Drained,
-        ActorPhase::Starting => LifecyclePhase::Starting,
-        ActorPhase::Running => LifecyclePhase::Running,
-        ActorPhase::Draining => LifecyclePhase::Draining,
-        ActorPhase::Stopped => LifecyclePhase::Stopped,
-        ActorPhase::Degraded => LifecyclePhase::Failed,
-        ActorPhase::Recovering => LifecyclePhase::Recovering,
+        ActorPhase::Dormant => molten_core::system_extension::LifecyclePhase::Drained,
+        ActorPhase::Starting => molten_core::system_extension::LifecyclePhase::Starting,
+        ActorPhase::Running => molten_core::system_extension::LifecyclePhase::Running,
+        ActorPhase::Draining => molten_core::system_extension::LifecyclePhase::Draining,
+        ActorPhase::Stopped => molten_core::system_extension::LifecyclePhase::Stopped,
+        ActorPhase::Degraded => molten_core::system_extension::LifecyclePhase::Failed,
+        ActorPhase::Recovering => molten_core::system_extension::LifecyclePhase::Recovering,
     }
 }
 

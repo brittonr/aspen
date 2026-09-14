@@ -1,22 +1,16 @@
-use std::path::Path;
-use std::path::PathBuf;
-
-use molten::error::MoltenError;
-use molten::error::Result;
-use molten::system_extension::ExecutableSystemExtensionFixtureRun;
-use molten::system_extension::ExecutionProfile;
-use molten::system_extension::HostEvidence;
-
 const ARTIFACT_INDEX_WIDTH: usize = 3;
 const MAX_STATUS_ARTIFACT_BYTES: u64 = 65_536;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PlannedArtifact {
-    relative_path: PathBuf,
+    relative_path: std::path::PathBuf,
     content: String,
 }
 
-pub(super) fn run_fixture(profile: ExecutionProfile, out: PathBuf) -> Result<()> {
+pub(super) fn run_fixture(
+    profile: molten::system_extension::ExecutionProfile,
+    out: std::path::PathBuf,
+) -> molten::error::Result<()> {
     let run = molten::system_extension::run_executable_system_extension_fixture(profile)?;
     let plan = plan_fixture_artifacts(&run)?;
     write_artifacts(&out, &plan)?;
@@ -31,15 +25,15 @@ pub(super) fn run_fixture(profile: ExecutionProfile, out: PathBuf) -> Result<()>
     Ok(())
 }
 
-pub(super) fn show(status: PathBuf) -> Result<()> {
-    let metadata = std::fs::metadata(&status).map_err(MoltenError::from)?;
+pub(super) fn show(status: std::path::PathBuf) -> molten::error::Result<()> {
+    let metadata = std::fs::metadata(&status).map_err(molten::error::MoltenError::from)?;
     if metadata.len() > MAX_STATUS_ARTIFACT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(molten::error::MoltenError::invalid_harness(format!(
             "system-extension status artifact is {} bytes; maximum is {MAX_STATUS_ARTIFACT_BYTES}",
             metadata.len()
         )));
     }
-    let source = std::fs::read_to_string(&status).map_err(MoltenError::from)?;
+    let source = std::fs::read_to_string(&status).map_err(molten::error::MoltenError::from)?;
     let value = molten::preserves_rail::parse_text(&source)?;
     let readback = molten::system_extension::parse_operator_status_readback(&value)?;
     println!(
@@ -58,7 +52,9 @@ pub(super) fn show(status: PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn plan_fixture_artifacts(run: &ExecutableSystemExtensionFixtureRun) -> Result<Vec<PlannedArtifact>> {
+fn plan_fixture_artifacts(
+    run: &molten::system_extension::ExecutableSystemExtensionFixtureRun,
+) -> molten::error::Result<Vec<PlannedArtifact>> {
     let mut artifacts = vec![
         planned("manifest.preserves", &run.manifest_value)?,
         planned("upgraded-status.preserves", &run.upgraded_status.value)?,
@@ -68,11 +64,11 @@ fn plan_fixture_artifacts(run: &ExecutableSystemExtensionFixtureRun) -> Result<V
     ];
     for (index, evidence) in run.evidence.iter().enumerate() {
         let (kind, value) = match evidence {
-            HostEvidence::Lifecycle(receipt) => ("lifecycle", &receipt.value),
-            HostEvidence::Callback(receipt) => ("callback", &receipt.value),
-            HostEvidence::EffectCompletion(receipt) => ("effect-completion", &receipt.value),
-            HostEvidence::Migration(receipt) => ("migration", &receipt.value),
-            HostEvidence::Readiness(receipt) => ("readiness", &receipt.value),
+            molten::system_extension::HostEvidence::Lifecycle(receipt) => ("lifecycle", &receipt.value),
+            molten::system_extension::HostEvidence::Callback(receipt) => ("callback", &receipt.value),
+            molten::system_extension::HostEvidence::EffectCompletion(receipt) => ("effect-completion", &receipt.value),
+            molten::system_extension::HostEvidence::Migration(receipt) => ("migration", &receipt.value),
+            molten::system_extension::HostEvidence::Readiness(receipt) => ("readiness", &receipt.value),
         };
         let filename = format!("evidence/{index:0width$}-{kind}.preserves", width = ARTIFACT_INDEX_WIDTH);
         artifacts.push(planned(filename, value)?);
@@ -80,21 +76,24 @@ fn plan_fixture_artifacts(run: &ExecutableSystemExtensionFixtureRun) -> Result<V
     Ok(artifacts)
 }
 
-fn planned(relative_path: impl Into<PathBuf>, value: &preserves::IOValue) -> Result<PlannedArtifact> {
+fn planned(
+    relative_path: impl Into<std::path::PathBuf>,
+    value: &preserves::IOValue,
+) -> molten::error::Result<PlannedArtifact> {
     Ok(PlannedArtifact {
         relative_path: relative_path.into(),
         content: molten::preserves_rail::to_text(value)?,
     })
 }
 
-fn write_artifacts(root: &Path, artifacts: &[PlannedArtifact]) -> Result<()> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
+fn write_artifacts(root: &std::path::Path, artifacts: &[PlannedArtifact]) -> molten::error::Result<()> {
+    std::fs::create_dir_all(root).map_err(molten::error::MoltenError::from)?;
     for artifact in artifacts {
         let path = root.join(&artifact.relative_path);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
         }
-        std::fs::write(path, artifact.content.as_bytes()).map_err(MoltenError::from)?;
+        std::fs::write(path, artifact.content.as_bytes()).map_err(molten::error::MoltenError::from)?;
     }
     Ok(())
 }
@@ -108,12 +107,13 @@ mod tests {
     // r[verify molten.system_extension.operator_readback]
     #[test]
     fn fixture_plan_has_bounded_relative_paths_and_a_status_artifact() {
-        let run =
-            molten::system_extension::run_executable_system_extension_fixture(ExecutionProfile::SandboxedComponent)
-                .expect("fixture run");
+        let run = molten::system_extension::run_executable_system_extension_fixture(
+            molten::system_extension::ExecutionProfile::SandboxedComponent,
+        )
+        .expect("fixture run");
         let plan = plan_fixture_artifacts(&run).expect("artifact plan");
 
-        assert!(plan.iter().any(|artifact| artifact.relative_path == Path::new("status.preserves")));
+        assert!(plan.iter().any(|artifact| artifact.relative_path == std::path::Path::new("status.preserves")));
         assert!(plan.iter().all(|artifact| artifact.relative_path.is_relative()));
         assert!(plan.iter().all(|artifact| {
             !artifact.relative_path.components().any(|component| component == std::path::Component::ParentDir)
@@ -124,18 +124,19 @@ mod tests {
     // r[verify molten.system_extension.operator_readback]
     #[test]
     fn status_parser_rejects_callback_receipts_as_operator_status() {
-        let run =
-            molten::system_extension::run_executable_system_extension_fixture(ExecutionProfile::SandboxedComponent)
-                .expect("fixture run");
+        let run = molten::system_extension::run_executable_system_extension_fixture(
+            molten::system_extension::ExecutionProfile::SandboxedComponent,
+        )
+        .expect("fixture run");
         let callback = run
             .evidence
             .iter()
             .find_map(|evidence| match evidence {
-                HostEvidence::Callback(receipt) => Some(&receipt.value),
-                HostEvidence::EffectCompletion(_)
-                | HostEvidence::Lifecycle(_)
-                | HostEvidence::Migration(_)
-                | HostEvidence::Readiness(_) => None,
+                molten::system_extension::HostEvidence::Callback(receipt) => Some(&receipt.value),
+                molten::system_extension::HostEvidence::EffectCompletion(_)
+                | molten::system_extension::HostEvidence::Lifecycle(_)
+                | molten::system_extension::HostEvidence::Migration(_)
+                | molten::system_extension::HostEvidence::Readiness(_) => None,
             })
             .expect("callback receipt");
 

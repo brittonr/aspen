@@ -1,14 +1,11 @@
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric_consistency::ConsistencyReadMode;
 
 pub(super) fn handle_proposal(
     state: &ReplicaState,
     request_ref: String,
     command_ref: String,
     command_schema_ref: String,
-) -> Result<ReplicaTransition> {
+) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_content_ref(&request_ref, "Raft proposal request ref")?;
     validation::validate_content_ref(&command_ref, "Raft proposal command ref")?;
@@ -31,32 +28,40 @@ pub(super) fn handle_proposal(
 pub(super) fn handle_read(
     state: &ReplicaState,
     request_ref: String,
-    mode: ConsistencyReadMode,
-) -> Result<ReplicaTransition> {
+    mode: crate::fabric_consistency::ConsistencyReadMode,
+) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_content_ref(&request_ref, "Raft read request ref")?;
     match mode {
-        ConsistencyReadMode::LocalStale => read_outcome(state, request_ref, mode, ReadDisposition::Local),
-        ConsistencyReadMode::Lease => read_outcome(state, request_ref, mode, ReadDisposition::Retryable),
-        ConsistencyReadMode::Linearizable if state.role != ReplicaRole::Leader => {
+        crate::fabric_consistency::ConsistencyReadMode::LocalStale => {
+            read_outcome(state, request_ref, mode, ReadDisposition::Local)
+        }
+        crate::fabric_consistency::ConsistencyReadMode::Lease => {
             read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
         }
-        ConsistencyReadMode::Linearizable if state.pending_reads.contains_key(&request_ref) => {
+        crate::fabric_consistency::ConsistencyReadMode::Linearizable if state.role != ReplicaRole::Leader => {
             read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
         }
-        ConsistencyReadMode::Linearizable if state.pending_reads.len() >= MAX_PENDING_REPLICA_READS => {
+        crate::fabric_consistency::ConsistencyReadMode::Linearizable
+            if state.pending_reads.contains_key(&request_ref) =>
+        {
             read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
         }
-        ConsistencyReadMode::Linearizable => begin_linearizable_read(state, request_ref),
+        crate::fabric_consistency::ConsistencyReadMode::Linearizable
+            if state.pending_reads.len() >= MAX_PENDING_REPLICA_READS =>
+        {
+            read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
+        }
+        crate::fabric_consistency::ConsistencyReadMode::Linearizable => begin_linearizable_read(state, request_ref),
     }
 }
 
 fn read_outcome(
     state: &ReplicaState,
     request_ref: String,
-    mode: ConsistencyReadMode,
+    mode: crate::fabric_consistency::ConsistencyReadMode,
     disposition: ReadDisposition,
-) -> Result<ReplicaTransition> {
+) -> crate::error::Result<ReplicaTransition> {
     finish_transition(state.clone(), vec![ReplicaEffect::ReadOutcome {
         request_ref,
         mode,
@@ -65,7 +70,7 @@ fn read_outcome(
     }])
 }
 
-fn begin_linearizable_read(state: &ReplicaState, request_ref: String) -> Result<ReplicaTransition> {
+fn begin_linearizable_read(state: &ReplicaState, request_ref: String) -> crate::error::Result<ReplicaTransition> {
     let mut next = state.clone();
     next.pending_reads.insert(request_ref.clone(), PendingReplicaRead {
         request_ref: request_ref.clone(),
@@ -89,14 +94,19 @@ fn begin_linearizable_read(state: &ReplicaState, request_ref: String) -> Result<
     finish_transition(next, effects)
 }
 
-pub(super) fn handle_create_snapshot(state: &ReplicaState, application_state_ref: String) -> Result<ReplicaTransition> {
+pub(super) fn handle_create_snapshot(
+    state: &ReplicaState,
+    application_state_ref: String,
+) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_content_ref(&application_state_ref, "Raft snapshot application state ref")?;
     if state.last_applied == INITIAL_COMMIT_INDEX {
-        return Err(MoltenError::invalid_harness("Raft snapshot requires a committed application boundary"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "Raft snapshot requires a committed application boundary",
+        ));
     }
     let last_included_term = support::term_at(state, state.last_applied)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft snapshot boundary term is absent"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft snapshot boundary term is absent"))?;
     let mut snapshot = ReplicaSnapshot {
         snapshot_ref: String::new(),
         group_binding_ref: state.profile.group_binding_ref.clone(),
@@ -115,7 +125,7 @@ pub(super) fn handle_create_snapshot(state: &ReplicaState, application_state_ref
     finish_transition(next, vec![ReplicaEffect::PersistSnapshot { snapshot }])
 }
 
-pub(super) fn handle_begin_drain(state: &ReplicaState) -> Result<ReplicaTransition> {
+pub(super) fn handle_begin_drain(state: &ReplicaState) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     let mut next = state.clone();
     next.lifecycle = ReplicaLifecycle::Draining;
@@ -125,7 +135,7 @@ pub(super) fn handle_begin_drain(state: &ReplicaState) -> Result<ReplicaTransiti
     }])
 }
 
-pub(super) fn handle_stop(state: &ReplicaState) -> Result<ReplicaTransition> {
+pub(super) fn handle_stop(state: &ReplicaState) -> crate::error::Result<ReplicaTransition> {
     if state.lifecycle == ReplicaLifecycle::Stopped {
         return finish_transition(state.clone(), Vec::new());
     }
@@ -144,7 +154,7 @@ fn duplicate_proposal_transition(
     state: &ReplicaState,
     request_ref: String,
     existing: &ReplicatedEntry,
-) -> Result<ReplicaTransition> {
+) -> crate::error::Result<ReplicaTransition> {
     let disposition = if existing.index <= state.commit_index {
         ProposalDisposition::Committed
     } else {
@@ -159,7 +169,7 @@ fn proposal_outcome(
     request_ref: String,
     disposition: ProposalDisposition,
     committed_index: Option<u64>,
-) -> Result<ReplicaTransition> {
+) -> crate::error::Result<ReplicaTransition> {
     finish_transition(state.clone(), vec![ReplicaEffect::ProposalOutcome {
         request_ref,
         disposition,
@@ -172,11 +182,11 @@ fn append_proposal(
     request_ref: String,
     command_ref: String,
     command_schema_ref: String,
-) -> Result<ReplicaTransition> {
+) -> crate::error::Result<ReplicaTransition> {
     let mut next = state.clone();
     let index = support::last_log_index(&next)
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft proposal log index overflow"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft proposal log index overflow"))?;
     let entry = ReplicatedEntry {
         index,
         term: next.current_term,

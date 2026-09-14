@@ -1,8 +1,6 @@
 use super::super::*;
-use super::support::ComponentFixture;
-use super::support::fixture_ref;
 
-fn admitted_materialization(fixture: &ComponentFixture) -> MaterializationAdmission {
+fn admitted_materialization(fixture: &super::support::ComponentFixture) -> MaterializationAdmission {
     verify_materialization(&fixture.profile, EvidenceScope::Production, fixture.source())
         .expect("materialization admission")
 }
@@ -12,7 +10,7 @@ fn identical_component_facts_produce_identical_pure_execution_plans() {
     // r[verify molten.wasm_component.determinism]
     // r[verify molten.wasm_component.functional_core]
     // r[verify molten.wasm_component.resources]
-    let fixture = ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
     let left = plan_component_execution(&fixture.profile, admitted_materialization(&fixture), &fixture.facts, &[])
         .expect("left plan");
     let right = plan_component_execution(&fixture.profile, admitted_materialization(&fixture), &fixture.facts, &[])
@@ -33,7 +31,7 @@ fn admission_rejects_wrong_world_unsupported_feature_and_dynamic_growth() {
     // r[verify molten.wasm_component.abi]
     // r[verify molten.wasm_component.determinism]
     // r[verify molten.wasm_component.fixtures]
-    let fixture = ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
 
     let mut wrong_world = fixture.facts.clone();
     wrong_world.declared_world = "other-world".to_string();
@@ -54,7 +52,7 @@ fn admission_rejects_wrong_world_unsupported_feature_and_dynamic_growth() {
 fn admission_rejects_over_resource_undeclared_wasi_and_unused_authority() {
     // r[verify molten.wasm_component.authority]
     // r[verify molten.wasm_component.resources]
-    let fixture = ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
 
     let mut oversized = fixture.facts.clone();
     oversized.memory.initial = fixture.profile.resources.max_memory_bytes + 1;
@@ -66,10 +64,10 @@ fn admission_rejects_over_resource_undeclared_wasi_and_unused_authority() {
     let grant = ComponentImportGrant {
         import: wasi.imports[0].clone(),
         capability: "filesystem-read".to_string(),
-        policy_ref: fixture_ref("import-policy"),
-        authority_ref: fixture_ref("import-authority"),
-        resource_ref: fixture_ref("import-resource"),
-        recorded_effect_ref: fixture_ref("import-effect"),
+        policy_ref: super::support::fixture_ref("import-policy"),
+        authority_ref: super::support::fixture_ref("import-authority"),
+        resource_ref: super::support::fixture_ref("import-resource"),
+        recorded_effect_ref: super::support::fixture_ref("import-effect"),
     };
     assert!(
         plan_component_execution(

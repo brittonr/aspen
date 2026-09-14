@@ -1,9 +1,3 @@
-use std::collections::BTreeMap;
-use std::sync::atomic::AtomicBool;
-
-use bounded_exec::Operation;
-use bounded_exec::RunError;
-
 use super::mechanics::*;
 use super::*;
 const RESOLUTION_DENIED_CODE: &str = "execution-resolution-denied";
@@ -29,7 +23,7 @@ enum OperationStatus {
 pub struct LiveExecutionAdapter<P: ExecutionOutputPublisher> {
     profile: CanonicalExecutionProfile,
     publisher: P,
-    operations: BTreeMap<String, (u64, OperationStatus)>,
+    operations: std::collections::BTreeMap<String, (u64, OperationStatus)>,
 }
 
 impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
@@ -40,7 +34,7 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
         Ok(Self {
             profile,
             publisher,
-            operations: BTreeMap::new(),
+            operations: std::collections::BTreeMap::new(),
         })
     }
 
@@ -65,7 +59,7 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for LiveExecutionAdapter<P
         &mut self,
         request: &CanonicalExecutionRequest,
         resolved: &ResolvedExecutionContext,
-        cancellation: Option<&AtomicBool>,
+        cancellation: Option<&std::sync::atomic::AtomicBool>,
     ) -> ExecutionPortResult<CanonicalExecutionReceipt> {
         validate_resolved_context(request, resolved).map_err(|detail| {
             failure(request, ExecutionPortFailureKind::ResolutionDenied, RESOLUTION_DENIED_CODE, detail, None, None)
@@ -112,19 +106,19 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
     fn record_run_failure(
         &mut self,
         request: &CanonicalExecutionRequest,
-        error: RunError,
+        error: bounded_exec::RunError,
     ) -> Box<ExecutionPortFailure> {
         let before_start = matches!(
             error,
-            RunError::InvalidLimits(_)
-                | RunError::EmptyProgram
-                | RunError::ProgramNotAbsolute
-                | RunError::EmptyCurrentDirectory
-                | RunError::CurrentDirectoryNotAbsolute
-                | RunError::DuplicateEnvironmentName
-                | RunError::InputLimitExceeded
-                | RunError::Io {
-                    operation: Operation::Spawn,
+            bounded_exec::RunError::InvalidLimits(_)
+                | bounded_exec::RunError::EmptyProgram
+                | bounded_exec::RunError::ProgramNotAbsolute
+                | bounded_exec::RunError::EmptyCurrentDirectory
+                | bounded_exec::RunError::CurrentDirectoryNotAbsolute
+                | bounded_exec::RunError::DuplicateEnvironmentName
+                | bounded_exec::RunError::InputLimitExceeded
+                | bounded_exec::RunError::Io {
+                    operation: bounded_exec::Operation::Spawn,
                     ..
                 }
         );

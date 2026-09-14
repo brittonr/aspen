@@ -1,8 +1,4 @@
-use serde_json::json;
-
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 const PROMETHEUS_MEDIA_TYPE: &str = "text/plain; version=0.0.4";
 const OTLP_JSON_MEDIA_TYPE: &str = "application/x-ndjson; profile=molten-otlp-v1";
@@ -53,7 +49,7 @@ pub fn execute_snapshot_export(
     last_export_tick: Option<u64>,
     format: ExportFormat,
     sink: &mut dyn ObservationSink,
-) -> Result<ExportExecution> {
+) -> crate::error::Result<ExportExecution> {
     require_export_class(adapter.class, format)?;
     let canonical = canonical_observation_snapshot(profile, snapshot, request.submitted_tick)?;
     let (media_type, payload) = render_snapshot(format, &canonical)?;
@@ -78,14 +74,14 @@ pub fn execute_event_export(
     state: &ExportShellState,
     last_export_tick: Option<u64>,
     sink: &mut dyn ObservationSink,
-) -> Result<ExportExecution> {
+) -> crate::error::Result<ExportExecution> {
     if !matches!(
         adapter.class,
         ObservationAdapterClass::Tracing
             | ObservationAdapterClass::OpenTelemetry
             | ObservationAdapterClass::DeterministicSimulation
     ) {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "event export requires tracing, OpenTelemetry, or deterministic simulation adapter",
         ));
     }
@@ -114,7 +110,7 @@ fn execute_rendered_export(
     payload: Vec<u8>,
     payload_ref: String,
     sink: &mut dyn ObservationSink,
-) -> Result<ExportExecution> {
+) -> crate::error::Result<ExportExecution> {
     validate_request_binding(request, &payload_ref, payload.len())?;
     let preflight_runtime = AdapterRuntimeObservation {
         available: state.available,
@@ -159,7 +155,7 @@ fn execute_rendered_export(
 fn render_event(
     class: ObservationAdapterClass,
     canonical: &CanonicalArtifact<ObservationEvent>,
-) -> Result<(&'static str, Vec<u8>)> {
+) -> crate::error::Result<(&'static str, Vec<u8>)> {
     if class == ObservationAdapterClass::Tracing {
         return Ok((TRACING_MEDIA_TYPE, canonical.artifact_ref.as_bytes().to_vec()));
     }
@@ -169,7 +165,7 @@ fn render_event(
         .iter()
         .map(|attribute| (attribute.name.clone(), attribute.value.clone()))
         .collect::<std::collections::BTreeMap<_, _>>();
-    let payload = serde_json::to_vec(&json!({
+    let payload = serde_json::to_vec(&serde_json::json!({
         "schema": "molten.opentelemetry.event.v1",
         "event_ref": canonical.artifact_ref,
         "kind": canonical.artifact.event_kind,
@@ -178,11 +174,13 @@ fn render_event(
         "attributes": attributes,
         "observed_tick": canonical.artifact.context.observed_tick,
     }))
-    .map_err(|error| MoltenError::invalid_harness(format!("OpenTelemetry event rendering failed: {error}")))?;
+    .map_err(|error| {
+        crate::error::MoltenError::invalid_harness(format!("OpenTelemetry event rendering failed: {error}"))
+    })?;
     Ok((OTLP_EVENT_MEDIA_TYPE, payload))
 }
 
-pub fn render_prometheus_snapshot(snapshot: &ObservationSnapshot) -> Result<Vec<u8>> {
+pub fn render_prometheus_snapshot(snapshot: &ObservationSnapshot) -> crate::error::Result<Vec<u8>> {
     let mut output = String::new();
     for series in &snapshot.series {
         output.push_str("# TYPE ");
@@ -214,7 +212,7 @@ pub fn render_prometheus_snapshot(snapshot: &ObservationSnapshot) -> Result<Vec<
     Ok(output.into_bytes())
 }
 
-pub fn render_opentelemetry_snapshot(snapshot: &ObservationSnapshot) -> Result<Vec<u8>> {
+pub fn render_opentelemetry_snapshot(snapshot: &ObservationSnapshot) -> crate::error::Result<Vec<u8>> {
     let mut lines = Vec::with_capacity(snapshot.series.len());
     for series in &snapshot.series {
         let labels = series
@@ -224,7 +222,7 @@ pub fn render_opentelemetry_snapshot(snapshot: &ObservationSnapshot) -> Result<V
             .map(|label| (label.name.clone(), label.value.clone()))
             .collect::<std::collections::BTreeMap<_, _>>();
         lines.push(
-            serde_json::to_string(&json!({
+            serde_json::to_string(&serde_json::json!({
                 "schema": "molten.opentelemetry.metric.v1",
                 "descriptor_ref": series.identity.descriptor_ref,
                 "name": series.metric_name,
@@ -236,7 +234,9 @@ pub fn render_opentelemetry_snapshot(snapshot: &ObservationSnapshot) -> Result<V
                 "sample_refs": series.source_sample_refs,
                 "observed_tick": series.latest_observed_tick,
             }))
-            .map_err(|error| MoltenError::invalid_harness(format!("OpenTelemetry JSON rendering failed: {error}")))?,
+            .map_err(|error| {
+                crate::error::MoltenError::invalid_harness(format!("OpenTelemetry JSON rendering failed: {error}"))
+            })?,
         );
     }
     let mut payload = lines.join("\n").into_bytes();
@@ -253,9 +253,11 @@ pub struct DeterministicSimulationSink {
 }
 
 impl DeterministicSimulationSink {
-    pub fn new(completion_tick: u64, max_records: usize) -> Result<Self> {
+    pub fn new(completion_tick: u64, max_records: usize) -> crate::error::Result<Self> {
         if max_records == 0 {
-            return Err(MoltenError::invalid_harness("deterministic observation sink record bound must be positive"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "deterministic observation sink record bound must be positive",
+            ));
         }
         Ok(Self {
             completion_tick,
@@ -316,7 +318,7 @@ impl ObservationSink for TracingReferenceSink {
 fn render_snapshot(
     format: ExportFormat,
     canonical: &CanonicalArtifact<ObservationSnapshot>,
-) -> Result<(&'static str, Vec<u8>)> {
+) -> crate::error::Result<(&'static str, Vec<u8>)> {
     match format {
         ExportFormat::Prometheus => Ok((PROMETHEUS_MEDIA_TYPE, render_prometheus_snapshot(&canonical.artifact)?)),
         ExportFormat::OpenTelemetryJson => {
@@ -326,7 +328,7 @@ fn render_snapshot(
     }
 }
 
-fn require_export_class(class: ObservationAdapterClass, format: ExportFormat) -> Result<()> {
+fn require_export_class(class: ObservationAdapterClass, format: ExportFormat) -> crate::error::Result<()> {
     let matches = matches!(
         (class, format),
         (ObservationAdapterClass::Prometheus, ExportFormat::Prometheus)
@@ -337,7 +339,9 @@ fn require_export_class(class: ObservationAdapterClass, format: ExportFormat) ->
     if matches {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness("observation adapter class does not match requested exporter format"))
+        Err(crate::error::MoltenError::invalid_harness(
+            "observation adapter class does not match requested exporter format",
+        ))
     }
 }
 
@@ -345,11 +349,11 @@ fn validate_request_binding(
     request: &AdapterDeliveryRequest,
     expected_payload_ref: &str,
     payload_len: usize,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let payload_bytes = u64::try_from(payload_len)
-        .map_err(|_| MoltenError::invalid_harness("export payload length does not fit u64"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("export payload length does not fit u64"))?;
     if request.payload_ref != expected_payload_ref || request.payload_bytes != payload_bytes {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "export request does not bind the canonical snapshot ref and rendered byte length",
         ));
     }

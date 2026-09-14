@@ -1,5 +1,3 @@
-use crate::error::Result;
-
 // The genesis and transition framing mirrors the archived ChaosControl
 // `smr-chain` contract exactly: separate versioned BLAKE3 domains, big-endian
 // length-prefixed parts, and a `blake3:` lowercase-hex digest string. Changing
@@ -34,7 +32,7 @@ pub struct ChaosControlConformanceProfile {
 
 impl ChaosControlConformanceProfile {
     // r[impl molten.consensus.chaoscontrol_chain_observation]
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> crate::error::Result<()> {
         crate::preserves_rail::validate_content_ref(&self.chaoscontrol_profile_ref)?;
         if self.max_command_bytes == 0 || self.max_projected_observations == 0 {
             return Err(crate::error::MoltenError::invalid_harness(
@@ -46,7 +44,7 @@ impl ChaosControlConformanceProfile {
 
     // Accepted conformance uses lossless observation mode; a sampled profile
     // cannot support external conformance evidence.
-    pub fn admits_conformance(&self) -> Result<()> {
+    pub fn admits_conformance(&self) -> crate::error::Result<()> {
         if self.observation_mode != ChaosControlObservationMode::Lossless {
             return Err(crate::error::MoltenError::invalid_harness(
                 "ChaosControl conformance requires lossless observation mode",
@@ -105,7 +103,7 @@ pub struct ChaosControlChainProjector {
 impl ChaosControlChainProjector {
     // Binds the canonical initial-state ref and derives the cohort genesis
     // digest with the exact ChaosControl genesis framing.
-    pub fn bind(profile: ChaosControlConformanceProfile, initial_state_ref: &str) -> Result<Self> {
+    pub fn bind(profile: ChaosControlConformanceProfile, initial_state_ref: &str) -> crate::error::Result<Self> {
         profile.validate()?;
         crate::preserves_rail::validate_content_ref(initial_state_ref)?;
         let genesis_digest = chaoscontrol_chain_genesis(&profile.chaoscontrol_profile_ref, initial_state_ref);
@@ -140,7 +138,7 @@ impl ChaosControlChainProjector {
     // transition. The committed application path in Molten is contiguous, so
     // stale, duplicated, noncontiguous, or generation-regressed applies are
     // typed denials rather than observations.
-    pub fn project(&mut self, apply: &CommittedApplyObservation) -> Result<ChaosControlChainObservation> {
+    pub fn project(&mut self, apply: &CommittedApplyObservation) -> crate::error::Result<ChaosControlChainObservation> {
         self.profile.admits_conformance()?;
         self.validate_committed_apply(apply)?;
         if apply.command_index < self.next_command_index {
@@ -191,7 +189,7 @@ impl ChaosControlChainProjector {
         Ok(observation)
     }
 
-    fn validate_committed_apply(&self, apply: &CommittedApplyObservation) -> Result<()> {
+    fn validate_committed_apply(&self, apply: &CommittedApplyObservation) -> crate::error::Result<()> {
         for reference in [
             &apply.group_ref,
             &apply.replica_ref,

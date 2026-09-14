@@ -1,11 +1,3 @@
-use std::collections::BTreeMap;
-
-use crate::system_extension::AdmittedNativeHostProfile;
-use crate::system_extension::NATIVE_INSTANCE_STATE_SCHEMA;
-use crate::system_extension::NativeHostIssue;
-use crate::system_extension::NativeInstanceRecord;
-use crate::system_extension::admit_native_removal;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeNodeRegistryIssue {
     Capacity { actual: usize, maximum: usize },
@@ -14,29 +6,32 @@ pub enum NativeNodeRegistryIssue {
     SchemaMismatch,
     ProfileMismatch,
     StaleGeneration { actual: u64, active: u64 },
-    Removal(Vec<NativeHostIssue>),
+    Removal(Vec<crate::system_extension::NativeHostIssue>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeNodeServiceRegistry {
     profile_ref: String,
     max_instances: usize,
-    instances: BTreeMap<String, NativeInstanceRecord>,
+    instances: std::collections::BTreeMap<String, crate::system_extension::NativeInstanceRecord>,
 }
 
 impl NativeNodeServiceRegistry {
-    pub fn new(profile: &AdmittedNativeHostProfile) -> Self {
+    pub fn new(profile: &crate::system_extension::AdmittedNativeHostProfile) -> Self {
         Self {
             profile_ref: profile.profile.profile_ref.clone(),
             max_instances: profile.profile.max_instances,
-            instances: BTreeMap::new(),
+            instances: std::collections::BTreeMap::new(),
         }
     }
 
     // r[impl molten.system_extension.native_host.durability]
     // r[impl molten.system_extension.native_host.neutrality]
-    pub fn install(&mut self, instance: NativeInstanceRecord) -> Result<(), NativeNodeRegistryIssue> {
-        if instance.schema != NATIVE_INSTANCE_STATE_SCHEMA {
+    pub fn install(
+        &mut self,
+        instance: crate::system_extension::NativeInstanceRecord,
+    ) -> Result<(), NativeNodeRegistryIssue> {
+        if instance.schema != crate::system_extension::NATIVE_INSTANCE_STATE_SCHEMA {
             return Err(NativeNodeRegistryIssue::SchemaMismatch);
         }
         if instance.profile_ref != self.profile_ref {
@@ -59,7 +54,10 @@ impl NativeNodeServiceRegistry {
         Ok(())
     }
 
-    pub fn replace_recovered(&mut self, instance: NativeInstanceRecord) -> Result<(), NativeNodeRegistryIssue> {
+    pub fn replace_recovered(
+        &mut self,
+        instance: crate::system_extension::NativeInstanceRecord,
+    ) -> Result<(), NativeNodeRegistryIssue> {
         let Some(current) = self.instances.get(&instance.instance_id) else {
             return Err(NativeNodeRegistryIssue::UnknownInstance(instance.instance_id));
         };
@@ -76,20 +74,23 @@ impl NativeNodeServiceRegistry {
         Ok(())
     }
 
-    pub fn get(&self, instance_id: &str) -> Option<&NativeInstanceRecord> {
+    pub fn get(&self, instance_id: &str) -> Option<&crate::system_extension::NativeInstanceRecord> {
         self.instances.get(instance_id)
     }
 
-    pub fn inventory(&self) -> Vec<&NativeInstanceRecord> {
+    pub fn inventory(&self) -> Vec<&crate::system_extension::NativeInstanceRecord> {
         self.instances.values().collect()
     }
 
-    pub fn remove(&mut self, instance_id: &str) -> Result<NativeInstanceRecord, NativeNodeRegistryIssue> {
+    pub fn remove(
+        &mut self,
+        instance_id: &str,
+    ) -> Result<crate::system_extension::NativeInstanceRecord, NativeNodeRegistryIssue> {
         let instance = self
             .instances
             .get(instance_id)
             .ok_or_else(|| NativeNodeRegistryIssue::UnknownInstance(instance_id.to_string()))?;
-        admit_native_removal(instance).map_err(NativeNodeRegistryIssue::Removal)?;
+        crate::system_extension::admit_native_removal(instance).map_err(NativeNodeRegistryIssue::Removal)?;
         self.instances
             .remove(instance_id)
             .ok_or_else(|| NativeNodeRegistryIssue::UnknownInstance(instance_id.to_string()))
@@ -105,7 +106,7 @@ mod tests {
     const GENERATION: u64 = 1;
     const MAX_INSTANCES: usize = 1;
 
-    fn profile() -> AdmittedNativeHostProfile {
+    fn profile() -> crate::system_extension::AdmittedNativeHostProfile {
         admit_native_host_profile(&NativeHostProfile {
             schema: NATIVE_HOST_PROFILE_SCHEMA.to_string(),
             profile_id: "node-native-host".to_string(),
@@ -130,9 +131,9 @@ mod tests {
         .expect("node native profile")
     }
 
-    fn stopped(id: &str) -> NativeInstanceRecord {
-        NativeInstanceRecord {
-            schema: NATIVE_INSTANCE_STATE_SCHEMA.to_string(),
+    fn stopped(id: &str) -> crate::system_extension::NativeInstanceRecord {
+        crate::system_extension::NativeInstanceRecord {
+            schema: crate::system_extension::NATIVE_INSTANCE_STATE_SCHEMA.to_string(),
             instance_id: id.to_string(),
             extension_id: "extension".to_string(),
             service_id: "service".to_string(),

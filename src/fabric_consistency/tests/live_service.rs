@@ -1,34 +1,6 @@
-use std::collections::BTreeSet;
-use std::time::Duration;
-
-use molten_core::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
-
 use super::raft::*;
 use super::*;
-use crate::error::Result;
-use crate::fabric::DeterminismClass;
-use crate::fabric::ExtensionTier;
-use crate::fabric::ExtensionTierRequest;
-use crate::fabric::FabricAuthority;
-use crate::fabric::FabricPortClass;
-use crate::fabric::FabricPortDescriptor;
-use crate::fabric::FabricPortRequirement;
-use crate::fabric::FabricResource;
-use crate::fabric::REQUIRED_FABRIC_NON_CLAIMS;
-use crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE;
-use crate::fabric::ReplayClass;
-use crate::fabric::canonical_extension_tier_admission;
-use crate::system_extension::CallbackInvocation;
-use crate::system_extension::CallbackOutcome;
-use crate::system_extension::ExecutionProfile;
-use crate::system_extension::HealthState;
-use crate::system_extension::OverloadPolicy;
-use crate::system_extension::ResourceEnvelope;
-use crate::system_extension::SYSTEM_EXTENSION_MANIFEST_SCHEMA;
 use crate::system_extension::SystemExtensionExecutor;
-use crate::system_extension::SystemExtensionHost;
-use crate::system_extension::SystemExtensionManifestInput;
-use crate::system_extension::canonical_admit_system_extension_manifest;
 
 const TEST_PORT_PROFILE: &str = "live-replica-test-port-v1";
 const TEST_PORT_OPERATION: &str = "operate";
@@ -59,26 +31,29 @@ const EXPECTED_ELECTION_PORT_CALLS: usize = 2;
 #[derive(Debug, Clone)]
 struct TestPortSpec {
     port_id: &'static str,
-    class: FabricPortClass,
-    authorities: Vec<FabricAuthority>,
-    resources: Vec<FabricResource>,
+    class: crate::fabric::FabricPortClass,
+    authorities: Vec<crate::fabric::FabricAuthority>,
+    resources: Vec<crate::fabric::FabricResource>,
 }
 
 #[derive(Debug, Clone, Copy)]
 struct TestExecutor;
 
 impl SystemExtensionExecutor for TestExecutor {
-    fn execution_profile(&self) -> ExecutionProfile {
-        ExecutionProfile::InProcessNative
+    fn execution_profile(&self) -> crate::system_extension::ExecutionProfile {
+        crate::system_extension::ExecutionProfile::InProcessNative
     }
 
-    fn invoke(&mut self, _invocation: &CallbackInvocation) -> std::result::Result<CallbackOutcome, String> {
-        Ok(CallbackOutcome {
+    fn invoke(
+        &mut self,
+        _invocation: &crate::system_extension::CallbackInvocation,
+    ) -> std::result::Result<crate::system_extension::CallbackOutcome, String> {
+        Ok(crate::system_extension::CallbackOutcome {
             output_refs: vec![test_ref("callback-output")],
             effects: Vec::new(),
             state_ref: Some(test_ref("callback-state")),
             checkpoint_ref: None,
-            health: HealthState::Healthy,
+            health: crate::system_extension::HealthState::Healthy,
         })
     }
 }
@@ -87,56 +62,71 @@ fn port_specs() -> Vec<TestPortSpec> {
     vec![
         TestPortSpec {
             port_id: crate::fabric_transport::FABRIC_TRANSPORT_PORT_ID,
-            class: FabricPortClass::Transport,
-            authorities: vec![FabricAuthority::Transport, FabricAuthority::ProtocolOwnership],
-            resources: vec![FabricResource::NetworkBytes, FabricResource::Concurrency],
+            class: crate::fabric::FabricPortClass::Transport,
+            authorities: vec![
+                crate::fabric::FabricAuthority::Transport,
+                crate::fabric::FabricAuthority::ProtocolOwnership,
+            ],
+            resources: vec![
+                crate::fabric::FabricResource::NetworkBytes,
+                crate::fabric::FabricResource::Concurrency,
+            ],
         },
         TestPortSpec {
             port_id: crate::fabric_durability::FABRIC_DURABLE_LOG_PORT_ID,
-            class: FabricPortClass::DurableState,
-            authorities: vec![FabricAuthority::DurableState],
-            resources: vec![FabricResource::StorageBytes, FabricResource::QueueDepth],
+            class: crate::fabric::FabricPortClass::DurableState,
+            authorities: vec![crate::fabric::FabricAuthority::DurableState],
+            resources: vec![
+                crate::fabric::FabricResource::StorageBytes,
+                crate::fabric::FabricResource::QueueDepth,
+            ],
         },
         TestPortSpec {
             port_id: crate::fabric_durability::FABRIC_SNAPSHOT_PORT_ID,
-            class: FabricPortClass::DurableState,
-            authorities: vec![FabricAuthority::DurableState],
-            resources: vec![FabricResource::StorageBytes, FabricResource::QueueDepth],
+            class: crate::fabric::FabricPortClass::DurableState,
+            authorities: vec![crate::fabric::FabricAuthority::DurableState],
+            resources: vec![
+                crate::fabric::FabricResource::StorageBytes,
+                crate::fabric::FabricResource::QueueDepth,
+            ],
         },
         TestPortSpec {
             port_id: crate::fabric_time::FABRIC_TIMER_PORT_ID,
-            class: FabricPortClass::Time,
-            authorities: vec![FabricAuthority::Time],
-            resources: vec![FabricResource::LogicalTime],
+            class: crate::fabric::FabricPortClass::Time,
+            authorities: vec![crate::fabric::FabricAuthority::Time],
+            resources: vec![crate::fabric::FabricResource::LogicalTime],
         },
         TestPortSpec {
             port_id: crate::fabric_time::FABRIC_ENTROPY_PORT_ID,
-            class: FabricPortClass::Time,
-            authorities: vec![FabricAuthority::Time],
-            resources: vec![FabricResource::Memory],
+            class: crate::fabric::FabricPortClass::Time,
+            authorities: vec![crate::fabric::FabricAuthority::Time],
+            resources: vec![crate::fabric::FabricResource::Memory],
         },
         TestPortSpec {
             port_id: crate::fabric_membership::FABRIC_MEMBERSHIP_PORT_ID,
-            class: FabricPortClass::Membership,
-            authorities: vec![FabricAuthority::Membership, FabricAuthority::Policy],
-            resources: vec![FabricResource::Diagnostics],
+            class: crate::fabric::FabricPortClass::Membership,
+            authorities: vec![
+                crate::fabric::FabricAuthority::Membership,
+                crate::fabric::FabricAuthority::Policy,
+            ],
+            resources: vec![crate::fabric::FabricResource::Diagnostics],
         },
         TestPortSpec {
             port_id: crate::fabric_membership::FABRIC_PLACEMENT_PORT_ID,
-            class: FabricPortClass::Placement,
+            class: crate::fabric::FabricPortClass::Placement,
             authorities: vec![
-                FabricAuthority::Placement,
-                FabricAuthority::Policy,
-                FabricAuthority::Resources,
+                crate::fabric::FabricAuthority::Placement,
+                crate::fabric::FabricAuthority::Policy,
+                crate::fabric::FabricAuthority::Resources,
             ],
-            resources: vec![FabricResource::Diagnostics],
+            resources: vec![crate::fabric::FabricResource::Diagnostics],
         },
     ]
 }
 
-fn port_descriptor(spec: &TestPortSpec) -> FabricPortDescriptor {
-    FabricPortDescriptor {
-        schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+fn port_descriptor(spec: &TestPortSpec) -> crate::fabric::FabricPortDescriptor {
+    crate::fabric::FabricPortDescriptor {
+        schema: molten_core::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
         port_id: spec.port_id.to_string(),
         version: "v1".to_string(),
         class: spec.class,
@@ -145,17 +135,17 @@ fn port_descriptor(spec: &TestPortSpec) -> FabricPortDescriptor {
         output_schema_refs: vec![TEST_OUTPUT_SCHEMA.to_string()],
         authority_requirements: spec.authorities.clone(),
         resource_requirements: spec.resources.clone(),
-        determinism: DeterminismClass::ExternalEffect,
-        replay: ReplayClass::RecordedEffectRequired,
+        determinism: crate::fabric::DeterminismClass::ExternalEffect,
+        replay: crate::fabric::ReplayClass::RecordedEffectRequired,
         implementation_profile: TEST_PORT_PROFILE.to_string(),
         conformance_refs: vec![test_ref(spec.port_id)],
-        non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+        non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
         enabled: true,
     }
 }
 
-fn port_requirement(spec: &TestPortSpec) -> FabricPortRequirement {
-    FabricPortRequirement {
+fn port_requirement(spec: &TestPortSpec) -> crate::fabric::FabricPortRequirement {
+    crate::fabric::FabricPortRequirement {
         port_id: spec.port_id.to_string(),
         version: "v1".to_string(),
         class: spec.class,
@@ -164,37 +154,37 @@ fn port_requirement(spec: &TestPortSpec) -> FabricPortRequirement {
         output_schema_refs: vec![TEST_OUTPUT_SCHEMA.to_string()],
         allowed_authorities: spec.authorities.clone(),
         available_resources: spec.resources.clone(),
-        expected_determinism: DeterminismClass::ExternalEffect,
-        expected_replay: ReplayClass::RecordedEffectRequired,
+        expected_determinism: crate::fabric::DeterminismClass::ExternalEffect,
+        expected_replay: crate::fabric::ReplayClass::RecordedEffectRequired,
         expected_profile: TEST_PORT_PROFILE.to_string(),
     }
 }
 
-fn host_without(omitted_port_id: Option<&str>) -> SystemExtensionHost<TestExecutor> {
+fn host_without(omitted_port_id: Option<&str>) -> crate::system_extension::SystemExtensionHost<TestExecutor> {
     let specs = port_specs().into_iter().filter(|spec| Some(spec.port_id) != omitted_port_id).collect::<Vec<_>>();
     let descriptors = specs.iter().map(port_descriptor).collect::<Vec<_>>();
     let requirements = specs.iter().map(port_requirement).collect::<Vec<_>>();
-    let tier = canonical_extension_tier_admission(&ExtensionTierRequest {
-        tier: ExtensionTier::SystemExtension,
+    let tier = crate::fabric::canonical_extension_tier_admission(&crate::fabric::ExtensionTierRequest {
+        tier: crate::fabric::ExtensionTier::SystemExtension,
         requested_authorities: vec![
-            FabricAuthority::ProtocolOwnership,
-            FabricAuthority::Transport,
-            FabricAuthority::DurableState,
-            FabricAuthority::Time,
-            FabricAuthority::Membership,
-            FabricAuthority::Placement,
-            FabricAuthority::Consistency,
-            FabricAuthority::Supervision,
-            FabricAuthority::Policy,
-            FabricAuthority::Resources,
-            FabricAuthority::Evidence,
+            crate::fabric::FabricAuthority::ProtocolOwnership,
+            crate::fabric::FabricAuthority::Transport,
+            crate::fabric::FabricAuthority::DurableState,
+            crate::fabric::FabricAuthority::Time,
+            crate::fabric::FabricAuthority::Membership,
+            crate::fabric::FabricAuthority::Placement,
+            crate::fabric::FabricAuthority::Consistency,
+            crate::fabric::FabricAuthority::Supervision,
+            crate::fabric::FabricAuthority::Policy,
+            crate::fabric::FabricAuthority::Resources,
+            crate::fabric::FabricAuthority::Evidence,
         ],
-        admission_evidence: REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
+        admission_evidence: crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
     })
     .expect("system-extension tier");
-    let admitted = canonical_admit_system_extension_manifest(
-        &SystemExtensionManifestInput {
-            schema: SYSTEM_EXTENSION_MANIFEST_SCHEMA.to_string(),
+    let admitted = crate::system_extension::canonical_admit_system_extension_manifest(
+        &crate::system_extension::SystemExtensionManifestInput {
+            schema: crate::system_extension::SYSTEM_EXTENSION_MANIFEST_SCHEMA.to_string(),
             extension_id: "extension-live-raft".to_string(),
             service_id: "service-live-raft".to_string(),
             implementation_ref: test_ref("implementation"),
@@ -209,7 +199,7 @@ fn host_without(omitted_port_id: Option<&str>) -> SystemExtensionHost<TestExecut
             capability_refs: vec![test_ref("capability")],
             policy_refs: vec![test_ref("policy")],
             provenance_refs: vec![test_ref("provenance")],
-            resources: ResourceEnvelope {
+            resources: crate::system_extension::ResourceEnvelope {
                 max_concurrent_callbacks: MAX_CONCURRENT_CALLBACKS,
                 max_queued_events: MAX_QUEUED_EVENTS,
                 max_inflight_bytes: MAX_INFLIGHT_BYTES,
@@ -219,9 +209,9 @@ fn host_without(omitted_port_id: Option<&str>) -> SystemExtensionHost<TestExecut
                 callback_deadline_ticks: CALLBACK_DEADLINE_TICKS,
                 shutdown_grace_ticks: SHUTDOWN_GRACE_TICKS,
                 max_restart_attempts: MAX_RESTART_ATTEMPTS,
-                overload_policy: OverloadPolicy::UpstreamBackpressure,
+                overload_policy: crate::system_extension::OverloadPolicy::UpstreamBackpressure,
             },
-            execution_profile: ExecutionProfile::InProcessNative,
+            execution_profile: crate::system_extension::ExecutionProfile::InProcessNative,
             state_schema: TEST_STATE_SCHEMA.to_string(),
             compatible_state_schemas: vec![TEST_STATE_SCHEMA.to_string()],
             evidence_profile_ref: test_ref("evidence-profile"),
@@ -230,18 +220,18 @@ fn host_without(omitted_port_id: Option<&str>) -> SystemExtensionHost<TestExecut
         },
         &descriptors,
         &tier,
-        &[ExecutionProfile::InProcessNative],
+        &[crate::system_extension::ExecutionProfile::InProcessNative],
     )
     .expect("admitted live Raft host manifest");
-    SystemExtensionHost::new(admitted, TestExecutor).expect("live Raft host")
+    crate::system_extension::SystemExtensionHost::new(admitted, TestExecutor).expect("live Raft host")
 }
 
-fn active_group_for_host(host: &SystemExtensionHost<TestExecutor>) -> ConsistencyGroupBinding {
+fn active_group_for_host(host: &crate::system_extension::SystemExtensionHost<TestExecutor>) -> ConsistencyGroupBinding {
     active_group_for_host_with_policies(host, host.manifest().manifest().policy_refs.clone())
 }
 
 fn active_group_for_host_with_policies(
-    host: &SystemExtensionHost<TestExecutor>,
+    host: &crate::system_extension::SystemExtensionHost<TestExecutor>,
     policy_refs: Vec<String>,
 ) -> ConsistencyGroupBinding {
     let mut input = binding_input();
@@ -359,24 +349,28 @@ struct ServiceDurabilityPort {
 }
 
 impl ReplicaDurabilityEffects for ServiceDurabilityPort {
-    fn persist_hard_state(&mut self, _term: u64, _voted_for: Option<&str>) -> Result<String> {
+    fn persist_hard_state(&mut self, _term: u64, _voted_for: Option<&str>) -> crate::error::Result<String> {
         self.hard_state_writes += 1;
         Ok(test_ref("service-hard-state"))
     }
 
-    fn persist_entries(&mut self, _truncate_from: Option<u64>, _entries: &[ReplicatedEntry]) -> Result<String> {
+    fn persist_entries(
+        &mut self,
+        _truncate_from: Option<u64>,
+        _entries: &[ReplicatedEntry],
+    ) -> crate::error::Result<String> {
         Ok(test_ref("service-entries"))
     }
 
-    fn flush_log(&mut self, _through_index: u64) -> Result<String> {
+    fn flush_log(&mut self, _through_index: u64) -> crate::error::Result<String> {
         Ok(test_ref("service-flush"))
     }
 
-    fn persist_commit(&mut self, _through_index: u64) -> Result<String> {
+    fn persist_commit(&mut self, _through_index: u64) -> crate::error::Result<String> {
         Ok(test_ref("service-commit"))
     }
 
-    fn persist_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> Result<String> {
+    fn persist_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
         Ok(test_ref("service-snapshot"))
     }
 }
@@ -400,12 +394,12 @@ struct ServiceTimePort {
 }
 
 impl ReplicaTimeEffects for ServiceTimePort {
-    fn arm_election_timer(&mut self, timer_ref: &str) -> Result<String> {
+    fn arm_election_timer(&mut self, timer_ref: &str) -> crate::error::Result<String> {
         self.election_timer_refs.push(timer_ref.to_string());
         Ok(test_ref("service-election-timer"))
     }
 
-    fn arm_heartbeat_timer(&mut self) -> Result<String> {
+    fn arm_heartbeat_timer(&mut self) -> crate::error::Result<String> {
         self.heartbeat_arms += 1;
         Ok(test_ref("service-heartbeat-timer"))
     }
@@ -415,11 +409,11 @@ impl ReplicaTimeEffects for ServiceTimePort {
 struct ServiceApplicationHandler;
 
 impl CommittedBatchHandler for ServiceApplicationHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> Result<String> {
+    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> crate::error::Result<String> {
         Ok(test_ref("service-application-snapshot-handler"))
     }
 
-    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> Result<String> {
+    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> crate::error::Result<String> {
         Ok(test_ref("service-application-handler"))
     }
 }
@@ -453,7 +447,7 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
             group_binding_ref: group.binding_ref.clone(),
             application_manifest_ref: group.application_manifest_ref.clone(),
             handler_ref: test_ref("service-application-binding"),
-            command_schema_refs: BTreeSet::from([test_ref("service-command-schema")]),
+            command_schema_refs: std::collections::BTreeSet::from([test_ref("service-command-schema")]),
             initial_applied_index: INITIAL_COMMIT_INDEX,
         },
         ServiceApplicationHandler,
@@ -490,7 +484,7 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
         })
         .expect("queue election timeout");
     let outcome = service
-        .run_next(Duration::from_millis(SERVICE_EVENT_TIMEOUT_MILLISECONDS))
+        .run_next(std::time::Duration::from_millis(SERVICE_EVENT_TIMEOUT_MILLISECONDS))
         .await
         .expect("bounded service turn");
     assert!(matches!(outcome, ReplicaExecutionOutcome::Applied(_)));

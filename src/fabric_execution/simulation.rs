@@ -1,9 +1,3 @@
-use std::collections::BTreeMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-
-use super::mechanics::publish_stream;
-use super::mechanics::validate_resolved_context;
 use super::*;
 
 const SIMULATION_PROFILE_CODE: &str = "execution-simulation-profile-mismatch";
@@ -35,15 +29,15 @@ enum SimulationStatus {
 pub struct SimulatedExecutionAdapter<P: ExecutionOutputPublisher> {
     profile: CanonicalExecutionProfile,
     publisher: P,
-    scripts: BTreeMap<String, ScriptedExecutionObservation>,
-    operations: BTreeMap<String, (u64, SimulationStatus)>,
+    scripts: std::collections::BTreeMap<String, ScriptedExecutionObservation>,
+    operations: std::collections::BTreeMap<String, (u64, SimulationStatus)>,
 }
 
 impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
     pub fn new(
         profile: CanonicalExecutionProfile,
         publisher: P,
-        scripts: BTreeMap<String, ScriptedExecutionObservation>,
+        scripts: std::collections::BTreeMap<String, ScriptedExecutionObservation>,
     ) -> Result<Self, SimulatedExecutionAdapterBuildError> {
         if profile.profile.descriptor.kind != ExecutionProfileKind::DeterministicSimulation {
             return Err(SimulatedExecutionAdapterBuildError::WrongProfileKind);
@@ -52,7 +46,7 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
             profile,
             publisher,
             scripts,
-            operations: BTreeMap::new(),
+            operations: std::collections::BTreeMap::new(),
         })
     }
 
@@ -70,7 +64,7 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdap
         &mut self,
         request: &CanonicalExecutionRequest,
         resolved: &ResolvedExecutionContext,
-        cancellation: Option<&AtomicBool>,
+        cancellation: Option<&std::sync::atomic::AtomicBool>,
     ) -> ExecutionPortResult<CanonicalExecutionReceipt> {
         if request.plan.profile.descriptor.kind != ExecutionProfileKind::DeterministicSimulation {
             return Err(simulation_failure(
@@ -82,7 +76,7 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdap
                 None,
             ));
         }
-        validate_resolved_context(request, resolved).map_err(|detail| {
+        super::mechanics::validate_resolved_context(request, resolved).map_err(|detail| {
             simulation_failure(
                 request,
                 ExecutionPortFailureKind::ResolutionDenied,
@@ -103,7 +97,7 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdap
             ));
         };
         let mut process = script.process.clone();
-        if cancellation.is_some_and(|flag| flag.load(Ordering::Acquire)) {
+        if cancellation.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Acquire)) {
             process.lifecycle = ExecutionLifecycleState::Cancelled;
             process.disposition = ExecutionObservedDisposition::Cancelled;
             process.start_observed = true;
@@ -161,9 +155,9 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
             ));
         }
         let stdout_publication =
-            publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stdout);
+            super::mechanics::publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stdout);
         let stderr_publication =
-            publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stderr);
+            super::mechanics::publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stderr);
         let publication_failed = matches!(stdout_publication, ExecutionStreamPublication::Failed { .. })
             || matches!(stderr_publication, ExecutionStreamPublication::Failed { .. });
         let receipt = canonical_execution_receipt(

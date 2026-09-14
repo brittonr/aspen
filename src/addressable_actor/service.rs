@@ -1,6 +1,4 @@
 use molten_core::addressable_actor::*;
-use molten_core::system_extension::LifecyclePhase;
-use molten_core::system_extension::LifecycleState;
 
 use super::*;
 
@@ -16,7 +14,7 @@ pub struct ActorHostBindingFacts {
     pub placement_ref: String,
     pub extension_generation: u64,
     pub system_extension_generation: u64,
-    pub system_extension_phase: LifecyclePhase,
+    pub system_extension_phase: molten_core::system_extension::LifecyclePhase,
     pub system_extension_checkpoint_ref: Option<String>,
     pub delivery_profile_ref: String,
     pub policy_current: bool,
@@ -239,7 +237,7 @@ fn validate_host_binding(service: &ActorServiceRequest<'_>, state: &ActorState) 
     {
         return Err(ActorServiceError::Host(ActorIssue::AdmissionDenied));
     }
-    let extension = LifecycleState {
+    let extension = molten_core::system_extension::LifecycleState {
         generation: host.system_extension_generation,
         phase: host.system_extension_phase,
         restart_attempts: 0,

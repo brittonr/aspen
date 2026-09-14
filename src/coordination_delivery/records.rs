@@ -1,8 +1,4 @@
 use molten_core::coordination_delivery::*;
-use preserves::IOValue;
-
-use crate::error::MoltenError;
-use crate::error::Result;
 
 pub const DELIVERY_COMMIT_RECEIPT_SCHEMA: &str = "molten.coordination-delivery-commit-receipt.v1";
 pub const DELIVERY_COMMIT_RECEIPT_RECORD: &str = "molten-coordination-delivery-commit-receipt-v1";
@@ -70,11 +66,13 @@ pub struct DeliveryCommitReceipt {
 pub struct CanonicalDeliveryCommitReceipt {
     pub receipt_ref: String,
     pub status: DeliveryServiceStatus,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
     pub bytes: Vec<u8>,
 }
 
-pub fn canonical_delivery_commit_receipt(receipt: &DeliveryCommitReceipt) -> Result<CanonicalDeliveryCommitReceipt> {
+pub fn canonical_delivery_commit_receipt(
+    receipt: &DeliveryCommitReceipt,
+) -> crate::error::Result<CanonicalDeliveryCommitReceipt> {
     if receipt.queue_id.is_empty()
         || receipt.request_ref.is_empty()
         || receipt.operation_ref.is_empty()
@@ -85,7 +83,7 @@ pub fn canonical_delivery_commit_receipt(receipt: &DeliveryCommitReceipt) -> Res
         || receipt.claims_exactly_once
         || receipt.non_claims != required_delivery_non_claims()
     {
-        return Err(MoltenError::invalid_harness("coordination delivery receipt is invalid"));
+        return Err(crate::error::MoltenError::invalid_harness("coordination delivery receipt is invalid"));
     }
     let value = record(DELIVERY_COMMIT_RECEIPT_RECORD, vec![
         field("schema", string(DELIVERY_COMMIT_RECEIPT_SCHEMA)),
@@ -110,7 +108,7 @@ pub fn canonical_delivery_commit_receipt(receipt: &DeliveryCommitReceipt) -> Res
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_DELIVERY_RECEIPT_BYTES {
-        return Err(MoltenError::invalid_harness("coordination delivery receipt exceeds its byte bound"));
+        return Err(crate::error::MoltenError::invalid_harness("coordination delivery receipt exceeds its byte bound"));
     }
     Ok(CanonicalDeliveryCommitReceipt {
         receipt_ref: hash_bytes(DELIVERY_RECEIPT_DOMAIN, &bytes),
@@ -120,7 +118,7 @@ pub fn canonical_delivery_commit_receipt(receipt: &DeliveryCommitReceipt) -> Res
     })
 }
 
-pub fn identify_canonical_delivery_status(status: &DeliveryStatus) -> Result<String> {
+pub fn identify_canonical_delivery_status(status: &DeliveryStatus) -> crate::error::Result<String> {
     let active = status
         .active_claims
         .iter()
@@ -155,7 +153,9 @@ pub fn identify_canonical_delivery_status(status: &DeliveryStatus) -> Result<Str
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_DELIVERY_STATUS_BYTES || status.payloads_rendered {
-        return Err(MoltenError::invalid_harness("coordination delivery status is invalid or over bound"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "coordination delivery status is invalid or over bound",
+        ));
     }
     Ok(hash_bytes(DELIVERY_STATUS_DOMAIN, &bytes))
 }
@@ -166,30 +166,30 @@ fn hash_bytes(domain: &'static str, bytes: &[u8]) -> String {
     format!("blake3:{}", hasher.finalize().to_hex())
 }
 
-fn optional_text(value: Option<&str>) -> IOValue {
+fn optional_text(value: Option<&str>) -> preserves::IOValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn boolean(value: bool) -> IOValue {
+fn boolean(value: bool) -> preserves::IOValue {
     record(if value { "true" } else { "false" }, Vec::new())
 }
 
-fn number(value: u64) -> IOValue {
+fn number(value: u64) -> preserves::IOValue {
     crate::preserves_rail::u64_value(value)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> preserves::IOValue {
     crate::preserves_rail::string(value.as_ref())
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn field(label: &'static str, value: IOValue) -> IOValue {
+fn field(label: &'static str, value: preserves::IOValue) -> preserves::IOValue {
     record(label, vec![value])
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::record(label, fields)
 }

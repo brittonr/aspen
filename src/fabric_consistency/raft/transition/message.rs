@@ -1,7 +1,10 @@
 use super::*;
-use crate::error::Result;
 
-pub(super) fn dispatch(transition: &mut MessageTransition, from: String, message: RaftMessage) -> Result<()> {
+pub(super) fn dispatch(
+    transition: &mut MessageTransition,
+    from: String,
+    message: RaftMessage,
+) -> crate::error::Result<()> {
     match message {
         message @ (RaftMessage::RequestVote { .. } | RaftMessage::VoteResponse { .. }) => {
             dispatch_election(transition, from, message)
@@ -18,7 +21,11 @@ pub(super) fn dispatch(transition: &mut MessageTransition, from: String, message
     }
 }
 
-fn dispatch_election(transition: &mut MessageTransition, from: String, message: RaftMessage) -> Result<()> {
+fn dispatch_election(
+    transition: &mut MessageTransition,
+    from: String,
+    message: RaftMessage,
+) -> crate::error::Result<()> {
     match message {
         RaftMessage::RequestVote {
             term,
@@ -48,7 +55,11 @@ fn dispatch_election(transition: &mut MessageTransition, from: String, message: 
     }
 }
 
-fn dispatch_replication(transition: &mut MessageTransition, from: String, message: RaftMessage) -> Result<()> {
+fn dispatch_replication(
+    transition: &mut MessageTransition,
+    from: String,
+    message: RaftMessage,
+) -> crate::error::Result<()> {
     match message {
         RaftMessage::AppendEntries {
             term,
@@ -88,7 +99,11 @@ fn dispatch_replication(transition: &mut MessageTransition, from: String, messag
     }
 }
 
-fn dispatch_snapshot(transition: &mut MessageTransition, from: String, message: RaftMessage) -> Result<()> {
+fn dispatch_snapshot(
+    transition: &mut MessageTransition,
+    from: String,
+    message: RaftMessage,
+) -> crate::error::Result<()> {
     match message {
         RaftMessage::InstallSnapshot {
             term,
@@ -118,7 +133,7 @@ fn dispatch_snapshot(transition: &mut MessageTransition, from: String, message: 
     }
 }
 
-fn dispatch_read(transition: &mut MessageTransition, from: String, message: RaftMessage) -> Result<()> {
+fn dispatch_read(transition: &mut MessageTransition, from: String, message: RaftMessage) -> crate::error::Result<()> {
     match message {
         RaftMessage::ReadProbe {
             term,

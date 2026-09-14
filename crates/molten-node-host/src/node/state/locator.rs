@@ -1,9 +1,3 @@
-use std::path::Component;
-use std::path::Path;
-use std::path::PathBuf;
-
-use super::invalid;
-
 const MAX_NODE_STATE_COMPONENTS: usize = 32;
 const MAX_NODE_STATE_PATH_BYTES: usize = 4_096;
 const MAX_REASONABLE_NODE_STATE_BOUND: usize = 1_000_000;
@@ -15,31 +9,31 @@ const _: () = assert!(MAX_NODE_STATE_PATH_BYTES <= MAX_REASONABLE_NODE_STATE_BOU
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NodeStatePath {
-    relative: PathBuf,
+    relative: std::path::PathBuf,
 }
 
 impl NodeStatePath {
     pub fn parse(value: &str) -> crate::error::Result<Self> {
         validate_node_state_locator(value)?;
-        let mut relative = PathBuf::new();
+        let mut relative = std::path::PathBuf::new();
         let mut component_count = 0usize;
-        for component in Path::new(value).components() {
+        for component in std::path::Path::new(value).components() {
             match component {
-                Component::Normal(value) => {
+                std::path::Component::Normal(value) => {
                     component_count = checked_component_count(component_count)?;
                     relative.push(value);
                 }
-                Component::CurDir => {}
-                Component::ParentDir => {
-                    return Err(invalid(format!("node state path {value} cannot contain parent traversal")));
+                std::path::Component::CurDir => {}
+                std::path::Component::ParentDir => {
+                    return Err(super::invalid(format!("node state path {value} cannot contain parent traversal")));
                 }
-                Component::RootDir | Component::Prefix(_) => {
-                    return Err(invalid(format!("node state path {value} must be relative")));
+                std::path::Component::RootDir | std::path::Component::Prefix(_) => {
+                    return Err(super::invalid(format!("node state path {value} must be relative")));
                 }
             }
         }
         if relative.as_os_str().is_empty() {
-            return Err(invalid("node state path cannot be empty"));
+            return Err(super::invalid("node state path cannot be empty"));
         }
         Ok(Self { relative })
     }
@@ -51,9 +45,9 @@ impl NodeStatePath {
             .components()
             .count()
             .checked_add(suffix.relative.components().count())
-            .ok_or_else(|| invalid("node state path component count overflow"))?;
+            .ok_or_else(|| super::invalid("node state path component count overflow"))?;
         if component_count > MAX_NODE_STATE_COMPONENTS {
-            return Err(invalid(format!(
+            return Err(super::invalid(format!(
                 "node state path component count {component_count} exceeds maximum {MAX_NODE_STATE_COMPONENTS}"
             )));
         }
@@ -65,12 +59,12 @@ impl NodeStatePath {
     pub fn join_segment(&self, segment: &str) -> crate::error::Result<Self> {
         let suffix = Self::parse(segment)?;
         if suffix.relative.components().count() != 1 {
-            return Err(invalid(format!("node state segment {segment} must contain exactly one component")));
+            return Err(super::invalid(format!("node state segment {segment} must contain exactly one component")));
         }
         self.join(segment)
     }
 
-    pub fn as_path(&self) -> &Path {
+    pub fn as_path(&self) -> &std::path::Path {
         &self.relative
     }
 
@@ -78,19 +72,19 @@ impl NodeStatePath {
         self.relative.to_string_lossy().into_owned()
     }
 
-    pub(super) fn into_path_buf(self) -> PathBuf {
+    pub(super) fn into_path_buf(self) -> std::path::PathBuf {
         self.relative
     }
 }
 
-pub(super) fn join_scope(scope: &Path, suffix: &NodeStatePath) -> crate::error::Result<PathBuf> {
+pub(super) fn join_scope(scope: &std::path::Path, suffix: &NodeStatePath) -> crate::error::Result<std::path::PathBuf> {
     let component_count = scope
         .components()
         .count()
         .checked_add(suffix.as_path().components().count())
-        .ok_or_else(|| invalid("node state namespace view component count overflow"))?;
+        .ok_or_else(|| super::invalid("node state namespace view component count overflow"))?;
     if component_count > MAX_NODE_STATE_COMPONENTS {
-        return Err(invalid(format!(
+        return Err(super::invalid(format!(
             "node state namespace view component count {component_count} exceeds maximum {MAX_NODE_STATE_COMPONENTS}"
         )));
     }
@@ -101,16 +95,16 @@ pub(super) fn join_scope(scope: &Path, suffix: &NodeStatePath) -> crate::error::
 
 fn validate_node_state_locator(value: &str) -> crate::error::Result<()> {
     if value.is_empty() {
-        return Err(invalid("node state path cannot be empty"));
+        return Err(super::invalid("node state path cannot be empty"));
     }
     if value.len() > MAX_NODE_STATE_PATH_BYTES {
-        return Err(invalid(format!(
+        return Err(super::invalid(format!(
             "node state path length {} exceeds maximum {MAX_NODE_STATE_PATH_BYTES}",
             value.len()
         )));
     }
     if has_platform_prefix(value) {
-        return Err(invalid(format!("platform-prefixed node state path {value} is not relative authority")));
+        return Err(super::invalid(format!("platform-prefixed node state path {value} is not relative authority")));
     }
     if value.contains("://")
         || value.starts_with("iroh:")
@@ -118,15 +112,17 @@ fn validate_node_state_locator(value: &str) -> crate::error::Result<()> {
         || value.starts_with("https:")
         || value.starts_with("blake3:")
     {
-        return Err(invalid(format!("remote or content locator {value} cannot become node state authority")));
+        return Err(super::invalid(format!("remote or content locator {value} cannot become node state authority")));
     }
     Ok(())
 }
 
-fn validate_path_bytes(path: &Path) -> crate::error::Result<()> {
+fn validate_path_bytes(path: &std::path::Path) -> crate::error::Result<()> {
     let bytes = path.to_string_lossy().len();
     if bytes > MAX_NODE_STATE_PATH_BYTES {
-        Err(invalid(format!("node state path length {bytes} exceeds maximum {MAX_NODE_STATE_PATH_BYTES}")))
+        Err(super::invalid(format!(
+            "node state path length {bytes} exceeds maximum {MAX_NODE_STATE_PATH_BYTES}"
+        )))
     } else {
         Ok(())
     }
@@ -139,9 +135,9 @@ fn has_platform_prefix(value: &str) -> bool {
 }
 
 fn checked_component_count(count: usize) -> crate::error::Result<usize> {
-    let next = count.checked_add(1).ok_or_else(|| invalid("node state path component count overflow"))?;
+    let next = count.checked_add(1).ok_or_else(|| super::invalid("node state path component count overflow"))?;
     if next > MAX_NODE_STATE_COMPONENTS {
-        Err(invalid(format!(
+        Err(super::invalid(format!(
             "node state path component count {next} exceeds maximum {MAX_NODE_STATE_COMPONENTS}"
         )))
     } else {

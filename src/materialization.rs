@@ -1,17 +1,7 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::io::Read;
 use std::io::Write;
-use std::path::Component;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
 
-use cap_fs_ext::FollowSymlinks;
 use cap_fs_ext::OpenOptionsFollowExt;
-
-use crate::error::MoltenError;
-use crate::error::Result;
 
 pub const DEFAULT_MAX_MATERIALIZATION_MEMBERS: usize = 4_096;
 pub const DEFAULT_MAX_MATERIALIZATION_MEMBER_BYTES: u64 = 16 * 1_024 * 1_024;
@@ -104,7 +94,7 @@ pub struct MaterializationPath {
 }
 
 impl MaterializationPath {
-    pub fn parse(value: &str, max_path_bytes: usize) -> Result<Self> {
+    pub fn parse(value: &str, max_path_bytes: usize) -> crate::error::Result<Self> {
         validate_materialization_path(value, max_path_bytes)?;
         Ok(Self {
             normalized: value.to_string(),
@@ -115,8 +105,8 @@ impl MaterializationPath {
         &self.normalized
     }
 
-    pub fn as_path(&self) -> &Path {
-        Path::new(&self.normalized)
+    pub fn as_path(&self) -> &std::path::Path {
+        std::path::Path::new(&self.normalized)
     }
 
     fn top_level(&self) -> &str {
@@ -136,7 +126,7 @@ pub struct MaterializationPolicy {
 }
 
 impl MaterializationPolicy {
-    pub fn bounded(profile: &str, replacement: ReplacementPolicy) -> Result<Self> {
+    pub fn bounded(profile: &str, replacement: ReplacementPolicy) -> crate::error::Result<Self> {
         validate_profile(profile)?;
         Ok(Self {
             profile: profile.to_string(),
@@ -155,7 +145,7 @@ impl MaterializationPolicy {
         max_member_bytes: u64,
         max_total_bytes: u64,
         max_path_bytes: usize,
-    ) -> Result<Self> {
+    ) -> crate::error::Result<Self> {
         validate_bounds(max_members, max_member_bytes, max_total_bytes, max_path_bytes)?;
         self.max_members = max_members;
         self.max_member_bytes = max_member_bytes;
@@ -205,7 +195,7 @@ impl MaterializationPayload {
         }
     }
 
-    pub fn member_input(&self) -> Result<MaterializationMemberInput> {
+    pub fn member_input(&self) -> crate::error::Result<MaterializationMemberInput> {
         Ok(MaterializationMemberInput {
             logical_path: self.logical_path.clone(),
             kind: MaterializationMemberKind::RegularFile,
@@ -219,15 +209,18 @@ impl MaterializationPayload {
 pub fn plan_payloads(
     policy: &MaterializationPolicy,
     payloads: &[MaterializationPayload],
-) -> Result<MaterializationPlan> {
-    let inputs = payloads.iter().map(MaterializationPayload::member_input).collect::<Result<Vec<_>>>()?;
+) -> crate::error::Result<MaterializationPlan> {
+    let inputs = payloads
+        .iter()
+        .map(MaterializationPayload::member_input)
+        .collect::<crate::error::Result<Vec<_>>>()?;
     plan_materialization(policy, &inputs)
 }
 
 pub fn plan_materialization(
     policy: &MaterializationPolicy,
     inputs: &[MaterializationMemberInput],
-) -> Result<MaterializationPlan> {
+) -> crate::error::Result<MaterializationPlan> {
     // r[impl molten.filesystem_materialization.plan]
     let mut policy = policy.clone();
     policy.reserved_top_level_names.sort();
@@ -243,9 +236,13 @@ pub fn plan_materialization(
         )));
     }
 
-    let reserved = policy.reserved_top_level_names.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let reserved = policy
+        .reserved_top_level_names
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
     let mut members = Vec::with_capacity(inputs.len());
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     let mut total_bytes = 0u64;
     for input in inputs {
         let logical_path = MaterializationPath::parse(&input.logical_path, policy.max_path_bytes)?;
@@ -305,7 +302,7 @@ pub fn plan_materialization(
     })
 }
 
-pub fn validate_materialization_plan(plan: &MaterializationPlan) -> Result<()> {
+pub fn validate_materialization_plan(plan: &MaterializationPlan) -> crate::error::Result<()> {
     let parsed = parse_materialization_plan_value(&plan.value)?;
     if parsed != *plan {
         return Err(invalid("materialization plan fields do not match canonical plan value"));
@@ -341,7 +338,7 @@ struct MaterializationRootInner {
 }
 
 pub struct MaterializationRoot {
-    inner: Arc<MaterializationRootInner>,
+    inner: std::sync::Arc<MaterializationRootInner>,
 }
 
 impl std::fmt::Debug for MaterializationRoot {
@@ -351,7 +348,7 @@ impl std::fmt::Debug for MaterializationRoot {
 }
 
 impl MaterializationRoot {
-    pub fn open(destination: &Path) -> Result<Self> {
+    pub fn open(destination: &std::path::Path) -> crate::error::Result<Self> {
         // r[impl molten.filesystem_materialization.root]
         match std::fs::symlink_metadata(destination) {
             Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
@@ -359,18 +356,18 @@ impl MaterializationRoot {
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                std::fs::create_dir_all(destination).map_err(MoltenError::from)?;
+                std::fs::create_dir_all(destination).map_err(crate::error::MoltenError::from)?;
             }
-            Err(error) => return Err(MoltenError::from(error)),
+            Err(error) => return Err(crate::error::MoltenError::from(error)),
         }
-        let dir =
-            cap_std::fs::Dir::open_ambient_dir(destination, cap_std::ambient_authority()).map_err(MoltenError::from)?;
+        let dir = cap_std::fs::Dir::open_ambient_dir(destination, cap_std::ambient_authority())
+            .map_err(crate::error::MoltenError::from)?;
         Ok(Self::from_dir(dir))
     }
 
     pub fn from_dir(dir: cap_std::fs::Dir) -> Self {
         Self {
-            inner: Arc::new(MaterializationRootInner { dir }),
+            inner: std::sync::Arc::new(MaterializationRootInner { dir }),
         }
     }
 
@@ -378,7 +375,7 @@ impl MaterializationRoot {
         &self,
         plan: &MaterializationPlan,
         payloads: &[MaterializationPayload],
-    ) -> Result<StagedMaterialization> {
+    ) -> crate::error::Result<StagedMaterialization> {
         validate_materialization_plan(plan)?;
         let payload_map = validate_payloads(plan, payloads)?;
         let stage_path = stage_path(plan)?;
@@ -393,13 +390,17 @@ impl MaterializationRoot {
             };
         }
         Ok(StagedMaterialization {
-            root: Arc::clone(&self.inner),
+            root: std::sync::Arc::clone(&self.inner),
             plan_ref: plan.plan_ref.clone(),
             stage_path,
         })
     }
 
-    pub fn commit(&self, plan: &MaterializationPlan, staged: &StagedMaterialization) -> Result<MaterializationReceipt> {
+    pub fn commit(
+        &self,
+        plan: &MaterializationPlan,
+        staged: &StagedMaterialization,
+    ) -> crate::error::Result<MaterializationReceipt> {
         self.commit_inner(plan, staged, None)
     }
 
@@ -408,10 +409,10 @@ impl MaterializationRoot {
         plan: &MaterializationPlan,
         staged: &StagedMaterialization,
         fail_after_publications: Option<usize>,
-    ) -> Result<MaterializationReceipt> {
+    ) -> crate::error::Result<MaterializationReceipt> {
         // r[impl molten.filesystem_materialization.commit]
         validate_materialization_plan(plan)?;
-        if !Arc::ptr_eq(&self.inner, &staged.root) {
+        if !std::sync::Arc::ptr_eq(&self.inner, &staged.root) {
             return Err(invalid("staged materialization belongs to a different destination root"));
         }
         if staged.plan_ref != plan.plan_ref {
@@ -471,7 +472,7 @@ impl MaterializationRoot {
                             &state,
                             &states,
                             &created_final_directories,
-                            MoltenError::from(error),
+                            crate::error::MoltenError::from(error),
                         ));
                     }
                     state.backup_path = Some(backup_path);
@@ -493,7 +494,7 @@ impl MaterializationRoot {
                     &state,
                     &states,
                     &created_final_directories,
-                    MoltenError::from(error),
+                    crate::error::MoltenError::from(error),
                 ));
             }
             state.published = true;
@@ -503,7 +504,7 @@ impl MaterializationRoot {
                     &self.inner.dir,
                     &states,
                     &created_final_directories,
-                    MoltenError::from(error),
+                    crate::error::MoltenError::from(error),
                 ));
             }
             if fail_after_publications.is_some_and(|limit| states.len() == limit) {
@@ -522,8 +523,8 @@ impl MaterializationRoot {
         build_materialization_receipt(plan)
     }
 
-    pub fn abort(&self, staged: &StagedMaterialization) -> Result<()> {
-        if !Arc::ptr_eq(&self.inner, &staged.root) {
+    pub fn abort(&self, staged: &StagedMaterialization) -> crate::error::Result<()> {
+        if !std::sync::Arc::ptr_eq(&self.inner, &staged.root) {
             return Err(invalid("cannot abort a stage owned by another materialization root"));
         }
         remove_tree_if_present(&self.inner.dir, &staged.stage_path)
@@ -533,7 +534,7 @@ impl MaterializationRoot {
         &self,
         plan: &MaterializationPlan,
         payloads: &[MaterializationPayload],
-    ) -> Result<MaterializationReceipt> {
+    ) -> crate::error::Result<MaterializationReceipt> {
         let staged = self.stage(plan, payloads)?;
         match self.commit(plan, &staged) {
             Ok(receipt) => Ok(receipt),
@@ -549,16 +550,16 @@ impl MaterializationRoot {
         }
     }
 
-    pub fn read(&self, path: &MaterializationPath) -> Result<Vec<u8>> {
+    pub fn read(&self, path: &MaterializationPath) -> crate::error::Result<Vec<u8>> {
         read_regular_file_bounded(&self.inner.dir, path.as_path(), DEFAULT_MAX_MATERIALIZATION_MEMBER_BYTES)
     }
 
     fn stage_inner(
         &self,
         plan: &MaterializationPlan,
-        payloads: &BTreeMap<MaterializationPath, &[u8]>,
-        stage_path: &Path,
-    ) -> Result<()> {
+        payloads: &std::collections::BTreeMap<MaterializationPath, &[u8]>,
+        stage_path: &std::path::Path,
+    ) -> crate::error::Result<()> {
         create_staging_root(&self.inner.dir, stage_path)?;
         for member in &plan.members {
             let bytes = payloads
@@ -572,7 +573,7 @@ impl MaterializationRoot {
         Ok(())
     }
 
-    fn preflight_publication(&self, plan: &MaterializationPlan) -> Result<()> {
+    fn preflight_publication(&self, plan: &MaterializationPlan) -> crate::error::Result<()> {
         for member in &plan.members {
             let final_path = member.logical_path.as_path();
             ensure_no_symlink_components(&self.inner.dir, final_path.parent())?;
@@ -600,9 +601,9 @@ impl MaterializationRoot {
 }
 
 pub struct StagedMaterialization {
-    root: Arc<MaterializationRootInner>,
+    root: std::sync::Arc<MaterializationRootInner>,
     plan_ref: String,
-    stage_path: PathBuf,
+    stage_path: std::path::PathBuf,
 }
 
 impl std::fmt::Debug for StagedMaterialization {
@@ -625,13 +626,13 @@ impl std::fmt::Debug for SourceDirectoryRoot {
 }
 
 impl SourceDirectoryRoot {
-    pub fn open_existing(source: &Path) -> Result<Self> {
-        let metadata = std::fs::symlink_metadata(source).map_err(MoltenError::from)?;
+    pub fn open_existing(source: &std::path::Path) -> crate::error::Result<Self> {
+        let metadata = std::fs::symlink_metadata(source).map_err(crate::error::MoltenError::from)?;
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
             return Err(invalid("materialization source must be a real directory"));
         }
-        let dir =
-            cap_std::fs::Dir::open_ambient_dir(source, cap_std::ambient_authority()).map_err(MoltenError::from)?;
+        let dir = cap_std::fs::Dir::open_ambient_dir(source, cap_std::ambient_authority())
+            .map_err(crate::error::MoltenError::from)?;
         Ok(Self { dir })
     }
 
@@ -643,7 +644,7 @@ impl SourceDirectoryRoot {
         &self,
         policy: &MaterializationPolicy,
         plan: &MaterializationPlan,
-    ) -> Result<Vec<MaterializationPayload>> {
+    ) -> crate::error::Result<Vec<MaterializationPayload>> {
         validate_materialization_plan(plan)?;
         let planned_inputs = plan
             .members
@@ -667,41 +668,44 @@ impl SourceDirectoryRoot {
         Ok(payloads)
     }
 
-    pub fn read_path(&self, path: &MaterializationPath, max_bytes: u64) -> Result<Vec<u8>> {
+    pub fn read_path(&self, path: &MaterializationPath, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
         read_regular_file_bounded(&self.dir, path.as_path(), max_bytes)
     }
 
-    pub fn open_subdir(&self, path: &MaterializationPath) -> Result<Self> {
+    pub fn open_subdir(&self, path: &MaterializationPath) -> crate::error::Result<Self> {
         ensure_no_symlink_components(&self.dir, Some(path.as_path()))?;
-        let dir = self.dir.open_dir(path.as_path()).map_err(MoltenError::from)?;
+        let dir = self.dir.open_dir(path.as_path()).map_err(crate::error::MoltenError::from)?;
         Ok(Self { dir })
     }
 
-    pub fn list_regular_files_recursive(&self, policy: &MaterializationPolicy) -> Result<Vec<MaterializationPath>> {
+    pub fn list_regular_files_recursive(
+        &self,
+        policy: &MaterializationPolicy,
+    ) -> crate::error::Result<Vec<MaterializationPath>> {
         validate_policy(policy)?;
-        let mut directories = vec![PathBuf::new()];
+        let mut directories = vec![std::path::PathBuf::new()];
         let mut files = Vec::new();
         let mut observed_entries = 0usize;
         while let Some(directory) = directories.pop() {
             let read_path = if directory.as_os_str().is_empty() {
-                Path::new(".")
+                std::path::Path::new(".")
             } else {
                 directory.as_path()
             };
-            for entry_result in self.dir.read_dir(read_path).map_err(MoltenError::from)? {
+            for entry_result in self.dir.read_dir(read_path).map_err(crate::error::MoltenError::from)? {
                 observed_entries = observed_entries
                     .checked_add(1)
                     .ok_or_else(|| invalid("materialization source entry count overflow"))?;
                 if observed_entries > policy.max_members {
                     return Err(invalid("materialization source traversal exceeds member bound"));
                 }
-                let entry = entry_result.map_err(MoltenError::from)?;
+                let entry = entry_result.map_err(crate::error::MoltenError::from)?;
                 let name = entry
                     .file_name()
                     .into_string()
                     .map_err(|_| invalid("materialization source name must be UTF-8"))?;
                 let relative = directory.join(name);
-                let file_type = entry.file_type().map_err(MoltenError::from)?;
+                let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
                 if file_type.is_dir() {
                     directories.push(relative);
                 } else if file_type.is_file() {
@@ -718,10 +722,10 @@ impl SourceDirectoryRoot {
 }
 
 pub fn materialize_path(
-    destination: &Path,
+    destination: &std::path::Path,
     policy: &MaterializationPolicy,
     payloads: &[MaterializationPayload],
-) -> Result<MaterializationReceipt> {
+) -> crate::error::Result<MaterializationReceipt> {
     let plan = plan_payloads(policy, payloads)?;
     let root = MaterializationRoot::open(destination)?;
     root.materialize(&plan, payloads)
@@ -737,7 +741,7 @@ pub fn write_archive<W: Write>(
     writer: W,
     policy: &MaterializationPolicy,
     payloads: &[MaterializationPayload],
-) -> Result<W> {
+) -> crate::error::Result<W> {
     // r[impl molten.filesystem_materialization.archive_members]
     let plan = plan_payloads(policy, payloads)?;
     let payload_map = validate_payloads(&plan, payloads)?;
@@ -755,24 +759,24 @@ pub fn write_archive<W: Write>(
         header.set_cksum();
         builder
             .append_data(&mut header, member.logical_path.as_str(), std::io::Cursor::new(*bytes))
-            .map_err(MoltenError::from)?;
+            .map_err(crate::error::MoltenError::from)?;
     }
-    builder.into_inner().map_err(MoltenError::from)
+    builder.into_inner().map_err(crate::error::MoltenError::from)
 }
 
-pub fn verify_archive<R: Read>(reader: R, policy: &MaterializationPolicy) -> Result<VerifiedArchive> {
+pub fn verify_archive<R: Read>(reader: R, policy: &MaterializationPolicy) -> crate::error::Result<VerifiedArchive> {
     // r[impl molten.filesystem_materialization.archive_members]
     validate_policy(policy)?;
     let mut archive = tar::Archive::new(reader);
     let mut payloads = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     let mut total_bytes = 0u64;
-    let entries = archive.entries().map_err(MoltenError::from)?;
+    let entries = archive.entries().map_err(crate::error::MoltenError::from)?;
     for entry_result in entries {
         if payloads.len() >= policy.max_members {
             return Err(invalid("archive member count exceeds materialization policy"));
         }
-        let mut entry = entry_result.map_err(MoltenError::from)?;
+        let mut entry = entry_result.map_err(crate::error::MoltenError::from)?;
         let entry_type = entry.header().entry_type();
         if !entry_type.is_file() {
             return Err(invalid("archive contains a link, directory, or unsupported special entry"));
@@ -786,7 +790,7 @@ pub fn verify_archive<R: Read>(reader: R, policy: &MaterializationPolicy) -> Res
         if !seen.insert(logical_path.clone()) {
             return Err(invalid(format!("duplicate normalized archive member: {}", logical_path.as_str())));
         }
-        let declared_size = entry.header().size().map_err(MoltenError::from)?;
+        let declared_size = entry.header().size().map_err(crate::error::MoltenError::from)?;
         if declared_size > policy.max_member_bytes {
             return Err(invalid("archive member exceeds materialization byte bound"));
         }
@@ -805,30 +809,40 @@ pub fn verify_archive<R: Read>(reader: R, policy: &MaterializationPolicy) -> Res
     Ok(VerifiedArchive { plan, payloads })
 }
 
-pub fn create_explicit_output_file(path: &Path) -> Result<std::fs::File> {
-    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
+pub fn create_explicit_output_file(path: &std::path::Path) -> crate::error::Result<std::fs::File> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| std::path::Path::new("."));
     let leaf = path.file_name().ok_or_else(|| invalid("explicit output file path has no file name"))?;
-    std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
-    let parent_dir =
-        cap_std::fs::Dir::open_ambient_dir(parent, cap_std::ambient_authority()).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
+    let parent_dir = cap_std::fs::Dir::open_ambient_dir(parent, cap_std::ambient_authority())
+        .map_err(crate::error::MoltenError::from)?;
     let mut options = cap_std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true).follow(FollowSymlinks::No);
-    let file = parent_dir.open_with(Path::new(leaf), &options).map_err(MoltenError::from)?;
-    if !file.metadata().map_err(MoltenError::from)?.is_file() {
+    options.write(true).create(true).truncate(true).follow(cap_fs_ext::FollowSymlinks::No);
+    let file = parent_dir
+        .open_with(std::path::Path::new(leaf), &options)
+        .map_err(crate::error::MoltenError::from)?;
+    if !file.metadata().map_err(crate::error::MoltenError::from)?.is_file() {
         return Err(invalid("explicit output leaf must be a regular file"));
     }
     Ok(file.into_std())
 }
 
-pub fn open_explicit_input_file(path: &Path) -> Result<std::fs::File> {
-    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
+pub fn open_explicit_input_file(path: &std::path::Path) -> crate::error::Result<std::fs::File> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| std::path::Path::new("."));
     let leaf = path.file_name().ok_or_else(|| invalid("explicit input file path has no file name"))?;
-    let parent_dir =
-        cap_std::fs::Dir::open_ambient_dir(parent, cap_std::ambient_authority()).map_err(MoltenError::from)?;
+    let parent_dir = cap_std::fs::Dir::open_ambient_dir(parent, cap_std::ambient_authority())
+        .map_err(crate::error::MoltenError::from)?;
     let mut options = cap_std::fs::OpenOptions::new();
-    options.read(true).follow(FollowSymlinks::No);
-    let file = parent_dir.open_with(Path::new(leaf), &options).map_err(MoltenError::from)?;
-    if !file.metadata().map_err(MoltenError::from)?.is_file() {
+    options.read(true).follow(cap_fs_ext::FollowSymlinks::No);
+    let file = parent_dir
+        .open_with(std::path::Path::new(leaf), &options)
+        .map_err(crate::error::MoltenError::from)?;
+    if !file.metadata().map_err(crate::error::MoltenError::from)?.is_file() {
         return Err(invalid("explicit input leaf must be a regular file"));
     }
     Ok(file.into_std())
@@ -838,7 +852,7 @@ fn materialization_plan_value(
     policy: &MaterializationPolicy,
     members: &[MaterializationMember],
     total_bytes: u64,
-) -> Result<preserves::IOValue> {
+) -> crate::error::Result<preserves::IOValue> {
     let member_count =
         u64::try_from(members.len()).map_err(|_| invalid("materialization member count does not fit u64"))?;
     let maximum_members =
@@ -878,7 +892,7 @@ fn materialization_plan_value(
     ]))
 }
 
-pub fn validate_materialization_receipt(receipt: &MaterializationReceipt) -> Result<()> {
+pub fn validate_materialization_receipt(receipt: &MaterializationReceipt) -> crate::error::Result<()> {
     // r[impl molten.filesystem_materialization.receipt]
     if receipt.decision != DECISION_PASS || !receipt.diagnostics.is_empty() {
         return Err(invalid("materialization receipt is not a passing receipt"));
@@ -944,7 +958,7 @@ pub fn validate_materialization_receipt(receipt: &MaterializationReceipt) -> Res
     Ok(())
 }
 
-pub fn parse_materialization_receipt(value: &preserves::IOValue) -> Result<MaterializationReceipt> {
+pub fn parse_materialization_receipt(value: &preserves::IOValue) -> crate::error::Result<MaterializationReceipt> {
     let record = value
         .collect_simple_record("filesystem-materialization-receipt-v1", Some(MATERIALIZATION_RECEIPT_FIELD_COUNT))
         .ok_or_else(|| invalid("expected filesystem materialization receipt"))?;
@@ -1008,7 +1022,7 @@ pub fn parse_materialization_receipt(value: &preserves::IOValue) -> Result<Mater
     Ok(receipt)
 }
 
-fn parse_materialization_plan_value(value: &preserves::IOValue) -> Result<MaterializationPlan> {
+fn parse_materialization_plan_value(value: &preserves::IOValue) -> crate::error::Result<MaterializationPlan> {
     let record = value
         .collect_simple_record("filesystem-materialization-plan-v1", Some(MATERIALIZATION_PLAN_FIELD_COUNT))
         .ok_or_else(|| invalid("expected filesystem materialization plan"))?;
@@ -1099,7 +1113,7 @@ fn required_record_fields(
     value: &preserves::Value<preserves::IOValue>,
     label: &str,
     arity: usize,
-) -> Result<Vec<preserves::Value<preserves::IOValue>>> {
+) -> crate::error::Result<Vec<preserves::Value<preserves::IOValue>>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(arity))
@@ -1107,31 +1121,37 @@ fn required_record_fields(
     Ok(record.fields_iter().cloned().collect())
 }
 
-fn required_preserves_string(value: &preserves::Value<preserves::IOValue>, label: &str) -> Result<String> {
+fn required_preserves_string(
+    value: &preserves::Value<preserves::IOValue>,
+    label: &str,
+) -> crate::error::Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| invalid(format!("expected string for {label}")))
 }
 
-fn required_preserves_u64(value: &preserves::Value<preserves::IOValue>, label: &str) -> Result<u64> {
+fn required_preserves_u64(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| invalid(format!("expected u64 for {label}")))?
         .map_err(|error| invalid(format!("u64 out of range for {label}: {error}")))
 }
 
-fn required_preserves_usize(value: &preserves::Value<preserves::IOValue>, label: &str) -> Result<usize> {
+fn required_preserves_usize(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<usize> {
     let value = required_preserves_u64(value, label)?;
     usize::try_from(value).map_err(|_| invalid(format!("u64 does not fit usize for {label}")))
 }
 
-fn required_named_string(value: &preserves::Value<preserves::IOValue>, label: &str) -> Result<String> {
+fn required_named_string(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<String> {
     let fields = required_record_fields(value, label, 1)?;
     required_preserves_string(&fields[0], label)
 }
 
-fn parse_named_string_sequence(value: &preserves::Value<preserves::IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_named_string_sequence(
+    value: &preserves::Value<preserves::IOValue>,
+    label: &str,
+) -> crate::error::Result<Vec<String>> {
     let fields = required_record_fields(value, label, 1)?;
     let entries = fields[0]
         .collect_sequence()
@@ -1142,7 +1162,9 @@ fn parse_named_string_sequence(value: &preserves::Value<preserves::IOValue>, lab
     entries.iter().map(|entry| required_preserves_string(entry, label)).collect()
 }
 
-fn parse_receipt_member_refs(value: &preserves::Value<preserves::IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_receipt_member_refs(
+    value: &preserves::Value<preserves::IOValue>,
+) -> crate::error::Result<Vec<(String, String)>> {
     let fields = required_record_fields(value, "members", 1)?;
     let entries = fields[0]
         .collect_sequence()
@@ -1168,7 +1190,7 @@ fn parse_receipt_member_refs(value: &preserves::Value<preserves::IOValue>) -> Re
     Ok(members)
 }
 
-fn parse_replacement_policy(value: &str) -> Result<ReplacementPolicy> {
+fn parse_replacement_policy(value: &str) -> crate::error::Result<ReplacementPolicy> {
     match value {
         "no-replace" => Ok(ReplacementPolicy::NoReplace),
         "replace-regular-files" => Ok(ReplacementPolicy::ReplaceRegularFiles),
@@ -1176,7 +1198,7 @@ fn parse_replacement_policy(value: &str) -> Result<ReplacementPolicy> {
     }
 }
 
-fn build_materialization_receipt(plan: &MaterializationPlan) -> Result<MaterializationReceipt> {
+fn build_materialization_receipt(plan: &MaterializationPlan) -> crate::error::Result<MaterializationReceipt> {
     // r[impl molten.filesystem_materialization.receipt]
     validate_materialization_plan(plan)?;
     let member_refs = plan
@@ -1230,7 +1252,9 @@ struct MaterializationReceiptValueInput<'a> {
     non_claims: &'a [String],
 }
 
-fn materialization_receipt_value(input: &MaterializationReceiptValueInput<'_>) -> Result<preserves::IOValue> {
+fn materialization_receipt_value(
+    input: &MaterializationReceiptValueInput<'_>,
+) -> crate::error::Result<preserves::IOValue> {
     let member_count =
         u64::try_from(input.member_count).map_err(|_| invalid("materialization member count does not fit u64"))?;
     Ok(crate::preserves_rail::record("filesystem-materialization-receipt-v1", vec![
@@ -1273,14 +1297,14 @@ fn materialization_receipt_value(input: &MaterializationReceiptValueInput<'_>) -
 fn validate_payloads<'a>(
     plan: &MaterializationPlan,
     payloads: &'a [MaterializationPayload],
-) -> Result<BTreeMap<MaterializationPath, &'a [u8]>> {
+) -> crate::error::Result<std::collections::BTreeMap<MaterializationPath, &'a [u8]>> {
     validate_materialization_plan(plan)?;
     let planned_paths = plan
         .members
         .iter()
         .map(|member| (member.logical_path.as_str(), &member.logical_path))
-        .collect::<BTreeMap<_, _>>();
-    let mut payload_map = BTreeMap::new();
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut payload_map = std::collections::BTreeMap::new();
     for payload in payloads {
         let path = planned_paths
             .get(payload.logical_path.as_str())
@@ -1301,7 +1325,7 @@ fn validate_payloads<'a>(
     Ok(payload_map)
 }
 
-fn verify_payload_bytes(member: &MaterializationMember, bytes: &[u8]) -> Result<()> {
+fn verify_payload_bytes(member: &MaterializationMember, bytes: &[u8]) -> crate::error::Result<()> {
     let size = u64::try_from(bytes.len()).map_err(|_| invalid("materialization payload size does not fit u64"))?;
     if size != member.expected_size {
         return Err(invalid(format!(
@@ -1321,22 +1345,26 @@ fn verify_payload_bytes(member: &MaterializationMember, bytes: &[u8]) -> Result<
     Ok(())
 }
 
-fn verify_member_bytes(member: &MaterializationMember, dir: &cap_std::fs::Dir, path: &Path) -> Result<()> {
+fn verify_member_bytes(
+    member: &MaterializationMember,
+    dir: &cap_std::fs::Dir,
+    path: &std::path::Path,
+) -> crate::error::Result<()> {
     let bytes = read_regular_file_bounded(dir, path, member.expected_size)?;
     verify_payload_bytes(member, &bytes)
 }
 
-fn verify_published_members(dir: &cap_std::fs::Dir, plan: &MaterializationPlan) -> Result<()> {
+fn verify_published_members(dir: &cap_std::fs::Dir, plan: &MaterializationPlan) -> crate::error::Result<()> {
     for member in &plan.members {
         verify_member_bytes(member, dir, member.logical_path.as_path())?;
     }
     Ok(())
 }
 
-fn validate_policy(policy: &MaterializationPolicy) -> Result<()> {
+fn validate_policy(policy: &MaterializationPolicy) -> crate::error::Result<()> {
     validate_profile(&policy.profile)?;
     validate_bounds(policy.max_members, policy.max_member_bytes, policy.max_total_bytes, policy.max_path_bytes)?;
-    let mut reserved = BTreeSet::new();
+    let mut reserved = std::collections::BTreeSet::new();
     for name in &policy.reserved_top_level_names {
         validate_reserved_name(name)?;
         if !reserved.insert(name) {
@@ -1351,7 +1379,7 @@ fn validate_bounds(
     max_member_bytes: u64,
     max_total_bytes: u64,
     max_path_bytes: usize,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     if max_members == 0 || max_member_bytes == 0 || max_total_bytes == 0 || max_path_bytes == 0 {
         return Err(invalid("materialization bounds must be non-zero"));
     }
@@ -1368,7 +1396,7 @@ fn validate_bounds(
     Ok(())
 }
 
-fn validate_profile(profile: &str) -> Result<()> {
+fn validate_profile(profile: &str) -> crate::error::Result<()> {
     if profile.is_empty() {
         return Err(invalid("materialization profile cannot be empty"));
     }
@@ -1381,17 +1409,17 @@ fn validate_profile(profile: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_reserved_name(name: &str) -> Result<()> {
+fn validate_reserved_name(name: &str) -> crate::error::Result<()> {
     if name.is_empty() || name.contains('/') || name.contains('\\') || name == "." || name == ".." {
         return Err(invalid("materialization reserved name must be one logical component"));
     }
     Ok(())
 }
 
-fn logical_path_from_relative_path(path: &Path) -> Result<String> {
+fn logical_path_from_relative_path(path: &std::path::Path) -> crate::error::Result<String> {
     let mut components = Vec::new();
     for component in path.components() {
-        let Component::Normal(component) = component else {
+        let std::path::Component::Normal(component) = component else {
             return Err(invalid("materialization source path is not normalized"));
         };
         let component = component.to_str().ok_or_else(|| invalid("materialization source path must be UTF-8"))?;
@@ -1403,7 +1431,7 @@ fn logical_path_from_relative_path(path: &Path) -> Result<String> {
     Ok(components.join("/"))
 }
 
-fn validate_materialization_path(value: &str, max_path_bytes: usize) -> Result<()> {
+fn validate_materialization_path(value: &str, max_path_bytes: usize) -> crate::error::Result<()> {
     if value.is_empty() {
         return Err(invalid("materialization member path cannot be empty"));
     }
@@ -1428,46 +1456,46 @@ fn validate_materialization_path(value: &str, max_path_bytes: usize) -> Result<(
             return Err(invalid("materialization member path contains an unsafe component"));
         }
     }
-    for component in Path::new(value).components() {
-        if !matches!(component, Component::Normal(_)) {
+    for component in std::path::Path::new(value).components() {
+        if !matches!(component, std::path::Component::Normal(_)) {
             return Err(invalid("materialization member path must be relative and normalized"));
         }
     }
     Ok(())
 }
 
-fn stage_path(plan: &MaterializationPlan) -> Result<PathBuf> {
+fn stage_path(plan: &MaterializationPlan) -> crate::error::Result<std::path::PathBuf> {
     let token = plan
         .plan_ref
         .strip_prefix("blake3:")
         .ok_or_else(|| invalid("materialization plan ref is not BLAKE3"))?;
-    Ok(Path::new(STAGING_DIRECTORY).join(token))
+    Ok(std::path::Path::new(STAGING_DIRECTORY).join(token))
 }
 
-fn create_staging_root(dir: &cap_std::fs::Dir, stage_path: &Path) -> Result<()> {
-    match entry_kind(dir, Path::new(STAGING_DIRECTORY))? {
-        None => dir.create_dir(STAGING_DIRECTORY).map_err(MoltenError::from)?,
+fn create_staging_root(dir: &cap_std::fs::Dir, stage_path: &std::path::Path) -> crate::error::Result<()> {
+    match entry_kind(dir, std::path::Path::new(STAGING_DIRECTORY))? {
+        None => dir.create_dir(STAGING_DIRECTORY).map_err(crate::error::MoltenError::from)?,
         Some(MaterializationMemberKind::Directory) => {}
         Some(_) => return Err(invalid("materialization staging root must be a real directory")),
     }
     ensure_no_symlink_components(dir, stage_path.parent())?;
-    dir.create_dir(stage_path).map_err(MoltenError::from)?;
+    dir.create_dir(stage_path).map_err(crate::error::MoltenError::from)?;
     create_directory_tree(dir, Some(&stage_path.join(STAGING_TREE_DIRECTORY)))?;
     Ok(())
 }
 
-fn create_directory_tree(dir: &cap_std::fs::Dir, path: Option<&Path>) -> Result<()> {
+fn create_directory_tree(dir: &cap_std::fs::Dir, path: Option<&std::path::Path>) -> crate::error::Result<()> {
     let Some(path) = path else {
         return Ok(());
     };
-    let mut current = PathBuf::new();
+    let mut current = std::path::PathBuf::new();
     for component in path.components() {
-        let Component::Normal(component) = component else {
+        let std::path::Component::Normal(component) = component else {
             return Err(invalid("capability directory creation received a non-relative component"));
         };
         current.push(component);
         match entry_kind(dir, &current)? {
-            None => dir.create_dir(&current).map_err(MoltenError::from)?,
+            None => dir.create_dir(&current).map_err(crate::error::MoltenError::from)?,
             Some(MaterializationMemberKind::Directory) => {}
             Some(_) => return Err(invalid("materialization parent is a symlink or non-directory entry")),
         }
@@ -1477,21 +1505,21 @@ fn create_directory_tree(dir: &cap_std::fs::Dir, path: Option<&Path>) -> Result<
 
 fn create_directory_tree_recording(
     dir: &cap_std::fs::Dir,
-    path: Option<&Path>,
-    created: &mut Vec<PathBuf>,
-) -> Result<()> {
+    path: Option<&std::path::Path>,
+    created: &mut Vec<std::path::PathBuf>,
+) -> crate::error::Result<()> {
     let Some(path) = path else {
         return Ok(());
     };
-    let mut current = PathBuf::new();
+    let mut current = std::path::PathBuf::new();
     for component in path.components() {
-        let Component::Normal(component) = component else {
+        let std::path::Component::Normal(component) = component else {
             return Err(invalid("capability directory creation received a non-relative component"));
         };
         current.push(component);
         match entry_kind(dir, &current)? {
             None => {
-                dir.create_dir(&current).map_err(MoltenError::from)?;
+                dir.create_dir(&current).map_err(crate::error::MoltenError::from)?;
                 created.push(current.clone());
             }
             Some(MaterializationMemberKind::Directory) => {}
@@ -1501,13 +1529,13 @@ fn create_directory_tree_recording(
     Ok(())
 }
 
-fn ensure_no_symlink_components(dir: &cap_std::fs::Dir, path: Option<&Path>) -> Result<()> {
+fn ensure_no_symlink_components(dir: &cap_std::fs::Dir, path: Option<&std::path::Path>) -> crate::error::Result<()> {
     let Some(path) = path else {
         return Ok(());
     };
-    let mut current = PathBuf::new();
+    let mut current = std::path::PathBuf::new();
     for component in path.components() {
-        let Component::Normal(component) = component else {
+        let std::path::Component::Normal(component) = component else {
             return Err(invalid("materialization parent check received a non-relative component"));
         };
         current.push(component);
@@ -1520,7 +1548,10 @@ fn ensure_no_symlink_components(dir: &cap_std::fs::Dir, path: Option<&Path>) -> 
     Ok(())
 }
 
-fn entry_kind(dir: &cap_std::fs::Dir, path: &Path) -> Result<Option<MaterializationMemberKind>> {
+fn entry_kind(
+    dir: &cap_std::fs::Dir,
+    path: &std::path::Path,
+) -> crate::error::Result<Option<MaterializationMemberKind>> {
     match dir.symlink_metadata(path) {
         Ok(metadata) => {
             let file_type = metadata.file_type();
@@ -1536,34 +1567,38 @@ fn entry_kind(dir: &cap_std::fs::Dir, path: &Path) -> Result<Option<Materializat
             Ok(Some(kind))
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(MoltenError::from(error)),
+        Err(error) => Err(crate::error::MoltenError::from(error)),
     }
 }
 
-fn write_create_new(dir: &cap_std::fs::Dir, path: &Path, bytes: &[u8]) -> Result<()> {
+fn write_create_new(dir: &cap_std::fs::Dir, path: &std::path::Path, bytes: &[u8]) -> crate::error::Result<()> {
     ensure_no_symlink_components(dir, path.parent())?;
     let mut options = cap_std::fs::OpenOptions::new();
-    options.write(true).create_new(true).follow(FollowSymlinks::No);
-    let mut file = dir.open_with(path, &options).map_err(MoltenError::from)?;
-    file.write_all(bytes).map_err(MoltenError::from)?;
-    file.flush().map_err(MoltenError::from)
+    options.write(true).create_new(true).follow(cap_fs_ext::FollowSymlinks::No);
+    let mut file = dir.open_with(path, &options).map_err(crate::error::MoltenError::from)?;
+    file.write_all(bytes).map_err(crate::error::MoltenError::from)?;
+    file.flush().map_err(crate::error::MoltenError::from)
 }
 
-fn read_regular_file_bounded(dir: &cap_std::fs::Dir, path: &Path, max_bytes: u64) -> Result<Vec<u8>> {
+fn read_regular_file_bounded(
+    dir: &cap_std::fs::Dir,
+    path: &std::path::Path,
+    max_bytes: u64,
+) -> crate::error::Result<Vec<u8>> {
     ensure_no_symlink_components(dir, path.parent())?;
     if entry_kind(dir, path)? != Some(MaterializationMemberKind::RegularFile) {
         return Err(invalid("materialization read target must be a regular file"));
     }
     let mut options = cap_std::fs::OpenOptions::new();
-    options.read(true).follow(FollowSymlinks::No);
-    let mut file = dir.open_with(path, &options).map_err(MoltenError::from)?;
+    options.read(true).follow(cap_fs_ext::FollowSymlinks::No);
+    let mut file = dir.open_with(path, &options).map_err(crate::error::MoltenError::from)?;
     read_bounded(&mut file, max_bytes)
 }
 
-fn read_bounded(reader: &mut impl Read, max_bytes: u64) -> Result<Vec<u8>> {
+fn read_bounded(reader: &mut impl Read, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
     let read_limit = max_bytes.checked_add(1).ok_or_else(|| invalid("materialization read bound overflow"))?;
     let mut bytes = Vec::new();
-    reader.take(read_limit).read_to_end(&mut bytes).map_err(MoltenError::from)?;
+    reader.take(read_limit).read_to_end(&mut bytes).map_err(crate::error::MoltenError::from)?;
     if u64::try_from(bytes.len()).map_err(|_| invalid("materialization read size does not fit u64"))? > max_bytes {
         return Err(invalid("materialization read exceeded configured byte bound"));
     }
@@ -1571,19 +1606,23 @@ fn read_bounded(reader: &mut impl Read, max_bytes: u64) -> Result<Vec<u8>> {
 }
 
 struct PublicationState {
-    final_path: PathBuf,
-    backup_path: Option<PathBuf>,
+    final_path: std::path::PathBuf,
+    backup_path: Option<std::path::PathBuf>,
     published: bool,
 }
 
-fn restore_current_backup(dir: &cap_std::fs::Dir, state: &PublicationState) -> Result<()> {
+fn restore_current_backup(dir: &cap_std::fs::Dir, state: &PublicationState) -> crate::error::Result<()> {
     let Some(backup) = state.backup_path.as_ref() else {
         return Ok(());
     };
-    dir.rename(backup, dir, &state.final_path).map_err(MoltenError::from)
+    dir.rename(backup, dir, &state.final_path).map_err(crate::error::MoltenError::from)
 }
 
-fn setup_failure(dir: &cap_std::fs::Dir, created_directories: &[PathBuf], primary: MoltenError) -> MoltenError {
+fn setup_failure(
+    dir: &cap_std::fs::Dir,
+    created_directories: &[std::path::PathBuf],
+    primary: crate::error::MoltenError,
+) -> crate::error::MoltenError {
     match rollback_created_directories(dir, created_directories) {
         Ok(()) => primary,
         Err(rollback) => invalid(format!(
@@ -1596,9 +1635,9 @@ fn publication_failure(
     dir: &cap_std::fs::Dir,
     current: &PublicationState,
     prior: &[PublicationState],
-    created_directories: &[PathBuf],
-    primary: MoltenError,
-) -> MoltenError {
+    created_directories: &[std::path::PathBuf],
+    primary: crate::error::MoltenError,
+) -> crate::error::MoltenError {
     let current_result = restore_current_backup(dir, current);
     let prior_result = rollback_publication(dir, prior);
     let directory_result = rollback_created_directories(dir, created_directories);
@@ -1613,9 +1652,9 @@ fn publication_failure(
 fn rollback_failure(
     dir: &cap_std::fs::Dir,
     states: &[PublicationState],
-    created_directories: &[PathBuf],
-    primary: MoltenError,
-) -> MoltenError {
+    created_directories: &[std::path::PathBuf],
+    primary: crate::error::MoltenError,
+) -> crate::error::MoltenError {
     let publication_result = rollback_publication(dir, states);
     let directory_result = rollback_created_directories(dir, created_directories);
     match (publication_result, directory_result) {
@@ -1626,7 +1665,10 @@ fn rollback_failure(
     }
 }
 
-fn rollback_created_directories(dir: &cap_std::fs::Dir, created_directories: &[PathBuf]) -> Result<()> {
+fn rollback_created_directories(
+    dir: &cap_std::fs::Dir,
+    created_directories: &[std::path::PathBuf],
+) -> crate::error::Result<()> {
     let mut diagnostics = Vec::new();
     for directory in created_directories.iter().rev() {
         match dir.remove_dir(directory) {
@@ -1642,7 +1684,7 @@ fn rollback_created_directories(dir: &cap_std::fs::Dir, created_directories: &[P
     }
 }
 
-fn rollback_publication(dir: &cap_std::fs::Dir, states: &[PublicationState]) -> Result<()> {
+fn rollback_publication(dir: &cap_std::fs::Dir, states: &[PublicationState]) -> crate::error::Result<()> {
     let mut diagnostics = Vec::new();
     for state in states.iter().rev() {
         if state.published {
@@ -1665,14 +1707,14 @@ fn rollback_publication(dir: &cap_std::fs::Dir, states: &[PublicationState]) -> 
     }
 }
 
-fn invalid(message: impl Into<String>) -> MoltenError {
-    MoltenError::invalid_harness(message.into())
+fn invalid(message: impl Into<String>) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(message.into())
 }
 
-fn remove_tree_if_present(dir: &cap_std::fs::Dir, path: &Path) -> Result<()> {
+fn remove_tree_if_present(dir: &cap_std::fs::Dir, path: &std::path::Path) -> crate::error::Result<()> {
     match entry_kind(dir, path)? {
         None => Ok(()),
-        Some(MaterializationMemberKind::Directory) => dir.remove_dir_all(path).map_err(MoltenError::from),
+        Some(MaterializationMemberKind::Directory) => dir.remove_dir_all(path).map_err(crate::error::MoltenError::from),
         Some(_) => Err(invalid("materialization stage path is not a real directory")),
     }
 }

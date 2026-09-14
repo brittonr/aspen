@@ -1,6 +1,4 @@
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 pub struct HealthProjectionInput<'a> {
     pub source_id: &'a str,
@@ -41,14 +39,16 @@ pub fn system_extension_health_input(
 }
 
 // r[impl molten.fabric_observability.health_scope]
-pub fn node_health_input(input: HealthProjectionInput<'_>, node_decision: &str) -> Result<HealthInput> {
+pub fn node_health_input(input: HealthProjectionInput<'_>, node_decision: &str) -> crate::error::Result<HealthInput> {
     let state = match node_decision {
         "pass" | "healthy" => HealthState::Healthy,
         "degraded" => HealthState::Degraded,
         "unavailable" | "stopped" => HealthState::Unavailable,
         "deny" | "failed" => HealthState::Failed,
         other => {
-            return Err(MoltenError::invalid_harness(format!("unsupported node health decision {other}")));
+            return Err(crate::error::MoltenError::invalid_harness(format!(
+                "unsupported node health decision {other}"
+            )));
         }
     };
     Ok(HealthInput {
@@ -69,7 +69,7 @@ pub fn runtime_counter_sample(
     labels: Vec<MetricLabel>,
     value: i64,
     as_of_tick: u64,
-) -> Result<CanonicalArtifact<MetricSample>> {
+) -> crate::error::Result<CanonicalArtifact<MetricSample>> {
     canonical_metric_sample(
         profile,
         descriptor,
@@ -104,7 +104,7 @@ pub struct SnapshotBuildInput<'a> {
 pub fn bounded_operator_snapshot(
     profile: &ObservationProfile,
     input: SnapshotBuildInput<'_>,
-) -> Result<CanonicalArtifact<ObservationSnapshot>> {
+) -> crate::error::Result<CanonicalArtifact<ObservationSnapshot>> {
     let snapshot = ObservationSnapshot {
         schema: OBSERVATION_SNAPSHOT_SCHEMA.to_string(),
         snapshot_id: input.snapshot_id.to_string(),

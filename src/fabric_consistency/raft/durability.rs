@@ -1,21 +1,18 @@
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric_durability::AppendRequest;
-use crate::fabric_durability::DurabilityLevel;
-use crate::fabric_durability::RedbDurableStateAdapter;
-use crate::fabric_durability::SnapshotKind;
-use crate::fabric_durability::SnapshotRequest;
 
 #[derive(Debug)]
 pub struct RedbReplicaDurabilityPort {
-    adapter: RedbDurableStateAdapter,
+    adapter: crate::fabric_durability::RedbDurableStateAdapter,
     durable_log_ref: String,
     snapshot_store_ref: String,
 }
 
 impl RedbReplicaDurabilityPort {
-    pub fn new(adapter: RedbDurableStateAdapter, durable_log_ref: String, snapshot_store_ref: String) -> Result<Self> {
+    pub fn new(
+        adapter: crate::fabric_durability::RedbDurableStateAdapter,
+        durable_log_ref: String,
+        snapshot_store_ref: String,
+    ) -> crate::error::Result<Self> {
         crate::preserves_rail::validate_content_ref(&durable_log_ref)?;
         crate::preserves_rail::validate_content_ref(&snapshot_store_ref)?;
         Ok(Self {
@@ -25,7 +22,7 @@ impl RedbReplicaDurabilityPort {
         })
     }
 
-    pub const fn adapter(&self) -> &RedbDurableStateAdapter {
+    pub const fn adapter(&self) -> &crate::fabric_durability::RedbDurableStateAdapter {
         &self.adapter
     }
 
@@ -37,9 +34,9 @@ impl RedbReplicaDurabilityPort {
         &self.snapshot_store_ref
     }
 
-    pub fn plan_recovery(&self, start_plan: ReplicaStartPlan) -> Result<ReplicaRecoveryPlan> {
+    pub fn plan_recovery(&self, start_plan: ReplicaStartPlan) -> crate::error::Result<ReplicaRecoveryPlan> {
         if !self.adapter.state().buffered_log.is_empty() {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::MoltenError::invalid_harness(
                 "live Raft recovery denies while buffered durability records remain",
             ));
         }
@@ -63,15 +60,18 @@ impl RedbReplicaDurabilityPort {
         plan_replica_recovery(start_plan, &self.adapter.state().durable_log, snapshot_bytes.as_deref())
     }
 
-    fn append_value(&mut self, value: preserves::IOValue, durability: DurabilityLevel) -> Result<String> {
+    fn append_value(
+        &mut self,
+        value: preserves::IOValue,
+        durability: crate::fabric_durability::DurabilityLevel,
+    ) -> crate::error::Result<String> {
         let bytes = crate::preserves_rail::canonical_bytes(&value)?;
         let value_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
         let descriptor = &self.adapter.state().descriptor;
-        let expected_sequence =
-            self.adapter.state().next_log_sequence().map_err(|error| {
-                MoltenError::invalid_harness(format!("live Raft durable sequence denied: {error:?}"))
-            })?;
-        let request = AppendRequest {
+        let expected_sequence = self.adapter.state().next_log_sequence().map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("live Raft durable sequence denied: {error:?}"))
+        })?;
+        let request = crate::fabric_durability::AppendRequest {
             adapter_id: descriptor.adapter_id.clone(),
             namespace_id: descriptor.namespace_id.clone(),
             generation: descriptor.generation,
@@ -85,18 +85,22 @@ impl RedbReplicaDurabilityPort {
 }
 
 impl ReplicaDurabilityEffects for RedbReplicaDurabilityPort {
-    fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> Result<String> {
+    fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> crate::error::Result<String> {
         let vote = voted_for.map_or_else(
             || crate::preserves_rail::record("none", Vec::new()),
             |voter| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(voter)]),
         );
         self.append_value(
             crate::preserves_rail::record("raft-hard-state-v1", vec![crate::preserves_rail::u64_value(term), vote]),
-            DurabilityLevel::MachineLoss,
+            crate::fabric_durability::DurabilityLevel::MachineLoss,
         )
     }
 
-    fn persist_entries(&mut self, truncate_from: Option<u64>, entries: &[ReplicatedEntry]) -> Result<String> {
+    fn persist_entries(
+        &mut self,
+        truncate_from: Option<u64>,
+        entries: &[ReplicatedEntry],
+    ) -> crate::error::Result<String> {
         let truncate = truncate_from.map_or_else(
             || crate::preserves_rail::record("none", Vec::new()),
             |index| crate::preserves_rail::record("some", vec![crate::preserves_rail::u64_value(index)]),
@@ -106,48 +110,53 @@ impl ReplicaDurabilityEffects for RedbReplicaDurabilityPort {
                 truncate,
                 crate::preserves_rail::sequence(entries.iter().map(entry_value).collect()),
             ]),
-            DurabilityLevel::Buffered,
+            crate::fabric_durability::DurabilityLevel::Buffered,
         )
     }
 
-    fn flush_log(&mut self, through_index: u64) -> Result<String> {
+    fn flush_log(&mut self, through_index: u64) -> crate::error::Result<String> {
         self.append_value(
             crate::preserves_rail::record("raft-log-flush-v1", vec![crate::preserves_rail::u64_value(through_index)]),
-            DurabilityLevel::Buffered,
+            crate::fabric_durability::DurabilityLevel::Buffered,
         )?;
         let generation = self.adapter.state().descriptor.generation;
-        Ok(self.adapter.flush(generation, DurabilityLevel::MachineLoss)?.transition_ref)
+        Ok(self
+            .adapter
+            .flush(generation, crate::fabric_durability::DurabilityLevel::MachineLoss)?
+            .transition_ref)
     }
 
-    fn persist_commit(&mut self, through_index: u64) -> Result<String> {
+    fn persist_commit(&mut self, through_index: u64) -> crate::error::Result<String> {
         if through_index == INITIAL_COMMIT_INDEX {
-            return Err(MoltenError::invalid_harness("live Raft commit boundary must be positive"));
+            return Err(crate::error::MoltenError::invalid_harness("live Raft commit boundary must be positive"));
         }
         self.append_value(
             crate::preserves_rail::record("raft-commit-boundary-v1", vec![crate::preserves_rail::u64_value(
                 through_index,
             )]),
-            DurabilityLevel::MachineLoss,
+            crate::fabric_durability::DurabilityLevel::MachineLoss,
         )
     }
 
-    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String> {
+    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
         if snapshot.snapshot_ref != snapshot_ref(snapshot)? {
-            return Err(MoltenError::invalid_harness("live Raft snapshot identity mismatch before persistence"));
+            return Err(crate::error::MoltenError::invalid_harness(
+                "live Raft snapshot identity mismatch before persistence",
+            ));
         }
         let value = snapshot_value(snapshot);
         let bytes = crate::preserves_rail::canonical_bytes(&value)?;
         let content_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
         let generation = self.adapter.state().descriptor.generation;
         let covered_log_sequence = self.adapter.state().durable_log.last().map(|record| record.sequence);
-        let request = SnapshotRequest {
-            kind: SnapshotKind::Snapshot,
+        let request = crate::fabric_durability::SnapshotRequest {
+            kind: crate::fabric_durability::SnapshotKind::Snapshot,
             generation,
             snapshot_ref: snapshot.snapshot_ref.clone(),
             content_ref,
             ordered_state_ref: snapshot.application_state_ref.clone(),
             covered_log_sequence,
-            durability: DurabilityLevel::MachineLoss,
+            durability: crate::fabric_durability::DurabilityLevel::MachineLoss,
         };
         Ok(self.adapter.create_snapshot(&request, &bytes)?.transition_ref)
     }

@@ -1,15 +1,3 @@
-use super::model::BenchmarkLane;
-use super::model::BenchmarkSuite;
-use super::model::PerformanceDenial;
-use super::model::PerformanceEvidenceRole;
-use super::model::PerformancePhase;
-use super::model::PerformanceProfile;
-use super::model::PerformanceProfileExport;
-use super::model::PerformanceResult;
-use super::model::content_ref;
-use super::model::sorted_unique;
-use super::model::valid_content_ref;
-
 pub const PERFORMANCE_PROFILE_SCHEMA: &str = "molten.wasm-component-performance-profile.v1";
 pub const PERFORMANCE_PROFILE_SCHEMA_VERSION: u32 = 1;
 pub const PERFORMANCE_PROFILE_SOURCE_LANGUAGE: &str = "nickel";
@@ -77,18 +65,21 @@ pub const PERFORMANCE_NON_CLAIMS: &[&str] = &[
 const PROFILE_EXPORT_JSON: &str =
     include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/wasm-component-performance/generated/profile.json"));
 
-pub fn supported_performance_profile() -> PerformanceResult<PerformanceProfile> {
-    let exported: PerformanceProfileExport = serde_json::from_str(PROFILE_EXPORT_JSON).map_err(|error| {
-        PerformanceDenial::new(format!("Wasm component performance profile export is invalid: {error}"))
-    })?;
+pub fn supported_performance_profile() -> super::model::PerformanceResult<super::model::PerformanceProfile> {
+    let exported: super::model::PerformanceProfileExport =
+        serde_json::from_str(PROFILE_EXPORT_JSON).map_err(|error| {
+            super::model::PerformanceDenial::new(format!(
+                "Wasm component performance profile export is invalid: {error}"
+            ))
+        })?;
     validate_profile_export(&exported)?;
     Ok(exported.profile)
 }
 
-pub fn validate_performance_profile(profile: &PerformanceProfile) -> PerformanceResult<()> {
+pub fn validate_performance_profile(profile: &super::model::PerformanceProfile) -> super::model::PerformanceResult<()> {
     let mut blockers = Vec::new();
     require_equal(&mut blockers, "profile id", &profile.profile_id, PERFORMANCE_PROFILE_ID);
-    if profile.evidence_role != PerformanceEvidenceRole::RecordedOnly {
+    if profile.evidence_role != super::model::PerformanceEvidenceRole::RecordedOnly {
         blockers.push("performance profile evidence role must remain recorded-only".to_string());
     }
     require_equal(
@@ -100,7 +91,7 @@ pub fn validate_performance_profile(profile: &PerformanceProfile) -> Performance
     require_equal(&mut blockers, "Sightglass revision", &profile.sightglass.revision, SIGHTGLASS_REVISION);
     require_equal(&mut blockers, "Sightglass runner", &profile.sightglass.runner, SIGHTGLASS_RUNNER);
     require_equal(&mut blockers, "Sightglass raw schema", &profile.sightglass.raw_schema, SIGHTGLASS_RAW_SCHEMA);
-    if profile.phases != PerformancePhase::ALL {
+    if profile.phases != super::model::PerformancePhase::ALL {
         blockers.push(
             "performance profile must retain separate compilation, instantiation, and execution phases".to_string(),
         );
@@ -108,7 +99,7 @@ pub fn validate_performance_profile(profile: &PerformanceProfile) -> Performance
     validate_suite(
         &profile.fast,
         SuiteExpectation {
-            lane: BenchmarkLane::Fast,
+            lane: super::model::BenchmarkLane::Fast,
             suite_id: FAST_SUITE_ID,
             bundle_refs: FAST_BUNDLE_REFS,
             workload_refs: &[ACTOR_WORKLOAD_REF],
@@ -121,7 +112,7 @@ pub fn validate_performance_profile(profile: &PerformanceProfile) -> Performance
     validate_suite(
         &profile.deep,
         SuiteExpectation {
-            lane: BenchmarkLane::Deep,
+            lane: super::model::BenchmarkLane::Deep,
             suite_id: DEEP_SUITE_ID,
             bundle_refs: DEEP_BUNDLE_REFS,
             workload_refs: &[ACTOR_WORKLOAD_REF, SYSTEM_EXTENSION_WORKLOAD_REF],
@@ -162,11 +153,11 @@ pub fn validate_performance_profile(profile: &PerformanceProfile) -> Performance
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(PerformanceDenial::from_blockers(blockers))
+        Err(super::model::PerformanceDenial::from_blockers(blockers))
     }
 }
 
-pub fn performance_suite_ref(suite: &BenchmarkSuite) -> String {
+pub fn performance_suite_ref(suite: &super::model::BenchmarkSuite) -> String {
     let mut lines = vec![
         format!("lane:{}", suite.lane.as_str()),
         format!("suite-id:{}", suite.suite_id),
@@ -183,16 +174,20 @@ pub fn performance_suite_ref(suite: &BenchmarkSuite) -> String {
         format!("maximum-samples:{}", suite.sampling.max_samples_per_phase),
     ];
     lines.extend(
-        sorted_unique(&suite.materialization_bundle_refs)
+        super::model::sorted_unique(&suite.materialization_bundle_refs)
             .into_iter()
             .map(|value| format!("bundle-ref:{value}")),
     );
-    lines.extend(sorted_unique(&suite.workload_refs).into_iter().map(|value| format!("workload-ref:{value}")));
+    lines.extend(
+        super::model::sorted_unique(&suite.workload_refs)
+            .into_iter()
+            .map(|value| format!("workload-ref:{value}")),
+    );
     lines.extend(suite.phases.iter().map(|phase| format!("phase:{}", phase.as_str())));
-    content_ref(lines.join("\n").as_bytes())
+    super::model::content_ref(lines.join("\n").as_bytes())
 }
 
-pub fn performance_profile_ref(profile: &PerformanceProfile) -> String {
+pub fn performance_profile_ref(profile: &super::model::PerformanceProfile) -> String {
     let mut lines = vec![
         format!("profile-id:{}", profile.profile_id),
         format!("evidence-role:{}", profile.evidence_role.as_str()),
@@ -226,10 +221,10 @@ pub fn performance_profile_ref(profile: &PerformanceProfile) -> String {
             .map(|profile_id| format!("optimization-profile-id:{profile_id}")),
     );
     lines.extend(profile.non_claims.iter().map(|claim| format!("non-claim:{claim}")));
-    content_ref(lines.join("\n").as_bytes())
+    super::model::content_ref(lines.join("\n").as_bytes())
 }
 
-fn validate_profile_export(exported: &PerformanceProfileExport) -> PerformanceResult<()> {
+fn validate_profile_export(exported: &super::model::PerformanceProfileExport) -> super::model::PerformanceResult<()> {
     let mut blockers = Vec::new();
     require_equal(&mut blockers, "schema id", &exported.schema_id, PERFORMANCE_PROFILE_SCHEMA);
     if exported.schema_version != PERFORMANCE_PROFILE_SCHEMA_VERSION {
@@ -237,13 +232,13 @@ fn validate_profile_export(exported: &PerformanceProfileExport) -> PerformanceRe
     }
     require_equal(&mut blockers, "source language", &exported.source_language, PERFORMANCE_PROFILE_SOURCE_LANGUAGE);
     if !blockers.is_empty() {
-        return Err(PerformanceDenial::from_blockers(blockers));
+        return Err(super::model::PerformanceDenial::from_blockers(blockers));
     }
     validate_performance_profile(&exported.profile)
 }
 
 struct SuiteExpectation<'a> {
-    lane: BenchmarkLane,
+    lane: super::model::BenchmarkLane,
     suite_id: &'a str,
     bundle_refs: &'a [&'a str],
     workload_refs: &'a [&'a str],
@@ -252,7 +247,7 @@ struct SuiteExpectation<'a> {
     max_samples: u32,
 }
 
-fn validate_suite(suite: &BenchmarkSuite, expected: SuiteExpectation<'_>, blockers: &mut Vec<String>) {
+fn validate_suite(suite: &super::model::BenchmarkSuite, expected: SuiteExpectation<'_>, blockers: &mut Vec<String>) {
     if suite.lane != expected.lane || suite.suite_id != expected.suite_id {
         blockers.push(format!("{} performance suite identity is stale", expected.lane.as_str()));
     }
@@ -263,8 +258,8 @@ fn validate_suite(suite: &BenchmarkSuite, expected: SuiteExpectation<'_>, blocke
     let expected_workloads = expected.workload_refs.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
     if suite.materialization_bundle_refs != expected_bundles
         || suite.workload_refs != expected_workloads
-        || suite.materialization_bundle_refs.iter().any(|value| !valid_content_ref(value))
-        || suite.workload_refs.iter().any(|value| !valid_content_ref(value))
+        || suite.materialization_bundle_refs.iter().any(|value| !super::model::valid_content_ref(value))
+        || suite.workload_refs.iter().any(|value| !super::model::valid_content_ref(value))
     {
         blockers
             .push(format!("{} performance suite fixture identities are stale or malformed", expected.lane.as_str()));
@@ -277,7 +272,7 @@ fn validate_suite(suite: &BenchmarkSuite, expected: SuiteExpectation<'_>, blocke
     {
         blockers.push(format!("{} performance suite environment identity is stale", expected.lane.as_str()));
     }
-    if suite.phases != PerformancePhase::ALL {
+    if suite.phases != super::model::PerformancePhase::ALL {
         blockers.push(format!("{} performance suite collapses or changes required phases", expected.lane.as_str()));
     }
     let expected_samples = suite.sampling.expected_samples_per_phase();

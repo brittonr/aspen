@@ -1,16 +1,6 @@
-use preserves::IOValue;
-use preserves::Value;
 use preserves::ValueImpl;
 
 use super::super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
 
 pub const CROSS_PROCESS_ENDPOINT_HANDOFF_SCHEMA: &str = "molten.fabric.transport.endpoint-handoff.v1";
 pub const CROSS_PROCESS_ENDPOINT_STATUS_SCHEMA: &str = "molten.fabric.transport.endpoint-status.v1";
@@ -49,14 +39,14 @@ pub struct CanonicalCrossProcessEndpoint {
     pub descriptor: CrossProcessEndpointDescriptor,
     pub descriptor_ref: String,
     pub handoff_ref: String,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanonicalEndpointStatus {
     pub status: EndpointStatusReadback,
     pub status_ref: String,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 // r[impl molten.fabric_transport.cross_process_endpoint]
@@ -64,9 +54,9 @@ pub fn canonical_cross_process_endpoint(
     profile: &TransportProfile,
     protocol: &ProtocolDescriptor,
     bindings: &EndpointDescriptorBindings,
-) -> Result<CanonicalCrossProcessEndpoint> {
+) -> crate::error::Result<CanonicalCrossProcessEndpoint> {
     let binding_value = endpoint_binding_value(profile, protocol, bindings);
-    let descriptor_ref = canonical_hash(&binding_value)?;
+    let descriptor_ref = crate::preserves_rail::canonical_hash(&binding_value)?;
     let descriptor = CrossProcessEndpointDescriptor {
         schema: CROSS_PROCESS_ENDPOINT_SCHEMA.to_string(),
         descriptor_ref: descriptor_ref.clone(),
@@ -92,7 +82,7 @@ pub fn canonical_cross_process_endpoint(
     validate_cross_process_endpoint(profile, protocol, &descriptor)
         .map_err(|issues| validation_error("canonical endpoint descriptor", &issues))?;
     let value = endpoint_descriptor_value(&descriptor_ref, binding_value);
-    let handoff_ref = canonical_hash(&value)?;
+    let handoff_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(CanonicalCrossProcessEndpoint {
         descriptor,
         descriptor_ref,
@@ -102,22 +92,24 @@ pub fn canonical_cross_process_endpoint(
 }
 
 // r[impl molten.fabric_transport.cross_process_endpoint]
-pub fn parse_canonical_cross_process_endpoint(value: &IOValue) -> Result<CanonicalCrossProcessEndpoint> {
+pub fn parse_canonical_cross_process_endpoint(
+    value: &preserves::IOValue,
+) -> crate::error::Result<CanonicalCrossProcessEndpoint> {
     let outer = simple_record(value, ENDPOINT_DESCRIPTOR_RECORD, ENDPOINT_DESCRIPTOR_FIELD_COUNT)?;
     let mut outer = outer.as_slice().iter();
     let schema = required_string(next_field(&mut outer, "endpoint handoff schema")?, "endpoint handoff schema")?;
     if schema != CROSS_PROCESS_ENDPOINT_HANDOFF_SCHEMA {
-        return Err(MoltenError::invalid_harness("cross-process endpoint handoff schema mismatch"));
+        return Err(crate::error::MoltenError::invalid_harness("cross-process endpoint handoff schema mismatch"));
     }
     let declared_descriptor_ref =
         required_ref(next_field(&mut outer, "endpoint descriptor ref")?, "endpoint descriptor ref")?;
     let binding_value = crate::preserves_rail::value_to_iovalue(next_field(&mut outer, "endpoint binding")?);
-    let actual_descriptor_ref = canonical_hash(&binding_value)?;
+    let actual_descriptor_ref = crate::preserves_rail::canonical_hash(&binding_value)?;
     if declared_descriptor_ref != actual_descriptor_ref {
-        return Err(MoltenError::invalid_harness("cross-process endpoint descriptor ref mismatch"));
+        return Err(crate::error::MoltenError::invalid_harness("cross-process endpoint descriptor ref mismatch"));
     }
     let descriptor = parse_endpoint_binding(&binding_value, &declared_descriptor_ref)?;
-    let handoff_ref = canonical_hash(value)?;
+    let handoff_ref = crate::preserves_rail::canonical_hash(value)?;
     Ok(CanonicalCrossProcessEndpoint {
         descriptor,
         descriptor_ref: declared_descriptor_ref,
@@ -127,19 +119,21 @@ pub fn parse_canonical_cross_process_endpoint(value: &IOValue) -> Result<Canonic
 }
 
 // r[impl molten.fabric_transport.cross_process_endpoint]
-pub fn canonical_endpoint_status(descriptor: &CrossProcessEndpointDescriptor) -> Result<CanonicalEndpointStatus> {
+pub fn canonical_endpoint_status(
+    descriptor: &CrossProcessEndpointDescriptor,
+) -> crate::error::Result<CanonicalEndpointStatus> {
     let status = endpoint_status_readback(descriptor);
-    let value = record(ENDPOINT_STATUS_RECORD, vec![
-        string(CROSS_PROCESS_ENDPOINT_STATUS_SCHEMA),
-        field("descriptor-ref", string(&status.descriptor_ref)),
-        field("public-endpoint-identity", string(&status.public_endpoint_identity)),
-        field("profile-id", string(&status.profile_id)),
-        field("protocol-id", string(&status.protocol_id)),
-        field("service-id", string(&status.service_id)),
-        field("generation", u64_value(status.generation)),
-        field("locator-cohort-ref", string(&status.locator_cohort_ref)),
+    let value = crate::preserves_rail::record(ENDPOINT_STATUS_RECORD, vec![
+        crate::preserves_rail::string(CROSS_PROCESS_ENDPOINT_STATUS_SCHEMA),
+        field("descriptor-ref", crate::preserves_rail::string(&status.descriptor_ref)),
+        field("public-endpoint-identity", crate::preserves_rail::string(&status.public_endpoint_identity)),
+        field("profile-id", crate::preserves_rail::string(&status.profile_id)),
+        field("protocol-id", crate::preserves_rail::string(&status.protocol_id)),
+        field("service-id", crate::preserves_rail::string(&status.service_id)),
+        field("generation", crate::preserves_rail::u64_value(status.generation)),
+        field("locator-cohort-ref", crate::preserves_rail::string(&status.locator_cohort_ref)),
         field("locator-classes", strings_value(status.locator_classes.iter().map(|class| class.as_str()))),
-        field("validity-cohort-ref", string(&status.validity_cohort_ref)),
+        field("validity-cohort-ref", crate::preserves_rail::string(&status.validity_cohort_ref)),
         field("non-claims", strings_value(status.non_claims.iter().map(|claim| claim.as_str()))),
         checks(&[
             "raw-locators-redacted",
@@ -148,7 +142,7 @@ pub fn canonical_endpoint_status(descriptor: &CrossProcessEndpointDescriptor) ->
             "connectivity-is-not-authority",
         ]),
     ]);
-    let status_ref = canonical_hash(&value)?;
+    let status_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(CanonicalEndpointStatus {
         status,
         status_ref,
@@ -160,41 +154,46 @@ fn endpoint_binding_value(
     profile: &TransportProfile,
     protocol: &ProtocolDescriptor,
     bindings: &EndpointDescriptorBindings,
-) -> IOValue {
-    record(ENDPOINT_BINDING_RECORD, vec![
-        string(CROSS_PROCESS_ENDPOINT_SCHEMA),
-        string(&profile.profile_id),
-        string(&profile.profile_ref),
-        string(&protocol.protocol_id),
-        string(&protocol.version),
-        string(&protocol.alpn),
-        string(&protocol.extension_id),
-        string(&protocol.service_id),
-        u64_value(protocol.generation),
-        string(&bindings.public_endpoint_identity),
-        string(&bindings.listener_identity_ref),
-        string(&bindings.expected_peer_context_ref),
-        string(&bindings.locator_cohort_ref),
-        sequence(
+) -> preserves::IOValue {
+    crate::preserves_rail::record(ENDPOINT_BINDING_RECORD, vec![
+        crate::preserves_rail::string(CROSS_PROCESS_ENDPOINT_SCHEMA),
+        crate::preserves_rail::string(&profile.profile_id),
+        crate::preserves_rail::string(&profile.profile_ref),
+        crate::preserves_rail::string(&protocol.protocol_id),
+        crate::preserves_rail::string(&protocol.version),
+        crate::preserves_rail::string(&protocol.alpn),
+        crate::preserves_rail::string(&protocol.extension_id),
+        crate::preserves_rail::string(&protocol.service_id),
+        crate::preserves_rail::u64_value(protocol.generation),
+        crate::preserves_rail::string(&bindings.public_endpoint_identity),
+        crate::preserves_rail::string(&bindings.listener_identity_ref),
+        crate::preserves_rail::string(&bindings.expected_peer_context_ref),
+        crate::preserves_rail::string(&bindings.locator_cohort_ref),
+        crate::preserves_rail::sequence(
             bindings
                 .locators
                 .iter()
-                .map(|locator| record(LOCATOR_RECORD, vec![string(locator.class.as_str()), string(&locator.value)]))
+                .map(|locator| {
+                    crate::preserves_rail::record(LOCATOR_RECORD, vec![
+                        crate::preserves_rail::string(locator.class.as_str()),
+                        crate::preserves_rail::string(&locator.value),
+                    ])
+                })
                 .collect(),
         ),
         strings_value(bindings.disclosure.explicit_handoff_classes.iter().map(|class| class.as_str())),
-        bool_value(bindings.disclosure.default_readback_redacted),
-        string(&protocol.framing.profile_ref),
-        record(RESOURCES_RECORD, vec![
-            u64_value(bindings.resources.max_sessions),
-            u64_value(bindings.resources.max_frame_bytes),
-            u64_value(bindings.resources.max_queued_bytes),
-            u64_value(bindings.resources.max_inflight_bytes),
+        crate::preserves_rail::bool_value(bindings.disclosure.default_readback_redacted),
+        crate::preserves_rail::string(&protocol.framing.profile_ref),
+        crate::preserves_rail::record(RESOURCES_RECORD, vec![
+            crate::preserves_rail::u64_value(bindings.resources.max_sessions),
+            crate::preserves_rail::u64_value(bindings.resources.max_frame_bytes),
+            crate::preserves_rail::u64_value(bindings.resources.max_queued_bytes),
+            crate::preserves_rail::u64_value(bindings.resources.max_inflight_bytes),
         ]),
-        record(VALIDITY_RECORD, vec![
-            string(&bindings.validity.cohort_ref),
-            u64_value(bindings.validity.not_before_tick),
-            u64_value(bindings.validity.expires_at_tick),
+        crate::preserves_rail::record(VALIDITY_RECORD, vec![
+            crate::preserves_rail::string(&bindings.validity.cohort_ref),
+            crate::preserves_rail::u64_value(bindings.validity.not_before_tick),
+            crate::preserves_rail::u64_value(bindings.validity.expires_at_tick),
         ]),
         strings_value(profile.non_claims.iter().map(|claim| claim.as_str())),
         checks(&[
@@ -206,10 +205,10 @@ fn endpoint_binding_value(
     ])
 }
 
-fn endpoint_descriptor_value(descriptor_ref: &str, binding_value: IOValue) -> IOValue {
-    record(ENDPOINT_DESCRIPTOR_RECORD, vec![
-        string(CROSS_PROCESS_ENDPOINT_HANDOFF_SCHEMA),
-        string(descriptor_ref),
+fn endpoint_descriptor_value(descriptor_ref: &str, binding_value: preserves::IOValue) -> preserves::IOValue {
+    crate::preserves_rail::record(ENDPOINT_DESCRIPTOR_RECORD, vec![
+        crate::preserves_rail::string(CROSS_PROCESS_ENDPOINT_HANDOFF_SCHEMA),
+        crate::preserves_rail::string(descriptor_ref),
         binding_value,
         checks(&[
             "binding-ref-recomputed-on-import",
@@ -219,7 +218,10 @@ fn endpoint_descriptor_value(descriptor_ref: &str, binding_value: IOValue) -> IO
     ])
 }
 
-fn parse_endpoint_binding(value: &IOValue, descriptor_ref: &str) -> Result<CrossProcessEndpointDescriptor> {
+fn parse_endpoint_binding(
+    value: &preserves::IOValue,
+    descriptor_ref: &str,
+) -> crate::error::Result<CrossProcessEndpointDescriptor> {
     let fields = simple_record(value, ENDPOINT_BINDING_RECORD, ENDPOINT_BINDING_FIELD_COUNT)?;
     let mut fields = fields.as_slice().iter();
     let schema = required_string(next_field(&mut fields, "endpoint schema")?, "endpoint schema")?;
@@ -272,12 +274,12 @@ fn parse_endpoint_binding(value: &IOValue, descriptor_ref: &str) -> Result<Cross
     })
 }
 
-fn parse_locators(value: &Value<IOValue>) -> Result<Vec<EndpointLocator>> {
-    let values = value
-        .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("cross-process endpoint locators must be a sequence"))?;
+fn parse_locators(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<Vec<EndpointLocator>> {
+    let values = value.collect_sequence().ok_or_else(|| {
+        crate::error::MoltenError::invalid_harness("cross-process endpoint locators must be a sequence")
+    })?;
     if values.len() > MAX_CANONICAL_LOCATORS {
-        return Err(MoltenError::invalid_harness("cross-process endpoint locator count exceeds bound"));
+        return Err(crate::error::MoltenError::invalid_harness("cross-process endpoint locator count exceeds bound"));
     }
     values
         .iter()
@@ -292,12 +294,14 @@ fn parse_locators(value: &Value<IOValue>) -> Result<Vec<EndpointLocator>> {
         .collect()
 }
 
-fn parse_locator_classes(value: &Value<IOValue>) -> Result<Vec<EndpointLocatorClass>> {
+fn parse_locator_classes(
+    value: &preserves::Value<preserves::IOValue>,
+) -> crate::error::Result<Vec<EndpointLocatorClass>> {
     let values = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("endpoint disclosure classes must be a sequence"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("endpoint disclosure classes must be a sequence"))?;
     if values.len() > MAX_CANONICAL_LOCATORS {
-        return Err(MoltenError::invalid_harness("endpoint disclosure class count exceeds bound"));
+        return Err(crate::error::MoltenError::invalid_harness("endpoint disclosure class count exceeds bound"));
     }
     values
         .iter()
@@ -305,17 +309,17 @@ fn parse_locator_classes(value: &Value<IOValue>) -> Result<Vec<EndpointLocatorCl
         .collect()
 }
 
-fn parse_locator_class(value: &str) -> Result<EndpointLocatorClass> {
+fn parse_locator_class(value: &str) -> crate::error::Result<EndpointLocatorClass> {
     match value {
         "ip" => Ok(EndpointLocatorClass::Ip),
         "relay" => Ok(EndpointLocatorClass::Relay),
         "custom" => Ok(EndpointLocatorClass::Custom),
         "private" => Ok(EndpointLocatorClass::Private),
-        other => Err(MoltenError::invalid_harness(format!("unsupported endpoint locator class {other}"))),
+        other => Err(crate::error::MoltenError::invalid_harness(format!("unsupported endpoint locator class {other}"))),
     }
 }
 
-fn parse_resources(value: &Value<IOValue>) -> Result<EndpointResourceBounds> {
+fn parse_resources(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<EndpointResourceBounds> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = simple_record(&value, RESOURCES_RECORD, RESOURCE_FIELD_COUNT)?;
     Ok(EndpointResourceBounds {
@@ -326,7 +330,7 @@ fn parse_resources(value: &Value<IOValue>) -> Result<EndpointResourceBounds> {
     })
 }
 
-fn parse_validity(value: &Value<IOValue>) -> Result<EndpointValidityCohort> {
+fn parse_validity(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<EndpointValidityCohort> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = simple_record(&value, VALIDITY_RECORD, VALIDITY_FIELD_COUNT)?;
     Ok(EndpointValidityCohort {
@@ -336,75 +340,81 @@ fn parse_validity(value: &Value<IOValue>) -> Result<EndpointValidityCohort> {
     })
 }
 
-fn parse_non_claims(value: &Value<IOValue>) -> Result<Vec<TransportNonClaim>> {
+fn parse_non_claims(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<Vec<TransportNonClaim>> {
     let values = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("endpoint non-claims must be a sequence"))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("endpoint non-claims must be a sequence"))?;
     values
         .iter()
         .map(|value| parse_non_claim(&required_string(&value, "endpoint non-claim")?))
         .collect()
 }
 
-fn parse_non_claim(value: &str) -> Result<TransportNonClaim> {
+fn parse_non_claim(value: &str) -> crate::error::Result<TransportNonClaim> {
     REQUIRED_TRANSPORT_NON_CLAIMS
         .into_iter()
         .find(|claim| claim.as_str() == value)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("unsupported endpoint non-claim {value}")))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("unsupported endpoint non-claim {value}")))
 }
 
-fn field(name: &str, value: IOValue) -> IOValue {
-    record("field", vec![string(name), value])
+fn field(name: &str, value: preserves::IOValue) -> preserves::IOValue {
+    crate::preserves_rail::record("field", vec![crate::preserves_rail::string(name), value])
 }
 
-fn strings_value<'a>(values: impl Iterator<Item = &'a str>) -> IOValue {
-    sequence(values.map(string).collect())
+fn strings_value<'a>(values: impl Iterator<Item = &'a str>) -> preserves::IOValue {
+    crate::preserves_rail::sequence(values.map(crate::preserves_rail::string).collect())
 }
 
-fn checks(values: &[&str]) -> IOValue {
-    record(CHECKS_RECORD, vec![strings_value(values.iter().copied())])
+fn checks(values: &[&str]) -> preserves::IOValue {
+    crate::preserves_rail::record(CHECKS_RECORD, vec![strings_value(values.iter().copied())])
 }
 
-fn simple_record(value: &IOValue, label: &str, field_count: usize) -> Result<Vec<Value<IOValue>>> {
+fn simple_record(
+    value: &preserves::IOValue,
+    label: &str,
+    field_count: usize,
+) -> crate::error::Result<Vec<preserves::Value<preserves::IOValue>>> {
     let fields = value
         .collect_simple_record(label, Some(field_count))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
     Ok(fields.iter().collect())
 }
 
 fn next_field<'a, 'b>(
-    fields: &mut impl Iterator<Item = &'a Value<IOValue>>,
+    fields: &mut impl Iterator<Item = &'a preserves::Value<preserves::IOValue>>,
     label: &'b str,
-) -> Result<&'a Value<IOValue>> {
+) -> crate::error::Result<&'a preserves::Value<preserves::IOValue>> {
     fields
         .next()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("cross-process endpoint missing {label}")))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("cross-process endpoint missing {label}")))
 }
 
-fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn required_string(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected string for {label}")))
 }
 
-fn required_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn required_ref(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<String> {
     let value = required_string(value, label)?;
     crate::preserves_rail::validate_content_ref(&value)?;
     Ok(value)
 }
 
-fn required_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn required_u64(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
-fn required_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
-    value.as_boolean().ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
+fn required_bool(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<bool> {
+    value
+        .as_boolean()
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected bool for {label}")))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
 }

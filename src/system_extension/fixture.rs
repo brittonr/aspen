@@ -1,44 +1,5 @@
-use preserves::IOValue;
-
-use super::CallbackKind;
-use super::CallbackOutcome;
-use super::CanonicalEffectCompletion;
-use super::CanonicalOperatorStatus;
-use super::EffectTarget;
-use super::ExecutableConformanceInput;
-use super::ExecutionProfile;
 use super::FabricEffectPort;
-use super::HealthState;
-use super::HostDispatchResult;
-use super::HostEvidence;
-use super::LifecyclePhase;
-use super::OverloadPolicy;
-use super::PortEffectOutput;
-use super::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS;
-use super::ResourceEnvelope;
-use super::SYSTEM_EXTENSION_MANIFEST_SCHEMA;
 use super::SystemExtensionExecutor;
-use super::SystemExtensionHost;
-use super::SystemExtensionManifestInput;
-use super::TypedEffectRequest;
-use super::canonical_admit_system_extension_manifest;
-use super::validate_executable_conformance;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::fabric::DeterminismClass;
-use crate::fabric::ExtensionTier;
-use crate::fabric::ExtensionTierRequest;
-use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
-use crate::fabric::FabricAuthority;
-use crate::fabric::FabricPortClass;
-use crate::fabric::FabricPortDescriptor;
-use crate::fabric::FabricPortKey;
-use crate::fabric::FabricPortRequirement;
-use crate::fabric::FabricResource;
-use crate::fabric::REQUIRED_FABRIC_NON_CLAIMS;
-use crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE;
-use crate::fabric::ReplayClass;
-use crate::fabric::canonical_extension_tier_admission;
 
 const HASH_A: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HASH_B: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -88,17 +49,17 @@ const WASM_PROBE_SOURCE: &str = r#"
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutableSystemExtensionFixtureRun {
-    pub profile: ExecutionProfile,
+    pub profile: super::ExecutionProfile,
     pub manifest_ref: String,
-    pub manifest_value: IOValue,
-    pub evidence: Vec<HostEvidence>,
-    pub conformance: ExecutableConformanceInput,
-    pub first_request_effects: Vec<TypedEffectRequest>,
-    pub first_effect_completions: Vec<CanonicalEffectCompletion>,
-    pub upgraded_status: CanonicalOperatorStatus,
-    pub rolled_back_status: CanonicalOperatorStatus,
-    pub recovered_status: CanonicalOperatorStatus,
-    pub final_status: CanonicalOperatorStatus,
+    pub manifest_value: preserves::IOValue,
+    pub evidence: Vec<super::HostEvidence>,
+    pub conformance: super::ExecutableConformanceInput,
+    pub first_request_effects: Vec<super::TypedEffectRequest>,
+    pub first_effect_completions: Vec<super::CanonicalEffectCompletion>,
+    pub upgraded_status: super::CanonicalOperatorStatus,
+    pub rolled_back_status: super::CanonicalOperatorStatus,
+    pub recovered_status: super::CanonicalOperatorStatus,
+    pub final_status: super::CanonicalOperatorStatus,
 }
 
 struct WasmProbe {
@@ -107,14 +68,16 @@ struct WasmProbe {
 }
 
 impl WasmProbe {
-    fn new() -> Result<Self> {
+    fn new() -> crate::error::Result<Self> {
         let mut config = wasmtime::Config::new();
         config.consume_fuel(true);
         let engine = wasmtime::Engine::new(&config).map_err(|error| {
-            MoltenError::invalid_harness(format!("sandboxed fixture engine initialization failed: {error}"))
+            crate::error::MoltenError::invalid_harness(format!(
+                "sandboxed fixture engine initialization failed: {error}"
+            ))
         })?;
         let module = wasmtime::Module::new(&engine, WASM_PROBE_SOURCE).map_err(|error| {
-            MoltenError::invalid_harness(format!("sandboxed fixture module compilation failed: {error}"))
+            crate::error::MoltenError::invalid_harness(format!("sandboxed fixture module compilation failed: {error}"))
         })?;
         Ok(Self { engine, module })
     }
@@ -149,8 +112,8 @@ impl FabricEffectPort for FixtureTransportPort {
     fn route(
         &mut self,
         binding: &crate::fabric::CanonicalFabricPortBinding,
-        effect: &TypedEffectRequest,
-    ) -> crate::fabric::FabricPortResult<PortEffectOutput> {
+        effect: &super::TypedEffectRequest,
+    ) -> crate::fabric::FabricPortResult<super::PortEffectOutput> {
         if binding.binding.key.port_id != PORT_ID
             || binding.binding.key.version != PORT_VERSION
             || effect.operation != PORT_OPERATION
@@ -161,7 +124,7 @@ impl FabricEffectPort for FixtureTransportPort {
             .routed
             .checked_add(1)
             .ok_or_else(|| crate::fabric::FabricPortError::malformed("fixture route counter overflow"))?;
-        Ok(PortEffectOutput {
+        Ok(super::PortEffectOutput {
             output_schema_ref: OUTPUT_SCHEMA.to_string(),
             output_ref: HASH_C.to_string(),
             materialized_output: None,
@@ -170,14 +133,14 @@ impl FabricEffectPort for FixtureTransportPort {
 }
 
 struct EchoExecutor {
-    profile: ExecutionProfile,
+    profile: super::ExecutionProfile,
     request_count: u64,
     wasm_probe: Option<WasmProbe>,
 }
 
 impl EchoExecutor {
-    fn new(profile: ExecutionProfile) -> Result<Self> {
-        let wasm_probe = if profile == ExecutionProfile::SandboxedComponent {
+    fn new(profile: super::ExecutionProfile) -> crate::error::Result<Self> {
+        let wasm_probe = if profile == super::ExecutionProfile::SandboxedComponent {
             Some(WasmProbe::new()?)
         } else {
             None
@@ -191,24 +154,27 @@ impl EchoExecutor {
 }
 
 impl SystemExtensionExecutor for EchoExecutor {
-    fn execution_profile(&self) -> ExecutionProfile {
+    fn execution_profile(&self) -> super::ExecutionProfile {
         self.profile
     }
 
-    fn invoke(&mut self, invocation: &super::CallbackInvocation) -> std::result::Result<CallbackOutcome, String> {
+    fn invoke(
+        &mut self,
+        invocation: &super::CallbackInvocation,
+    ) -> std::result::Result<super::CallbackOutcome, String> {
         if let Some(wasm_probe) = &self.wasm_probe {
             wasm_probe.invoke(invocation.sequence)?;
         }
-        if invocation.callback == CallbackKind::Request {
+        if invocation.callback == super::CallbackKind::Request {
             self.request_count =
                 self.request_count.checked_add(1).ok_or_else(|| "fixture request counter overflow".to_string())?;
             if self.request_count == FAILING_REQUEST_NUMBER {
                 return Err("fixture retryable callback failure".to_string());
             }
         }
-        let effects = if invocation.callback == CallbackKind::Request {
-            vec![TypedEffectRequest {
-                target: EffectTarget::FabricPort(FabricPortKey {
+        let effects = if invocation.callback == super::CallbackKind::Request {
+            vec![super::TypedEffectRequest {
+                target: super::EffectTarget::FabricPort(crate::fabric::FabricPortKey {
                     port_id: PORT_ID.to_string(),
                     version: PORT_VERSION.to_string(),
                 }),
@@ -222,17 +188,17 @@ impl SystemExtensionExecutor for EchoExecutor {
         } else {
             Vec::new()
         };
-        let checkpoint_ref = if invocation.callback == CallbackKind::Checkpoint {
+        let checkpoint_ref = if invocation.callback == super::CallbackKind::Checkpoint {
             Some(HASH_E.to_string())
         } else {
             None
         };
-        Ok(CallbackOutcome {
+        Ok(super::CallbackOutcome {
             output_refs: vec![HASH_A.to_string()],
             effects,
             state_ref: Some(HASH_B.to_string()),
             checkpoint_ref,
-            health: HealthState::Healthy,
+            health: super::HealthState::Healthy,
         })
     }
 }
@@ -240,60 +206,62 @@ impl SystemExtensionExecutor for EchoExecutor {
 // r[impl molten.system_extension.callbacks]
 // r[impl molten.system_extension.final_validation]
 pub fn run_executable_system_extension_fixture(
-    profile: ExecutionProfile,
-) -> Result<ExecutableSystemExtensionFixtureRun> {
-    if profile == ExecutionProfile::NativeProcess {
-        return Err(MoltenError::invalid_harness(
+    profile: super::ExecutionProfile,
+) -> crate::error::Result<ExecutableSystemExtensionFixtureRun> {
+    if profile == super::ExecutionProfile::NativeProcess {
+        return Err(crate::error::MoltenError::invalid_harness(
             "the deterministic fixture admits in-process-native or sandboxed-component profiles only",
         ));
     }
-    let tier = canonical_extension_tier_admission(&ExtensionTierRequest {
-        tier: ExtensionTier::SystemExtension,
+    let tier = crate::fabric::canonical_extension_tier_admission(&crate::fabric::ExtensionTierRequest {
+        tier: crate::fabric::ExtensionTier::SystemExtension,
         requested_authorities: vec![
-            FabricAuthority::Transport,
-            FabricAuthority::Resources,
-            FabricAuthority::Supervision,
-            FabricAuthority::Evidence,
+            crate::fabric::FabricAuthority::Transport,
+            crate::fabric::FabricAuthority::Resources,
+            crate::fabric::FabricAuthority::Supervision,
+            crate::fabric::FabricAuthority::Evidence,
         ],
-        admission_evidence: REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
+        admission_evidence: crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
     })?;
     let descriptors = [port_descriptor()];
     let admitted =
-        canonical_admit_system_extension_manifest(&manifest_input(profile), &descriptors, &tier, &[profile])?;
+        super::canonical_admit_system_extension_manifest(&manifest_input(profile), &descriptors, &tier, &[profile])?;
     let mut upgrade_input = manifest_input(profile);
     upgrade_input.implementation_ref = HASH_B.to_string();
     upgrade_input.state_schema = UPGRADED_STATE_SCHEMA.to_string();
     upgrade_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
-    let upgrade_manifest = canonical_admit_system_extension_manifest(&upgrade_input, &descriptors, &tier, &[profile])?;
+    let upgrade_manifest =
+        super::canonical_admit_system_extension_manifest(&upgrade_input, &descriptors, &tier, &[profile])?;
     let mut rollback_input = manifest_input(profile);
     rollback_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
     let rollback_manifest =
-        canonical_admit_system_extension_manifest(&rollback_input, &descriptors, &tier, &[profile])?;
+        super::canonical_admit_system_extension_manifest(&rollback_input, &descriptors, &tier, &[profile])?;
     let manifest_ref = admitted.manifest_ref().to_string();
     let manifest_value = admitted.value().clone();
-    let mut host = SystemExtensionHost::new(admitted, EchoExecutor::new(profile)?)?;
+    let mut host = super::SystemExtensionHost::new(admitted, EchoExecutor::new(profile)?)?;
 
     host.activate(START_TICK)?;
     host.health(HEALTH_TICK)?.require_executed("health")?;
     let (first_request_receipt, first_request_effects) =
         match host.dispatch_request(HASH_C, REQUEST_BYTES, REQUEST_TICK)? {
-            HostDispatchResult::Executed {
+            super::HostDispatchResult::Executed {
                 receipt,
                 approved_effects,
                 ..
             } => (receipt, approved_effects),
             other => {
-                return Err(MoltenError::invalid_harness(format!("fixture first request did not execute: {other:?}")));
+                return Err(crate::error::MoltenError::invalid_harness(format!(
+                    "fixture first request did not execute: {other:?}"
+                )));
             }
         };
     let mut transport_port = FixtureTransportPort::default();
     let first_effect_completions = host.route_approved_effects(&first_request_receipt, &mut transport_port)?;
     host.checkpoint(CHECKPOINT_TICK)?;
-    let checkpoint_ref = host
-        .state()
-        .checkpoint_ref
-        .clone()
-        .ok_or_else(|| MoltenError::invalid_harness("fixture checkpoint ref missing after checkpoint"))?;
+    let checkpoint_ref =
+        host.state().checkpoint_ref.clone().ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness("fixture checkpoint ref missing after checkpoint")
+        })?;
     let upgraded_status =
         host.upgrade(upgrade_manifest, EchoExecutor::new(profile)?, &checkpoint_ref, UPGRADE_TICK)?.status;
     let rolled_back_status = host
@@ -302,18 +270,20 @@ pub fn run_executable_system_extension_fixture(
     host.dispatch_request(HASH_C, REQUEST_BYTES, POST_ROLLBACK_REQUEST_TICK)?
         .require_executed("post-rollback request")?;
     match host.dispatch_request(HASH_C, REQUEST_BYTES, FAILURE_TICK)? {
-        HostDispatchResult::Failed { .. } => {}
+        super::HostDispatchResult::Failed { .. } => {}
         other => {
-            return Err(MoltenError::invalid_harness(format!("fixture retryable request did not fail: {other:?}")));
+            return Err(crate::error::MoltenError::invalid_harness(format!(
+                "fixture retryable request did not fail: {other:?}"
+            )));
         }
     }
-    if host.state().phase != LifecyclePhase::Failed {
-        return Err(MoltenError::invalid_harness("fixture retryable failure did not enter failed phase"));
+    if host.state().phase != super::LifecyclePhase::Failed {
+        return Err(crate::error::MoltenError::invalid_harness("fixture retryable failure did not enter failed phase"));
     }
     host.restart(RECOVERY_TICK)?;
     let recovered_status = host.operator_status()?;
-    if recovered_status.status.phase != LifecyclePhase::Running {
-        return Err(MoltenError::invalid_harness("fixture recovery did not return to running phase"));
+    if recovered_status.status.phase != super::LifecyclePhase::Running {
+        return Err(crate::error::MoltenError::invalid_harness("fixture recovery did not return to running phase"));
     }
     host.dispatch_request(HASH_C, REQUEST_BYTES, POST_RECOVERY_TICK)?
         .require_executed("post-recovery request")?;
@@ -322,19 +292,21 @@ pub fn run_executable_system_extension_fixture(
     let final_status = host.operator_status()?;
 
     let required_callbacks = vec![
-        CallbackKind::Initialize,
-        CallbackKind::Start,
-        CallbackKind::Request,
-        CallbackKind::Health,
-        CallbackKind::Checkpoint,
-        CallbackKind::Recover,
-        CallbackKind::Drain,
-        CallbackKind::Shutdown,
+        super::CallbackKind::Initialize,
+        super::CallbackKind::Start,
+        super::CallbackKind::Request,
+        super::CallbackKind::Health,
+        super::CallbackKind::Checkpoint,
+        super::CallbackKind::Recover,
+        super::CallbackKind::Drain,
+        super::CallbackKind::Shutdown,
     ];
     let conformance = host.executable_conformance_input(required_callbacks);
-    let issues = validate_executable_conformance(&conformance);
+    let issues = super::validate_executable_conformance(&conformance);
     if !issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("executable fixture conformance denied: {issues:?}")));
+        return Err(crate::error::MoltenError::invalid_harness(format!(
+            "executable fixture conformance denied: {issues:?}"
+        )));
     }
 
     Ok(ExecutableSystemExtensionFixtureRun {
@@ -352,9 +324,9 @@ pub fn run_executable_system_extension_fixture(
     })
 }
 
-fn manifest_input(profile: ExecutionProfile) -> SystemExtensionManifestInput {
-    SystemExtensionManifestInput {
-        schema: SYSTEM_EXTENSION_MANIFEST_SCHEMA.to_string(),
+fn manifest_input(profile: super::ExecutionProfile) -> super::SystemExtensionManifestInput {
+    super::SystemExtensionManifestInput {
+        schema: super::SYSTEM_EXTENSION_MANIFEST_SCHEMA.to_string(),
         extension_id: EXTENSION_ID.to_string(),
         service_id: SERVICE_ID.to_string(),
         implementation_ref: HASH_A.to_string(),
@@ -373,7 +345,7 @@ fn manifest_input(profile: ExecutionProfile) -> SystemExtensionManifestInput {
         capability_refs: vec![HASH_B.to_string()],
         policy_refs: vec![HASH_C.to_string()],
         provenance_refs: vec![HASH_D.to_string()],
-        resources: ResourceEnvelope {
+        resources: super::ResourceEnvelope {
             max_concurrent_callbacks: MAX_CONCURRENT_CALLBACKS,
             max_queued_events: MAX_QUEUED_EVENTS,
             max_inflight_bytes: MAX_INFLIGHT_BYTES,
@@ -383,49 +355,55 @@ fn manifest_input(profile: ExecutionProfile) -> SystemExtensionManifestInput {
             callback_deadline_ticks: CALLBACK_DEADLINE_TICKS,
             shutdown_grace_ticks: SHUTDOWN_GRACE_TICKS,
             max_restart_attempts: MAX_RESTART_ATTEMPTS,
-            overload_policy: OverloadPolicy::UpstreamBackpressure,
+            overload_policy: super::OverloadPolicy::UpstreamBackpressure,
         },
         execution_profile: profile,
         state_schema: STATE_SCHEMA.to_string(),
         compatible_state_schemas: vec![STATE_SCHEMA.to_string()],
         evidence_profile_ref: HASH_E.to_string(),
         initial_generation: INITIAL_GENERATION,
-        non_claims: REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
+        non_claims: super::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS.to_vec(),
     }
 }
 
-fn port_descriptor() -> FabricPortDescriptor {
-    FabricPortDescriptor {
-        schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+fn port_descriptor() -> crate::fabric::FabricPortDescriptor {
+    crate::fabric::FabricPortDescriptor {
+        schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
         port_id: PORT_ID.to_string(),
         version: PORT_VERSION.to_string(),
-        class: FabricPortClass::Transport,
+        class: crate::fabric::FabricPortClass::Transport,
         operation_classes: vec![PORT_OPERATION.to_string()],
         input_schema_refs: vec![INPUT_SCHEMA.to_string()],
         output_schema_refs: vec![OUTPUT_SCHEMA.to_string()],
-        authority_requirements: vec![FabricAuthority::Transport],
-        resource_requirements: vec![FabricResource::Concurrency, FabricResource::NetworkBytes],
-        determinism: DeterminismClass::ExternalEffect,
-        replay: ReplayClass::RecordedEffectRequired,
+        authority_requirements: vec![crate::fabric::FabricAuthority::Transport],
+        resource_requirements: vec![
+            crate::fabric::FabricResource::Concurrency,
+            crate::fabric::FabricResource::NetworkBytes,
+        ],
+        determinism: crate::fabric::DeterminismClass::ExternalEffect,
+        replay: crate::fabric::ReplayClass::RecordedEffectRequired,
         implementation_profile: PORT_PROFILE.to_string(),
         conformance_refs: vec![HASH_A.to_string()],
-        non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+        non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
         enabled: true,
     }
 }
 
-fn port_requirement() -> FabricPortRequirement {
-    FabricPortRequirement {
+fn port_requirement() -> crate::fabric::FabricPortRequirement {
+    crate::fabric::FabricPortRequirement {
         port_id: PORT_ID.to_string(),
         version: PORT_VERSION.to_string(),
-        class: FabricPortClass::Transport,
+        class: crate::fabric::FabricPortClass::Transport,
         operation_classes: vec![PORT_OPERATION.to_string()],
         input_schema_refs: vec![INPUT_SCHEMA.to_string()],
         output_schema_refs: vec![OUTPUT_SCHEMA.to_string()],
-        allowed_authorities: vec![FabricAuthority::Transport],
-        available_resources: vec![FabricResource::Concurrency, FabricResource::NetworkBytes],
-        expected_determinism: DeterminismClass::ExternalEffect,
-        expected_replay: ReplayClass::RecordedEffectRequired,
+        allowed_authorities: vec![crate::fabric::FabricAuthority::Transport],
+        available_resources: vec![
+            crate::fabric::FabricResource::Concurrency,
+            crate::fabric::FabricResource::NetworkBytes,
+        ],
+        expected_determinism: crate::fabric::DeterminismClass::ExternalEffect,
+        expected_replay: crate::fabric::ReplayClass::RecordedEffectRequired,
         expected_profile: PORT_PROFILE.to_string(),
     }
 }
@@ -437,29 +415,32 @@ mod tests {
     // r[verify molten.system_extension.lifecycle]
     #[test]
     fn stale_checkpoint_denies_upgrade_before_generation_or_evidence_changes() {
-        let profile = ExecutionProfile::InProcessNative;
-        let tier = canonical_extension_tier_admission(&ExtensionTierRequest {
-            tier: ExtensionTier::SystemExtension,
+        let profile = super::super::ExecutionProfile::InProcessNative;
+        let tier = crate::fabric::canonical_extension_tier_admission(&crate::fabric::ExtensionTierRequest {
+            tier: crate::fabric::ExtensionTier::SystemExtension,
             requested_authorities: vec![
-                FabricAuthority::Transport,
-                FabricAuthority::Resources,
-                FabricAuthority::Supervision,
-                FabricAuthority::Evidence,
+                crate::fabric::FabricAuthority::Transport,
+                crate::fabric::FabricAuthority::Resources,
+                crate::fabric::FabricAuthority::Supervision,
+                crate::fabric::FabricAuthority::Evidence,
             ],
-            admission_evidence: REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
+            admission_evidence: crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
         })
         .expect("tier admission");
         let descriptors = [port_descriptor()];
         let admitted =
-            canonical_admit_system_extension_manifest(&manifest_input(profile), &descriptors, &tier, &[profile])
-                .expect("initial manifest");
+            super::super::canonical_admit_system_extension_manifest(&manifest_input(profile), &descriptors, &tier, &[
+                profile,
+            ])
+            .expect("initial manifest");
         let mut upgrade_input = manifest_input(profile);
         upgrade_input.state_schema = UPGRADED_STATE_SCHEMA.to_string();
         upgrade_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
-        let upgrade = canonical_admit_system_extension_manifest(&upgrade_input, &descriptors, &tier, &[profile])
-            .expect("upgrade manifest");
-        let mut host =
-            SystemExtensionHost::new(admitted, EchoExecutor::new(profile).expect("executor")).expect("extension host");
+        let upgrade =
+            super::super::canonical_admit_system_extension_manifest(&upgrade_input, &descriptors, &tier, &[profile])
+                .expect("upgrade manifest");
+        let mut host = super::super::SystemExtensionHost::new(admitted, EchoExecutor::new(profile).expect("executor"))
+            .expect("extension host");
         host.activate(START_TICK).expect("activation");
         host.checkpoint(CHECKPOINT_TICK).expect("checkpoint");
         let before_state = host.state().clone();

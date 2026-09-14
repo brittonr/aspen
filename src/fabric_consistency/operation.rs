@@ -1,9 +1,3 @@
-use preserves::IOValue;
-
-use super::ConsistencyGroupLifecycle;
-use super::ConsistencyReadMode;
-use crate::error::Result;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GroupOpenMode {
     Create,
@@ -79,7 +73,7 @@ pub enum ConsistencyOperation {
     },
     Read {
         query_ref: String,
-        mode: ConsistencyReadMode,
+        mode: super::ConsistencyReadMode,
     },
     Snapshot {
         snapshot_policy_ref: String,
@@ -159,10 +153,10 @@ pub struct ConsistencyPortPlan {
     pub binding_ref: String,
     pub operation: ConsistencyOperation,
     pub decision: ConsistencyPlanDecision,
-    pub lifecycle_before: ConsistencyGroupLifecycle,
-    pub lifecycle_after: ConsistencyGroupLifecycle,
+    pub lifecycle_before: super::ConsistencyGroupLifecycle,
+    pub lifecycle_after: super::ConsistencyGroupLifecycle,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
 }
 
 impl ConsistencyPortPlan {
@@ -174,6 +168,6 @@ impl ConsistencyPortPlan {
 pub fn plan_consistency_operation(
     binding: &super::ConsistencyGroupBinding,
     input: ConsistencyPortCommandInput,
-) -> Result<ConsistencyPortPlan> {
+) -> crate::error::Result<ConsistencyPortPlan> {
     super::planner::plan_consistency_operation(binding, input)
 }

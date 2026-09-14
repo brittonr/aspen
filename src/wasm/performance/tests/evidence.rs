@@ -1,28 +1,29 @@
 use super::super::*;
-use super::support::BASELINE_SAMPLE_COUNTS;
-use super::support::MODERATE_IMPROVEMENT_SAMPLE_COUNTS;
-use super::support::fixture_bytes_ref;
-use super::support::fixture_component_bytes;
-use super::support::fixture_materialized;
-use super::support::fixture_optimization;
-use super::support::fixture_ref;
-use super::support::fixture_run;
 
 #[test]
 fn recorded_only_receipts_bind_runs_comparisons_and_external_evidence() {
     // r[verify molten.wasm_performance.evidence]
     let profile = supported_performance_profile().expect("supported performance profile");
-    let bytes = fixture_component_bytes();
-    let (suite, bundle, materialized) =
-        fixture_materialized(&profile, PerformanceArtifactKind::PortableComponent, &bytes, fixture_bytes_ref(&bytes));
-    let baseline = fixture_run(&profile, &suite, &materialized, BASELINE_SAMPLE_COUNTS);
-    let candidate = fixture_run(&profile, &suite, &materialized, MODERATE_IMPROVEMENT_SAMPLE_COUNTS);
+    let bytes = super::support::fixture_component_bytes();
+    let (suite, bundle, materialized) = super::support::fixture_materialized(
+        &profile,
+        PerformanceArtifactKind::PortableComponent,
+        &bytes,
+        super::support::fixture_bytes_ref(&bytes),
+    );
+    let baseline = super::support::fixture_run(&profile, &suite, &materialized, super::support::BASELINE_SAMPLE_COUNTS);
+    let candidate = super::support::fixture_run(
+        &profile,
+        &suite,
+        &materialized,
+        super::support::MODERATE_IMPROVEMENT_SAMPLE_COUNTS,
+    );
     let ComparisonDecision::Comparable(comparison) =
         compare_benchmark_runs(&profile, &baseline, &candidate).expect("performance comparison")
     else {
         panic!("fixture runs must be comparable");
     };
-    let optimization = fixture_optimization();
+    let optimization = super::support::fixture_optimization();
     let input = PerformanceReceiptInput {
         run: candidate,
         comparison_peer_run: Some(baseline),
@@ -58,11 +59,15 @@ fn self_consistent_stale_overclaiming_and_incomplete_receipts_fail_contextual_va
     // r[verify molten.wasm_performance.evidence]
     // r[verify molten.wasm_performance.validation]
     let profile = supported_performance_profile().expect("supported performance profile");
-    let bytes = fixture_component_bytes();
-    let (suite, bundle, materialized) =
-        fixture_materialized(&profile, PerformanceArtifactKind::PortableComponent, &bytes, fixture_bytes_ref(&bytes));
-    let run = fixture_run(&profile, &suite, &materialized, BASELINE_SAMPLE_COUNTS);
-    let optimization = fixture_optimization();
+    let bytes = super::support::fixture_component_bytes();
+    let (suite, bundle, materialized) = super::support::fixture_materialized(
+        &profile,
+        PerformanceArtifactKind::PortableComponent,
+        &bytes,
+        super::support::fixture_bytes_ref(&bytes),
+    );
+    let run = super::support::fixture_run(&profile, &suite, &materialized, super::support::BASELINE_SAMPLE_COUNTS);
+    let optimization = super::support::fixture_optimization();
     let input = PerformanceReceiptInput {
         run,
         comparison_peer_run: None,
@@ -75,7 +80,7 @@ fn self_consistent_stale_overclaiming_and_incomplete_receipts_fail_contextual_va
     let receipt = build_performance_receipt(input.clone()).expect("performance receipt");
 
     let mut stale_input = input.clone();
-    stale_input.run.host_class_ref = fixture_ref("other-host-class");
+    stale_input.run.host_class_ref = super::support::fixture_ref("other-host-class");
     stale_input.run.run_ref = benchmark_run_ref(&stale_input.run);
     let stale = build_performance_receipt(stale_input).expect("self-consistent stale receipt");
     assert!(validate_performance_receipt_against(&stale, &input).is_err());

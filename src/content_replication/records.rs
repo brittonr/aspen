@@ -1,20 +1,17 @@
 use molten_core::content_replication::*;
-use preserves::IOValue;
 
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 const RECORD_IDENTITY_CONTEXT: &str = "onixresearch.molten.content-replication.record.v1";
 
 #[derive(Debug, Clone)]
 pub struct CanonicalReplicationRecord {
     pub record_ref: String,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
     pub bytes: Vec<u8>,
 }
 
-pub fn canonical_manifest(manifest: &Manifest) -> Result<CanonicalReplicationRecord> {
+pub fn canonical_manifest(manifest: &Manifest) -> crate::error::Result<CanonicalReplicationRecord> {
     canonical(
         "manifest",
         record("content-replication-manifest-v1", vec![
@@ -38,7 +35,7 @@ pub fn canonical_manifest(manifest: &Manifest) -> Result<CanonicalReplicationRec
     )
 }
 
-pub fn canonical_plan(plan: &Plan) -> Result<CanonicalReplicationRecord> {
+pub fn canonical_plan(plan: &Plan) -> crate::error::Result<CanonicalReplicationRecord> {
     canonical(
         "plan",
         record("content-replication-plan-v1", vec![
@@ -60,7 +57,7 @@ pub fn canonical_plan(plan: &Plan) -> Result<CanonicalReplicationRecord> {
     )
 }
 
-pub fn canonical_operation(operation: &PriorOperation) -> Result<CanonicalReplicationRecord> {
+pub fn canonical_operation(operation: &PriorOperation) -> crate::error::Result<CanonicalReplicationRecord> {
     canonical(
         "operation",
         record("content-replication-operation-v1", vec![
@@ -79,7 +76,7 @@ pub fn canonical_operation(operation: &PriorOperation) -> Result<CanonicalReplic
     )
 }
 
-pub fn canonical_status(status: &Status) -> Result<CanonicalReplicationRecord> {
+pub fn canonical_status(status: &Status) -> crate::error::Result<CanonicalReplicationRecord> {
     canonical(
         "status",
         record("content-replication-status-v1", vec![
@@ -97,7 +94,7 @@ pub fn canonical_status(status: &Status) -> Result<CanonicalReplicationRecord> {
     )
 }
 
-pub fn canonical_operator_status(view: &OperatorStatusView) -> Result<CanonicalReplicationRecord> {
+pub fn canonical_operator_status(view: &OperatorStatusView) -> crate::error::Result<CanonicalReplicationRecord> {
     canonical(
         "operator-status",
         record("content-replication-operator-status-v1", vec![
@@ -118,10 +115,12 @@ pub fn canonical_operator_status(view: &OperatorStatusView) -> Result<CanonicalR
     )
 }
 
-pub fn canonical_receipt(receipt: &ExecutionReceipt) -> Result<CanonicalReplicationRecord> {
+pub fn canonical_receipt(receipt: &ExecutionReceipt) -> crate::error::Result<CanonicalReplicationRecord> {
     let expected = NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
     if receipt.non_claims != expected {
-        return Err(MoltenError::invalid_harness("content-replication receipt non-claims are incomplete"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "content-replication receipt non-claims are incomplete",
+        ));
     }
     canonical(
         "receipt",
@@ -142,7 +141,7 @@ pub fn canonical_receipt(receipt: &ExecutionReceipt) -> Result<CanonicalReplicat
     )
 }
 
-fn content_values(contents: &[ReplicaRule]) -> Vec<IOValue> {
+fn content_values(contents: &[ReplicaRule]) -> Vec<preserves::IOValue> {
     contents
         .iter()
         .map(|content| {
@@ -158,7 +157,7 @@ fn content_values(contents: &[ReplicaRule]) -> Vec<IOValue> {
         .collect()
 }
 
-fn action_value(action: &Action) -> IOValue {
+fn action_value(action: &Action) -> preserves::IOValue {
     record("replication-action", vec![
         string(&action.action_id),
         string(&action.operation_id),
@@ -177,12 +176,12 @@ fn action_value(action: &Action) -> IOValue {
     ])
 }
 
-fn canonical(kind: &str, value: IOValue) -> Result<CanonicalReplicationRecord> {
+fn canonical(kind: &str, value: preserves::IOValue) -> crate::error::Result<CanonicalReplicationRecord> {
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let mut hasher = blake3::Hasher::new_derive_key(RECORD_IDENTITY_CONTEXT);
     update(&mut hasher, kind)?;
     let length = u64::try_from(bytes.len())
-        .map_err(|_| MoltenError::invalid_harness("replication record length exceeds u64"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("replication record length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(&bytes);
     Ok(CanonicalReplicationRecord {
@@ -192,56 +191,56 @@ fn canonical(kind: &str, value: IOValue) -> Result<CanonicalReplicationRecord> {
     })
 }
 
-fn update(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
+fn update(hasher: &mut blake3::Hasher, value: &str) -> crate::error::Result<()> {
     let length = u64::try_from(value.len())
-        .map_err(|_| MoltenError::invalid_harness("replication identity field length exceeds u64"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("replication identity field length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
     Ok(())
 }
 
-fn non_claims() -> IOValue {
+fn non_claims() -> preserves::IOValue {
     field("non-claims", sequence(NON_CLAIMS.iter().map(string).collect()))
 }
 
-fn issues(values: &[Issue]) -> IOValue {
+fn issues(values: &[Issue]) -> preserves::IOValue {
     sequence(values.iter().map(|issue| string(issue.as_str())).collect())
 }
 
-fn strings(values: &[String]) -> IOValue {
+fn strings(values: &[String]) -> preserves::IOValue {
     sequence(values.iter().map(string).collect())
 }
 
-fn optional(value: Option<&str>) -> IOValue {
+fn optional(value: Option<&str>) -> preserves::IOValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn boolean(value: bool) -> IOValue {
+fn boolean(value: bool) -> preserves::IOValue {
     record(if value { "true" } else { "false" }, Vec::new())
 }
 
-fn count(value: usize) -> Result<IOValue> {
+fn count(value: usize) -> crate::error::Result<preserves::IOValue> {
     u64::try_from(value)
         .map(number)
-        .map_err(|_| MoltenError::invalid_harness("replication count exceeds u64"))
+        .map_err(|_| crate::error::MoltenError::invalid_harness("replication count exceeds u64"))
 }
 
-fn field(label: &'static str, value: IOValue) -> IOValue {
+fn field(label: &'static str, value: preserves::IOValue) -> preserves::IOValue {
     record(label, vec![value])
 }
 
-fn number(value: u64) -> IOValue {
+fn number(value: u64) -> preserves::IOValue {
     crate::preserves_rail::u64_value(value)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> preserves::IOValue {
     crate::preserves_rail::string(value.as_ref())
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::record(label, fields)
 }

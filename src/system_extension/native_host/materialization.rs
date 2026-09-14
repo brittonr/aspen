@@ -1,7 +1,3 @@
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use super::super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,17 +49,17 @@ pub trait NativeCallbackValuePort: Send {
     ) -> Result<NativeValuePublicationReceipt, NativeValuePortFailure>;
 }
 
-pub type SharedNativeCallbackValuePort = Arc<Mutex<Box<dyn NativeCallbackValuePort>>>;
+pub type SharedNativeCallbackValuePort = std::sync::Arc<std::sync::Mutex<Box<dyn NativeCallbackValuePort>>>;
 
 pub fn shared_native_callback_value_port(
     port: impl NativeCallbackValuePort + 'static,
 ) -> SharedNativeCallbackValuePort {
-    Arc::new(Mutex::new(Box::new(port)))
+    std::sync::Arc::new(std::sync::Mutex::new(Box::new(port)))
 }
 
 #[derive(Debug, Default)]
 pub struct InMemoryNativeCallbackValuePort {
-    values: BTreeMap<String, Vec<u8>>,
+    values: std::collections::BTreeMap<String, Vec<u8>>,
     next_publication_failure: Option<NativeValuePortFailureKind>,
 }
 
