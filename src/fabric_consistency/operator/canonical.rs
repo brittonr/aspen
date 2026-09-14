@@ -4,7 +4,7 @@ pub(super) fn preflight_ref(
     action: ConsistencyOperatorAction,
     dry_run: bool,
     plan: &ConsistencyPortPlan,
-) -> Result<String> {
+) -> crate::error::Result<String> {
     crate::preserves_rail::validate_content_ref(&plan.plan_ref)?;
     crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
         "fabric-consistency-operator-preflight-v1",
@@ -23,7 +23,7 @@ pub(super) fn execution_ref(
     preflight: &ConsistencyOperatorPreflight,
     status: ConsistencyOperatorExecutionStatus,
     effect_ref: Option<&str>,
-) -> Result<String> {
+) -> crate::error::Result<String> {
     let effect = match effect_ref {
         Some(reference) => {
             crate::preserves_rail::validate_content_ref(reference)?;
@@ -47,8 +47,8 @@ pub(super) fn readback_ref(
     replica: &ConsistencyOperatorReplicaState,
     evidence_refs: &[String],
     evidence_truncated: bool,
-    health: &ReplicaAggregateHealthEvidence,
-) -> Result<String> {
+    health: &crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence,
+) -> crate::error::Result<String> {
     for reference in evidence_refs {
         crate::preserves_rail::validate_content_ref(reference)?;
     }

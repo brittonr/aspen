@@ -1,25 +1,5 @@
 use std::str::FromStr;
 
-use molten_core::fabric_crypto_identity::MoltenArtifactAuthObservation;
-use molten_core::fabric_crypto_identity::MoltenArtifactAuthReport;
-use molten_core::fabric_crypto_identity::MoltenArtifactAuthStatementInput;
-use molten_core::fabric_crypto_identity::OpaqueKeyHandle;
-use molten_core::fabric_crypto_identity::VerificationDecisionKind;
-use molten_core::fabric_crypto_identity::evaluate_artifact_auth_dual_run;
-use molten_core::fabric_crypto_identity::evaluate_verification;
-use molten_core::fabric_crypto_identity::map_artifact_auth_statement;
-use serde::Deserialize;
-use serde::Serialize;
-
-use super::IrohEd25519FileAdapter;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::node_state::MAX_NODE_STATE_FILE_BYTES;
-use crate::node_state::NodeStateNamespace;
-use crate::node_state::NodeStateNamespaceKind;
-use crate::node_state::NodeStatePath;
-use crate::preserves_rail::content_ref_from_bytes;
-
 mod operational;
 
 pub use operational::MoltenArtifactAuthOperationalReceipt;
@@ -38,12 +18,12 @@ const HEX_CHARS_PER_BYTE: usize = 2;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MoltenArtifactAuthShellInput<'a> {
-    pub statement: MoltenArtifactAuthStatementInput<'a>,
-    pub handle: &'a OpaqueKeyHandle,
+    pub statement: molten_core::fabric_crypto_identity::MoltenArtifactAuthStatementInput<'a>,
+    pub handle: &'a molten_core::fabric_crypto_identity::OpaqueKeyHandle,
     pub signing_policy_ref: &'a str,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SignedArtifactAuthStatement {
     pub statement_ref: String,
@@ -57,13 +37,13 @@ pub struct SignedArtifactAuthStatement {
 #[cfg(test)]
 impl SignedArtifactAuthStatement {
     pub(crate) fn replace_signature_bytes_for_test(&mut self, signature_bytes: Vec<u8>) {
-        self.signature_ref = content_ref_from_bytes(&signature_bytes);
+        self.signature_ref = crate::preserves_rail::content_ref_from_bytes(&signature_bytes);
         self.signature_hex = bytes_to_lower_hex(&signature_bytes);
         self.signature_bytes = signature_bytes;
     }
 
     pub(crate) fn replace_public_key_for_test(&mut self, public_key: iroh::PublicKey) {
-        self.public_key_ref = content_ref_from_bytes(public_key.as_bytes());
+        self.public_key_ref = crate::preserves_rail::content_ref_from_bytes(public_key.as_bytes());
         self.public_key = public_key.to_string();
     }
 }
@@ -75,27 +55,28 @@ pub struct MoltenArtifactAuthShellReport {
     pub signature_ref: String,
     pub signature_hex: String,
     pub cryptographic_failure_code: Option<String>,
-    pub dual_run: MoltenArtifactAuthReport,
+    pub dual_run: molten_core::fabric_crypto_identity::MoltenArtifactAuthReport,
 }
 
 // r[impl molten.artifact_auth_shell.exact_verification]
 // r[impl molten.artifact_auth_shell.evidence]
 pub fn sign_artifact_auth_for_dual_run(
-    adapter: &IrohEd25519FileAdapter<'_>,
+    adapter: &super::IrohEd25519FileAdapter<'_>,
     input: &MoltenArtifactAuthShellInput<'_>,
-) -> Result<SignedArtifactAuthStatement> {
+) -> crate::error::Result<SignedArtifactAuthStatement> {
     admit_signing_input(input)?;
     let statement = map_statement(&input.statement)?;
     let signed = adapter.sign_artifact_auth_statement(input.handle, &statement, input.signing_policy_ref)?;
-    let public_key = iroh::PublicKey::from_str(&signed.public_key)
-        .map_err(|_| MoltenError::invalid_harness("artifact-auth signer returned a malformed public key"))?;
+    let public_key = iroh::PublicKey::from_str(&signed.public_key).map_err(|_| {
+        crate::error::MoltenError::invalid_harness("artifact-auth signer returned a malformed public key")
+    })?;
     let statement_bytes = artifact_auth_core::canonical_statement_bytes(&statement)
-        .map_err(|_| MoltenError::invalid_harness("artifact-auth statement is not canonicalizable"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("artifact-auth statement is not canonicalizable"))?;
     let result = SignedArtifactAuthStatement {
-        statement_ref: content_ref_from_bytes(&statement_bytes),
+        statement_ref: crate::preserves_rail::content_ref_from_bytes(&statement_bytes),
         public_key: signed.public_key,
-        public_key_ref: content_ref_from_bytes(public_key.as_bytes()),
-        signature_ref: content_ref_from_bytes(&signed.signature_bytes),
+        public_key_ref: crate::preserves_rail::content_ref_from_bytes(public_key.as_bytes()),
+        signature_ref: crate::preserves_rail::content_ref_from_bytes(&signed.signature_bytes),
         signature_hex: bytes_to_lower_hex(&signed.signature_bytes),
         signature_bytes: signed.signature_bytes,
     };
@@ -108,29 +89,43 @@ pub fn sign_artifact_auth_for_dual_run(
 // r[impl molten.artifact_auth_shell.evidence]
 // r[impl molten.artifact_auth_shell.authority]
 pub fn evaluate_artifact_auth_shell_dual_run(
-    input: &MoltenArtifactAuthStatementInput<'_>,
+    input: &molten_core::fabric_crypto_identity::MoltenArtifactAuthStatementInput<'_>,
     signed: &SignedArtifactAuthStatement,
-) -> Result<MoltenArtifactAuthShellReport> {
+) -> crate::error::Result<MoltenArtifactAuthShellReport> {
     let statement = map_statement(input)?;
     let statement_bytes = artifact_auth_core::canonical_statement_bytes(&statement)
-        .map_err(|_| MoltenError::invalid_harness("artifact-auth statement is not canonicalizable"))?;
-    require_carrier_identity("statement", &signed.statement_ref, &content_ref_from_bytes(&statement_bytes))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("artifact-auth statement is not canonicalizable"))?;
+    require_carrier_identity(
+        "statement",
+        &signed.statement_ref,
+        &crate::preserves_rail::content_ref_from_bytes(&statement_bytes),
+    )?;
     let public_key = iroh::PublicKey::from_str(&signed.public_key)
-        .map_err(|_| MoltenError::invalid_harness("artifact-auth carrier public key is malformed"))?;
-    require_carrier_identity("public key", &signed.public_key_ref, &content_ref_from_bytes(public_key.as_bytes()))?;
-    require_carrier_identity("signature", &signed.signature_ref, &content_ref_from_bytes(&signed.signature_bytes))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("artifact-auth carrier public key is malformed"))?;
+    require_carrier_identity(
+        "public key",
+        &signed.public_key_ref,
+        &crate::preserves_rail::content_ref_from_bytes(public_key.as_bytes()),
+    )?;
+    require_carrier_identity(
+        "signature",
+        &signed.signature_ref,
+        &crate::preserves_rail::content_ref_from_bytes(&signed.signature_bytes),
+    )?;
     require_carrier_identity("signature hex", &signed.signature_hex, &bytes_to_lower_hex(&signed.signature_bytes))?;
     let cryptographic =
         artifact_auth_ed25519::verify_statement(&statement, public_key.as_bytes(), &signed.signature_bytes);
     let cryptographic_failure_code = cryptographic.failure_code.clone();
-    let dual_run = evaluate_artifact_auth_dual_run(&MoltenArtifactAuthObservation {
-        profile: input.profile,
-        request: input.request,
-        producer_id: input.producer_id,
-        key_id: input.key_id,
-        currentness_ref: input.currentness_ref,
-        standalone_cryptographic: cryptographic,
-    });
+    let dual_run = molten_core::fabric_crypto_identity::evaluate_artifact_auth_dual_run(
+        &molten_core::fabric_crypto_identity::MoltenArtifactAuthObservation {
+            profile: input.profile,
+            request: input.request,
+            producer_id: input.producer_id,
+            key_id: input.key_id,
+            currentness_ref: input.currentness_ref,
+            standalone_cryptographic: cryptographic,
+        },
+    );
     let result = MoltenArtifactAuthShellReport {
         statement_ref: signed.statement_ref.clone(),
         public_key_ref: signed.public_key_ref.clone(),
@@ -144,22 +139,26 @@ pub fn evaluate_artifact_auth_shell_dual_run(
     Ok(result)
 }
 
-fn admit_signing_input(input: &MoltenArtifactAuthShellInput<'_>) -> Result<()> {
+fn admit_signing_input(input: &MoltenArtifactAuthShellInput<'_>) -> crate::error::Result<()> {
     let request = input.statement.request;
-    let legacy = evaluate_verification(input.statement.profile, request);
-    if legacy.kind != VerificationDecisionKind::Accept {
-        return Err(MoltenError::invalid_harness("artifact-auth signing requires an accepted legacy observation"));
+    let legacy = molten_core::fabric_crypto_identity::evaluate_verification(input.statement.profile, request);
+    if legacy.kind != molten_core::fabric_crypto_identity::VerificationDecisionKind::Accept {
+        return Err(crate::error::MoltenError::invalid_harness(
+            "artifact-auth signing requires an accepted legacy observation",
+        ));
     }
     if request.signer_generation != input.handle.generation || request.observed.generation != input.handle.generation {
-        return Err(MoltenError::invalid_harness("artifact-auth signing generation does not match the current handle"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "artifact-auth signing generation does not match the current handle",
+        ));
     }
     if request.signer_currentness != input.handle.currentness || !input.handle.currentness.permits_signing() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "artifact-auth signing currentness does not permit the current handle",
         ));
     }
     if input.statement.currentness_ref != input.handle.currentness_evidence_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "artifact-auth signing currentness evidence does not match the current handle",
         ));
     }
@@ -168,15 +167,22 @@ fn admit_signing_input(input: &MoltenArtifactAuthShellInput<'_>) -> Result<()> {
     Ok(())
 }
 
-fn map_statement(input: &MoltenArtifactAuthStatementInput<'_>) -> Result<artifact_auth_core::ArtifactStatement> {
-    map_artifact_auth_statement(input).map_err(|issues| {
-        MoltenError::invalid_harness(format!("artifact-auth statement mapping failed: {}", issues.join(",")))
+fn map_statement(
+    input: &molten_core::fabric_crypto_identity::MoltenArtifactAuthStatementInput<'_>,
+) -> crate::error::Result<artifact_auth_core::ArtifactStatement> {
+    molten_core::fabric_crypto_identity::map_artifact_auth_statement(input).map_err(|issues| {
+        crate::error::MoltenError::invalid_harness(format!(
+            "artifact-auth statement mapping failed: {}",
+            issues.join(",")
+        ))
     })
 }
 
-fn require_carrier_identity(label: &str, observed: &str, expected: &str) -> Result<()> {
+fn require_carrier_identity(label: &str, observed: &str, expected: &str) -> crate::error::Result<()> {
     if observed != expected {
-        return Err(MoltenError::invalid_harness(format!("artifact-auth carrier {label} identity mismatch")));
+        return Err(crate::error::MoltenError::invalid_harness(format!(
+            "artifact-auth carrier {label} identity mismatch"
+        )));
     }
     Ok(())
 }

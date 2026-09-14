@@ -9,7 +9,11 @@ struct RecordingEffects {
 }
 
 impl ConsistencyOperatorEffects for RecordingEffects {
-    fn apply(&mut self, action: ConsistencyOperatorAction, _plan: &ConsistencyPortPlan) -> Result<String> {
+    fn apply(
+        &mut self,
+        action: ConsistencyOperatorAction,
+        _plan: &ConsistencyPortPlan,
+    ) -> crate::error::Result<String> {
         self.calls += 1;
         Ok(test_ref(action.as_str()))
     }
@@ -106,7 +110,7 @@ fn operator_applies_drain_snapshot_recover_and_remove_through_one_effect_shell()
 fn operator_readback_is_bounded_and_rejects_substituted_group_identity() {
     let active = active_binding();
     let records = (0..(MAX_OPERATOR_EVIDENCE_REFS + 1))
-        .map(|offset| ReplicaEvidenceRecord {
+        .map(|offset| crate::fabric_consistency::raft::ReplicaEvidenceRecord {
             sequence: u64::try_from(offset + 1).expect("bounded evidence sequence"),
             kind: crate::fabric_consistency::raft::ReplicaEvidenceKind::Commit,
             term: INITIAL_CONSISTENCY_EPOCH,
@@ -121,8 +125,8 @@ fn operator_readback_is_bounded_and_rejects_substituted_group_identity() {
         group_binding_ref: active.binding_ref.clone(),
         service_generation: active.service_generation,
         node_id: "node-a".to_string(),
-        role: ReplicaRole::Leader,
-        lifecycle: ReplicaLifecycle::Running,
+        role: crate::fabric_consistency::raft::ReplicaRole::Leader,
+        lifecycle: crate::fabric_consistency::raft::ReplicaLifecycle::Running,
         term: INITIAL_CONSISTENCY_EPOCH,
         commit_index: INITIAL_CONSISTENCY_EPOCH,
         last_applied: INITIAL_CONSISTENCY_EPOCH,
@@ -242,8 +246,8 @@ fn command_for(binding: &ConsistencyGroupBinding, operation: ConsistencyOperatio
     }
 }
 
-fn health() -> ReplicaAggregateHealthEvidence {
-    ReplicaAggregateHealthEvidence {
+fn health() -> crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence {
+    crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence {
         status: "healthy".to_string(),
         selected_record_count: 0,
         suppressed_heartbeat_count: 0,

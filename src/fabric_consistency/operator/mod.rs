@@ -4,14 +4,7 @@ mod canonical;
 mod tests;
 
 use super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::fabric_consistency::raft::BoundLiveReplicaEffectPorts;
-use crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence;
-use crate::fabric_consistency::raft::ReplicaEvidenceRecord;
-use crate::fabric_consistency::raft::ReplicaLifecycle;
-use crate::fabric_consistency::raft::ReplicaRole;
-use crate::fabric_consistency::raft::ScopedLiveReplicaService;
 
 pub const MAX_OPERATOR_EVIDENCE_REFS: usize = 64;
 
@@ -83,8 +76,8 @@ pub struct ConsistencyOperatorReplicaState {
     pub group_binding_ref: String,
     pub service_generation: u64,
     pub node_id: String,
-    pub role: ReplicaRole,
-    pub lifecycle: ReplicaLifecycle,
+    pub role: crate::fabric_consistency::raft::ReplicaRole,
+    pub lifecycle: crate::fabric_consistency::raft::ReplicaLifecycle,
     pub term: u64,
     pub commit_index: u64,
     pub last_applied: u64,
@@ -99,8 +92,8 @@ pub struct ConsistencyOperatorReadback {
     pub service_generation: u64,
     pub lifecycle: ConsistencyGroupLifecycle,
     pub node_id: String,
-    pub role: ReplicaRole,
-    pub replica_lifecycle: ReplicaLifecycle,
+    pub role: crate::fabric_consistency::raft::ReplicaRole,
+    pub replica_lifecycle: crate::fabric_consistency::raft::ReplicaLifecycle,
     pub term: u64,
     pub commit_index: u64,
     pub last_applied: u64,
@@ -113,14 +106,14 @@ pub struct ConsistencyOperatorReadback {
 }
 
 pub trait ConsistencyOperatorEffects {
-    fn apply(&mut self, action: ConsistencyOperatorAction, plan: &ConsistencyPortPlan) -> Result<String>;
+    fn apply(&mut self, action: ConsistencyOperatorAction, plan: &ConsistencyPortPlan) -> crate::error::Result<String>;
 }
 
 // r[impl molten.fabric_consistency.operator_readback]
 pub fn plan_consistency_operator_action(
     binding: &ConsistencyGroupBinding,
     request: ConsistencyOperatorRequest,
-) -> Result<ConsistencyOperatorPreflight> {
+) -> crate::error::Result<ConsistencyOperatorPreflight> {
     let action = action_for_operation(&request.command.operation)?;
     let plan = plan_consistency_operation(binding, request.command)?;
     let preflight_ref = canonical::preflight_ref(action, request.dry_run, &plan)?;
@@ -136,9 +129,9 @@ pub fn plan_consistency_operator_action(
 pub fn execute_consistency_operator_action<E: ConsistencyOperatorEffects>(
     preflight: &ConsistencyOperatorPreflight,
     effects: &mut E,
-) -> Result<ConsistencyOperatorExecution> {
+) -> crate::error::Result<ConsistencyOperatorExecution> {
     if preflight.preflight_ref != canonical::preflight_ref(preflight.action, preflight.dry_run, &preflight.plan)? {
-        return Err(MoltenError::invalid_harness("consistency operator preflight identity mismatch"));
+        return Err(crate::error::MoltenError::invalid_harness("consistency operator preflight identity mismatch"));
     }
     let (status, effect_ref) = if !preflight.plan.admitted() {
         (ConsistencyOperatorExecutionStatus::Denied, None)
@@ -163,9 +156,9 @@ pub fn execute_consistency_operator_action<E: ConsistencyOperatorEffects>(
 pub fn consistency_operator_readback(
     binding: &ConsistencyGroupBinding,
     replica: &ConsistencyOperatorReplicaState,
-    records: &[ReplicaEvidenceRecord],
-    health: &ReplicaAggregateHealthEvidence,
-) -> Result<ConsistencyOperatorReadback> {
+    records: &[crate::fabric_consistency::raft::ReplicaEvidenceRecord],
+    health: &crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence,
+) -> crate::error::Result<ConsistencyOperatorReadback> {
     validate_readback_binding(binding, replica, health)?;
     let is_evidence_truncated = records.len() > MAX_OPERATOR_EVIDENCE_REFS;
     let mut selected_evidence_refs = records
@@ -202,8 +195,8 @@ pub fn consistency_operator_readback(
 // r[impl molten.fabric_consistency.operator_readback]
 pub fn live_replica_operator_readback<P: BoundLiveReplicaEffectPorts>(
     binding: &ConsistencyGroupBinding,
-    service: &ScopedLiveReplicaService<P>,
-) -> Result<ConsistencyOperatorReadback> {
+    service: &crate::fabric_consistency::raft::ScopedLiveReplicaService<P>,
+) -> crate::error::Result<ConsistencyOperatorReadback> {
     let state = service.state();
     let replica = ConsistencyOperatorReplicaState {
         group_binding_ref: state.profile.group_binding_ref.clone(),
@@ -219,7 +212,7 @@ pub fn live_replica_operator_readback<P: BoundLiveReplicaEffectPorts>(
     consistency_operator_readback(binding, &replica, service.evidence().records(), &health)
 }
 
-fn action_for_operation(operation: &ConsistencyOperation) -> Result<ConsistencyOperatorAction> {
+fn action_for_operation(operation: &ConsistencyOperation) -> crate::error::Result<ConsistencyOperatorAction> {
     match operation {
         ConsistencyOperation::Open {
             mode: GroupOpenMode::Create,
@@ -229,20 +222,24 @@ fn action_for_operation(operation: &ConsistencyOperation) -> Result<ConsistencyO
         ConsistencyOperation::Snapshot { .. } => Ok(ConsistencyOperatorAction::Snapshot),
         ConsistencyOperation::Recover { .. } => Ok(ConsistencyOperatorAction::Recover),
         ConsistencyOperation::Remove => Ok(ConsistencyOperatorAction::Remove),
-        _ => Err(MoltenError::invalid_harness("operation is outside the bounded consistency operator surface")),
+        _ => Err(crate::error::MoltenError::invalid_harness(
+            "operation is outside the bounded consistency operator surface",
+        )),
     }
 }
 
 fn validate_readback_binding(
     binding: &ConsistencyGroupBinding,
     replica: &ConsistencyOperatorReplicaState,
-    health: &ReplicaAggregateHealthEvidence,
-) -> Result<()> {
+    health: &crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence,
+) -> crate::error::Result<()> {
     if replica.group_binding_ref != binding.binding_ref || replica.service_generation != binding.service_generation {
-        return Err(MoltenError::invalid_harness("consistency operator readback binding mismatch"));
+        return Err(crate::error::MoltenError::invalid_harness("consistency operator readback binding mismatch"));
     }
     if replica.last_applied > replica.commit_index {
-        return Err(MoltenError::invalid_harness("consistency operator readback applied index exceeds commit"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "consistency operator readback applied index exceeds commit",
+        ));
     }
     crate::preserves_rail::validate_content_ref(&health.evidence_ref)
 }

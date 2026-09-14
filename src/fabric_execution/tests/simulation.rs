@@ -6,7 +6,7 @@ use super::*;
 fn simulation_replays_equal_receipts_and_preserves_unknown_without_retry() {
     let (profile, request) =
         canonical_request(ExecutionProfileKind::DeterministicSimulation, script_arguments("ignored-by-simulation"));
-    let mut scripts = BTreeMap::new();
+    let mut scripts = std::collections::BTreeMap::new();
     scripts.insert(HASH_B.to_string(), ScriptedExecutionObservation {
         process: scripted_process(ExecutionLifecycleState::Exited, EXPECTED_STDOUT),
     });
@@ -20,7 +20,7 @@ fn simulation_replays_equal_receipts_and_preserves_unknown_without_retry() {
     assert_eq!(first_receipt.receipt_ref, second_receipt.receipt_ref);
     assert_eq!(first_receipt.value, second_receipt.value);
 
-    let mut unknown_scripts = BTreeMap::new();
+    let mut unknown_scripts = std::collections::BTreeMap::new();
     unknown_scripts.insert(HASH_B.to_string(), ScriptedExecutionObservation {
         process: scripted_process(ExecutionLifecycleState::Unknown, &[]),
     });
@@ -42,7 +42,7 @@ fn live_and_simulation_compositions_share_command_and_outcome_shape() {
     let mut live = crate::system_extension::compose_system_extension_execution_fabric(
         live_profile,
         MemoryPublisher::default(),
-        BTreeMap::new(),
+        std::collections::BTreeMap::new(),
     )
     .expect("live composition");
     let live_receipt = live
@@ -51,7 +51,7 @@ fn live_and_simulation_compositions_share_command_and_outcome_shape() {
 
     let (simulation_profile, simulation_request) =
         canonical_request(ExecutionProfileKind::DeterministicSimulation, arguments);
-    let mut scripts = BTreeMap::new();
+    let mut scripts = std::collections::BTreeMap::new();
     scripts.insert(HASH_B.to_string(), ScriptedExecutionObservation {
         process: scripted_process(ExecutionLifecycleState::Exited, EXPECTED_STDOUT),
     });
@@ -79,12 +79,12 @@ fn system_extension_composition_selects_only_the_exact_profile() {
     let selected = crate::system_extension::compose_system_extension_execution_fabric(
         live.clone(),
         MemoryPublisher::default(),
-        BTreeMap::new(),
+        std::collections::BTreeMap::new(),
     )
     .expect("live composition");
     assert!(matches!(selected, crate::system_extension::SystemExtensionExecutionFabric::Live(_)));
 
-    let mut scripts = BTreeMap::new();
+    let mut scripts = std::collections::BTreeMap::new();
     scripts.insert(HASH_B.to_string(), ScriptedExecutionObservation {
         process: scripted_process(ExecutionLifecycleState::Exited, &[]),
     });
@@ -104,7 +104,8 @@ fn unavailable_profile_has_no_hidden_fallback() {
     let live_profile =
         canonical_admit_execution_profile(&descriptor(ExecutionProfileKind::LiveBoundedProcess)).expect("live profile");
     assert_eq!(
-        SimulatedExecutionAdapter::new(live_profile, MemoryPublisher::default(), BTreeMap::new()).err(),
+        SimulatedExecutionAdapter::new(live_profile, MemoryPublisher::default(), std::collections::BTreeMap::new())
+            .err(),
         Some(SimulatedExecutionAdapterBuildError::WrongProfileKind)
     );
 }

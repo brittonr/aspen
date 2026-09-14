@@ -86,7 +86,7 @@ fn live_adapter_reports_timeout_cancellation_and_definite_spawn_failure() {
         canonical_request(ExecutionProfileKind::LiveBoundedProcess, script_arguments(NON_TERMINATING_SCRIPT));
     let mut cancel_adapter =
         LiveExecutionAdapter::new(cancel_profile, MemoryPublisher::default()).expect("cancel adapter");
-    let cancellation = AtomicBool::new(true);
+    let cancellation = std::sync::atomic::AtomicBool::new(true);
     let cancelled = cancel_adapter
         .execute(&cancel_request, &resolved(Some(INPUT_BYTES.to_vec())), Some(&cancellation))
         .expect("cancellation is an observation");
@@ -97,7 +97,7 @@ fn live_adapter_reports_timeout_cancellation_and_definite_spawn_failure() {
     let mut missing_adapter =
         LiveExecutionAdapter::new(missing_profile, MemoryPublisher::default()).expect("missing adapter");
     let mut missing = resolved(Some(INPUT_BYTES.to_vec()));
-    missing.executable_path = PathBuf::from("/definitely/not/an/executable");
+    missing.executable_path = std::path::PathBuf::from("/definitely/not/an/executable");
     let failure = missing_adapter
         .execute(&missing_request, &missing, None)
         .expect_err("missing executable must fail before start");

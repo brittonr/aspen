@@ -22,7 +22,7 @@ pub(super) fn execute_actions<'a>(
     history: &[PriorOperation],
     evidence_refs: &mut Vec<String>,
     ports: ReconcilePorts<'a>,
-) -> Result<ExecutionResult<'a>> {
+) -> crate::error::Result<ExecutionResult<'a>> {
     let execution_ports = ExecutionPorts {
         content: ports.content,
         transport: ports.transport,
@@ -77,7 +77,7 @@ fn execute_action(
     content: &mut dyn ContentPort,
     transport: &mut dyn TransportPort,
     retention: &mut dyn RetentionPort,
-) -> Result<Option<PriorOperation>> {
+) -> crate::error::Result<Option<PriorOperation>> {
     match action.kind {
         ActionKind::Defer => Ok(None),
         ActionKind::Reuse => Ok(history.iter().find(|prior| prior.operation_id == action.operation_id).cloned()),
@@ -95,7 +95,7 @@ fn execute_transfer(
     transport: &mut dyn TransportPort,
     retention: &mut dyn RetentionPort,
     evidence_refs: &mut Vec<String>,
-) -> Result<PriorOperation> {
+) -> crate::error::Result<PriorOperation> {
     let pin = retention.acquire_pin(action)?;
     validate_pin(manifest, action, &pin)?;
     evidence_refs.push(pin.pin_ref);
@@ -125,7 +125,7 @@ fn execute_cleanup(
     content: &mut dyn ContentPort,
     retention: &mut dyn RetentionPort,
     evidence_refs: &mut Vec<String>,
-) -> Result<PriorOperation> {
+) -> crate::error::Result<PriorOperation> {
     let admission = retention.authorize_cleanup(action)?;
     validate_cleanup(manifest, action, &admission)?;
     let cleanup_ref = content.cleanup(action, &admission)?;
@@ -140,7 +140,7 @@ fn operation_from_action(
     action: &Action,
     outcome: OperationOutcome,
     result_ref: Option<String>,
-) -> Result<PriorOperation> {
+) -> crate::error::Result<PriorOperation> {
     Ok(PriorOperation {
         operation_id: action.operation_id.clone(),
         content_ref: action.content_ref.clone(),

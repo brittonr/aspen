@@ -406,12 +406,18 @@ fn module_directory(path: &str) -> Option<std::path::PathBuf> {
 /// part sees the imports of its siblings. Removing an import from such a file
 /// can break a file the summary never flagged, so the module tree and the part
 /// tree are scanned for the bound names first.
-fn shared_scope_hazard(
-    path: &str,
-    syntax: &syn::File,
-    owners: &BTreeMap<String, String>,
-) -> Option<String> {
-    let file = FsPath::new(path);
+/// One descendant module file and its distance below the module parent.
+struct Descendant {
+    path: String,
+    depth: usize,
+}
+
+/// Collect the module files below a module parent.
+///
+/// `None` means the file is not a module parent, so no child shares its scope.
+/// `Some(Err(..))` means a child shares the scope in a way this tool does not
+/// rewrite.
+fn module_descendants(path: &str, syntax: &syn::File) -> Option<Result<Vec<Descendant>, String>> {
     let mut declares_mod = false;
     for item in &syntax.items {
         match item {
@@ -422,7 +428,7 @@ fn shared_scope_hazard(
                     .iter()
                     .any(|attribute| attribute.path().is_ident("path"))
                 {
-                    return Some(format!("`#[path]` module `{}`", item_mod.ident));
+                    return Some(Err(format!("`#[path]` module `{}`", item_mod.ident)));
                 }
             }
             syn::Item::Macro(item_macro)
@@ -433,57 +439,233 @@ fn shared_scope_hazard(
                     .last()
                     .is_some_and(|segment| segment.ident == "include") =>
             {
-                return Some(String::from("include! splice shares one module scope"));
+                return Some(Err(String::from("include! splice shares one module scope")));
             }
             _ => {}
         }
     }
-
-    let sibling_root = if path.contains("/parts/") {
-        let mut current = file.parent();
-        while let Some(directory) = current {
-            if directory.file_name().is_some_and(|name| name == "parts") {
-                return scan_for_names(directory, file, owners, "part body shares one module scope");
-            }
-            current = directory.parent();
-        }
-        return Some(String::from("include! part body shares one module scope"));
-    } else if declares_mod {
-        let Some(directory) = module_directory(path) else {
-            return Some(String::from("module parent with an unresolved child directory"));
-        };
-        directory
-    } else {
-        return None;
-    };
-
-    if !sibling_root.is_dir() {
+    if !declares_mod {
         return None;
     }
-    scan_for_names(&sibling_root, file, owners, "descendant module references the name")
+    let directory = module_directory(path)?;
+    if !directory.is_dir() {
+        return None;
+    }
+    let parent = FsPath::new(path);
+    let mut found = Vec::new();
+    collect_descendants(&directory, &directory, parent, &mut found);
+    found.sort_by(|left, right| left.path.cmp(&right.path));
+    Some(Ok(found))
 }
 
+fn collect_descendants(
+    root: &FsPath,
+    directory: &FsPath,
+    exclude: &FsPath,
+    found: &mut Vec<Descendant>,
+) {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    let mut children: Vec<std::path::PathBuf> =
+        entries.filter_map(|entry| entry.ok().map(|entry| entry.path())).collect();
+    children.sort();
+    for child in children {
+        if child.is_dir() {
+            collect_descendants(root, &child, exclude, found);
+            continue;
+        }
+        if child.extension().and_then(|extension| extension.to_str()) != Some("rs") || child == exclude
+        {
+            continue;
+        }
+        let Ok(relative) = child.strip_prefix(root) else {
+            continue;
+        };
+        let components = relative.components().count();
+        let is_mod = child.file_name().is_some_and(|name| name == "mod.rs");
+        let depth = if is_mod {
+            components.saturating_sub(1)
+        } else {
+            components
+        };
+        if depth == 0 {
+            continue;
+        }
+        found.push(Descendant {
+            path: child.to_string_lossy().into_owned(),
+            depth,
+        });
+    }
+}
+
+/// Detect the include! splice, which shares one scope across sibling parts.
+fn parts_hazard(path: &str, syntax: &syn::File, owners: &BTreeMap<String, String>) -> Option<String> {
+    if !path.contains("/parts/") {
+        return None;
+    }
+    let file = FsPath::new(path);
+    let mut current = file.parent();
+    while let Some(directory) = current {
+        if directory.file_name().is_some_and(|name| name == "parts") {
+            return scan_for_names(directory, file, owners, "part body shares one module scope");
+        }
+        current = directory.parent();
+    }
+    let _ = syntax;
+    Some(String::from("include! part body shares one module scope"))
+}
+
+/// Report the first sibling file that states any bound name, if any.
 fn scan_for_names(
     directory: &FsPath,
     exclude: &FsPath,
     owners: &BTreeMap<String, String>,
     reason: &str,
 ) -> Option<String> {
-    let files = rust_files(directory, exclude);
-    for candidate in files {
+    for candidate in rust_files(directory, exclude) {
         let Ok(text) = std::fs::read_to_string(&candidate) else {
             return Some(format!("{reason}: unreadable {}", candidate.display()));
         };
         for name in owners.keys() {
             if mentions_identifier(&text, name) {
-                return Some(format!(
-                    "{reason}: `{name}` in {}",
-                    candidate.display()
-                ));
+                return Some(format!("{reason}: `{name}` in {}", candidate.display()));
             }
         }
     }
     None
+}
+
+/// True when the identifier at `end` is followed by a field colon.
+fn followed_by_colon(source: &str, end: usize) -> bool {
+    let rest = source.get(end..).unwrap_or_default().trim_start();
+    rest.starts_with(':') && !rest.starts_with("::")
+}
+
+/// Rewrite the bare references to a bound name inside one descendant module.
+///
+/// A qualified reference such as `super::Name` reaches the parent through a
+/// path this tool does not rewrite, and a local binding of the same name hides
+/// the parent import, so both cases are reported instead of rewritten.
+fn rewrite_descendant(
+    path: &str,
+    depth: usize,
+    source: &str,
+    owners: &BTreeMap<String, String>,
+) -> Result<(String, usize), String> {
+    let syntax = syn::parse_file(source).map_err(|error| format!("parse failed: {error}"))?;
+    let lines = LineIndex::new(source);
+    let mut bindings = FileBindings {
+        bindings: Bindings::default(),
+        extra_use_bindings: BTreeSet::new(),
+        lines: &lines,
+        flagged_ranges: &[],
+    };
+    bindings.visit_file(&syntax);
+    for name in owners.keys() {
+        if bindings.bindings.names.contains(name) {
+            return Err(format!("descendant {path} binds `{name}` locally"));
+        }
+        if bindings.extra_use_bindings.contains(name) {
+            return Err(format!("descendant {path} imports `{name}` again"));
+        }
+    }
+    let mut modules = InlineModules {
+        ranges: Vec::new(),
+        lines: &lines,
+    };
+    modules.visit_file(&syntax);
+
+    let mut edits: Vec<(Range<usize>, String)> = Vec::new();
+    let tokens: proc_macro2::TokenStream = source
+        .parse()
+        .map_err(|error| format!("tokenize failed: {error}"))?;
+    collect_descendant_edits(
+        tokens,
+        owners,
+        &modules.ranges,
+        &lines,
+        source,
+        depth,
+        &mut edits,
+    )?;
+    if edits.is_empty() {
+        return Ok((source.to_string(), 0));
+    }
+    edits.sort_by_key(|(range, _)| range.start);
+    let edit_count = edits.len();
+    let mut output = source.to_string();
+    for (range, replacement) in edits.into_iter().rev() {
+        output.replace_range(range, &replacement);
+    }
+    syn::parse_file(&output).map_err(|error| format!("rewrite produced invalid syntax: {error}"))?;
+    Ok((output, edit_count))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn collect_descendant_edits(
+    stream: proc_macro2::TokenStream,
+    owners: &BTreeMap<String, String>,
+    module_ranges: &[Range<usize>],
+    lines: &LineIndex,
+    source: &str,
+    depth: usize,
+    edits: &mut Vec<(Range<usize>, String)>,
+) -> Result<(), String> {
+    let mut previous = String::new();
+    for token in stream {
+        match token {
+            proc_macro2::TokenTree::Group(group) => {
+                collect_descendant_edits(
+                    group.stream(),
+                    owners,
+                    module_ranges,
+                    lines,
+                    source,
+                    depth,
+                    edits,
+                )?;
+                previous.clear();
+            }
+            proc_macro2::TokenTree::Ident(ident) => {
+                let name = ident.to_string();
+                let range = lines.range(ident.span());
+                if let Some(owner) = owners.get(&name) {
+                    if previous == "::" {
+                        return Err(format!("qualified reference to `{name}` needs a manual path"));
+                    }
+                    let hidden = previous == "::"
+                        || previous == "."
+                        || is_macro_name(source, range.end)
+                        || followed_by_colon(source, range.end);
+                    if !hidden {
+                        let depth = depth + module_depth(module_ranges, range.start);
+                        edits.push((range, qualify_owner(owner, depth)));
+                    }
+                }
+                previous = name;
+            }
+            proc_macro2::TokenTree::Punct(punct) => {
+                previous = if punct.as_char() == ':' && previous == ":" {
+                    String::from("::")
+                } else {
+                    punct.as_char().to_string()
+                };
+            }
+            proc_macro2::TokenTree::Literal(_) => previous.clear(),
+        }
+    }
+    Ok(())
+}
+
+/// True when the identifier at `end` is a macro invocation name.
+fn is_macro_name(source: &str, end: usize) -> bool {
+    let rest = source.get(end..).unwrap_or_default();
+    let mut characters = rest.chars();
+    if characters.next() != Some('!') {
+        return false;
+    }
+    characters.next() != Some('=')
 }
 
 /// Parse `  F123   non_trait_imports   crate   path:line` index rows.
@@ -544,12 +726,19 @@ fn leaf_deletion_range(source: &str, leaf: Range<usize>) -> Range<usize> {
     }
 }
 
+/// One repaired file plus the descendant modules that moved with it.
+struct Repair {
+    output: String,
+    edits: usize,
+    descendants: Vec<(String, String, usize)>,
+}
+
 /// Rewrite flagged imports in `source`, returning the new text and edit count.
 fn qualify_source(
     path: &str,
     source: &str,
     flagged_lines: &[usize],
-) -> Result<(String, usize), String> {
+) -> Result<Repair, String> {
     let syntax = syn::parse_file(source).map_err(|error| format!("parse failed: {error}"))?;
     let lines = LineIndex::new(source);
     let mut owners: BTreeMap<String, String> = BTreeMap::new();
@@ -627,7 +816,11 @@ fn qualify_source(
         return Err(format!("manual repair required: {}", skipped.join("; ")));
     }
     if owners.is_empty() {
-        return Ok((source.to_string(), 0));
+        return Ok(Repair {
+            output: source.to_string(),
+            edits: 0,
+            descendants: Vec::new(),
+        });
     }
 
     let mut file_bindings = FileBindings {
@@ -654,8 +847,22 @@ fn qualify_source(
         lines: &lines,
     };
     modules.visit_file(&syntax);
-    if let Some(hazard) = shared_scope_hazard(path, &syntax, &owners) {
+    if let Some(hazard) = parts_hazard(path, &syntax, &owners) {
         return Err(format!("manual repair required: {hazard}"));
+    }
+    let mut descendants: Vec<(String, String, usize)> = Vec::new();
+    if let Some(children) = module_descendants(path, &syntax) {
+        for child in children? {
+            let text = std::fs::read_to_string(&child.path)
+                .map_err(|error| format!("cannot read {}: {error}", child.path))?;
+            match rewrite_descendant(&child.path, child.depth, &text, &owners) {
+                Ok((output, edits)) if edits > 0 => {
+                    descendants.push((child.path.clone(), output, edits));
+                }
+                Ok(_) => {}
+                Err(message) => return Err(format!("manual repair required: {message}")),
+            }
+        }
     }
     let mut edits: Vec<(Range<usize>, String)> = Vec::new();
     let mut manual: Vec<String> = Vec::new();
@@ -696,7 +903,11 @@ fn qualify_source(
         output.replace_range(range, &replacement);
     }
     syn::parse_file(&output).map_err(|error| format!("rewrite produced invalid syntax: {error}"))?;
-    Ok((output, edit_count))
+    Ok(Repair {
+        output,
+        edits: edit_count,
+        descendants,
+    })
 }
 
 /// Adjust an owner path for the inline-module depth of one use site.
@@ -827,17 +1038,32 @@ fn run_summary(summary_path: &str, dry_run: bool, only: &[String]) -> Result<usi
         let source =
             std::fs::read_to_string(path).map_err(|error| format!("cannot read {path}: {error}"))?;
         match qualify_source(path, &source, lines) {
-            Ok((_output, edits)) if edits == 0 => {}
-            Ok((_output, edits)) if dry_run => {
-                println!("{path}: {edits} edits (dry run)");
-                total_edits += edits;
+            Ok(repair) if repair.edits == 0 && repair.descendants.is_empty() => {}
+            Ok(repair) if dry_run => {
+                let descendant_edits: usize = repair.descendants.iter().map(|(_, _, edits)| edits).sum();
+                println!(
+                    "{path}: {} edits, {} descendant files (dry run)",
+                    repair.edits,
+                    repair.descendants.len()
+                );
+                total_edits += repair.edits + descendant_edits;
                 repaired += 1;
             }
-            Ok((output, edits)) => {
-                std::fs::write(path, output)
+            Ok(repair) => {
+                std::fs::write(path, repair.output)
                     .map_err(|error| format!("cannot write {path}: {error}"))?;
-                println!("{path}: {edits} edits");
-                total_edits += edits;
+                let mut descendant_edits = 0_usize;
+                for (child, output, edits) in &repair.descendants {
+                    std::fs::write(child, output)
+                        .map_err(|error| format!("cannot write {child}: {error}"))?;
+                    descendant_edits += edits;
+                }
+                println!(
+                    "{path}: {} edits, {} descendant files",
+                    repair.edits,
+                    repair.descendants.len()
+                );
+                total_edits += repair.edits + descendant_edits;
                 repaired += 1;
             }
             Err(message) => {
@@ -872,12 +1098,14 @@ impl Holder {
     }
 }
 "#;
-    let (output, edits) = qualify_source("src/addr/route.rs", source, &[2, 3])?;
-    if edits != SELF_TEST_EXPECTED_EDITS {
+    let repair = qualify_source("src/addr/route.rs", source, &[2, 3])?;
+    if repair.edits != SELF_TEST_EXPECTED_EDITS {
         return Err(format!(
-            "self test expected {SELF_TEST_EXPECTED_EDITS} edits, got {edits}"
+            "self test expected {SELF_TEST_EXPECTED_EDITS} edits, got {}",
+            repair.edits
         ));
     }
+    let output = repair.output;
     if output.contains("use crate::addr::Addr;") || output.contains("use crate::addr::Route as Path;")
     {
         return Err(String::from("self test kept a flagged import"));
@@ -904,13 +1132,13 @@ impl Holder {
     }
 
     let nested = "use super::Addr;\n\nmod inner {\n    fn f(value: Addr) -> Addr {\n        value\n    }\n}\n";
-    let (output, _edits) = qualify_source("src/addr/route.rs", nested, &[1])?;
+    let output = qualify_source("src/addr/route.rs", nested, &[1])?.output;
     if !output.contains("fn f(value: super::super::Addr) -> super::super::Addr") {
         return Err(format!("self test did not adjust inline-module depth in\n{output}"));
     }
 
     let absolute = "use ::syndicate::bag::BTreeBag;\n\nfn f() -> BTreeBag {\n    BTreeBag::new()\n}\n";
-    let (output, _edits) = qualify_source("src/addr/route.rs", absolute, &[1])?;
+    let output = qualify_source("src/addr/route.rs", absolute, &[1])?.output;
     if !output.contains("-> ::syndicate::bag::BTreeBag") {
         return Err(format!("self test lost the absolute path in\n{output}"));
     }
@@ -924,7 +1152,7 @@ impl Holder {
         return Err(String::from("self test accepted a partially flagged group"));
     }
     let parent = "use crate::addr::Addr;\nmod child;\n";
-    let (output, _edits) = qualify_source("src/addr/route.rs", parent, &[1])?;
+    let output = qualify_source("src/addr/route.rs", parent, &[1])?.output;
     if output.contains("use crate::addr::Addr;") {
         return Err(String::from("self test kept a parent import without a sharing child"));
     }
@@ -935,10 +1163,32 @@ impl Holder {
         return Err(String::from("self test accepted an include! part body"));
     }
     let isolated_part = "use crate::codec::unused_owner_item;\n";
-    let (output, _edits) =
-        qualify_source("src/effects/parts/mod/p999/body.rs", isolated_part, &[1])?;
+    let output = qualify_source("src/effects/parts/mod/p999/body.rs", isolated_part, &[1])?.output;
     if output.contains("use crate::codec::unused_owner_item;") {
         return Err(String::from("self test skipped an isolated part body"));
+    }
+
+    // A descendant module sees the parent import through `use super::*`, so
+    // the repair has to qualify the descendant reference with one more step.
+    let mut owners = BTreeMap::new();
+    owners.insert(String::from("Addr"), String::from("super::Addr"));
+    let child = "use super::*;\n\nfn f(value: Addr) -> Addr {\n    value\n}\n";
+    let (output, edits) = rewrite_descendant("src/addr/route/child.rs", 1, child, &owners)?;
+    if edits != 2 || !output.contains("fn f(value: super::super::Addr) -> super::super::Addr") {
+        return Err(format!("self test did not qualify a descendant in\n{output}"));
+    }
+    let grandchild = "use super::*;\n\nfn f(value: Addr) -> Addr {\n    value\n}\n";
+    let (output, _edits) = rewrite_descendant("src/addr/route/child/grand.rs", 2, grandchild, &owners)?;
+    if !output.contains("-> super::super::super::Addr") {
+        return Err(format!("self test used the wrong descendant depth in\n{output}"));
+    }
+    let qualified = "fn f(value: super::Addr) -> usize {\n    let _ = value;\n    0\n}\n";
+    if rewrite_descendant("src/addr/route/child.rs", 1, qualified, &owners).is_ok() {
+        return Err(String::from("self test accepted a qualified descendant reference"));
+    }
+    let shadowed_child = "fn f() {\n    let Addr = 1;\n    let _ = Addr;\n}\n";
+    if rewrite_descendant("src/addr/route/child.rs", 1, shadowed_child, &owners).is_ok() {
+        return Err(String::from("self test accepted a shadowing descendant binding"));
     }
     let shadowed = "use crate::addr::Addr;\n\nfn f() {\n    let Addr = 1;\n    let _ = Addr;\n}\n";
     if qualify_source("src/addr/route.rs", shadowed, &[1]).is_ok() {

@@ -1,5 +1,4 @@
     use super::*;
-    use std::fs;
 
     fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
@@ -155,10 +154,10 @@
             fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
         })
         .expect("publish chain segment");
-        let bundle_bytes = fs::read(blob_path(&iroh, &published.bundle_ref).expect("blob path")).expect("read bundle");
+        let bundle_bytes = std::fs::read(blob_path(&iroh, &published.bundle_ref).expect("blob path")).expect("read bundle");
         let bundle = parse_canonical_bytes(&bundle_bytes).expect("parse bundle");
         let tampered = remove_bundle_artifacts_of_kind(&bundle, "chain-predicate-receipt");
-        fs::write(
+        std::fs::write(
             blob_path(&iroh, &published.bundle_ref).expect("blob path"),
             canonical_bytes(&tampered).expect("canonical tampered bundle"),
         )
@@ -192,7 +191,7 @@
             fork_policy: crate::evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
         })
         .expect("publish chain segment");
-        fs::write(blob_path(&iroh, &published.bundle_ref).expect("blob path"), b"tampered").expect("tamper blob");
+        std::fs::write(blob_path(&iroh, &published.bundle_ref).expect("blob path"), b"tampered").expect("tamper blob");
         let error = fetch_chain_segment(&FetchChainSegmentInput {
             iroh_root: &iroh,
             ticket: &published.ticket,

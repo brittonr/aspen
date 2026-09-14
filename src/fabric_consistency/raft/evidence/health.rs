@@ -4,7 +4,7 @@ pub(super) fn aggregate(
     ledger: &ReplicaEvidenceLedger,
     state: &ReplicaState,
     production_admitted: bool,
-) -> Result<ReplicaAggregateHealthEvidence> {
+) -> crate::error::Result<ReplicaAggregateHealthEvidence> {
     let status = if state.lifecycle == ReplicaLifecycle::Stopped {
         "stopped"
     } else if ledger.saturated || ledger.diagnostic.is_some() || !state.pending_reads.is_empty() {
@@ -33,10 +33,9 @@ pub(super) fn aggregate(
             crate::preserves_rail::u64_value(state.current_term),
             crate::preserves_rail::u64_value(state.commit_index),
             crate::preserves_rail::u64_value(state.last_applied),
-            crate::preserves_rail::u64_value(
-                u64::try_from(ledger.records.len())
-                    .map_err(|_| MoltenError::invalid_harness("live Raft evidence record count exceeds u64"))?,
-            ),
+            crate::preserves_rail::u64_value(u64::try_from(ledger.records.len()).map_err(|_| {
+                crate::error::MoltenError::invalid_harness("live Raft evidence record count exceeds u64")
+            })?),
             crate::preserves_rail::u64_value(ledger.suppressed_heartbeat_count),
             crate::preserves_rail::bool_value(ledger.saturated),
             diagnostic_value,

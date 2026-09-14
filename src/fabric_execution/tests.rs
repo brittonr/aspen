@@ -1,17 +1,4 @@
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-
 use super::*;
-use crate::fabric::DeterminismClass;
-use crate::fabric::FabricAuthority;
-use crate::fabric::FabricPortClass;
-use crate::fabric::FabricPortRequirement;
-use crate::fabric::FabricResource;
-use crate::fabric::REQUIRED_FABRIC_NON_CLAIMS;
-use crate::fabric::ReplayClass;
-use crate::fabric::build_fabric_port_registry;
-use crate::fabric::resolve_fabric_port_binding;
 
 mod live;
 mod simulation;
@@ -102,7 +89,7 @@ fn descriptor(kind: ExecutionProfileKind) -> ExecutionProfileDescriptor {
         component_license: BOUNDED_EXEC_LICENSE.to_string(),
         component_package: BOUNDED_EXEC_PACKAGE.to_string(),
         conformance_refs: vec![HASH_B.to_string()],
-        fabric_non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+        fabric_non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
         non_claims: REQUIRED_EXECUTION_NON_CLAIMS.to_vec(),
     }
 }
@@ -203,10 +190,10 @@ fn canonicalize_request(
 
 fn resolved(stdin_bytes: Option<Vec<u8>>) -> ResolvedExecutionContext {
     ResolvedExecutionContext {
-        executable_path: PathBuf::from("/bin/sh"),
+        executable_path: std::path::PathBuf::from("/bin/sh"),
         executable_artifact_ref: HASH_B.to_string(),
         executable_identity_ref: HASH_C.to_string(),
-        workspace_path: PathBuf::from("/"),
+        workspace_path: std::path::PathBuf::from("/"),
         workspace_ref: HASH_D.to_string(),
         stdin_ref: stdin_bytes.as_ref().map(|_| HASH_E.to_string()),
         stdin_bytes,
@@ -262,35 +249,36 @@ fn source_cohort_and_exact_port_binding_are_canonical() {
     let profile =
         canonical_admit_execution_profile(&descriptor(ExecutionProfileKind::LiveBoundedProcess)).expect("live profile");
     let descriptor = fabric_execution_port_descriptor(&profile);
-    let registry = build_fabric_port_registry(std::slice::from_ref(&descriptor)).expect("execution registry");
-    let requirement = FabricPortRequirement {
+    let registry =
+        crate::fabric::build_fabric_port_registry(std::slice::from_ref(&descriptor)).expect("execution registry");
+    let requirement = crate::fabric::FabricPortRequirement {
         port_id: EXECUTION_PORT_ID.to_string(),
         version: EXECUTION_PORT_VERSION.to_string(),
-        class: FabricPortClass::Execution,
+        class: crate::fabric::FabricPortClass::Execution,
         operation_classes: descriptor.operation_classes.clone(),
         input_schema_refs: descriptor.input_schema_refs.clone(),
         output_schema_refs: descriptor.output_schema_refs.clone(),
         allowed_authorities: vec![
-            FabricAuthority::Execution,
-            FabricAuthority::Resources,
-            FabricAuthority::Evidence,
+            crate::fabric::FabricAuthority::Execution,
+            crate::fabric::FabricAuthority::Resources,
+            crate::fabric::FabricAuthority::Evidence,
         ],
         available_resources: vec![
-            FabricResource::Memory,
-            FabricResource::StorageBytes,
-            FabricResource::ExecutionMillis,
-            FabricResource::InputBytes,
-            FabricResource::OutputBytes,
-            FabricResource::Concurrency,
-            FabricResource::QueueDepth,
-            FabricResource::LogicalTime,
-            FabricResource::Diagnostics,
+            crate::fabric::FabricResource::Memory,
+            crate::fabric::FabricResource::StorageBytes,
+            crate::fabric::FabricResource::ExecutionMillis,
+            crate::fabric::FabricResource::InputBytes,
+            crate::fabric::FabricResource::OutputBytes,
+            crate::fabric::FabricResource::Concurrency,
+            crate::fabric::FabricResource::QueueDepth,
+            crate::fabric::FabricResource::LogicalTime,
+            crate::fabric::FabricResource::Diagnostics,
         ],
-        expected_determinism: DeterminismClass::ExternalEffect,
-        expected_replay: ReplayClass::RecordedEffectRequired,
+        expected_determinism: crate::fabric::DeterminismClass::ExternalEffect,
+        expected_replay: crate::fabric::ReplayClass::RecordedEffectRequired,
         expected_profile: "bounded-process-live-v1".to_string(),
     };
-    let binding = resolve_fabric_port_binding(&registry, &requirement).expect("exact execution binding");
-    assert_eq!(binding.class, FabricPortClass::Execution);
+    let binding = crate::fabric::resolve_fabric_port_binding(&registry, &requirement).expect("exact execution binding");
+    assert_eq!(binding.class, crate::fabric::FabricPortClass::Execution);
     assert_eq!(binding.implementation_profile, "bounded-process-live-v1");
 }

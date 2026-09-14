@@ -1,5 +1,4 @@
     use super::*;
-    use std::fs;
 
     #[test]
     fn local_gossip_roundtrip_preserves_envelope_identity() {
@@ -73,7 +72,7 @@
         })
         .expect("envelope");
         publish_local_gossip(&root, &envelope, "peer:a").expect("publish with valid content");
-        fs::write(blob_path(&root, &content_ref).expect("blob path"), b"tampered").expect("tamper blob");
+        std::fs::write(blob_path(&root, &content_ref).expect("blob path"), b"tampered").expect("tamper blob");
         let error = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b")
             .expect_err("tampered content rejects delivery");
         assert!(error.to_string().contains("content ref"));
@@ -223,7 +222,7 @@
         let delivery = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
         let log = delivery_log(std::slice::from_ref(&delivery), true).expect("delivery log");
         assert_eq!(crate::ledger::artifact_kind(&log.value), "remote-dataspace-delivery-log");
-        fs::remove_dir_all(root.join("gossip")).expect("remove live transport bytes");
+        std::fs::remove_dir_all(root.join("gossip")).expect("remove live transport bytes");
         let mut observed_state = RuntimeState::new(REPLAY_SEED);
         let observed_events = apply_delivered_envelope(&mut observed_state, &delivery.envelope).expect("observed apply");
         let observed_state_ref = observed_state.snapshot().snapshot_ref().expect("observed state ref");
@@ -311,7 +310,7 @@
         let wrong_peer =
             deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:c").expect_err("wrong peer rejects");
         assert!(wrong_peer.to_string().contains("target"));
-        fs::write(envelope_path(&root, "services", &envelope.envelope_ref).expect("envelope path"), b"not-preserves")
+        std::fs::write(envelope_path(&root, "services", &envelope.envelope_ref).expect("envelope path"), b"not-preserves")
             .expect("tamper envelope bytes");
         let tampered = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b")
             .expect_err("tampered envelope rejects");
