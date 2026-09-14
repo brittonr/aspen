@@ -500,8 +500,8 @@ pub(crate) fn canonical_service_readiness(
     state: &LifecycleState,
     boundary_ref: &str,
 ) -> Result<CanonicalServiceReadiness> {
-    let ready = state.phase == super::LifecyclePhase::Running && state.health == HealthState::Healthy;
-    let action = if ready { "publish" } else { "withdraw" };
+    let is_ready = state.phase == super::LifecyclePhase::Running && state.health == HealthState::Healthy;
+    let action = if is_ready { "publish" } else { "withdraw" };
     let value = record("system-extension-readiness-v1", vec![
         string(super::SYSTEM_EXTENSION_READINESS_SCHEMA),
         field("manifest-ref", string(manifest_ref)),
@@ -510,7 +510,7 @@ pub(crate) fn canonical_service_readiness(
         field("generation", u64_value(state.generation)),
         field("phase", string(state.phase.as_str())),
         field("health", string(state.health.as_str())),
-        field("ready", bool_value(ready)),
+        field("ready", bool_value(is_ready)),
         field("action", string(action)),
         field("boundary-ref", string(boundary_ref)),
         checks_value(&[
@@ -524,7 +524,7 @@ pub(crate) fn canonical_service_readiness(
         readiness_ref,
         service_id: service_id.to_string(),
         generation: state.generation,
-        ready,
+        ready: is_ready,
         health: state.health,
         value,
     })

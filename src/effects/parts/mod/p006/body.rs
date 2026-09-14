@@ -362,22 +362,22 @@ fn handler_profile_admission_diagnostics(
 fn effect_support_diagnostics(manifest: &EffectManifest, supported_effects: &[DeclaredEffect]) -> Vec<String> {
     let mut diagnostics = Vec::new();
     for declared in &manifest.declared_effects {
-        let mut saw_effect_operation = false;
-        let mut saw_exact = false;
+        let mut is_saw_effect_operation = false;
+        let mut is_saw_exact = false;
         for supported in supported_effects {
             if supported.effect_id == declared.effect_id && supported.operation == declared.operation {
-                saw_effect_operation = true;
+                is_saw_effect_operation = true;
                 if effect_support_matches(declared, supported) {
-                    saw_exact = true;
+                    is_saw_exact = true;
                 }
             }
         }
-        if !saw_effect_operation {
+        if !is_saw_effect_operation {
             diagnostics.push(format!(
                 "handler profile does not support declared effect {} operation {}",
                 declared.effect_id, declared.operation
             ));
-        } else if !saw_exact {
+        } else if !is_saw_exact {
             diagnostics.push(format!(
                 "handler profile schema/resource/capability mismatch for effect {} operation {}",
                 declared.effect_id, declared.operation
@@ -416,16 +416,16 @@ fn missing_capability_diagnostics(effect: &DeclaredEffect, request: &EffectReque
 
 fn effect_profile_replay_binding_diagnostics(input: &EffectProfileReplayBindingInput) -> Vec<String> {
     let mut diagnostics = Vec::new();
-    let compatible = input.compatibility_ref.is_some();
+    let is_compatible = input.compatibility_ref.is_some();
     if let Some(expected_manifest_ref) = input.expected_manifest_ref.as_deref()
         && expected_manifest_ref != input.effect_manifest_ref
-        && !compatible
+        && !is_compatible
     {
         diagnostics.push("effect profile binding manifest ref changed without compatibility evidence".to_string());
     }
     if let Some(expected_handler_profile_ref) = input.expected_handler_profile_ref.as_deref()
         && expected_handler_profile_ref != input.handler_profile_ref
-        && !compatible
+        && !is_compatible
     {
         diagnostics.push("effect profile binding handler profile ref changed without compatibility evidence".to_string());
     }

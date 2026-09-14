@@ -153,9 +153,9 @@ fn release_snapshot_caveats_rendered(
     required_caveats: &[String],
     diagnostics: &mut Vec<String>,
 ) -> Result<bool> {
-    let mut rendered = true;
+    let mut is_rendered = true;
     if snapshot.caveats.is_empty() {
-        rendered = false;
+        is_rendered = false;
         push_bounded(
             diagnostics,
             "release snapshot must render at least one caveat".to_string(),
@@ -165,7 +165,7 @@ fn release_snapshot_caveats_rendered(
     }
     for required in required_caveats {
         if !snapshot.caveats.iter().any(|caveat| caveat == required) {
-            rendered = false;
+            is_rendered = false;
             push_bounded(
                 diagnostics,
                 format!("required caveat not rendered: {required}"),
@@ -174,7 +174,7 @@ fn release_snapshot_caveats_rendered(
             )?;
         }
     }
-    Ok(rendered)
+    Ok(is_rendered)
 }
 
 fn release_snapshot_fresh_evidence(snapshot: &ReleaseSnapshot, diagnostics: &mut Vec<String>) -> Result<bool> {
@@ -208,17 +208,17 @@ fn release_snapshot_required_evidence_bound(
     snapshot: &ReleaseSnapshot,
     diagnostics: &mut Vec<String>,
 ) -> Result<bool> {
-    let mut bound = true;
-    bound &= require_non_empty_refs(&snapshot.doc_refs, "release snapshot docs", diagnostics)?;
-    bound &= require_non_empty_refs(&snapshot.transcript_refs, "release snapshot transcripts", diagnostics)?;
-    bound &= require_non_empty_refs(&snapshot.expected_receipt_refs, "release snapshot expected receipts", diagnostics)?;
-    bound &= require_non_empty_refs(&snapshot.policy_refs, "release snapshot policy evidence", diagnostics)?;
-    bound &= require_non_empty_refs(&snapshot.provenance_refs, "release snapshot provenance evidence", diagnostics)?;
-    bound &= require_non_empty_refs(&snapshot.source_gate_refs, "release snapshot source-gate evidence", diagnostics)?;
-    bound &= require_non_empty_refs(&snapshot.resource_refs, "release snapshot resource evidence", diagnostics)?;
-    bound &= require_non_empty_refs(&snapshot.compatibility_refs, "release snapshot compatibility receipts", diagnostics)?;
-    bound &= require_non_empty_refs(&snapshot.migration_refs, "release snapshot migration receipts", diagnostics)?;
-    Ok(bound)
+    let mut is_bound = true;
+    is_bound &= require_non_empty_refs(&snapshot.doc_refs, "release snapshot docs", diagnostics)?;
+    is_bound &= require_non_empty_refs(&snapshot.transcript_refs, "release snapshot transcripts", diagnostics)?;
+    is_bound &= require_non_empty_refs(&snapshot.expected_receipt_refs, "release snapshot expected receipts", diagnostics)?;
+    is_bound &= require_non_empty_refs(&snapshot.policy_refs, "release snapshot policy evidence", diagnostics)?;
+    is_bound &= require_non_empty_refs(&snapshot.provenance_refs, "release snapshot provenance evidence", diagnostics)?;
+    is_bound &= require_non_empty_refs(&snapshot.source_gate_refs, "release snapshot source-gate evidence", diagnostics)?;
+    is_bound &= require_non_empty_refs(&snapshot.resource_refs, "release snapshot resource evidence", diagnostics)?;
+    is_bound &= require_non_empty_refs(&snapshot.compatibility_refs, "release snapshot compatibility receipts", diagnostics)?;
+    is_bound &= require_non_empty_refs(&snapshot.migration_refs, "release snapshot migration receipts", diagnostics)?;
+    Ok(is_bound)
 }
 
 fn require_non_empty_refs(refs: &[String], label: &str, diagnostics: &mut Vec<String>) -> Result<bool> {

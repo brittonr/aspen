@@ -166,7 +166,7 @@ fn parse_admission_authority(value: &Value<IoValue>) -> Result<AdmissionAuthorit
     let authority = simple_record(&authority_value, "authority", 10)?;
     let source = required_record_string(&authority[0], "source", "admission authority source")?;
     let capability_ref = required_record_hash(&authority[1], "capability-ref", "admission authority capability ref")?;
-    let authorized = required_record_bool(&authority[2], "authorized", "admission authority authorized")?;
+    let is_authorized = required_record_bool(&authority[2], "authorized", "admission authority authorized")?;
     let grant_ref = optional_request_string(&authority[3], "admission authority grant ref")?;
     let request_ref = required_record_hash(&authority[4], "request-ref", "admission authority request ref")?;
     let proofset_ref = required_record_hash(&authority[5], "ucan-proofset-ref", "admission authority UCAN proofset ref")?;
@@ -199,7 +199,7 @@ fn parse_admission_authority(value: &Value<IoValue>) -> Result<AdmissionAuthorit
     Ok(AdmissionAuthorityEvidence {
         source,
         capability_ref,
-        authorized,
+        authorized: is_authorized,
         grant_ref,
         request_ref,
         proofset_ref,

@@ -136,11 +136,11 @@ impl FabricEffectPort for DeterministicSimulationPortRouter {
         if !profile.deterministic {
             return Err(FabricPortError::capability("simulation effect cannot route through a live adapter"));
         }
-        let target_matches = matches!(
+        let is_target_matches = matches!(
             &effect.target,
             crate::system_extension::EffectTarget::FabricPort(key) if key == &binding.binding.key
         );
-        if !target_matches {
+        if !is_target_matches {
             return Err(FabricPortError::malformed("simulation effect target does not match its canonical binding"));
         }
         let active_fault = self.active_fault(&profile).cloned();

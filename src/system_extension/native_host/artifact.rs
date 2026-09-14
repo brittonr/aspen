@@ -215,9 +215,9 @@ pub fn verify_native_artifact_index(
         }
     }
     for member in &index.members {
-        let parent_is_root = member.parent_ref == index.manifest_ref;
-        let parent_is_indexed = refs.contains(&member.parent_ref);
-        if !parent_is_root && !parent_is_indexed {
+        let is_parent_is_root = member.parent_ref == index.manifest_ref;
+        let is_parent_is_indexed = refs.contains(&member.parent_ref);
+        if !is_parent_is_root && !is_parent_is_indexed {
             issues.push(NativeArtifactIndexIssue::ParentNotIndexed {
                 artifact_ref: member.artifact_ref.clone(),
                 parent_ref: member.parent_ref.clone(),

@@ -80,8 +80,8 @@ pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result
 
 fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_>) -> Result<HostcallAdmission> {
     let mut diagnostics = Vec::new();
-    let primitive_ref_matches = primitive_hostcall_ref(input.operation)? == input.hostcall_ref;
-    let primitive_declared = primitive_ref_matches && manifest.hostcall_refs.iter().any(|value| value == input.hostcall_ref);
+    let is_primitive_ref_matches = primitive_hostcall_ref(input.operation)? == input.hostcall_ref;
+    let is_primitive_declared = is_primitive_ref_matches && manifest.hostcall_refs.iter().any(|value| value == input.hostcall_ref);
     let extension_descriptor = matching_bound_descriptor(
         manifest,
         input.extension_contracts,
@@ -97,25 +97,25 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
             attenuation_valid: true,
             revocation_valid: true,
         });
-    let descriptor_requirements = descriptor_requirements_pass(
+    let is_descriptor_requirements = descriptor_requirements_pass(
         manifest,
         extension_descriptor.as_ref(),
         &grant_match,
         input,
     );
-    let is_declared_hostcall = primitive_declared || extension_descriptor.is_some();
-    let operation_ref_bound = primitive_ref_matches || extension_descriptor.is_some();
+    let is_declared_hostcall = is_primitive_declared || extension_descriptor.is_some();
+    let is_operation_ref_bound = is_primitive_ref_matches || extension_descriptor.is_some();
     let has_authority = !input.authority_refs.is_empty();
     let has_resources = !input.resource_refs.is_empty();
     let has_ambient_request = is_ambient_operation(input.operation);
     let has_matching_capability_grant = extension_descriptor.is_none() || grant_match.grant.is_some();
     let has_typed_capability_grant = extension_descriptor.is_none() || !input.capability_grants.is_empty();
-    let attenuation_valid = extension_descriptor.is_none() || grant_match.attenuation_valid;
-    let revocation_valid = extension_descriptor.is_none() || grant_match.revocation_valid;
+    let is_attenuation_valid = extension_descriptor.is_none() || grant_match.attenuation_valid;
+    let is_revocation_valid = extension_descriptor.is_none() || grant_match.revocation_valid;
     let has_descriptor_requirements = if extension_descriptor.is_some() {
-        descriptor_requirements
+        is_descriptor_requirements
     } else {
-        primitive_declared
+        is_primitive_declared
     };
     if !is_declared_hostcall {
         diagnostics.push_limited(
@@ -124,7 +124,7 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
             "plugin hostcall diagnostics",
         )?;
     }
-    if !operation_ref_bound {
+    if !is_operation_ref_bound {
         diagnostics.push_limited(
             format!("plugin hostcall operation/ref binding mismatch for {}", input.operation),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -170,14 +170,14 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
             "plugin hostcall diagnostics",
         )?;
     }
-    if extension_descriptor.is_some() && !attenuation_valid {
+    if extension_descriptor.is_some() && !is_attenuation_valid {
         diagnostics.push_limited(
             format!("plugin hostcall {} capability grant attenuation is invalid", input.operation),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin hostcall diagnostics",
         )?;
     }
-    if extension_descriptor.is_some() && !revocation_valid {
+    if extension_descriptor.is_some() && !is_revocation_valid {
         diagnostics.push_limited(
             format!("plugin hostcall {} capability grant is revoked", input.operation),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -194,12 +194,12 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
     Ok(HostcallAdmission {
         diagnostics,
         is_declared_hostcall,
-        operation_ref_bound,
+        operation_ref_bound: is_operation_ref_bound,
         has_authority,
         has_typed_capability_grant,
         has_matching_capability_grant,
-        attenuation_valid,
-        revocation_valid,
+        attenuation_valid: is_attenuation_valid,
+        revocation_valid: is_revocation_valid,
         has_resources,
         has_descriptor_requirements,
         has_ambient_request,
@@ -252,28 +252,28 @@ fn matching_capability_grant<'a>(
     bound: &BoundHostcallDescriptor<'_>,
     input: &'a HostcallReceiptInput<'_>,
 ) -> Result<GrantMatchResult<'a>> {
-    let mut any_attenuation_invalid = false;
-    let mut any_revocation_invalid = false;
+    let mut is_any_attenuation_invalid = false;
+    let mut is_any_revocation_invalid = false;
     for grant in input.capability_grants {
         if !grant_identity_matches(manifest, bound, grant) {
             continue;
         }
-        let attenuation_valid = grant_attenuation_matches(grant, input.evaluation_turn, input.resource_refs);
-        let revocation_valid = !grant.revoked;
-        if attenuation_valid && revocation_valid && grant_context_matches(manifest, bound.descriptor, input, grant) {
+        let is_attenuation_valid = grant_attenuation_matches(grant, input.evaluation_turn, input.resource_refs);
+        let is_revocation_valid = !grant.revoked;
+        if is_attenuation_valid && is_revocation_valid && grant_context_matches(manifest, bound.descriptor, input, grant) {
             return Ok(GrantMatchResult {
                 grant: Some(grant),
-                attenuation_valid,
-                revocation_valid,
+                attenuation_valid: is_attenuation_valid,
+                revocation_valid: is_revocation_valid,
             });
         }
-        any_attenuation_invalid |= !attenuation_valid;
-        any_revocation_invalid |= !revocation_valid;
+        is_any_attenuation_invalid |= !is_attenuation_valid;
+        is_any_revocation_invalid |= !is_revocation_valid;
     }
     Ok(GrantMatchResult {
         grant: None,
-        attenuation_valid: !any_attenuation_invalid,
-        revocation_valid: !any_revocation_invalid,
+        attenuation_valid: !is_any_attenuation_invalid,
+        revocation_valid: !is_any_revocation_invalid,
     })
 }
 

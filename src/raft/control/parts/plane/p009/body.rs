@@ -398,7 +398,7 @@ pub fn parse_consensus_engine_descriptor(value: &IoValue) -> Result<ConsensusEng
     let profile_id = record_string(&fields[1], "profile")?;
     let profile_version = record_string(&fields[2], "version")?;
     let implementation_id = record_string(&fields[3], "implementation")?;
-    let enabled = record_bool(&fields[4], "enabled")?;
+    let is_enabled = record_bool(&fields[4], "enabled")?;
     let supported_read_consistency_modes = parse_string_sequence(&fields[5], "read-consistency")?;
     validate_read_consistency_support(&supported_read_consistency_modes)?;
     let capabilities = parse_string_sequence(&fields[6], "capabilities")?;
@@ -422,7 +422,7 @@ pub fn parse_consensus_engine_descriptor(value: &IoValue) -> Result<ConsensusEng
         profile_id,
         profile_version,
         implementation_id,
-        enabled,
+        enabled: is_enabled,
         supported_read_consistency_modes,
         capabilities,
         currentness_evidence_classes,

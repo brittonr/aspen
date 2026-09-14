@@ -108,12 +108,12 @@ fn recheck_linear_ownership<R: LinearAuthorityTransferPort>(
 ) -> Result<()> {
     let ownership = runtime.observe_ownership(plan)?;
     let expected_generation = realization.transfer_generation;
-    let current = ownership.capability_ref == plan.capability_ref
+    let is_current = ownership.capability_ref == plan.capability_ref
         && Some(ownership.generation) == expected_generation
         && !ownership.source_active
         && !ownership.destination_active
         && valid_content_ref(&ownership.observation_ref);
-    if current {
+    if is_current {
         realization.source_active = ownership.source_active;
         realization.destination_active = ownership.destination_active;
         realization.transfer_generation = Some(ownership.generation);

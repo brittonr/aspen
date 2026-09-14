@@ -158,7 +158,7 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
             super::mechanics::publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stdout);
         let stderr_publication =
             super::mechanics::publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stderr);
-        let publication_failed = matches!(stdout_publication, ExecutionStreamPublication::Failed { .. })
+        let is_publication_failed = matches!(stdout_publication, ExecutionStreamPublication::Failed { .. })
             || matches!(stderr_publication, ExecutionStreamPublication::Failed { .. });
         let receipt = canonical_execution_receipt(
             request,
@@ -200,7 +200,7 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
             request.plan.request.operation_ref.clone(),
             (request.plan.request.generation, SimulationStatus::Terminal(receipt.receipt_ref.clone())),
         );
-        if publication_failed {
+        if is_publication_failed {
             return Err(simulation_failure(
                 request,
                 ExecutionPortFailureKind::OutputPublication,

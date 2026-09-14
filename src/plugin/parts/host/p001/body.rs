@@ -354,10 +354,10 @@ fn parse_grant_revocation(value: &Value<IoValue>) -> Result<(Vec<String>, bool)>
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, "revocation", PLUGIN_CAPABILITY_GRANT_REVOCATION_ARITY)?;
     let refs = required_ref_sequence(&fields[0], "plugin capability grant revocation refs")?;
-    let revoked = fields[1]
+    let is_revoked = fields[1]
         .as_boolean()
         .ok_or_else(|| MoltenError::invalid_harness("plugin capability grant revoked flag must be boolean"))?;
-    Ok((refs, revoked))
+    Ok((refs, is_revoked))
 }
 
 fn parse_grant_attenuation(value: &Value<IoValue>) -> Result<PluginCapabilityGrantAttenuation> {

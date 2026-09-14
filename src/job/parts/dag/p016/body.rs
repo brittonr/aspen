@@ -27,13 +27,13 @@ fn push_target_state_check(
     buffers: &mut DeliveryCheckBuffers,
 ) -> Result<()> {
     let source_registry_marker = ["source-registry"];
-    let request_has_source_registry =
+    let is_request_has_source_registry =
         crate::preserves_rail::find_named_structural_marker(&request.value, &source_registry_marker)?.is_some();
-    let execution_has_source_registry =
+    let is_execution_has_source_registry =
         crate::preserves_rail::find_named_structural_marker(&execution_request.value, &source_registry_marker)?.is_some();
     let has_target_state_only = execution_request.target_peer == request.target_peer
-        && !request_has_source_registry
-        && !execution_has_source_registry;
+        && !is_request_has_source_registry
+        && !is_execution_has_source_registry;
     buffers.push("target-state-only", has_target_state_only);
     if !has_target_state_only {
         buffers.note("job worker execution request must run from target roots only");

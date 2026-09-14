@@ -304,7 +304,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
             .map_err(|_| MoltenError::invalid_harness("verification public key is malformed"))?;
         let public_key_ref = content_ref_from_bytes(public_key.as_bytes());
         let parsed_signature = iroh::Signature::try_from(signature.signature.as_slice()).ok();
-        let crypto_passed = parsed_signature
+        let is_crypto_passed = parsed_signature
             .as_ref()
             .is_some_and(|parsed| public_key.verify(&expected_domain.bytes, parsed).is_ok());
         let mut observed = signature.metadata.clone();
@@ -316,7 +316,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
             profile_ref: self.profile.profile.profile_ref.clone(),
             expected_domain: expected_domain.domain.clone(),
             observed,
-            cryptographic_verification_passed: crypto_passed,
+            cryptographic_verification_passed: is_crypto_passed,
             signer_currentness,
             signer_generation,
             policy_ref: policy_ref.to_string(),

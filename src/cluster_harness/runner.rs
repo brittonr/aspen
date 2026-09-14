@@ -137,17 +137,18 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
 
     let mut child_executions = Vec::new();
     let mut diagnostics = Vec::new();
-    let init_passed = execute_phase_for_nodes(input, &plan, "init", &mut child_executions, &mut artifacts, |node| {
-        vec![
-            OsString::from("node"),
-            OsString::from("init"),
-            OsString::from("--state-root"),
-            node.state_root.as_os_str().to_os_string(),
-            OsString::from("--node-id"),
-            OsString::from(&node.node_id),
-        ]
-    })?;
-    let start_passed = if init_passed {
+    let is_init_passed =
+        execute_phase_for_nodes(input, &plan, "init", &mut child_executions, &mut artifacts, |node| {
+            vec![
+                OsString::from("node"),
+                OsString::from("init"),
+                OsString::from("--state-root"),
+                node.state_root.as_os_str().to_os_string(),
+                OsString::from("--node-id"),
+                OsString::from(&node.node_id),
+            ]
+        })?;
+    let is_start_passed = if is_init_passed {
         execute_phase_for_nodes(input, &plan, "start", &mut child_executions, &mut artifacts, |node| {
             vec![
                 OsString::from("node"),
@@ -160,7 +161,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
         diagnostics.push("cluster-harness-start-skipped-after-init-failure".to_string());
         false
     };
-    let workflow_passed = if start_passed {
+    let is_workflow_passed = if is_start_passed {
         execute_phase_for_nodes(input, &plan, "workflow", &mut child_executions, &mut artifacts, |node| {
             vec![
                 OsString::from("node"),
@@ -179,7 +180,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
         diagnostics.push("cluster-harness-workflow-skipped-after-start-failure".to_string());
         false
     };
-    let status_passed = if workflow_passed {
+    let is_status_passed = if is_workflow_passed {
         execute_phase_for_nodes(input, &plan, "status", &mut child_executions, &mut artifacts, |node| {
             vec![
                 OsString::from("node"),
@@ -193,7 +194,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
         false
     };
 
-    let stop_passed = if start_passed {
+    let is_stop_passed = if is_start_passed {
         execute_phase_for_nodes_reverse(input, &plan, "stop", &mut child_executions, &mut artifacts, |node| {
             vec![
                 OsString::from("node"),
@@ -220,7 +221,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     child_receipt_refs.dedup();
     let cleanup_input = ClusterHarnessCleanupInput {
         child_process_refs: child_process_refs.clone(),
-        stopped_node_ids: if stop_passed {
+        stopped_node_ids: if is_stop_passed {
             plan.nodes.iter().rev().map(|node| node.node_id.clone()).collect()
         } else {
             Vec::new()
@@ -232,7 +233,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
             .collect(),
         removed_ticket_refs: cleanup_observation.removed_ticket_refs,
         remaining_ticket_paths: cleanup_observation.remaining_ticket_paths,
-        cleanup_succeeded: cleanup_observation.succeeded && stop_passed,
+        cleanup_succeeded: cleanup_observation.succeeded && is_stop_passed,
         caveats: caveats.clone(),
     };
     let cleanup = cleanup_value(&cleanup_input)?;
@@ -245,7 +246,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
         &node_artifacts,
         &child_executions,
         &diagnostics,
-        init_passed && start_passed && workflow_passed && status_passed && stop_passed,
+        is_init_passed && is_start_passed && is_workflow_passed && is_status_passed && is_stop_passed,
         &caveats,
     )?;
     push_artifact(&mut artifacts, LIFECYCLE_FILE, CLUSTER_LIFECYCLE_KIND, lifecycle.lifecycle_value)?;
@@ -492,10 +493,10 @@ fn execute_phase_for_nodes<F>(
 where
     F: Fn(&crate::cluster::ClusterNodePlan) -> Vec<OsString>,
 {
-    let mut passed = true;
+    let mut is_passed = true;
     for node in &plan.nodes {
         let execution = execute_child(input, node, phase, arguments(node))?;
-        passed &= execution.succeeded;
+        is_passed &= execution.succeeded;
         push_artifact(
             artifacts,
             &format!("children/processes/{phase}-{}.preserves", node.path_component),
@@ -504,7 +505,7 @@ where
         )?;
         executions.push(execution);
     }
-    Ok(passed)
+    Ok(is_passed)
 }
 
 fn execute_phase_for_nodes_reverse<F>(
@@ -518,10 +519,10 @@ fn execute_phase_for_nodes_reverse<F>(
 where
     F: Fn(&crate::cluster::ClusterNodePlan) -> Vec<OsString>,
 {
-    let mut passed = true;
+    let mut is_passed = true;
     for node in plan.nodes.iter().rev() {
         let execution = execute_child(input, node, phase, arguments(node))?;
-        passed &= execution.succeeded;
+        is_passed &= execution.succeeded;
         push_artifact(
             artifacts,
             &format!("children/processes/{phase}-{}.preserves", node.path_component),
@@ -530,7 +531,7 @@ where
         )?;
         executions.push(execution);
     }
-    Ok(passed)
+    Ok(is_passed)
 }
 
 fn execute_child(
@@ -556,8 +557,8 @@ fn execute_child(
     };
     let started = Instant::now();
     let timeout = Duration::from_millis(input.child_timeout_ms);
-    let mut timed_out = false;
-    let mut orphaned = false;
+    let mut is_timed_out = false;
+    let mut is_orphaned = false;
     let mut process_error = None;
     loop {
         match child.try_wait() {
@@ -566,15 +567,15 @@ fn execute_child(
             Err(error) => {
                 process_error = Some(format!("child status failed: {error}"));
                 if child.kill().is_err() {
-                    orphaned = true;
+                    is_orphaned = true;
                 }
                 break;
             }
         }
         if started.elapsed() >= timeout {
-            timed_out = true;
+            is_timed_out = true;
             if child.kill().is_err() {
-                orphaned = true;
+                is_orphaned = true;
             }
             break;
         }
@@ -582,7 +583,7 @@ fn execute_child(
     }
     match child.wait_with_output() {
         Ok(output) => {
-            let process_status_ok = process_error.is_none();
+            let is_process_status_ok = process_error.is_none();
             let stderr = process_error.map_or_else(
                 || String::from_utf8_lossy(&output.stderr).into_owned(),
                 |error| format!("{error}\n{}", String::from_utf8_lossy(&output.stderr)),
@@ -591,16 +592,16 @@ fn execute_child(
                 exit_code: output.status.code(),
                 stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
                 stderr,
-                timed_out,
-                orphaned,
-                succeeded: output.status.success() && !timed_out && !orphaned && process_status_ok,
+                timed_out: is_timed_out,
+                orphaned: is_orphaned,
+                succeeded: output.status.success() && !is_timed_out && !is_orphaned && is_process_status_ok,
             })
         }
         Err(error) => finalize_child_execution(input, node, phase, ChildProcessObservation {
             exit_code: None,
             stdout: String::new(),
             stderr: format!("child wait failed: {error}"),
-            timed_out,
+            timed_out: is_timed_out,
             orphaned: true,
             succeeded: false,
         }),
@@ -760,8 +761,8 @@ fn build_lifecycle_artifacts(
     phases_passed: bool,
     caveats: &[String],
 ) -> Result<LifecycleArtifacts> {
-    let complete = phases_passed && nodes.len() == node_ids.len() && nodes.iter().all(NodeArtifacts::complete);
-    let (lifecycle_value, drift_summary) = if complete {
+    let is_complete = phases_passed && nodes.len() == node_ids.len() && nodes.iter().all(NodeArtifacts::complete);
+    let (lifecycle_value, drift_summary) = if is_complete {
         let phase = |name: &str| crate::cluster::ClusterLifecyclePhaseObservation {
             phase: name.to_string(),
             decision: RUN_DIRECTORY_PASS.to_string(),
@@ -846,12 +847,12 @@ fn cleanup_state_roots(plan: &crate::cluster::ClusterPlan) -> Result<CleanupObse
         collect_ticket_paths(&node.state_root, &node.state_root, &mut ticket_paths)?;
     }
     let mut removed_ticket_refs = Vec::new();
-    let mut succeeded = true;
+    let mut is_succeeded = true;
     for path in &ticket_paths {
         let text = std::fs::read_to_string(path).unwrap_or_default();
         removed_ticket_refs.push(content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &text));
         if std::fs::remove_file(path).is_err() {
-            succeeded = false;
+            is_succeeded = false;
         }
     }
     let mut remaining = Vec::new();
@@ -861,7 +862,7 @@ fn cleanup_state_roots(plan: &crate::cluster::ClusterPlan) -> Result<CleanupObse
     let remaining_ticket_paths = remaining.into_iter().map(|path| path.display().to_string()).collect::<Vec<_>>();
     Ok(CleanupObservation {
         removed_ticket_refs,
-        succeeded: succeeded && remaining_ticket_paths.is_empty(),
+        succeeded: is_succeeded && remaining_ticket_paths.is_empty(),
         remaining_ticket_paths,
     })
 }
@@ -1037,8 +1038,8 @@ fn observe_preserves_artifact(path: &Path, entry: &RunArtifactIndexEntry) -> Run
     };
     let observed_ref = crate::preserves_rail::canonical_hash(&value).ok();
     let actual_kind = crate::ledger::artifact_kind(&value).to_string();
-    let canonical = crate::preserves_rail::to_text(&value).is_ok_and(|rendered| rendered == text);
-    let pass_eligible = artifact_decision(&value, &actual_kind)
+    let is_canonical = crate::preserves_rail::to_text(&value).is_ok_and(|rendered| rendered == text);
+    let is_pass_eligible = artifact_decision(&value, &actual_kind)
         .ok()
         .flatten()
         .is_none_or(|decision| decision == RUN_DIRECTORY_PASS);
@@ -1047,8 +1048,8 @@ fn observe_preserves_artifact(path: &Path, entry: &RunArtifactIndexEntry) -> Run
         artifact_kind: actual_kind,
         observed_ref,
         format: ARTIFACT_FORMAT_PRESERVES.to_string(),
-        canonical,
-        pass_eligible,
+        canonical: is_canonical,
+        pass_eligible: is_pass_eligible,
     }
 }
 

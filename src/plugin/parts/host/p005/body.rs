@@ -200,7 +200,7 @@ pub fn parse_plugin_extension_contract(value: &IoValue) -> Result<PluginExtensio
     let conformance = parse_conformance(&fields[6])?;
     let policy_refs = record_ref_sequence(&fields[7], "policy")?;
     let supply_chain_refs = record_ref_sequence(&fields[8], "supply-chain")?;
-    let production_profile = parse_profile(&fields[9])?;
+    let is_production_profile = parse_profile(&fields[9])?;
     let checks = parse_checks(&fields[10])?;
     require_check_status(&checks, "canonical-contract", PLUGIN_DECISION_PASS, "plugin extension contract")?;
     require_check_status(&checks, "no-ambient-authority", PLUGIN_DECISION_PASS, "plugin extension contract")?;
@@ -223,7 +223,7 @@ pub fn parse_plugin_extension_contract(value: &IoValue) -> Result<PluginExtensio
         conformance,
         policy_refs,
         supply_chain_refs,
-        production_profile,
+        production_profile: is_production_profile,
         value: value.clone(),
     })
 }
@@ -309,10 +309,10 @@ pub fn plugin_extension_negotiation_receipt_value(input: &PluginExtensionNegotia
     let mut selected_refs = Vec::new();
     negotiate_required(input, &mut selected_refs, &mut diagnostics)?;
     negotiate_optional(input, &mut selected_refs, &mut diagnostics)?;
-    let required_present = input.required_contract_refs.iter().all(|reference| selected_refs.contains(reference));
-    let optional_policy_ok = input.allow_optional_omission
+    let is_required_present = input.required_contract_refs.iter().all(|reference| selected_refs.contains(reference));
+    let is_optional_policy_ok = input.allow_optional_omission
         || input.optional_contract_refs.iter().all(|reference| selected_refs.contains(reference));
-    let conformance_bound = selected_refs.iter().all(|reference| {
+    let is_conformance_bound = selected_refs.iter().all(|reference| {
         contract_for_ref(input.extension_contracts, reference)
             .is_some_and(|contract| !input.production_profile || contract.production_profile)
     });
@@ -331,9 +331,9 @@ pub fn plugin_extension_negotiation_receipt_value(input: &PluginExtensionNegotia
         record("selected", vec![refs_sequence(&selected_refs)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value(&[
-            ("required-extensions-present", status(required_present)),
-            ("optional-omission-policy", status(optional_policy_ok)),
-            ("conformance-bound", status(conformance_bound)),
+            ("required-extensions-present", status(is_required_present)),
+            ("optional-omission-policy", status(is_optional_policy_ok)),
+            ("conformance-bound", status(is_conformance_bound)),
             ("fail-closed-negotiation", PLUGIN_DECISION_PASS),
             ("no-implicit-fallback", status(diagnostics.is_empty())),
         ]),
@@ -346,10 +346,10 @@ fn negotiate_required(
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<()> {
     for reference in input.required_contract_refs {
-        let in_manifest = input.manifest.extension_contract_refs.contains(reference);
-        let host_supports = input.host_supported_contract_refs.contains(reference);
+        let is_in_manifest = input.manifest.extension_contract_refs.contains(reference);
+        let is_host_supports = input.host_supported_contract_refs.contains(reference);
         let contract = contract_for_ref(input.extension_contracts, reference);
-        if in_manifest && host_supports && production_profile_ok(contract, input.production_profile) {
+        if is_in_manifest && is_host_supports && production_profile_ok(contract, input.production_profile) {
             selected_refs.push_limited(reference.clone(), MAX_PLUGIN_REFS, "plugin selected extension refs")?;
         } else {
             diagnostics.push_limited(
@@ -368,10 +368,10 @@ fn negotiate_optional(
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<()> {
     for reference in input.optional_contract_refs {
-        let selectable = input.manifest.extension_contract_refs.contains(reference)
+        let is_selectable = input.manifest.extension_contract_refs.contains(reference)
             && input.host_supported_contract_refs.contains(reference)
             && production_profile_ok(contract_for_ref(input.extension_contracts, reference), input.production_profile);
-        if selectable {
+        if is_selectable {
             selected_refs.push_limited(reference.clone(), MAX_PLUGIN_REFS, "plugin selected extension refs")?;
         } else if !input.allow_optional_omission {
             diagnostics.push_limited(
@@ -431,12 +431,12 @@ pub fn plugin_extension_compatibility_receipt_value(input: &PluginExtensionCompa
             "plugin extension compatibility diagnostics",
         )?;
     }
-    let retained_required = retained_required_contracts(input, &mut diagnostics)?;
-    let compatible_versions = compatible_extension_versions(input, &mut diagnostics)?;
-    let retained_hostcalls = retained_hostcall_descriptors(input, &mut diagnostics)?;
-    let schema_compatible = schema_compatible(input, &mut diagnostics)?;
-    let requirements_compatible = requirements_compatible(input, &mut diagnostics)?;
-    let conformance_bound = compatibility_conformance_bound(input, &mut diagnostics)?;
+    let is_retained_required = retained_required_contracts(input, &mut diagnostics)?;
+    let is_compatible_versions = compatible_extension_versions(input, &mut diagnostics)?;
+    let is_retained_hostcalls = retained_hostcall_descriptors(input, &mut diagnostics)?;
+    let is_schema_compatible = schema_compatible(input, &mut diagnostics)?;
+    let is_requirements_compatible = requirements_compatible(input, &mut diagnostics)?;
+    let is_conformance_bound = compatibility_conformance_bound(input, &mut diagnostics)?;
     if input.cleanup_refs.is_empty() {
         diagnostics.push_limited(
             "plugin extension compatibility requires cleanup refs".to_string(),
@@ -465,13 +465,13 @@ pub fn plugin_extension_compatibility_receipt_value(input: &PluginExtensionCompa
         checks_value(&[
             ("same-plugin", status(input.old_manifest.plugin_id == input.new_manifest.plugin_id)),
             ("host-abi-compatible", status(input.old_manifest.abi == input.new_manifest.abi)),
-            ("required-extensions-retained", status(retained_required)),
-            ("version-compatible", status(compatible_versions)),
-            ("hostcall-descriptors-retained", status(retained_hostcalls)),
-            ("schema-compatible", status(schema_compatible)),
-            ("authority-resource-effect-compatible", status(requirements_compatible)),
+            ("required-extensions-retained", status(is_retained_required)),
+            ("version-compatible", status(is_compatible_versions)),
+            ("hostcall-descriptors-retained", status(is_retained_hostcalls)),
+            ("schema-compatible", status(is_schema_compatible)),
+            ("authority-resource-effect-compatible", status(is_requirements_compatible)),
             ("rollback-cleanup-bound", status(!input.cleanup_refs.is_empty())),
-            ("conformance-bound", status(conformance_bound)),
+            ("conformance-bound", status(is_conformance_bound)),
         ]),
     ]))
 }
@@ -507,10 +507,10 @@ fn retained_required_contracts(
     input: &PluginExtensionCompatibilityInput<'_>,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<bool> {
-    let mut retained = true;
+    let mut is_retained = true;
     for old_ref in &input.old_manifest.extension_contract_refs {
         let Some(old_contract) = contract_for_ref(input.old_contracts, old_ref) else {
-            retained = false;
+            is_retained = false;
             diagnostics.push_limited(
                 format!("old plugin extension contract {old_ref} is unavailable for compatibility"),
                 MAX_PLUGIN_DIAGNOSTICS,
@@ -519,7 +519,7 @@ fn retained_required_contracts(
             continue;
         };
         if matching_new_contract(input, old_contract).is_none() {
-            retained = false;
+            is_retained = false;
             diagnostics.push_limited(
                 format!("plugin extension upgrade removes required extension {}", old_contract.extension_id),
                 MAX_PLUGIN_DIAGNOSTICS,
@@ -527,25 +527,25 @@ fn retained_required_contracts(
             )?;
         }
     }
-    Ok(retained)
+    Ok(is_retained)
 }
 
 fn compatible_extension_versions(
     input: &PluginExtensionCompatibilityInput<'_>,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<bool> {
-    let mut compatible = true;
+    let mut is_compatible = true;
     for old_ref in &input.old_manifest.extension_contract_refs {
         let Some(old_contract) = contract_for_ref(input.old_contracts, old_ref) else {
-            compatible = false;
+            is_compatible = false;
             continue;
         };
         let Some(new_contract) = matching_new_contract(input, old_contract) else {
-            compatible = false;
+            is_compatible = false;
             continue;
         };
         if !version_not_downgrade(&new_contract.version, &old_contract.version)? {
-            compatible = false;
+            is_compatible = false;
             diagnostics.push_limited(
                 format!("plugin extension {} downgrades from {} to {}", old_contract.extension_id, old_contract.version, new_contract.version),
                 MAX_PLUGIN_DIAGNOSTICS,
@@ -553,28 +553,28 @@ fn compatible_extension_versions(
             )?;
         }
     }
-    Ok(compatible)
+    Ok(is_compatible)
 }
 
 fn retained_hostcall_descriptors(
     input: &PluginExtensionCompatibilityInput<'_>,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<bool> {
-    let mut retained = true;
+    let mut is_retained = true;
     for old_ref in &input.old_manifest.extension_contract_refs {
         let Some(old_contract) = contract_for_ref(input.old_contracts, old_ref) else {
-            retained = false;
+            is_retained = false;
             continue;
         };
         let Some(new_contract) = matching_new_contract(input, old_contract) else {
-            retained = false;
+            is_retained = false;
             continue;
         };
         for old_descriptor in &old_contract.hostcall_descriptors {
             if find_descriptor(new_contract, &old_descriptor.operation, &old_descriptor.descriptor_ref).is_none()
                 && input.migration_refs.is_empty()
             {
-                retained = false;
+                is_retained = false;
                 diagnostics.push_limited(
                     format!("plugin extension upgrade removes required hostcall {}", old_descriptor.operation),
                     MAX_PLUGIN_DIAGNOSTICS,
@@ -583,7 +583,7 @@ fn retained_hostcall_descriptors(
             }
         }
     }
-    Ok(retained)
+    Ok(is_retained)
 }
 
 fn schema_compatible(
@@ -612,14 +612,14 @@ fn compare_descriptors(
     predicate: impl Fn(&PluginHostcallDescriptor, &PluginHostcallDescriptor) -> bool,
     message: &str,
 ) -> Result<bool> {
-    let mut compatible = true;
+    let mut is_compatible = true;
     for old_ref in &input.old_manifest.extension_contract_refs {
         let Some(old_contract) = contract_for_ref(input.old_contracts, old_ref) else {
-            compatible = false;
+            is_compatible = false;
             continue;
         };
         let Some(new_contract) = matching_new_contract(input, old_contract) else {
-            compatible = false;
+            is_compatible = false;
             continue;
         };
         for old_descriptor in &old_contract.hostcall_descriptors {
@@ -627,7 +627,7 @@ fn compare_descriptors(
                 && !predicate(old_descriptor, new_descriptor)
                 && input.migration_refs.is_empty()
             {
-                compatible = false;
+                is_compatible = false;
                 diagnostics.push_limited(
                     format!("{message}: {}", old_descriptor.operation),
                     MAX_PLUGIN_DIAGNOSTICS,
@@ -636,17 +636,17 @@ fn compare_descriptors(
             }
         }
     }
-    Ok(compatible)
+    Ok(is_compatible)
 }
 
 fn compatibility_conformance_bound(
     input: &PluginExtensionCompatibilityInput<'_>,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<bool> {
-    let mut bound = true;
+    let mut is_bound = true;
     for new_ref in &input.new_manifest.extension_contract_refs {
         let Some(contract) = contract_for_ref(input.new_contracts, new_ref) else {
-            bound = false;
+            is_bound = false;
             diagnostics.push_limited(
                 format!("new plugin extension contract {new_ref} is unavailable for conformance"),
                 MAX_PLUGIN_DIAGNOSTICS,
@@ -655,7 +655,7 @@ fn compatibility_conformance_bound(
             continue;
         };
         if input.production_profile && !contract.production_profile {
-            bound = false;
+            is_bound = false;
             diagnostics.push_limited(
                 format!("plugin extension contract {} lacks production conformance evidence", contract.extension_id),
                 MAX_PLUGIN_DIAGNOSTICS,
@@ -663,7 +663,7 @@ fn compatibility_conformance_bound(
             )?;
         }
     }
-    Ok(bound)
+    Ok(is_bound)
 }
 
 fn matching_new_contract<'a>(

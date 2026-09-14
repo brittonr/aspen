@@ -156,8 +156,8 @@ fn evaluate_cutover_readiness(
     let has_rollback = !plan.rollback_refs.is_empty();
     let has_transcript_task = plan.tasks.iter().any(|candidate| candidate.kind == "transcript-rerun");
     let has_replay = task_kind_completed(root, plan, "transcript-rerun")?;
-    let migration_complete = task_kind_completed_or_absent(root, plan, &["migrate-schema", "migrate-storage"])?;
-    let protocol_complete = task_kind_completed_or_absent(root, plan, &["drain-sessions"])?;
+    let is_migration_complete = task_kind_completed_or_absent(root, plan, &["migrate-schema", "migrate-storage"])?;
+    let is_protocol_complete = task_kind_completed_or_absent(root, plan, &["drain-sessions"])?;
     let is_ready = has_exact_cutover_refs
         && has_impact_evidence
         && has_compatibility
@@ -167,8 +167,8 @@ fn evaluate_cutover_readiness(
         && has_rollback
         && has_transcript_task
         && has_replay
-        && migration_complete
-        && protocol_complete;
+        && is_migration_complete
+        && is_protocol_complete;
     let mut diagnostics = Vec::new();
     push_cutover_diagnostic(&mut diagnostics, has_exact_cutover_refs, "cutover requires exact from/to refs")?;
     push_cutover_diagnostic(&mut diagnostics, has_impact_evidence, "cutover requires dependency impact evidence")?;
@@ -179,8 +179,8 @@ fn evaluate_cutover_readiness(
     push_cutover_diagnostic(&mut diagnostics, has_rollback, "cutover requires rollback strategy refs")?;
     push_cutover_diagnostic(&mut diagnostics, has_transcript_task, "cutover requires transcript replay task")?;
     push_cutover_diagnostic(&mut diagnostics, has_replay, "cutover requires passing replay receipt")?;
-    push_cutover_diagnostic(&mut diagnostics, migration_complete, "cutover requires completed migration receipts")?;
-    push_cutover_diagnostic(&mut diagnostics, protocol_complete, "cutover requires completed protocol session drain")?;
+    push_cutover_diagnostic(&mut diagnostics, is_migration_complete, "cutover requires completed migration receipts")?;
+    push_cutover_diagnostic(&mut diagnostics, is_protocol_complete, "cutover requires completed protocol session drain")?;
     Ok(UpgradeCutoverReadinessDecision {
         decision: if is_ready { "pass" } else { "deny" },
         diagnostics,
@@ -193,8 +193,8 @@ fn evaluate_cutover_readiness(
             ("source-gate-bound", pass_fail(has_source_gate)),
             ("rollback-strategy-bound", pass_fail(has_rollback)),
             ("replay-receipt-bound", pass_fail(has_replay)),
-            ("migration-receipt-bound", pass_fail(migration_complete)),
-            ("protocol-session-drain-bound", pass_fail(protocol_complete)),
+            ("migration-receipt-bound", pass_fail(is_migration_complete)),
+            ("protocol-session-drain-bound", pass_fail(is_protocol_complete)),
             ("metadata-cutover", pass_fail(is_ready)),
         ],
     })

@@ -241,7 +241,8 @@ fn parse_endpoint_binding(
     let locator_cohort_ref = required_ref(next_field(&mut fields, "locator cohort ref")?, "locator cohort ref")?;
     let locators = parse_locators(next_field(&mut fields, "locators")?)?;
     let explicit_handoff_classes = parse_locator_classes(next_field(&mut fields, "disclosure classes")?)?;
-    let default_readback_redacted = required_bool(next_field(&mut fields, "default redaction")?, "default redaction")?;
+    let is_default_readback_redacted =
+        required_bool(next_field(&mut fields, "default redaction")?, "default redaction")?;
     let framing_profile_ref = required_ref(next_field(&mut fields, "framing ref")?, "framing ref")?;
     let resources = parse_resources(next_field(&mut fields, "resources")?)?;
     let validity = parse_validity(next_field(&mut fields, "validity")?)?;
@@ -265,7 +266,7 @@ fn parse_endpoint_binding(
         locators,
         disclosure: EndpointDisclosurePolicy {
             explicit_handoff_classes,
-            default_readback_redacted,
+            default_readback_redacted: is_default_readback_redacted,
         },
         framing_profile_ref,
         resources,

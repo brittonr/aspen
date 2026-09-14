@@ -376,26 +376,26 @@ fn validate_release_workflow_stage(stage: &str) -> Result<()> {
 fn release_workflow_stage_results(
     input: &ReleaseWorkflowStateInput<'_>,
 ) -> Result<Vec<ReleaseWorkflowStageResult>> {
-    let dogfood_complete = input.dogfood_report_ref.is_some() && input.dogfood_report_decision == "pass";
-    let bundle_export_complete = dogfood_complete && input.release_gate_ref.is_some() && input.bundle_ref.is_some();
-    let bundle_verify_complete = bundle_export_complete
+    let is_dogfood_complete = input.dogfood_report_ref.is_some() && input.dogfood_report_decision == "pass";
+    let is_bundle_export_complete = is_dogfood_complete && input.release_gate_ref.is_some() && input.bundle_ref.is_some();
+    let is_bundle_verify_complete = is_bundle_export_complete
         && input.bundle_verify_ref.is_some()
         && input.bundle_verify_decision == "pass";
-    let signed_members_complete = bundle_verify_complete && signed_members_cover_required(input);
-    let promotion_complete = signed_members_complete
+    let is_signed_members_complete = is_bundle_verify_complete && signed_members_cover_required(input);
+    let is_promotion_complete = is_signed_members_complete
         && input.promotion_ref.is_some()
         && input.promotion_decision == "pass";
-    let signed_promotion_complete = promotion_complete
+    let is_signed_promotion_complete = is_promotion_complete
         && input.signed_promotion_ref.is_some()
         && input.signed_promotion_subject_ref == input.promotion_ref;
-    let summary_complete = signed_promotion_complete
+    let is_summary_complete = is_signed_promotion_complete
         && input.summary_ref.is_some()
         && input.summary_decision == "pass"
         && input.summary_promotion_ref == input.promotion_ref;
-    let archive_export_complete = summary_complete
+    let is_archive_export_complete = is_summary_complete
         && input.export_manifest_ref.is_some()
         && input.export_manifest_summary_ref == input.summary_ref;
-    let archive_verify_complete = archive_export_complete
+    let is_archive_verify_complete = is_archive_export_complete
         && input.export_verify_ref.is_some()
         && input.export_verify_decision == "pass"
         && input.export_verify_manifest_ref == input.export_manifest_ref;
@@ -403,48 +403,48 @@ fn release_workflow_stage_results(
     Ok(vec![
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_DOGFOOD,
-            dogfood_complete,
+            is_dogfood_complete,
             dogfood_diagnostics(input),
         )?,
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_BUNDLE_EXPORT,
-            bundle_export_complete,
-            bundle_export_diagnostics(input, dogfood_complete),
+            is_bundle_export_complete,
+            bundle_export_diagnostics(input, is_dogfood_complete),
         )?,
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_BUNDLE_VERIFY,
-            bundle_verify_complete,
-            bundle_verify_diagnostics(input, bundle_export_complete),
+            is_bundle_verify_complete,
+            bundle_verify_diagnostics(input, is_bundle_export_complete),
         )?,
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_SIGNED_MEMBERS,
-            signed_members_complete,
-            signed_member_diagnostics(input, bundle_verify_complete)?,
+            is_signed_members_complete,
+            signed_member_diagnostics(input, is_bundle_verify_complete)?,
         )?,
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_PROMOTION,
-            promotion_complete,
-            promotion_stage_diagnostics(input, signed_members_complete),
+            is_promotion_complete,
+            promotion_stage_diagnostics(input, is_signed_members_complete),
         )?,
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_SIGNED_PROMOTION,
-            signed_promotion_complete,
-            signed_promotion_diagnostics(input, promotion_complete),
+            is_signed_promotion_complete,
+            signed_promotion_diagnostics(input, is_promotion_complete),
         )?,
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_SUMMARY,
-            summary_complete,
-            summary_stage_diagnostics(input, signed_promotion_complete),
+            is_summary_complete,
+            summary_stage_diagnostics(input, is_signed_promotion_complete),
         )?,
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_ARCHIVE_EXPORT,
-            archive_export_complete,
-            archive_export_diagnostics(input, summary_complete),
+            is_archive_export_complete,
+            archive_export_diagnostics(input, is_summary_complete),
         )?,
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_ARCHIVE_VERIFY,
-            archive_verify_complete,
-            archive_verify_diagnostics(input, archive_export_complete),
+            is_archive_verify_complete,
+            archive_verify_diagnostics(input, is_archive_export_complete),
         )?,
     ])
 }

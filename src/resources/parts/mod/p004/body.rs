@@ -203,10 +203,10 @@ fn validate_scoped_name(name: &str) -> Result<()> {
             "scoped name exceeds maximum length {MAX_SCOPED_NAME_LENGTH}: {name}"
         )));
     }
-    let valid = name
+    let is_valid = name
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.');
-    if !valid {
+    if !is_valid {
         return Err(MoltenError::invalid_harness(format!(
             "scoped name contains invalid characters: {name}"
         )));
@@ -221,10 +221,10 @@ fn validate_label_key(key: &str) -> Result<()> {
             "label key exceeds maximum length {MAX_LABEL_KEY_LENGTH}: {key}"
         )));
     }
-    let valid = key
+    let is_valid = key
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' || c == '/');
-    if !valid {
+    if !is_valid {
         return Err(MoltenError::invalid_harness(format!(
             "label key contains invalid characters: {key}"
         )));
@@ -238,10 +238,10 @@ fn validate_label_value(value: &str) -> Result<()> {
             "label value exceeds maximum length {MAX_LABEL_VALUE_LENGTH}"
         )));
     }
-    let valid = value
+    let is_valid = value
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_');
-    if !valid {
+    if !is_valid {
         return Err(MoltenError::invalid_harness(format!(
             "label value contains invalid characters: {value}"
         )));

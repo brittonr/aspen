@@ -102,7 +102,7 @@
         // r[verify molten.runtime_state_machine_proof.generated_turn_traces]
         let salt = draw_property_salt(&tc);
         let trace_len = draw_generated_trace_len(&tc);
-        let invert_outcomes = draw_property_bool(&tc);
+        let is_invert_outcomes = draw_property_bool(&tc);
         let seed = salt.saturating_add(GENERATED_TRACE_SEED_OFFSET);
         let mut state = RuntimeState::new(seed);
         let mut replay = RuntimeState::new(seed);
@@ -115,7 +115,7 @@
             let turn = state.begin_turn(&step);
             let replay_turn = replay.begin_turn(&step);
             assert_eq!(turn, replay_turn);
-            let should_commit = (index % GENERATED_TRACE_OUTCOME_PERIOD == 0) != invert_outcomes;
+            let should_commit = (index % GENERATED_TRACE_OUTCOME_PERIOD == 0) != is_invert_outcomes;
 
             if should_commit {
                 let expected = expected_turn_snapshot(&before, &turn, TurnOutcome::Committed);

@@ -122,7 +122,7 @@ pub fn plan_traversal(descriptor: &TraversalDescriptor, inventory: &LocalInvento
     });
     let descriptor_ref = canonical_hash(&descriptor_value)?;
     let local_inventory_ref = inventory_summary_ref(inventory);
-    let replayable = diagnostics.is_empty();
+    let is_replayable = diagnostics.is_empty();
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = traversal_plan_receipt_value(
         decision,
@@ -132,7 +132,7 @@ pub fn plan_traversal(descriptor: &TraversalDescriptor, inventory: &LocalInvento
         &already_present_refs,
         &fetch_refs,
         &diagnostics,
-        replayable,
+        is_replayable,
     );
     Ok(TraversalPlan {
         decision: decision.to_string(),
@@ -142,7 +142,7 @@ pub fn plan_traversal(descriptor: &TraversalDescriptor, inventory: &LocalInvento
         already_present_refs,
         fetch_refs,
         diagnostics,
-        replayable,
+        replayable: is_replayable,
         receipt_value,
     })
 }

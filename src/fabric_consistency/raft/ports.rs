@@ -110,7 +110,7 @@ pub fn validate_replica_runtime_identity_for_start(
 ) -> crate::error::Result<()> {
     validate_runtime_identity(identity)?;
     let state = &plan.state;
-    let exact = identity.service_id == plan.service_id
+    let is_exact = identity.service_id == plan.service_id
         && identity.service_generation == state.profile.service_generation
         && identity.group_binding_ref == state.profile.group_binding_ref
         && identity.application_manifest_ref == plan.application_manifest_ref
@@ -126,7 +126,7 @@ pub fn validate_replica_runtime_identity_for_start(
         && identity.resource_profile_ref == state.profile.resource_profile_ref;
     let expected_bindings = plan.port_binding_refs.iter().collect::<std::collections::BTreeSet<_>>();
     let actual_bindings = identity.fabric_binding_refs.iter().collect::<std::collections::BTreeSet<_>>();
-    if !exact || actual_bindings != expected_bindings {
+    if !is_exact || actual_bindings != expected_bindings {
         return Err(crate::error::MoltenError::invalid_harness(
             "live Raft runtime port identity does not match the admitted start plan",
         ));
@@ -170,7 +170,7 @@ where
     S: crate::fabric_time::CryptographicEntropySource,
     H: CommittedBatchHandler,
 {
-    let exact = identity.durable_log_ref == durability.durable_log_ref()
+    let is_exact = identity.durable_log_ref == durability.durable_log_ref()
         && identity.snapshot_store_ref == durability.snapshot_store_ref()
         && identity.protocol_ref == transport.protocol_ref()
         && identity.timer_profile_ref == time.timer_profile_ref()
@@ -181,7 +181,7 @@ where
         && identity.service_id == control.service_id()
         && identity.service_generation == control.service_generation()
         && identity.supervision_ref == control.supervision_ref();
-    if !exact {
+    if !is_exact {
         return Err(crate::error::MoltenError::invalid_harness(
             "live Raft concrete adapter identity does not match the runtime port cohort",
         ));

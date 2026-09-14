@@ -120,16 +120,16 @@ fn validate_candidate_ref(input: &ReleaseProfileInput, diagnostics: &mut Vec<Str
 }
 
 fn validate_refs(input: &ReleaseProfileInput, diagnostics: &mut Vec<String>) {
-    let release = input.tier == "release";
+    let is_release = input.tier == "release";
     for (field, reference) in evidence_ref_pairs(&input.evidence_refs) {
         match reference {
             Some(reference) => {
                 validate_ref_with_diagnostics(field, reference, diagnostics);
-                if release && is_placeholder_ref(reference) {
+                if is_release && is_placeholder_ref(reference) {
                     diagnostics.push(format!("placeholder-release-ref:{field}"));
                 }
             }
-            None if release => diagnostics.push(format!("missing-release-ref:{field}")),
+            None if is_release => diagnostics.push(format!("missing-release-ref:{field}")),
             None => {}
         }
     }

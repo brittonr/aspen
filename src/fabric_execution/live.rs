@@ -108,7 +108,7 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
         request: &CanonicalExecutionRequest,
         error: bounded_exec::RunError,
     ) -> Box<ExecutionPortFailure> {
-        let before_start = matches!(
+        let is_before_start = matches!(
             error,
             bounded_exec::RunError::InvalidLimits(_)
                 | bounded_exec::RunError::EmptyProgram
@@ -122,7 +122,7 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
                     ..
                 }
         );
-        let (kind, code, status) = if before_start {
+        let (kind, code, status) = if is_before_start {
             (
                 ExecutionPortFailureKind::RejectedBeforeStart,
                 PRESTART_FAILURE_CODE,
@@ -145,7 +145,7 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
             publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stdout);
         let stderr_publication =
             publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stderr);
-        let publication_failed = matches!(stdout_publication, ExecutionStreamPublication::Failed { .. })
+        let is_publication_failed = matches!(stdout_publication, ExecutionStreamPublication::Failed { .. })
             || matches!(stderr_publication, ExecutionStreamPublication::Failed { .. });
         let receipt = canonical_execution_receipt(
             request,
@@ -172,7 +172,7 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
             request.plan.request.operation_ref.clone(),
             (request.plan.request.generation, OperationStatus::Terminal(receipt.receipt_ref.clone())),
         );
-        if publication_failed {
+        if is_publication_failed {
             return Err(failure(
                 request,
                 ExecutionPortFailureKind::OutputPublication,

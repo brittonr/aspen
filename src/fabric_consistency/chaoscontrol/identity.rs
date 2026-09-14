@@ -73,7 +73,7 @@ pub fn admit_proposal_attempts(attempts: &[ChaosControlProposalAttempt]) -> crat
     let identity = &attempts[0].operation;
     validate_logical_operation(identity)?;
     let mut acknowledged_index: Option<u64> = None;
-    let mut saw_indefinite = false;
+    let mut is_saw_indefinite = false;
     for attempt in attempts {
         if &attempt.operation != identity {
             return Err(crate::error::MoltenError::invalid_harness(
@@ -96,13 +96,13 @@ pub fn admit_proposal_attempts(attempts: &[ChaosControlProposalAttempt]) -> crat
                 }
             },
             ChaosControlProposalOutcome::DefinitelyRejected => {
-                if saw_indefinite {
+                if is_saw_indefinite {
                     return Err(crate::error::MoltenError::invalid_harness(
                         "ChaosControl indefinite outcome cannot become definite non-execution evidence",
                     ));
                 }
             }
-            ChaosControlProposalOutcome::Indefinite => saw_indefinite = true,
+            ChaosControlProposalOutcome::Indefinite => is_saw_indefinite = true,
         }
     }
     Ok(())

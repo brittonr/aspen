@@ -220,17 +220,17 @@ impl DestinationGrantPort for Runtime {
 impl LinearAuthorityTransferPort for Runtime {
     fn observe_ownership(&mut self, plan: &WorldBranchAuthorityPlan) -> Result<LinearOwnershipObservation> {
         self.ownership_calls += 1;
-        let initial = self.ownership_calls == 1;
+        let is_initial = self.ownership_calls == 1;
         Ok(LinearOwnershipObservation {
             capability_ref: plan.capability_ref.clone(),
-            generation: if initial {
+            generation: if is_initial {
                 SOURCE_GENERATION
             } else {
                 self.post_transfer_generation
             },
-            source_active: initial || self.post_transfer_source_active,
+            source_active: is_initial || self.post_transfer_source_active,
             destination_active: false,
-            observation_ref: content_ref(if initial {
+            observation_ref: content_ref(if is_initial {
                 "ownership-initial"
             } else {
                 "ownership-activation"

@@ -703,7 +703,7 @@ fn decode_snapshot(snapshot_ref: &str, bytes: &[u8]) -> crate::error::Result<Sna
     let covered_log_sequence = cursor.take_optional_u64()?;
     let ordered_state_ref = cursor.take_string()?;
     let durability = decode_level(cursor.take_byte()?)?;
-    let corrupted = decode_bool(cursor.take_byte()?)?;
+    let is_corrupted = decode_bool(cursor.take_byte()?)?;
     cursor.finish()?;
     Ok(SnapshotRecord {
         kind,
@@ -715,7 +715,7 @@ fn decode_snapshot(snapshot_ref: &str, bytes: &[u8]) -> crate::error::Result<Sna
         covered_log_sequence,
         ordered_state_ref,
         durability,
-        corrupted,
+        corrupted: is_corrupted,
     })
 }
 
@@ -743,11 +743,11 @@ fn decode_effect(transaction_id: &str, bytes: &[u8]) -> crate::error::Result<Eff
     let operation_ref = cursor.take_string()?;
     let phase = decode_phase(cursor.take_byte()?)?;
     let expires_at_tick = cursor.take_optional_u64()?;
-    let durable_reservation = decode_bool(cursor.take_byte()?)?;
-    let exclusive = decode_bool(cursor.take_byte()?)?;
-    let expiring = decode_bool(cursor.take_byte()?)?;
-    let idempotent_commit = decode_bool(cursor.take_byte()?)?;
-    let compensating_abort = decode_bool(cursor.take_byte()?)?;
+    let is_durable_reservation = decode_bool(cursor.take_byte()?)?;
+    let is_exclusive = decode_bool(cursor.take_byte()?)?;
+    let is_expiring = decode_bool(cursor.take_byte()?)?;
+    let is_idempotent_commit = decode_bool(cursor.take_byte()?)?;
+    let is_compensating_abort = decode_bool(cursor.take_byte()?)?;
     cursor.finish()?;
     Ok(EffectTransactionState {
         transaction_id: transaction_id.to_string(),
@@ -756,11 +756,11 @@ fn decode_effect(transaction_id: &str, bytes: &[u8]) -> crate::error::Result<Eff
         phase,
         expires_at_tick,
         profile: EffectTransactionProfile {
-            durable_reservation,
-            exclusive,
-            expiring,
-            idempotent_commit,
-            compensating_abort,
+            durable_reservation: is_durable_reservation,
+            exclusive: is_exclusive,
+            expiring: is_expiring,
+            idempotent_commit: is_idempotent_commit,
+            compensating_abort: is_compensating_abort,
         },
     })
 }

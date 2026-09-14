@@ -287,24 +287,24 @@ pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
         .map_err(|error| core_error("schedule cancellation probe", error))?;
     let cancelled =
         super::cancel_timer(&cancel_timer_state, generation).map_err(|error| core_error("cancel probe", error))?;
-    let cancellation_prevented_delivery = matches!(
+    let is_cancellation_prevented_delivery = matches!(
         super::poll_timer(&cancelled.next, generation, observed, 1),
         Err(super::TimerError::TerminalTimer(_))
     );
 
     let (scheduler_selected, scheduler_cancellation_recorded) =
         run_scheduler_conformance(profile, service_id, generation)?;
-    let entropy_bound_rejected = run_entropy_conformance(profile, generation)?;
+    let is_entropy_bound_rejected = run_entropy_conformance(profile, generation)?;
 
     Ok(AdapterConformanceObservation {
         domain: adapter.timer_domain(),
         timer_action: fired.action,
         delivery_count: fired.delivery_count,
         stale_generation_discarded: stale.action == super::TimerAction::DiscardedStaleGeneration,
-        cancellation_prevented_delivery,
+        cancellation_prevented_delivery: is_cancellation_prevented_delivery,
         scheduler_selected,
         scheduler_cancellation_recorded,
-        entropy_bound_rejected,
+        entropy_bound_rejected: is_entropy_bound_rejected,
     })
 }
 
@@ -419,7 +419,7 @@ fn run_entropy_conformance(profile: &super::AdmittedTimeProfile, generation: u64
         .checked_add(1)
         .ok_or_else(|| crate::error::MoltenError::invalid_harness("conformance entropy bound overflow"))?;
     let request = super::EntropyRequest::Bytes { count: over_limit };
-    let rejected = match mode {
+    let is_rejected = match mode {
         super::EntropyMode::DeterministicSimulation => matches!(
             super::draw_deterministic_entropy(profile, generation, &stream, request),
             Err(super::EntropyError::RequestLimitExceeded { .. })
@@ -429,7 +429,7 @@ fn run_entropy_conformance(profile: &super::AdmittedTimeProfile, generation: u64
             Err(super::EntropyError::RequestLimitExceeded { .. })
         ),
     };
-    Ok(rejected)
+    Ok(is_rejected)
 }
 
 #[derive(Debug, Default)]

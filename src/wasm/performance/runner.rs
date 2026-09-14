@@ -334,7 +334,7 @@ pub fn parse_sightglass_measurements(
     }
     for phase in &mut phases {
         phase.samples.sort_by_key(|sample| (sample.process, sample.iteration));
-        let complete_coordinate_grid = (0..suite.sampling.processes).all(|process| {
+        let is_complete_coordinate_grid = (0..suite.sampling.processes).all(|process| {
             let iterations = phase
                 .samples
                 .iter()
@@ -345,7 +345,7 @@ pub fn parse_sightglass_measurements(
                 && iterations.iter().copied().eq(0..suite.sampling.iterations_per_process)
         });
         if phase.samples.len() != expected_samples
-            || !complete_coordinate_grid
+            || !is_complete_coordinate_grid
             || phase
                 .samples
                 .iter()

@@ -328,25 +328,25 @@ pub fn parse_transcript_artifact(value: &IoValue) -> Result<TranscriptArtifact> 
     let checks_index = field_count - 1;
     let checks = parse_checks(&fields[checks_index])?;
     require_check(&checks, "no-ambient-identity", "transcript artifact")?;
-    let legacy = field_count == TRANSCRIPT_ARTIFACT_LEGACY_FIELD_COUNT;
+    let is_legacy = field_count == TRANSCRIPT_ARTIFACT_LEGACY_FIELD_COUNT;
     Ok(TranscriptArtifact {
         transcript_ref: canonical_hash(value)?,
         source_ref: record_ref(&fields[1], "source")?,
         stanzas,
         dependency_closure_hash: required_ref(&dep_fields[0], "dependency closure hash")?,
         dependency_refs: parse_ref_sequence_value(&dep_fields[1], "dependency refs")?,
-        artifact_refs: if legacy { Vec::new() } else { record_ref_sequence(&fields[4], "artifacts")? },
-        schema_refs: if legacy { Vec::new() } else { record_ref_sequence(&fields[5], "schemas")? },
-        handler_profile_ref: record_optional_ref(&fields[if legacy { 4 } else { 6 }], "handler-profile")?,
-        policy_refs: record_ref_sequence(&fields[if legacy { 5 } else { 7 }], "policy")?,
-        capability_refs: record_ref_sequence(&fields[if legacy { 6 } else { 8 }], "capability")?,
-        resource_refs: if legacy { Vec::new() } else { record_ref_sequence(&fields[9], "resources")? },
-        effect_manifest_refs: if legacy { Vec::new() } else { record_ref_sequence(&fields[10], "effects")? },
-        revocation_refs: record_ref_sequence(&fields[if legacy { 7 } else { 11 }], "revocation")?,
-        seed_ref: record_optional_ref(&fields[if legacy { 8 } else { 12 }], "seed")?,
-        logical_time: if legacy { None } else { record_optional_u64(&fields[13], "logical-time")? },
-        expected_refs: record_ref_sequence(&fields[if legacy { 9 } else { 14 }], "expected")?,
-        resolution_refs: if legacy { Vec::new() } else { record_ref_sequence(&fields[15], "resolutions")? },
+        artifact_refs: if is_legacy { Vec::new() } else { record_ref_sequence(&fields[4], "artifacts")? },
+        schema_refs: if is_legacy { Vec::new() } else { record_ref_sequence(&fields[5], "schemas")? },
+        handler_profile_ref: record_optional_ref(&fields[if is_legacy { 4 } else { 6 }], "handler-profile")?,
+        policy_refs: record_ref_sequence(&fields[if is_legacy { 5 } else { 7 }], "policy")?,
+        capability_refs: record_ref_sequence(&fields[if is_legacy { 6 } else { 8 }], "capability")?,
+        resource_refs: if is_legacy { Vec::new() } else { record_ref_sequence(&fields[9], "resources")? },
+        effect_manifest_refs: if is_legacy { Vec::new() } else { record_ref_sequence(&fields[10], "effects")? },
+        revocation_refs: record_ref_sequence(&fields[if is_legacy { 7 } else { 11 }], "revocation")?,
+        seed_ref: record_optional_ref(&fields[if is_legacy { 8 } else { 12 }], "seed")?,
+        logical_time: if is_legacy { None } else { record_optional_u64(&fields[13], "logical-time")? },
+        expected_refs: record_ref_sequence(&fields[if is_legacy { 9 } else { 14 }], "expected")?,
+        resolution_refs: if is_legacy { Vec::new() } else { record_ref_sequence(&fields[15], "resolutions")? },
         value: value.clone(),
     })
 }

@@ -167,7 +167,7 @@ pub fn consistency_operator_readback(
     health: &ReplicaAggregateHealthEvidence,
 ) -> Result<ConsistencyOperatorReadback> {
     validate_readback_binding(binding, replica, health)?;
-    let evidence_truncated = records.len() > MAX_OPERATOR_EVIDENCE_REFS;
+    let is_evidence_truncated = records.len() > MAX_OPERATOR_EVIDENCE_REFS;
     let mut selected_evidence_refs = records
         .iter()
         .rev()
@@ -175,7 +175,8 @@ pub fn consistency_operator_readback(
         .map(|record| record.evidence_ref.clone())
         .collect::<Vec<_>>();
     selected_evidence_refs.reverse();
-    let readback_ref = canonical::readback_ref(binding, replica, &selected_evidence_refs, evidence_truncated, health)?;
+    let readback_ref =
+        canonical::readback_ref(binding, replica, &selected_evidence_refs, is_evidence_truncated, health)?;
     Ok(ConsistencyOperatorReadback {
         binding_ref: binding.binding_ref.clone(),
         group_id: binding.group_id.clone(),
@@ -190,7 +191,7 @@ pub fn consistency_operator_readback(
         commit_index: replica.commit_index,
         last_applied: replica.last_applied,
         selected_evidence_refs,
-        evidence_truncated,
+        evidence_truncated: is_evidence_truncated,
         aggregate_health_ref: health.evidence_ref.clone(),
         production_admitted: health.production_admitted,
         non_claims: binding.non_claims.clone(),

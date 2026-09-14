@@ -316,7 +316,7 @@ pub fn build_cluster_harness_parent(
     }
     diagnostics.sort();
     diagnostics.dedup();
-    let all_required_kinds_observed =
+    let is_all_required_kinds_observed =
         !diagnostics.iter().any(|diagnostic| diagnostic.contains("missing-required-artifact-kind"));
     let decision = if diagnostics.is_empty() {
         PASS_DECISION
@@ -346,7 +346,7 @@ pub fn build_cluster_harness_parent(
         crate::preserves_rail::record("caveats", vec![strings_sequence(&input.caveats)]),
         crate::preserves_rail::checks_value(&[
             ("child-receipts-bound", status(!input.child_receipt_refs.is_empty())),
-            ("required-artifact-kinds-observed", status(all_required_kinds_observed)),
+            ("required-artifact-kinds-observed", status(is_all_required_kinds_observed)),
             ("unsupported-is-not-pass", status(!input.unsupported_pass_claim)),
             ("logs-diagnostic-only", PASS_DECISION),
         ]),

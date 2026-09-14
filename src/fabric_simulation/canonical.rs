@@ -286,7 +286,7 @@ pub fn canonical_simulation_differential(
     validate_refs("simulation differential", simulation_trace_refs)?;
     validate_refs("live differential", live_trace_refs)?;
     validate_refs("normalized difference", &normalized_difference_refs)?;
-    let equivalent = simulation_trace_refs == live_trace_refs && normalized_difference_refs.is_empty();
+    let is_equivalent = simulation_trace_refs == live_trace_refs && normalized_difference_refs.is_empty();
     let value = record("fabric-simulation-differential-v1", vec![
         string(FABRIC_SIMULATION_DIFFERENTIAL_SCHEMA),
         field("simulation-profile-ref", string(simulation_profile_ref)),
@@ -295,7 +295,7 @@ pub fn canonical_simulation_differential(
         field("simulation-trace-refs", strings_value(simulation_trace_refs.iter().map(String::as_str))),
         field("live-trace-refs", strings_value(live_trace_refs.iter().map(String::as_str))),
         field("normalized-difference-refs", strings_value(normalized_difference_refs.iter().map(String::as_str))),
-        field("equivalent", bool_value(equivalent)),
+        field("equivalent", bool_value(is_equivalent)),
         checks(&[
             "shared-port-contract",
             "declared-capability-differences-visible",
@@ -308,7 +308,7 @@ pub fn canonical_simulation_differential(
         simulation_profile_ref: simulation_profile_ref.to_string(),
         live_profile_ref: live_profile_ref.to_string(),
         shared_contract_ref: shared_contract_ref.to_string(),
-        equivalent,
+        equivalent: is_equivalent,
         normalized_difference_refs,
         value,
     })

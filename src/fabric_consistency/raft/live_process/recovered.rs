@@ -19,15 +19,15 @@ pub(super) async fn run(
         let timer_ref = node.service.state().active_election_timer_ref.clone();
         child::require_applied(node.service.handle_event(ReplicaEvent::ElectionTimeout { timer_ref }).await)?;
     }
-    let mut stale_frame_sent = false;
+    let mut is_stale_frame_sent = false;
     for _step in 0..EVENT_LOOP_LIMIT {
         if run_directory.join(STOP_FILE).is_file() {
             node.listener = Some(ingress.shutdown().await?);
             return child::finish_node(node_id, endpoint_identity, node, run_directory).await;
         }
-        if node_id == NODE_A && !stale_frame_sent && run_directory.join(RECOVERED_LEADER_FILE).is_file() {
+        if node_id == NODE_A && !is_stale_frame_sent && run_directory.join(RECOVERED_LEADER_FILE).is_file() {
             send_stale_leader_frame(&mut node).await?;
-            stale_frame_sent = true;
+            is_stale_frame_sent = true;
         }
         let Some(event) = child::poll_event(&mut ingress).await? else {
             continue;

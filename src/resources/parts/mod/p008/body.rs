@@ -301,11 +301,11 @@ pub fn validate_reconcile_completion(
     input: &ReconcileCompletionInput,
 ) -> ReconcileCompletionDecision {
     let mut diagnostics = Vec::new();
-    let mut pass = true;
+    let mut is_pass = true;
 
     // Generation must match
     if input.claimed_generation != input.current_generation {
-        pass = false;
+        is_pass = false;
         diagnostics.push(format!(
             "stale generation: claimed {} but current is {}",
             input.claimed_generation, input.current_generation,
@@ -314,7 +314,7 @@ pub fn validate_reconcile_completion(
 
     // Must have an admitted plan
     if !input.has_admitted_plan {
-        pass = false;
+        is_pass = false;
         diagnostics.push("no admitted plan for reconciliation".to_string());
     }
 
@@ -325,18 +325,18 @@ pub fn validate_reconcile_completion(
             .iter()
             .any(|receipt| receipt.contains(required))
         {
-            pass = false;
+            is_pass = false;
             diagnostics.push(format!("missing effect receipt for: {required}"));
         }
     }
 
     // Must have status update
     if !input.has_status_update {
-        pass = false;
+        is_pass = false;
         diagnostics.push("status update required for reconciliation success".to_string());
     }
 
-    ReconcileCompletionDecision { pass, diagnostics }
+    ReconcileCompletionDecision { pass: is_pass, diagnostics }
 }
 
 // ---------------------------------------------------------------------------

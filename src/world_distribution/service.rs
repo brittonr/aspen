@@ -67,14 +67,18 @@ where
                 .ok_or_else(|| MoltenError::invalid_harness("DAG receipt contains an untyped world object"))
         })
         .collect::<Result<Vec<_>>>()?;
-    let complete = dag.receipt.decision == DagSyncDecision::Complete && missing.is_empty();
-    let canonical_receipt =
-        canonical_world_sync_receipt(&initial_plan, &dag.canonical_receipt.record_ref, complete, dag.receipt.verified)?;
+    let is_complete = dag.receipt.decision == DagSyncDecision::Complete && missing.is_empty();
+    let canonical_receipt = canonical_world_sync_receipt(
+        &initial_plan,
+        &dag.canonical_receipt.record_ref,
+        is_complete,
+        dag.receipt.verified,
+    )?;
     ports.receipts.publish_world_distribution_receipt(&canonical_receipt)?;
     Ok(WorldSyncOutcome {
         initial_plan,
         dag,
-        complete,
+        complete: is_complete,
         missing,
         activation_authorized: false,
         canonical_receipt,

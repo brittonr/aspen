@@ -395,13 +395,13 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         callback_receipt: &super::CanonicalCallbackReceipt,
         port: &mut P,
     ) -> crate::error::Result<Vec<super::CanonicalEffectCompletion>> {
-        let receipt_is_host_owned = self.evidence.iter().any(|evidence| {
+        let is_receipt_is_host_owned = self.evidence.iter().any(|evidence| {
             matches!(
                 evidence,
                 HostEvidence::Callback(receipt) if receipt.receipt_ref == callback_receipt.receipt_ref
             )
         });
-        if !receipt_is_host_owned || callback_receipt.decision != super::CallbackExecutionDecision::Succeeded {
+        if !is_receipt_is_host_owned || callback_receipt.decision != super::CallbackExecutionDecision::Succeeded {
             return Err(crate::error::MoltenError::invalid_harness(
                 "system-extension effect routing requires a successful host-owned callback receipt",
             ));

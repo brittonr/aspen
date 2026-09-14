@@ -92,7 +92,7 @@ pub fn parse_canonical_snapshot_descriptor(bytes: &[u8]) -> Result<(SnapshotDesc
     let facts = cohort_values.iter().map(parse_cohort_fact).collect::<Result<Vec<_>>>()?;
     let component_values = required_named_sequence(&fields[6], "components", MAX_SNAPSHOT_COMPONENTS)?;
     let components = component_values.iter().map(parse_component).collect::<Result<Vec<_>>>()?;
-    let contains_live_handle = parse_named_boolean(&fields[7], "contains-live-handle")?;
+    let is_contains_live_handle = parse_named_boolean(&fields[7], "contains-live-handle")?;
     let synchronization = parse_synchronization(&fields[8])?;
     let descriptor = SnapshotDescriptor {
         class,
@@ -100,7 +100,7 @@ pub fn parse_canonical_snapshot_descriptor(bytes: &[u8]) -> Result<(SnapshotDesc
         profile_ref,
         cohort: SnapshotCohort { cohort_ref, facts },
         components,
-        contains_live_handle,
+        contains_live_handle: is_contains_live_handle,
         synchronization,
     };
     let canonical = canonical_snapshot_descriptor(&descriptor)?;

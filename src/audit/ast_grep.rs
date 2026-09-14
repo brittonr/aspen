@@ -244,7 +244,7 @@ pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditRece
     let known_rule_ids =
         input.profile.rules.iter().map(|rule| rule.id.as_str()).collect::<std::collections::BTreeSet<_>>();
     let finding_rule_ids = finding_rule_ids(&input.findings);
-    let findings_known = input.findings.iter().all(|finding| known_rule_ids.contains(finding.rule_id.as_str()));
+    let is_findings_known = input.findings.iter().all(|finding| known_rule_ids.contains(finding.rule_id.as_str()));
     let blocking_rule_ids = input
         .profile
         .rules
@@ -252,9 +252,9 @@ pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditRece
         .filter(|rule| rule.posture == RulePosture::Blocking)
         .map(|rule| rule.id.as_str())
         .collect::<std::collections::BTreeSet<_>>();
-    let blocking_findings_absent =
+    let is_blocking_findings_absent =
         input.findings.iter().all(|finding| !blocking_rule_ids.contains(finding.rule_id.as_str()));
-    let non_claims_bound = has_all_required_non_claims(&input.profile.non_claims);
+    let is_non_claims_bound = has_all_required_non_claims(&input.profile.non_claims);
 
     let mut checks = Vec::new();
     checks.push(check(
@@ -284,12 +284,12 @@ pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditRece
     ));
     checks.push(check(
         "findings-reference-known-rules",
-        findings_known,
+        is_findings_known,
         "all structural findings must reference declared inventory rules".to_string(),
     ));
     checks.push(check(
         "blocking-findings-absent",
-        blocking_findings_absent,
+        is_blocking_findings_absent,
         "blocking structural rules must have no findings in converted scopes".to_string(),
     ));
     checks.push(check(
@@ -299,19 +299,19 @@ pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditRece
     ));
     checks.push(check(
         "non-claims-bound",
-        non_claims_bound,
+        is_non_claims_bound,
         "receipt must bind authority, replay, sealed-repro, UCAN, distributed-safety, and release non-claims"
             .to_string(),
     ));
 
-    let valid = checks.iter().all(|candidate| candidate.passed);
+    let is_valid = checks.iter().all(|candidate| candidate.passed);
     AstGrepAuditReceipt {
         profile_id: input.profile.id,
         ast_grep_version: input.ast_grep_version,
         rule_bundle_hash: input.rule_bundle_hash,
         scan_scope_hash: input.scan_scope_hash,
         evidence_gate_run_ref: input.evidence_gate_run_ref,
-        decision: if valid {
+        decision: if is_valid {
             RECEIPT_DECISION_EVIDENCE_ONLY.to_string()
         } else {
             RECEIPT_DECISION_INVALID.to_string()

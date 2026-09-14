@@ -144,7 +144,7 @@ pub fn evaluate_world_head_authentication(
     let statement_ref = statement_set_ref(&statements)?;
     let decision_ref = WorldHeadAuthenticationDecisionRef::new(format!("blake3:{}", decision.decision_blake3))
         .map_err(|error| MoltenError::invalid_harness(format!("invalid authentication decision ref: {error}")))?;
-    let policy_matches = policy.profile_id == scope.profile_id
+    let is_policy_matches = policy.profile_id == scope.profile_id
         && scope.verifier_context.digest_hex
             == crate::preserves_rail::content_ref_hex(claim.claim.policy_ref.as_str())?;
     Ok(WorldHeadAuthenticationResult {
@@ -153,7 +153,7 @@ pub fn evaluate_world_head_authentication(
             decision_ref,
             passed: decision.passed,
             purpose_matches: scope.purpose == molten_core::world_head::WORLD_HEAD_ARTIFACT_AUTH_PURPOSE,
-            policy_matches,
+            policy_matches: is_policy_matches,
             signers,
         },
         statement_ref,

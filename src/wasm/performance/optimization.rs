@@ -163,7 +163,7 @@ pub fn admit_capacity(
 }
 
 fn validate_named_shape(optimization: &super::model::OptimizationProfile, blockers: &mut Vec<String>) {
-    let shape_matches_name = match optimization.profile_id.as_str() {
+    let is_shape_matches_name = match optimization.profile_id.as_str() {
         BASELINE_OPTIMIZATION_PROFILE_ID => {
             !optimization.pooling_allocator
                 && !optimization.copy_on_write_heap_images
@@ -190,7 +190,7 @@ fn validate_named_shape(optimization: &super::model::OptimizationProfile, blocke
         }
         _ => true,
     };
-    if !shape_matches_name {
+    if !is_shape_matches_name {
         blockers.push("Wasm optimization profile name and enabled knobs disagree".to_string());
     }
 }

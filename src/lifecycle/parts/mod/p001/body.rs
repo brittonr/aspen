@@ -262,12 +262,12 @@ pub fn evaluate_service_demand(input: &ServiceDemandEvaluationInput<'_>) -> Resu
     if input.evidence_refs.is_empty() {
         diagnostics.push("service start requires lifecycle evidence".to_owned());
     }
-    let missing_dependencies = diagnostics
+    let is_missing_dependencies = diagnostics
         .iter()
         .any(|diagnostic| diagnostic.starts_with("service dependency readiness missing"));
     let lifecycle_kind = if diagnostics.is_empty() {
         "start"
-    } else if missing_dependencies {
+    } else if is_missing_dependencies {
         "dependency-wait"
     } else {
         "admission-wait"

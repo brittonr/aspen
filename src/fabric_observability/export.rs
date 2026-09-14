@@ -329,14 +329,14 @@ fn render_snapshot(
 }
 
 fn require_export_class(class: ObservationAdapterClass, format: ExportFormat) -> crate::error::Result<()> {
-    let matches = matches!(
+    let is_matches = matches!(
         (class, format),
         (ObservationAdapterClass::Prometheus, ExportFormat::Prometheus)
             | (ObservationAdapterClass::OpenTelemetry, ExportFormat::OpenTelemetryJson)
             | (ObservationAdapterClass::Tracing, ExportFormat::TracingReference)
             | (ObservationAdapterClass::DeterministicSimulation, _)
     );
-    if matches {
+    if is_matches {
         Ok(())
     } else {
         Err(crate::error::MoltenError::invalid_harness(

@@ -111,59 +111,59 @@ fn string_vec(values: &[&str]) -> Vec<String> {
 pub fn evaluate_plugin_lifecycle_state(input: &PluginLifecycleStateInput<'_>) -> Result<PluginLifecycleStateDecision> {
     validate_optional_ref(input.recovery_receipt_ref, "plugin lifecycle recovery receipt ref")?;
     let mut diagnostics = Vec::new();
-    let install_passes = plugin_install_passes(input.install, input.manifest, &mut diagnostics)?;
-    let permission_passes = plugin_permission_passes(input.permission, input.manifest, &mut diagnostics)?;
-    let activation_passes = plugin_activation_passes(input.activation, input.manifest, &mut diagnostics)?;
-    let hostcall_passes = plugin_hostcall_passes(input.hostcall, input.manifest, &mut diagnostics)?;
-    let health_passes = plugin_health_passes(input.health, input.manifest, input.recovery_receipt_ref, &mut diagnostics)?;
-    let removal_passes = plugin_removal_passes(input.removal, input.manifest, &mut diagnostics)?;
-    let upgrade_passes = plugin_upgrade_passes(input.upgrade, input.manifest, &mut diagnostics)?;
-    let negotiation_passes = plugin_negotiation_passes(input.negotiation, input.manifest, &mut diagnostics)?;
-    let compatibility_passes = plugin_compatibility_passes(input.compatibility, input.manifest, &mut diagnostics)?;
+    let is_install_passes = plugin_install_passes(input.install, input.manifest, &mut diagnostics)?;
+    let is_permission_passes = plugin_permission_passes(input.permission, input.manifest, &mut diagnostics)?;
+    let is_activation_passes = plugin_activation_passes(input.activation, input.manifest, &mut diagnostics)?;
+    let is_hostcall_passes = plugin_hostcall_passes(input.hostcall, input.manifest, &mut diagnostics)?;
+    let is_health_passes = plugin_health_passes(input.health, input.manifest, input.recovery_receipt_ref, &mut diagnostics)?;
+    let is_removal_passes = plugin_removal_passes(input.removal, input.manifest, &mut diagnostics)?;
+    let is_upgrade_passes = plugin_upgrade_passes(input.upgrade, input.manifest, &mut diagnostics)?;
+    let is_negotiation_passes = plugin_negotiation_passes(input.negotiation, input.manifest, &mut diagnostics)?;
+    let is_compatibility_passes = plugin_compatibility_passes(input.compatibility, input.manifest, &mut diagnostics)?;
 
-    if requires_permission(input.evaluation_kind) && !permission_passes {
+    if requires_permission(input.evaluation_kind) && !is_permission_passes {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_PERMISSION_MISSING.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    if requires_activation(input.evaluation_kind) && !activation_passes {
+    if requires_activation(input.evaluation_kind) && !is_activation_passes {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_ACTIVATION_MISSING.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    if requires_healthy_use(input.evaluation_kind) && !health_passes {
+    if requires_healthy_use(input.evaluation_kind) && !is_health_passes {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_HEALTH_FAILED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    if requires_negotiation(input.evaluation_kind, input.manifest) && !negotiation_passes {
+    if requires_negotiation(input.evaluation_kind, input.manifest) && !is_negotiation_passes {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_NEGOTIATION_MISSING.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    if requires_extension_compatibility(input.evaluation_kind, input.manifest) && !compatibility_passes {
+    if requires_extension_compatibility(input.evaluation_kind, input.manifest) && !is_compatibility_passes {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_COMPATIBILITY_MISSING.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    if matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::HostcallRequest) && removal_passes {
+    if matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::HostcallRequest) && is_removal_passes {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_AUTHORITY_CLOSED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    if matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::UpgradeRequest) && removal_passes {
+    if matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::UpgradeRequest) && is_removal_passes {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_AUTHORITY_CLOSED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -172,15 +172,15 @@ pub fn evaluate_plugin_lifecycle_state(input: &PluginLifecycleStateInput<'_>) ->
     }
 
     let guards = plugin_lifecycle_guard_snapshot(input, PluginLifecycleGuardBooleans {
-        install_passes,
-        permission_passes,
-        activation_passes,
-        hostcall_passes,
-        health_passes,
-        removal_passes,
-        upgrade_passes,
-        negotiation_passes,
-        compatibility_passes,
+        install_passes: is_install_passes,
+        permission_passes: is_permission_passes,
+        activation_passes: is_activation_passes,
+        hostcall_passes: is_hostcall_passes,
+        health_passes: is_health_passes,
+        removal_passes: is_removal_passes,
+        upgrade_passes: is_upgrade_passes,
+        negotiation_passes: is_negotiation_passes,
+        compatibility_passes: is_compatibility_passes,
     });
     plugin_lifecycle_transition_decision(input.evaluation_kind, &input.manifest.manifest_ref, guards, diagnostics)
 }
@@ -206,17 +206,17 @@ fn plugin_install_passes(
         )?;
         return Ok(false);
     }
-    let binding_matches = install.plugin_ref == manifest.plugin_ref
+    let is_binding_matches = install.plugin_ref == manifest.plugin_ref
         && install.manifest_ref == manifest.manifest_ref
         && install.artifact_ref == manifest.artifact_ref;
-    if !binding_matches {
+    if !is_binding_matches {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_INSTALL_FAILED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    Ok(binding_matches)
+    Ok(is_binding_matches)
 }
 
 fn plugin_permission_passes(
@@ -235,15 +235,15 @@ fn plugin_permission_passes(
         )?;
         return Ok(false);
     }
-    let binding_matches = permission.plugin_ref == manifest.plugin_ref && permission.manifest_ref == manifest.manifest_ref;
-    if !binding_matches {
+    let is_binding_matches = permission.plugin_ref == manifest.plugin_ref && permission.manifest_ref == manifest.manifest_ref;
+    if !is_binding_matches {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_PERMISSION_BINDING_MISMATCH.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    Ok(binding_matches)
+    Ok(is_binding_matches)
 }
 
 fn plugin_activation_passes(
@@ -262,17 +262,17 @@ fn plugin_activation_passes(
         )?;
         return Ok(false);
     }
-    let binding_matches = activation.plugin_ref == manifest.plugin_ref
+    let is_binding_matches = activation.plugin_ref == manifest.plugin_ref
         && activation.manifest_ref == manifest.manifest_ref
         && activation.operation == PLUGIN_LIFECYCLE_ACTIVATION_OPERATION;
-    if !binding_matches {
+    if !is_binding_matches {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_ACTIVATION_BINDING_MISMATCH.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    Ok(binding_matches)
+    Ok(is_binding_matches)
 }
 
 fn plugin_hostcall_passes(
@@ -299,9 +299,9 @@ fn plugin_hostcall_passes(
         )?;
         return Ok(false);
     }
-    let manifest_declares_hostcall = manifest.hostcall_refs.iter().any(|reference| reference == &hostcall.hostcall_ref)
+    let is_manifest_declares_hostcall = manifest.hostcall_refs.iter().any(|reference| reference == &hostcall.hostcall_ref)
         || !manifest.extension_contract_refs.is_empty();
-    if !manifest_declares_hostcall {
+    if !is_manifest_declares_hostcall {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_HOSTCALL_UNDECLARED.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
@@ -414,16 +414,16 @@ fn plugin_negotiation_passes(
         )?;
         return Ok(false);
     }
-    let binding_matches = negotiation.manifest_ref == manifest.manifest_ref
+    let is_binding_matches = negotiation.manifest_ref == manifest.manifest_ref
         && contains_all(&negotiation.selected_contract_refs, &manifest.extension_contract_refs);
-    if !binding_matches {
+    if !is_binding_matches {
         diagnostics.push_limited(
             PLUGIN_LIFECYCLE_NEGOTIATION_BINDING_MISMATCH.to_string(),
             MAX_PLUGIN_DIAGNOSTICS,
             "plugin lifecycle diagnostics",
         )?;
     }
-    Ok(binding_matches)
+    Ok(is_binding_matches)
 }
 
 fn plugin_compatibility_passes(

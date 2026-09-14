@@ -188,8 +188,8 @@ fn release_snapshot_verify_core(
     required_caveats: &[String],
 ) -> Result<ReleaseSnapshotVerifyCore> {
     let mut diagnostics = Vec::new();
-    let snapshot_artifact_kind = artifact.kind == RELEASE_SNAPSHOT_ARTIFACT_KIND;
-    if !snapshot_artifact_kind {
+    let is_snapshot_artifact_kind = artifact.kind == RELEASE_SNAPSHOT_ARTIFACT_KIND;
+    if !is_snapshot_artifact_kind {
         push_bounded(
             &mut diagnostics,
             format!("release snapshot artifact kind was {}, expected {RELEASE_SNAPSHOT_ARTIFACT_KIND}", artifact.kind),
@@ -200,8 +200,8 @@ fn release_snapshot_verify_core(
 
     let expected_members = sorted_unique(&snapshot.artifact_refs);
     let artifact_dependencies = sorted_unique(&artifact.dependency_refs);
-    let mut exact_member_closure = artifact_dependencies == expected_members;
-    if !exact_member_closure {
+    let mut is_exact_member_closure = artifact_dependencies == expected_members;
+    if !is_exact_member_closure {
         push_bounded(
             &mut diagnostics,
             "release snapshot registry dependencies do not match exact artifact members".to_string(),
@@ -211,7 +211,7 @@ fn release_snapshot_verify_core(
     }
     for member_ref in &expected_members {
         if let Err(error) = read_artifact_with_root(root, member_ref) {
-            exact_member_closure = false;
+            is_exact_member_closure = false;
             push_bounded(
                 &mut diagnostics,
                 format!("tampered or missing snapshot member {member_ref}: {error}"),
@@ -222,7 +222,7 @@ fn release_snapshot_verify_core(
     }
     let (closure_refs, missing_refs) = compute_closure_refs(root, &expected_members)?;
     if !missing_refs.is_empty() {
-        exact_member_closure = false;
+        is_exact_member_closure = false;
         for missing_ref in &missing_refs {
             push_bounded(
                 &mut diagnostics,
@@ -233,7 +233,7 @@ fn release_snapshot_verify_core(
         }
     }
     for missing_member in set_difference(&closure_refs, &expected_members)? {
-        exact_member_closure = false;
+        is_exact_member_closure = false;
         push_bounded(
             &mut diagnostics,
             format!("snapshot omitted closure member {missing_member}"),
@@ -242,7 +242,7 @@ fn release_snapshot_verify_core(
         )?;
     }
     for unexpected_member in set_difference(&expected_members, &closure_refs)? {
-        exact_member_closure = false;
+        is_exact_member_closure = false;
         push_bounded(
             &mut diagnostics,
             format!("snapshot listed unexpected closure member {unexpected_member}"),
@@ -252,7 +252,7 @@ fn release_snapshot_verify_core(
     }
     let closure_digest = canonical_hash(&closure_value(&expected_members, &closure_refs, &missing_refs)?)?;
     if closure_digest != snapshot.dependency_closure_digest {
-        exact_member_closure = false;
+        is_exact_member_closure = false;
         push_bounded(
             &mut diagnostics,
             format!(
@@ -288,7 +288,7 @@ fn release_snapshot_verify_core(
     }
 
     let recomputed_subject = release_snapshot_subject_ref(&release_snapshot_subject_input_from_snapshot(snapshot))?;
-    let signature_subject_bound = recomputed_subject == snapshot.signature_subject_ref && !snapshot.signature_refs.is_empty();
+    let is_signature_subject_bound = recomputed_subject == snapshot.signature_subject_ref && !snapshot.signature_refs.is_empty();
     if recomputed_subject != snapshot.signature_subject_ref {
         push_bounded(
             &mut diagnostics,
@@ -309,15 +309,15 @@ fn release_snapshot_verify_core(
         )?;
     }
 
-    let caveats_rendered = release_snapshot_caveats_rendered(snapshot, required_caveats, &mut diagnostics)?;
-    let fresh_evidence = release_snapshot_fresh_evidence(snapshot, &mut diagnostics)?;
-    let redaction_profile_bound = release_snapshot_redaction_bound(snapshot, &mut diagnostics)?;
-    let required_evidence_bound = release_snapshot_required_evidence_bound(snapshot, &mut diagnostics)?;
-    let non_authority_boundary = snapshot
+    let is_caveats_rendered = release_snapshot_caveats_rendered(snapshot, required_caveats, &mut diagnostics)?;
+    let is_fresh_evidence = release_snapshot_fresh_evidence(snapshot, &mut diagnostics)?;
+    let is_redaction_profile_bound = release_snapshot_redaction_bound(snapshot, &mut diagnostics)?;
+    let is_required_evidence_bound = release_snapshot_required_evidence_bound(snapshot, &mut diagnostics)?;
+    let is_non_authority_boundary = snapshot
         .non_claims
         .iter()
         .any(|claim| claim.contains("authority") || claim.contains("deployment") || claim.contains("execution"));
-    if !non_authority_boundary {
+    if !is_non_authority_boundary {
         push_bounded(
             &mut diagnostics,
             "release snapshot must surface non-claims for authority, deployment, or execution".to_string(),
@@ -327,15 +327,15 @@ fn release_snapshot_verify_core(
     }
     Ok(ReleaseSnapshotVerifyCore {
         diagnostics,
-        snapshot_artifact_kind,
-        exact_member_closure,
+        snapshot_artifact_kind: is_snapshot_artifact_kind,
+        exact_member_closure: is_exact_member_closure,
         dependency_index_digest,
-        signature_subject_bound,
-        caveats_rendered,
-        fresh_evidence,
-        redaction_profile_bound,
-        non_authority_boundary,
-        required_evidence_bound,
+        signature_subject_bound: is_signature_subject_bound,
+        caveats_rendered: is_caveats_rendered,
+        fresh_evidence: is_fresh_evidence,
+        redaction_profile_bound: is_redaction_profile_bound,
+        non_authority_boundary: is_non_authority_boundary,
+        required_evidence_bound: is_required_evidence_bound,
     })
 }
 

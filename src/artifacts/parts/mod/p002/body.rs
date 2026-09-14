@@ -905,7 +905,7 @@ fn parse_dependency_edge_value(value: &IoValue) -> Result<ArtifactDependencyEdge
     require_check(&checks, "direct-edge", "artifact dependency edge")?;
     let required_value = value_to_iovalue(&fields[5]);
     let required_record = simple_record(&required_value, "required", 1)?;
-    let required = required_record[0]
+    let is_required = required_record[0]
         .as_boolean()
         .ok_or_else(|| MoltenError::invalid_harness("artifact dependency edge required must be bool"))?;
     Ok(ArtifactDependencyEdge {
@@ -914,7 +914,7 @@ fn parse_dependency_edge_value(value: &IoValue) -> Result<ArtifactDependencyEdge
         target_ref: record_ref(&fields[2], "target")?,
         target_kind: record_string(&fields[3], "target-kind")?,
         relation: record_string(&fields[4], "relation")?,
-        required,
+        required: is_required,
         scope: record_string(&fields[6], "scope")?,
         evidence_refs: record_ref_sequence(&fields[7], "evidence")?,
         value: value.clone(),

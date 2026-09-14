@@ -130,17 +130,17 @@ impl ChaosControlObservationLedger {
             );
             return Ok(ChaosControlIngestStatus::ViolationRecorded);
         }
-        let predecessor_conflict = history
+        let is_predecessor_conflict = history
             .digests
             .get(&observation.command_index.saturating_sub(1))
             .filter(|observed| observation.command_index > 1 && *observed != &observation.prior_digest)
             .is_some();
-        let successor_conflict = history
+        let is_successor_conflict = history
             .digests
             .get(&(observation.command_index + 1))
             .filter(|successor_prior| **successor_prior != observation.next_digest)
             .is_some();
-        if predecessor_conflict || successor_conflict {
+        if is_predecessor_conflict || is_successor_conflict {
             history.digests.insert(observation.command_index, observation.next_digest.clone());
             history.state_refs.insert(observation.command_index, observation.application_state_ref.clone());
             history.highest_index = history.highest_index.max(Some(observation.command_index));

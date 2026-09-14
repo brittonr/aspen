@@ -107,12 +107,12 @@ fn is_binding_admitted(input: &GetValueInnerInput<'_>, typed_ref: &EntryRef) -> 
     let Some(schema_compatibility_value) = input.schema_compatibility_value else {
         return Ok(false);
     };
-    let admits = crate::schema_identity::compatibility_admits_storage(
+    let is_admits = crate::schema_identity::compatibility_admits_storage(
         schema_compatibility_value,
         expected_schema_ref,
         &typed_ref.schema_ref,
     )?;
-    if !admits {
+    if !is_admits {
         return Ok(false);
     }
     let receipt_value =

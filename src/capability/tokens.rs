@@ -549,21 +549,21 @@ fn validate_checks(value: &preserves::Value<IoValue>, decision: &str) -> Result<
     let value = crate::preserves_rail::value_to_iovalue(value);
     let checks = crate::preserves_rail::simple_record_fields(&value, "checks", 1)?;
     let entries = crate::preserves_rail::required_sequence_field(&checks[0], "UCAN verification check sequence")?;
-    let mut saw_decision = false;
+    let mut is_saw_decision = false;
     for entry in entries.as_ref() {
         let entry_value = crate::preserves_rail::value_to_iovalue(entry);
         let check = crate::preserves_rail::simple_record_fields(&entry_value, "check", 2)?;
         let name = required_string(&check[0], "UCAN verification check name")?;
         let status = required_string(&check[1], "UCAN verification check status")?;
         if name == "decision-bound" {
-            saw_decision = status == decision;
+            is_saw_decision = status == decision;
         } else if decision == DECISION_PASS && status != CHECK_STATUS_PASS {
             return Err(crate::error::MoltenError::invalid_harness(format!(
                 "passing UCAN verification receipt has failing check {name}"
             )));
         }
     }
-    if saw_decision {
+    if is_saw_decision {
         Ok(())
     } else {
         Err(crate::error::MoltenError::invalid_harness("UCAN verification receipt missing decision-bound check"))

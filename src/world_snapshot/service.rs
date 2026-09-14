@@ -349,12 +349,12 @@ fn validate_admission(
     minimum_generation: Option<u64>,
 ) -> Result<()> {
     validate_ref(&observation.admission_ref, "snapshot current-admission observation")?;
-    let stale = minimum_generation.is_some_and(|minimum| observation.generation < minimum);
+    let is_stale = minimum_generation.is_some_and(|minimum| observation.generation < minimum);
     if !observation.allowed
         || observation.descriptor_ref != descriptor_ref
         || observation.profile_ref != descriptor.profile_ref.as_str()
         || observation.cohort_ref != destination.cohort_ref.as_str()
-        || stale
+        || is_stale
     {
         return Err(MoltenError::invalid_harness("snapshot current admission denied, drifted, or became stale"));
     }

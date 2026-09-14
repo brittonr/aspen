@@ -200,12 +200,12 @@ pub fn evaluate_placement_fit(request: &PlacementRequest) -> Result<PlacementDec
     }
 
     // Check fit
-    let fits = capacity.available_cpu_millis >= request.requests.cpu_millis
+    let is_fits = capacity.available_cpu_millis >= request.requests.cpu_millis
         && capacity.available_memory_bytes >= request.requests.memory_bytes
         && capacity.available_storage_bytes >= request.requests.storage_bytes
         && capacity.available_network_mbps >= request.requests.network_mbps;
 
-    if !fits {
+    if !is_fits {
         return Ok(PlacementDecision {
             decision: "deny".to_string(),
             target_ref: Some(capacity.target_ref.clone()),
@@ -248,24 +248,24 @@ pub fn evaluate_taint_toleration_match(
     let mut unmatched_effects = Vec::new();
 
     for taint in taints {
-        let tolerated = tolerations.iter().any(|tol| {
-            let key_match = match tol.operator {
+        let is_tolerated = tolerations.iter().any(|tol| {
+            let is_key_match = match tol.operator {
                 TolerationOperator::Equal => tol.key == taint.key,
                 TolerationOperator::Exists => true,
             };
-            let value_match = match (&tol.operator, &tol.value) {
+            let is_value_match = match (&tol.operator, &tol.value) {
                 (TolerationOperator::Equal, Some(v)) => v == &taint.value,
                 (TolerationOperator::Exists, _) => true,
                 _ => false,
             };
-            let effect_match = match (&tol.effect, &taint.effect) {
+            let is_effect_match = match (&tol.effect, &taint.effect) {
                 (Some(tol_effect), _) => *tol_effect == taint.effect,
                 (None, _) => true,
             };
-            key_match && value_match && effect_match
+            is_key_match && is_value_match && is_effect_match
         });
 
-        if !tolerated {
+        if !is_tolerated {
             unmatched_effects.push(taint.effect);
         }
     }
@@ -282,12 +282,12 @@ pub fn evaluate_placement(
     let mut diagnostics = Vec::new();
 
     for constraint in &request.constraints {
-        let satisfied = match constraint.kind {
+        let is_satisfied = match constraint.kind {
             ConstraintKind::Required | ConstraintKind::AntiAffinity => {
-                let found = explicit_target_properties
+                let is_found = explicit_target_properties
                     .iter()
                     .any(|(k, v)| k == &constraint.key && constraint.values.contains(v));
-                if !found {
+                if !is_found {
                     diagnostics.push(format!(
                         "required constraint not satisfied: {} {:?} {:?}",
                         constraint.key,
@@ -295,12 +295,12 @@ pub fn evaluate_placement(
                         constraint.values,
                     ));
                 }
-                found
+                is_found
             }
             ConstraintKind::Preferred => true, // Preferred is not a hard deny
         };
 
-        if !satisfied && constraint.kind == ConstraintKind::Required {
+        if !is_satisfied && constraint.kind == ConstraintKind::Required {
             return PlacementDecision {
                 decision: "deny".to_string(),
                 target_ref: None,
@@ -319,7 +319,7 @@ pub fn evaluate_placement(
         .collect();
 
     if !taint_keys.is_empty() {
-        let tolerated = request.tolerations.iter().any(|tol| {
+        let is_tolerated = request.tolerations.iter().any(|tol| {
             taint_keys.iter().any(|tk| {
                 match tol.operator {
                     TolerationOperator::Equal => &tol.key == tk,
@@ -327,7 +327,7 @@ pub fn evaluate_placement(
                 }
             })
         });
-        if !tolerated {
+        if !is_tolerated {
             diagnostics.push("target has hard taints without matching tolerations".to_string());
             return PlacementDecision {
                 decision: "deny".to_string(),

@@ -44,11 +44,11 @@ pub fn evaluate_secret_access_binding(input: SecretAccessBindingInput<'_>) -> Re
         collect_decrypt_binding_diagnostics(input, reveal, decrypt, &mut diagnostics)?;
     }
     if let Some(expected_plaintext_ref) = input.expected_plaintext_ref {
-        let decrypt_plaintext_mismatch = match input.decrypt.and_then(|decrypt| decrypt.plaintext_ref.as_deref()) {
+        let is_decrypt_plaintext_mismatch = match input.decrypt.and_then(|decrypt| decrypt.plaintext_ref.as_deref()) {
             Some(actual) => actual != expected_plaintext_ref,
             None => false,
         };
-        if reveal.plaintext_ref.as_deref() != Some(expected_plaintext_ref) || decrypt_plaintext_mismatch {
+        if reveal.plaintext_ref.as_deref() != Some(expected_plaintext_ref) || is_decrypt_plaintext_mismatch {
             diagnostics.push_limited(
                 SECRET_ACCESS_PLAINTEXT_MISMATCH.to_string(),
                 MAX_SECRET_DIAGNOSTICS,
@@ -117,11 +117,11 @@ pub fn evaluate_secret_redaction_gate(input: SecretRedactionGateInput<'_>) -> Re
             "secret redaction diagnostics",
         )?;
     }
-    let bundle_gate_preserving = match input.private_bundle {
+    let is_bundle_gate_preserving = match input.private_bundle {
         Some(profile) => profile.is_gate_preserving && profile.transform_receipt_ref == input.transform.receipt_ref,
         None => true,
     };
-    let is_gate_preserving = input.transform.is_gate_preserving && bundle_gate_preserving;
+    let is_gate_preserving = input.transform.is_gate_preserving && is_bundle_gate_preserving;
     if input.requires_gate_preserving && !is_gate_preserving {
         diagnostics.push_limited(
             SECRET_REDACTION_PROFILE_DIAGNOSTIC_ONLY.to_string(),

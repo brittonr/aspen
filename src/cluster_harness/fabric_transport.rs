@@ -268,7 +268,7 @@ fn execute_prepared_distinct_process_transport_run(
         &input.run_directory,
         &input.run_directory.join(CLIENT_LOG_FILE),
     )?;
-    let child_handles_distinct = listener.id() != client.id();
+    let is_child_handles_distinct = listener.id() != client.id();
     let client_start = start_artifact(EndpointParticipantRole::Client, &client_invocation_ref)?;
     write_preserves(&input.run_directory.join(CLIENT_START_FILE), &client_start.value)?;
 
@@ -295,7 +295,7 @@ fn execute_prepared_distinct_process_transport_run(
         &listener_terminal,
         &client_terminal,
         &cleanup,
-        child_handles_distinct,
+        is_child_handles_distinct,
     );
     let assessment = assess_distinct_process_transport_evidence(&assessment_input);
     let parent_value = parent_run_value(
@@ -838,7 +838,7 @@ fn participant_evidence(
     exited: bool,
 ) -> DistinctProcessParticipantEvidence {
     let expected_command_profile_ref = command_profile_ref(participant.role.as_str());
-    let parent_observed_start = start.parent_observed
+    let is_parent_observed_start = start.parent_observed
         && start.role == participant.role
         && start.invocation_ref == participant.invocation_ref
         && start.command_profile_ref == expected_command_profile_ref;
@@ -857,7 +857,7 @@ fn participant_evidence(
         request_ref: participant.request_ref.clone(),
         payload_ref: participant.payload_ref.clone(),
         acknowledgement_ref: participant.acknowledgement_ref.clone(),
-        parent_observed_start,
+        parent_observed_start: is_parent_observed_start,
         parent_observed_terminal: true,
         parent_observed_exit: exited,
         automatic_retry_count: participant.automatic_retry_count,
@@ -1015,14 +1015,14 @@ fn read_start(path: &std::path::Path) -> crate::error::Result<StartArtifact> {
     let role = parse_role(&required_string(next(&mut fields, "start role")?, "start role")?)?;
     let invocation_ref = required_ref(next(&mut fields, "start invocation")?, "start invocation")?;
     let command_profile_ref = required_ref(next(&mut fields, "command profile")?, "command profile")?;
-    let parent_observed = required_bool(next(&mut fields, "parent observed")?, "parent observed")?;
+    let is_parent_observed = required_bool(next(&mut fields, "parent observed")?, "parent observed")?;
     let _checks = next(&mut fields, "start checks")?;
     let artifact_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(StartArtifact {
         role,
         invocation_ref,
         command_profile_ref,
-        parent_observed,
+        parent_observed: is_parent_observed,
         value,
         artifact_ref,
     })
@@ -1037,9 +1037,9 @@ fn read_cleanup(path: &std::path::Path) -> crate::error::Result<CleanupArtifact>
     let client_terminal_ref = required_ref(next(&mut fields, "client terminal")?, "client terminal")?;
     let listener_cleanup_ref = required_ref(next(&mut fields, "listener cleanup")?, "listener cleanup")?;
     let client_cleanup_ref = required_ref(next(&mut fields, "client cleanup")?, "client cleanup")?;
-    let listener_exited = required_bool(next(&mut fields, "listener exited")?, "listener exited")?;
-    let client_exited = required_bool(next(&mut fields, "client exited")?, "client exited")?;
-    let no_orphans = required_bool(next(&mut fields, "no orphans")?, "no orphans")?;
+    let is_listener_exited = required_bool(next(&mut fields, "listener exited")?, "listener exited")?;
+    let is_client_exited = required_bool(next(&mut fields, "client exited")?, "client exited")?;
+    let is_no_orphans = required_bool(next(&mut fields, "no orphans")?, "no orphans")?;
     let _checks = next(&mut fields, "cleanup checks")?;
     let artifact_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(CleanupArtifact {
@@ -1047,9 +1047,9 @@ fn read_cleanup(path: &std::path::Path) -> crate::error::Result<CleanupArtifact>
         client_terminal_ref,
         listener_cleanup_ref,
         client_cleanup_ref,
-        listener_exited,
-        client_exited,
-        no_orphans,
+        listener_exited: is_listener_exited,
+        client_exited: is_client_exited,
+        no_orphans: is_no_orphans,
         value,
         artifact_ref,
     })

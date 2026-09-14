@@ -146,7 +146,7 @@ fn validate_outcome_kind(plan: &super::ConsistencyPortPlan, kind: ConsistencyOut
             "denied consistency plan cannot produce a non-denial outcome",
         ));
     }
-    let compatible = kind.is_non_mutating_failure()
+    let is_compatible = kind.is_non_mutating_failure()
         || matches!(
             (&plan.operation, kind),
             (super::ConsistencyOperation::Open { .. }, ConsistencyOutcomeKind::Opened)
@@ -173,7 +173,7 @@ fn validate_outcome_kind(plan: &super::ConsistencyPortPlan, kind: ConsistencyOut
                 | (super::ConsistencyOperation::Status, ConsistencyOutcomeKind::StatusObserved)
                 | (super::ConsistencyOperation::Remove, ConsistencyOutcomeKind::Removed)
         );
-    if compatible {
+    if is_compatible {
         Ok(())
     } else {
         Err(crate::error::MoltenError::invalid_harness(

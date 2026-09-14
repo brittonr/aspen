@@ -1024,8 +1024,11 @@ fn parse_receipt_inputs(
         let text = std::fs::read_to_string(&path).map_err(molten::error::MoltenError::from)?;
         let value = molten::preserves_rail::parse_text(&text)?;
         let receipt = molten::requirement_traceability::parse_verification_run_receipt(&value)?;
-        let target_exists = root.join(&receipt.target).exists();
-        sources.push(molten::requirement_traceability::ReceiptCoverageSource { value, target_exists });
+        let is_target_exists = root.join(&receipt.target).exists();
+        sources.push(molten::requirement_traceability::ReceiptCoverageSource {
+            value,
+            target_exists: is_target_exists,
+        });
     }
     molten::requirement_traceability::coverage_from_verification_receipts(&sources)
 }
@@ -1036,15 +1039,15 @@ fn evidence_from_fields(
 ) -> Outcome<molten::requirement_traceability::VerificationEvidence> {
     let target = fields[2].clone();
     let artifact_ref = fields[4].clone();
-    let target_exists = root.join(&target).exists();
-    let artifact_present = molten::preserves_rail::validate_content_ref(&artifact_ref).is_ok();
+    let is_target_exists = root.join(&target).exists();
+    let is_artifact_present = molten::preserves_rail::validate_content_ref(&artifact_ref).is_ok();
     Ok(molten::requirement_traceability::VerificationEvidence {
         target,
         command: fields[3].clone(),
         artifact_refs: vec![artifact_ref.clone()],
         artifact_ref,
-        target_exists,
-        artifact_present,
+        target_exists: is_target_exists,
+        artifact_present: is_artifact_present,
         source: "compatibility".to_string(),
         receipt_ref: None,
         expected_decision: "compatibility".to_string(),
