@@ -163,41 +163,225 @@ fn is_group_tree(tree: &syn::UseTree) -> bool {
 
 /// Collect every identifier the file binds outside its own `use` items.
 ///
-/// A binding that matches a bound import name would make the token rewrite
-/// change an unrelated name, so any collision skips the file.
+/// One name that can hide an import, with the source range where it hides it.
+struct Scope {
+    name: String,
+    /// The range in which the name resolves to this binding.
+    range: Range<usize>,
+    /// Where the binding starts to hide the import.
+    offset: usize,
+    /// The binding's own span, which is never rewritten.
+    declaration: Range<usize>,
+}
+
+/// A name that a second pass resolves to its own scope.
+struct Candidate {
+    name: String,
+    offset: usize,
+    declaration: Range<usize>,
+    /// True for an item declaration, which is scoped to its own module.
+    item: bool,
+    /// True when the pattern can also name a constant, as a match arm can.
+    ambiguous: bool,
+}
+
 #[derive(Default)]
 struct Bindings {
     names: BTreeSet<String>,
+    candidates: Vec<Candidate>,
+    shorthands: BTreeSet<String>,
 }
 
 impl Bindings {
-    fn pattern(&mut self, pat: &syn::Pat) {
-        let mut collector = PatternNames::default();
+    fn pattern(&mut self, pat: &syn::Pat, lines: &LineIndex) {
+        self.record(pat, lines, None, false);
+    }
+    /// A `let` binding becomes visible after its statement, not at its pattern.
+    fn local(&mut self, pat: &syn::Pat, lines: &LineIndex, scope_start: usize) {
+        self.record(pat, lines, Some(scope_start), false);
+    }
+    /// A bare pattern in a refutable position can name a constant instead of a
+    /// fresh binding, so the file cannot be rewritten without resolving it.
+    fn refutable(&mut self, pat: &syn::Pat, lines: &LineIndex) {
+        self.record(pat, lines, None, matches!(pat, syn::Pat::Ident(_)));
+    }
+    fn record(
+        &mut self,
+        pat: &syn::Pat,
+        lines: &LineIndex,
+        scope_start: Option<usize>,
+        ambiguous: bool,
+    ) {
+        let mut collector = PatternNames {
+            lines,
+            names: Vec::new(),
+        };
         collector.visit_pat(pat);
-        self.names.extend(collector.names);
+        for (name, declaration) in collector.names {
+            self.names.insert(name.clone());
+            self.candidates.push(Candidate {
+                offset: scope_start.unwrap_or(declaration.start),
+                declaration,
+                name,
+                item: false,
+                ambiguous,
+            });
+        }
+    }
+    fn item(&mut self, name: String, declaration: Range<usize>) {
+        self.names.insert(name.clone());
+        self.candidates.push(Candidate {
+            offset: declaration.start,
+            declaration,
+            name,
+            item: true,
+            ambiguous: false,
+        });
     }
 }
 
-#[derive(Default)]
-struct PatternNames {
-    names: BTreeSet<String>,
+/// Binding identifiers with their own source spans.
+struct PatternNames<'a> {
+    lines: &'a LineIndex,
+    names: Vec<(String, Range<usize>)>,
 }
 
-impl<'ast> Visit<'ast> for PatternNames {
+impl<'ast> Visit<'ast> for PatternNames<'_> {
     fn visit_pat_ident(&mut self, node: &'ast syn::PatIdent) {
-        self.names.insert(node.ident.to_string());
+        self.names
+            .push((node.ident.to_string(), self.lines.range(node.ident.span())));
         syn::visit::visit_pat_ident(self, node);
     }
     fn visit_pat_struct(&mut self, node: &'ast syn::PatStruct) {
         for field in &node.fields {
             if let syn::Member::Named(name) = &field.member {
                 if field.colon_token.is_none() {
-                    self.names.insert(name.to_string());
+                    self.names.push((name.to_string(), self.lines.range(name.span())));
                 }
             }
         }
         syn::visit::visit_pat_struct(self, node);
     }
+}
+
+/// The innermost block and inline module around one byte offset.
+struct Enclosing<'a> {
+    lines: &'a LineIndex,
+    offset: usize,
+    block: Option<Range<usize>>,
+    body: Option<Range<usize>>,
+    module: Option<Range<usize>>,
+}
+
+impl<'ast> Visit<'ast> for Enclosing<'_> {
+    fn visit_block(&mut self, node: &'ast syn::Block) {
+        tighten(&mut self.block, self.lines.range(node.span()), self.offset);
+        syn::visit::visit_block(self, node);
+    }
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        if node.content.is_some() {
+            tighten(&mut self.module, self.lines.range(node.span()), self.offset);
+        }
+        syn::visit::visit_item_mod(self, node);
+    }
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        self.record_body(node.span(), &node.block);
+        syn::visit::visit_item_fn(self, node);
+    }
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        self.record_body(node.span(), &node.block);
+        syn::visit::visit_impl_item_fn(self, node);
+    }
+    fn visit_trait_item_fn(&mut self, node: &'ast syn::TraitItemFn) {
+        if let Some(block) = &node.default {
+            self.record_body(node.span(), block);
+        }
+        syn::visit::visit_trait_item_fn(self, node);
+    }
+    fn visit_expr_closure(&mut self, node: &'ast syn::ExprClosure) {
+        if let syn::Expr::Block(block) = node.body.as_ref() {
+            self.record_body(node.span(), &block.block);
+        }
+        syn::visit::visit_expr_closure(self, node);
+    }
+}
+
+impl Enclosing<'_> {
+    /// A parameter is declared in the signature, so its scope is the body of
+    /// the function or closure that owns it.
+    fn record_body(&mut self, span: proc_macro2::Span, block: &syn::Block) {
+        let signature = self.lines.range(span);
+        if signature.contains(&self.offset) {
+            set_smallest(&mut self.body, self.lines.range(block.span()));
+        }
+    }
+}
+
+fn set_smallest(slot: &mut Option<Range<usize>>, range: Range<usize>) {
+    let width = range.end.saturating_sub(range.start);
+    if slot
+        .as_ref()
+        .is_none_or(|current| current.end.saturating_sub(current.start) > width)
+    {
+        *slot = Some(range);
+    }
+}
+
+fn tighten(slot: &mut Option<Range<usize>>, range: Range<usize>, offset: usize) {
+    if !range.contains(&offset) {
+        return;
+    }
+    let width = range.end.saturating_sub(range.start);
+    if slot
+        .as_ref()
+        .is_none_or(|current| current.end.saturating_sub(current.start) > width)
+    {
+        *slot = Some(range);
+    }
+}
+
+/// Resolve every candidate name to the range where it hides an import.
+fn build_scopes(
+    syntax: &syn::File,
+    lines: &LineIndex,
+    candidates: &[Candidate],
+    file_range: Range<usize>,
+) -> Vec<Scope> {
+    let mut scopes = Vec::new();
+    for candidate in candidates {
+        let mut enclosing = Enclosing {
+            lines,
+            offset: candidate.offset,
+            block: None,
+            body: None,
+            module: None,
+        };
+        enclosing.visit_file(syntax);
+        let range = if candidate.item {
+            enclosing.module.unwrap_or_else(|| file_range.clone())
+        } else {
+            match enclosing.block.or(enclosing.body) {
+                Some(range) => range,
+                None => continue,
+            }
+        };
+        scopes.push(Scope {
+            name: candidate.name.clone(),
+            range,
+            offset: candidate.offset,
+            declaration: candidate.declaration.clone(),
+        });
+    }
+    scopes
+}
+
+/// True when a later binding or item hides `name` at this offset.
+fn is_hidden(scopes: &[Scope], name: &str, offset: usize) -> bool {
+    scopes.iter().any(|scope| {
+        scope.name == name
+            && (scope.declaration.contains(&offset)
+                || (scope.range.contains(&offset) && offset >= scope.offset))
+    })
 }
 
 struct FileBindings<'a> {
@@ -211,39 +395,39 @@ impl<'ast> Visit<'ast> for FileBindings<'_> {
     fn visit_item(&mut self, node: &'ast syn::Item) {
         match node {
             syn::Item::Fn(item) => {
-                self.bindings.names.insert(item.sig.ident.to_string());
+                self.record_item(&item.sig.ident);
             }
             syn::Item::Struct(item) => {
-                self.bindings.names.insert(item.ident.to_string());
+                self.record_item(&item.ident);
             }
             syn::Item::Enum(item) => {
-                self.bindings.names.insert(item.ident.to_string());
+                self.record_item(&item.ident);
             }
             syn::Item::Union(item) => {
-                self.bindings.names.insert(item.ident.to_string());
+                self.record_item(&item.ident);
             }
             syn::Item::Trait(item) => {
-                self.bindings.names.insert(item.ident.to_string());
+                self.record_item(&item.ident);
             }
             syn::Item::Type(item) => {
-                self.bindings.names.insert(item.ident.to_string());
+                self.record_item(&item.ident);
             }
             syn::Item::Const(item) => {
-                self.bindings.names.insert(item.ident.to_string());
+                self.record_item(&item.ident);
             }
             syn::Item::Static(item) => {
-                self.bindings.names.insert(item.ident.to_string());
+                self.record_item(&item.ident);
             }
             syn::Item::Mod(item) => {
-                self.bindings.names.insert(item.ident.to_string());
+                self.record_item(&item.ident);
             }
             syn::Item::Macro(item) => {
                 if let Some(ident) = &item.ident {
-                    self.bindings.names.insert(ident.to_string());
+                    self.record_item(ident);
                 }
             }
             syn::Item::ExternCrate(item) => {
-                self.bindings.names.insert(item.ident.to_string());
+                self.record_item(&item.ident);
             }
             syn::Item::Use(item) => {
                 let range = self.lines.range(item.span());
@@ -262,30 +446,25 @@ impl<'ast> Visit<'ast> for FileBindings<'_> {
         syn::visit::visit_item(self, node);
     }
     fn visit_variant(&mut self, node: &'ast syn::Variant) {
-        self.bindings.names.insert(node.ident.to_string());
+        // A variant is reachable only through its enum, so it does not hide a
+        // module-level name.
         syn::visit::visit_variant(self, node);
     }
     fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
-        self.bindings.names.insert(node.sig.ident.to_string());
+        // A method name is reachable only through its receiver, so it does not
+        // hide a module-level name.
         syn::visit::visit_impl_item_fn(self, node);
     }
     fn visit_trait_item_fn(&mut self, node: &'ast syn::TraitItemFn) {
-        self.bindings.names.insert(node.sig.ident.to_string());
         syn::visit::visit_trait_item_fn(self, node);
-    }
-    fn visit_field(&mut self, node: &'ast syn::Field) {
-        if let Some(ident) = &node.ident {
-            self.bindings.names.insert(ident.to_string());
-        }
-        syn::visit::visit_field(self, node);
     }
     fn visit_generic_param(&mut self, node: &'ast syn::GenericParam) {
         match node {
             syn::GenericParam::Type(param) => {
-                self.bindings.names.insert(param.ident.to_string());
+                self.record_item(&param.ident);
             }
             syn::GenericParam::Const(param) => {
-                self.bindings.names.insert(param.ident.to_string());
+                self.record_item(&param.ident);
             }
             syn::GenericParam::Lifetime(_) => {}
         }
@@ -293,35 +472,47 @@ impl<'ast> Visit<'ast> for FileBindings<'_> {
     }
     fn visit_fn_arg(&mut self, node: &'ast syn::FnArg) {
         if let syn::FnArg::Typed(typed) = node {
-            self.bindings.pattern(&typed.pat);
+            self.bindings.pattern(&typed.pat, self.lines);
         }
         syn::visit::visit_fn_arg(self, node);
     }
     fn visit_local(&mut self, node: &'ast syn::Local) {
-        self.bindings.pattern(&node.pat);
+        let scope_start = self.lines.range(node.span()).end;
+        self.bindings.local(&node.pat, self.lines, scope_start);
         syn::visit::visit_local(self, node);
     }
     fn visit_arm(&mut self, node: &'ast syn::Arm) {
-        self.bindings.pattern(&node.pat);
+        self.bindings.refutable(&node.pat, self.lines);
         syn::visit::visit_arm(self, node);
+    }
+    fn visit_expr_let(&mut self, node: &'ast syn::ExprLet) {
+        self.bindings.refutable(&node.pat, self.lines);
+        syn::visit::visit_expr_let(self, node);
     }
     fn visit_expr_closure(&mut self, node: &'ast syn::ExprClosure) {
         for input in &node.inputs {
-            self.bindings.pattern(input);
+            self.bindings.pattern(input, self.lines);
         }
         syn::visit::visit_expr_closure(self, node);
     }
     fn visit_expr_for_loop(&mut self, node: &'ast syn::ExprForLoop) {
-        self.bindings.pattern(&node.pat);
+        self.bindings.pattern(&node.pat, self.lines);
         syn::visit::visit_expr_for_loop(self, node);
     }
     fn visit_field_value(&mut self, node: &'ast syn::FieldValue) {
         if node.colon_token.is_none() {
             if let syn::Member::Named(name) = &node.member {
-                self.bindings.names.insert(name.to_string());
+                self.bindings.shorthands.insert(name.to_string());
             }
         }
         syn::visit::visit_field_value(self, node);
+    }
+}
+
+impl FileBindings<'_> {
+    fn record_item(&mut self, ident: &proc_macro2::Ident) {
+        let range = self.lines.range(ident.span());
+        self.bindings.item(ident.to_string(), range);
     }
 }
 
@@ -563,13 +754,22 @@ fn rewrite_descendant(
     };
     bindings.visit_file(&syntax);
     for name in owners.keys() {
-        if bindings.bindings.names.contains(name) {
-            return Err(format!("descendant {path} binds `{name}` locally"));
+        if bindings.bindings.shorthands.contains(name) {
+            return Err(format!("descendant {path} reads `{name}` from a field shorthand"));
         }
         if bindings.extra_use_bindings.contains(name) {
             return Err(format!("descendant {path} imports `{name}` again"));
         }
+        if bindings
+            .bindings
+            .candidates
+            .iter()
+            .any(|candidate| candidate.ambiguous && &candidate.name == name)
+        {
+            return Err(format!("descendant {path} matches `{name}` as a possible constant"));
+        }
     }
+    let scopes = build_scopes(&syntax, &lines, &bindings.bindings.candidates, 0..source.len());
     let mut modules = InlineModules {
         ranges: Vec::new(),
         lines: &lines,
@@ -587,6 +787,7 @@ fn rewrite_descendant(
         &lines,
         source,
         depth,
+        &scopes,
         &mut edits,
     )?;
     if edits.is_empty() {
@@ -610,6 +811,7 @@ fn collect_descendant_edits(
     lines: &LineIndex,
     source: &str,
     depth: usize,
+    scopes: &[Scope],
     edits: &mut Vec<(Range<usize>, String)>,
 ) -> Result<(), String> {
     let mut previous = String::new();
@@ -625,6 +827,7 @@ fn collect_descendant_edits(
                     lines,
                     source,
                     depth,
+                    scopes,
                     edits,
                 )?;
                 previous.clear();
@@ -643,7 +846,7 @@ fn collect_descendant_edits(
                     let hidden = previous == "."
                         || is_macro_name(source, range.end)
                         || followed_by_colon(source, range.end);
-                    if !hidden {
+                    if !hidden && !is_hidden(scopes, &name, range.start) {
                         record_reference(owner, &segments, depth, module_ranges, edits)?;
                     }
                 }
@@ -881,16 +1084,30 @@ fn qualify_source(
     };
     file_bindings.visit_file(&syntax);
     for name in owners.keys() {
-        if file_bindings.bindings.names.contains(name) {
-            skipped.push(format!("local binding shadows `{name}`"));
-        }
         if file_bindings.extra_use_bindings.contains(name) {
             skipped.push(format!("second `use` binds `{name}`"));
+        }
+        if file_bindings.bindings.shorthands.contains(name) {
+            skipped.push(format!("field shorthand reads `{name}`"));
+        }
+        if file_bindings
+            .bindings
+            .candidates
+            .iter()
+            .any(|candidate| candidate.ambiguous && &candidate.name == name)
+        {
+            skipped.push(format!("match pattern `{name}` can name a constant"));
         }
     }
     if !skipped.is_empty() {
         return Err(format!("manual repair required: {}", skipped.join("; ")));
     }
+    let scopes = build_scopes(
+        &syntax,
+        &lines,
+        &file_bindings.bindings.candidates,
+        0..source.len(),
+    );
 
     let mut modules = InlineModules {
         ranges: Vec::new(),
@@ -925,6 +1142,8 @@ fn qualify_source(
         &flagged_ranges,
         &modules.ranges,
         &lines,
+        &scopes,
+        source,
         &mut edits,
         &mut manual,
     );
@@ -990,6 +1209,8 @@ fn collect_reference_edits(
     flagged_ranges: &[Range<usize>],
     module_ranges: &[Range<usize>],
     lines: &LineIndex,
+    scopes: &[Scope],
+    source: &str,
     edits: &mut Vec<(Range<usize>, String)>,
     manual: &mut Vec<String>,
 ) {
@@ -1003,6 +1224,8 @@ fn collect_reference_edits(
                     flagged_ranges,
                     module_ranges,
                     lines,
+                    scopes,
+                    source,
                     edits,
                     manual,
                 );
@@ -1014,10 +1237,15 @@ fn collect_reference_edits(
                 let range = lines.range(ident.span());
                 let in_import = flagged_ranges.iter().any(|item| item.contains(&start));
                 let is_qualified = previous == "::" || previous == ".";
-                if !in_import && !is_qualified {
+                // A field name is not a path reference.
+                let is_field = followed_by_colon(source, range.end);
+                if !in_import && !is_qualified && !is_field {
                     if let Some(owner) = owners.get(&name) {
                         let depth = module_depth(module_ranges, start);
-                        if owner.starts_with("self::") && depth > 0 {
+                        if is_hidden(scopes, &name, start) {
+                            // A later binding or item owns this name here, so the
+                            // reference resolves to it, not to the import.
+                        } else if owner.starts_with("self::") && depth > 0 {
                             manual.push(format!("`self::` owner for `{name}` inside a nested module"));
                         } else {
                             edits.push((range, qualify_owner(owner, depth)));
@@ -1246,13 +1474,21 @@ impl Holder {
     if edits != 0 || !output.contains("value: crate::addr::Addr") {
         return Err(format!("self test rewrote an unrelated absolute path in\n{output}"));
     }
-    let shadowed_child = "fn f() {\n    let Addr = 1;\n    let _ = Addr;\n}\n";
-    if rewrite_descendant("src/addr/route/child.rs", 1, shadowed_child, &owners).is_ok() {
-        return Err(String::from("self test accepted a shadowing descendant binding"));
+    let shadowed_child = "fn f() {\n    let Addr = 1;\n    let _ = Addr;\n}\n\nfn g(value: Addr) -> Addr {\n    value\n}\n";
+    let (output, edits) = rewrite_descendant("src/addr/route/child.rs", 1, shadowed_child, &owners)?;
+    if edits != 2 || !output.contains("fn g(value: super::super::Addr) -> super::super::Addr") {
+        return Err(format!("self test mishandled a partial shadow in\n{output}"));
     }
-    let shadowed = "use crate::addr::Addr;\n\nfn f() {\n    let Addr = 1;\n    let _ = Addr;\n}\n";
-    if qualify_source("src/addr/route.rs", shadowed, &[1]).is_ok() {
-        return Err(String::from("self test accepted a shadowing binding"));
+    if !output.contains("let Addr = 1;") || !output.contains("let _ = Addr;") {
+        return Err(format!("self test rewrote a shadowed binding in\n{output}"));
+    }
+    let shadowed = "use crate::addr::Addr;\n\nfn f() {\n    let Addr = 1;\n    let _ = Addr;\n}\n\nfn g(value: Addr) {\n    let _ = value;\n}\n";
+    let output = qualify_source("src/addr/route.rs", shadowed, &[1])?.output;
+    if !output.contains("fn g(value: crate::addr::Addr)") {
+        return Err(format!("self test missed an unshadowed reference in\n{output}"));
+    }
+    if !output.contains("let Addr = 1;") || output.contains("use crate::addr::Addr;") {
+        return Err(format!("self test rewrote a shadowed binding in\n{output}"));
     }
     let anonymous = "use std::hash::Hash as _;\nuse std::hash::Hasher;\n";
     if qualify_source("src/addr/route.rs", anonymous, &[1]).is_ok() {

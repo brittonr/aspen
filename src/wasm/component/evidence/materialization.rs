@@ -1,15 +1,3 @@
-use super::super::model::ComponentConsumer;
-use super::super::model::ComponentDenial;
-use super::super::model::ComponentResult;
-use super::super::model::ComponentRuntimeProfile;
-use super::super::model::EvidenceScope;
-use super::super::model::WasmArtifactKind;
-use super::super::model::content_ref;
-use super::super::model::sorted_unique;
-use super::super::model::valid_content_ref;
-use super::super::model::valid_ref_collection;
-use super::super::profile::component_profile_ref;
-
 pub const MANTLE_COMPONENT_BUNDLE_SCHEMA: &str = "mantle.component-materialization-bundle.v1";
 pub const COMPONENT_ADMISSION_ENVELOPE_SCHEMA: &str = "molten.component-admission-envelope.v1";
 const MAX_COMPONENT_EVIDENCE_REFS: usize = 128;
@@ -21,11 +9,12 @@ pub struct MaterializedObjectIdentity {
 }
 
 impl MaterializedObjectIdentity {
-    pub fn measure(bytes: &[u8]) -> ComponentResult<Self> {
-        let byte_length = u64::try_from(bytes.len())
-            .map_err(|error| ComponentDenial::new(format!("materialized object length is unsupported: {error}")))?;
+    pub fn measure(bytes: &[u8]) -> super::super::model::ComponentResult<Self> {
+        let byte_length = u64::try_from(bytes.len()).map_err(|error| {
+            super::super::model::ComponentDenial::new(format!("materialized object length is unsupported: {error}"))
+        })?;
         Ok(Self {
-            content_ref: content_ref(bytes),
+            content_ref: super::super::model::content_ref(bytes),
             byte_length,
         })
     }
@@ -37,8 +26,8 @@ pub struct MantleComponentBundle {
     pub bundle_ref: String,
     pub component: MaterializedObjectIdentity,
     pub wit: MaterializedObjectIdentity,
-    pub artifact_kind: WasmArtifactKind,
-    pub consumer: ComponentConsumer,
+    pub artifact_kind: super::super::model::WasmArtifactKind,
+    pub consumer: super::super::model::ComponentConsumer,
     pub expected_profile_id: String,
     pub expected_cohort_ref: String,
     pub build_cohort_ref: String,
@@ -90,11 +79,11 @@ impl<'a> ComponentArtifactSource<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterializationAdmission {
-    pub evidence_scope: EvidenceScope,
+    pub evidence_scope: super::super::model::EvidenceScope,
     pub component_ref: String,
     pub wit_ref: String,
     pub bundle_ref: Option<String>,
-    pub consumer: ComponentConsumer,
+    pub consumer: super::super::model::ComponentConsumer,
     pub profile_ref: String,
     pub mantle_evidence_refs: Vec<String>,
     pub valence_evidence_refs: Vec<String>,
@@ -120,20 +109,24 @@ pub fn mantle_bundle_ref(bundle: &MantleComponentBundle) -> String {
         format!("portable:{}", bundle.has_portable_bytes),
         format!("precompiled:{}", bundle.has_precompiled_bytes),
     ];
-    lines.extend(sorted_unique(&bundle.stage_receipt_refs).into_iter().map(|value| format!("stage-receipt:{value}")));
     lines.extend(
-        sorted_unique(&bundle.embedded_admission_refs)
+        super::super::model::sorted_unique(&bundle.stage_receipt_refs)
+            .into_iter()
+            .map(|value| format!("stage-receipt:{value}")),
+    );
+    lines.extend(
+        super::super::model::sorted_unique(&bundle.embedded_admission_refs)
             .into_iter()
             .map(|value| format!("embedded-admission:{value}")),
     );
-    content_ref(lines.join("\n").as_bytes())
+    super::super::model::content_ref(lines.join("\n").as_bytes())
 }
 
 pub fn verify_materialization(
-    profile: &ComponentRuntimeProfile,
-    requested_scope: EvidenceScope,
+    profile: &super::super::model::ComponentRuntimeProfile,
+    requested_scope: super::super::model::EvidenceScope,
     source: ComponentArtifactSource<'_>,
-) -> ComponentResult<MaterializationAdmission> {
+) -> super::super::model::ComponentResult<MaterializationAdmission> {
     let component = MaterializedObjectIdentity::measure(source.component_bytes())?;
     let wit = MaterializedObjectIdentity::measure(source.wit_bytes())?;
     validate_byte_bounds(profile, &component, &wit)?;
@@ -148,18 +141,18 @@ pub fn verify_materialization(
             component_bytes: _,
             wit_bytes: _,
         } => {
-            if requested_scope != EvidenceScope::TestOnly {
-                return Err(ComponentDenial::new(
+            if requested_scope != super::super::model::EvidenceScope::TestOnly {
+                return Err(super::super::model::ComponentDenial::new(
                     "production component execution requires a Mantle materialization bundle",
                 ));
             }
             Ok(MaterializationAdmission {
-                evidence_scope: EvidenceScope::TestOnly,
+                evidence_scope: super::super::model::EvidenceScope::TestOnly,
                 component_ref: component.content_ref,
                 wit_ref: wit.content_ref,
                 bundle_ref: None,
-                consumer: ComponentConsumer::Actor,
-                profile_ref: component_profile_ref(profile),
+                consumer: super::super::model::ComponentConsumer::Actor,
+                profile_ref: super::super::profile::component_profile_ref(profile),
                 mantle_evidence_refs: Vec::new(),
                 valence_evidence_refs: Vec::new(),
                 cairn_evidence_refs: Vec::new(),
@@ -172,10 +165,10 @@ pub fn verify_materialization(
 }
 
 fn validate_byte_bounds(
-    profile: &ComponentRuntimeProfile,
+    profile: &super::super::model::ComponentRuntimeProfile,
     component: &MaterializedObjectIdentity,
     wit: &MaterializedObjectIdentity,
-) -> ComponentResult<()> {
+) -> super::super::model::ComponentResult<()> {
     let mut blockers = Vec::new();
     if component.byte_length > profile.resources.max_component_bytes {
         blockers.push("component bytes exceed the admitted profile bound".to_string());
@@ -186,20 +179,20 @@ fn validate_byte_bounds(
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(ComponentDenial::from_blockers(blockers))
+        Err(super::super::model::ComponentDenial::from_blockers(blockers))
     }
 }
 
 fn verify_bundle(
-    profile: &ComponentRuntimeProfile,
-    requested_scope: EvidenceScope,
+    profile: &super::super::model::ComponentRuntimeProfile,
+    requested_scope: super::super::model::EvidenceScope,
     bundle: &MantleComponentBundle,
     envelope: &ComponentAdmissionEnvelope,
     measured_component: &MaterializedObjectIdentity,
     measured_wit: &MaterializedObjectIdentity,
-) -> ComponentResult<MaterializationAdmission> {
+) -> super::super::model::ComponentResult<MaterializationAdmission> {
     let mut blockers = Vec::new();
-    if requested_scope != EvidenceScope::Production {
+    if requested_scope != super::super::model::EvidenceScope::Production {
         blockers.push("Mantle production bundle must execute in production evidence scope".to_string());
     }
     if bundle.schema_id != MANTLE_COMPONENT_BUNDLE_SCHEMA {
@@ -211,10 +204,11 @@ fn verify_bundle(
     if &bundle.component != measured_component || &bundle.wit != measured_wit {
         blockers.push("Mantle component bundle object identity differs from remeasured bytes".to_string());
     }
-    if bundle.artifact_kind != WasmArtifactKind::Component {
+    if bundle.artifact_kind != super::super::model::WasmArtifactKind::Component {
         blockers.push("Mantle component bundle is not classified as a component".to_string());
     }
-    if bundle.expected_profile_id != profile.profile_id || bundle.expected_cohort_ref != component_profile_ref(profile)
+    if bundle.expected_profile_id != profile.profile_id
+        || bundle.expected_cohort_ref != super::super::profile::component_profile_ref(profile)
     {
         blockers.push("Mantle component bundle expected profile is stale or mismatched".to_string());
     }
@@ -228,15 +222,15 @@ fn verify_bundle(
             .push("initial component cohort admits portable bytes and rejects precompiled deserialization".to_string());
     }
     if !blockers.is_empty() {
-        return Err(ComponentDenial::from_blockers(blockers));
+        return Err(super::super::model::ComponentDenial::from_blockers(blockers));
     }
     Ok(MaterializationAdmission {
-        evidence_scope: EvidenceScope::Production,
+        evidence_scope: super::super::model::EvidenceScope::Production,
         component_ref: measured_component.content_ref.clone(),
         wit_ref: measured_wit.content_ref.clone(),
         bundle_ref: Some(bundle.bundle_ref.clone()),
         consumer: bundle.consumer,
-        profile_ref: component_profile_ref(profile),
+        profile_ref: super::super::profile::component_profile_ref(profile),
         mantle_evidence_refs: mantle_evidence_refs(bundle),
         valence_evidence_refs: envelope.valence_sidecar_refs.clone(),
         cairn_evidence_refs: envelope.cairn_acceptance_refs.clone(),
@@ -249,14 +243,14 @@ fn verify_bundle(
 fn mantle_evidence_refs(bundle: &MantleComponentBundle) -> Vec<String> {
     let mut refs = vec![bundle.build_cohort_ref.clone(), bundle.octet_report_ref.clone()];
     refs.extend(bundle.stage_receipt_refs.clone());
-    sorted_unique(&refs)
+    super::super::model::sorted_unique(&refs)
 }
 
 fn validate_bundle_refs(bundle: &MantleComponentBundle, blockers: &mut Vec<String>) {
-    if !valid_content_ref(&bundle.build_cohort_ref)
-        || !valid_content_ref(&bundle.octet_report_ref)
+    if !super::super::model::valid_content_ref(&bundle.build_cohort_ref)
+        || !super::super::model::valid_content_ref(&bundle.octet_report_ref)
         || bundle.stage_receipt_refs.len() > MAX_COMPONENT_EVIDENCE_REFS
-        || !valid_ref_collection(&bundle.stage_receipt_refs)
+        || !super::super::model::valid_ref_collection(&bundle.stage_receipt_refs)
     {
         blockers
             .push("Mantle component bundle has missing, malformed, duplicate, or unsorted build evidence".to_string());
@@ -281,7 +275,7 @@ fn validate_envelope(
         ("authority", &envelope.authority_refs),
         ("resource", &envelope.resource_refs),
     ] {
-        if refs.len() > MAX_COMPONENT_EVIDENCE_REFS || !valid_ref_collection(refs) {
+        if refs.len() > MAX_COMPONENT_EVIDENCE_REFS || !super::super::model::valid_ref_collection(refs) {
             blockers.push(format!(
                 "component admission envelope {label} refs are missing, malformed, duplicate, or unsorted"
             ));

@@ -1,24 +1,4 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::time::Duration;
-
-use super::tests::NODE_A;
-use super::tests::active_group;
-use super::tests::sent_envelope_to;
-use super::tests::started_state;
-use super::tests::test_ref;
 use super::*;
-use crate::error::Result;
-use crate::fabric_durability::DurableAdapterKind;
-use crate::fabric_durability::RedbDurableStateAdapter;
-use crate::fabric_durability::tests::descriptor;
-use crate::fabric_durability::tests::profile;
-use crate::fabric_time::tests::live_profile;
-use crate::fabric_transport::ListenerDrainReason;
-use crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS;
-use crate::fabric_transport::cross_process::tests::client_input;
-use crate::fabric_transport::cross_process::tests::listener;
-use crate::fabric_transport::exchange_cross_process_frame;
 
 const NODE_B: &str = "node-b";
 const POSITIVE_TIMEOUT_SECONDS: u64 = 1;
@@ -36,12 +16,12 @@ const INGRESS_TEST_DELIVERY_LIMIT: u64 = 4;
 struct AssemblyApplicationHandler;
 
 impl CommittedBatchHandler for AssemblyApplicationHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> Result<String> {
-        Ok(test_ref("assembled-application-snapshot-evidence"))
+    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> crate::error::Result<String> {
+        Ok(super::tests::test_ref("assembled-application-snapshot-evidence"))
     }
 
-    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> Result<String> {
-        Ok(test_ref("assembled-application-evidence"))
+    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> crate::error::Result<String> {
+        Ok(super::tests::test_ref("assembled-application-evidence"))
     }
 }
 
@@ -49,9 +29,9 @@ impl CommittedBatchHandler for AssemblyApplicationHandler {
 #[test]
 fn raft_iroh_transport_denies_empty_peer_registry() {
     let error = IrohReplicaTransportPort::new(
-        test_ref("empty-Iroh-peer-registry"),
-        BTreeMap::new(),
-        Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
+        super::tests::test_ref("empty-Iroh-peer-registry"),
+        std::collections::BTreeMap::new(),
+        std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
     )
     .expect_err("empty peer registry must deny");
     assert!(error.to_string().contains("at least one admitted peer"));
@@ -61,8 +41,8 @@ fn raft_iroh_transport_denies_empty_peer_registry() {
 #[test]
 fn ingress_config_admits_bounded_values_and_denies_zero_capacity() {
     let valid = IrohReplicaIngressConfig {
-        session_ref: test_ref("ingress-session"),
-        accept_timeout: Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
+        session_ref: super::tests::test_ref("ingress-session"),
+        accept_timeout: std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
         event_capacity: INGRESS_TEST_CAPACITY,
         delivery_limit: INGRESS_TEST_DELIVERY_LIMIT,
     };
@@ -76,17 +56,19 @@ fn ingress_config_admits_bounded_values_and_denies_zero_capacity() {
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
 async fn ingress_shutdown_cancels_accept_and_returns_the_listener() {
-    let listener = listener().await;
+    let listener = crate::fabric_transport::cross_process::tests::listener().await;
     let pump = IrohReplicaIngressPump::spawn(listener, IrohReplicaIngressConfig {
-        session_ref: test_ref("ingress-cancellation-session"),
-        accept_timeout: Duration::from_secs(TEST_TIMEOUT_SECONDS),
+        session_ref: super::tests::test_ref("ingress-cancellation-session"),
+        accept_timeout: std::time::Duration::from_secs(
+            crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS,
+        ),
         event_capacity: INGRESS_TEST_CAPACITY,
         delivery_limit: INGRESS_TEST_DELIVERY_LIMIT,
     })
     .expect("ingress pump");
     let listener = pump.shutdown().await.expect("cancelled ingress listener");
     listener
-        .drain_and_close(ListenerDrainReason::OperatorRequest)
+        .drain_and_close(crate::fabric_transport::ListenerDrainReason::OperatorRequest)
         .await
         .expect("ingress listener cleanup");
 }
@@ -94,31 +76,38 @@ async fn ingress_shutdown_cancels_accept_and_returns_the_listener() {
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
 async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup() {
-    let group = active_group();
-    let mut replica_state = started_state(&group, NODE_A);
+    let group = super::tests::active_group();
+    let mut replica_state = super::tests::started_state(&group, super::tests::NODE_A);
     assert_eq!(replica_state.profile.service_generation, ASSEMBLY_GENERATION);
-    let listener = listener().await;
+    let listener = crate::fabric_transport::cross_process::tests::listener().await;
     let endpoint = listener.handoff().clone();
-    let protocol_ref = test_ref("assembled-Iroh-protocol");
-    let durable_log_ref = test_ref("assembled-durable-log");
-    let snapshot_store_ref = test_ref("assembled-snapshot-store");
-    let entropy_profile_ref = test_ref("assembled-entropy-profile");
-    let supervision_ref = test_ref("assembled-supervision");
+    let protocol_ref = super::tests::test_ref("assembled-Iroh-protocol");
+    let durable_log_ref = super::tests::test_ref("assembled-durable-log");
+    let snapshot_store_ref = super::tests::test_ref("assembled-snapshot-store");
+    let entropy_profile_ref = super::tests::test_ref("assembled-entropy-profile");
+    let supervision_ref = super::tests::test_ref("assembled-supervision");
     let service_id = group.service_id.clone();
     let application_manifest_ref = group.application_manifest_ref.clone();
-    let mut peers = BTreeMap::new();
-    peers.insert(NODE_B.to_string(), client_input(endpoint));
-    let transport =
-        IrohReplicaTransportPort::new(protocol_ref.clone(), peers, Duration::from_secs(POSITIVE_TIMEOUT_SECONDS))
-            .expect("assembled Iroh transport");
+    let mut peers = std::collections::BTreeMap::new();
+    peers.insert(NODE_B.to_string(), crate::fabric_transport::cross_process::tests::client_input(endpoint));
+    let transport = IrohReplicaTransportPort::new(
+        protocol_ref.clone(),
+        peers,
+        std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
+    )
+    .expect("assembled Iroh transport");
 
     let root = crate::test_support::process_workspace("assembled-live-raft-redb").expect("workspace");
-    let redb = RedbDurableStateAdapter::open(&root, profile(DurableAdapterKind::LiveRedb), descriptor())
-        .expect("assembled Redb adapter");
+    let redb = crate::fabric_durability::RedbDurableStateAdapter::open(
+        &root,
+        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
+        crate::fabric_durability::tests::descriptor(),
+    )
+    .expect("assembled Redb adapter");
     let durability = RedbReplicaDurabilityPort::new(redb, durable_log_ref.clone(), snapshot_store_ref.clone())
         .expect("assembled durability port");
 
-    let canonical_time = live_profile().profile;
+    let canonical_time = crate::fabric_time::tests::live_profile().profile;
     let timer_profile_ref = canonical_time.profile_ref.clone();
     let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let time = TokioReplicaTimePort::new_operating_system(
@@ -126,9 +115,9 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
             profile: canonical_time,
             generation: ASSEMBLY_GENERATION,
             service_id: service_id.clone(),
-            capability_ref: test_ref("assembled-time-capability"),
+            capability_ref: super::tests::test_ref("assembled-time-capability"),
             entropy_binding_ref: entropy_profile_ref.clone(),
-            tick_duration: Duration::from_millis(ASSEMBLY_TICK_MILLISECONDS),
+            tick_duration: std::time::Duration::from_millis(ASSEMBLY_TICK_MILLISECONDS),
             heartbeat_ticks: ASSEMBLY_HEARTBEAT_TICKS,
             election_min_ticks: ASSEMBLY_ELECTION_MIN_TICKS,
             election_max_ticks: ASSEMBLY_ELECTION_MAX_TICKS,
@@ -140,8 +129,8 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
         ReplicaApplicationConfig {
             group_binding_ref: group.binding_ref.clone(),
             application_manifest_ref: application_manifest_ref.clone(),
-            handler_ref: test_ref("assembled-application-handler"),
-            command_schema_refs: BTreeSet::from([test_ref("assembled-command-schema")]),
+            handler_ref: super::tests::test_ref("assembled-application-handler"),
+            command_schema_refs: std::collections::BTreeSet::from([super::tests::test_ref("assembled-command-schema")]),
             initial_applied_index: INITIAL_COMMIT_INDEX,
         },
         AssemblyApplicationHandler,
@@ -165,7 +154,7 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
     replica_state.profile.entropy_profile_ref.clone_from(&entropy_profile_ref);
     replica_state.profile.supervision_ref.clone_from(&supervision_ref);
     let fabric_binding_refs = (0..ASSEMBLY_FABRIC_BINDING_COUNT)
-        .map(|index| test_ref(&format!("assembled-fabric-binding-{index}")))
+        .map(|index| super::tests::test_ref(&format!("assembled-fabric-binding-{index}")))
         .collect::<Vec<_>>();
     let identity = ReplicaRuntimePortIdentity {
         service_id: service_id.clone(),
@@ -186,7 +175,7 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
     };
 
     let mut mismatched = identity.clone();
-    mismatched.protocol_ref = test_ref("substituted-assembled-protocol");
+    mismatched.protocol_ref = super::tests::test_ref("substituted-assembled-protocol");
     let error =
         validate_concrete_replica_port_identity(&mismatched, &durability, &transport, &time, &application, &control)
             .expect_err("concrete protocol substitution must deny");
@@ -218,35 +207,38 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
     assert!(!service.production_admitted());
     assert!(!service.ports().durability.adapter().state().durable_log.is_empty());
     drop(service);
-    listener.drain_and_close(ListenerDrainReason::OperatorRequest).await.expect("listener cleanup");
+    listener
+        .drain_and_close(crate::fabric_transport::ListenerDrainReason::OperatorRequest)
+        .await
+        .expect("listener cleanup");
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]
 // r[verify molten.fabric_consistency.live_raft]
 #[tokio::test]
 async fn canonical_raft_envelope_crosses_admitted_iroh_listener() {
-    let group = active_group();
-    let node_a = started_state(&group, NODE_A);
+    let group = super::tests::active_group();
+    let node_a = super::tests::started_state(&group, super::tests::NODE_A);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
         timer_ref: node_a.active_election_timer_ref.clone(),
     })
     .expect("election transition");
-    let first_envelope = sent_envelope_to(&election, NODE_B);
+    let first_envelope = super::tests::sent_envelope_to(&election, NODE_B);
     let second_election = apply_replica_event(&election.next, ReplicaEvent::ElectionTimeout {
         timer_ref: election.next.active_election_timer_ref.clone(),
     })
     .expect("second election transition");
-    let second_envelope = sent_envelope_to(&second_election, NODE_B);
+    let second_envelope = super::tests::sent_envelope_to(&second_election, NODE_B);
 
-    let mut listener = listener().await;
+    let mut listener = crate::fabric_transport::cross_process::tests::listener().await;
     let endpoint = listener.handoff().clone();
-    let input = client_input(endpoint);
+    let input = crate::fabric_transport::cross_process::tests::client_input(endpoint);
     let session_ref = input.session_ref.clone();
-    let mut peers = BTreeMap::new();
+    let mut peers = std::collections::BTreeMap::new();
     peers.insert(NODE_B.to_string(), input);
-    let timeout = Duration::from_secs(TEST_TIMEOUT_SECONDS);
-    let mut transport =
-        IrohReplicaTransportPort::new(test_ref("Raft-Iroh-protocol"), peers, timeout).expect("Raft Iroh transport");
+    let timeout = std::time::Duration::from_secs(crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS);
+    let mut transport = IrohReplicaTransportPort::new(super::tests::test_ref("Raft-Iroh-protocol"), peers, timeout)
+        .expect("Raft Iroh transport");
     let mut request_refs = Vec::new();
 
     for envelope in [first_envelope, second_envelope] {
@@ -263,24 +255,30 @@ async fn canonical_raft_envelope_crosses_admitted_iroh_listener() {
         request_refs.push(refs.request_ref);
     }
     assert_ne!(request_refs[0], request_refs[1]);
-    listener.drain_and_close(ListenerDrainReason::OperatorRequest).await.expect("listener cleanup");
+    listener
+        .drain_and_close(crate::fabric_transport::ListenerDrainReason::OperatorRequest)
+        .await
+        .expect("listener cleanup");
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
 async fn malformed_raft_payload_is_denied_before_transport_acknowledgement() {
-    let mut listener = listener().await;
+    let mut listener = crate::fabric_transport::cross_process::tests::listener().await;
     let endpoint = listener.handoff().clone();
-    let input = client_input(endpoint);
+    let input = crate::fabric_transport::cross_process::tests::client_input(endpoint);
     let session_ref = input.session_ref.clone();
-    let timeout = Duration::from_secs(TEST_TIMEOUT_SECONDS);
+    let timeout = std::time::Duration::from_secs(crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS);
 
-    let send = exchange_cross_process_frame(input, b"not-a-canonical-raft-frame", timeout);
+    let send = crate::fabric_transport::exchange_cross_process_frame(input, b"not-a-canonical-raft-frame", timeout);
     let receive = receive_replica_event(&mut listener, &session_ref, timeout);
     let (send, receive) = tokio::join!(send, receive);
 
     assert!(send.is_err());
     assert!(receive.is_err());
     assert_eq!(listener.state().active_sessions, 0);
-    listener.drain_and_close(ListenerDrainReason::OperatorRequest).await.expect("listener cleanup");
+    listener
+        .drain_and_close(crate::fabric_transport::ListenerDrainReason::OperatorRequest)
+        .await
+        .expect("listener cleanup");
 }

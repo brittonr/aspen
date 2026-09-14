@@ -3,26 +3,7 @@
     reason = "the journal keeps one canonical instance codec beside its memory and durability-port adapters"
 )]
 
-use preserves::IOValue;
-use preserves::Value;
-
 use super::super::*;
-use crate::error::MoltenError;
-use crate::fabric_durability::AppendRequest;
-use crate::fabric_durability::DurabilityLevel;
-use crate::fabric_durability::RedbDurableStateAdapter;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::required_content_ref_string;
-use crate::preserves_rail::required_sequence_field;
-use crate::preserves_rail::required_string_field;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::simple_record_fields;
-use crate::preserves_rail::strict_canonical_decode;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
 
 const INSTANCE_RECORD: &str = "native-instance-state-v2";
 const LIFECYCLE_RECORD: &str = "native-instance-lifecycle-v2";
@@ -40,7 +21,7 @@ const MAX_INSTANCE_COLLECTION_ITEMS: usize = 1_024;
 pub struct CanonicalNativeInstanceRecord {
     pub record_ref: String,
     pub record: NativeInstanceRecord,
-    pub value: IOValue,
+    pub value: preserves::IOValue,
     pub bytes: Vec<u8>,
 }
 
@@ -97,15 +78,15 @@ impl NativeHostJournal for InMemoryNativeHostJournal {
 }
 
 pub struct DurableNativeHostJournal {
-    adapter: RedbDurableStateAdapter,
+    adapter: crate::fabric_durability::RedbDurableStateAdapter,
 }
 
 impl DurableNativeHostJournal {
-    pub fn new(adapter: RedbDurableStateAdapter) -> Self {
+    pub fn new(adapter: crate::fabric_durability::RedbDurableStateAdapter) -> Self {
         Self { adapter }
     }
 
-    pub fn adapter(&self) -> &RedbDurableStateAdapter {
+    pub fn adapter(&self) -> &crate::fabric_durability::RedbDurableStateAdapter {
         &self.adapter
     }
 }
@@ -124,14 +105,14 @@ impl NativeHostJournal for DurableNativeHostJournal {
             .next_log_sequence()
             .map_err(|error| NativeJournalError::Storage(format!("native journal sequence: {error:?}")))?;
         self.adapter
-            .append(&AppendRequest {
+            .append(&crate::fabric_durability::AppendRequest {
                 adapter_id: descriptor.adapter_id.clone(),
                 namespace_id: descriptor.namespace_id.clone(),
                 generation: descriptor.generation,
                 expected_sequence,
                 value: canonical.bytes.clone(),
                 value_ref: canonical.record_ref.clone(),
-                durability: DurabilityLevel::MachineLoss,
+                durability: crate::fabric_durability::DurabilityLevel::MachineLoss,
             })
             .map_err(|error| NativeJournalError::Storage(error.to_string()))?;
         Ok(canonical)
@@ -164,8 +145,8 @@ pub fn canonical_native_instance_record(
     record_input: &NativeInstanceRecord,
 ) -> crate::error::Result<CanonicalNativeInstanceRecord> {
     let value = native_instance_value(record_input);
-    let record_ref = canonical_hash(&value)?;
-    let bytes = canonical_bytes(&value)?;
+    let record_ref = crate::preserves_rail::canonical_hash(&value)?;
+    let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     Ok(CanonicalNativeInstanceRecord {
         record_ref,
         record: record_input.clone(),
@@ -176,21 +157,21 @@ pub fn canonical_native_instance_record(
 
 // r[impl molten.system_extension.native_host.durability]
 pub fn decode_native_instance_record(bytes: &[u8]) -> crate::error::Result<NativeInstanceRecord> {
-    let decoded = strict_canonical_decode(bytes)?;
-    let fields = simple_record_fields(&decoded.value, INSTANCE_RECORD, INSTANCE_FIELD_COUNT)?;
-    let schema = required_string_field(&fields[0], "native instance schema")?;
+    let decoded = crate::preserves_rail::strict_canonical_decode(bytes)?;
+    let fields = crate::preserves_rail::simple_record_fields(&decoded.value, INSTANCE_RECORD, INSTANCE_FIELD_COUNT)?;
+    let schema = crate::preserves_rail::required_string_field(&fields[0], "native instance schema")?;
     if schema != NATIVE_INSTANCE_STATE_SCHEMA {
-        return Err(MoltenError::invalid_harness("native instance schema mismatch"));
+        return Err(crate::error::MoltenError::invalid_harness("native instance schema mismatch"));
     }
     Ok(NativeInstanceRecord {
         schema,
-        instance_id: required_string_field(&fields[1], "native instance id")?,
-        extension_id: required_string_field(&fields[2], "native extension id")?,
-        service_id: required_string_field(&fields[3], "native service id")?,
-        manifest_ref: required_content_ref_string(&fields[4], "native manifest ref")?,
-        executable_ref: required_content_ref_string(&fields[5], "native executable ref")?,
-        profile_ref: required_content_ref_string(&fields[6], "native profile ref")?,
-        state_schema_ref: required_content_ref_string(&fields[7], "native state schema ref")?,
+        instance_id: crate::preserves_rail::required_string_field(&fields[1], "native instance id")?,
+        extension_id: crate::preserves_rail::required_string_field(&fields[2], "native extension id")?,
+        service_id: crate::preserves_rail::required_string_field(&fields[3], "native service id")?,
+        manifest_ref: crate::preserves_rail::required_content_ref_string(&fields[4], "native manifest ref")?,
+        executable_ref: crate::preserves_rail::required_content_ref_string(&fields[5], "native executable ref")?,
+        profile_ref: crate::preserves_rail::required_content_ref_string(&fields[6], "native profile ref")?,
+        state_schema_ref: crate::preserves_rail::required_content_ref_string(&fields[7], "native state schema ref")?,
         lifecycle: parse_lifecycle(&fields[8])?,
         usage: parse_usage(&fields[9])?,
         callback_sequence: required_u64(&fields[10], "native callback sequence")?,
@@ -205,79 +186,79 @@ pub fn decode_native_instance_record(bytes: &[u8]) -> crate::error::Result<Nativ
     })
 }
 
-fn native_instance_value(instance: &NativeInstanceRecord) -> IOValue {
-    record(INSTANCE_RECORD, vec![
-        string(&instance.schema),
-        string(&instance.instance_id),
-        string(&instance.extension_id),
-        string(&instance.service_id),
-        string(&instance.manifest_ref),
-        string(&instance.executable_ref),
-        string(&instance.profile_ref),
-        string(&instance.state_schema_ref),
+fn native_instance_value(instance: &NativeInstanceRecord) -> preserves::IOValue {
+    crate::preserves_rail::record(INSTANCE_RECORD, vec![
+        crate::preserves_rail::string(&instance.schema),
+        crate::preserves_rail::string(&instance.instance_id),
+        crate::preserves_rail::string(&instance.extension_id),
+        crate::preserves_rail::string(&instance.service_id),
+        crate::preserves_rail::string(&instance.manifest_ref),
+        crate::preserves_rail::string(&instance.executable_ref),
+        crate::preserves_rail::string(&instance.profile_ref),
+        crate::preserves_rail::string(&instance.state_schema_ref),
         lifecycle_value(&instance.lifecycle),
         usage_value(instance.usage),
-        u64_value(instance.callback_sequence),
-        u64_value(instance.event_sequence),
+        crate::preserves_rail::u64_value(instance.callback_sequence),
+        crate::preserves_rail::u64_value(instance.event_sequence),
         optional_ref_value(instance.state_ref.as_deref()),
         optional_ref_value(instance.checkpoint_ref.as_deref()),
-        sequence(instance.unresolved.iter().map(operation_value).collect()),
-        sequence(instance.completed_operations.iter().map(operation_value).collect()),
+        crate::preserves_rail::sequence(instance.unresolved.iter().map(operation_value).collect()),
+        crate::preserves_rail::sequence(instance.completed_operations.iter().map(operation_value).collect()),
         ref_sequence(&instance.completed_operation_refs),
         ref_sequence(&instance.evidence_refs),
-        bool_value(instance.is_accepting_ingress),
+        crate::preserves_rail::bool_value(instance.is_accepting_ingress),
     ])
 }
 
-fn lifecycle_value(state: &LifecycleState) -> IOValue {
-    record(LIFECYCLE_RECORD, vec![
-        u64_value(state.generation),
-        string(state.phase.as_str()),
-        u64_value(state.restart_attempts),
-        string(state.health.as_str()),
+fn lifecycle_value(state: &LifecycleState) -> preserves::IOValue {
+    crate::preserves_rail::record(LIFECYCLE_RECORD, vec![
+        crate::preserves_rail::u64_value(state.generation),
+        crate::preserves_rail::string(state.phase.as_str()),
+        crate::preserves_rail::u64_value(state.restart_attempts),
+        crate::preserves_rail::string(state.health.as_str()),
         optional_ref_value(state.checkpoint_ref.as_deref()),
     ])
 }
 
-fn usage_value(usage: ResourceUsage) -> IOValue {
-    record(USAGE_RECORD, vec![
-        u64_value(usage.concurrent_callbacks),
-        u64_value(usage.queued_events),
-        u64_value(usage.inflight_bytes),
-        u64_value(usage.open_streams),
-        u64_value(usage.timers),
-        u64_value(usage.effect_requests),
+fn usage_value(usage: ResourceUsage) -> preserves::IOValue {
+    crate::preserves_rail::record(USAGE_RECORD, vec![
+        crate::preserves_rail::u64_value(usage.concurrent_callbacks),
+        crate::preserves_rail::u64_value(usage.queued_events),
+        crate::preserves_rail::u64_value(usage.inflight_bytes),
+        crate::preserves_rail::u64_value(usage.open_streams),
+        crate::preserves_rail::u64_value(usage.timers),
+        crate::preserves_rail::u64_value(usage.effect_requests),
     ])
 }
 
-fn operation_value(operation: &NativeOperationRecord) -> IOValue {
-    record(OPERATION_RECORD, vec![
-        string(&operation.schema),
-        string(&operation.operation_ref),
-        string(&operation.parent_ref),
-        string(operation.kind.as_str()),
-        u64_value(operation.generation),
-        string(operation.state.as_str()),
+fn operation_value(operation: &NativeOperationRecord) -> preserves::IOValue {
+    crate::preserves_rail::record(OPERATION_RECORD, vec![
+        crate::preserves_rail::string(&operation.schema),
+        crate::preserves_rail::string(&operation.operation_ref),
+        crate::preserves_rail::string(&operation.parent_ref),
+        crate::preserves_rail::string(operation.kind.as_str()),
+        crate::preserves_rail::u64_value(operation.generation),
+        crate::preserves_rail::string(operation.state.as_str()),
         optional_ref_value(operation.terminal_ref.as_deref()),
-        bool_value(operation.is_retry_permitted),
+        crate::preserves_rail::bool_value(operation.is_retry_permitted),
     ])
 }
 
-fn parse_lifecycle(value: &Value<IOValue>) -> crate::error::Result<LifecycleState> {
+fn parse_lifecycle(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<LifecycleState> {
     let value = crate::preserves_rail::value_to_iovalue(value);
-    let fields = simple_record_fields(&value, LIFECYCLE_RECORD, LIFECYCLE_FIELD_COUNT)?;
+    let fields = crate::preserves_rail::simple_record_fields(&value, LIFECYCLE_RECORD, LIFECYCLE_FIELD_COUNT)?;
     Ok(LifecycleState {
         generation: required_u64(&fields[0], "lifecycle generation")?,
-        phase: parse_phase(&required_string_field(&fields[1], "lifecycle phase")?)?,
+        phase: parse_phase(&crate::preserves_rail::required_string_field(&fields[1], "lifecycle phase")?)?,
         restart_attempts: required_u64(&fields[2], "lifecycle restart attempts")?,
-        health: parse_health(&required_string_field(&fields[3], "lifecycle health")?)?,
+        health: parse_health(&crate::preserves_rail::required_string_field(&fields[3], "lifecycle health")?)?,
         checkpoint_ref: parse_optional_ref(&fields[4], "lifecycle checkpoint ref")?,
     })
 }
 
-fn parse_usage(value: &Value<IOValue>) -> crate::error::Result<ResourceUsage> {
+fn parse_usage(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<ResourceUsage> {
     let value = crate::preserves_rail::value_to_iovalue(value);
-    let fields = simple_record_fields(&value, USAGE_RECORD, USAGE_FIELD_COUNT)?;
+    let fields = crate::preserves_rail::simple_record_fields(&value, USAGE_RECORD, USAGE_FIELD_COUNT)?;
     Ok(ResourceUsage {
         concurrent_callbacks: required_u64(&fields[0], "usage callbacks")?,
         queued_events: required_u64(&fields[1], "usage queue")?,
@@ -288,65 +269,80 @@ fn parse_usage(value: &Value<IOValue>) -> crate::error::Result<ResourceUsage> {
     })
 }
 
-fn parse_operations(value: &Value<IOValue>) -> crate::error::Result<Vec<NativeOperationRecord>> {
-    let values = required_sequence_field(value, "native operations")?;
+fn parse_operations(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<Vec<NativeOperationRecord>> {
+    let values = crate::preserves_rail::required_sequence_field(value, "native operations")?;
     require_item_bound(values.len(), "native operations")?;
     values.iter().map(parse_operation).collect()
 }
 
-fn parse_operation(value: &Value<IOValue>) -> crate::error::Result<NativeOperationRecord> {
+fn parse_operation(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<NativeOperationRecord> {
     let value = crate::preserves_rail::value_to_iovalue(value);
-    let fields = simple_record_fields(&value, OPERATION_RECORD, OPERATION_FIELD_COUNT)?;
-    let schema = required_string_field(&fields[0], "native operation schema")?;
+    let fields = crate::preserves_rail::simple_record_fields(&value, OPERATION_RECORD, OPERATION_FIELD_COUNT)?;
+    let schema = crate::preserves_rail::required_string_field(&fields[0], "native operation schema")?;
     if schema != NATIVE_OPERATION_SCHEMA {
-        return Err(MoltenError::invalid_harness("native operation schema mismatch"));
+        return Err(crate::error::MoltenError::invalid_harness("native operation schema mismatch"));
     }
     Ok(NativeOperationRecord {
         schema,
-        operation_ref: required_content_ref_string(&fields[1], "native operation ref")?,
-        parent_ref: required_content_ref_string(&fields[2], "native operation parent ref")?,
-        kind: parse_operation_kind(&required_string_field(&fields[3], "native operation kind")?)?,
+        operation_ref: crate::preserves_rail::required_content_ref_string(&fields[1], "native operation ref")?,
+        parent_ref: crate::preserves_rail::required_content_ref_string(&fields[2], "native operation parent ref")?,
+        kind: parse_operation_kind(&crate::preserves_rail::required_string_field(
+            &fields[3],
+            "native operation kind",
+        )?)?,
         generation: required_u64(&fields[4], "native operation generation")?,
-        state: parse_operation_state(&required_string_field(&fields[5], "native operation state")?)?,
+        state: parse_operation_state(&crate::preserves_rail::required_string_field(
+            &fields[5],
+            "native operation state",
+        )?)?,
         terminal_ref: parse_optional_ref(&fields[6], "native operation terminal ref")?,
         is_retry_permitted: required_bool(&fields[7], "native operation retry state")?,
     })
 }
 
-fn parse_refs(value: &Value<IOValue>, field: &str) -> crate::error::Result<Vec<String>> {
-    let values = required_sequence_field(value, field)?;
+fn parse_refs(value: &preserves::Value<preserves::IOValue>, field: &str) -> crate::error::Result<Vec<String>> {
+    let values = crate::preserves_rail::required_sequence_field(value, field)?;
     require_item_bound(values.len(), field)?;
-    values.iter().map(|value| required_content_ref_string(value, field)).collect()
+    values
+        .iter()
+        .map(|value| crate::preserves_rail::required_content_ref_string(value, field))
+        .collect()
 }
 
-fn ref_sequence(references: &[String]) -> IOValue {
-    sequence(references.iter().map(string).collect())
+fn ref_sequence(references: &[String]) -> preserves::IOValue {
+    crate::preserves_rail::sequence(references.iter().map(crate::preserves_rail::string).collect())
 }
 
-fn optional_ref_value(reference: Option<&str>) -> IOValue {
-    reference.map_or_else(|| record(NONE_RECORD, Vec::new()), |reference| record(SOME_RECORD, vec![string(reference)]))
+fn optional_ref_value(reference: Option<&str>) -> preserves::IOValue {
+    reference.map_or_else(
+        || crate::preserves_rail::record(NONE_RECORD, Vec::new()),
+        |reference| crate::preserves_rail::record(SOME_RECORD, vec![crate::preserves_rail::string(reference)]),
+    )
 }
 
-fn parse_optional_ref(value: &Value<IOValue>, field: &str) -> crate::error::Result<Option<String>> {
+fn parse_optional_ref(
+    value: &preserves::Value<preserves::IOValue>,
+    field: &str,
+) -> crate::error::Result<Option<String>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     if value.collect_simple_record(NONE_RECORD, Some(0)).is_some() {
         return Ok(None);
     }
-    let fields = simple_record_fields(&value, SOME_RECORD, 1)?;
-    required_content_ref_string(&fields[0], field).map(Some)
+    let fields = crate::preserves_rail::simple_record_fields(&value, SOME_RECORD, 1)?;
+    crate::preserves_rail::required_content_ref_string(&fields[0], field).map(Some)
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> crate::error::Result<u64> {
+fn required_u64(value: &preserves::Value<preserves::IOValue>, field: &str) -> crate::error::Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
-fn required_bool(value: &Value<IOValue>, field: &str) -> crate::error::Result<bool> {
+fn required_bool(value: &preserves::Value<preserves::IOValue>, field: &str) -> crate::error::Result<bool> {
     value
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected boolean for {field}")))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected boolean for {field}")))
 }
 
 fn parse_phase(value: &str) -> crate::error::Result<LifecyclePhase> {
@@ -370,7 +366,7 @@ fn parse_phase(value: &str) -> crate::error::Result<LifecyclePhase> {
         "quarantined" => Ok(LifecyclePhase::Quarantined),
         "stopped" => Ok(LifecyclePhase::Stopped),
         "removed" => Ok(LifecyclePhase::Removed),
-        _ => Err(MoltenError::invalid_harness("native lifecycle phase is unsupported")),
+        _ => Err(crate::error::MoltenError::invalid_harness("native lifecycle phase is unsupported")),
     }
 }
 
@@ -383,7 +379,7 @@ fn parse_health(value: &str) -> crate::error::Result<HealthState> {
         "failed" => Ok(HealthState::Failed),
         "quarantined" => Ok(HealthState::Quarantined),
         "stopped" => Ok(HealthState::Stopped),
-        _ => Err(MoltenError::invalid_harness("native health state is unsupported")),
+        _ => Err(crate::error::MoltenError::invalid_harness("native health state is unsupported")),
     }
 }
 
@@ -393,7 +389,7 @@ fn parse_operation_kind(value: &str) -> crate::error::Result<NativeOperationKind
         "effect" => Ok(NativeOperationKind::Effect),
         "ingress" => Ok(NativeOperationKind::Ingress),
         "value-publication" => Ok(NativeOperationKind::ValuePublication),
-        _ => Err(MoltenError::invalid_harness("native operation kind is unsupported")),
+        _ => Err(crate::error::MoltenError::invalid_harness("native operation kind is unsupported")),
     }
 }
 
@@ -404,13 +400,13 @@ fn parse_operation_state(value: &str) -> crate::error::Result<NativeOperationSta
         "terminal" => Ok(NativeOperationState::Terminal),
         "unknown" => Ok(NativeOperationState::Unknown),
         "stale" => Ok(NativeOperationState::Stale),
-        _ => Err(MoltenError::invalid_harness("native operation state is unsupported")),
+        _ => Err(crate::error::MoltenError::invalid_harness("native operation state is unsupported")),
     }
 }
 
 fn require_item_bound(actual: usize, field: &str) -> crate::error::Result<()> {
     if actual > MAX_INSTANCE_COLLECTION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!("{field} exceeds its item bound")));
+        return Err(crate::error::MoltenError::invalid_harness(format!("{field} exceeds its item bound")));
     }
     Ok(())
 }
