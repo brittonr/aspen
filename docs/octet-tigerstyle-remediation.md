@@ -2,20 +2,28 @@
 
 This file records the current Octet source-gate evidence and the remaining caveat for `octet-tigerstyle-remediation`.
 
-Current state (probe `target/octet-after-nti/summary.txt`, commit `1ab24c3fe`):
+Current state (probe `target/octet-after-naming2/summary.txt`, commit `973d5eac0`):
 
 - `dylint.toml` sets `disabled_lints = []`, so the probe reports every lint.
-- The workspace probe is `warning-only`: 4838 warnings, 0 errors, 340 autofixable.
-- Those warnings are 2687 distinct `lint + file + line` sites; the probe double-counts some sites.
+- The workspace probe is `warning-only`: 4444 warnings, 0 errors, 0 autofixable.
+- Those warnings are 2480 distinct `lint + file + line` sites; the probe double-counts some sites.
 - The pre-remediation baseline in this worktree was 6754 warnings and 3724 distinct sites.
-- The largest remaining families are `path_segment_repetition` (1038), `non_trait_imports`
-  (449), and `excessive_file_length` (304 files).
+- Nineteen lint families report zero. The largest remaining families are
+  `path_segment_repetition` (1038), `non_trait_imports` (449), and
+  `excessive_file_length` (304 files).
 
-`scripts/octet-qualify-imports.rs` performs the `non_trait_imports` repair. It reads an Octet
-summary, deletes each flagged private import, and adds the qualified owner path at every use
-site, adjusting `super::` owners for inline-module depth. It refuses files whose scope it cannot
-rewrite safely, and it re-parses its own output before writing. `cargo -q -Zscript
-scripts/octet-qualify-imports.rs --self-test` runs the positive and negative fixtures.
+Two scripts carry the mechanical repairs. Each one reads an Octet artifact, refuses any file it
+cannot rewrite safely, and re-parses its own output before writing:
+
+- `scripts/octet-qualify-imports.rs` resolves `non_trait_imports` from a probe summary.
+- `scripts/octet-predicate-names.rs` resolves `bool_naming` from a JSON result stream.
+
+Run `cargo -q -Zscript scripts/<name>.rs --self-test` for the positive and negative fixtures.
+
+Families that remain need a design decision rather than a rewrite. `borrowed_argument_types`
+reports `&mut Vec<T>` sinks, where the suggested `&mut [T]` cannot grow, so each site needs a
+sink or return shape. `path_segment_repetition` wants about 1030 public items renamed, and
+`excessive_file_length` wants 304 files split.
 
 The sections below are historical slices from the earlier burn-down. They are kept for the
 rationale and the per-slice counts, not as a description of the current gate.
@@ -39,13 +47,13 @@ Focused object corpus: object-set hash `b3:f61ed6753b0a349fa2988e444ea3bae1f0ae2
 
 | Scope | Status | Findings | Warnings | Errors | Autofixable |
 |---|---:|---:|---:|---:|---:|
-| workspace | warning-only | 4838 | 4838 | 0 | 340 |
-| distinct sites | warning-only | 2687 | 2687 | 0 | 340 |
+| workspace | warning-only | 4444 | 4444 | 0 | 0 |
+| distinct sites | warning-only | 2480 | 2480 | 0 | 0 |
 
 Top workspace lint counts by distinct site: `path_segment_repetition` 1038,
 `non_trait_imports` 449, `excessive_file_length` 304, `borrowed_argument_types` 184,
-`bool_naming` 171, `function_length` 127, `unbounded_collection_growth` 112,
-`too_many_parameters` 72, `no_unwrap` 70, `underscore_in_module_filename` 34.
+`function_length` 127, `unbounded_collection_growth` 112, `too_many_parameters` 72,
+`no_unwrap` 70, `underscore_in_module_filename` 34, `explicit_defaults` 17.
 
 Latest no-disabled-lints harness replay import-wrapper probe (`target/octet-burndown/harness-replay-wrapper-import-0/summary.txt`) is `warning-only` with 5274 warnings: `path_segment_repetition` 2960, `non_trait_imports` 2146, `excessive_file_length` 111, `underscore_in_module_filename` 48, and `module_file_count` 9; `function_length`, `nested_conditionals`, and `borrowed_argument_types` remain cleared, and `function_length` is now enforced by `dylint.toml`. The remaining source-scope rows are generated/remapped external rows classified by the remediation plan rather than silently hidden; any future Molten-owned or unknown row remains fail-closed/actionable before `module_file_count` or underscore-filename caveats can be removed, and import/path/size families remain active caveats until each family is clean or scoped. The remaining file-size, import, path-shape, and source-scope rows stay visible active caveats for later focused gateway, command-shape, and file-size splits rather than being hidden by configuration-clean source-gate evidence.
 
