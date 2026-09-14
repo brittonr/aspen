@@ -1,29 +1,11 @@
 
 pub fn classify_idempotency_decision(input: DecisionLawInput<'_>) -> Result<IdempotencyDecisionLaw> {
     validate_refs(input.evidence_refs, "delivery decision evidence ref")?;
-    let law = if let Some(entry) = input.existing_entry {
-        let has_same_operation = entry.operation_ref == input.operation.operation_ref;
-        let has_same_payload = entry.payload_ref == input.operation.payload_ref;
-        let has_same_evidence = entry.evidence_refs == input.evidence_refs;
-        if has_same_operation && has_same_payload && has_same_evidence {
-            IdempotencyDecisionLaw {
-                kind: IdempotencyDecisionKind::Duplicate,
-                prior_receipt_ref: Some(entry.first_receipt_ref.clone()),
-                prior_semantic_result_ref: entry.semantic_result_ref.clone(),
-                diagnostics: Vec::new(),
-                should_commit_side_effect: false,
-            }
-        } else {
-            IdempotencyDecisionLaw {
-                kind: IdempotencyDecisionKind::Conflict,
-                prior_receipt_ref: Some(entry.first_receipt_ref.clone()),
-                prior_semantic_result_ref: None,
-                diagnostics: vec!["delivery operation sequence reused with different payload or evidence".to_string()],
-                should_commit_side_effect: false,
-            }
-        }
-    } else if input.operation.sequence < input.window.next_sequence {
-        IdempotencyDecisionLaw {
+    if let Some(entry) = input.existing_entry {
+        return Ok(prior_entry_law(entry, input.operation, input.evidence_refs));
+    }
+    if input.operation.sequence < input.window.next_sequence {
+        return Ok(IdempotencyDecisionLaw {
             kind: IdempotencyDecisionKind::Stale,
             prior_receipt_ref: None,
             prior_semantic_result_ref: None,
@@ -32,13 +14,14 @@ pub fn classify_idempotency_decision(input: DecisionLawInput<'_>) -> Result<Idem
                 input.operation.sequence, input.window.next_sequence
             )],
             should_commit_side_effect: false,
-        }
-    } else if input.operation.sequence > input.window.next_sequence {
+        });
+    }
+    if input.operation.sequence > input.window.next_sequence {
         let kind = match input.gap_policy {
             GapPolicy::Deny => IdempotencyDecisionKind::Gap,
             GapPolicy::Retry => IdempotencyDecisionKind::Retry,
         };
-        IdempotencyDecisionLaw {
+        return Ok(IdempotencyDecisionLaw {
             kind,
             prior_receipt_ref: None,
             prior_semantic_result_ref: None,
@@ -47,17 +30,44 @@ pub fn classify_idempotency_decision(input: DecisionLawInput<'_>) -> Result<Idem
                 input.operation.sequence, input.window.next_sequence
             )],
             should_commit_side_effect: false,
+        });
+    }
+    Ok(IdempotencyDecisionLaw {
+        kind: IdempotencyDecisionKind::First,
+        prior_receipt_ref: None,
+        prior_semantic_result_ref: None,
+        diagnostics: Vec::new(),
+        should_commit_side_effect: true,
+    })
+}
+
+/// A repeat of one operation is a duplicate when every binding field matches,
+/// and a conflict when any of them changed.
+fn prior_entry_law(
+    entry: &DedupEntry,
+    operation: &OperationId,
+    evidence_refs: &[String],
+) -> IdempotencyDecisionLaw {
+    let has_same_operation = entry.operation_ref == operation.operation_ref;
+    let has_same_payload = entry.payload_ref == operation.payload_ref;
+    let has_same_evidence = entry.evidence_refs == evidence_refs;
+    if has_same_operation && has_same_payload && has_same_evidence {
+        IdempotencyDecisionLaw {
+            kind: IdempotencyDecisionKind::Duplicate,
+            prior_receipt_ref: Some(entry.first_receipt_ref.clone()),
+            prior_semantic_result_ref: entry.semantic_result_ref.clone(),
+            diagnostics: Vec::new(),
+            should_commit_side_effect: false,
         }
     } else {
         IdempotencyDecisionLaw {
-            kind: IdempotencyDecisionKind::First,
-            prior_receipt_ref: None,
+            kind: IdempotencyDecisionKind::Conflict,
+            prior_receipt_ref: Some(entry.first_receipt_ref.clone()),
             prior_semantic_result_ref: None,
-            diagnostics: Vec::new(),
-            should_commit_side_effect: true,
+            diagnostics: vec!["delivery operation sequence reused with different payload or evidence".to_string()],
+            should_commit_side_effect: false,
         }
-    };
-    Ok(law)
+    }
 }
 
 pub fn check(input: CheckInput<'_>) -> Result<Decision> {

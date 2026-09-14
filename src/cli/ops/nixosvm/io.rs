@@ -66,25 +66,22 @@ pub(super) fn print_or_log_summary(is_written_to_file: bool, summary: &str) {
 }
 
 pub(super) fn kind(text: &str) -> &'static str {
-    if text.contains("nixos-vm-topology-v1") {
-        "topology"
-    } else if text.contains("nixos-vm-node-evidence-v1") {
-        "node-evidence"
-    } else if text.contains("nixos-vm-test-run-v1") {
-        "test-run"
-    } else if text.contains("nixos-vm-evidence-validation-v1") {
-        "vm-evidence-validation"
-    } else if text.contains("nixos-vm-evidence-manifest-v1") {
-        "vm-evidence-manifest"
-    } else if text.contains("nixos-vm-fault-descriptor-v1") {
-        "vm-fault-descriptor"
-    } else if text.contains("nixos-vm-fault-receipt-v1") {
-        "vm-fault-receipt"
-    } else if text.contains("nixos-vm-fault-validation-v1") {
-        "vm-fault-validation"
-    } else if text.contains("prod-soak-run-v1") {
-        "prod-soak-run"
-    } else {
-        "artifact"
+    const KINDS: &[(&str, &str)] = &[
+        ("nixos-vm-topology-v1", "topology"),
+        ("nixos-vm-node-evidence-v1", "node-evidence"),
+        ("nixos-vm-test-run-v1", "test-run"),
+        ("nixos-vm-evidence-validation-v1", "vm-evidence-validation"),
+        ("nixos-vm-evidence-manifest-v1", "vm-evidence-manifest"),
+        ("nixos-vm-fault-descriptor-v1", "vm-fault-descriptor"),
+        ("nixos-vm-fault-receipt-v1", "vm-fault-receipt"),
+        ("nixos-vm-fault-validation-v1", "vm-fault-validation"),
+        ("prod-soak-run-v1", "prod-soak-run"),
+    ];
+    // The first marker that appears in the text decides the kind.
+    for (marker, kind) in KINDS {
+        if text.contains(marker) {
+            return kind;
+        }
     }
+    "artifact"
 }

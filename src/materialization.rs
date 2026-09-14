@@ -1553,21 +1553,27 @@ fn entry_kind(
     path: &std::path::Path,
 ) -> crate::error::Result<Option<MaterializationMemberKind>> {
     match dir.symlink_metadata(path) {
-        Ok(metadata) => {
-            let file_type = metadata.file_type();
-            let kind = if file_type.is_file() {
-                MaterializationMemberKind::RegularFile
-            } else if file_type.is_dir() {
-                MaterializationMemberKind::Directory
-            } else if file_type.is_symlink() {
-                MaterializationMemberKind::Symlink
-            } else {
-                MaterializationMemberKind::Special
-            };
-            Ok(Some(kind))
-        }
+        Ok(metadata) => Ok(Some(member_kind(&metadata.file_type()))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(crate::error::MoltenError::from(error)),
+    }
+}
+
+fn member_kind(file_type: &cap_std::fs::FileType) -> MaterializationMemberKind {
+    if file_type.is_file() {
+        MaterializationMemberKind::RegularFile
+    } else if file_type.is_dir() {
+        MaterializationMemberKind::Directory
+    } else {
+        link_kind(file_type)
+    }
+}
+
+fn link_kind(file_type: &cap_std::fs::FileType) -> MaterializationMemberKind {
+    if file_type.is_symlink() {
+        MaterializationMemberKind::Symlink
+    } else {
+        MaterializationMemberKind::Special
     }
 }
 

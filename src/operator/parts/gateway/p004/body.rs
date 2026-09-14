@@ -35,57 +35,36 @@ pub fn handle_http3_iroh_readback(input: &Http3IrohReadbackInput<'_>) -> Result<
     if !matches!(input.method, HTTP3_METHOD_GET | HTTP3_METHOD_HEAD) {
         diagnostics.push(format!("HTTP3-over-Iroh method {} is read-only unsupported", input.method));
     }
-    if diagnostics.is_empty() {
-        let read = ReadInput {
-            object_ref: input.object_ref.to_string(),
-            member: Some(input.route.to_string()),
-            requested_range: input.requested_range,
-            requester_ref: input.requester_ref.to_string(),
-            manifest: input.manifest,
-            visibility: input.visibility.clone(),
-        };
-        let gateway = if input.requested_range.is_some() && input.manifest.is_some() {
-            let range = verify_range(&RangeVerificationInput {
-                read,
-                chunk_bytes: input.chunk_bytes.clone(),
-            })?;
-            if range.decision == "pass" {
-                Http3GatewayOutcome {
-                    decision: range.decision,
-                    bytes: if input.method == HTTP3_METHOD_HEAD { Vec::new() } else { range.bytes },
-                    receipt_value: range.receipt_value,
-                    diagnostics: range.diagnostics,
-                }
-            } else {
-                Http3GatewayOutcome {
-                    decision: range.decision,
-                    bytes: Vec::new(),
-                    receipt_value: range.receipt_value,
-                    diagnostics: range.diagnostics,
-                }
-            }
-        } else {
-            let decision = decide_readback(&read)?;
-            Http3GatewayOutcome {
-                decision: decision.decision,
-                bytes: Vec::new(),
-                receipt_value: decision.receipt_value,
-                diagnostics: decision.diagnostics,
-            }
-        };
-        diagnostics.extend(gateway.diagnostics.iter().cloned());
-        let decision = if diagnostics.is_empty() && gateway.decision == "pass" { "pass" } else { "deny" };
-        let status = http3_status_for_decision(decision);
-        let receipt_value = http3_adapter_receipt_value(input, decision, status, Some(&gateway.receipt_value), &diagnostics)?;
-        return Ok(Http3IrohReadbackDecision {
-            decision: decision.to_string(),
-            status,
-            bytes: if decision == "pass" { gateway.bytes } else { Vec::new() },
-            gateway_receipt_value: Some(gateway.receipt_value),
-            diagnostics,
-            receipt_value,
-        });
+    if !diagnostics.is_empty() {
+        return denied_iroh_readback(input, diagnostics);
     }
+    let read = ReadInput {
+        object_ref: input.object_ref.to_string(),
+        member: Some(input.route.to_string()),
+        requested_range: input.requested_range,
+        requester_ref: input.requester_ref.to_string(),
+        manifest: input.manifest,
+        visibility: input.visibility.clone(),
+    };
+    let gateway = gateway_outcome(input, &read)?;
+    diagnostics.extend(gateway.diagnostics.iter().cloned());
+    let decision = if diagnostics.is_empty() && gateway.decision == "pass" { "pass" } else { "deny" };
+    let status = http3_status_for_decision(decision);
+    let receipt_value = http3_adapter_receipt_value(input, decision, status, Some(&gateway.receipt_value), &diagnostics)?;
+    Ok(Http3IrohReadbackDecision {
+        decision: decision.to_string(),
+        status,
+        bytes: if decision == "pass" { gateway.bytes } else { Vec::new() },
+        gateway_receipt_value: Some(gateway.receipt_value),
+        diagnostics,
+        receipt_value,
+    })
+}
+
+fn denied_iroh_readback(
+    input: &Http3IrohReadbackInput<'_>,
+    diagnostics: Vec<String>,
+) -> Result<Http3IrohReadbackDecision> {
     let status = http3_status_for_decision("deny");
     let receipt_value = http3_adapter_receipt_value(input, "deny", status, None, &diagnostics)?;
     Ok(Http3IrohReadbackDecision {
@@ -95,6 +74,38 @@ pub fn handle_http3_iroh_readback(input: &Http3IrohReadbackInput<'_>) -> Result<
         gateway_receipt_value: None,
         diagnostics,
         receipt_value,
+    })
+}
+
+/// A ranged read verifies the requested window; any other read decides from the
+/// manifest alone.
+fn gateway_outcome(
+    input: &Http3IrohReadbackInput<'_>,
+    read: &ReadInput<'_>,
+) -> Result<Http3GatewayOutcome> {
+    if input.requested_range.is_some() && input.manifest.is_some() {
+        let range = verify_range(&RangeVerificationInput {
+            read: read.clone(),
+            chunk_bytes: input.chunk_bytes.clone(),
+        })?;
+        let bytes = if range.decision == "pass" && input.method != HTTP3_METHOD_HEAD {
+            range.bytes
+        } else {
+            Vec::new()
+        };
+        return Ok(Http3GatewayOutcome {
+            decision: range.decision,
+            bytes,
+            receipt_value: range.receipt_value,
+            diagnostics: range.diagnostics,
+        });
+    }
+    let decision = decide_readback(read)?;
+    Ok(Http3GatewayOutcome {
+        decision: decision.decision,
+        bytes: Vec::new(),
+        receipt_value: decision.receipt_value,
+        diagnostics: decision.diagnostics,
     })
 }
 

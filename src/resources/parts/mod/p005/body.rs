@@ -318,52 +318,7 @@ fn evaluate_single_phase(phase: AdmissionPhase, input: &AdmissionChainInput) -> 
                 }
             }
         }
-        AdmissionPhase::ReviewedMutation => {
-            // Mutation is required for create/update operations
-            if input.operation == ResourceOperation::Create || input.operation == ResourceOperation::Update {
-                if let Some(ref evidence) = input.mutation_evidence {
-                    if validate_mutation_evidence(evidence) {
-                        PhaseResult {
-                            phase,
-                            decision: PhaseDecision::Pass,
-                            evidence_refs: vec![
-                                evidence.rule_ref.clone(),
-                                evidence.pre_mutation_ref.clone(),
-                                evidence.post_mutation_ref.clone(),
-                            ],
-                            diagnostics: Vec::new(),
-                        }
-                    } else {
-                        PhaseResult {
-                            phase,
-                            decision: PhaseDecision::Deny,
-                            evidence_refs: Vec::new(),
-                            diagnostics: vec![
-                                "mutation evidence has invalid refs or pre/post mismatch".to_string(),
-                            ],
-                        }
-                    }
-                } else {
-                    PhaseResult {
-                        phase,
-                        decision: PhaseDecision::Deny,
-                        evidence_refs: Vec::new(),
-                        diagnostics: vec![
-                            "missing mutation evidence for create/update operation".to_string(),
-                        ],
-                    }
-                }
-            } else {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Skip,
-                    evidence_refs: Vec::new(),
-                    diagnostics: vec![
-                        format!("mutation phase skipped for {:?} operation", input.operation),
-                    ],
-                }
-            }
-        }
+        AdmissionPhase::ReviewedMutation => reviewed_mutation_result(phase, input),
         AdmissionPhase::FinalValidation => {
             if let Some(ref evidence) = input.final_validation_passed {
                 PhaseResult {
@@ -407,6 +362,47 @@ fn evaluate_single_phase(phase: AdmissionPhase, input: &AdmissionChainInput) -> 
                 evidence_refs: Vec::new(),
                 diagnostics: Vec::new(),
             }
+        }
+    }
+}
+
+/// Mutation evidence is required for create and update operations, and the
+/// phase is skipped for every other operation.
+fn reviewed_mutation_result(phase: AdmissionPhase, input: &AdmissionChainInput) -> PhaseResult {
+    let is_mutating = input.operation == ResourceOperation::Create || input.operation == ResourceOperation::Update;
+    if !is_mutating {
+        return PhaseResult {
+            phase,
+            decision: PhaseDecision::Skip,
+            evidence_refs: Vec::new(),
+            diagnostics: vec![format!("mutation phase skipped for {:?} operation", input.operation)],
+        };
+    }
+    let Some(evidence) = input.mutation_evidence.as_ref() else {
+        return PhaseResult {
+            phase,
+            decision: PhaseDecision::Deny,
+            evidence_refs: Vec::new(),
+            diagnostics: vec!["missing mutation evidence for create/update operation".to_string()],
+        };
+    };
+    if validate_mutation_evidence(evidence) {
+        PhaseResult {
+            phase,
+            decision: PhaseDecision::Pass,
+            evidence_refs: vec![
+                evidence.rule_ref.clone(),
+                evidence.pre_mutation_ref.clone(),
+                evidence.post_mutation_ref.clone(),
+            ],
+            diagnostics: Vec::new(),
+        }
+    } else {
+        PhaseResult {
+            phase,
+            decision: PhaseDecision::Deny,
+            evidence_refs: Vec::new(),
+            diagnostics: vec!["mutation evidence has invalid refs or pre/post mismatch".to_string()],
         }
     }
 }
