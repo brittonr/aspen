@@ -760,6 +760,12 @@ Fixed pre-change wire fixtures and direct-handler comparisons protect valid byte
 [`evidence/octet/raft-message-rejections/validation.md`](evidence/octet/raft-message-rejections/validation.md) records the bounded checks and remaining acceptance limits.
 The Molten consistency owner maintains these tests. This repair does not establish whole-system panic freedom.
 
+The content-replication integration helper returns setup and transport errors to its test callers.
+Direct tests preserve the complete received envelope and reject all other outcome variants with exact diagnostics.
+The existing two-process assertions and process limits remain unchanged.
+[`evidence/octet/content-test-errors/validation.md`](evidence/octet/content-test-errors/validation.md) records the checks and their limits.
+The Molten content-replication owner maintains this test boundary. It does not establish a public runtime defect or whole-system panic freedom.
+
 ### Historical Octet burndown
 
 The next paragraph preserves earlier burndown results. Those results do not establish acceptance for later source.

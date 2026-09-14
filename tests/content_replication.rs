@@ -1,6 +1,9 @@
 #[path = "src/test/support.rs"]
 mod test_support;
 
+#[path = "content_replication/outcomes.rs"]
+mod outcomes;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -114,8 +117,28 @@ fn action(manifest: &Manifest, corrupt_target: bool) -> Action {
         .expect("multiprocess action")
 }
 
-fn run_action(label: &str, manifest: &Manifest, action: &Action) -> TransferEnvelope {
-    let workspace = test_support::process_workspace(label).expect("process workspace");
+fn received(outcome: TransferOutcome) -> molten::error::Result<TransferEnvelope> {
+    match outcome {
+        TransferOutcome::Received(envelope) => Ok(envelope),
+        other @ (TransferOutcome::Cancelled(_)
+        | TransferOutcome::Uncertain(_)
+        | TransferOutcome::Unavailable(_)
+        | TransferOutcome::TimedOut(_)) => {
+            Err(molten::error::MoltenError::invalid_harness(format!("unexpected transfer outcome: {other:?}")))
+        }
+    }
+}
+
+fn verify_envelope(run_directory: &std::path::Path, envelope: &TransferEnvelope) -> molten::error::Result<()> {
+    let verification = molten::cluster_harness::verify_distinct_process_transport_run(run_directory)?;
+    assert_eq!(verification.decision, "pass");
+    assert_eq!(verification.parent_ref, envelope.transfer_ref);
+    assert_eq!(verification.verification_ref, envelope.transport_verification_ref);
+    Ok(())
+}
+
+fn run_action(label: &str, manifest: &Manifest, action: &Action) -> molten::error::Result<TransferEnvelope> {
+    let workspace = test_support::process_workspace(label)?;
     let run_root = workspace.join("run");
     let mut adapter = DistinctProcessTransferAdapter::open(
         manifest,
@@ -123,42 +146,34 @@ fn run_action(label: &str, manifest: &Manifest, action: &Action) -> TransferEnve
         PathBuf::from(env!("CARGO_BIN_EXE_molten")),
         DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS,
         BTreeMap::from([(manifest.contents[0].content_ref.clone(), PAYLOAD.to_vec())]),
-    )
-    .expect("multiprocess adapter");
-    let envelope = match adapter.fetch(action).expect("multiprocess transfer") {
-        TransferOutcome::Received(envelope) => envelope,
-        other => panic!("unexpected transfer outcome: {other:?}"),
-    };
-    let verification = molten::cluster_harness::verify_distinct_process_transport_run(
-        &run_root.join(action.operation_id.strip_prefix("blake3:").expect("operation prefix")),
-    )
-    .expect("offline multiprocess verification");
-    assert_eq!(verification.decision, "pass");
-    assert_eq!(verification.parent_ref, envelope.transfer_ref);
-    assert_eq!(verification.verification_ref, envelope.transport_verification_ref);
+    )?;
+    let envelope = received(adapter.fetch(action)?)?;
+    verify_envelope(&run_root.join(action.operation_id.strip_prefix("blake3:").expect("operation prefix")), &envelope)?;
     assert_eq!(adapter.call_count(), 1);
-    envelope
+    Ok(envelope)
 }
 
 #[test]
-fn multiprocess_replication_moves_exact_content_under_operation_identity() {
+fn multiprocess_replication_moves_exact_content_under_operation_identity() -> molten::error::Result<()> {
     let manifest = manifest();
     let action = action(&manifest, false);
     assert_eq!(action.kind, ActionKind::Transfer);
-    let envelope = run_action("content_replication_transfer", &manifest, &action);
+    let envelope = run_action("content_replication_transfer", &manifest, &action)?;
     assert_eq!(envelope.operation_id, action.operation_id);
     assert_eq!(envelope.content_ref, manifest.contents[0].content_ref);
     assert_eq!(envelope.encoded_bytes, manifest.contents[0].encoded_bytes);
+    Ok(())
 }
 
 #[test]
-fn multiprocess_repair_uses_the_same_receiver_plan_and_transport_contract() {
+fn multiprocess_repair_uses_the_same_receiver_plan_and_transport_contract() -> molten::error::Result<()> {
     let manifest = manifest();
     let action = action(&manifest, true);
     assert_eq!(action.kind, ActionKind::Repair);
-    let envelope = run_action("content_replication_repair", &manifest, &action);
+    let envelope = run_action("content_replication_repair", &manifest, &action)?;
     assert_eq!(envelope.target_peer, "peer-b");
     assert!(envelope.protected);
+    Ok(())
 }
 
 #[test]
