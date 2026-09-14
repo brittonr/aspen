@@ -1,3 +1,4 @@
+use super::super::canonical::canonical_retry_events;
 use super::super::fixture::retry as fixture_retry;
 use super::*;
 
@@ -10,6 +11,8 @@ const SATURATED_DELAY: u64 = 128;
 const SATURATED_DEADLINE: u64 = FIXTURE_RETRY_NOW + SATURATED_DELAY;
 const PUBLIC_RETRY_NOW: u64 = 35;
 const PUBLIC_RETRY_DEADLINE: u64 = PUBLIC_RETRY_NOW + SATURATED_DELAY;
+const PUBLIC_FAULT_ADVANCE: u64 = 1;
+const PUBLIC_FINAL_TICKS: u64 = PUBLIC_RETRY_DEADLINE + PUBLIC_FAULT_ADVANCE;
 const ORDINARY_BASE: u64 = 5;
 const ORDINARY_FACTOR: u64 = 2;
 const ORDINARY_JITTER: u64 = 2;
@@ -26,6 +29,21 @@ fn executable_fixture_does_not_finish_before_its_retry_timer_fires() {
         "the run completed at {} before the retry timer deadline {PUBLIC_RETRY_DEADLINE}",
         run.report.report.final_time_ticks,
     );
+    assert_eq!(run.report.report.final_time_ticks, PUBLIC_FINAL_TICKS);
+    let terminal = canonical_named_event(
+        &run.simulation_profile.profile_ref,
+        CanonicalTimeEventKind::Conformance,
+        GENERATION,
+        "simulation-run-state",
+        "completed",
+        PUBLIC_FINAL_TICKS,
+    )
+    .expect("expected terminal event");
+    assert_eq!(run.report.report.terminal_outcome_ref, terminal.evidence_ref);
+    assert!(run.events.contains(&terminal));
+    let timer = support::expected_timer_event(&run.simulation_profile, SATURATION_SUBJECT, PUBLIC_RETRY_DEADLINE);
+    assert!(run.events.contains(&timer));
+    assert!(run.report.report.evidence_refs.contains(&timer.evidence_ref));
 }
 
 // r[verify molten.audit_f12.saturation]
@@ -34,21 +52,12 @@ fn executable_fixture_does_not_finish_before_its_retry_timer_fires() {
 fn executable_fixture_records_corrected_retry_delay_and_deadline() {
     let run =
         run_executable_fabric_time_fixture(FabricTimeFixtureSelection::DeterministicSimulation).expect("retry fixture");
-    for (action, ticks) in [
-        ("retry-delay", SATURATED_DELAY),
-        ("retry-planned", PUBLIC_RETRY_DEADLINE),
-    ] {
-        let expected = canonical_named_event(
-            &run.simulation_profile.profile_ref,
-            CanonicalTimeEventKind::Deadline,
-            GENERATION,
-            SATURATION_SUBJECT,
-            action,
-            ticks,
-        )
-        .expect("expected retry event");
-        assert!(run.events.contains(&expected), "missing canonical retry observation: {action}");
-        assert!(run.report.report.evidence_refs.contains(&expected.evidence_ref));
+    let plan =
+        support::expected_plan(&run.simulation_profile, SATURATION_SUBJECT, SATURATED_DELAY, PUBLIC_RETRY_DEADLINE);
+    let expected = canonical_retry_events(&run.simulation_profile.profile_ref, &plan).expect("expected retry events");
+    for event in expected {
+        assert!(run.events.contains(&event), "missing canonical retry observation: {}", event.evidence_ref);
+        assert!(run.report.report.evidence_refs.contains(&event.evidence_ref));
     }
 }
 
@@ -68,16 +77,11 @@ fn executable_fixture_preserves_ordinary_retry_and_exposes_wrapped_replay_reject
     )
     .expect("ordinary retry event");
     assert!(run.events.contains(&ordinary));
-    let wrapped = canonical_named_event(
-        &run.simulation_profile.profile_ref,
-        CanonicalTimeEventKind::Deadline,
-        GENERATION,
-        SATURATION_SUBJECT,
-        "retry-delay",
-        0,
-    )
-    .expect("wrapped counterexample");
-    assert!(!run.events.contains(&wrapped), "the fixture must not publish a wrapped retry delay");
+    let wrapped_plan = support::expected_plan(&run.simulation_profile, SATURATION_SUBJECT, 0, PUBLIC_RETRY_NOW);
+    let wrapped = canonical_retry_events(&run.simulation_profile.profile_ref, &wrapped_plan).expect("wrapped history");
+    for event in wrapped {
+        assert!(!run.events.contains(&event), "the fixture must not publish a wrapped retry observation");
+    }
     let rejection = canonical_named_event(
         &run.simulation_profile.profile_ref,
         CanonicalTimeEventKind::Conformance,

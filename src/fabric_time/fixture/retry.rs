@@ -1,4 +1,5 @@
 use super::*;
+use crate::fabric_time::canonical::canonical_retry_events;
 
 const SATURATION_SUBJECT: &str = "fixture-retry-saturation";
 const SATURATION_BASE: u64 = 2;
@@ -38,22 +39,7 @@ pub(in crate::fabric_time) fn plan_events(
     assert!(plan.delay.ticks > 0);
     assert!(plan.delay.ticks <= input.policy.maximum_delay_ticks);
     assert!(plan.deadline.target.ticks() >= input.now.ticks());
-    let events = [
-        ("retry-delay", plan.delay.ticks),
-        ("retry-planned", plan.deadline.target.ticks()),
-    ]
-    .into_iter()
-    .map(|(action, ticks)| {
-        canonical_named_event(
-            &profile.profile_ref,
-            CanonicalTimeEventKind::Deadline,
-            input.generation,
-            &input.subject_id,
-            action,
-            ticks,
-        )
-    })
-    .collect::<Result<Vec<_>>>()?;
+    let events = canonical_retry_events(&profile.profile_ref, &plan)?;
     Ok((plan, events))
 }
 
@@ -155,19 +141,10 @@ pub(super) fn run_saturation_scenario(
 }
 
 fn reject_wrapped_history(profile: &CanonicalTimeProfile, input: &RetryFixtureInput) -> Result<()> {
-    let wrapped = [("retry-delay", 0), ("retry-planned", input.now.ticks())]
-        .into_iter()
-        .map(|(action, ticks)| {
-            canonical_named_event(
-                &profile.profile_ref,
-                CanonicalTimeEventKind::Deadline,
-                input.generation,
-                &input.subject_id,
-                action,
-                ticks,
-            )
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let (mut wrapped_plan, _) = plan_events(profile, FIXTURE_GENERATION, input)?;
+    wrapped_plan.delay.ticks = 0;
+    wrapped_plan.deadline.target = input.now.clone();
+    let wrapped = canonical_retry_events(&profile.profile_ref, &wrapped_plan)?;
     match replay(profile, FIXTURE_GENERATION, input, &wrapped) {
         Err(MoltenError::HarnessDivergence(_)) => Ok(()),
         Err(error) => Err(error),

@@ -16,7 +16,10 @@ fn admitted_retry_reaches_the_clock_and_records_observed_timer_delivery() {
     assert_eq!(clock.now, SATURATED_DEADLINE);
     assert_eq!(clock.reads, 0);
     assert_eq!(events.len(), EXECUTION_EVENT_COUNT);
-    assert_eq!(events.last().expect("timer observation").kind, CanonicalTimeEventKind::Timer);
+    assert_eq!(
+        events.last().expect("timer observation"),
+        &expected_timer_event(&profile, &request.subject_id, SATURATED_DEADLINE)
+    );
     assert_eq!(request, before);
 }
 
@@ -53,6 +56,13 @@ fn denied_requests(profile: &CanonicalTimeProfile) -> Vec<(fixture_retry::RetryF
     });
     let mut stale = input(profile);
     stale.generation = STALE_GENERATION;
+    let mut zero_generation = input(profile);
+    zero_generation.generation = 0;
+    let mut wrong_profile = input(profile);
+    wrong_profile.now = TimeValue::Virtual(VirtualInstant {
+        profile_ref: HASH_B.to_string(),
+        ticks: FIXTURE_RETRY_NOW,
+    });
     vec![
         (jitter, DeadlineLeaseError::JitterOutOfBounds { actual: 1, maximum: 0 }),
         (missing_jitter, DeadlineLeaseError::JitterRequired),
@@ -65,6 +75,14 @@ fn denied_requests(profile: &CanonicalTimeProfile) -> Vec<(fixture_retry::RetryF
             expected: GENERATION,
             actual: STALE_GENERATION,
         }),
+        (zero_generation, DeadlineLeaseError::ZeroGeneration),
+        (
+            wrong_profile,
+            DeadlineLeaseError::Arithmetic(TimeArithmeticError::ProfileMismatch {
+                expected: profile.profile.profile_ref.clone(),
+                actual: HASH_B.to_string(),
+            }),
+        ),
     ]
 }
 

@@ -1,5 +1,8 @@
 use preserves::IOValue;
 
+mod retry;
+pub(super) use retry::canonical_retry_events;
+
 use super::AdmittedTimeProfile;
 use super::CheckedDuration;
 use super::DeadlineDecision;
