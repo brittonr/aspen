@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod rejections;
+
 use preserves::IOValue;
 use preserves::Value;
 use preserves::ValueImpl;
@@ -37,7 +40,7 @@ pub fn canonical_replica_message(envelope: &ReplicaMessageEnvelope) -> Result<Ca
         crate::preserves_rail::u64_value(envelope.service_generation),
         crate::preserves_rail::string(&envelope.from),
         crate::preserves_rail::string(&envelope.to),
-        message_value(&envelope.message),
+        message_value(&envelope.message)?,
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let envelope_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
@@ -67,7 +70,7 @@ pub fn parse_canonical_replica_message(bytes: &[u8]) -> Result<ReplicaMessageEnv
     Ok(envelope)
 }
 
-fn message_value(message: &RaftMessage) -> IOValue {
+fn message_value(message: &RaftMessage) -> Result<IOValue> {
     match message {
         message @ (RaftMessage::RequestVote { .. } | RaftMessage::VoteResponse { .. }) => vote_message_value(message),
         message @ (RaftMessage::AppendEntries { .. } | RaftMessage::AppendResponse { .. }) => {
@@ -82,8 +85,8 @@ fn message_value(message: &RaftMessage) -> IOValue {
     }
 }
 
-fn vote_message_value(message: &RaftMessage) -> IOValue {
-    match message {
+fn vote_message_value(message: &RaftMessage) -> Result<IOValue> {
+    Ok(match message {
         RaftMessage::RequestVote {
             term,
             candidate_id,
@@ -112,12 +115,19 @@ fn vote_message_value(message: &RaftMessage) -> IOValue {
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        _ => unreachable!("vote encoding admitted a non-vote message"),
-    }
+        RaftMessage::AppendEntries { .. }
+        | RaftMessage::AppendResponse { .. }
+        | RaftMessage::ReadProbe { .. }
+        | RaftMessage::ReadAcknowledgement { .. }
+        | RaftMessage::InstallSnapshot { .. }
+        | RaftMessage::SnapshotResponse { .. } => {
+            return Err(MoltenError::invalid_harness("vote encoding admitted a non-vote message"));
+        }
+    })
 }
 
-fn append_message_value(message: &RaftMessage) -> IOValue {
-    match message {
+fn append_message_value(message: &RaftMessage) -> Result<IOValue> {
+    Ok(match message {
         RaftMessage::AppendEntries {
             term,
             leader_id,
@@ -156,12 +166,19 @@ fn append_message_value(message: &RaftMessage) -> IOValue {
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        _ => unreachable!("append encoding admitted a non-append message"),
-    }
+        RaftMessage::RequestVote { .. }
+        | RaftMessage::VoteResponse { .. }
+        | RaftMessage::ReadProbe { .. }
+        | RaftMessage::ReadAcknowledgement { .. }
+        | RaftMessage::InstallSnapshot { .. }
+        | RaftMessage::SnapshotResponse { .. } => {
+            return Err(MoltenError::invalid_harness("append encoding admitted a non-append message"));
+        }
+    })
 }
 
-fn read_message_value(message: &RaftMessage) -> IOValue {
-    match message {
+fn read_message_value(message: &RaftMessage) -> Result<IOValue> {
+    Ok(match message {
         RaftMessage::ReadProbe {
             term,
             leader_id,
@@ -190,12 +207,19 @@ fn read_message_value(message: &RaftMessage) -> IOValue {
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        _ => unreachable!("read encoding admitted a non-read message"),
-    }
+        RaftMessage::RequestVote { .. }
+        | RaftMessage::VoteResponse { .. }
+        | RaftMessage::AppendEntries { .. }
+        | RaftMessage::AppendResponse { .. }
+        | RaftMessage::InstallSnapshot { .. }
+        | RaftMessage::SnapshotResponse { .. } => {
+            return Err(MoltenError::invalid_harness("read encoding admitted a non-read message"));
+        }
+    })
 }
 
-fn snapshot_message_value(message: &RaftMessage) -> IOValue {
-    match message {
+fn snapshot_message_value(message: &RaftMessage) -> Result<IOValue> {
+    Ok(match message {
         RaftMessage::InstallSnapshot {
             term,
             leader_id,
@@ -224,8 +248,15 @@ fn snapshot_message_value(message: &RaftMessage) -> IOValue {
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        _ => unreachable!("snapshot encoding admitted a non-snapshot message"),
-    }
+        RaftMessage::RequestVote { .. }
+        | RaftMessage::VoteResponse { .. }
+        | RaftMessage::AppendEntries { .. }
+        | RaftMessage::AppendResponse { .. }
+        | RaftMessage::ReadProbe { .. }
+        | RaftMessage::ReadAcknowledgement { .. } => {
+            return Err(MoltenError::invalid_harness("snapshot encoding admitted a non-snapshot message"));
+        }
+    })
 }
 
 fn entry_value(entry: &ReplicatedEntry) -> IOValue {

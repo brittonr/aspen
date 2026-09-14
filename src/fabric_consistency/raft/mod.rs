@@ -31,6 +31,8 @@ pub use transition::*;
 #[cfg(test)]
 mod canonical_tests;
 #[cfg(test)]
+mod compatibility;
+#[cfg(test)]
 mod durability_tests;
 #[cfg(test)]
 mod evidence_tests;

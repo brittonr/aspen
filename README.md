@@ -754,6 +754,12 @@ The combined native-build and retry candidate also fails the public strict gate,
 [`evidence/combined-native-retry/validation.md`](evidence/combined-native-retry/validation.md) records its passing tests and unresolved Nix and lifecycle gates.
 Successful imports and warning-only hook results do not establish strict acceptance.
 
+The private Raft message helpers now return errors instead of panicking on a wrong message family.
+The existing public dispatchers cannot select those wrong-family paths.
+Fixed pre-change wire fixtures and direct-handler comparisons protect valid bytes, state, and effect order.
+[`evidence/octet/raft-message-rejections/validation.md`](evidence/octet/raft-message-rejections/validation.md) records the bounded checks and remaining acceptance limits.
+The Molten consistency owner maintains these tests. This repair does not establish whole-system panic freedom.
+
 ### Historical Octet burndown
 
 The next paragraph preserves earlier burndown results. Those results do not establish acceptance for later source.
