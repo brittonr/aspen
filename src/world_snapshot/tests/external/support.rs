@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
 
-use chaoscontrol_snapshot_descriptor as chaos;
 use molten_core::world_commit::RootKind;
 use molten_core::world_commit::SnapshotProfileRef;
 use molten_core::world_commit::WorldCommitRef;
@@ -43,13 +42,14 @@ pub(super) fn digest(byte: char) -> String {
     format!("blake3:{}", byte.to_string().repeat(DIGEST_HEX_LENGTH))
 }
 
-pub(super) fn fixture() -> (chaos::SnapshotDescriptorEnvelope, SnapshotDescriptor) {
-    let descriptor: chaos::SnapshotDescriptor = serde_json::from_str(include_str!(
+pub(super) fn fixture() -> (chaoscontrol_snapshot_descriptor::SnapshotDescriptorEnvelope, SnapshotDescriptor) {
+    let descriptor: chaoscontrol_snapshot_descriptor::SnapshotDescriptor = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/world-snapshot/chaoscontrol-snapshot-descriptor.valid.json"
     ))
     .expect("valid ChaosControl descriptor fixture");
-    let descriptor_id = chaos::descriptor_identity(&descriptor).expect("descriptor identity");
-    let envelope = chaos::SnapshotDescriptorEnvelope {
+    let descriptor_id =
+        chaoscontrol_snapshot_descriptor::descriptor_identity(&descriptor).expect("descriptor identity");
+    let envelope = chaoscontrol_snapshot_descriptor::SnapshotDescriptorEnvelope {
         descriptor_id,
         descriptor,
     };

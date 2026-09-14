@@ -46,11 +46,8 @@ fn sightglass_raw_json_preserves_separate_bounded_phase_samples() {
     .expect("Sightglass measurements parse");
     assert_eq!(phases.len(), PerformancePhase::ALL.len());
     assert_eq!(phases.iter().map(|phase| phase.phase).collect::<Vec<_>>(), PerformancePhase::ALL);
-    assert!(
-        phases
-            .iter()
-            .all(|phase| phase.samples.len() == profile.fast.sampling.min_samples_per_phase as usize)
-    );
+    assert!(phases.iter().all(|phase| phase.samples.len()
+        == usize::try_from(profile.fast.sampling.min_samples_per_phase).expect("sampling count fits usize")));
     assert!(phases.iter().all(|phase| phase.event == super::support::FIXTURE_EVENT));
 
     let deep = parse_sightglass_measurements(
@@ -64,7 +61,8 @@ fn sightglass_raw_json_preserves_separate_bounded_phase_samples() {
         ),
     )
     .expect("deep Sightglass measurements parse");
-    assert!(deep.iter().all(|phase| phase.samples.len() == profile.deep.sampling.min_samples_per_phase as usize));
+    assert!(deep.iter().all(|phase| phase.samples.len()
+        == usize::try_from(profile.deep.sampling.min_samples_per_phase).expect("sampling count fits usize")));
 
     let arguments = sightglass_arguments(&profile.fast);
     for required in [

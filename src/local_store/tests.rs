@@ -77,7 +77,9 @@ mod tests {
             crate::test_support::process_workspace("cap_std_missing_root").expect("create missing-root workspace");
         let missing_root = missing_parent.join("missing");
         let error = RetentionStoreRoot::open_existing(&missing_root).expect_err("missing root denied");
-        assert!(error.to_string().contains("No such") || error.to_string().contains("not found"));
+        let message = error.to_string();
+        let is_missing_root = message.contains("No such") || message.contains("not found");
+        assert!(is_missing_root, "unexpected missing root denial: {message}");
     }
 
     #[cfg(unix)]
@@ -99,12 +101,12 @@ mod tests {
             .root()
             .read(&LocalStorePath::parse("entries/escape-link").expect("symlink path"))
             .expect_err("symlink escape denied");
-        assert!(
-            error.to_string().contains("outside")
-                || error.to_string().contains("symlink")
-                || error.to_string().contains("permission")
-                || error.to_string().contains("regular file")
-        );
+        let message = error.to_string();
+        let is_escape_denied = message.contains("outside")
+            || message.contains("symlink")
+            || message.contains("permission")
+            || message.contains("regular file");
+        assert!(is_escape_denied, "unexpected symlink escape denial: {message}");
         let intermediate_error = root
             .root()
             .read(&LocalStorePath::parse("entries/escape-directory/secret.txt").expect("intermediate path"))

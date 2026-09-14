@@ -68,18 +68,15 @@ pub fn canonical_dag_request(request: &DagSyncRequest) -> Result<CanonicalDagRec
             field("roots", refs(roots.iter().map(DagRootRef::as_str))),
             field("strategy", string(request.strategy.as_str())),
             field("available", sequence(available.iter().map(object_value).collect())),
-            field(
-                "progress",
-                request.progress.as_ref().map_or_else(
-                    || record("none", Vec::new()),
-                    |progress| record("some", vec![progress_value(progress)]),
-                ),
-            ),
+            field("progress", match request.progress.as_ref() {
+                Some(progress) => record("some", vec![progress_value(progress)?]),
+                None => record("none", Vec::new()),
+            }),
             field("peers", refs(peers.iter().map(DagPeerId::as_str))),
             field("epoch-ref", string(request.epoch_ref.as_str())),
             field("generation", number(request.generation)),
             field("policy-ref", string(request.policy_ref.as_str())),
-            field("bounds", bounds_value(&request.bounds)),
+            field("bounds", bounds_value(&request.bounds)?),
         ]),
     )
 }
@@ -103,13 +100,13 @@ pub fn canonical_dag_plan(plan: &DagSyncPlan) -> Result<CanonicalDagRecord> {
                     plan.requests
                         .iter()
                         .map(|request| {
-                            record("fetch-request", vec![
+                            Ok(record("fetch-request", vec![
                                 object_value(&request.object_ref),
                                 optional(request.assigned_peer.as_ref().map(DagPeerId::as_str)),
-                                usize_value(request.sequence),
-                            ])
+                                usize_field(request.sequence)?,
+                            ]))
                         })
-                        .collect(),
+                        .collect::<Result<Vec<_>>>()?,
                 ),
             ),
             field("complete", boolean(plan.complete)),
@@ -135,7 +132,7 @@ pub fn canonical_dag_response(response: &DagResponseObservation) -> Result<Canon
 }
 
 pub fn canonical_dag_progress(progress: &DagSyncProgress) -> Result<CanonicalDagRecord> {
-    canonical("progress", progress_value(progress))
+    canonical("progress", progress_value(progress)?)
 }
 
 pub fn canonical_dag_receipt(receipt: &DagSyncReceipt) -> Result<CanonicalDagRecord> {
@@ -151,8 +148,8 @@ pub fn canonical_dag_receipt(receipt: &DagSyncReceipt) -> Result<CanonicalDagRec
             field("epoch-ref", string(receipt.epoch_ref.as_str())),
             field("generation", number(receipt.generation)),
             field("strategy", string(receipt.strategy.as_str())),
-            field("requested", usize_value(receipt.requested)),
-            field("verified", usize_value(receipt.verified)),
+            field("requested", usize_field(receipt.requested)?),
+            field("verified", usize_field(receipt.verified)?),
             field("missing", sequence(receipt.missing.iter().map(object_value).collect())),
             field("issues", sequence(receipt.issues.iter().map(|issue| string(issue.as_str())).collect())),
             non_claims(),
@@ -160,10 +157,10 @@ pub fn canonical_dag_receipt(receipt: &DagSyncReceipt) -> Result<CanonicalDagRec
     )
 }
 
-fn progress_value(progress: &DagSyncProgress) -> IOValue {
+fn progress_value(progress: &DagSyncProgress) -> Result<IOValue> {
     let mut verified = progress.verified.clone();
     verified.sort();
-    record(DAG_PROGRESS_RECORD, vec![
+    Ok(record(DAG_PROGRESS_RECORD, vec![
         field("epoch-ref", string(progress.epoch_ref.as_str())),
         field("generation", number(progress.generation)),
         field("strategy", string(progress.strategy.as_str())),
@@ -172,20 +169,20 @@ fn progress_value(progress: &DagSyncProgress) -> IOValue {
         field("schemas", refs(progress.schema_refs.iter().map(DagSchemaRef::as_str))),
         field("peers", refs(progress.peers.iter().map(DagPeerId::as_str))),
         field("verified", sequence(verified.iter().map(object_value).collect())),
-        field("steps-completed", usize_value(progress.steps_completed)),
-    ])
+        field("steps-completed", usize_field(progress.steps_completed)?),
+    ]))
 }
 
-fn bounds_value(bounds: &DagBounds) -> IOValue {
-    record("dag-bounds", vec![
-        usize_value(bounds.max_nodes),
-        usize_value(bounds.max_edges),
-        usize_value(bounds.max_roots),
-        usize_value(bounds.max_depth),
+fn bounds_value(bounds: &DagBounds) -> Result<IOValue> {
+    Ok(record("dag-bounds", vec![
+        usize_field(bounds.max_nodes)?,
+        usize_field(bounds.max_edges)?,
+        usize_field(bounds.max_roots)?,
+        usize_field(bounds.max_depth)?,
         number(bounds.max_bytes),
-        usize_value(bounds.max_steps),
-        usize_value(bounds.max_peers),
-    ])
+        usize_field(bounds.max_steps)?,
+        usize_field(bounds.max_peers)?,
+    ]))
 }
 
 fn object_value(object: &DagObjectRef) -> IOValue {
@@ -195,7 +192,7 @@ fn object_value(object: &DagObjectRef) -> IOValue {
 fn canonical(kind: &str, value: IOValue) -> Result<CanonicalDagRecord> {
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let mut hasher = blake3::Hasher::new_derive_key(DAG_RECORD_IDENTITY_CONTEXT);
-    update(&mut hasher, kind);
+    update(&mut hasher, kind)?;
     let length =
         u64::try_from(bytes.len()).map_err(|_| MoltenError::invalid_harness("DAG record byte length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
@@ -207,10 +204,12 @@ fn canonical(kind: &str, value: IOValue) -> Result<CanonicalDagRecord> {
     })
 }
 
-fn update(hasher: &mut blake3::Hasher, value: &str) {
-    let length = u64::try_from(value.len()).unwrap_or(u64::MAX);
+fn update(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
+    let length =
+        u64::try_from(value.len()).map_err(|_| MoltenError::invalid_harness("DAG record field length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
+    Ok(())
 }
 
 fn non_claims() -> IOValue {
@@ -233,8 +232,9 @@ fn boolean(value: bool) -> IOValue {
     record(if value { "true" } else { "false" }, Vec::new())
 }
 
-fn usize_value(value: usize) -> IOValue {
-    number(u64::try_from(value).unwrap_or(u64::MAX))
+fn usize_field(value: usize) -> Result<IOValue> {
+    let converted = u64::try_from(value).map_err(|_| MoltenError::invalid_harness("DAG record count exceeds u64"))?;
+    Ok(number(converted))
 }
 
 fn number(value: u64) -> IOValue {

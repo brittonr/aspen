@@ -501,11 +501,18 @@ fn integer_sqrt(value: u128) -> u128 {
             .checked_div(BINARY_SEARCH_DIVISOR)
             .expect("binary-search divisor is a nonzero constant");
         let midpoint = low + half_range;
-        if midpoint > value / midpoint {
+        let Some(midpoint_quotient) = value.checked_div(midpoint) else {
+            high = midpoint;
+            continue;
+        };
+        if midpoint > midpoint_quotient {
             high = midpoint;
         } else {
             let next = midpoint + 1;
-            if next > value / next {
+            let Some(next_quotient) = value.checked_div(next) else {
+                return midpoint;
+            };
+            if next > next_quotient {
                 return midpoint;
             }
             low = next;

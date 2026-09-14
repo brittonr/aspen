@@ -309,7 +309,11 @@ fn partition_chunk_fetches(chunk_refs: &[String], peers: &[String], strategy: &s
         .iter()
         .enumerate()
         .map(|(index, chunk_ref)| {
-            let peer_index = if strategy == CHUNK_SYNC_PARTITIONED_LEAF { index % peers.len() } else { 0 };
+            let peer_index = if strategy == CHUNK_SYNC_PARTITIONED_LEAF {
+                index.checked_rem(peers.len()).map_or(0, |remainder| remainder)
+            } else {
+                0
+            };
             ChunkFetchEffect {
                 peer: peers[peer_index].clone(),
                 chunk_ref: chunk_ref.clone(),

@@ -253,7 +253,10 @@
         assert_eq!(duplicate_lock.receipt.prior_receipt_ref.as_deref(), Some(first_lock.receipt.receipt_ref.as_str()));
         assert_eq!(duplicate_lock.receipt.preserved_state_ref.as_deref(), Some(before_duplicate_ref.as_str()));
         assert_eq!(state_ref(&runtime), before_duplicate_ref);
-        assert_eq!(runtime.receipts.len(), before_receipts.saturating_add(MIN_FENCING_TOKEN as usize));
+        assert_eq!(
+            runtime.receipts.len(),
+            before_receipts.saturating_add(usize::try_from(MIN_FENCING_TOKEN).expect("fencing token fits usize"))
+        );
         assert_eq!(runtime.applied_operations.len(), before_applied);
         assert_coordination_invariants(&runtime, &queue_key, &expected_queue);
 

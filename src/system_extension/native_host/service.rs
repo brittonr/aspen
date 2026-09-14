@@ -104,7 +104,8 @@ where
             ));
         }
         let instance = std::sync::Arc::new(std::sync::Mutex::new(initial_instance(&profile, &executable, &admitted)));
-        save_shared(&journal, &lock_instance(&instance)?.clone())?;
+        let record = lock_instance(&instance)?.clone();
+        save_shared(&journal, &record)?;
         let executor =
             NativeProcessSystemExtensionExecutor::new(port, journal.clone(), values, instance.clone(), template)
                 .map_err(|error| NativeServiceError::Host(format!("native executor construction failed: {error:?}")))?;
@@ -449,10 +450,6 @@ where
             &binding.binding_ref,
             &effect.generation.to_string(),
         ]);
-        let current = self
-            .instance
-            .lock()
-            .map_err(|_| crate::fabric::FabricPortError::storage("native effect instance state is unavailable"))?;
         let operation = NativeOperationRecord {
             schema: NATIVE_OPERATION_SCHEMA.to_string(),
             operation_ref: operation_ref.clone(),
@@ -463,9 +460,16 @@ where
             terminal_ref: None,
             is_retry_permitted: false,
         };
-        let next = commit_native_operation_intent(self.profile, &current, operation)
-            .map_err(|_| crate::fabric::FabricPortError::storage("native effect intent admission failed"))?;
-        drop(current);
+        // The guard stays inside this block so the instance lock is released
+        // before the journal write and the later re-lock.
+        let next = {
+            let current = self
+                .instance
+                .lock()
+                .map_err(|_| crate::fabric::FabricPortError::storage("native effect instance state is unavailable"))?;
+            commit_native_operation_intent(self.profile, &current, operation)
+                .map_err(|_| crate::fabric::FabricPortError::storage("native effect intent admission failed"))?
+        };
         save_shared(&self.journal, &next)
             .map_err(|_| crate::fabric::FabricPortError::storage("native effect intent persistence failed"))?;
         *self

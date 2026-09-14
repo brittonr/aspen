@@ -154,7 +154,7 @@ fn realize_linear<R: WorldBranchAuthorityRuntime>(
     {
         return Err(MoltenError::invalid_harness("linear branch-authority ownership is stale or ambiguous"));
     }
-    let operation_ref = linear_operation_ref(plan, ownership.generation);
+    let operation_ref = linear_operation_ref(plan, ownership.generation)?;
     let successor_generation = ownership
         .generation
         .checked_add(1)
@@ -210,15 +210,16 @@ fn realize_promotion<R: PromotionReservationPort>(
     })
 }
 
-fn linear_operation_ref(plan: &WorldBranchAuthorityPlan, generation: u64) -> String {
+fn linear_operation_ref(plan: &WorldBranchAuthorityPlan, generation: u64) -> Result<String> {
     let mut hasher = blake3::Hasher::new_derive_key(LINEAR_OPERATION_DOMAIN);
     for value in [plan.plan_ref.as_str(), plan.capability_ref.as_str()] {
-        let length = u64::try_from(value.len()).unwrap_or(u64::MAX);
+        let length = u64::try_from(value.len())
+            .map_err(|_| MoltenError::invalid_harness("branch authority operation ref length exceeds u64"))?;
         hasher.update(&length.to_le_bytes());
         hasher.update(value.as_bytes());
     }
     hasher.update(&generation.to_le_bytes());
-    format!("blake3:{}", hasher.finalize().to_hex())
+    Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }
 
 fn publish<R: BranchAuthorityReceiptPort>(

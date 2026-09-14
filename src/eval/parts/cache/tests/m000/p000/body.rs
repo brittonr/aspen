@@ -198,7 +198,9 @@
             ..GetInput::default()
         })
         .expect_err("stale policy export denies hit");
-        assert!(stale_policy.to_string().contains("validity") || stale_policy.to_string().contains("stale"));
+        let policy_message = stale_policy.to_string();
+        let is_stale_explained = policy_message.contains("validity") || policy_message.contains("stale");
+        assert!(is_stale_explained, "unexpected stale policy denial: {policy_message}");
 
         let changed_handler = test_ref("handler-profile-v2");
         let denied_profile = evaluate_cache_hit_validity(CacheHitValidityInput {

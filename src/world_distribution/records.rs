@@ -42,7 +42,7 @@ pub fn canonical_world_sync_request(plan: &WorldClosurePlan) -> Result<Canonical
             field("generation", number(plan.request.generation)),
             field("policy-ref", string(plan.request.policy_ref.as_str())),
             field("peers", sequence(plan.request.peers.iter().map(|peer| string(peer.as_str())).collect())),
-            field("object-limit", usize_value(plan.request.bounds.max_nodes)),
+            field("object-limit", usize_value(plan.request.bounds.max_nodes)?),
             non_claims(),
         ]),
     )
@@ -189,7 +189,7 @@ pub fn canonical_world_sync_receipt(
             field("dag-plan-ref", string(plan.shared_plan.plan_ref.as_str())),
             field("dag-receipt-ref", string(dag_receipt_ref)),
             field("complete", boolean(complete)),
-            field("verified", usize_value(verified)),
+            field("verified", usize_value(verified)?),
             field("activation-authorized", boolean(false)),
             non_claims(),
         ]),
@@ -252,8 +252,10 @@ fn boolean(value: bool) -> IOValue {
     record(if value { "true" } else { "false" }, Vec::new())
 }
 
-fn usize_value(value: usize) -> IOValue {
-    crate::preserves_rail::u64_value(u64::try_from(value).unwrap_or(u64::MAX))
+fn usize_value(value: usize) -> crate::error::Result<IOValue> {
+    let converted = u64::try_from(value)
+        .map_err(|_| crate::error::MoltenError::invalid_harness("world distribution count exceeds u64"))?;
+    Ok(crate::preserves_rail::u64_value(converted))
 }
 
 fn number(value: u64) -> IOValue {

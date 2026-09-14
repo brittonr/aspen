@@ -74,7 +74,7 @@ fn status_identity_is_ordered_bounded_and_payload_free() {
     };
     assert_eq!(
         identify_canonical_delivery_status(&status).expect("status"),
-        identify_canonical_delivery_status(&status.clone()).expect("repeat status")
+        identify_canonical_delivery_status(&status).expect("repeat status")
     );
     let mut invalid = status;
     invalid.payloads_rendered = true;

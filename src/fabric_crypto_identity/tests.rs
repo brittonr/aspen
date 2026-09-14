@@ -241,7 +241,9 @@ fn rotation_fences_stale_handle_and_restart_resolves_new_generation() {
     let stale = adapter
         .sign(&first.handle.handle, &stale_domain, &test_ref("sign-policy"))
         .expect_err("stale handle denied");
-    assert!(stale.to_string().contains("HandleGenerationStale") || stale.to_string().contains("HandleRefStale"));
+    let stale_message = stale.to_string();
+    let is_stale_handle = stale_message.contains("HandleGenerationStale") || stale_message.contains("HandleRefStale");
+    assert!(is_stale_handle, "unexpected stale handle denial: {stale_message}");
 }
 
 // r[verify molten.crypto_identity.canonical_signature_binding]

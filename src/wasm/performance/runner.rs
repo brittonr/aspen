@@ -203,11 +203,15 @@ fn run_sightglass_subprocess(
             Some(status) => break status,
             None if started.elapsed() >= timeout => {
                 let kill_diagnostic = child.kill().err().map_or_else(String::new, |error| format!(": {error}"));
-                let _ = child.wait();
-                let _ = join_bounded_reader(stdout_reader, "stdout");
-                let _ = join_bounded_reader(stderr_reader, "stderr");
+                let wait_diagnostic = child.wait().err().map_or_else(String::new, |error| format!(": {error}"));
+                let stdout_diagnostic = join_bounded_reader(stdout_reader, "stdout")
+                    .err()
+                    .map_or_else(String::new, |error| format!(": {error}"));
+                let stderr_diagnostic = join_bounded_reader(stderr_reader, "stderr")
+                    .err()
+                    .map_or_else(String::new, |error| format!(": {error}"));
                 return Err(super::model::PerformanceDenial::new(format!(
-                    "Sightglass process exceeded its admitted runtime{kill_diagnostic}"
+                    "Sightglass process exceeded its admitted runtime{kill_diagnostic}{wait_diagnostic}{stdout_diagnostic}{stderr_diagnostic}"
                 )));
             }
             None => std::thread::sleep(std::time::Duration::from_millis(PROCESS_POLL_INTERVAL_MILLISECONDS)),

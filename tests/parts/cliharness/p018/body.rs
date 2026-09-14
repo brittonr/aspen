@@ -123,7 +123,8 @@ fn cli_cluster_harness_offline_verifier_denies_tampered_artifact() -> CliResult<
         .output()?;
     assert_failure(&verify, "cluster harness tamper verification");
     let error = stderr(&verify);
-    assert!(error.contains("non-canonical-artifact") || error.contains("content-ref-mismatch"));
+    let is_tamper_explained = error.contains("non-canonical-artifact") || error.contains("content-ref-mismatch");
+    assert!(is_tamper_explained, "unexpected tamper verification error: {error}");
 
     #[cfg(unix)]
     {

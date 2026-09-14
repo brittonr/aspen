@@ -77,11 +77,10 @@ fn cli_fabric_transport_verifier_denies_child_only_or_tampered_parent_observatio
         .output()?;
     assert_failure(&verify, "fabric transport child-only claim denial");
     let error = stderr(&verify);
-    assert!(
-        error.contains("parent-start-missing")
-            || error.contains("parent-run-artifact-mismatch")
-            || error.contains("artifact-index-mismatch")
-    );
+    let is_denial_explained = error.contains("parent-start-missing")
+        || error.contains("parent-run-artifact-mismatch")
+        || error.contains("artifact-index-mismatch");
+    assert!(is_denial_explained, "unexpected child-only claim denial: {error}");
     Ok(())
 }
 

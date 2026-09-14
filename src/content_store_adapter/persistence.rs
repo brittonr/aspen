@@ -166,7 +166,9 @@ fn take_lines<'a>(
     count: usize,
     field: &str,
 ) -> crate::error::Result<Vec<String>> {
-    if count > MAX_PARTIAL_STATE_BYTES as usize {
+    let bound = usize::try_from(MAX_PARTIAL_STATE_BYTES)
+        .map_err(|_| crate::error::MoltenError::invalid_harness(format!("{field} bound exceeds platform usize")))?;
+    if count > bound {
         return Err(crate::error::MoltenError::invalid_harness(format!("{field} count exceeds bound")));
     }
     (0..count).map(|_| next_line(lines, field).map(str::to_string)).collect()

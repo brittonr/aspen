@@ -104,7 +104,9 @@ fn receiver_driven_reconcile_pins_verifies_persists_and_receipts_last() {
     let transport = events.iter().position(|event| *event == "transport").expect("transport event");
     let verify = events.iter().position(|event| *event == "verify").expect("verify event");
     let store = events.iter().position(|event| *event == "store-operation").expect("store operation event");
-    assert!(pin < transport && transport < verify && verify < store);
+    assert!(pin < transport);
+    assert!(transport < verify);
+    assert!(verify < store);
     assert_eq!(events.last(), Some(&"publish-receipt"));
 }
 

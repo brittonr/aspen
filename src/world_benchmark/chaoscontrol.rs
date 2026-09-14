@@ -58,7 +58,11 @@ pub fn instrument_chaoscontrol_snapshot(
             "ChaosControl sharing page geometry does not cover exact snapshot memory",
         ));
     }
-    let page_count = descriptor.topology.memory_bytes / observation.page_size_bytes;
+    let page_count = descriptor
+        .topology
+        .memory_bytes
+        .checked_div(observation.page_size_bytes)
+        .ok_or_else(|| MoltenError::invalid_harness("ChaosControl sharing page size is zero"))?;
     let observed_pages = observation
         .copied_pages
         .checked_add(observation.mapped_pages)

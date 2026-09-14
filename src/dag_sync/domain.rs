@@ -130,26 +130,27 @@ pub fn project_artifact_closure(
 }
 
 fn derived_node(context: &'static str, fields: &[&str]) -> Result<DagNodeRef> {
-    DagNodeRef::new(derived(context, fields)).map_err(dag_reference_error)
+    DagNodeRef::new(derived(context, fields)?).map_err(dag_reference_error)
 }
 
 fn derived_root(context: &'static str, fields: &[&str]) -> Result<DagRootRef> {
-    DagRootRef::new(derived(context, fields)).map_err(dag_reference_error)
+    DagRootRef::new(derived(context, fields)?).map_err(dag_reference_error)
 }
 
 fn derived_schema(context: &'static str, fields: &[String]) -> Result<DagSchemaRef> {
     let values = fields.iter().map(String::as_str).collect::<Vec<_>>();
-    DagSchemaRef::new(derived(context, &values)).map_err(dag_reference_error)
+    DagSchemaRef::new(derived(context, &values)?).map_err(dag_reference_error)
 }
 
-fn derived(context: &'static str, fields: &[&str]) -> String {
+fn derived(context: &'static str, fields: &[&str]) -> Result<String> {
     let mut hasher = blake3::Hasher::new_derive_key(context);
     for field in fields {
-        let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
+        let length = u64::try_from(field.len())
+            .map_err(|_| MoltenError::invalid_harness("DAG domain field length exceeds u64"))?;
         hasher.update(&length.to_be_bytes());
         hasher.update(field.as_bytes());
     }
-    format!("blake3:{}", hasher.finalize().to_hex())
+    Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }
 
 fn dag_reference_error(error: DagReferenceError) -> MoltenError {

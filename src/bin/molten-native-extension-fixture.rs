@@ -13,7 +13,7 @@ const EFFECT_OUTPUT_SCHEMA: &str = "molten.fixture.native.effect-output.v1";
 
 fn main() {
     if let Err(error) = run() {
-        let _ = writeln!(std::io::stderr(), "native extension fixture failed: {error}");
+        eprintln!("native extension fixture failed: {error}");
         std::process::exit(1);
     }
 }

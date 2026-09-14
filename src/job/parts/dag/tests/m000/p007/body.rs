@@ -109,7 +109,7 @@
     #[test]
     fn job_dag_dependency_readiness_gate_denies_unsatisfied_and_missing_inputs() {
         // r[verify molten.job_dag_state_machine_proof.dependency_readiness_gate]
-        let dag = generated_chain_dag(GENERATED_JOB_MIN_NODES as usize);
+        let dag = generated_chain_dag(usize::try_from(GENERATED_JOB_MIN_NODES).expect("generated node count fits usize"));
         let plan = trellis_execution_plan(&dag.nodes, &dag.edges).expect("plan");
         let dependent = generated_node_id(usize::try_from(GENERATED_JOB_MIN_NODES - 1).expect("dependent index"));
         let deps = plan.dependency_indices.get(&dependent).expect("dependent deps");
