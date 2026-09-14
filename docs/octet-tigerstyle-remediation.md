@@ -2,10 +2,10 @@
 
 This file records the current Octet source-gate evidence and the remaining caveat for `octet-tigerstyle-remediation`.
 
-Current state (probe `target/octet-after-nested/summary.txt`, commit `0de32a23a`):
+Current state (probe `target/octet-after-panic/summary.txt`, commit `b76bde6ac`):
 
 - `dylint.toml` sets `disabled_lints = []`, so the probe reports every lint.
-- The workspace probe is `warning-only`: 3973 warnings, 0 errors, 0 autofixable.
+- The workspace probe is `warning-only`: 3965 warnings, 0 errors, 0 autofixable.
 - The pre-remediation baseline in this worktree was 6754 warnings.
 - Eighteen lint families report zero. The largest remaining families are
   `path_segment_repetition` (1877), `excessive_file_length` (550), and
@@ -48,7 +48,7 @@ Focused object corpus: object-set hash `b3:f61ed6753b0a349fa2988e444ea3bae1f0ae2
 
 | Scope | Status | Findings | Warnings | Errors | Autofixable |
 |---|---:|---:|---:|---:|---:|
-| workspace | warning-only | 3973 | 3973 | 0 | 0 |
+| workspace | warning-only | 3965 | 3965 | 0 | 0 |
 
 Top workspace lint counts: `path_segment_repetition` 1877, `excessive_file_length` 550,
 `borrowed_argument_types` 368, `non_trait_imports` 326, `unbounded_collection_growth` 216,
