@@ -2,11 +2,23 @@
 
 This file records the current Octet source-gate evidence and the remaining caveat for `octet-tigerstyle-remediation`.
 
-Canonical plan receipt: `target/octet/remediation-plan.preserves`
+Current state (probe `target/octet-after-nti/summary.txt`, commit `1ab24c3fe`):
 
-Plan ref: `blake3:597a1602f066ace0ef1f2cd1bc256ff3d1224a106108f889455b5975f2c645ca`
+- `dylint.toml` sets `disabled_lints = []`, so the probe reports every lint.
+- The workspace probe is `warning-only`: 4838 warnings, 0 errors, 340 autofixable.
+- Those warnings are 2687 distinct `lint + file + line` sites; the probe double-counts some sites.
+- The pre-remediation baseline in this worktree was 6754 warnings and 3724 distinct sites.
+- The largest remaining families are `path_segment_repetition` (1038), `non_trait_imports`
+  (449), and `excessive_file_length` (304 files).
 
-Latest Octet receipt refs: artifact import `blake3:d3b948e359afb78f79220e2dd9b4585c69afa714bc8b0850c9a41c0f282e262f`; strict gate pass `blake3:3a08764da4540f8bdf16e1dcdd6f723d26c5d7083efdb5c8cafbdb9b6ee095c7`; remediation plan `blake3:597a1602f066ace0ef1f2cd1bc256ff3d1224a106108f889455b5975f2c645ca`.
+`scripts/octet-qualify-imports.rs` performs the `non_trait_imports` repair. It reads an Octet
+summary, deletes each flagged private import, and adds the qualified owner path at every use
+site, adjusting `super::` owners for inline-module depth. It refuses files whose scope it cannot
+rewrite safely, and it re-parses its own output before writing. `cargo -q -Zscript
+scripts/octet-qualify-imports.rs --self-test` runs the positive and negative fixtures.
+
+The sections below are historical slices from the earlier burn-down. They are kept for the
+rationale and the per-slice counts, not as a description of the current gate.
 
 ## Artifact refs
 
@@ -27,12 +39,13 @@ Focused object corpus: object-set hash `b3:f61ed6753b0a349fa2988e444ea3bae1f0ae2
 
 | Scope | Status | Findings | Warnings | Errors | Autofixable |
 |---|---:|---:|---:|---:|---:|
-| workspace | clean | 0 | 0 | 0 | 0 |
-| lib-only | clean | 0 | 0 | 0 | 0 |
+| workspace | warning-only | 4838 | 4838 | 0 | 340 |
+| distinct sites | warning-only | 2687 | 2687 | 0 | 340 |
 
-Top workspace lint counts: none.
-
-Top lib-only lint counts: none.
+Top workspace lint counts by distinct site: `path_segment_repetition` 1038,
+`non_trait_imports` 449, `excessive_file_length` 304, `borrowed_argument_types` 184,
+`bool_naming` 171, `function_length` 127, `unbounded_collection_growth` 112,
+`too_many_parameters` 72, `no_unwrap` 70, `underscore_in_module_filename` 34.
 
 Latest no-disabled-lints harness replay import-wrapper probe (`target/octet-burndown/harness-replay-wrapper-import-0/summary.txt`) is `warning-only` with 5274 warnings: `path_segment_repetition` 2960, `non_trait_imports` 2146, `excessive_file_length` 111, `underscore_in_module_filename` 48, and `module_file_count` 9; `function_length`, `nested_conditionals`, and `borrowed_argument_types` remain cleared, and `function_length` is now enforced by `dylint.toml`. The remaining source-scope rows are generated/remapped external rows classified by the remediation plan rather than silently hidden; any future Molten-owned or unknown row remains fail-closed/actionable before `module_file_count` or underscore-filename caveats can be removed, and import/path/size families remain active caveats until each family is clean or scoped. The remaining file-size, import, path-shape, and source-scope rows stay visible active caveats for later focused gateway, command-shape, and file-size splits rather than being hidden by configuration-clean source-gate evidence.
 

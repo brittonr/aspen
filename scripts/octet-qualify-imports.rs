@@ -340,21 +340,90 @@ impl<'ast> Visit<'ast> for InlineModules<'_> {
     }
 }
 
+/// True when `text` mentions `name` as a standalone identifier.
+fn mentions_identifier(text: &str, name: &str) -> bool {
+    let bytes = text.as_bytes();
+    let needle = name.as_bytes();
+    if needle.is_empty() || needle.len() > bytes.len() {
+        return false;
+    }
+    let mut index = 0_usize;
+    while let Some(found) = text[index..].find(name) {
+        let start = index + found;
+        let end = start + needle.len();
+        let before_ok = start == 0 || !is_identifier_byte(bytes[start - 1]);
+        let after_ok = end == bytes.len() || !is_identifier_byte(bytes[end]);
+        if before_ok && after_ok {
+            return true;
+        }
+        index = end;
+    }
+    false
+}
+
+fn is_identifier_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+/// Collect every `.rs` file under `directory`, excluding `exclude`.
+fn rust_files(directory: &FsPath, exclude: &FsPath) -> Vec<std::path::PathBuf> {
+    let mut found = Vec::new();
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return found;
+    };
+    let mut children: Vec<std::path::PathBuf> =
+        entries.filter_map(|entry| entry.ok().map(|entry| entry.path())).collect();
+    children.sort();
+    for child in children {
+        if child.is_dir() {
+            found.extend(rust_files(&child, exclude));
+        } else if child.extension().and_then(|extension| extension.to_str()) == Some("rs")
+            && child != exclude
+        {
+            found.push(child);
+        }
+    }
+    found
+}
+
+/// The directory that holds a module's child modules.
+fn module_directory(path: &str) -> Option<std::path::PathBuf> {
+    let file = FsPath::new(path);
+    let stem = file.file_stem()?.to_str()?;
+    let parent = file.parent()?;
+    if stem == "mod" {
+        Some(parent.to_path_buf())
+    } else {
+        Some(parent.join(stem))
+    }
+}
+
 /// Detect scopes that the token rewrite cannot repair safely.
 ///
-/// A module parent that declares `mod child;` shares its private imports with
-/// every child that writes `use super::*;`. A `parts/**/body.rs` tree is
-/// spliced into one module with `include!`, so each part sees the imports of
-/// its siblings. Removing an import from such a file can break a different file
-/// that the summary never flagged.
-fn shared_scope_hazard(path: &str, syntax: &syn::File) -> Option<String> {
-    if path.contains("/parts/") {
-        return Some(String::from("include! part body shares one module scope"));
-    }
+/// A module parent shares its private imports with any descendant file that
+/// writes `use super::*;` or that reaches the name through `super::`. A
+/// `parts/**/body.rs` tree is spliced into one module with `include!`, so each
+/// part sees the imports of its siblings. Removing an import from such a file
+/// can break a file the summary never flagged, so the module tree and the part
+/// tree are scanned for the bound names first.
+fn shared_scope_hazard(
+    path: &str,
+    syntax: &syn::File,
+    owners: &BTreeMap<String, String>,
+) -> Option<String> {
+    let file = FsPath::new(path);
+    let mut declares_mod = false;
     for item in &syntax.items {
         match item {
             syn::Item::Mod(item_mod) if item_mod.content.is_none() => {
-                return Some(format!("module parent declares `mod {};`", item_mod.ident));
+                declares_mod = true;
+                if item_mod
+                    .attrs
+                    .iter()
+                    .any(|attribute| attribute.path().is_ident("path"))
+                {
+                    return Some(format!("`#[path]` module `{}`", item_mod.ident));
+                }
             }
             syn::Item::Macro(item_macro)
                 if item_macro
@@ -367,6 +436,51 @@ fn shared_scope_hazard(path: &str, syntax: &syn::File) -> Option<String> {
                 return Some(String::from("include! splice shares one module scope"));
             }
             _ => {}
+        }
+    }
+
+    let sibling_root = if path.contains("/parts/") {
+        let mut current = file.parent();
+        while let Some(directory) = current {
+            if directory.file_name().is_some_and(|name| name == "parts") {
+                return scan_for_names(directory, file, owners, "part body shares one module scope");
+            }
+            current = directory.parent();
+        }
+        return Some(String::from("include! part body shares one module scope"));
+    } else if declares_mod {
+        let Some(directory) = module_directory(path) else {
+            return Some(String::from("module parent with an unresolved child directory"));
+        };
+        directory
+    } else {
+        return None;
+    };
+
+    if !sibling_root.is_dir() {
+        return None;
+    }
+    scan_for_names(&sibling_root, file, owners, "descendant module references the name")
+}
+
+fn scan_for_names(
+    directory: &FsPath,
+    exclude: &FsPath,
+    owners: &BTreeMap<String, String>,
+    reason: &str,
+) -> Option<String> {
+    let files = rust_files(directory, exclude);
+    for candidate in files {
+        let Ok(text) = std::fs::read_to_string(&candidate) else {
+            return Some(format!("{reason}: unreadable {}", candidate.display()));
+        };
+        for name in owners.keys() {
+            if mentions_identifier(&text, name) {
+                return Some(format!(
+                    "{reason}: `{name}` in {}",
+                    candidate.display()
+                ));
+            }
         }
     }
     None
@@ -437,9 +551,6 @@ fn qualify_source(
     flagged_lines: &[usize],
 ) -> Result<(String, usize), String> {
     let syntax = syn::parse_file(source).map_err(|error| format!("parse failed: {error}"))?;
-    if let Some(hazard) = shared_scope_hazard(path, &syntax) {
-        return Err(format!("manual repair required: {hazard}"));
-    }
     let lines = LineIndex::new(source);
     let mut owners: BTreeMap<String, String> = BTreeMap::new();
     let mut removals: Vec<Range<usize>> = Vec::new();
@@ -543,6 +654,9 @@ fn qualify_source(
         lines: &lines,
     };
     modules.visit_file(&syntax);
+    if let Some(hazard) = shared_scope_hazard(path, &syntax, &owners) {
+        return Err(format!("manual repair required: {hazard}"));
+    }
     let mut edits: Vec<(Range<usize>, String)> = Vec::new();
     let mut manual: Vec<String> = Vec::new();
     let tokens: proc_macro2::TokenStream = source
@@ -810,12 +924,21 @@ impl Holder {
         return Err(String::from("self test accepted a partially flagged group"));
     }
     let parent = "use crate::addr::Addr;\nmod child;\n";
-    if qualify_source("src/addr/route.rs", parent, &[1]).is_ok() {
-        return Err(String::from("self test accepted a module parent"));
+    let (output, _edits) = qualify_source("src/addr/route.rs", parent, &[1])?;
+    if output.contains("use crate::addr::Addr;") {
+        return Err(String::from("self test kept a parent import without a sharing child"));
     }
-    let part = "use crate::addr::Addr;\n";
-    if qualify_source("src/effects/parts/mod/p000/body.rs", part, &[1]).is_ok() {
+    // The effects part tree is spliced into one module, so a sibling that
+    // mentions the bound name must block the rewrite.
+    let part = "use crate::codec::canonical_hash;\n";
+    if qualify_source("src/effects/parts/mod/p999/body.rs", part, &[1]).is_ok() {
         return Err(String::from("self test accepted an include! part body"));
+    }
+    let isolated_part = "use crate::codec::unused_owner_item;\n";
+    let (output, _edits) =
+        qualify_source("src/effects/parts/mod/p999/body.rs", isolated_part, &[1])?;
+    if output.contains("use crate::codec::unused_owner_item;") {
+        return Err(String::from("self test skipped an isolated part body"));
     }
     let shadowed = "use crate::addr::Addr;\n\nfn f() {\n    let Addr = 1;\n    let _ = Addr;\n}\n";
     if qualify_source("src/addr/route.rs", shadowed, &[1]).is_ok() {
