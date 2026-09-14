@@ -766,6 +766,11 @@ The existing two-process assertions and process limits remain unchanged.
 [`evidence/octet/content-test-errors/validation.md`](evidence/octet/content-test-errors/validation.md) records the checks and their limits.
 The Molten content-replication owner maintains this test boundary. It does not establish a public runtime defect or whole-system panic freedom.
 
+The Wasm performance comparison uses `u128::isqrt` from the unchanged Rust compiler cohort.
+Tests cover full-width square boundaries, exact confidence fields, comparison identity, and rejection order.
+[`evidence/octet/wasm-integer-sqrt/validation.md`](evidence/octet/wasm-integer-sqrt/validation.md) records the source repair and its limits.
+The Molten Wasm performance owner maintains this boundary. These tests do not measure benchmark speed or establish production readiness.
+
 ### Historical Octet burndown
 
 The next paragraph preserves earlier burndown results. Those results do not establish acceptance for later source.

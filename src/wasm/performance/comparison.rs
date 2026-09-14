@@ -24,8 +24,6 @@ use super::profile::validate_performance_profile;
 const MIN_STATISTICAL_SAMPLES: usize = 2;
 const NORMAL_95_MULTIPLIER_MILLI: u128 = 1_960;
 const MILLI_SCALE: u128 = 1_000;
-const BINARY_SEARCH_DIVISOR: u128 = 2;
-const _: () = assert!(BINARY_SEARCH_DIVISOR > 0);
 const MAX_RECORDED_EFFECT_REFS: usize = 128;
 
 #[derive(Debug, Clone)]
@@ -490,26 +488,9 @@ fn summarize_samples(samples: &[PerformanceSample], scale: u128) -> PerformanceR
     })
 }
 
+#[cfg(test)]
+mod roots;
+
 fn integer_sqrt(value: u128) -> u128 {
-    if value <= 1 {
-        return value;
-    }
-    let mut low = 1_u128;
-    let mut high = value;
-    while low < high {
-        let half_range = (high - low)
-            .checked_div(BINARY_SEARCH_DIVISOR)
-            .expect("binary-search divisor is a nonzero constant");
-        let midpoint = low + half_range;
-        if midpoint > value / midpoint {
-            high = midpoint;
-        } else {
-            let next = midpoint + 1;
-            if next > value / next {
-                return midpoint;
-            }
-            low = next;
-        }
-    }
-    low
+    value.isqrt()
 }

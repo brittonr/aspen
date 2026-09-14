@@ -1,3 +1,5 @@
+mod exact;
+
 use super::super::*;
 use super::support::BASELINE_SAMPLE_COUNTS;
 use super::support::IMPROVED_SAMPLE_COUNTS;
