@@ -34,9 +34,14 @@ use syn::spanned::Spanned;
 use syn::visit::Visit;
 
 const LINT_NAME: &str = "bool_naming";
-const SUGGESTED_PREFIX: &str = "is_";
 const MESSAGE_PREFIX: &str = "boolean binding `";
 const MESSAGE_SUFFIX: &str = "` should have a predicate prefix";
+
+/// Predicate prefixes that satisfy the lint, in preference order.
+///
+/// The first choice is Octet's own suggestion. A later choice is used when an
+/// earlier one already names something else in the same file.
+const PREDICATE_PREFIXES: &[&str] = &["is_", "should_", "has_", "can_", "was_", "will_", "needs_"];
 
 /// Source geometry for one file: byte offset of every line start.
 struct LineIndex {
@@ -72,8 +77,8 @@ struct Binding {
 }
 
 impl Binding {
-    fn suggested(&self) -> String {
-        format!("{SUGGESTED_PREFIX}{}", self.name)
+    fn preferred_name(&self) -> String {
+        format!("{}{}", PREDICATE_PREFIXES[0], self.name)
     }
 }
 
@@ -166,6 +171,48 @@ impl<'ast> Visit<'ast> for EnclosingLocal<'_> {
             }
         }
         syn::visit::visit_local(self, node);
+    }
+}
+
+/// The tightest function body that contains one byte offset.
+///
+/// Rust lowers a function parameter to a synthetic `let` in the body, so a
+/// flagged parameter has no enclosing block of its own. Its scope is the body
+/// of the function whose signature contains the binding.
+struct EnclosingFunction<'a> {
+    lines: &'a LineIndex,
+    offset: usize,
+    best: Option<Range<usize>>,
+}
+
+impl<'ast> Visit<'ast> for EnclosingFunction<'_> {
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        self.record(&node.sig, &node.block);
+        syn::visit::visit_item_fn(self, node);
+    }
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        self.record(&node.sig, &node.block);
+        syn::visit::visit_impl_item_fn(self, node);
+    }
+    fn visit_trait_item_fn(&mut self, node: &'ast syn::TraitItemFn) {
+        if let Some(block) = &node.default {
+            self.record(&node.sig, block);
+        }
+        syn::visit::visit_trait_item_fn(self, node);
+    }
+}
+
+impl EnclosingFunction<'_> {
+    fn record(&mut self, sig: &syn::Signature, block: &syn::Block) {
+        let signature = self.lines.range(sig.span());
+        if !signature.contains(&self.offset) {
+            return;
+        }
+        let body = self.lines.range(block.span());
+        let width = body.end.saturating_sub(body.start);
+        if self.best.as_ref().is_none_or(|current| current.end.saturating_sub(current.start) > width) {
+            self.best = Some(body);
+        }
     }
 }
 
@@ -322,9 +369,21 @@ fn rewrite_source(
             best: None,
         };
         enclosing.visit_file(&syntax);
-        let Some(block) = enclosing.best else {
-            skipped.push(format!("no enclosing block for `{}`", binding.name));
-            continue;
+        let block = match enclosing.best {
+            Some(block) => block,
+            None => {
+                let mut function = EnclosingFunction {
+                    lines: &lines,
+                    offset,
+                    best: None,
+                };
+                function.visit_file(&syntax);
+                let Some(body) = function.best else {
+                    skipped.push(format!("no enclosing block for `{}`", binding.name));
+                    continue;
+                };
+                body
+            }
         };
         let mut statement = EnclosingLocal {
             lines: &lines,
@@ -332,18 +391,20 @@ fn rewrite_source(
             end: None,
         };
         statement.visit_file(&syntax);
-        let Some(scope_start) = statement.end else {
-            skipped.push(format!("no enclosing `let` for `{}`", binding.name));
-            continue;
-        };
-        let suggested = binding.suggested();
-        if mentions_identifier(source, &suggested) {
+        // A function parameter has no source `let`, so its own binding offset
+        // starts the scope that the body uses share.
+        let scope_start = statement.end.unwrap_or(offset);
+        let renamed = PREDICATE_PREFIXES
+            .iter()
+            .map(|prefix| format!("{prefix}{}", binding.name))
+            .find(|candidate| !mentions_identifier(source, candidate));
+        let Some(suggested) = renamed else {
             skipped.push(format!(
-                "`{suggested}` already appears in {path} for `{}`",
+                "every predicate name for `{}` already appears in {path}",
                 binding.name
             ));
             continue;
-        }
+        };
         renames.insert(binding.name.clone(), suggested.clone());
         scoped.push((binding.name.clone(), block, scope_start, offset));
     }
@@ -434,8 +495,7 @@ fn collect_renames(
                 let start = range.start;
                 let in_scope = scoped.iter().any(|(scope_name, block, scope_start, binding)| {
                     scope_name == &name
-                        && block.contains(&start)
-                        && (start >= *scope_start || start == *binding)
+                        && (start == *binding || (block.contains(&start) && start >= *scope_start))
                 });
                 let in_use = use_ranges.iter().any(|item| item.contains(&start));
                 let is_qualified = previous == "::" || previous == ".";
@@ -541,8 +601,12 @@ fn report(value: bool) {
     }
 
     let captured = "pub fn run() {\n    let ready = true;\n    let is_ready = false;\n    let _ = (ready, is_ready);\n}\n";
-    if rewrite_source("src/run.rs", captured, &bindings).is_ok() {
-        return Err(String::from("self test accepted a captured suggested name"));
+    let (output, _edits) = rewrite_source("src/run.rs", captured, &bindings)?;
+    if !output.contains("let should_ready = true;") || !output.contains("(should_ready, is_ready)") {
+        return Err(format!("self test did not fall back to a free predicate prefix in\n{output}"));
+    }
+    if bindings[0].preferred_name() != "is_ready" {
+        return Err(String::from("self test changed the preferred predicate name"));
     }
 
     let qualified = "pub fn run() {\n    let ready = true;\n    let _ = ready;\n    let _ = Guard::ready();\n}\n";

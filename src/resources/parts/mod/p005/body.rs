@@ -190,14 +190,14 @@ pub struct AdmissionChainResult {
 /// A later phase MUST NOT claim success when an earlier phase denied.
 pub fn evaluate_admission_chain(input: &AdmissionChainInput) -> AdmissionChainResult {
     let mut phase_results = Vec::new();
-    let mut overall_pass = true;
+    let mut is_overall_pass = true;
     let mut diagnostics = Vec::new();
 
     for phase in AdmissionPhase::all() {
         let result = evaluate_single_phase(*phase, input);
-        let denied = matches!(result.decision, PhaseDecision::Deny);
-        if denied {
-            overall_pass = false;
+        let is_denied = matches!(result.decision, PhaseDecision::Deny);
+        if is_denied {
+            is_overall_pass = false;
             diagnostics.push(format!(
                 "phase {} denied: {}",
                 result.phase.as_str(),
@@ -207,7 +207,7 @@ pub fn evaluate_admission_chain(input: &AdmissionChainInput) -> AdmissionChainRe
         phase_results.push(result);
 
         // A later phase must not continue after a deny
-        if denied {
+        if is_denied {
             for remaining in AdmissionPhase::all() {
                 if remaining.index() > phase.index() {
                     phase_results.push(PhaseResult {
@@ -225,7 +225,7 @@ pub fn evaluate_admission_chain(input: &AdmissionChainInput) -> AdmissionChainRe
         }
     }
 
-    let commit_plan_ref = if overall_pass {
+    let commit_plan_ref = if is_overall_pass {
         Some(generate_commit_plan_ref(input))
     } else {
         None
@@ -233,7 +233,7 @@ pub fn evaluate_admission_chain(input: &AdmissionChainInput) -> AdmissionChainRe
 
     AdmissionChainResult {
         operation: input.operation,
-        pass: overall_pass,
+        pass: is_overall_pass,
         phase_results,
         commit_plan_ref,
         diagnostics,
@@ -413,10 +413,10 @@ fn evaluate_single_phase(phase: AdmissionPhase, input: &AdmissionChainInput) -> 
 
 fn validate_mutation_evidence(evidence: &MutationEvidence) -> bool {
     // All refs must be valid content refs
-    let rule_ok = validate_content_ref(&evidence.rule_ref).is_ok();
-    let pre_ok = validate_content_ref(&evidence.pre_mutation_ref).is_ok();
-    let post_ok = validate_content_ref(&evidence.post_mutation_ref).is_ok();
-    rule_ok && pre_ok && post_ok
+    let is_rule_ok = validate_content_ref(&evidence.rule_ref).is_ok();
+    let is_pre_ok = validate_content_ref(&evidence.pre_mutation_ref).is_ok();
+    let is_post_ok = validate_content_ref(&evidence.post_mutation_ref).is_ok();
+    is_rule_ok && is_pre_ok && is_post_ok
 }
 
 fn generate_commit_plan_ref(_input: &AdmissionChainInput) -> String {
@@ -461,30 +461,30 @@ pub struct StatusOperationDecision {
 /// metadata.
 pub fn validate_status_operation(input: &StatusOperationInput) -> StatusOperationDecision {
     let mut diagnostics = Vec::new();
-    let mut pass = true;
+    let mut should_pass = true;
 
     if input.changes_desired_ref {
-        pass = false;
+        should_pass = false;
         diagnostics.push("status operation cannot change desired-state ref".to_string());
     }
     if input.changes_desired_generation && input.proposed_generation != input.current_generation {
-        pass = false;
+        should_pass = false;
         diagnostics.push("status operation cannot advance desired generation".to_string());
     }
     if input.changes_finalizers {
-        pass = false;
+        should_pass = false;
         diagnostics.push("status operation cannot alter finalizers".to_string());
     }
     if input.changes_authority_metadata {
-        pass = false;
+        should_pass = false;
         diagnostics.push("status operation cannot alter authority-bearing metadata".to_string());
     }
     if !input.has_status_condition_evidence {
-        pass = false;
+        should_pass = false;
         diagnostics.push("status operation must have condition evidence".to_string());
     }
 
-    StatusOperationDecision { pass, diagnostics }
+    StatusOperationDecision { pass: should_pass, diagnostics }
 }
 
 // ---------------------------------------------------------------------------

@@ -179,7 +179,7 @@ pub(crate) enum Command {
         child_receipt_refs: Vec<String>,
         #[arg(long = "diagnostic-log-ref")]
         diagnostic_log_refs: Vec<String>,
-        #[arg(long, default_value_t = false)]
+        #[arg(long)]
         unavailable: bool,
         #[arg(long = "claimed-decision", default_value = "pass")]
         claimed_decision: String,

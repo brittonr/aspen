@@ -110,10 +110,10 @@ async fn run_leader(
 ) -> Result<()> {
     let timer_ref = node.service.state().active_election_timer_ref.clone();
     require_applied(node.service.handle_event(ReplicaEvent::ElectionTimeout { timer_ref }).await)?;
-    let mut proposal_started = false;
-    let mut read_started = false;
-    let mut snapshot_started = false;
-    let mut quorum_loss_started = false;
+    let mut is_proposal_started = false;
+    let mut is_read_started = false;
+    let mut is_snapshot_started = false;
+    let mut is_quorum_loss_started = false;
     for _step in 0..EVENT_LOOP_LIMIT {
         if run_directory.join(STOP_FILE).is_file() {
             return Ok(());
@@ -123,26 +123,26 @@ async fn run_leader(
             continue;
         };
         let outcome = node.service.handle_event(event.event).await;
-        let read_completed = has_read_outcome(&outcome);
+        let is_read_completed = has_read_outcome(&outcome);
         require_applied(outcome)?;
-        if node.service.state().role == ReplicaRole::Leader && !proposal_started {
+        if node.service.state().role == ReplicaRole::Leader && !is_proposal_started {
             propose(node).await?;
-            proposal_started = true;
+            is_proposal_started = true;
         }
-        if node.service.state().commit_index == INITIAL_LOG_INDEX && !read_started {
+        if node.service.state().commit_index == INITIAL_LOG_INDEX && !is_read_started {
             begin_read(node).await?;
-            read_started = true;
+            is_read_started = true;
         }
-        if read_completed && !snapshot_started {
+        if is_read_completed && !is_snapshot_started {
             begin_snapshot_catch_up(node).await?;
-            snapshot_started = true;
+            is_snapshot_started = true;
         }
-        if snapshot_started
-            && !quorum_loss_started
+        if is_snapshot_started
+            && !is_quorum_loss_started
             && node.service.state().match_index.get(NODE_C) == Some(&INITIAL_LOG_INDEX)
         {
             begin_quorum_loss(node, run_directory).await?;
-            quorum_loss_started = true;
+            is_quorum_loss_started = true;
             write_signal(&run_directory.join(LEADER_DONE_FILE), "leader-done")?;
         }
     }
@@ -212,7 +212,7 @@ async fn run_follower(
     ingress: &mut IrohReplicaIngressPump,
     run_directory: &Path,
     endpoint_identity: &str,
-    lag_until_snapshot: bool,
+    is_lag_until_snapshot: bool,
 ) -> Result<()> {
     for _step in 0..EVENT_LOOP_LIMIT {
         if run_directory.join(STOP_FILE).is_file() {
@@ -225,7 +225,7 @@ async fn run_follower(
         if run_directory.join(PARTITION_FILE).is_file() {
             continue;
         }
-        if lag_until_snapshot && should_drop_before_snapshot(node.service.state(), &event.event) {
+        if is_lag_until_snapshot && should_drop_before_snapshot(node.service.state(), &event.event) {
             continue;
         }
         require_applied(node.service.handle_event(event.event).await)?;
