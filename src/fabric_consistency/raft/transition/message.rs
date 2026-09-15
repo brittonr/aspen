@@ -51,7 +51,14 @@ fn dispatch_election(
             voter_id,
             is_granted: granted,
         }),
-        _ => Err(crate::error::MoltenError::invalid_harness("election dispatch admitted a non-election message")),
+        RaftMessage::AppendEntries { .. }
+        | RaftMessage::AppendResponse { .. }
+        | RaftMessage::ReadProbe { .. }
+        | RaftMessage::ReadAcknowledgement { .. }
+        | RaftMessage::InstallSnapshot { .. }
+        | RaftMessage::SnapshotResponse { .. } => {
+            Err(crate::error::MoltenError::invalid_harness("election dispatch admitted a non-election message"))
+        }
     }
 }
 
@@ -95,7 +102,12 @@ fn dispatch_replication(
             match_index,
             conflict_index,
         }),
-        _ => Err(crate::error::MoltenError::invalid_harness(
+        RaftMessage::RequestVote { .. }
+        | RaftMessage::VoteResponse { .. }
+        | RaftMessage::ReadProbe { .. }
+        | RaftMessage::ReadAcknowledgement { .. }
+        | RaftMessage::InstallSnapshot { .. }
+        | RaftMessage::SnapshotResponse { .. } => Err(crate::error::MoltenError::invalid_harness(
             "replication dispatch admitted a non-replication message",
         )),
     }
@@ -131,7 +143,14 @@ fn dispatch_snapshot(
             snapshot_index,
             is_accepted: accepted,
         }),
-        _ => Err(crate::error::MoltenError::invalid_harness("snapshot dispatch admitted a non-snapshot message")),
+        RaftMessage::RequestVote { .. }
+        | RaftMessage::VoteResponse { .. }
+        | RaftMessage::AppendEntries { .. }
+        | RaftMessage::AppendResponse { .. }
+        | RaftMessage::ReadProbe { .. }
+        | RaftMessage::ReadAcknowledgement { .. } => {
+            Err(crate::error::MoltenError::invalid_harness("snapshot dispatch admitted a non-snapshot message"))
+        }
     }
 }
 
@@ -161,6 +180,13 @@ fn dispatch_read(transition: &mut MessageTransition, from: String, message: Raft
             follower_id,
             request_ref,
         }),
-        _ => Err(crate::error::MoltenError::invalid_harness("read dispatch admitted a non-read message")),
+        RaftMessage::RequestVote { .. }
+        | RaftMessage::VoteResponse { .. }
+        | RaftMessage::AppendEntries { .. }
+        | RaftMessage::AppendResponse { .. }
+        | RaftMessage::InstallSnapshot { .. }
+        | RaftMessage::SnapshotResponse { .. } => {
+            Err(crate::error::MoltenError::invalid_harness("read dispatch admitted a non-read message"))
+        }
     }
 }

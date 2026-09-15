@@ -2,14 +2,14 @@
 
 This file records the current Octet source-gate evidence and the remaining caveat for `octet-tigerstyle-remediation`.
 
-Current state (probe `target/octet-burndown/nested-use-scope-0/summary.txt`, commit
-`a98371e09`):
+Current state (probe `target/octet-burndown/catch-all-explicit-0/summary.txt`, commit
+`e09ae1888`):
 
 - `dylint.toml` sets `disabled_lints = []`, so the probe reports every lint.
-- The workspace probe is `warning-only`: 3675 warnings, 0 errors, 0 autofixable.
+- The workspace probe is `warning-only`: 3667 warnings, 0 errors, 0 autofixable.
 - The pre-remediation baseline in this worktree was 6754 warnings. The `octet-baseline`
   probe for this burn-down was 3963 warnings.
-- Eighteen lint families report zero. The largest remaining families are
+- Nineteen lint families report zero. The largest remaining families are
   `path_segment_repetition` (1877), `excessive_file_length` (552),
   `borrowed_argument_types` (368), and `unbounded_collection_growth` (216).
 
@@ -53,11 +53,11 @@ Focused object corpus: object-set hash `b3:f61ed6753b0a349fa2988e444ea3bae1f0ae2
 
 | Scope | Status | Findings | Warnings | Errors | Autofixable |
 |---|---:|---:|---:|---:|---:|
-| workspace | warning-only | 3675 | 3675 | 0 | 0 |
+| workspace | warning-only | 3667 | 3667 | 0 | 0 |
 
 Top workspace lint counts: `path_segment_repetition` 1877, `excessive_file_length` 552,
-`borrowed_argument_types` 368, `non_trait_imports` 34, `unbounded_collection_growth` 216,
-`function_length` 204, `too_many_parameters` 143, `no_unwrap` 80,
+`borrowed_argument_types` 368, `unbounded_collection_growth` 216, `function_length` 204,
+`too_many_parameters` 143, `no_unwrap` 80,
 `underscore_in_module_filename` 56, `usize_in_public_api` 32.
 
 Latest no-disabled-lints harness replay import-wrapper probe (`target/octet-burndown/harness-replay-wrapper-import-0/summary.txt`) is `warning-only` with 5274 warnings: `path_segment_repetition` 2960, `non_trait_imports` 2146, `excessive_file_length` 111, `underscore_in_module_filename` 48, and `module_file_count` 9; `function_length`, `nested_conditionals`, and `borrowed_argument_types` remain cleared, and `function_length` is now enforced by `dylint.toml`. The remaining source-scope rows are generated/remapped external rows classified by the remediation plan rather than silently hidden; any future Molten-owned or unknown row remains fail-closed/actionable before `module_file_count` or underscore-filename caveats can be removed, and import/path/size families remain active caveats until each family is clean or scoped. The remaining file-size, import, path-shape, and source-scope rows stay visible active caveats for later focused gateway, command-shape, and file-size splits rather than being hidden by configuration-clean source-gate evidence.
@@ -372,6 +372,8 @@ Inline format argument validation: the import repair refuses a file when a remov
 Live-cluster setup visibility validation: the import repair refuses a `pub(super) use` because a visibility-narrowed re-export cannot be replaced by a qualified path, and `src/fabric_consistency/raft/live_cluster/mod.rs` held three of them for `setup` items, which blocked the remaining 21 private imports in that file. The re-exports are gone: `mod setup;` is now `pub(in crate::fabric_consistency::raft) mod setup;`, the three items already carry the same visibility, and the three call sites in `src/fabric_consistency/raft/live_process/child.rs` name `live_cluster::setup::*`. The descendant refusal that surfaced next was a genuine shadowing ambiguity: `time_for` in `src/fabric_consistency/raft/live_cluster/setup.rs` had a `profile` parameter that collided with the parent's `profile` import through a field shorthand, so the parameter is now `time_profile`. Validation passed with `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p molten --lib fabric_consistency` (97 tests), and `cargo test -p molten --lib raft` (53 tests). The repair then rewrote `mod.rs` with 48 edits and two descendant files for 100 edits in total. The no-disabled probe `target/octet-burndown/live-cluster-setup-mod-0/summary.txt` reports `warning-only` with 3723 warnings, down from 3747. The reduction is 24 `non_trait_imports` findings (110 to 86), and no other lint family moved.
 
 Nested-use scope validation: the import repair read only the file-level items, so a flagged `use` inside a function body or a `mod name { .. }` body produced no edit and no diagnostic. A `use crate::preserves_rail::record;` at the top of a value builder, for example, was invisible to the tool. The tool now collects nested uses, scopes each rewrite to the block that holds the import, resolves a nested import before a file-level one, and refuses a nested import that no reference can qualify so an import kept only for method resolution is never dropped silently. It also bounds the shadow check to the nested scope, because an item declared outside that scope does not shadow the nested import. Four self-test fixtures cover a block-scoped import, a nested-module import, an inner shadow inside a qualified block, and an unqualifiable nested import. Validation passed with `cargo -q -Zscript scripts/octet-qualify-imports.rs --self-test`, `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test -p molten --lib` (1458 tests). The repair rewrote nine files with 224 edits: the two Wasm evidence modules, `src/fabric_durability/tests.rs`, `src/fabric_time/tests.rs`, `src/fabric_transport/tests.rs`, `src/fabric_transport/cross_process/tests.rs`, `src/live_binding_adoption.rs`, `src/node/parts/daemon/tests/m000/p013/body.rs`, and `src/node/state/tests.rs`. The no-disabled probe `target/octet-burndown/nested-use-scope-0/summary.txt` reports `warning-only` with 3675 warnings, down from 3723. The reduction is 52 `non_trait_imports` findings (86 to 34). Qualifying the projection calls lengthened `src/wasm/performance/evidence.rs` past the 300-line file limit and past the function limit for `performance_receipt_value`, so that file carries 2 `excessive_file_length` and 2 `function_length` findings; the file split is the follow-up slice. `src/main/root/command.rs` is refused because its `use clap::Parser;` exists only for method resolution on `Cli::try_parse_from`.
+
+Catch-all dispatch validation: the four family dispatchers in `src/fabric_consistency/raft/transition/message.rs` each matched their two variants and then denied every other message with `_ => Err(..)`, so `catch_all_on_enum` reported 8 findings and a new `RaftMessage` variant would have reached the deny arm without a compile error. Each wildcard is now an explicit six-variant or-pattern over the remaining `RaftMessage` variants, which keeps the refusal, removes the wildcard, and makes the match fail to compile when a variant is added. Validation passed with `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test -p molten --lib raft` (53 tests). The no-disabled probe `target/octet-burndown/catch-all-explicit-0/summary.txt` reports `warning-only` with 3667 warnings, down from 3675. The reduction is 8 `catch_all_on_enum` findings and that family now reports zero; no other lint family moved.
 
 ## No-suppression policy
 
