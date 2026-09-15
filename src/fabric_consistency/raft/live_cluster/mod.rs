@@ -1,33 +1,7 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::time::Duration;
-
-use super::tests::NODE_A;
-use super::tests::NODE_B;
-use super::tests::NODE_C;
-use super::tests::active_group;
-use super::tests::started_state;
-use super::tests::test_ref;
 use super::*;
-use crate::error::Result;
-use crate::fabric_durability::DurableAdapterKind;
-use crate::fabric_durability::RedbDurableStateAdapter;
-use crate::fabric_durability::tests::descriptor;
-use crate::fabric_durability::tests::profile;
-use crate::fabric_time::OperatingSystemEntropySource;
-use crate::fabric_time::tests::live_profile;
-use crate::fabric_transport::CanonicalCrossProcessEndpoint;
-use crate::fabric_transport::IrohCrossProcessListener;
-use crate::fabric_transport::ListenerDrainReason;
-use crate::fabric_transport::cross_process::tests::client_input;
-use crate::fabric_transport::cross_process::tests::listener_with_secret;
 
-mod setup;
+pub(in crate::fabric_consistency::raft) mod setup;
 mod workflow;
-
-pub(super) use setup::build_node_at_root;
-pub(super) use setup::close_node;
-pub(super) use setup::recover_node_at_root;
 
 const NODE_A_SECRET_BYTE: u8 = 17;
 const NODE_B_SECRET_BYTE: u8 = 19;
@@ -47,23 +21,23 @@ pub(super) struct LiveApplicationHandler {
 }
 
 impl CommittedBatchHandler for LiveApplicationHandler {
-    fn restore_snapshot(&mut self, snapshot: &ApplicationSnapshotRestore) -> Result<String> {
+    fn restore_snapshot(&mut self, snapshot: &ApplicationSnapshotRestore) -> crate::error::Result<String> {
         self.restored_application_state_ref = Some(snapshot.application_state_ref.clone());
-        Ok(test_ref("live-cluster-snapshot-restore"))
+        Ok(super::tests::test_ref("live-cluster-snapshot-restore"))
     }
 
-    fn apply_batch(&mut self, commands: &[ApplicationCommand]) -> Result<String> {
+    fn apply_batch(&mut self, commands: &[ApplicationCommand]) -> crate::error::Result<String> {
         self.applied_request_refs.extend(commands.iter().map(|command| command.request_ref.clone()));
-        Ok(test_ref("live-cluster-application"))
+        Ok(super::tests::test_ref("live-cluster-application"))
     }
 }
 
-type LivePorts = ConcreteReplicaPortBundle<OperatingSystemEntropySource, LiveApplicationHandler>;
+type LivePorts = ConcreteReplicaPortBundle<crate::fabric_time::OperatingSystemEntropySource, LiveApplicationHandler>;
 type LiveService = ScopedLiveReplicaService<LivePorts>;
 
 pub(super) struct LiveNode {
     pub(super) service: LiveService,
-    pub(super) listener: Option<IrohCrossProcessListener>,
+    pub(super) listener: Option<crate::fabric_transport::IrohCrossProcessListener>,
     pub(super) session_ref: String,
     pub(super) recovery_ref: Option<String>,
     _workspace: Option<crate::test_support::ProcessWorkspace>,
@@ -73,36 +47,41 @@ pub(super) struct LiveNode {
 // r[verify molten.fabric_consistency.live_raft]
 #[tokio::test]
 async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
-    let group = active_group();
-    let listener_a = listener_with_secret(NODE_A_SECRET_BYTE).await;
-    let listener_b = listener_with_secret(NODE_B_SECRET_BYTE).await;
-    let listener_c = listener_with_secret(NODE_C_SECRET_BYTE).await;
-    let endpoints = BTreeMap::from([
-        (NODE_A.to_string(), listener_a.handoff().clone()),
-        (NODE_B.to_string(), listener_b.handoff().clone()),
-        (NODE_C.to_string(), listener_c.handoff().clone()),
+    let group = super::tests::active_group();
+    let listener_a = crate::fabric_transport::cross_process::tests::listener_with_secret(NODE_A_SECRET_BYTE).await;
+    let listener_b = crate::fabric_transport::cross_process::tests::listener_with_secret(NODE_B_SECRET_BYTE).await;
+    let listener_c = crate::fabric_transport::cross_process::tests::listener_with_secret(NODE_C_SECRET_BYTE).await;
+    let endpoints = std::collections::BTreeMap::from([
+        (super::tests::NODE_A.to_string(), listener_a.handoff().clone()),
+        (super::tests::NODE_B.to_string(), listener_b.handoff().clone()),
+        (super::tests::NODE_C.to_string(), listener_c.handoff().clone()),
     ]);
     assert_ne!(
-        endpoints[NODE_A].descriptor.public_endpoint_identity,
-        endpoints[NODE_B].descriptor.public_endpoint_identity
+        endpoints[super::tests::NODE_A].descriptor.public_endpoint_identity,
+        endpoints[super::tests::NODE_B].descriptor.public_endpoint_identity
     );
     assert_ne!(
-        endpoints[NODE_B].descriptor.public_endpoint_identity,
-        endpoints[NODE_C].descriptor.public_endpoint_identity
+        endpoints[super::tests::NODE_B].descriptor.public_endpoint_identity,
+        endpoints[super::tests::NODE_C].descriptor.public_endpoint_identity
     );
 
-    let mut node_a = setup::build_node(&group, NODE_A, listener_a, &endpoints).await.expect("node A");
-    let mut node_b = setup::build_node(&group, NODE_B, listener_b, &endpoints).await.expect("node B");
-    let mut node_c = setup::build_node(&group, NODE_C, listener_c, &endpoints).await.expect("node C");
+    let mut node_a = setup::build_node(&group, super::tests::NODE_A, listener_a, &endpoints).await.expect("node A");
+    let mut node_b = setup::build_node(&group, super::tests::NODE_B, listener_b, &endpoints).await.expect("node B");
+    let mut node_c = setup::build_node(&group, super::tests::NODE_C, listener_c, &endpoints).await.expect("node C");
     workflow::elect_node_a(&mut node_a, &mut node_b, &mut node_c).await.expect("live election");
-    let request_ref = test_ref("live-cluster-request");
+    let request_ref = super::tests::test_ref("live-cluster-request");
     workflow::replicate_request(&mut node_a, &mut node_b, &mut node_c, &request_ref)
         .await
         .expect("live replication");
-    workflow::quorum_read(&mut node_a, &mut node_b, &mut node_c, &test_ref("live-cluster-linearizable-read"))
-        .await
-        .expect("live quorum read");
-    let application_state_ref = test_ref("live-cluster-application-state");
+    workflow::quorum_read(
+        &mut node_a,
+        &mut node_b,
+        &mut node_c,
+        &super::tests::test_ref("live-cluster-linearizable-read"),
+    )
+    .await
+    .expect("live quorum read");
+    let application_state_ref = super::tests::test_ref("live-cluster-application-state");
     workflow::snapshot_catch_up(&mut node_a, &mut node_b, &mut node_c, &application_state_ref)
         .await
         .expect("live snapshot catch-up");
@@ -124,8 +103,13 @@ async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
     );
     assert_eq!(node_a.service.ports().application.handler().applied_request_refs, vec![request_ref.clone()]);
     assert_eq!(node_b.service.ports().application.handler().applied_request_refs, vec![request_ref]);
-    let selected_evidence =
-        node_a.service.evidence().records().iter().map(|record| record.kind).collect::<BTreeSet<_>>();
+    let selected_evidence = node_a
+        .service
+        .evidence()
+        .records()
+        .iter()
+        .map(|record| record.kind)
+        .collect::<std::collections::BTreeSet<_>>();
     for kind in [
         ReplicaEvidenceKind::GroupAdmission,
         ReplicaEvidenceKind::Configuration,
@@ -156,6 +140,6 @@ async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
     setup::close_node(node_c).await;
 }
 
-fn live_timeout() -> Duration {
-    Duration::from_secs(LIVE_TIMEOUT_SECONDS)
+fn live_timeout() -> std::time::Duration {
+    std::time::Duration::from_secs(LIVE_TIMEOUT_SECONDS)
 }

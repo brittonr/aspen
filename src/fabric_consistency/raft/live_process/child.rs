@@ -25,7 +25,7 @@ pub(super) async fn run(
     std::fs::create_dir_all(&durability_root).map_err(crate::error::MoltenError::from)?;
     let node = match mode {
         ChildMode::Fresh => {
-            crate::fabric_consistency::raft::live_cluster::build_node_at_root(
+            crate::fabric_consistency::raft::live_cluster::setup::build_node_at_root(
                 &group,
                 &node_id,
                 listener,
@@ -35,7 +35,7 @@ pub(super) async fn run(
             .await?
         }
         ChildMode::Recover => {
-            crate::fabric_consistency::raft::live_cluster::recover_node_at_root(
+            crate::fabric_consistency::raft::live_cluster::setup::recover_node_at_root(
                 &group,
                 &node_id,
                 listener,
@@ -92,7 +92,7 @@ pub(super) async fn finish_node(
     run_directory: &std::path::Path,
 ) -> crate::error::Result<()> {
     let mut receipt = receipt_from_node(&node_id, &endpoint_identity, &node)?;
-    crate::fabric_consistency::raft::live_cluster::close_node(node).await;
+    crate::fabric_consistency::raft::live_cluster::setup::close_node(node).await;
     receipt.clean_shutdown = true;
     write_value(&receipt_path(run_directory, &node_id), &receipt_value(&receipt))
 }

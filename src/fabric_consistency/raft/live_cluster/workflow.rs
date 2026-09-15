@@ -1,6 +1,10 @@
 use super::*;
 
-pub(super) async fn elect_node_a(node_a: &mut LiveNode, node_b: &mut LiveNode, node_c: &mut LiveNode) -> Result<()> {
+pub(super) async fn elect_node_a(
+    node_a: &mut LiveNode,
+    node_b: &mut LiveNode,
+    node_c: &mut LiveNode,
+) -> crate::error::Result<()> {
     let timer_ref = node_a.service.state().active_election_timer_ref.clone();
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
@@ -35,13 +39,13 @@ pub(super) async fn replicate_request(
     node_b: &mut LiveNode,
     node_c: &mut LiveNode,
     request_ref: &str,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
     let proposal = node_a.service.handle_event(ReplicaEvent::Propose {
         request_ref: request_ref.to_string(),
-        command_ref: test_ref("live-cluster-command"),
-        command_schema_ref: test_ref("live-cluster-command-schema"),
+        command_ref: super::super::tests::test_ref("live-cluster-command"),
+        command_schema_ref: super::super::tests::test_ref("live-cluster-command-schema"),
     });
     let receive_b = receive_replica_event(&mut node_b.listener, &session_b, live_timeout());
     let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
@@ -64,7 +68,7 @@ pub(super) async fn quorum_read(
     node_b: &mut LiveNode,
     node_c: &mut LiveNode,
     request_ref: &str,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
     let read = node_a.service.handle_event(ReplicaEvent::Read {
@@ -102,7 +106,7 @@ pub(super) async fn snapshot_catch_up(
     node_b: &mut LiveNode,
     node_c: &mut LiveNode,
     application_state_ref: &str,
-) -> Result<()> {
+) -> crate::error::Result<()> {
     require_applied(
         node_a
             .service
@@ -142,7 +146,11 @@ pub(super) async fn snapshot_catch_up(
     Ok(())
 }
 
-async fn replicate_commit_notice(node_a: &mut LiveNode, node_b: &mut LiveNode, node_c: &mut LiveNode) -> Result<()> {
+async fn replicate_commit_notice(
+    node_a: &mut LiveNode,
+    node_b: &mut LiveNode,
+    node_c: &mut LiveNode,
+) -> crate::error::Result<()> {
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
     let heartbeat = node_a.service.handle_event(ReplicaEvent::HeartbeatTimeout);
@@ -162,7 +170,7 @@ async fn replicate_commit_notice(node_a: &mut LiveNode, node_b: &mut LiveNode, n
     Ok(())
 }
 
-fn require_applied(outcome: ReplicaExecutionOutcome) -> Result<()> {
+fn require_applied(outcome: ReplicaExecutionOutcome) -> crate::error::Result<()> {
     match outcome {
         ReplicaExecutionOutcome::Applied(_) => Ok(()),
         ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
