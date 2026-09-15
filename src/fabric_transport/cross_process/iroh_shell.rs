@@ -1,10 +1,4 @@
-use std::fmt;
-use std::net::SocketAddr;
-use std::time::Duration;
-
 use super::super::*;
-use crate::error::MoltenError;
-use crate::error::Result;
 
 pub const IROH_SECRET_KEY_BYTES: usize = 32;
 pub const CROSS_PROCESS_FRAME_PREFIX_BYTES: usize = 8;
@@ -21,7 +15,10 @@ pub struct IrohEndpointCapability {
 }
 
 impl IrohEndpointCapability {
-    pub fn from_secret_bytes(secret_bytes: [u8; IROH_SECRET_KEY_BYTES], capability_ref: String) -> Result<Self> {
+    pub fn from_secret_bytes(
+        secret_bytes: [u8; IROH_SECRET_KEY_BYTES],
+        capability_ref: String,
+    ) -> crate::error::Result<Self> {
         crate::preserves_rail::validate_content_ref(&capability_ref)?;
         Ok(Self {
             secret_key: iroh::SecretKey::from_bytes(&secret_bytes),
@@ -34,8 +31,8 @@ impl IrohEndpointCapability {
     }
 }
 
-impl fmt::Debug for IrohEndpointCapability {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Debug for IrohEndpointCapability {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("IrohEndpointCapability")
             .field("capability_ref", &self.capability_ref)
@@ -49,7 +46,7 @@ pub struct IrohCrossProcessListenerInput {
     pub profile: CanonicalTransportProfile,
     pub protocol: ProtocolDescriptor,
     pub capability: IrohEndpointCapability,
-    pub bind_addr: SocketAddr,
+    pub bind_addr: std::net::SocketAddr,
     pub listener_identity_ref: String,
     pub expected_peer_context_ref: String,
     pub locator_cohort_ref: String,
@@ -64,7 +61,7 @@ pub struct IrohCrossProcessClientInput {
     pub profile: CanonicalTransportProfile,
     pub protocol: ProtocolDescriptor,
     pub capability: IrohEndpointCapability,
-    pub bind_addr: SocketAddr,
+    pub bind_addr: std::net::SocketAddr,
     pub endpoint: CanonicalCrossProcessEndpoint,
     pub expected: ExpectedEndpointBinding,
     pub admission: EndpointAdmissionState,
@@ -94,8 +91,8 @@ pub struct CrossProcessReceivedFrame {
     pub evidence: CrossProcessFrameEvidence,
 }
 
-impl fmt::Debug for CrossProcessReceivedFrame {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Debug for CrossProcessReceivedFrame {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("CrossProcessReceivedFrame")
             .field("payload_ref", &self.evidence.payload_ref)
@@ -126,8 +123,8 @@ pub struct IrohCrossProcessListener {
     state: CrossProcessListenerState,
 }
 
-impl fmt::Debug for IrohCrossProcessListener {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Debug for IrohCrossProcessListener {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("IrohCrossProcessListener")
             .field("descriptor_ref", &self.endpoint_artifact.descriptor_ref)
@@ -140,7 +137,7 @@ impl fmt::Debug for IrohCrossProcessListener {
 impl IrohCrossProcessListener {
     // r[impl molten.fabric_transport.cross_process_listener]
     // r[impl molten.fabric_transport.cross_process_session]
-    pub async fn bind(input: IrohCrossProcessListenerInput) -> Result<Self> {
+    pub async fn bind(input: IrohCrossProcessListenerInput) -> crate::error::Result<Self> {
         validate_listener_shell_input(&input)?;
         let alpn = input.protocol.alpn.as_bytes().to_vec();
         let endpoint = bind_explicit_endpoint(input.bind_addr, input.capability, &alpn).await?;
@@ -228,8 +225,8 @@ impl IrohCrossProcessListener {
         &mut self,
         session_ref: &str,
         request_ref: &str,
-        timeout: Duration,
-    ) -> Result<CrossProcessFrameEvidence> {
+        timeout: std::time::Duration,
+    ) -> crate::error::Result<CrossProcessFrameEvidence> {
         Ok(self.accept_one_frame(session_ref, request_ref, timeout).await?.evidence)
     }
 
@@ -238,8 +235,8 @@ impl IrohCrossProcessListener {
         &mut self,
         session_ref: &str,
         request_ref: &str,
-        timeout: Duration,
-    ) -> Result<CrossProcessReceivedFrame> {
+        timeout: std::time::Duration,
+    ) -> crate::error::Result<CrossProcessReceivedFrame> {
         validate_exchange_refs(session_ref, request_ref)?;
         self.accept_one_derived_frame(session_ref, timeout, |_| Ok(request_ref.to_string())).await
     }
@@ -250,23 +247,23 @@ impl IrohCrossProcessListener {
     pub async fn accept_one_derived_frame<F>(
         &mut self,
         session_ref: &str,
-        timeout: Duration,
+        timeout: std::time::Duration,
         derive_request_ref: F,
-    ) -> Result<CrossProcessReceivedFrame>
+    ) -> crate::error::Result<CrossProcessReceivedFrame>
     where
-        F: FnOnce(&[u8]) -> Result<String>,
+        F: FnOnce(&[u8]) -> crate::error::Result<String>,
     {
         crate::preserves_rail::validate_content_ref(session_ref)?;
         if !self.state.is_ready() {
-            return Err(MoltenError::invalid_harness("cross-process listener is not ready"));
+            return Err(crate::error::MoltenError::invalid_harness("cross-process listener is not ready"));
         }
         let incoming = tokio::time::timeout(timeout, self.endpoint.accept())
             .await
-            .map_err(|_| MoltenError::invalid_harness("cross-process listener accept timed out"))?
-            .ok_or_else(|| MoltenError::invalid_harness("cross-process listener closed before accept"))?;
+            .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process listener accept timed out"))?
+            .ok_or_else(|| crate::error::MoltenError::invalid_harness("cross-process listener closed before accept"))?;
         let connection = tokio::time::timeout(timeout, incoming)
             .await
-            .map_err(|_| MoltenError::invalid_harness("cross-process listener handshake timed out"))?
+            .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process listener handshake timed out"))?
             .map_err(iroh_error)?;
         let remote_transport_identity_ref = blake3_ref(connection.remote_id().to_string().as_bytes());
         self.state = apply_cross_process_listener_command(&self.state, &CrossProcessListenerCommand::AcceptSession {
@@ -320,13 +317,16 @@ impl IrohCrossProcessListener {
     }
 
     // r[impl molten.fabric_transport.cross_process_listener]
-    pub async fn drain_and_close(mut self, reason: ListenerDrainReason) -> Result<CrossProcessListenerCleanup> {
+    pub async fn drain_and_close(
+        mut self,
+        reason: ListenerDrainReason,
+    ) -> crate::error::Result<CrossProcessListenerCleanup> {
         self.state =
             apply_cross_process_listener_command(&self.state, &CrossProcessListenerCommand::BeginDrain { reason })
                 .map_err(|issues| shell_validation_error("cross-process listener drain", &issues))?
                 .next;
         if self.state.active_sessions != 0 {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::MoltenError::invalid_harness(
                 "cross-process listener drain requires all sessions to be terminal",
             ));
         }
@@ -357,7 +357,7 @@ impl IrohCrossProcessListener {
         })
     }
 
-    fn finish_listener_session(&mut self) -> Result<()> {
+    fn finish_listener_session(&mut self) -> crate::error::Result<()> {
         self.state = apply_cross_process_listener_command(&self.state, &CrossProcessListenerCommand::SessionTerminal {
             callback_generation: self.protocol.generation,
         })
@@ -372,8 +372,8 @@ impl IrohCrossProcessListener {
 pub async fn exchange_cross_process_frame(
     input: IrohCrossProcessClientInput,
     payload: &[u8],
-    timeout: Duration,
-) -> Result<CrossProcessFrameEvidence> {
+    timeout: std::time::Duration,
+) -> crate::error::Result<CrossProcessFrameEvidence> {
     validate_client_shell_input(&input, payload)?;
     let dial_plan = admit_endpoint_import(
         &input.profile.profile,
@@ -384,9 +384,11 @@ pub async fn exchange_cross_process_frame(
     )
     .map_err(|issues| shell_validation_error("cross-process endpoint import", &issues))?;
     let payload_bytes = u64::try_from(payload.len())
-        .map_err(|_| MoltenError::invalid_harness("cross-process payload size does not fit u64"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process payload size does not fit u64"))?;
     if payload_bytes == 0 || payload_bytes > dial_plan.resources.max_frame_bytes {
-        return Err(MoltenError::invalid_harness("cross-process client payload exceeds the admitted frame bound"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "cross-process client payload exceeds the admitted frame bound",
+        ));
     }
     let mut session = plan_cross_process_session(&dial_plan, &input.session_ref, EndpointParticipantRole::Client)
         .map_err(|issues| shell_validation_error("cross-process client session plan", &issues))?;
@@ -455,18 +457,18 @@ async fn run_server_exchange<F>(
     session: &mut CrossProcessSessionState,
     derive_request_ref: F,
     generation: u64,
-    timeout: Duration,
-) -> Result<ServerNetworkFrame>
+    timeout: std::time::Duration,
+) -> crate::error::Result<ServerNetworkFrame>
 where
-    F: FnOnce(&[u8]) -> Result<String>,
+    F: FnOnce(&[u8]) -> crate::error::Result<String>,
 {
     let (mut send, mut receive) = tokio::time::timeout(timeout, connection.accept_bi())
         .await
-        .map_err(|_| MoltenError::invalid_harness("cross-process stream accept timed out"))?
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process stream accept timed out"))?
         .map_err(iroh_error)?;
     let payload = read_bounded_frame(&mut receive, session.resources.max_frame_bytes, timeout).await?;
     let payload_bytes = u64::try_from(payload.len())
-        .map_err(|_| MoltenError::invalid_harness("cross-process payload size does not fit u64"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process payload size does not fit u64"))?;
     *session = apply_cross_process_session_command(session, &CrossProcessSessionCommand::ReceiveFrame {
         payload_bytes,
         callback_generation: generation,
@@ -478,7 +480,7 @@ where
     write_bounded_frame(&mut send, &payload, session.resources.max_frame_bytes, timeout).await?;
     tokio::time::timeout(timeout, connection.closed())
         .await
-        .map_err(|_| MoltenError::invalid_harness("cross-process peer close timed out"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process peer close timed out"))?;
     let payload_ref = cross_process_frame_ref(&request_ref, &payload);
     Ok(ServerNetworkFrame {
         frame: NetworkFrame {
@@ -499,11 +501,11 @@ async fn run_client_exchange(
     request_ref: &str,
     payload: &[u8],
     generation: u64,
-    timeout: Duration,
-) -> Result<ClientNetworkFrame> {
+    timeout: std::time::Duration,
+) -> crate::error::Result<ClientNetworkFrame> {
     let connection = tokio::time::timeout(timeout, endpoint.connect(endpoint_addr, alpn))
         .await
-        .map_err(|_| MoltenError::invalid_harness("cross-process connect timed out"))?
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process connect timed out"))?
         .map_err(iroh_error)?;
     let remote_transport_identity_ref = blake3_ref(connection.remote_id().to_string().as_bytes());
     *session = apply_cross_process_session_command(session, &CrossProcessSessionCommand::Established {
@@ -513,7 +515,7 @@ async fn run_client_exchange(
     .map_err(|issues| shell_validation_error("cross-process client establishment", &issues))?
     .next;
     let payload_bytes = u64::try_from(payload.len())
-        .map_err(|_| MoltenError::invalid_harness("cross-process payload size does not fit u64"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process payload size does not fit u64"))?;
     *session = apply_cross_process_session_command(session, &CrossProcessSessionCommand::QueueFrame {
         payload_bytes,
         callback_generation: generation,
@@ -529,12 +531,12 @@ async fn run_client_exchange(
 
     let (mut send, mut receive) = tokio::time::timeout(timeout, connection.open_bi())
         .await
-        .map_err(|_| MoltenError::invalid_harness("cross-process stream open timed out"))?
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process stream open timed out"))?
         .map_err(iroh_error)?;
     write_bounded_frame(&mut send, payload, session.resources.max_frame_bytes, timeout).await?;
     let acknowledgement = read_bounded_frame(&mut receive, session.resources.max_frame_bytes, timeout).await?;
     if acknowledgement != payload {
-        return Err(MoltenError::invalid_harness("cross-process acknowledgement payload mismatch"));
+        return Err(crate::error::MoltenError::invalid_harness("cross-process acknowledgement payload mismatch"));
     }
     *session = apply_cross_process_session_command(session, &CrossProcessSessionCommand::AcknowledgeFrame {
         payload_bytes,
@@ -555,10 +557,10 @@ async fn run_client_exchange(
 }
 
 async fn bind_explicit_endpoint(
-    bind_addr: SocketAddr,
+    bind_addr: std::net::SocketAddr,
     capability: IrohEndpointCapability,
     alpn: &[u8],
-) -> Result<iroh::Endpoint> {
+) -> crate::error::Result<iroh::Endpoint> {
     iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
         .relay_mode(iroh::RelayMode::Disabled)
         .clear_ip_transports()
@@ -575,21 +577,21 @@ async fn write_bounded_frame(
     send: &mut iroh::endpoint::SendStream,
     payload: &[u8],
     max_frame_bytes: u64,
-    timeout: Duration,
-) -> Result<()> {
+    timeout: std::time::Duration,
+) -> crate::error::Result<()> {
     let payload_bytes = u64::try_from(payload.len())
-        .map_err(|_| MoltenError::invalid_harness("cross-process payload size does not fit u64"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process payload size does not fit u64"))?;
     if payload_bytes == 0 || payload_bytes > max_frame_bytes {
-        return Err(MoltenError::invalid_harness("cross-process outbound frame exceeds bound"));
+        return Err(crate::error::MoltenError::invalid_harness("cross-process outbound frame exceeds bound"));
     }
     let prefix = payload_bytes.to_be_bytes();
     tokio::time::timeout(timeout, send.write_all(&prefix))
         .await
-        .map_err(|_| MoltenError::invalid_harness("cross-process frame prefix write timed out"))?
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process frame prefix write timed out"))?
         .map_err(iroh_error)?;
     tokio::time::timeout(timeout, send.write_all(payload))
         .await
-        .map_err(|_| MoltenError::invalid_harness("cross-process frame payload write timed out"))?
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process frame payload write timed out"))?
         .map_err(iroh_error)?;
     send.finish().map_err(iroh_error)
 }
@@ -597,30 +599,30 @@ async fn write_bounded_frame(
 async fn read_bounded_frame(
     receive: &mut iroh::endpoint::RecvStream,
     max_frame_bytes: u64,
-    timeout: Duration,
-) -> Result<Vec<u8>> {
+    timeout: std::time::Duration,
+) -> crate::error::Result<Vec<u8>> {
     let mut prefix = [0_u8; CROSS_PROCESS_FRAME_PREFIX_BYTES];
     tokio::time::timeout(timeout, receive.read_exact(&mut prefix))
         .await
-        .map_err(|_| MoltenError::invalid_harness("cross-process frame prefix read timed out"))?
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process frame prefix read timed out"))?
         .map_err(iroh_error)?;
     let payload_bytes = u64::from_be_bytes(prefix);
     if payload_bytes == 0 || payload_bytes > max_frame_bytes {
-        return Err(MoltenError::invalid_harness("cross-process inbound frame exceeds bound"));
+        return Err(crate::error::MoltenError::invalid_harness("cross-process inbound frame exceeds bound"));
     }
     let payload_len = usize::try_from(payload_bytes)
-        .map_err(|_| MoltenError::invalid_harness("cross-process frame size does not fit usize"))?;
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process frame size does not fit usize"))?;
     let mut payload = vec![0_u8; payload_len];
     tokio::time::timeout(timeout, receive.read_exact(&mut payload))
         .await
-        .map_err(|_| MoltenError::invalid_harness("cross-process frame payload read timed out"))?
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process frame payload read timed out"))?
         .map_err(iroh_error)?;
     let trailing = tokio::time::timeout(timeout, receive.read_to_end(0))
         .await
-        .map_err(|_| MoltenError::invalid_harness("cross-process frame terminal read timed out"))?
+        .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process frame terminal read timed out"))?
         .map_err(iroh_error)?;
     if !trailing.is_empty() {
-        return Err(MoltenError::invalid_harness("cross-process frame has trailing bytes"));
+        return Err(crate::error::MoltenError::invalid_harness("cross-process frame has trailing bytes"));
     }
     Ok(payload)
 }
@@ -633,7 +635,7 @@ fn finalize_successful_session(
     request_ref: &str,
     remote_transport_identity_ref: &str,
     frame: NetworkFrame,
-) -> Result<CrossProcessFrameEvidence> {
+) -> crate::error::Result<CrossProcessFrameEvidence> {
     session = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::Close)
         .map_err(|issues| shell_validation_error("cross-process session close", &issues))?
         .next;
@@ -666,7 +668,7 @@ fn finalize_successful_session(
 fn finalize_failed_session(
     mut session: CrossProcessSessionState,
     class: SessionTerminalClass,
-) -> Result<CrossProcessSessionState> {
+) -> crate::error::Result<CrossProcessSessionState> {
     session = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::Fail {
         class,
         delivery_definitive: false,
@@ -686,13 +688,13 @@ fn finalize_failed_session(
     Ok(session)
 }
 
-fn validate_listener_shell_input(input: &IrohCrossProcessListenerInput) -> Result<()> {
+fn validate_listener_shell_input(input: &IrohCrossProcessListenerInput) -> crate::error::Result<()> {
     crate::preserves_rail::validate_content_ref(input.capability.capability_ref())?;
     crate::preserves_rail::validate_content_ref(&input.listener_identity_ref)?;
     crate::preserves_rail::validate_content_ref(&input.expected_peer_context_ref)?;
     crate::preserves_rail::validate_content_ref(&input.locator_cohort_ref)?;
     if !input.bind_addr.ip().is_loopback() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "initial cross-process Iroh profile requires an explicit loopback bind address",
         ));
     }
@@ -702,49 +704,51 @@ fn validate_listener_shell_input(input: &IrohCrossProcessListenerInput) -> Resul
         || !input.admission.profile_active
         || !input.admission.listener_ready
     {
-        return Err(MoltenError::invalid_harness("cross-process listener capability admission is not fully active"));
+        return Err(crate::error::MoltenError::invalid_harness(
+            "cross-process listener capability admission is not fully active",
+        ));
     }
     Ok(())
 }
 
-fn validate_client_shell_input(input: &IrohCrossProcessClientInput, payload: &[u8]) -> Result<()> {
+fn validate_client_shell_input(input: &IrohCrossProcessClientInput, payload: &[u8]) -> crate::error::Result<()> {
     crate::preserves_rail::validate_content_ref(input.capability.capability_ref())?;
     validate_exchange_refs(&input.session_ref, &input.request_ref)?;
     if payload.is_empty() {
-        return Err(MoltenError::invalid_harness("cross-process payload must not be empty"));
+        return Err(crate::error::MoltenError::invalid_harness("cross-process payload must not be empty"));
     }
     if !input.bind_addr.ip().is_loopback() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::MoltenError::invalid_harness(
             "initial cross-process Iroh client profile requires an explicit loopback bind address",
         ));
     }
     Ok(())
 }
 
-fn validate_exchange_refs(session_ref: &str, request_ref: &str) -> Result<()> {
+fn validate_exchange_refs(session_ref: &str, request_ref: &str) -> crate::error::Result<()> {
     crate::preserves_rail::validate_content_ref(session_ref)?;
     crate::preserves_rail::validate_content_ref(request_ref)
 }
 
-fn endpoint_locators(endpoint_addr: &iroh::EndpointAddr) -> Result<Vec<EndpointLocator>> {
+fn endpoint_locators(endpoint_addr: &iroh::EndpointAddr) -> crate::error::Result<Vec<EndpointLocator>> {
     let mut locators = Vec::new();
     for address in &endpoint_addr.addrs {
         let class = match address {
             iroh::TransportAddr::Ip(_) => EndpointLocatorClass::Ip,
             iroh::TransportAddr::Relay(_) => EndpointLocatorClass::Relay,
             iroh::TransportAddr::Custom(_) => {
-                return Err(MoltenError::invalid_harness(
+                return Err(crate::error::MoltenError::invalid_harness(
                     "custom Iroh transport addresses are outside the admitted profile",
                 ));
             }
             _ => {
-                return Err(MoltenError::invalid_harness(
+                return Err(crate::error::MoltenError::invalid_harness(
                     "unknown Iroh transport address is outside the admitted profile",
                 ));
             }
         };
         if locators.len() >= MAX_ENDPOINT_LOCATORS {
-            return Err(MoltenError::invalid_harness("Iroh endpoint locator count exceeds bound"));
+            return Err(crate::error::MoltenError::invalid_harness("Iroh endpoint locator count exceeds bound"));
         }
         locators.push(EndpointLocator {
             class,
@@ -754,11 +758,13 @@ fn endpoint_locators(endpoint_addr: &iroh::EndpointAddr) -> Result<Vec<EndpointL
     Ok(locators)
 }
 
-fn iroh_endpoint_addr(plan: &EndpointDialPlan) -> Result<iroh::EndpointAddr> {
+fn iroh_endpoint_addr(plan: &EndpointDialPlan) -> crate::error::Result<iroh::EndpointAddr> {
     let endpoint_id = plan
         .public_endpoint_identity
         .strip_prefix("iroh:")
-        .ok_or_else(|| MoltenError::invalid_harness("cross-process endpoint identity must use iroh prefix"))?
+        .ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness("cross-process endpoint identity must use iroh prefix")
+        })?
         .parse::<iroh::EndpointId>()
         .map_err(iroh_error)?;
     let mut addresses = Vec::with_capacity(plan.locators.len());
@@ -768,8 +774,10 @@ fn iroh_endpoint_addr(plan: &EndpointDialPlan) -> Result<iroh::EndpointAddr> {
                 let address = locator
                     .value
                     .strip_prefix("ip:")
-                    .ok_or_else(|| MoltenError::invalid_harness("cross-process IP locator prefix mismatch"))?
-                    .parse::<SocketAddr>()
+                    .ok_or_else(|| {
+                        crate::error::MoltenError::invalid_harness("cross-process IP locator prefix mismatch")
+                    })?
+                    .parse::<std::net::SocketAddr>()
                     .map_err(iroh_error)?;
                 iroh::TransportAddr::Ip(address)
             }
@@ -777,13 +785,15 @@ fn iroh_endpoint_addr(plan: &EndpointDialPlan) -> Result<iroh::EndpointAddr> {
                 let relay = locator
                     .value
                     .strip_prefix("relay:")
-                    .ok_or_else(|| MoltenError::invalid_harness("cross-process relay locator prefix mismatch"))?
+                    .ok_or_else(|| {
+                        crate::error::MoltenError::invalid_harness("cross-process relay locator prefix mismatch")
+                    })?
                     .parse::<iroh::RelayUrl>()
                     .map_err(iroh_error)?;
                 iroh::TransportAddr::Relay(relay)
             }
             EndpointLocatorClass::Custom | EndpointLocatorClass::Private => {
-                return Err(MoltenError::invalid_harness(
+                return Err(crate::error::MoltenError::invalid_harness(
                     "cross-process endpoint contains an unsupported locator class",
                 ));
             }
@@ -829,10 +839,10 @@ fn blake3_ref(bytes: &[u8]) -> String {
     format!("blake3:{}", blake3::hash(bytes).to_hex())
 }
 
-fn iroh_error(error: impl fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("cross-process Iroh transport failed: {error}"))
+fn iroh_error(error: impl std::fmt::Display) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("cross-process Iroh transport failed: {error}"))
 }
 
-fn shell_validation_error(label: &str, issues: &impl fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn shell_validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
+    crate::error::MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
 }

@@ -1244,7 +1244,12 @@ fn collect_reference_edits(
                 let is_qualified = previous == "::" || previous == ".";
                 // A field name is not a path reference.
                 let is_field = followed_by_colon(source, range.end);
-                if !in_import && !is_qualified && !is_field {
+                // A function or method definition name is declared here, not
+                // referenced. Recorded items hide their own name, but the
+                // bindings walk keeps method names out of scope on purpose, so
+                // the definition site is skipped explicitly.
+                let is_definition = previous == "fn";
+                if !in_import && !is_qualified && !is_field && !is_definition {
                     if let Some(owner) = owners.get(&name) {
                         let depth = module_depth(module_ranges, start);
                         if pattern_names_constant(&name, scopes, start) {
@@ -1507,6 +1512,16 @@ impl Holder {
     let formatted = "use crate::addr::Addr;\n\nfn f(value: Addr) -> String {\n    format!(\"{Addr}\")\n}\n";
     if qualify_source("src/addr/route.rs", formatted, &[1]).is_ok() {
         return Err(String::from("self test accepted an inline format argument"));
+    }
+    // An imported function name that is also a method name: the definition
+    // name stays, and the call in the body is qualified.
+    let method = "use crate::addr::observe_file;\n\nstruct Holder;\n\nimpl Holder {\n    fn observe_file(&self) -> u32 {\n        observe_file()\n    }\n}\n";
+    let output = qualify_source("src/addr/route.rs", method, &[1])?.output;
+    if !output.contains("fn observe_file(&self)") {
+        return Err(format!("self test rewrote a method definition name in\n{output}"));
+    }
+    if !output.contains("crate::addr::observe_file()") {
+        return Err(format!("self test missed a method-body reference in\n{output}"));
     }
     // An uppercase name in a match arm names the imported constant, so the
     // pattern keeps its meaning only when it is qualified.

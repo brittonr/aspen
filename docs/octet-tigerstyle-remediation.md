@@ -2,21 +2,24 @@
 
 This file records the current Octet source-gate evidence and the remaining caveat for `octet-tigerstyle-remediation`.
 
-Current state (probe `target/octet-after-panic/summary.txt`, commit `b76bde6ac`):
+Current state (probe `target/octet-burndown/fn-definition-skip-0/summary.txt`, commit
+`2dd66a700`):
 
 - `dylint.toml` sets `disabled_lints = []`, so the probe reports every lint.
-- The workspace probe is `warning-only`: 3965 warnings, 0 errors, 0 autofixable.
-- The pre-remediation baseline in this worktree was 6754 warnings.
+- The workspace probe is `warning-only`: 3873 warnings, 0 errors, 0 autofixable.
+- The pre-remediation baseline in this worktree was 6754 warnings. The `octet-baseline`
+  probe for this slice was 3963 warnings.
 - Eighteen lint families report zero. The largest remaining families are
-  `path_segment_repetition` (1877), `excessive_file_length` (550), and
-  `borrowed_argument_types` (368).
+  `path_segment_repetition` (1877), `excessive_file_length` (550),
+  `borrowed_argument_types` (368), and `non_trait_imports` (236).
 
 Two scripts carry the mechanical repairs. Each one reads an Octet artifact, refuses any file it
 cannot rewrite safely, and re-parses its own output before writing:
 
 - `scripts/octet-qualify-imports.rs` resolves `non_trait_imports` from a probe summary. It
   removes each flagged private import, qualifies the references that the import owns, follows
-  references into descendant modules, and skips a reference that a later binding owns.
+  references into descendant modules, and skips a reference that a later binding owns. It also
+  keeps a function or method definition name in place when the same name is imported.
 - `scripts/octet-predicate-names.rs` resolves `bool_naming` from a JSON result stream.
 
 Run `cargo -q -Zscript scripts/<name>.rs --self-test` for the positive and negative fixtures.
@@ -48,10 +51,10 @@ Focused object corpus: object-set hash `b3:f61ed6753b0a349fa2988e444ea3bae1f0ae2
 
 | Scope | Status | Findings | Warnings | Errors | Autofixable |
 |---|---:|---:|---:|---:|---:|
-| workspace | warning-only | 3965 | 3965 | 0 | 0 |
+| workspace | warning-only | 3873 | 3873 | 0 | 0 |
 
 Top workspace lint counts: `path_segment_repetition` 1877, `excessive_file_length` 550,
-`borrowed_argument_types` 368, `non_trait_imports` 326, `unbounded_collection_growth` 216,
+`borrowed_argument_types` 368, `non_trait_imports` 236, `unbounded_collection_growth` 216,
 `function_length` 202, `too_many_parameters` 143, `no_unwrap` 80,
 `underscore_in_module_filename` 56, `usize_in_public_api` 32.
 
@@ -359,6 +362,8 @@ Job core alias import validation: baseline `cargo test job` passed before the sl
 1. Continue splitting long files instead of relying on `excessive_file_length`; `function_length` is now enforced.
 2. Normalize imports and repeated path segments instead of relying on `non_trait_imports` and `path_segment_repetition` disables.
 3. Resolve `module_file_count`, including external registry/rustlib paths, through Octet/config/tooling support rather than repo-only edits if needed.
+
+Import repair method-definition validation: baseline `cargo -q -Zscript scripts/octet-qualify-imports.rs --findings target/octet-baseline/summary.txt --dry-run` repaired 0 files and skipped 16, and three of the skips reported a failed re-parse instead of a refusal reason. The cause was a tool gap: the bindings walk keeps a method name out of scope on purpose, so `collect_reference_edits` rewrote the definition name itself when an imported function shared the method name, as with `pub fn observe_file` in `crates/molten-node-host/src/node/state/namespace.rs`. The tool now skips the identifier that follows the `fn` keyword and carries a new self-test fixture for an imported function whose name is also a method name. Validation passed with `cargo -q -Zscript scripts/octet-qualify-imports.rs --self-test`, `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p molten-node-host` (5 tests), `cargo test -p molten --lib node_state` (10 tests), and `cargo test -p molten --lib fabric_transport` (15 tests). The repair rewrote three files with 236 edits: `crates/molten-node-host/src/node/state/authority.rs`, `crates/molten-node-host/src/node/state/namespace.rs`, and `src/fabric_transport/cross_process/iroh_shell.rs`. The no-disabled probe `target/octet-burndown/fn-definition-skip-0/summary.txt` reports `warning-only` with 3873 warnings, down from 3963 at `target/octet-baseline/summary.txt`. The reduction is 90 `non_trait_imports` findings (326 to 236), and every other lint family is unchanged. Thirteen files remain refused by the tool for separate manual reasons: public imports, inline format arguments, shared use groups, a shared part-body module scope, a repeated binding, and `#[path]` test modules.
 
 ## No-suppression policy
 
