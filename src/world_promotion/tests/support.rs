@@ -145,7 +145,7 @@ pub(super) struct UnknownTransaction {
     pub readback_calls: Cell<usize>,
 }
 
-impl WorldPromotionTransactionPort for UnknownTransaction {
+impl WorldPromotionCommitPort for UnknownTransaction {
     fn commit_promotion(
         &mut self,
         _plan: &WorldPromotionPlan,
@@ -160,7 +160,9 @@ impl WorldPromotionTransactionPort for UnknownTransaction {
         self.readback_calls.set(self.readback_calls.get().saturating_add(1));
         Ok(WorldPromotionReadBackObservation::Reservation)
     }
+}
 
+impl WorldPromotionBookkeepingPort for UnknownTransaction {
     fn read_reservation(
         &self,
         _reservation_ref: &WorldReleaseReservationRef,

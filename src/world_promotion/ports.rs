@@ -7,7 +7,8 @@ pub trait WorldPromotionCurrentPort {
     fn observe_transaction(&mut self, plan: &WorldPromotionPlan) -> Result<WorldPromotionTransactionFacts>;
 }
 
-pub trait WorldPromotionTransactionPort {
+/// The commit half of the promotion transaction port.
+pub trait WorldPromotionCommitPort {
     fn commit_promotion(
         &mut self,
         plan: &WorldPromotionPlan,
@@ -17,7 +18,11 @@ pub trait WorldPromotionTransactionPort {
     ) -> Result<WorldPromotionCommitObservation>;
 
     fn read_back_promotion(&self, plan: &WorldPromotionPlan) -> Result<WorldPromotionReadBackObservation>;
+}
 
+/// The reservation and attempt bookkeeping half of the promotion transaction
+/// port.
+pub trait WorldPromotionBookkeepingPort {
     fn read_reservation(&self, reservation_ref: &WorldReleaseReservationRef)
     -> Result<Option<WorldReleaseReservation>>;
 
@@ -34,6 +39,11 @@ pub trait WorldPromotionTransactionPort {
 
     fn read_attempt(&self, attempt_ref: &WorldReleaseAttemptRef) -> Result<Option<WorldAttemptRecord>>;
 }
+
+/// Every transaction capability a promotion adapter must provide.
+pub trait WorldPromotionTransactionPort: WorldPromotionCommitPort + WorldPromotionBookkeepingPort {}
+
+impl<T> WorldPromotionTransactionPort for T where T: WorldPromotionCommitPort + WorldPromotionBookkeepingPort {}
 
 pub trait WorldEffectAdmissionPort {
     fn observe_dispatch(

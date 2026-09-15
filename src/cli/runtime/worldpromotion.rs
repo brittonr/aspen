@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use molten::error::MoltenError;
 use molten::error::Result;
 use molten::world_promotion::LocalWorldPromotionStore;
-use molten::world_promotion::WorldPromotionTransactionPort;
+use molten::world_promotion::WorldPromotionBookkeepingPort;
 use molten::world_promotion::canonical_promotion_plan;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_head::WorldBranchClass;

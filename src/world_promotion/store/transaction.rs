@@ -7,10 +7,11 @@ use crate::error::Result;
 use crate::world_head::canonical_world_head_state;
 use crate::world_head::parse_canonical_world_head_state;
 use crate::world_promotion::CanonicalWorldPromotionRecord;
-use crate::world_promotion::WorldPromotionTransactionPort;
+use crate::world_promotion::WorldPromotionBookkeepingPort;
+use crate::world_promotion::WorldPromotionCommitPort;
 use crate::world_promotion::parse_reservation;
 
-impl WorldPromotionTransactionPort for LocalWorldPromotionStore {
+impl WorldPromotionCommitPort for LocalWorldPromotionStore {
     fn commit_promotion(
         &mut self,
         plan: &WorldPromotionPlan,
@@ -117,7 +118,9 @@ impl WorldPromotionTransactionPort for LocalWorldPromotionStore {
             Ok(WorldPromotionReadBackObservation::Missing)
         }
     }
+}
 
+impl WorldPromotionBookkeepingPort for LocalWorldPromotionStore {
     fn read_reservation(
         &self,
         reservation_ref: &WorldReleaseReservationRef,
