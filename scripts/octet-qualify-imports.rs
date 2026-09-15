@@ -387,6 +387,19 @@ fn is_hidden(scopes: &[Scope], name: &str, offset: usize) -> bool {
     })
 }
 
+/// True when a binding inside `outer` hides `name` at this offset.
+///
+/// A nested `use` shadows a file-level import, so the reverse is not true: an
+/// item declared outside the nested scope does not shadow the nested import.
+fn is_hidden_within(scopes: &[Scope], name: &str, offset: usize, outer: &Range<usize>) -> bool {
+    scopes.iter().any(|scope| {
+        scope.name == name
+            && outer.contains(&scope.range.start)
+            && (scope.declaration.contains(&offset)
+                || (scope.range.contains(&offset) && offset >= scope.offset))
+    })
+}
+
 /// True when a pattern that can name a constant must be qualified instead.
 ///
 /// Rust requires a non-snake-case name for a constant, so an uppercase name in
@@ -999,6 +1012,123 @@ struct Repair {
     descendants: Vec<(String, String, usize)>,
 }
 
+/// A flagged `use` item that is nested inside a block or a nested module body.
+///
+/// The import is scoped to `scope`, so only references inside that range are
+/// rewritten. A `use` in a function body and a `use` in a `mod name { .. }`
+/// body both behave this way.
+struct LocalImport {
+    scope: Range<usize>,
+    name: String,
+    owner: String,
+    item: Range<usize>,
+}
+
+/// Collect the flagged `use` items that sit inside a nested scope.
+struct LocalUses<'a> {
+    lines: &'a LineIndex,
+    flagged_lines: &'a [usize],
+    scopes: Vec<Range<usize>>,
+    found: Vec<LocalImport>,
+    skipped: Vec<String>,
+}
+
+impl<'ast> Visit<'ast> for LocalUses<'_> {
+    fn visit_block(&mut self, node: &'ast syn::Block) {
+        self.scopes.push(self.lines.range(node.span()));
+        syn::visit::visit_block(self, node);
+        self.scopes.pop();
+    }
+
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        if let Some((brace, _)) = &node.content {
+            self.scopes.push(self.lines.range(brace.span.join()));
+            syn::visit::visit_item_mod(self, node);
+            self.scopes.pop();
+        }
+    }
+
+    fn visit_item(&mut self, node: &'ast syn::Item) {
+        if let syn::Item::Use(item_use) = node {
+            self.record(item_use);
+        }
+        syn::visit::visit_item(self, node);
+    }
+}
+
+impl LocalUses<'_> {
+    fn record(&mut self, item_use: &syn::ItemUse) {
+        let start_line = item_use.span().start().line;
+        let Some(scope) = self.scopes.last().cloned() else {
+            return;
+        };
+        if !self.flagged_lines.contains(&start_line) {
+            return;
+        }
+        if !item_use.attrs.is_empty() {
+            self.skipped.push(format!("attributes on line {start_line}"));
+            return;
+        }
+        if !matches!(item_use.vis, syn::Visibility::Inherited) {
+            self.skipped.push(format!("public import on line {start_line}"));
+            return;
+        }
+        if matches!(item_use.tree, syn::UseTree::Glob(_)) {
+            self.skipped.push(format!("glob import on line {start_line}"));
+            return;
+        }
+        let names = bound_names(&item_use.tree);
+        if is_group_tree(&item_use.tree) && names.len() != 1 {
+            self.skipped.push(format!("shared use group on line {start_line}"));
+            return;
+        }
+        let colon = if item_use.leading_colon.is_some() {
+            "::"
+        } else {
+            ""
+        };
+        let item = self.lines.range(item_use.span());
+        for target in &names {
+            if target == "_" {
+                self.skipped.push(format!("anonymous import on line {start_line}"));
+                continue;
+            }
+            let Some((owner, bound)) = resolve_leaf(colon, &item_use.tree, target) else {
+                self.skipped.push(format!("unresolved leaf `{target}` on line {start_line}"));
+                continue;
+            };
+            if let Some(existing) =
+                self.found.iter().find(|import| import.scope == scope && import.name == bound)
+            {
+                if existing.owner != owner {
+                    self.skipped.push(format!("ambiguous owner for `{bound}` on line {start_line}"));
+                }
+                continue;
+            }
+            self.found.push(LocalImport {
+                scope: scope.clone(),
+                name: bound,
+                owner,
+                item: item.clone(),
+            });
+        }
+    }
+}
+
+/// The innermost nested import that names `name` at `offset`.
+fn local_import_at(
+    imports: &[LocalImport],
+    name: &str,
+    offset: usize,
+) -> Option<usize> {
+    imports
+        .iter()
+        .enumerate()
+        .filter(|(_, import)| import.name == name && import.scope.contains(&offset))
+        .min_by_key(|(_, import)| import.scope.end - import.scope.start)
+        .map(|(index, _)| index)
+}
+
 /// Rewrite flagged imports in `source`, returning the new text and edit count.
 fn qualify_source(
     path: &str,
@@ -1081,7 +1211,26 @@ fn qualify_source(
     if !skipped.is_empty() {
         return Err(format!("manual repair required: {}", skipped.join("; ")));
     }
-    if owners.is_empty() {
+    let (local_skipped, local_imports) = {
+        let mut nested = LocalUses {
+            lines: &lines,
+            flagged_lines,
+            scopes: Vec::new(),
+            found: Vec::new(),
+            skipped: Vec::new(),
+        };
+        nested.visit_file(&syntax);
+        (nested.skipped, nested.found)
+    };
+    skipped.extend(local_skipped);
+    if !skipped.is_empty() {
+        return Err(format!("manual repair required: {}", skipped.join("; ")));
+    }
+    for import in &local_imports {
+        removals.push(line_deletion_range(source, import.item.clone()));
+        flagged_ranges.push(import.item.clone());
+    }
+    if owners.is_empty() && local_imports.is_empty() {
         return Ok(Repair {
             output: source.to_string(),
             edits: 0,
@@ -1096,11 +1245,15 @@ fn qualify_source(
         flagged_ranges: &flagged_ranges,
     };
     file_bindings.visit_file(&syntax);
-    for name in owners.keys() {
-        if file_bindings.extra_use_bindings.contains(name) {
+    let rewritten_names = owners
+        .keys()
+        .cloned()
+        .chain(local_imports.iter().map(|import| import.name.clone()));
+    for name in rewritten_names {
+        if file_bindings.extra_use_bindings.contains(&name) {
             skipped.push(format!("second `use` binds `{name}`"));
         }
-        if file_bindings.bindings.shorthands.contains(name) {
+        if file_bindings.bindings.shorthands.contains(&name) {
             skipped.push(format!("field shorthand reads `{name}`"));
         }
     }
@@ -1138,12 +1291,14 @@ fn qualify_source(
     }
     let mut edits: Vec<(Range<usize>, String)> = Vec::new();
     let mut manual: Vec<String> = Vec::new();
+    let mut used_locals: BTreeSet<usize> = BTreeSet::new();
     let tokens: proc_macro2::TokenStream = source
         .parse()
         .map_err(|error| format!("tokenize failed: {error}"))?;
     collect_reference_edits(
         tokens.clone(),
         &owners,
+        &local_imports,
         &flagged_ranges,
         &modules.ranges,
         &lines,
@@ -1151,8 +1306,19 @@ fn qualify_source(
         source,
         &mut edits,
         &mut manual,
+        &mut used_locals,
     );
-    inline_format_references(tokens, &owners, &mut manual);
+    // Removing a nested import is safe only when every reference to it in its
+    // own scope was qualified. An import kept only for method resolution, or an
+    // unused one, would otherwise leave the file unresolved.
+    for (index, import) in local_imports.iter().enumerate() {
+        if !used_locals.contains(&index) {
+            manual.push(format!("nested import `{}` has no reference to qualify", import.name));
+        }
+    }
+    let mut names: BTreeSet<String> = owners.keys().cloned().collect();
+    names.extend(local_imports.iter().map(|import| import.name.clone()));
+    inline_format_references(tokens, &names, &mut manual);
     if !manual.is_empty() {
         manual.sort();
         manual.dedup();
@@ -1211,6 +1377,7 @@ fn module_depth(ranges: &[Range<usize>], offset: usize) -> usize {
 fn collect_reference_edits(
     stream: proc_macro2::TokenStream,
     owners: &BTreeMap<String, String>,
+    local_imports: &[LocalImport],
     flagged_ranges: &[Range<usize>],
     module_ranges: &[Range<usize>],
     lines: &LineIndex,
@@ -1218,6 +1385,7 @@ fn collect_reference_edits(
     source: &str,
     edits: &mut Vec<(Range<usize>, String)>,
     manual: &mut Vec<String>,
+    used: &mut BTreeSet<usize>,
 ) {
     let mut previous = String::new();
     for token in stream {
@@ -1226,6 +1394,7 @@ fn collect_reference_edits(
                 collect_reference_edits(
                     group.stream(),
                     owners,
+                    local_imports,
                     flagged_ranges,
                     module_ranges,
                     lines,
@@ -1233,6 +1402,7 @@ fn collect_reference_edits(
                     source,
                     edits,
                     manual,
+                    used,
                 );
                 previous.clear();
             }
@@ -1250,7 +1420,18 @@ fn collect_reference_edits(
                 // the definition site is skipped explicitly.
                 let is_definition = previous == "fn";
                 if !in_import && !is_qualified && !is_field && !is_definition {
-                    if let Some(owner) = owners.get(&name) {
+                    // A nested `use` shadows a file-level import inside its own
+                    // scope, so it is resolved first.
+                    if let Some(index) = local_import_at(local_imports, &name, start) {
+                        let import = &local_imports[index];
+                        let depth = module_depth(module_ranges, start);
+                        let shadowed = !pattern_names_constant(&name, scopes, start)
+                            && is_hidden_within(scopes, &name, start, &import.scope);
+                        if !shadowed {
+                            edits.push((range, qualify_owner(&import.owner, depth)));
+                            used.insert(index);
+                        }
+                    } else if let Some(owner) = owners.get(&name) {
                         let depth = module_depth(module_ranges, start);
                         if pattern_names_constant(&name, scopes, start) {
                             // A constant pattern over an uppercase name: qualify
@@ -1287,20 +1468,20 @@ fn collect_reference_edits(
 /// reported for manual repair instead of being rewritten silently.
 fn inline_format_references(
     stream: proc_macro2::TokenStream,
-    owners: &BTreeMap<String, String>,
+    names: &BTreeSet<String>,
     manual: &mut Vec<String>,
 ) {
     for token in stream {
         match token {
             proc_macro2::TokenTree::Group(group) => {
-                inline_format_references(group.stream(), owners, manual);
+                inline_format_references(group.stream(), names, manual);
             }
             proc_macro2::TokenTree::Literal(literal) => {
                 let text = literal.to_string();
                 if !text.contains('{') {
                     continue;
                 }
-                for name in owners.keys() {
+                for name in names {
                     let open = format!("{{{name}}}");
                     let spec = format!("{{{name}:");
                     if text.contains(&open) || text.contains(&spec) {
@@ -1522,6 +1703,50 @@ impl Holder {
     }
     if !output.contains("crate::addr::observe_file()") {
         return Err(format!("self test missed a method-body reference in\n{output}"));
+    }
+    // A nested `use` is scoped to its own block, so a sibling function keeps
+    // its own name resolution.
+    let local = "fn f() {\n    use crate::addr::Addr;\n    let value: Addr = Addr::default();\n    let _ = value;\n}\n\nfn g(value: Addr) -> Addr {\n    value\n}\n";
+    let output = qualify_source("src/addr/route.rs", local, &[2])?.output;
+    if output.contains("use crate::addr::Addr;") {
+        return Err(format!("self test kept a nested import in\n{output}"));
+    }
+    if !output.contains("let value: crate::addr::Addr = crate::addr::Addr::default();") {
+        return Err(format!("self test missed a block-scoped reference in\n{output}"));
+    }
+    if !output.contains("fn g(value: Addr) -> Addr") {
+        return Err(format!("self test leaked a block scope outside its block in\n{output}"));
+    }
+    // A nested module body scopes its imports the same way.
+    let nested_module =
+        "mod tests {\n    use crate::addr::Addr;\n\n    fn f(value: Addr) -> Addr {\n        value\n    }\n}\n";
+    let output = qualify_source("src/addr/route.rs", nested_module, &[2])?.output;
+    if output.contains("use crate::addr::Addr;") {
+        return Err(format!("self test kept a nested-module import in\n{output}"));
+    }
+    if !output.contains("fn f(value: crate::addr::Addr) -> crate::addr::Addr") {
+        return Err(format!("self test missed a nested-module reference in\n{output}"));
+    }
+    // An inner block can hide the name again, and that block keeps its own
+    // resolution while the outer block is qualified.
+    let shadowed_local = "fn f() {\n    use crate::addr::Addr;\n    let value: Addr = Addr::default();\n    {\n        let Addr = 1;\n        let _ = Addr;\n    }\n    let _ = value;\n}\n";
+    let output = qualify_source("src/addr/route.rs", shadowed_local, &[2])?.output;
+    if !output.contains("let Addr = 1;") || !output.contains("let _ = Addr;") {
+        return Err(format!("self test rewrote a shadowed nested binding in\n{output}"));
+    }
+    if !output.contains("let value: crate::addr::Addr = crate::addr::Addr::default();") {
+        return Err(format!("self test missed an outer nested reference in\n{output}"));
+    }
+    // A nested import that no reference can qualify is refused: it can be kept
+    // only for method resolution, so removing it would not resolve.
+    let unresolved_local = "fn f() {\n    use crate::addr::Addr;\n    let Addr = 1;\n    let _ = Addr;\n}\n";
+    if qualify_source("src/addr/route.rs", unresolved_local, &[2]).is_ok() {
+        return Err(String::from("self test accepted an unqualifiable nested import"));
+    }
+    // A nested import used as an inline format capture is still a refusal.
+    let local_format = "fn f() -> String {\n    use crate::addr::ADDR;\n    format!(\"{ADDR}\")\n}\n";
+    if qualify_source("src/addr/route.rs", local_format, &[2]).is_ok() {
+        return Err(String::from("self test accepted a nested inline format argument"));
     }
     // An uppercase name in a match arm names the imported constant, so the
     // pattern keeps its meaning only when it is qualified.

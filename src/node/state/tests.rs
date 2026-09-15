@@ -182,7 +182,6 @@ fn nested_store_handles_share_the_open_node_authority() {
 #[test]
 fn symlinked_and_non_regular_leaves_deny_before_read_write_or_remove() {
     // r[verify molten.node.cap_std_validation]
-    use std::os::unix::fs::symlink;
 
     let (workspace, root) = state_root("node-state-symlink-denial");
     root.create_layout().expect("layout");
@@ -191,7 +190,7 @@ fn symlinked_and_non_regular_leaves_deny_before_read_write_or_remove() {
     let outside = plan.path().join("outside");
     std::fs::write(&outside, b"outside").expect("outside file");
     let linked = plan.path().join("control/inbox/linked.preserves");
-    symlink(&outside, &linked).expect("symlink leaf");
+    std::os::unix::fs::symlink(&outside, &linked).expect("symlink leaf");
     let inbox = root.control_inbox().expect("inbox");
     let linked_path = NodeStatePath::parse("linked.preserves").expect("linked path");
     assert!(inbox.read(&linked_path, MAX_NODE_STATE_FILE_BYTES).is_err());

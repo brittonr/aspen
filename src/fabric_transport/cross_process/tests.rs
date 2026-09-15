@@ -192,23 +192,23 @@ pub(crate) fn client_input(endpoint: CanonicalCrossProcessEndpoint) -> IrohCross
 }
 
 fn effect_binding(profile: &CanonicalTransportProfile) -> crate::fabric::CanonicalFabricPortBinding {
-    use crate::fabric::FabricPortRequirement;
-    use crate::fabric::resolve_canonical_fabric_port_binding;
-
     let descriptor = fabric_transport_port_descriptor(profile);
-    resolve_canonical_fabric_port_binding(std::slice::from_ref(&descriptor), &FabricPortRequirement {
-        port_id: descriptor.port_id.clone(),
-        version: descriptor.version.clone(),
-        class: descriptor.class,
-        operation_classes: descriptor.operation_classes.clone(),
-        input_schema_refs: descriptor.input_schema_refs.clone(),
-        output_schema_refs: descriptor.output_schema_refs.clone(),
-        allowed_authorities: descriptor.authority_requirements.clone(),
-        available_resources: descriptor.resource_requirements.clone(),
-        expected_determinism: descriptor.determinism,
-        expected_replay: descriptor.replay,
-        expected_profile: descriptor.implementation_profile.clone(),
-    })
+    crate::fabric::resolve_canonical_fabric_port_binding(
+        std::slice::from_ref(&descriptor),
+        &crate::fabric::FabricPortRequirement {
+            port_id: descriptor.port_id.clone(),
+            version: descriptor.version.clone(),
+            class: descriptor.class,
+            operation_classes: descriptor.operation_classes.clone(),
+            input_schema_refs: descriptor.input_schema_refs.clone(),
+            output_schema_refs: descriptor.output_schema_refs.clone(),
+            allowed_authorities: descriptor.authority_requirements.clone(),
+            available_resources: descriptor.resource_requirements.clone(),
+            expected_determinism: descriptor.determinism,
+            expected_replay: descriptor.replay,
+            expected_profile: descriptor.implementation_profile.clone(),
+        },
+    )
     .expect("cross-process transport binding")
 }
 

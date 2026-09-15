@@ -45,7 +45,6 @@
     fn replaced_control_lock_cannot_redirect_cleanup() {
         // r[verify molten.node.cap_std_request_lifecycle]
         // r[verify molten.node.cap_std_validation]
-        use std::os::unix::fs::symlink;
 
         let root_path = initialized_control_root("node-control-lock-replacement", "node:lock-replacement");
         let root = crate::node_state::NodeStateRoot::open(&root_path).expect("state root");
@@ -56,7 +55,7 @@
         std::fs::write(&outside_path, b"outside").expect("outside lock target");
         let lock_path = root_path.join(CONTROL_LOCK_FILE);
         std::fs::remove_file(&lock_path).expect("remove original lock");
-        symlink(&outside_path, &lock_path).expect("replace lock with symlink");
+        std::os::unix::fs::symlink(&outside_path, &lock_path).expect("replace lock with symlink");
 
         let error = remove_active_lock(&root).expect_err("replacement lock cleanup must deny");
         assert!(error.to_string().contains("regular file"));

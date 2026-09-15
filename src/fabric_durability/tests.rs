@@ -263,19 +263,16 @@ fn deterministic_adapter_corruption_requires_quarantine_and_stale_generation_den
 // r[verify molten.fabric_durability.final_validation]
 #[test]
 fn registered_effect_port_routes_only_known_commands_to_the_exact_bound_profile() {
-    use crate::fabric::FabricPortRequirement;
-    use crate::fabric::resolve_canonical_fabric_port_binding;
-    use crate::system_extension::EffectTarget;
     use crate::system_extension::FabricEffectPort;
-    use crate::system_extension::TypedEffectRequest;
 
     let simulation = profile(DurableAdapterKind::DeterministicSimulation);
     let port_descriptor = fabric_durability_port_descriptors(&simulation)
         .into_iter()
         .find(|descriptor| descriptor.port_id == FABRIC_DURABLE_LOG_PORT_ID)
         .expect("durable log descriptor");
-    let binding =
-        resolve_canonical_fabric_port_binding(std::slice::from_ref(&port_descriptor), &FabricPortRequirement {
+    let binding = crate::fabric::resolve_canonical_fabric_port_binding(
+        std::slice::from_ref(&port_descriptor),
+        &crate::fabric::FabricPortRequirement {
             port_id: port_descriptor.port_id.clone(),
             version: port_descriptor.version.clone(),
             class: port_descriptor.class,
@@ -287,14 +284,15 @@ fn registered_effect_port_routes_only_known_commands_to_the_exact_bound_profile(
             expected_determinism: port_descriptor.determinism,
             expected_replay: port_descriptor.replay,
             expected_profile: port_descriptor.implementation_profile.clone(),
-        })
-        .expect("canonical durability binding");
+        },
+    )
+    .expect("canonical durability binding");
     let adapter = SimulatedDurableStateAdapter::new(simulation, descriptor()).expect("simulation adapter");
     let mut port = RegisteredDurableEffectPort::new(adapter);
     port.register(OPERATION_REF.to_string(), DurablePortCommand::Append(append_request(DurabilityLevel::ProcessLoss)))
         .expect("register durable request");
-    let effect = TypedEffectRequest {
-        target: EffectTarget::FabricPort(binding.binding.key.clone()),
+    let effect = crate::system_extension::TypedEffectRequest {
+        target: crate::system_extension::EffectTarget::FabricPort(binding.binding.key.clone()),
         operation: "append".to_string(),
         input_schema_ref: DURABLE_STATE_OPERATION_SCHEMA.to_string(),
         output_schema_ref: DURABLE_STATE_OUTCOME_SCHEMA.to_string(),

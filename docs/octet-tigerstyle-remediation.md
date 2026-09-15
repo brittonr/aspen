@@ -2,15 +2,15 @@
 
 This file records the current Octet source-gate evidence and the remaining caveat for `octet-tigerstyle-remediation`.
 
-Current state (probe `target/octet-burndown/live-cluster-setup-mod-0/summary.txt`, commit
-`a591c38ac`):
+Current state (probe `target/octet-burndown/nested-use-scope-0/summary.txt`, commit
+`a98371e09`):
 
 - `dylint.toml` sets `disabled_lints = []`, so the probe reports every lint.
-- The workspace probe is `warning-only`: 3723 warnings, 0 errors, 0 autofixable.
+- The workspace probe is `warning-only`: 3675 warnings, 0 errors, 0 autofixable.
 - The pre-remediation baseline in this worktree was 6754 warnings. The `octet-baseline`
   probe for this burn-down was 3963 warnings.
 - Eighteen lint families report zero. The largest remaining families are
-  `path_segment_repetition` (1877), `excessive_file_length` (550),
+  `path_segment_repetition` (1877), `excessive_file_length` (552),
   `borrowed_argument_types` (368), and `unbounded_collection_growth` (216).
 
 Two scripts carry the mechanical repairs. Each one reads an Octet artifact, refuses any file it
@@ -19,7 +19,9 @@ cannot rewrite safely, and re-parses its own output before writing:
 - `scripts/octet-qualify-imports.rs` resolves `non_trait_imports` from a probe summary. It
   removes each flagged private import, qualifies the references that the import owns, follows
   references into descendant modules, and skips a reference that a later binding owns. It also
-  keeps a function or method definition name in place when the same name is imported.
+  keeps a function or method definition name in place when the same name is imported, and it
+  repairs a `use` that is nested inside a function body or a nested module body by scoping the
+  rewrite to the block that holds the import.
 - `scripts/octet-predicate-names.rs` resolves `bool_naming` from a JSON result stream.
 
 Run `cargo -q -Zscript scripts/<name>.rs --self-test` for the positive and negative fixtures.
@@ -51,11 +53,11 @@ Focused object corpus: object-set hash `b3:f61ed6753b0a349fa2988e444ea3bae1f0ae2
 
 | Scope | Status | Findings | Warnings | Errors | Autofixable |
 |---|---:|---:|---:|---:|---:|
-| workspace | warning-only | 3723 | 3723 | 0 | 0 |
+| workspace | warning-only | 3675 | 3675 | 0 | 0 |
 
-Top workspace lint counts: `path_segment_repetition` 1877, `excessive_file_length` 550,
-`borrowed_argument_types` 368, `non_trait_imports` 86, `unbounded_collection_growth` 216,
-`function_length` 202, `too_many_parameters` 143, `no_unwrap` 80,
+Top workspace lint counts: `path_segment_repetition` 1877, `excessive_file_length` 552,
+`borrowed_argument_types` 368, `non_trait_imports` 34, `unbounded_collection_growth` 216,
+`function_length` 204, `too_many_parameters` 143, `no_unwrap` 80,
 `underscore_in_module_filename` 56, `usize_in_public_api` 32.
 
 Latest no-disabled-lints harness replay import-wrapper probe (`target/octet-burndown/harness-replay-wrapper-import-0/summary.txt`) is `warning-only` with 5274 warnings: `path_segment_repetition` 2960, `non_trait_imports` 2146, `excessive_file_length` 111, `underscore_in_module_filename` 48, and `module_file_count` 9; `function_length`, `nested_conditionals`, and `borrowed_argument_types` remain cleared, and `function_length` is now enforced by `dylint.toml`. The remaining source-scope rows are generated/remapped external rows classified by the remediation plan rather than silently hidden; any future Molten-owned or unknown row remains fail-closed/actionable before `module_file_count` or underscore-filename caveats can be removed, and import/path/size families remain active caveats until each family is clean or scoped. The remaining file-size, import, path-shape, and source-scope rows stay visible active caveats for later focused gateway, command-shape, and file-size splits rather than being hidden by configuration-clean source-gate evidence.
@@ -368,6 +370,8 @@ Import repair method-definition validation: baseline `cargo -q -Zscript scripts/
 Inline format argument validation: the import repair refuses a file when a removed leaf is used as an inline format capture, because the token rewrite cannot qualify a capture. Four files held one such capture each, at 126 `non_trait_imports` findings: `src/fabric_consistency/raft/admission.rs` (`STATIC_VOTER_COUNT`), `src/fabric_consistency/binding.rs` (`MAX_CONSISTENCY_IDENTIFIER_BYTES`), `crates/molten-node-host/src/node/state/enumeration.rs` (`MAX_NODE_STATE_ENTRIES`), and `crates/molten-node-host/src/node/state/filesystem.rs` (`MAX_NODE_STATE_FILE_BYTES`). Each capture moved to a positional argument with the qualified owner path, for example `format!("node state entry count exceeds maximum {}", super::MAX_NODE_STATE_ENTRIES)`. The repair then rewrote the four files with 273 edits. Validation passed with `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p molten --lib fabric_consistency` (97 tests), `cargo test -p molten --lib node_state` (10 tests), and `cargo test -p molten-node-host` (exit 0). The no-disabled probe `target/octet-burndown/inline-format-positional-0/summary.txt` reports `warning-only` with 3747 warnings, down from 3873. The reduction is 126 `non_trait_imports` findings (236 to 110), and no other lint family moved. Nine files remain refused by the tool: three public imports, a repeated descendant import, a repeated binding, a shared use group, a shared part-body module scope, and two `#[path]` test modules.
 
 Live-cluster setup visibility validation: the import repair refuses a `pub(super) use` because a visibility-narrowed re-export cannot be replaced by a qualified path, and `src/fabric_consistency/raft/live_cluster/mod.rs` held three of them for `setup` items, which blocked the remaining 21 private imports in that file. The re-exports are gone: `mod setup;` is now `pub(in crate::fabric_consistency::raft) mod setup;`, the three items already carry the same visibility, and the three call sites in `src/fabric_consistency/raft/live_process/child.rs` name `live_cluster::setup::*`. The descendant refusal that surfaced next was a genuine shadowing ambiguity: `time_for` in `src/fabric_consistency/raft/live_cluster/setup.rs` had a `profile` parameter that collided with the parent's `profile` import through a field shorthand, so the parameter is now `time_profile`. Validation passed with `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p molten --lib fabric_consistency` (97 tests), and `cargo test -p molten --lib raft` (53 tests). The repair then rewrote `mod.rs` with 48 edits and two descendant files for 100 edits in total. The no-disabled probe `target/octet-burndown/live-cluster-setup-mod-0/summary.txt` reports `warning-only` with 3723 warnings, down from 3747. The reduction is 24 `non_trait_imports` findings (110 to 86), and no other lint family moved.
+
+Nested-use scope validation: the import repair read only the file-level items, so a flagged `use` inside a function body or a `mod name { .. }` body produced no edit and no diagnostic. A `use crate::preserves_rail::record;` at the top of a value builder, for example, was invisible to the tool. The tool now collects nested uses, scopes each rewrite to the block that holds the import, resolves a nested import before a file-level one, and refuses a nested import that no reference can qualify so an import kept only for method resolution is never dropped silently. It also bounds the shadow check to the nested scope, because an item declared outside that scope does not shadow the nested import. Four self-test fixtures cover a block-scoped import, a nested-module import, an inner shadow inside a qualified block, and an unqualifiable nested import. Validation passed with `cargo -q -Zscript scripts/octet-qualify-imports.rs --self-test`, `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test -p molten --lib` (1458 tests). The repair rewrote nine files with 224 edits: the two Wasm evidence modules, `src/fabric_durability/tests.rs`, `src/fabric_time/tests.rs`, `src/fabric_transport/tests.rs`, `src/fabric_transport/cross_process/tests.rs`, `src/live_binding_adoption.rs`, `src/node/parts/daemon/tests/m000/p013/body.rs`, and `src/node/state/tests.rs`. The no-disabled probe `target/octet-burndown/nested-use-scope-0/summary.txt` reports `warning-only` with 3675 warnings, down from 3723. The reduction is 52 `non_trait_imports` findings (86 to 34). Qualifying the projection calls lengthened `src/wasm/performance/evidence.rs` past the 300-line file limit and past the function limit for `performance_receipt_value`, so that file carries 2 `excessive_file_length` and 2 `function_length` findings; the file split is the follow-up slice. `src/main/root/command.rs` is refused because its `use clap::Parser;` exists only for method resolution on `Cli::try_parse_from`.
 
 ## No-suppression policy
 

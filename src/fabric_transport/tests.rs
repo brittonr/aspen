@@ -323,35 +323,34 @@ fn deterministic_partition_after_submission_reports_uncertainty_without_retry() 
 // r[verify molten.fabric_transport.protocol_registration]
 #[test]
 fn registered_effect_port_routes_only_exact_profile_generation_and_known_request() {
-    use crate::fabric::FabricPortRequirement;
-    use crate::fabric::resolve_canonical_fabric_port_binding;
-    use crate::system_extension::EffectTarget;
     use crate::system_extension::FabricEffectPort;
-    use crate::system_extension::TypedEffectRequest;
 
     let profile = profile(TransportAdapterKind::DeterministicSimulation);
     let descriptor = fabric_transport_port_descriptor(&profile);
-    let binding = resolve_canonical_fabric_port_binding(std::slice::from_ref(&descriptor), &FabricPortRequirement {
-        port_id: descriptor.port_id.clone(),
-        version: descriptor.version.clone(),
-        class: descriptor.class,
-        operation_classes: descriptor.operation_classes.clone(),
-        input_schema_refs: descriptor.input_schema_refs.clone(),
-        output_schema_refs: descriptor.output_schema_refs.clone(),
-        allowed_authorities: descriptor.authority_requirements.clone(),
-        available_resources: descriptor.resource_requirements.clone(),
-        expected_determinism: descriptor.determinism,
-        expected_replay: descriptor.replay,
-        expected_profile: descriptor.implementation_profile.clone(),
-    })
+    let binding = crate::fabric::resolve_canonical_fabric_port_binding(
+        std::slice::from_ref(&descriptor),
+        &crate::fabric::FabricPortRequirement {
+            port_id: descriptor.port_id.clone(),
+            version: descriptor.version.clone(),
+            class: descriptor.class,
+            operation_classes: descriptor.operation_classes.clone(),
+            input_schema_refs: descriptor.input_schema_refs.clone(),
+            output_schema_refs: descriptor.output_schema_refs.clone(),
+            allowed_authorities: descriptor.authority_requirements.clone(),
+            available_resources: descriptor.resource_requirements.clone(),
+            expected_determinism: descriptor.determinism,
+            expected_replay: descriptor.replay,
+            expected_profile: descriptor.implementation_profile.clone(),
+        },
+    )
     .expect("transport binding");
     let context = ExtensionTransportContext::from_test_snapshot("echo-service", GENERATION, &profile);
     let adapter = DeterministicTransportAdapter::new(profile.clone()).expect("simulated adapter");
     let mut port = RegisteredTransportEffectPort::new(adapter, context, profile).expect("registered port");
     port.register(REQUEST_REF.to_string(), setup_commands()[0].clone())
         .expect("register transport request");
-    let effect = TypedEffectRequest {
-        target: EffectTarget::FabricPort(binding.binding.key.clone()),
+    let effect = crate::system_extension::TypedEffectRequest {
+        target: crate::system_extension::EffectTarget::FabricPort(binding.binding.key.clone()),
         operation: "register-protocol".to_string(),
         input_schema_ref: TRANSPORT_COMMAND_SCHEMA.to_string(),
         output_schema_ref: TRANSPORT_EVENT_SCHEMA.to_string(),

@@ -140,49 +140,54 @@ pub fn validate_component_receipt_chain(receipts: &[ComponentReceipt]) -> super:
 }
 
 pub fn component_receipt_value(receipt: &ComponentReceipt) -> preserves::IOValue {
-    use crate::preserves_rail::optional_ref_value;
-    use crate::preserves_rail::record;
-    use crate::preserves_rail::sequence;
-    use crate::preserves_rail::string;
-    use crate::preserves_rail::u64_value;
-
-    record("wasm-component-receipt-v1", vec![
-        record("schema", vec![string(COMPONENT_RECEIPT_SCHEMA)]),
-        record("stage", vec![string(receipt.input.stage.as_str())]),
-        record("decision", vec![string(receipt.input.decision.as_str())]),
-        record("evidence-scope", vec![string(receipt.input.evidence_scope.as_str())]),
-        record("consumer", vec![string(receipt.input.consumer.as_str())]),
-        record("component-ref", vec![string(&receipt.input.component_ref)]),
-        record("wit-ref", vec![string(&receipt.input.wit_ref)]),
-        record("profile-ref", vec![string(&receipt.input.profile_ref)]),
-        record("runtime-configuration-ref", vec![string(&receipt.input.runtime_configuration_ref)]),
-        record("bundle-ref", vec![optional_ref_value(receipt.input.bundle_ref.as_deref())]),
-        record("imports", vec![strings(&receipt.input.imports)]),
-        record("capabilities", vec![strings(&receipt.input.capabilities)]),
-        record("mantle-evidence-refs", vec![strings(&receipt.input.mantle_evidence_refs)]),
-        record("valence-evidence-refs", vec![strings(&receipt.input.valence_evidence_refs)]),
-        record("cairn-evidence-refs", vec![strings(&receipt.input.cairn_evidence_refs)]),
-        record("policy-refs", vec![strings(&receipt.input.policy_refs)]),
-        record("authority-refs", vec![strings(&receipt.input.authority_refs)]),
-        record("resource-refs", vec![strings(&receipt.input.resource_refs)]),
-        record("recorded-effect-refs", vec![strings(&receipt.input.recorded_effect_refs)]),
-        record("input-ref", vec![optional_ref_value(receipt.input.input_ref.as_deref())]),
-        record("output-ref", vec![optional_ref_value(receipt.input.output_ref.as_deref())]),
-        record("fuel-limit", vec![optional_u64(receipt.input.fuel_limit)]),
-        record("fuel-remaining", vec![optional_u64(receipt.input.fuel_remaining)]),
-        record("trap-class", vec![
-            receipt
-                .input
-                .trap_class
-                .as_deref()
-                .map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)])),
-        ]),
-        record("parent-refs", vec![strings(&receipt.input.parent_refs)]),
-        record("diagnostics", vec![strings(&receipt.input.diagnostics)]),
-        record("non-claims", vec![sequence(receipt.non_claims.iter().map(string).collect())]),
-        record("fuel-observation", vec![
-            u64_value(receipt.input.fuel_limit.unwrap_or(0)),
-            u64_value(receipt.input.fuel_remaining.unwrap_or(0)),
+    crate::preserves_rail::record("wasm-component-receipt-v1", vec![
+        crate::preserves_rail::record("schema", vec![crate::preserves_rail::string(COMPONENT_RECEIPT_SCHEMA)]),
+        crate::preserves_rail::record("stage", vec![crate::preserves_rail::string(receipt.input.stage.as_str())]),
+        crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(receipt.input.decision.as_str())]),
+        crate::preserves_rail::record("evidence-scope", vec![crate::preserves_rail::string(
+            receipt.input.evidence_scope.as_str(),
+        )]),
+        crate::preserves_rail::record("consumer", vec![crate::preserves_rail::string(receipt.input.consumer.as_str())]),
+        crate::preserves_rail::record("component-ref", vec![crate::preserves_rail::string(
+            &receipt.input.component_ref,
+        )]),
+        crate::preserves_rail::record("wit-ref", vec![crate::preserves_rail::string(&receipt.input.wit_ref)]),
+        crate::preserves_rail::record("profile-ref", vec![crate::preserves_rail::string(&receipt.input.profile_ref)]),
+        crate::preserves_rail::record("runtime-configuration-ref", vec![crate::preserves_rail::string(
+            &receipt.input.runtime_configuration_ref,
+        )]),
+        crate::preserves_rail::record("bundle-ref", vec![crate::preserves_rail::optional_ref_value(
+            receipt.input.bundle_ref.as_deref(),
+        )]),
+        crate::preserves_rail::record("imports", vec![strings(&receipt.input.imports)]),
+        crate::preserves_rail::record("capabilities", vec![strings(&receipt.input.capabilities)]),
+        crate::preserves_rail::record("mantle-evidence-refs", vec![strings(&receipt.input.mantle_evidence_refs)]),
+        crate::preserves_rail::record("valence-evidence-refs", vec![strings(&receipt.input.valence_evidence_refs)]),
+        crate::preserves_rail::record("cairn-evidence-refs", vec![strings(&receipt.input.cairn_evidence_refs)]),
+        crate::preserves_rail::record("policy-refs", vec![strings(&receipt.input.policy_refs)]),
+        crate::preserves_rail::record("authority-refs", vec![strings(&receipt.input.authority_refs)]),
+        crate::preserves_rail::record("resource-refs", vec![strings(&receipt.input.resource_refs)]),
+        crate::preserves_rail::record("recorded-effect-refs", vec![strings(&receipt.input.recorded_effect_refs)]),
+        crate::preserves_rail::record("input-ref", vec![crate::preserves_rail::optional_ref_value(
+            receipt.input.input_ref.as_deref(),
+        )]),
+        crate::preserves_rail::record("output-ref", vec![crate::preserves_rail::optional_ref_value(
+            receipt.input.output_ref.as_deref(),
+        )]),
+        crate::preserves_rail::record("fuel-limit", vec![optional_u64(receipt.input.fuel_limit)]),
+        crate::preserves_rail::record("fuel-remaining", vec![optional_u64(receipt.input.fuel_remaining)]),
+        crate::preserves_rail::record("trap-class", vec![receipt.input.trap_class.as_deref().map_or_else(
+            || crate::preserves_rail::record("none", Vec::new()),
+            |value| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(value)]),
+        )]),
+        crate::preserves_rail::record("parent-refs", vec![strings(&receipt.input.parent_refs)]),
+        crate::preserves_rail::record("diagnostics", vec![strings(&receipt.input.diagnostics)]),
+        crate::preserves_rail::record("non-claims", vec![crate::preserves_rail::sequence(
+            receipt.non_claims.iter().map(crate::preserves_rail::string).collect(),
+        )]),
+        crate::preserves_rail::record("fuel-observation", vec![
+            crate::preserves_rail::u64_value(receipt.input.fuel_limit.unwrap_or(0)),
+            crate::preserves_rail::u64_value(receipt.input.fuel_remaining.unwrap_or(0)),
         ]),
     ])
 }

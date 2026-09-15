@@ -1,12 +1,4 @@
 use super::*;
-use crate::fabric::DeterminismClass;
-use crate::fabric::FabricAuthority;
-use crate::fabric::FabricPortClass;
-use crate::fabric::FabricPortRequirement;
-use crate::fabric::FabricResource;
-use crate::fabric::ReplayClass;
-use crate::fabric::build_fabric_port_registry;
-use crate::fabric::resolve_fabric_port_binding;
 
 const HASH_A: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HASH_B: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -151,24 +143,24 @@ fn canonical_profile_rejects_missing_non_claim() {
 fn port_bindings_reject_silent_profile_substitution() {
     let profile = simulation_profile();
     let descriptors = fabric_time_port_descriptors(&profile);
-    let registry = build_fabric_port_registry(&descriptors).expect("time registry");
+    let registry = crate::fabric::build_fabric_port_registry(&descriptors).expect("time registry");
     let clock = &descriptors[0];
-    let mut requirement = FabricPortRequirement {
+    let mut requirement = crate::fabric::FabricPortRequirement {
         port_id: clock.port_id.clone(),
         version: clock.version.clone(),
-        class: FabricPortClass::Time,
+        class: crate::fabric::FabricPortClass::Time,
         operation_classes: clock.operation_classes.clone(),
         input_schema_refs: clock.input_schema_refs.clone(),
         output_schema_refs: clock.output_schema_refs.clone(),
-        allowed_authorities: vec![FabricAuthority::Time],
-        available_resources: vec![FabricResource::LogicalTime],
-        expected_determinism: DeterminismClass::DeterministicWithRecordedInputs,
-        expected_replay: ReplayClass::Recompute,
+        allowed_authorities: vec![crate::fabric::FabricAuthority::Time],
+        available_resources: vec![crate::fabric::FabricResource::LogicalTime],
+        expected_determinism: crate::fabric::DeterminismClass::DeterministicWithRecordedInputs,
+        expected_replay: crate::fabric::ReplayClass::Recompute,
         expected_profile: "unadmitted-fallback".to_string(),
     };
-    assert!(resolve_fabric_port_binding(&registry, &requirement).is_err());
+    assert!(crate::fabric::resolve_fabric_port_binding(&registry, &requirement).is_err());
     requirement.expected_profile = profile.profile.profile_id.clone();
-    assert!(resolve_fabric_port_binding(&registry, &requirement).is_ok());
+    assert!(crate::fabric::resolve_fabric_port_binding(&registry, &requirement).is_ok());
 }
 
 #[test]
@@ -307,32 +299,29 @@ fn entropy_evidence_omits_output_bytes() {
 
 #[test]
 fn reference_matrix_preserves_plugin_extension_and_application_authority_boundaries() {
-    use crate::fabric::ExtensionTier;
-    use crate::fabric::ExtensionTierRequest;
-    use crate::fabric::FabricAuthority;
-    use crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE;
-    use crate::fabric::validate_extension_tier;
-
-    let plugin = ExtensionTierRequest {
-        tier: ExtensionTier::SandboxedPlugin,
-        requested_authorities: vec![FabricAuthority::Time],
+    let plugin = crate::fabric::ExtensionTierRequest {
+        tier: crate::fabric::ExtensionTier::SandboxedPlugin,
+        requested_authorities: vec![crate::fabric::FabricAuthority::Time],
         admission_evidence: Vec::new(),
     };
-    assert!(validate_extension_tier(&plugin).is_err());
+    assert!(crate::fabric::validate_extension_tier(&plugin).is_err());
 
-    let extension = ExtensionTierRequest {
-        tier: ExtensionTier::SystemExtension,
-        requested_authorities: vec![FabricAuthority::Time, FabricAuthority::Scheduling],
-        admission_evidence: REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
+    let extension = crate::fabric::ExtensionTierRequest {
+        tier: crate::fabric::ExtensionTier::SystemExtension,
+        requested_authorities: vec![
+            crate::fabric::FabricAuthority::Time,
+            crate::fabric::FabricAuthority::Scheduling,
+        ],
+        admission_evidence: crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
     };
-    assert!(validate_extension_tier(&extension).is_ok());
+    assert!(crate::fabric::validate_extension_tier(&extension).is_ok());
 
-    let application = ExtensionTierRequest {
-        tier: ExtensionTier::ApplicationWorkload,
-        requested_authorities: vec![FabricAuthority::ApplicationServiceUse],
+    let application = crate::fabric::ExtensionTierRequest {
+        tier: crate::fabric::ExtensionTier::ApplicationWorkload,
+        requested_authorities: vec![crate::fabric::FabricAuthority::ApplicationServiceUse],
         admission_evidence: Vec::new(),
     };
-    assert!(validate_extension_tier(&application).is_ok());
+    assert!(crate::fabric::validate_extension_tier(&application).is_ok());
 }
 
 #[test]

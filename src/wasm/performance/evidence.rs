@@ -73,11 +73,6 @@ pub fn validate_performance_receipt_against(
 }
 
 pub fn performance_receipt_value(receipt: &PerformanceReceipt) -> preserves::IOValue {
-    use crate::preserves_rail::record;
-    use crate::preserves_rail::sequence;
-    use crate::preserves_rail::string;
-    use crate::preserves_rail::u64_value;
-
     let run = &receipt.input.run;
     let phases = run
         .phases
@@ -87,49 +82,75 @@ pub fn performance_receipt_value(receipt: &PerformanceReceipt) -> preserves::IOV
                 .samples
                 .iter()
                 .map(|sample| {
-                    record("sample", vec![
-                        u64_value(u64::from(sample.process)),
-                        u64_value(u64::from(sample.iteration)),
-                        u64_value(sample.count),
+                    crate::preserves_rail::record("sample", vec![
+                        crate::preserves_rail::u64_value(u64::from(sample.process)),
+                        crate::preserves_rail::u64_value(u64::from(sample.iteration)),
+                        crate::preserves_rail::u64_value(sample.count),
                     ])
                 })
                 .collect();
-            record("phase", vec![string(phase.phase.as_str()), string(&phase.event), sequence(samples)])
+            crate::preserves_rail::record("phase", vec![
+                crate::preserves_rail::string(phase.phase.as_str()),
+                crate::preserves_rail::string(&phase.event),
+                crate::preserves_rail::sequence(samples),
+            ])
         })
         .collect();
-    record("wasm-component-performance-receipt-v1", vec![
-        record("schema", vec![string(PERFORMANCE_RECEIPT_SCHEMA)]),
-        record("evidence-role", vec![string(receipt.evidence_role.as_str())]),
-        record("suite-ref", vec![string(&run.suite_ref)]),
-        record("run-ref", vec![string(&run.run_ref)]),
-        record("benchmark-ref", vec![string(&run.benchmark_ref)]),
-        record("consumer", vec![string(run.consumer.as_str())]),
-        record("source-component-ref", vec![string(&run.source_component_ref)]),
-        record("component-ref", vec![string(&run.component_ref)]),
-        record("component-profile-ref", vec![string(&run.component_profile_ref)]),
-        record("performance-profile-ref", vec![string(&run.performance_profile_ref)]),
-        record("engine-cohort-ref", vec![string(&run.engine_cohort_ref)]),
-        record("engine-artifact-ref", vec![string(&run.engine_artifact_ref)]),
-        record("runner-artifact-ref", vec![string(&run.runner_artifact_ref)]),
-        record("runtime-configuration-ref", vec![string(&run.runtime_configuration_ref)]),
-        record("target", vec![string(&run.target)]),
-        record("host-class-ref", vec![string(&run.host_class_ref)]),
-        record("measurement", vec![string(&run.measurement)]),
-        record("resource-envelope-ref", vec![string(&run.resource_envelope_ref)]),
-        record("recorded-effect-refs", vec![strings(&run.recorded_effect_refs)]),
-        record("phases", vec![sequence(phases)]),
-        record("comparison-peer-run", vec![optional_run(receipt.input.comparison_peer_run.as_ref())]),
-        record("comparison-peer-run-ref", vec![optional_ref(
+    crate::preserves_rail::record("wasm-component-performance-receipt-v1", vec![
+        crate::preserves_rail::record("schema", vec![crate::preserves_rail::string(PERFORMANCE_RECEIPT_SCHEMA)]),
+        crate::preserves_rail::record("evidence-role", vec![crate::preserves_rail::string(
+            receipt.evidence_role.as_str(),
+        )]),
+        crate::preserves_rail::record("suite-ref", vec![crate::preserves_rail::string(&run.suite_ref)]),
+        crate::preserves_rail::record("run-ref", vec![crate::preserves_rail::string(&run.run_ref)]),
+        crate::preserves_rail::record("benchmark-ref", vec![crate::preserves_rail::string(&run.benchmark_ref)]),
+        crate::preserves_rail::record("consumer", vec![crate::preserves_rail::string(run.consumer.as_str())]),
+        crate::preserves_rail::record("source-component-ref", vec![crate::preserves_rail::string(
+            &run.source_component_ref,
+        )]),
+        crate::preserves_rail::record("component-ref", vec![crate::preserves_rail::string(&run.component_ref)]),
+        crate::preserves_rail::record("component-profile-ref", vec![crate::preserves_rail::string(
+            &run.component_profile_ref,
+        )]),
+        crate::preserves_rail::record("performance-profile-ref", vec![crate::preserves_rail::string(
+            &run.performance_profile_ref,
+        )]),
+        crate::preserves_rail::record("engine-cohort-ref", vec![crate::preserves_rail::string(&run.engine_cohort_ref)]),
+        crate::preserves_rail::record("engine-artifact-ref", vec![crate::preserves_rail::string(
+            &run.engine_artifact_ref,
+        )]),
+        crate::preserves_rail::record("runner-artifact-ref", vec![crate::preserves_rail::string(
+            &run.runner_artifact_ref,
+        )]),
+        crate::preserves_rail::record("runtime-configuration-ref", vec![crate::preserves_rail::string(
+            &run.runtime_configuration_ref,
+        )]),
+        crate::preserves_rail::record("target", vec![crate::preserves_rail::string(&run.target)]),
+        crate::preserves_rail::record("host-class-ref", vec![crate::preserves_rail::string(&run.host_class_ref)]),
+        crate::preserves_rail::record("measurement", vec![crate::preserves_rail::string(&run.measurement)]),
+        crate::preserves_rail::record("resource-envelope-ref", vec![crate::preserves_rail::string(
+            &run.resource_envelope_ref,
+        )]),
+        crate::preserves_rail::record("recorded-effect-refs", vec![strings(&run.recorded_effect_refs)]),
+        crate::preserves_rail::record("phases", vec![crate::preserves_rail::sequence(phases)]),
+        crate::preserves_rail::record("comparison-peer-run", vec![optional_run(
+            receipt.input.comparison_peer_run.as_ref(),
+        )]),
+        crate::preserves_rail::record("comparison-peer-run-ref", vec![optional_ref(
             receipt.input.comparison_peer_run.as_ref().map(|run| run.run_ref.as_str()),
         )]),
-        record("comparison-ref", vec![optional_ref(
+        crate::preserves_rail::record("comparison-ref", vec![optional_ref(
             receipt.input.comparison.as_ref().map(|comparison| comparison.comparison_ref.as_str()),
         )]),
-        record("optimization-profile-ref", vec![string(&receipt.input.optimization_profile_ref)]),
-        record("mantle-evidence-refs", vec![strings(&receipt.input.mantle_evidence_refs)]),
-        record("valence-evidence-refs", vec![strings(&receipt.input.valence_evidence_refs)]),
-        record("conformance-receipt-refs", vec![strings(&receipt.input.conformance_receipt_refs)]),
-        record("non-claims", vec![strings(&receipt.non_claims)]),
+        crate::preserves_rail::record("optimization-profile-ref", vec![crate::preserves_rail::string(
+            &receipt.input.optimization_profile_ref,
+        )]),
+        crate::preserves_rail::record("mantle-evidence-refs", vec![strings(&receipt.input.mantle_evidence_refs)]),
+        crate::preserves_rail::record("valence-evidence-refs", vec![strings(&receipt.input.valence_evidence_refs)]),
+        crate::preserves_rail::record("conformance-receipt-refs", vec![strings(
+            &receipt.input.conformance_receipt_refs,
+        )]),
+        crate::preserves_rail::record("non-claims", vec![strings(&receipt.non_claims)]),
     ])
 }
 
@@ -216,11 +237,6 @@ fn normalize_input(input: &mut PerformanceReceiptInput) {
 }
 
 fn benchmark_run_value(run: &super::model::BenchmarkRun) -> preserves::IOValue {
-    use crate::preserves_rail::record;
-    use crate::preserves_rail::sequence;
-    use crate::preserves_rail::string;
-    use crate::preserves_rail::u64_value;
-
     let phases = run
         .phases
         .iter()
@@ -229,35 +245,53 @@ fn benchmark_run_value(run: &super::model::BenchmarkRun) -> preserves::IOValue {
                 .samples
                 .iter()
                 .map(|sample| {
-                    record("sample", vec![
-                        u64_value(u64::from(sample.process)),
-                        u64_value(u64::from(sample.iteration)),
-                        u64_value(sample.count),
+                    crate::preserves_rail::record("sample", vec![
+                        crate::preserves_rail::u64_value(u64::from(sample.process)),
+                        crate::preserves_rail::u64_value(u64::from(sample.iteration)),
+                        crate::preserves_rail::u64_value(sample.count),
                     ])
                 })
                 .collect();
-            record("phase", vec![string(phase.phase.as_str()), string(&phase.event), sequence(samples)])
+            crate::preserves_rail::record("phase", vec![
+                crate::preserves_rail::string(phase.phase.as_str()),
+                crate::preserves_rail::string(&phase.event),
+                crate::preserves_rail::sequence(samples),
+            ])
         })
         .collect();
-    record("benchmark-run-v1", vec![
-        record("suite-ref", vec![string(&run.suite_ref)]),
-        record("run-ref", vec![string(&run.run_ref)]),
-        record("benchmark-ref", vec![string(&run.benchmark_ref)]),
-        record("consumer", vec![string(run.consumer.as_str())]),
-        record("source-component-ref", vec![string(&run.source_component_ref)]),
-        record("component-ref", vec![string(&run.component_ref)]),
-        record("component-profile-ref", vec![string(&run.component_profile_ref)]),
-        record("performance-profile-ref", vec![string(&run.performance_profile_ref)]),
-        record("engine-cohort-ref", vec![string(&run.engine_cohort_ref)]),
-        record("engine-artifact-ref", vec![string(&run.engine_artifact_ref)]),
-        record("runner-artifact-ref", vec![string(&run.runner_artifact_ref)]),
-        record("runtime-configuration-ref", vec![string(&run.runtime_configuration_ref)]),
-        record("target", vec![string(&run.target)]),
-        record("host-class-ref", vec![string(&run.host_class_ref)]),
-        record("measurement", vec![string(&run.measurement)]),
-        record("resource-envelope-ref", vec![string(&run.resource_envelope_ref)]),
-        record("recorded-effect-refs", vec![strings(&run.recorded_effect_refs)]),
-        record("phases", vec![sequence(phases)]),
+    crate::preserves_rail::record("benchmark-run-v1", vec![
+        crate::preserves_rail::record("suite-ref", vec![crate::preserves_rail::string(&run.suite_ref)]),
+        crate::preserves_rail::record("run-ref", vec![crate::preserves_rail::string(&run.run_ref)]),
+        crate::preserves_rail::record("benchmark-ref", vec![crate::preserves_rail::string(&run.benchmark_ref)]),
+        crate::preserves_rail::record("consumer", vec![crate::preserves_rail::string(run.consumer.as_str())]),
+        crate::preserves_rail::record("source-component-ref", vec![crate::preserves_rail::string(
+            &run.source_component_ref,
+        )]),
+        crate::preserves_rail::record("component-ref", vec![crate::preserves_rail::string(&run.component_ref)]),
+        crate::preserves_rail::record("component-profile-ref", vec![crate::preserves_rail::string(
+            &run.component_profile_ref,
+        )]),
+        crate::preserves_rail::record("performance-profile-ref", vec![crate::preserves_rail::string(
+            &run.performance_profile_ref,
+        )]),
+        crate::preserves_rail::record("engine-cohort-ref", vec![crate::preserves_rail::string(&run.engine_cohort_ref)]),
+        crate::preserves_rail::record("engine-artifact-ref", vec![crate::preserves_rail::string(
+            &run.engine_artifact_ref,
+        )]),
+        crate::preserves_rail::record("runner-artifact-ref", vec![crate::preserves_rail::string(
+            &run.runner_artifact_ref,
+        )]),
+        crate::preserves_rail::record("runtime-configuration-ref", vec![crate::preserves_rail::string(
+            &run.runtime_configuration_ref,
+        )]),
+        crate::preserves_rail::record("target", vec![crate::preserves_rail::string(&run.target)]),
+        crate::preserves_rail::record("host-class-ref", vec![crate::preserves_rail::string(&run.host_class_ref)]),
+        crate::preserves_rail::record("measurement", vec![crate::preserves_rail::string(&run.measurement)]),
+        crate::preserves_rail::record("resource-envelope-ref", vec![crate::preserves_rail::string(
+            &run.resource_envelope_ref,
+        )]),
+        crate::preserves_rail::record("recorded-effect-refs", vec![strings(&run.recorded_effect_refs)]),
+        crate::preserves_rail::record("phases", vec![crate::preserves_rail::sequence(phases)]),
     ])
 }
 

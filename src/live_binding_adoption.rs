@@ -263,14 +263,13 @@ pub fn parse_adoption_artifact(
 
 #[cfg(test)]
 mod tests {
-    use serde::Deserialize;
 
     use super::*;
 
     const SEMANTIC_MAPPING_SCHEMA: &str = "molten.semantic-operation-mapping.v1";
     const ADOPTION_KIND_COUNT: usize = 9;
 
-    #[derive(Deserialize)]
+    #[derive(serde::Deserialize)]
     struct SemanticMappingFixture {
         schema: String,
         kamacite_revision: String,
