@@ -1199,33 +1199,38 @@ fn collect_relative_files(
     current: &std::path::Path,
     output: &mut std::collections::BTreeSet<String>,
 ) -> crate::error::Result<()> {
-    if output.len() > MAX_RUN_FILES {
-        return Err(crate::error::MoltenError::invalid_harness(
-            "distinct-process run directory file count exceeds bound",
-        ));
-    }
-    for entry in std::fs::read_dir(current).map_err(crate::error::MoltenError::from)? {
-        let entry = entry.map_err(crate::error::MoltenError::from)?;
-        let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
-        if file_type.is_symlink() {
+    let mut pending = vec![current.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        if output.len() > MAX_RUN_FILES {
             return Err(crate::error::MoltenError::invalid_harness(
-                "distinct-process run directory must not contain symlinks",
+                "distinct-process run directory file count exceeds bound",
             ));
         }
-        if file_type.is_dir() {
-            collect_relative_files(root, &entry.path(), output)?;
-        } else if file_type.is_file() {
-            let relative = entry
-                .path()
-                .strip_prefix(root)
-                .map_err(|error| crate::error::MoltenError::invalid_harness(format!("run path strip failed: {error}")))?
-                .to_string_lossy()
-                .into_owned();
-            output.insert(relative);
-        } else {
-            return Err(crate::error::MoltenError::invalid_harness(
-                "distinct-process run directory contains a non-regular entry",
-            ));
+        for entry in std::fs::read_dir(&directory).map_err(crate::error::MoltenError::from)? {
+            let entry = entry.map_err(crate::error::MoltenError::from)?;
+            let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
+            if file_type.is_symlink() {
+                return Err(crate::error::MoltenError::invalid_harness(
+                    "distinct-process run directory must not contain symlinks",
+                ));
+            }
+            if file_type.is_dir() {
+                pending.push(entry.path());
+            } else if file_type.is_file() {
+                let relative = entry
+                    .path()
+                    .strip_prefix(root)
+                    .map_err(|error| {
+                        crate::error::MoltenError::invalid_harness(format!("run path strip failed: {error}"))
+                    })?
+                    .to_string_lossy()
+                    .into_owned();
+                output.insert(relative);
+            } else {
+                return Err(crate::error::MoltenError::invalid_harness(
+                    "distinct-process run directory contains a non-regular entry",
+                ));
+            }
         }
     }
     Ok(())

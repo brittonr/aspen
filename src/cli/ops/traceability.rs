@@ -942,28 +942,33 @@ fn collect_specs_under(
     changed: bool,
     sources: &mut Vec<molten::requirement_traceability::SpecSource>,
 ) -> Outcome<()> {
-    if !path.exists() {
-        return Ok(());
-    }
-    if path.is_file() {
-        if path.file_name().is_some_and(|name| name == std::ffi::OsStr::new("spec.md")) {
-            let markdown = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
-            sources.push(molten::requirement_traceability::SpecSource {
-                source: path.display().to_string(),
-                markdown,
-                changed,
-                default_kind: "evidence".to_string(),
-            });
+    let mut pending = vec![path.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        if !next.exists() {
+            continue;
         }
-        return Ok(());
-    }
-    let mut entries = std::fs::read_dir(path)
-        .map_err(molten::error::MoltenError::from)?
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(molten::error::MoltenError::from)?;
-    entries.sort_by_key(|entry| entry.path());
-    for entry in entries {
-        collect_specs_under(&entry.path(), changed, sources)?;
+        if next.is_file() {
+            if next.file_name().is_some_and(|name| name == std::ffi::OsStr::new("spec.md")) {
+                let markdown = std::fs::read_to_string(&next).map_err(molten::error::MoltenError::from)?;
+                sources.push(molten::requirement_traceability::SpecSource {
+                    source: next.display().to_string(),
+                    markdown,
+                    changed,
+                    default_kind: "evidence".to_string(),
+                });
+            }
+            continue;
+        }
+        let mut entries = std::fs::read_dir(&next)
+            .map_err(molten::error::MoltenError::from)?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(molten::error::MoltenError::from)?;
+        entries.sort_by_key(|entry| entry.path());
+        // Push in reverse so the stack visits entries in sorted order and keeps
+        // the depth-first order of the earlier recursion.
+        for entry in entries.into_iter().rev() {
+            pending.push(entry.path());
+        }
     }
     Ok(())
 }

@@ -866,19 +866,28 @@ fn collect_ticket_paths(
     if !current.exists() {
         return Ok(());
     }
-    if paths.len() >= MAX_TICKET_FILES {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
-            "cluster harness ticket file count exceeds bound {MAX_TICKET_FILES} under {}",
-            root.display()
-        )));
-    }
-    for entry in std::fs::read_dir(current).map_err(crate::error::MoltenError::from)? {
-        let entry = entry.map_err(crate::error::MoltenError::from)?;
-        let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
-        if file_type.is_dir() {
-            collect_ticket_paths(root, &entry.path(), paths)?;
-        } else if file_type.is_file() && entry.file_name().to_string_lossy().to_ascii_lowercase().contains("ticket") {
-            paths.push(entry.path());
+    let mut pending = vec![current.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        if paths.len() >= MAX_TICKET_FILES {
+            return Err(crate::error::MoltenError::invalid_harness(format!(
+                "cluster harness ticket file count exceeds bound {MAX_TICKET_FILES} under {}",
+                root.display()
+            )));
+        }
+        if next.is_dir() {
+            let entries = std::fs::read_dir(&next)
+                .map_err(crate::error::MoltenError::from)?
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(crate::error::MoltenError::from)?;
+            // Push in reverse so the stack keeps the depth-first order of the
+            // earlier recursion.
+            for entry in entries.into_iter().rev() {
+                pending.push(entry.path());
+            }
+        } else if next.is_file()
+            && next.file_name().is_some_and(|name| name.to_string_lossy().to_ascii_lowercase().contains("ticket"))
+        {
+            paths.push(next);
         }
     }
     Ok(())
@@ -1143,19 +1152,24 @@ fn collect_run_files_from(
     current: &std::path::Path,
     files: &mut Vec<String>,
 ) -> crate::error::Result<()> {
-    for entry in std::fs::read_dir(current).map_err(crate::error::MoltenError::from)? {
-        let entry = entry.map_err(crate::error::MoltenError::from)?;
-        let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
-        if file_type.is_dir() {
-            collect_run_files_from(root, &entry.path(), files)?;
-        } else if file_type.is_file() || file_type.is_symlink() {
-            let relative = entry
-                .path()
-                .strip_prefix(root)
-                .map_err(|_| crate::error::MoltenError::invalid_harness("cluster run file escaped root"))?
-                .to_string_lossy()
-                .replace(std::path::MAIN_SEPARATOR, "/");
-            files.push(relative);
+    let mut pending = vec![current.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        if next.is_dir() {
+            for entry in std::fs::read_dir(&next).map_err(crate::error::MoltenError::from)? {
+                let entry = entry.map_err(crate::error::MoltenError::from)?;
+                let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
+                if file_type.is_dir() {
+                    pending.push(entry.path());
+                } else if file_type.is_file() || file_type.is_symlink() {
+                    let relative = entry
+                        .path()
+                        .strip_prefix(root)
+                        .map_err(|_| crate::error::MoltenError::invalid_harness("cluster run file escaped root"))?
+                        .to_string_lossy()
+                        .replace(std::path::MAIN_SEPARATOR, "/");
+                    files.push(relative);
+                }
+            }
         }
     }
     Ok(())

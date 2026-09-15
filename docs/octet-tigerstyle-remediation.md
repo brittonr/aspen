@@ -2,11 +2,11 @@
 
 This file records the current Octet source-gate evidence and the remaining caveat for `octet-tigerstyle-remediation`.
 
-Current state (probe `target/octet-burndown/catch-all-explicit-0/summary.txt`, commit
-`e09ae1888`):
+Current state (probe `target/octet-burndown/iterative-walks-0/summary.txt`, commit
+`fa3376cba`):
 
 - `dylint.toml` sets `disabled_lints = []`, so the probe reports every lint.
-- The workspace probe is `warning-only`: 3667 warnings, 0 errors, 0 autofixable.
+- The workspace probe is `warning-only`: 3659 warnings, 0 errors, 0 autofixable.
 - The pre-remediation baseline in this worktree was 6754 warnings. The `octet-baseline`
   probe for this burn-down was 3963 warnings.
 - Nineteen lint families report zero. The largest remaining families are
@@ -53,7 +53,7 @@ Focused object corpus: object-set hash `b3:f61ed6753b0a349fa2988e444ea3bae1f0ae2
 
 | Scope | Status | Findings | Warnings | Errors | Autofixable |
 |---|---:|---:|---:|---:|---:|
-| workspace | warning-only | 3667 | 3667 | 0 | 0 |
+| workspace | warning-only | 3659 | 3659 | 0 | 0 |
 
 Top workspace lint counts: `path_segment_repetition` 1877, `excessive_file_length` 552,
 `borrowed_argument_types` 368, `unbounded_collection_growth` 216, `function_length` 204,
@@ -374,6 +374,8 @@ Live-cluster setup visibility validation: the import repair refuses a `pub(super
 Nested-use scope validation: the import repair read only the file-level items, so a flagged `use` inside a function body or a `mod name { .. }` body produced no edit and no diagnostic. A `use crate::preserves_rail::record;` at the top of a value builder, for example, was invisible to the tool. The tool now collects nested uses, scopes each rewrite to the block that holds the import, resolves a nested import before a file-level one, and refuses a nested import that no reference can qualify so an import kept only for method resolution is never dropped silently. It also bounds the shadow check to the nested scope, because an item declared outside that scope does not shadow the nested import. Four self-test fixtures cover a block-scoped import, a nested-module import, an inner shadow inside a qualified block, and an unqualifiable nested import. Validation passed with `cargo -q -Zscript scripts/octet-qualify-imports.rs --self-test`, `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test -p molten --lib` (1458 tests). The repair rewrote nine files with 224 edits: the two Wasm evidence modules, `src/fabric_durability/tests.rs`, `src/fabric_time/tests.rs`, `src/fabric_transport/tests.rs`, `src/fabric_transport/cross_process/tests.rs`, `src/live_binding_adoption.rs`, `src/node/parts/daemon/tests/m000/p013/body.rs`, and `src/node/state/tests.rs`. The no-disabled probe `target/octet-burndown/nested-use-scope-0/summary.txt` reports `warning-only` with 3675 warnings, down from 3723. The reduction is 52 `non_trait_imports` findings (86 to 34). Qualifying the projection calls lengthened `src/wasm/performance/evidence.rs` past the 300-line file limit and past the function limit for `performance_receipt_value`, so that file carries 2 `excessive_file_length` and 2 `function_length` findings; the file split is the follow-up slice. `src/main/root/command.rs` is refused because its `use clap::Parser;` exists only for method resolution on `Cli::try_parse_from`.
 
 Catch-all dispatch validation: the four family dispatchers in `src/fabric_consistency/raft/transition/message.rs` each matched their two variants and then denied every other message with `_ => Err(..)`, so `catch_all_on_enum` reported 8 findings and a new `RaftMessage` variant would have reached the deny arm without a compile error. Each wildcard is now an explicit six-variant or-pattern over the remaining `RaftMessage` variants, which keeps the refusal, removes the wildcard, and makes the match fail to compile when a variant is added. Validation passed with `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test -p molten --lib raft` (53 tests). The no-disabled probe `target/octet-burndown/catch-all-explicit-0/summary.txt` reports `warning-only` with 3667 warnings, down from 3675. The reduction is 8 `catch_all_on_enum` findings and that family now reports zero; no other lint family moved.
+
+Directory walk iteration validation: four private helpers walked a directory tree by calling themselves, so `no_recursion` reported 8 findings across `src/cli/ops/traceability.rs::collect_specs_under`, `src/cluster_harness/fabric_transport.rs::collect_relative_files`, and `src/cluster_harness/runner.rs::{collect_ticket_paths,collect_run_files_from}`. Each helper now uses an explicit pending stack. Where the walk order reaches an ordered output, the entries of one directory are pushed in reverse so the stack reproduces the depth-first order of the earlier recursion; the ticket walk keeps `read_dir` order, the run-file walk keeps its later sort, and the relative-file walk fills a `BTreeSet`. Bounds and symlink or non-regular-entry denials are unchanged. Validation passed with `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test -p molten --lib` (1458 tests). The no-disabled probe `target/octet-burndown/iterative-walks-0/summary.txt` reports `warning-only` with 3659 warnings, down from 3667. The reduction is 8 `no_recursion` findings. The remaining 2 findings are the single recursive structural-value scan in `src/preserves/parts/rail/p001/body.rs`, which keeps a path stack, a first-match result, and per-node bounds, so its conversion needs its own slice.
 
 ## No-suppression policy
 
