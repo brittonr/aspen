@@ -697,7 +697,7 @@ fn status(is_passing: bool) -> &'static str {
     if is_passing { "pass" } else { "deny" }
 }
 
-#[path = "vm_validation.rs"]
+#[path = "vm/validation.rs"]
 mod validation;
 pub use validation::*;
 

@@ -3,6 +3,7 @@ mod canonical;
 pub mod chaoscontrol;
 pub mod fastpath;
 mod lifecycle;
+#[path = "live/service.rs"]
 mod live_service;
 mod operation;
 mod operator;

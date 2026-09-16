@@ -2,11 +2,11 @@
 
 This file records the current Octet source-gate evidence and the remaining caveat for `octet-tigerstyle-remediation`.
 
-Current state (probe `target/octet-burndown/iterative-walks-0/summary.txt`, commit
-`fa3376cba`):
+Current state (probe `target/octet-burndown/module-layout-b-0/summary.txt`, commit
+`033be587b`):
 
 - `dylint.toml` sets `disabled_lints = []`, so the probe reports every lint.
-- The workspace probe is `warning-only`: 3659 warnings, 0 errors, 0 autofixable.
+- The workspace probe is `warning-only`: 3619 warnings, 0 errors, 0 autofixable.
 - The pre-remediation baseline in this worktree was 6754 warnings. The `octet-baseline`
   probe for this burn-down was 3963 warnings.
 - Nineteen lint families report zero. The largest remaining families are
@@ -53,7 +53,7 @@ Focused object corpus: object-set hash `b3:f61ed6753b0a349fa2988e444ea3bae1f0ae2
 
 | Scope | Status | Findings | Warnings | Errors | Autofixable |
 |---|---:|---:|---:|---:|---:|
-| workspace | warning-only | 3659 | 3659 | 0 | 0 |
+| workspace | warning-only | 3619 | 3619 | 0 | 0 |
 
 Top workspace lint counts: `path_segment_repetition` 1877, `excessive_file_length` 552,
 `borrowed_argument_types` 368, `unbounded_collection_growth` 216, `function_length` 204,
@@ -376,6 +376,8 @@ Nested-use scope validation: the import repair read only the file-level items, s
 Catch-all dispatch validation: the four family dispatchers in `src/fabric_consistency/raft/transition/message.rs` each matched their two variants and then denied every other message with `_ => Err(..)`, so `catch_all_on_enum` reported 8 findings and a new `RaftMessage` variant would have reached the deny arm without a compile error. Each wildcard is now an explicit six-variant or-pattern over the remaining `RaftMessage` variants, which keeps the refusal, removes the wildcard, and makes the match fail to compile when a variant is added. Validation passed with `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test -p molten --lib raft` (53 tests). The no-disabled probe `target/octet-burndown/catch-all-explicit-0/summary.txt` reports `warning-only` with 3667 warnings, down from 3675. The reduction is 8 `catch_all_on_enum` findings and that family now reports zero; no other lint family moved.
 
 Directory walk iteration validation: four private helpers walked a directory tree by calling themselves, so `no_recursion` reported 8 findings across `src/cli/ops/traceability.rs::collect_specs_under`, `src/cluster_harness/fabric_transport.rs::collect_relative_files`, and `src/cluster_harness/runner.rs::{collect_ticket_paths,collect_run_files_from}`. Each helper now uses an explicit pending stack. Where the walk order reaches an ordered output, the entries of one directory are pushed in reverse so the stack reproduces the depth-first order of the earlier recursion; the ticket walk keeps `read_dir` order, the run-file walk keeps its later sort, and the relative-file walk fills a `BTreeSet`. Bounds and symlink or non-regular-entry denials are unchanged. Validation passed with `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test -p molten --lib` (1458 tests). The no-disabled probe `target/octet-burndown/iterative-walks-0/summary.txt` reports `warning-only` with 3659 warnings, down from 3667. The reduction is 8 `no_recursion` findings. The remaining 2 findings are the single recursive structural-value scan in `src/preserves/parts/rail/p001/body.rs`, which keeps a path stack, a first-match result, and per-node bounds, so its conversion needs its own slice.
+
+Compound-filename layout validation: `underscore_in_module_filename` rejects a module file whose stem joins two words, and `module_file_count` rejects a module directory with too many files. Twenty-one module files moved from `x_y.rs` to `x/y.rs`: seven raft test modules under `src/fabric_consistency/raft/` and fourteen more under `src/capability`, `src/content_store_adapter`, `src/fabric_consistency`, `src/fabric_crypto_identity`, `src/fabric_transport/cross_process`, `src/nixos`, `src/node`, `src/operator`, `src/prod`, `src/project`, and `src/protocol`. Every declaration keeps its module name and gains `#[path = "x/y.rs"]`, so module paths and test names are unchanged. The counterexample path in `evidence/tracey/runtime-spine-content-refs-direct-repairs.ncl` and its generated JSON follow the moved cross-process shell, and one `include_str!("iroh/shell.rs")` guard in the cross-process tests follows it too. Validation passed with `cargo fmt --all`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p molten --lib` (1458 tests), and `nickel typecheck` plus `nickel export` on the Tracey repair manifest. The no-disabled probe `target/octet-burndown/module-layout-b-0/summary.txt` reports `warning-only` with 3619 warnings, down from 3659. The reduction is 35 `underscore_in_module_filename` findings (56 to 21) and 5 `module_file_count` findings (23 to 18); no other lint family moved. The remaining underscore findings are `src/cli/runtime` port files, `src/audit/ast_grep.rs`, `src/project` and `src/cluster_harness` files with submodules, `src/live_binding_adoption.rs`, and three `tests/*.rs` files that Cargo treats as test targets.
 
 ## No-suppression policy
 

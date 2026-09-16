@@ -2,6 +2,7 @@
 
 mod artifact_auth;
 mod canonical;
+#[path = "file/adapter.rs"]
 mod file_adapter;
 mod integration;
 

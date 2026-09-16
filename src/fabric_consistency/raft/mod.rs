@@ -29,22 +29,29 @@ pub use time::*;
 pub use transition::*;
 
 #[cfg(test)]
+#[path = "canonical/tests.rs"]
 mod canonical_tests;
 #[cfg(test)]
+#[path = "durability/tests.rs"]
 mod durability_tests;
 #[cfg(test)]
+#[path = "evidence/tests.rs"]
 mod evidence_tests;
 #[cfg(test)]
+#[path = "executor/tests.rs"]
 mod executor_tests;
 #[cfg(test)]
+#[path = "iroh/tests.rs"]
 mod iroh_tests;
 #[cfg(test)]
 mod live_cluster;
 #[cfg(test)]
 mod live_process;
 #[cfg(test)]
+#[path = "ports/tests.rs"]
 mod port_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+#[path = "time/tests.rs"]
 mod time_tests;

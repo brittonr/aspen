@@ -1,3 +1,4 @@
+#[path = "claim/authority.rs"]
 pub mod claim_authority;
 pub mod tokens;
 

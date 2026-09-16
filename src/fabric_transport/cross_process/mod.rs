@@ -1,7 +1,9 @@
 //! Capability-scoped cross-process transport artifacts and Iroh shell.
 
 mod canonical;
+#[path = "effect/port.rs"]
 mod effect_port;
+#[path = "iroh/shell.rs"]
 mod iroh_shell;
 
 pub use canonical::*;

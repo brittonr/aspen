@@ -1,5 +1,6 @@
 mod canonical;
 mod integration;
+#[path = "live/iroh.rs"]
 mod live_iroh;
 mod local;
 mod persistence;

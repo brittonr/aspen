@@ -366,7 +366,7 @@ async fn listener_accept_timeout_is_bounded_and_does_not_publish_a_false_session
 // r[verify molten.fabric_transport.cross_process_validation]
 #[test]
 fn public_shell_surface_contains_no_runtime_handle_accessor_or_ambient_fallback() {
-    let source = include_str!("iroh_shell.rs");
+    let source = include_str!("iroh/shell.rs");
     for forbidden in [
         "pub fn endpoint(",
         "pub fn connection(",

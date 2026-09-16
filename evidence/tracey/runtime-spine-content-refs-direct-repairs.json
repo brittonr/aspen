@@ -20,7 +20,7 @@
       "requirement_id": "molten.runtime_spine.canonical_content_refs.helper_construction"
     },
     {
-      "counterexample_path": "src/fabric_transport/cross_process/iroh_shell.rs",
+      "counterexample_path": "src/fabric_transport/cross_process/iroh/shell.rs",
       "reason": "current production source still contains direct prefix formatting and manipulation outside the Preserves rail",
       "requirement_id": "molten.runtime_spine.canonical_content_refs.no_ad_hoc_formatting"
     }

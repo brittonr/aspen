@@ -166,11 +166,11 @@ compat_module!(node_iroh, transport);
 pub mod kernel;
 compat_module!(node_runtime, kernel);
 #[doc(hidden)]
-#[path = "node/profile_config.rs"]
+#[path = "node/profile/config.rs"]
 pub mod node_profile_config_core;
 compat_module!(node_profile_config, node_profile_config_core);
 #[doc(hidden)]
-#[path = "node/service_fsm.rs"]
+#[path = "node/service/fsm.rs"]
 pub mod node_service_fsm_core;
 compat_module!(node_service_fsm, node_service_fsm_core);
 #[doc(hidden)]
@@ -182,7 +182,7 @@ compat_module!(octet_gate, quality);
 pub mod remediator;
 compat_module!(octet_remediation, remediator);
 #[doc(hidden)]
-#[path = "operator/context_profile.rs"]
+#[path = "operator/context/profile.rs"]
 pub mod context_profile_core;
 compat_module!(operator_context_profile, context_profile_core);
 #[doc(hidden)]
@@ -210,7 +210,7 @@ compat_module!(preserves_rail, codec);
 pub mod launch;
 compat_module!(prod_readiness, launch);
 #[doc(hidden)]
-#[path = "prod/release_profile.rs"]
+#[path = "prod/release/profile.rs"]
 pub mod release_profile_core;
 compat_module!(prod_release_profile, release_profile_core);
 #[doc(hidden)]
@@ -226,7 +226,7 @@ compat_module!(prod_soak, burnin);
 pub mod conversation;
 compat_module!(protocol_session, conversation);
 #[doc(hidden)]
-#[path = "protocol/sans_io.rs"]
+#[path = "protocol/sans/io.rs"]
 pub mod sans_io_protocol_core;
 compat_module!(sans_io_protocol, sans_io_protocol_core);
 #[doc(hidden)]
@@ -287,11 +287,11 @@ compat_module!(service_runtime, worker_core);
 pub mod watchdog;
 compat_module!(service_supervision, watchdog);
 #[doc(hidden)]
-#[path = "project/config_portability.rs"]
+#[path = "project/config/portability.rs"]
 pub mod config_portability_core;
 compat_module!(project_config_portability, config_portability_core);
 #[doc(hidden)]
-#[path = "project/effective_config.rs"]
+#[path = "project/effective/config.rs"]
 pub mod effective_config_core;
 compat_module!(project_effective_config, effective_config_core);
 #[doc(hidden)]

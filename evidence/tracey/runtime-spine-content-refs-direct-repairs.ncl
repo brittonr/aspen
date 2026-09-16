@@ -122,7 +122,7 @@ let manifest | Manifest = {
     {
       requirement_id = "molten.runtime_spine.canonical_content_refs.no_ad_hoc_formatting",
       reason = "current production source still contains direct prefix formatting and manipulation outside the Preserves rail",
-      counterexample_path = "src/fabric_transport/cross_process/iroh_shell.rs",
+      counterexample_path = "src/fabric_transport/cross_process/iroh/shell.rs",
     },
   ],
   non_claims = [
