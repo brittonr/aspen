@@ -3,13 +3,14 @@
 This file records the current Octet source-gate evidence and the remaining caveat for `octet-tigerstyle-remediation`.
 
 Current state (probe `target/octet-burndown/module-layout-b-0/summary.txt`, commit
-`033be587b`):
+`de53ab3ba`):
 
 - `dylint.toml` sets `disabled_lints = []`, so the probe reports every lint.
 - The workspace probe is `warning-only`: 3619 warnings, 0 errors, 0 autofixable.
 - The pre-remediation baseline in this worktree was 6754 warnings. The `octet-baseline`
   probe for this burn-down was 3963 warnings.
-- Nineteen lint families report zero. The largest remaining families are
+- Seventeen of the 72 lints in the Octet catalog still report findings. The largest remaining
+  families are
   `path_segment_repetition` (1877), `excessive_file_length` (552),
   `borrowed_argument_types` (368), and `unbounded_collection_growth` (216).
 
