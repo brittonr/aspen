@@ -599,11 +599,8 @@ fn run_deadline_lease_scenario(
     events.push(canonical_deadline_event(&profile.profile_ref, &decision)?);
     counters.deadline_lease_events = checked_increment(counters.deadline_lease_events, "deadline/lease event count")?;
 
-    let retry = plan_retry(
-        &profile.profile,
-        FIXTURE_GENERATION,
-        "fixture-retry",
-        FIXTURE_GENERATION,
+    events.extend(retry_events(
+        profile,
         &virtual_value(&profile.profile, DEADLINE_OBSERVATION),
         1,
         RetryPolicy {
@@ -616,16 +613,8 @@ fn run_deadline_lease_scenario(
             },
         },
         Some(RETRY_JITTER),
-    )
-    .map_err(|error| core_error("plan fixture retry", error))?;
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Deadline,
-        FIXTURE_GENERATION,
-        "fixture-retry",
-        "retry-planned",
-        retry.deadline.target.ticks(),
     )?);
+    counters.deadline_lease_events = checked_increment(counters.deadline_lease_events, "deadline/lease event count")?;
     counters.deadline_lease_events = checked_increment(counters.deadline_lease_events, "deadline/lease event count")?;
 
     let lease = evaluate_lease(&profile.profile, FIXTURE_GENERATION, &LeaseRequest {
@@ -644,6 +633,47 @@ fn run_deadline_lease_scenario(
     events.push(canonical_lease_event(&profile.profile_ref, &lease)?);
     counters.deadline_lease_events = checked_increment(counters.deadline_lease_events, "deadline/lease event count")?;
     Ok(())
+}
+
+const RETRY_EVENT_COUNT: usize = 2;
+
+// r[impl molten.audit_f12.compatibility]
+// r[impl molten.audit_f12.validation]
+pub(super) fn retry_events(
+    profile: &CanonicalTimeProfile,
+    now: &TimeValue,
+    attempt: u64,
+    policy: RetryPolicy,
+    jitter: Option<u64>,
+) -> crate::error::Result<[CanonicalTimeEvent; RETRY_EVENT_COUNT]> {
+    let retry = plan_retry(
+        &profile.profile,
+        FIXTURE_GENERATION,
+        "fixture-retry",
+        FIXTURE_GENERATION,
+        now,
+        attempt,
+        policy,
+        jitter,
+    )
+    .map_err(|error| core_error("plan fixture retry", error))?;
+    let deadline = canonical_named_event(
+        &profile.profile_ref,
+        CanonicalTimeEventKind::Deadline,
+        FIXTURE_GENERATION,
+        "fixture-retry",
+        "retry-planned",
+        retry.deadline.target.ticks(),
+    )?;
+    let delay = canonical_named_event(
+        &profile.profile_ref,
+        CanonicalTimeEventKind::Deadline,
+        FIXTURE_GENERATION,
+        "fixture-retry",
+        "retry-delay",
+        retry.delay.ticks,
+    )?;
+    Ok([deadline, delay])
 }
 
 fn run_clock_partition_faults(

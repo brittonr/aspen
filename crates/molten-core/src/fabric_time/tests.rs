@@ -691,6 +691,140 @@ fn retry_plans_are_bounded_and_jitter_explicit() {
     ));
 }
 
+// r[verify molten.audit_f12.saturation]
+// r[verify molten.audit_f12.bounds]
+#[test]
+fn retry_exponential_delay_saturates_at_arithmetic_boundaries() {
+    const AUDIT_BASE: u64 = 2;
+    const AUDIT_ATTEMPT: u64 = 63;
+    const ORDINARY_ATTEMPT: u64 = 3;
+    const ORDINARY_DELAY: u64 = 16;
+    let policy = RetryPolicy {
+        maximum_attempts: u64::MAX,
+        base_delay_ticks: AUDIT_BASE,
+        maximum_delay_ticks: PROFILE_LIMIT,
+        backoff: RetryBackoff::Exponential,
+        jitter: RetryJitter::None,
+    };
+    let cases = [
+        (0, AUDIT_BASE),
+        (ORDINARY_ATTEMPT, ORDINARY_DELAY),
+        (AUDIT_ATTEMPT, PROFILE_LIMIT),
+        (u64::from(u64::BITS), PROFILE_LIMIT),
+        (u64::from(u32::MAX) + 1, PROFILE_LIMIT),
+        (u64::MAX - 1, PROFILE_LIMIT),
+    ];
+    for (attempt, expected) in cases {
+        let plan = plan_retry(
+            &profile(),
+            ACTIVE_GENERATION,
+            "retry.boundary",
+            ACTIVE_GENERATION,
+            &virtual_time(0),
+            attempt,
+            policy,
+            None,
+        )
+        .expect("admitted retry");
+        assert_eq!(plan.delay.ticks, expected, "attempt {attempt}");
+        assert_eq!(plan.deadline.target.ticks(), expected);
+    }
+    assert_eq!(
+        plan_retry(
+            &profile(),
+            ACTIVE_GENERATION,
+            "retry.boundary",
+            ACTIVE_GENERATION,
+            &virtual_time(0),
+            u64::MAX,
+            policy,
+            None
+        ),
+        Err(DeadlineLeaseError::RetryExhausted {
+            attempt: u64::MAX,
+            maximum: u64::MAX
+        }),
+    );
+}
+
+// r[verify molten.audit_f12.compatibility]
+#[test]
+fn retry_fixed_delay_and_rejections_remain_exact() {
+    let profile = profile();
+    let policy = RetryPolicy {
+        maximum_attempts: u64::MAX,
+        base_delay_ticks: RETRY_BASE,
+        maximum_delay_ticks: RETRY_MAX,
+        backoff: RetryBackoff::Fixed,
+        jitter: RetryJitter::None,
+    };
+    let now = virtual_time(DEADLINE_TICKS);
+    for attempt in [0, RETRY_ATTEMPT, u64::MAX - 1] {
+        let plan =
+            plan_retry(&profile, ACTIVE_GENERATION, "retry.fixed", ACTIVE_GENERATION, &now, attempt, policy, None)
+                .expect("fixed retry");
+        assert_eq!(plan.delay.ticks, RETRY_BASE);
+        assert_eq!(plan.deadline.target.ticks(), DEADLINE_TICKS + RETRY_BASE);
+    }
+    assert_eq!(
+        plan_retry(&profile, ACTIVE_GENERATION, "retry.fixed", STALE_GENERATION, &now, 0, policy, None),
+        Err(DeadlineLeaseError::StaleGeneration {
+            expected: ACTIVE_GENERATION,
+            actual: STALE_GENERATION,
+        })
+    );
+    assert_eq!(
+        plan_retry(&profile, ACTIVE_GENERATION, "retry.fixed", ACTIVE_GENERATION, &now, 0, policy, Some(0)),
+        Err(DeadlineLeaseError::JitterOutOfBounds { actual: 0, maximum: 0 })
+    );
+    let jitter_policy = RetryPolicy {
+        jitter: RetryJitter::Bounded {
+            maximum_ticks: RETRY_JITTER,
+        },
+        ..policy
+    };
+    assert_eq!(
+        plan_retry(&profile, ACTIVE_GENERATION, "retry.fixed", ACTIVE_GENERATION, &now, 0, jitter_policy, None),
+        Err(DeadlineLeaseError::JitterRequired)
+    );
+    assert_eq!(
+        plan_retry(
+            &profile,
+            ACTIVE_GENERATION,
+            "retry.fixed",
+            ACTIVE_GENERATION,
+            &now,
+            0,
+            jitter_policy,
+            Some(RETRY_JITTER + 1)
+        ),
+        Err(DeadlineLeaseError::JitterOutOfBounds {
+            actual: RETRY_JITTER + 1,
+            maximum: RETRY_JITTER
+        })
+    );
+    assert_eq!(
+        plan_retry(
+            &profile,
+            ACTIVE_GENERATION,
+            "retry.fixed",
+            ACTIVE_GENERATION,
+            &virtual_time(u64::MAX),
+            0,
+            policy,
+            None
+        ),
+        Err(DeadlineLeaseError::Arithmetic(TimeArithmeticError::Overflow))
+    );
+    let mut wrong_profile = profile.clone();
+    wrong_profile.supported_domains = vec![TimeDomain::Logical];
+    assert_eq!(
+        plan_retry(&wrong_profile, ACTIVE_GENERATION, "retry.fixed", ACTIVE_GENERATION, &now, 0, policy, None),
+        Err(DeadlineLeaseError::Arithmetic(TimeArithmeticError::UnsupportedDomain(TimeDomain::Virtual)))
+    );
+    assert_eq!(now, virtual_time(DEADLINE_TICKS));
+}
+
 #[test]
 fn exclusive_lease_actions_require_fresh_fencing() {
     let profile = profile();
