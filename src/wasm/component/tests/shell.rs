@@ -74,6 +74,7 @@ fn production_loose_bytes_and_core_module_requests_never_fall_back() {
             wit_bytes: &fixture.wit_bytes,
         },
         facts: &fixture.facts,
+        import_manifest: &fixture.import_manifest,
         import_grants: &[],
         input: &input,
     };

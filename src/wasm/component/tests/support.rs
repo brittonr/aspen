@@ -23,6 +23,7 @@ pub struct ComponentFixture {
     pub bundle: MantleComponentBundle,
     pub envelope: ComponentAdmissionEnvelope,
     pub facts: ComponentArtifactFacts,
+    pub import_manifest: DeclaredManifest,
 }
 
 impl ComponentFixture {
@@ -60,6 +61,7 @@ impl ComponentFixture {
             resource_refs: vec![fixture_ref("resource")],
         };
         let facts = valid_facts(&profile);
+        let import_manifest = valid_import_manifest(&profile);
         Self {
             profile,
             component_bytes,
@@ -67,6 +69,7 @@ impl ComponentFixture {
             bundle,
             envelope,
             facts,
+            import_manifest,
         }
     }
 
@@ -93,6 +96,7 @@ impl ComponentFixture {
             evidence_scope: EvidenceScope::Production,
             source: self.source(),
             facts: &self.facts,
+            import_manifest: &self.import_manifest,
             import_grants: &[],
             input,
         }
@@ -128,6 +132,17 @@ pub fn valid_facts(profile: &ComponentRuntimeProfile) -> ComponentArtifactFacts 
         memories: FIXED_MEMORY_COUNT,
         tables: FIXED_TABLE_COUNT,
     }
+}
+
+pub fn valid_import_manifest(profile: &ComponentRuntimeProfile) -> DeclaredManifest {
+    build_manifest(ManifestInput {
+        profile_id: profile.profile_id.clone(),
+        wit_package: profile.wit.package.clone(),
+        world: profile.wit.world.clone(),
+        imports: Vec::new(),
+        exports: vec![COMPONENT_INVOKE_EXPORT.to_string()],
+    })
+    .expect("valid import manifest fixture")
 }
 
 pub fn input_value() -> preserves::IOValue {
