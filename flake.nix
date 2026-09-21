@@ -1973,6 +1973,31 @@
                   done
                   touch "$out"
                 '';
+            marbleStorePilotProfileCheck =
+              pkgs.runCommand "molten-marble-store-pilot-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.nickel
+                    pkgs.diffutils
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  profile=docs/marble-object-store-pilot/profile.ncl
+                  generated=docs/marble-object-store-pilot/generated/catalog.json
+                  nickel export "$profile" --format json > "$TMPDIR/catalog.json"
+                  diff -u "$generated" "$TMPDIR/catalog.json"
+                  for fixture in docs/marble-object-store-pilot/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative marble store pilot fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  touch "$out"
+                '';
             # r[verify molten.project.inherited_tracey_classification.verified_repair]
             # r[verify molten.project.runtime_spine_tracey.direct_repairs]
             # r[verify molten.project.runtime_spine_tracey.exact_manifest]
@@ -2870,6 +2895,7 @@
             fabric-cryptographic-identity-profile = fabricCryptographicIdentityProfileCheck;
             fabric-observability-profile = fabricObservabilityProfileCheck;
             content-store-adapter-profile = contentStoreAdapterProfileCheck;
+            marble-store-pilot-profile = marbleStorePilotProfileCheck;
             world-benchmark-profile = worldBenchmarkProfileCheck;
             world-faults-profile = worldFaultsProfileCheck;
             world-state-oracle-profile = worldStateOracleProfileCheck;

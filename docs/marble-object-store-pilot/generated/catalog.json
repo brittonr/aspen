@@ -1,0 +1,27 @@
+{
+  "dependencies": [
+    {
+      "consumed_claims": [],
+      "crate": "marble",
+      "license": "Apache-2.0 (MIT/Apache-2.0 dual license, Apache-2.0 option selected)",
+      "pinned_version": "16.0.2",
+      "plane": "implementation",
+      "transport": "crates.io"
+    },
+    {
+      "consumed_claims": [],
+      "crate": "art",
+      "license": "Apache-2.0 (MIT OR Apache-2.0 dual license, Apache-2.0 option selected)",
+      "pinned_version": "1.0.0",
+      "plane": "implementation",
+      "transport": "crates.io"
+    }
+  ],
+  "non_claims": [
+    "spike-is-not-default-path",
+    "object-id-is-not-content-identity",
+    "measurement-is-not-proof",
+    "recovery-claims-stop-at-recovered-batches"
+  ],
+  "schema_id": "molten.marble-store-pilot.catalog.v1"
+}
