@@ -11,10 +11,22 @@ fn identical_component_facts_produce_identical_pure_execution_plans() {
     // r[verify molten.wasm_component.functional_core]
     // r[verify molten.wasm_component.resources]
     let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
-    let left = plan_component_execution(&fixture.profile, admitted_materialization(&fixture), &fixture.facts, &[])
-        .expect("left plan");
-    let right = plan_component_execution(&fixture.profile, admitted_materialization(&fixture), &fixture.facts, &[])
-        .expect("right plan");
+    let left = plan_component_execution(
+        &fixture.profile,
+        admitted_materialization(&fixture),
+        &fixture.import_manifest,
+        &fixture.facts,
+        &[],
+    )
+    .expect("left plan");
+    let right = plan_component_execution(
+        &fixture.profile,
+        admitted_materialization(&fixture),
+        &fixture.import_manifest,
+        &fixture.facts,
+        &[],
+    )
+    .expect("right plan");
     assert_eq!(left, right);
     assert!(left.imports.is_empty());
     assert!(left.capabilities.is_empty());
@@ -35,17 +47,44 @@ fn admission_rejects_wrong_world_unsupported_feature_and_dynamic_growth() {
 
     let mut wrong_world = fixture.facts.clone();
     wrong_world.declared_world = "other-world".to_string();
-    assert!(plan_component_execution(&fixture.profile, admitted_materialization(&fixture), &wrong_world, &[]).is_err());
+    assert!(
+        plan_component_execution(
+            &fixture.profile,
+            admitted_materialization(&fixture),
+            &fixture.import_manifest,
+            &wrong_world,
+            &[]
+        )
+        .is_err()
+    );
 
     let mut unsupported = fixture.facts.clone();
     unsupported.enabled_features.push("threads".to_string());
     unsupported.enabled_features.sort();
-    assert!(plan_component_execution(&fixture.profile, admitted_materialization(&fixture), &unsupported, &[]).is_err());
+    assert!(
+        plan_component_execution(
+            &fixture.profile,
+            admitted_materialization(&fixture),
+            &fixture.import_manifest,
+            &unsupported,
+            &[]
+        )
+        .is_err()
+    );
 
     let mut dynamic = fixture.facts.clone();
     dynamic.memory.strategy = GrowthStrategy::Dynamic;
     dynamic.memory.maximum = None;
-    assert!(plan_component_execution(&fixture.profile, admitted_materialization(&fixture), &dynamic, &[]).is_err());
+    assert!(
+        plan_component_execution(
+            &fixture.profile,
+            admitted_materialization(&fixture),
+            &fixture.import_manifest,
+            &dynamic,
+            &[]
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -57,7 +96,16 @@ fn admission_rejects_over_resource_undeclared_wasi_and_unused_authority() {
     let mut oversized = fixture.facts.clone();
     oversized.memory.initial = fixture.profile.resources.max_memory_bytes + 1;
     oversized.memory.maximum = Some(oversized.memory.initial);
-    assert!(plan_component_execution(&fixture.profile, admitted_materialization(&fixture), &oversized, &[]).is_err());
+    assert!(
+        plan_component_execution(
+            &fixture.profile,
+            admitted_materialization(&fixture),
+            &fixture.import_manifest,
+            &oversized,
+            &[]
+        )
+        .is_err()
+    );
 
     let mut wasi = fixture.facts.clone();
     wasi.imports = vec!["wasi:filesystem/types@0.2.6".to_string()];
@@ -73,6 +121,7 @@ fn admission_rejects_over_resource_undeclared_wasi_and_unused_authority() {
         plan_component_execution(
             &fixture.profile,
             admitted_materialization(&fixture),
+            &fixture.import_manifest,
             &wasi,
             std::slice::from_ref(&grant),
         )
@@ -80,7 +129,13 @@ fn admission_rejects_over_resource_undeclared_wasi_and_unused_authority() {
     );
 
     assert!(
-        plan_component_execution(&fixture.profile, admitted_materialization(&fixture), &fixture.facts, &[grant])
-            .is_err()
+        plan_component_execution(
+            &fixture.profile,
+            admitted_materialization(&fixture),
+            &fixture.import_manifest,
+            &fixture.facts,
+            &[grant]
+        )
+        .is_err()
     );
 }
