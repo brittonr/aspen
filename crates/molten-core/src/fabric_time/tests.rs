@@ -944,3 +944,418 @@ fn exclusive_lease_actions_require_fresh_fencing() {
     let expired = evaluate_lease(&profile, ACTIVE_GENERATION, &request).expect("expired deny");
     assert_eq!(expired.kind, LeaseDecisionKind::DeniedExpired);
 }
+
+fn limited_scheduler_profile(max_runnables: u64, queue_depth: u64) -> AdmittedTimeProfile {
+    let mut limited = descriptor(TimeProfileKind::DeterministicSimulation);
+    limited.max_runnables = max_runnables;
+    limited.max_scheduler_concurrency = limited.max_scheduler_concurrency.min(max_runnables);
+    limited.max_scheduler_queue_depth = queue_depth;
+    admit_time_profile(&limited).expect("admitted limited scheduler profile")
+}
+
+fn scheduler_command(
+    profile: &AdmittedTimeProfile,
+    policy: SchedulerPolicy,
+    state: &SchedulerState,
+    command: &SchedulerCommand,
+) -> SchedulerTransition {
+    apply_scheduler_command(profile, policy, state, ACTIVE_GENERATION, command).expect("scheduler command")
+}
+
+fn scheduler_phase(state: &SchedulerState, key: &RunnableKey) -> RunnablePhase {
+    state.runnables.iter().find(|runnable| &runnable.key == key).expect("known runnable").phase
+}
+
+fn active_runnable_count(state: &SchedulerState) -> usize {
+    state
+        .runnables
+        .iter()
+        .filter(|runnable| !matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled))
+        .count()
+}
+
+// r[verify molten.audit_f09.resume]
+// r[verify molten.audit_f09.queue]
+#[test]
+fn wake_resumes_a_blocked_occurrence_at_the_active_limit() {
+    let profile = limited_scheduler_profile(1, 1);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let key = runnable("resumed", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: key.clone(),
+        priority: 3,
+    })
+    .next;
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Block { key: key.clone() }).next;
+    let blocked = state.clone();
+
+    let resumed = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: key.clone(),
+        priority: 7,
+    });
+
+    assert_eq!(resumed.action, SchedulerAction::Woken);
+    assert_eq!(resumed.next.runnables.len(), blocked.runnables.len());
+    assert_eq!(active_runnable_count(&resumed.next), active_runnable_count(&blocked));
+    let record = resumed.next.runnables.iter().find(|runnable| runnable.key == key).expect("resumed record");
+    assert_eq!(record.phase, RunnablePhase::Ready);
+    assert_eq!(record.priority, 7);
+    assert_eq!(record.wait_turns, 0);
+    assert_eq!(record.enqueue_sequence, blocked.next_enqueue_sequence);
+    assert_eq!(resumed.next.next_enqueue_sequence, blocked.next_enqueue_sequence + 1);
+}
+
+// r[verify molten.audit_f09.ordering]
+#[test]
+fn wake_resume_enters_fifo_order_behind_older_ready_work() {
+    let profile = limited_scheduler_profile(2, 2);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let resuming = runnable("resuming", ACTIVE_GENERATION);
+    let older = runnable("older", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: resuming.clone(),
+        priority: 0,
+    })
+    .next;
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Block { key: resuming.clone() }).next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: older.clone(),
+        priority: 0,
+    })
+    .next;
+
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: resuming.clone(),
+        priority: 0,
+    })
+    .next;
+
+    let resuming_sequence = state
+        .runnables
+        .iter()
+        .find(|runnable| runnable.key == resuming)
+        .expect("resumed record")
+        .enqueue_sequence;
+    let older_sequence = state
+        .runnables
+        .iter()
+        .find(|runnable| runnable.key == older)
+        .expect("older record")
+        .enqueue_sequence;
+    assert!(resuming_sequence > older_sequence, "resume must take a fresh position behind older ready work");
+}
+
+// r[verify molten.audit_f09.queue]
+#[test]
+fn wake_resume_denies_when_the_ready_queue_is_full() {
+    let profile = limited_scheduler_profile(4, 1);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let blocked_key = runnable("blocked", ACTIVE_GENERATION);
+    let ready_key = runnable("ready", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: blocked_key.clone(),
+        priority: 1,
+    })
+    .next;
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Block {
+        key: blocked_key.clone(),
+    })
+    .next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: ready_key.clone(),
+        priority: 2,
+    })
+    .next;
+    let before = state.clone();
+
+    let denied = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: blocked_key.clone(),
+        priority: 9,
+    });
+
+    assert_eq!(denied.action, SchedulerAction::RejectedOverload);
+    assert_eq!(denied.next, before);
+    assert_eq!(scheduler_phase(&denied.next, &blocked_key), RunnablePhase::Blocked);
+    assert_eq!(scheduler_phase(&denied.next, &ready_key), RunnablePhase::Ready);
+}
+
+// r[verify molten.audit_f09.resume]
+#[test]
+fn wake_denies_non_blocked_duplicates_without_mutation() {
+    let profile = limited_scheduler_profile(4, 4);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let ready_key = runnable("ready-duplicate", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: ready_key.clone(),
+        priority: 0,
+    })
+    .next;
+    assert!(matches!(
+        apply_scheduler_command(
+            &profile,
+            policy,
+            &state,
+            ACTIVE_GENERATION,
+            &SchedulerCommand::Wake { key: ready_key.clone(), priority: 0 },
+        ),
+        Err(SchedulerError::DuplicateRunnable(duplicate)) if duplicate == ready_key
+    ));
+    assert_eq!(scheduler_phase(&state, &ready_key), RunnablePhase::Ready);
+
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    assert!(matches!(
+        apply_scheduler_command(&profile, policy, &state, ACTIVE_GENERATION, &SchedulerCommand::Wake {
+            key: ready_key.clone(),
+            priority: 0
+        },),
+        Err(SchedulerError::DuplicateRunnable(_))
+    ));
+    assert_eq!(scheduler_phase(&state, &ready_key), RunnablePhase::Running);
+
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Complete { key: ready_key.clone() }).next;
+    assert!(matches!(
+        apply_scheduler_command(&profile, policy, &state, ACTIVE_GENERATION, &SchedulerCommand::Wake {
+            key: ready_key.clone(),
+            priority: 0
+        },),
+        Err(SchedulerError::DuplicateRunnable(_))
+    ));
+    assert_eq!(scheduler_phase(&state, &ready_key), RunnablePhase::Completed);
+
+    let cancelled_key = runnable("cancelled-duplicate", ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: cancelled_key.clone(),
+        priority: 0,
+    })
+    .next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Cancel {
+        key: cancelled_key.clone(),
+    })
+    .next;
+    assert!(matches!(
+        apply_scheduler_command(&profile, policy, &state, ACTIVE_GENERATION, &SchedulerCommand::Wake {
+            key: cancelled_key.clone(),
+            priority: 0
+        },),
+        Err(SchedulerError::DuplicateRunnable(_))
+    ));
+    assert_eq!(scheduler_phase(&state, &cancelled_key), RunnablePhase::Cancelled);
+}
+
+// r[verify molten.audit_f09.ordering]
+#[test]
+fn wake_resume_overflow_preserves_state() {
+    let profile = limited_scheduler_profile(2, 2);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let key = runnable("exhausted", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: key.clone(),
+        priority: 0,
+    })
+    .next;
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Block { key: key.clone() }).next;
+    let mut exhausted = state.clone();
+    exhausted.next_enqueue_sequence = u64::MAX;
+    let before = exhausted.clone();
+
+    assert!(matches!(
+        apply_scheduler_command(&profile, policy, &exhausted, ACTIVE_GENERATION, &SchedulerCommand::Wake {
+            key: key.clone(),
+            priority: 0
+        },),
+        Err(SchedulerError::Overflow)
+    ));
+    assert_eq!(exhausted, before);
+    assert_eq!(scheduler_phase(&exhausted, &key), RunnablePhase::Blocked);
+}
+
+// r[verify molten.audit_f10.queue]
+// r[verify molten.audit_f10.shared_admission]
+#[test]
+fn yield_denies_at_the_ready_bound_and_preserves_state() {
+    let profile = limited_scheduler_profile(4, 1);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let running_key = runnable("yielding", ACTIVE_GENERATION);
+    let ready_key = runnable("queued", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: running_key.clone(),
+        priority: 0,
+    })
+    .next;
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: ready_key.clone(),
+        priority: 0,
+    })
+    .next;
+    let before = state.clone();
+
+    let denied = scheduler_command(&profile, policy, &state, &SchedulerCommand::Yield {
+        key: running_key.clone(),
+    });
+
+    assert_eq!(denied.action, SchedulerAction::RejectedOverload);
+    assert_eq!(denied.next, before);
+    assert_eq!(scheduler_phase(&denied.next, &running_key), RunnablePhase::Running);
+    assert_eq!(scheduler_phase(&denied.next, &ready_key), RunnablePhase::Ready);
+}
+
+// r[verify molten.audit_f10.queue]
+// r[verify molten.audit_f10.atomicity]
+#[test]
+fn yield_admits_with_ready_capacity_and_takes_a_fresh_position() {
+    let profile = limited_scheduler_profile(4, 2);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let key = runnable("yielding", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: key.clone(),
+        priority: 0,
+    })
+    .next;
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    let sequence_before = state.next_enqueue_sequence;
+
+    let yielded = scheduler_command(&profile, policy, &state, &SchedulerCommand::Yield { key: key.clone() });
+
+    assert_eq!(yielded.action, SchedulerAction::Yielded);
+    let record = yielded.next.runnables.iter().find(|runnable| runnable.key == key).expect("yielded record");
+    assert_eq!(record.phase, RunnablePhase::Ready);
+    assert_eq!(record.enqueue_sequence, sequence_before);
+    assert_eq!(yielded.next.next_enqueue_sequence, sequence_before + 1);
+}
+
+// r[verify molten.audit_f10.shared_admission]
+#[test]
+fn new_wake_denies_at_the_active_bound_while_ready_capacity_exists() {
+    let profile = limited_scheduler_profile(1, 1);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let running_key = runnable("running", ACTIVE_GENERATION);
+    let new_key = runnable("new", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: running_key.clone(),
+        priority: 0,
+    })
+    .next;
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    let before = state.clone();
+
+    let denied = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: new_key.clone(),
+        priority: 0,
+    });
+
+    assert_eq!(denied.action, SchedulerAction::RejectedOverload);
+    assert_eq!(denied.next, before);
+    assert!(denied.next.runnables.iter().all(|runnable| runnable.key != new_key));
+    assert_eq!(scheduler_phase(&denied.next, &running_key), RunnablePhase::Running);
+}
+
+// r[verify molten.audit_f10.queue]
+#[test]
+fn backpressure_profile_maps_denied_yield_to_backpressure() {
+    let mut limited = descriptor(TimeProfileKind::DeterministicSimulation);
+    limited.max_scheduler_queue_depth = 1;
+    limited.scheduler_policy = SchedulerPolicy {
+        ordering: SchedulerOrdering::PriorityThenFifo,
+        replay: SchedulerReplayPolicy::Deterministic,
+        overload: SchedulerOverloadPolicy::Backpressure,
+    };
+    let profile = admit_time_profile(&limited).expect("admitted backpressure profile");
+    let policy = profile.scheduler_policy;
+    let running_key = runnable("yielding", ACTIVE_GENERATION);
+    let queued_key = runnable("queued", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: running_key.clone(),
+        priority: 0,
+    })
+    .next;
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: queued_key.clone(),
+        priority: 0,
+    })
+    .next;
+    let before = state.clone();
+
+    let denied = scheduler_command(&profile, policy, &state, &SchedulerCommand::Yield {
+        key: running_key.clone(),
+    });
+
+    assert_eq!(denied.action, SchedulerAction::Backpressure);
+    assert_eq!(denied.next, before);
+    assert_eq!(scheduler_phase(&denied.next, &running_key), RunnablePhase::Running);
+}
+
+// r[verify molten.audit_f09.validation]
+// r[verify molten.audit_f10.atomicity]
+#[test]
+fn stale_generation_wake_and_yield_discard_without_effects() {
+    let profile = limited_scheduler_profile(2, 2);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let stale = runnable("stale", STALE_GENERATION);
+    let state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    let before = state.clone();
+
+    let woken = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: stale.clone(),
+        priority: 0,
+    });
+    assert_eq!(woken.action, SchedulerAction::DiscardedStaleGeneration);
+    assert_eq!(woken.next, before);
+
+    let yielded = scheduler_command(&profile, policy, &state, &SchedulerCommand::Yield { key: stale });
+    assert_eq!(yielded.action, SchedulerAction::DiscardedStaleGeneration);
+    assert_eq!(yielded.next, before);
+}
+
+// r[verify molten.audit_f10.atomicity]
+#[test]
+fn yield_denies_invalid_phase_and_exhausted_sequence_without_mutation() {
+    let profile = limited_scheduler_profile(4, 4);
+    let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
+    let key = runnable("invalid-yield", ACTIVE_GENERATION);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: key.clone(),
+        priority: 0,
+    })
+    .next;
+
+    assert!(matches!(
+        apply_scheduler_command(&profile, policy, &state, ACTIVE_GENERATION, &SchedulerCommand::Yield {
+            key: key.clone()
+        },),
+        Err(SchedulerError::InvalidPhase {
+            expected: RunnablePhase::Running,
+            ..
+        })
+    ));
+    assert_eq!(scheduler_phase(&state, &key), RunnablePhase::Ready);
+
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("select").next;
+    let mut exhausted = state.clone();
+    exhausted.next_enqueue_sequence = u64::MAX;
+    let before = exhausted.clone();
+
+    assert!(matches!(
+        apply_scheduler_command(&profile, policy, &exhausted, ACTIVE_GENERATION, &SchedulerCommand::Yield {
+            key: key.clone()
+        },),
+        Err(SchedulerError::Overflow)
+    ));
+    assert_eq!(exhausted, before);
+    assert_eq!(scheduler_phase(&exhausted, &key), RunnablePhase::Running);
+}

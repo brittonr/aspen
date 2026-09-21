@@ -269,6 +269,166 @@ fn live_scheduler_wake_shell_routes_only_admitted_wake_transitions() {
     assert!(adapter.unregister(&key));
 }
 
+// r[verify molten.audit_f09.validation]
+#[test]
+fn extension_context_resumes_a_blocked_occurrence_at_the_active_limit() {
+    let mut limited = simulation_profile();
+    limited.profile.max_runnables = 1;
+    limited.profile.max_scheduler_concurrency = 1;
+    limited.profile.max_scheduler_queue_depth = 1;
+    let profile = &limited.profile;
+    let context =
+        ExtensionTimeContext::from_test_snapshot("test-service", GENERATION, profile, vec![HASH_B.to_string()]);
+    let policy = SchedulerPolicy {
+        ordering: SchedulerOrdering::Fifo,
+        replay: SchedulerReplayPolicy::Deterministic,
+        overload: SchedulerOverloadPolicy::Reject,
+    };
+    let key = RunnableKey {
+        service_id: "test-service".to_string(),
+        generation: GENERATION,
+        runnable_id: "resumed".to_string(),
+    };
+    let mut state = new_scheduler_state(profile, GENERATION);
+    state = context
+        .apply_scheduler_command(profile, policy, &state, &SchedulerCommand::Wake {
+            key: key.clone(),
+            priority: 0,
+        })
+        .expect("admitted wake")
+        .next;
+    state = context.choose_runnable(profile, policy, &state, None).expect("select").next;
+    state = context
+        .apply_scheduler_command(profile, policy, &state, &SchedulerCommand::Block { key: key.clone() })
+        .expect("admitted block")
+        .next;
+    let blocked = state.clone();
+
+    let resumed = context
+        .apply_scheduler_command(profile, policy, &state, &SchedulerCommand::Wake {
+            key: key.clone(),
+            priority: 1,
+        })
+        .expect("admitted resume at the active limit");
+
+    assert_eq!(resumed.action, SchedulerAction::Woken);
+    assert_eq!(resumed.next.runnables.len(), blocked.runnables.len());
+    assert!(
+        resumed
+            .next
+            .runnables
+            .iter()
+            .any(|runnable| runnable.key == key && runnable.phase == RunnablePhase::Ready)
+    );
+}
+
+// r[verify molten.audit_f10.validation]
+#[test]
+fn extension_context_reports_overload_for_yield_at_the_ready_bound() {
+    let mut limited = simulation_profile();
+    limited.profile.max_scheduler_queue_depth = 1;
+    let profile = &limited.profile;
+    let context =
+        ExtensionTimeContext::from_test_snapshot("test-service", GENERATION, profile, vec![HASH_B.to_string()]);
+    let policy = SchedulerPolicy {
+        ordering: SchedulerOrdering::Fifo,
+        replay: SchedulerReplayPolicy::Deterministic,
+        overload: SchedulerOverloadPolicy::Reject,
+    };
+    let running_key = RunnableKey {
+        service_id: "test-service".to_string(),
+        generation: GENERATION,
+        runnable_id: "yielding".to_string(),
+    };
+    let queued_key = RunnableKey {
+        service_id: "test-service".to_string(),
+        generation: GENERATION,
+        runnable_id: "queued".to_string(),
+    };
+    let mut state = new_scheduler_state(profile, GENERATION);
+    state = context
+        .apply_scheduler_command(profile, policy, &state, &SchedulerCommand::Wake {
+            key: running_key.clone(),
+            priority: 0,
+        })
+        .expect("admitted wake")
+        .next;
+    state = context.choose_runnable(profile, policy, &state, None).expect("select").next;
+    state = context
+        .apply_scheduler_command(profile, policy, &state, &SchedulerCommand::Wake {
+            key: queued_key.clone(),
+            priority: 0,
+        })
+        .expect("admitted queued wake")
+        .next;
+    let before = state.clone();
+
+    let denied = context
+        .apply_scheduler_command(profile, policy, &state, &SchedulerCommand::Yield {
+            key: running_key.clone(),
+        })
+        .expect("yield decision at the ready bound");
+
+    assert_eq!(denied.action, SchedulerAction::RejectedOverload);
+    assert_eq!(denied.next, before);
+    assert!(
+        denied
+            .next
+            .runnables
+            .iter()
+            .any(|runnable| runnable.key == running_key && runnable.phase == RunnablePhase::Running)
+    );
+}
+
+// r[verify molten.audit_f10.validation]
+#[test]
+fn corrected_yield_admission_diverges_from_an_over_capacity_history() {
+    let mut limited = simulation_profile();
+    limited.profile.max_scheduler_queue_depth = 1;
+    let profile = &limited.profile;
+    let context =
+        ExtensionTimeContext::from_test_snapshot("test-service", GENERATION, profile, vec![HASH_B.to_string()]);
+    let policy = profile.scheduler_policy;
+    let running_key = RunnableKey {
+        service_id: "test-service".to_string(),
+        generation: GENERATION,
+        runnable_id: "yielding".to_string(),
+    };
+    let queued_key = RunnableKey {
+        service_id: "test-service".to_string(),
+        generation: GENERATION,
+        runnable_id: "queued".to_string(),
+    };
+    let mut state = new_scheduler_state(profile, GENERATION);
+    state = context
+        .apply_scheduler_command(profile, policy, &state, &SchedulerCommand::Wake {
+            key: running_key.clone(),
+            priority: 0,
+        })
+        .expect("admitted wake")
+        .next;
+    state = context.choose_runnable(profile, policy, &state, None).expect("select").next;
+    state = context
+        .apply_scheduler_command(profile, policy, &state, &SchedulerCommand::Wake {
+            key: queued_key.clone(),
+            priority: 0,
+        })
+        .expect("admitted queued wake")
+        .next;
+
+    let replayed = context
+        .apply_scheduler_command(profile, policy, &state, &SchedulerCommand::Yield {
+            key: running_key.clone(),
+        })
+        .expect("replay decision");
+
+    // A history recorded under the former rule reported `Yielded`; the corrected admission
+    // reports the overload result and leaves the recorded state untouched.
+    assert_ne!(replayed.action, SchedulerAction::Yielded);
+    assert_eq!(replayed.action, SchedulerAction::RejectedOverload);
+    assert_eq!(replayed.next, state);
+}
+
 #[test]
 fn entropy_evidence_omits_output_bytes() {
     let profile = simulation_profile();

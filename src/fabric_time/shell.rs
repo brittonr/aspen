@@ -100,20 +100,29 @@ impl ExtensionTimeContext {
         if key.service_id != self.service_id {
             return Err(MoltenError::invalid_harness("runnable service identity mismatch"));
         }
-        if matches!(command, SchedulerCommand::Wake { .. }) {
-            let active = u64::try_from(
-                state
-                    .runnables
-                    .iter()
-                    .filter(|runnable| !matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled))
-                    .count(),
-            )
-            .map_err(|_| MoltenError::invalid_harness("runnable count overflow"))?;
-            if active >= self.max_runnables {
-                return Err(MoltenError::invalid_harness(format!(
-                    "system-extension runnable limit {} exhausted",
-                    self.max_runnables
-                )));
+        // A blocked occurrence already holds its active slot, so resume is not charged again.
+        if let SchedulerCommand::Wake { key: woken, .. } = command {
+            let is_resume = state
+                .runnables
+                .iter()
+                .any(|runnable| &runnable.key == woken && runnable.phase == RunnablePhase::Blocked);
+            if !is_resume {
+                let active = u64::try_from(
+                    state
+                        .runnables
+                        .iter()
+                        .filter(|runnable| {
+                            !matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled)
+                        })
+                        .count(),
+                )
+                .map_err(|_| MoltenError::invalid_harness("runnable count overflow"))?;
+                if active >= self.max_runnables {
+                    return Err(MoltenError::invalid_harness(format!(
+                        "system-extension runnable limit {} exhausted",
+                        self.max_runnables
+                    )));
+                }
             }
         }
         super::apply_scheduler_command(profile, policy, state, self.generation, command)

@@ -191,9 +191,7 @@ pub fn apply_scheduler_command(
     }
     match command {
         SchedulerCommand::Wake { key, priority } => wake(profile, policy, state, key, *priority),
-        SchedulerCommand::Yield { key } => {
-            transition_phase(state, key, RunnablePhase::Running, RunnablePhase::Ready, SchedulerAction::Yielded, true)
-        }
+        SchedulerCommand::Yield { key } => yield_occurrence(profile, policy, state, key),
         SchedulerCommand::Block { key } => block(state, key),
         SchedulerCommand::Complete { key } => transition_phase(
             state,
@@ -292,19 +290,21 @@ pub fn cleanup_scheduler_generation(state: &SchedulerState, generation: u64) -> 
     next
 }
 
-fn wake(
+// r[impl molten.audit_f10.shared_admission]
+// r[impl molten.audit_f09.queue]
+fn ready_overload_action(
     profile: &AdmittedTimeProfile,
     policy: SchedulerPolicy,
     state: &SchedulerState,
-    key: &RunnableKey,
-    priority: i32,
-) -> Result<SchedulerTransition, SchedulerError> {
-    if state.runnables.iter().any(|runnable| &runnable.key == key) {
-        return Err(SchedulerError::DuplicateRunnable(key.clone()));
+    counts_as_new_work: bool,
+) -> Result<Option<SchedulerAction>, SchedulerError> {
+    let queued = count_phase(state, RunnablePhase::Ready)?;
+    if queued >= profile.max_scheduler_queue_depth {
+        return Ok(Some(overload_action(policy)));
     }
-    let queued =
-        u64::try_from(state.runnables.iter().filter(|runnable| runnable.phase == RunnablePhase::Ready).count())
-            .map_err(|_| SchedulerError::Overflow)?;
+    if !counts_as_new_work {
+        return Ok(None);
+    }
     let active = u64::try_from(
         state
             .runnables
@@ -313,16 +313,60 @@ fn wake(
             .count(),
     )
     .map_err(|_| SchedulerError::Overflow)?;
-    if queued >= profile.max_scheduler_queue_depth || active >= profile.max_runnables {
-        let action = match policy.overload {
-            SchedulerOverloadPolicy::Reject => SchedulerAction::RejectedOverload,
-            SchedulerOverloadPolicy::Backpressure => SchedulerAction::Backpressure,
-        };
+    if active >= profile.max_runnables {
+        return Ok(Some(overload_action(policy)));
+    }
+    Ok(None)
+}
+
+fn overload_action(policy: SchedulerPolicy) -> SchedulerAction {
+    match policy.overload {
+        SchedulerOverloadPolicy::Reject => SchedulerAction::RejectedOverload,
+        SchedulerOverloadPolicy::Backpressure => SchedulerAction::Backpressure,
+    }
+}
+
+fn unchanged_transition(state: &SchedulerState, key: &RunnableKey, action: SchedulerAction) -> SchedulerTransition {
+    SchedulerTransition {
+        next: state.clone(),
+        action,
+        runnable: key.clone(),
+    }
+}
+
+// r[impl molten.audit_f09.resume]
+// r[impl molten.audit_f09.ordering]
+fn wake(
+    profile: &AdmittedTimeProfile,
+    policy: SchedulerPolicy,
+    state: &SchedulerState,
+    key: &RunnableKey,
+    priority: i32,
+) -> Result<SchedulerTransition, SchedulerError> {
+    if let Some(existing) = state.runnables.iter().find(|runnable| &runnable.key == key) {
+        if existing.phase != RunnablePhase::Blocked {
+            return Err(SchedulerError::DuplicateRunnable(key.clone()));
+        }
+        // A blocked occurrence already holds its active slot: only ready capacity applies.
+        if let Some(action) = ready_overload_action(profile, policy, state, false)? {
+            return Ok(unchanged_transition(state, key, action));
+        }
+        let mut next = state.clone();
+        let sequence = next.next_enqueue_sequence;
+        next.next_enqueue_sequence = sequence.checked_add(1).ok_or(SchedulerError::Overflow)?;
+        let runnable = find_runnable_mut(&mut next, key)?;
+        runnable.phase = RunnablePhase::Ready;
+        runnable.priority = priority;
+        runnable.enqueue_sequence = sequence;
+        runnable.wait_turns = 0;
         return Ok(SchedulerTransition {
-            next: state.clone(),
-            action,
+            next,
+            action: SchedulerAction::Woken,
             runnable: key.clone(),
         });
+    }
+    if let Some(action) = ready_overload_action(profile, policy, state, true)? {
+        return Ok(unchanged_transition(state, key, action));
     }
     let mut next = state.clone();
     let enqueue_sequence = next.next_enqueue_sequence;
@@ -339,6 +383,29 @@ fn wake(
         action: SchedulerAction::Woken,
         runnable: key.clone(),
     })
+}
+
+// r[impl molten.audit_f10.queue]
+// r[impl molten.audit_f10.atomicity]
+fn yield_occurrence(
+    profile: &AdmittedTimeProfile,
+    policy: SchedulerPolicy,
+    state: &SchedulerState,
+    key: &RunnableKey,
+) -> Result<SchedulerTransition, SchedulerError> {
+    let phase = find_runnable(state, key)?.phase;
+    if phase != RunnablePhase::Running {
+        return Err(SchedulerError::InvalidPhase {
+            key: key.clone(),
+            expected: RunnablePhase::Running,
+            actual: phase,
+        });
+    }
+    // A running occurrence already holds its active slot: only ready capacity applies.
+    if let Some(action) = ready_overload_action(profile, policy, state, false)? {
+        return Ok(unchanged_transition(state, key, action));
+    }
+    transition_phase(state, key, RunnablePhase::Running, RunnablePhase::Ready, SchedulerAction::Yielded, true)
 }
 
 fn block(state: &SchedulerState, key: &RunnableKey) -> Result<SchedulerTransition, SchedulerError> {
