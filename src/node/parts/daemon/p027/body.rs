@@ -313,7 +313,18 @@ fn dispatch_shutdown_request(
     root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
-    let stop = stop_local_node_with_request(root, request)?;
+    let startup = current_startup_receipt(root)?;
+    let admission = admit_shutdown_request(root, request, &startup)?;
+    let Some(plan) = admission.plan else {
+        return finalize_operation_dispatch(&OperationFinalizeInput {
+            state_root: root,
+            request,
+            startup_receipt_ref: &startup.receipt_ref,
+            subreceipt_refs: &[],
+            diagnostics: &admission.diagnostics,
+        });
+    };
+    let stop = execute_shutdown_plan(root, request, &plan)?;
     write_preserves(
         root,
         &control_outbox_receipt_path(&request.request_ref)?,

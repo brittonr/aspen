@@ -14,4 +14,5 @@ mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/tests/m000/p011/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/tests/m000/p012/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/tests/m000/p013/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/tests/m000/p014/body.rs"));
 }
