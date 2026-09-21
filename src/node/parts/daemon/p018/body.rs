@@ -117,14 +117,60 @@ pub fn stop_local_with_root(root: &crate::node_state::NodeStateRoot) -> Result<S
     stop_local_node_with_request(root, &request)
 }
 
+// r[impl molten.audit_f01.admission]
+// r[impl molten.audit_f01.preserve_state]
 fn stop_local_node_with_request(
     root: &crate::node_state::NodeStateRoot,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<Stop> {
-    let startup_value = read_preserves(root, &fixed_node_path(STARTUP_FILE)?)?;
-    let startup = crate::node_runtime::parse_node_startup_receipt(&startup_value)?;
-    let mut shutdown_adapters = Vec::with_capacity(startup.adapters.len());
-    for adapter in startup.adapters.iter().rev() {
+    let startup = current_startup_receipt(root)?;
+    let admission = admit_shutdown_request(root, request, &startup)?;
+    let Some(plan) = admission.plan else {
+        let denial_ref = write_shutdown_denial(root, request, &startup.receipt_ref, &admission.diagnostics)?;
+        return Err(MoltenError::invalid_harness(format!(
+            "node shutdown denied: {} (denial receipt={})",
+            admission.diagnostics.join("; "),
+            denial_ref
+        )));
+    };
+    execute_shutdown_plan(root, request, &plan)
+}
+
+fn admit_shutdown_request(
+    root: &crate::node_state::NodeStateRoot,
+    request: &crate::node_runtime::ControlRequest,
+    startup: &crate::node_runtime::NodeStartupReceipt,
+) -> Result<crate::node_runtime::ShutdownAdmission> {
+    let has_active_lock = root.try_exists(&fixed_node_path(CONTROL_LOCK_FILE)?)?;
+    crate::node_runtime::admit_node_shutdown(&crate::node_runtime::ShutdownAdmissionInput {
+        request,
+        startup_receipt_ref: &startup.receipt_ref,
+        adapter_receipts: &startup.adapters,
+        has_active_lock,
+    })
+}
+
+fn write_shutdown_denial(
+    root: &crate::node_state::NodeStateRoot,
+    request: &crate::node_runtime::ControlRequest,
+    startup_receipt_ref: &str,
+    diagnostics: &[String],
+) -> Result<String> {
+    let control_receipt_value = control_receipt_for_request(root, request, startup_receipt_ref, &[], diagnostics)?;
+    let control_receipt_ref = crate::preserves_rail::canonical_hash(&control_receipt_value)?;
+    write_preserves(root, &fixed_node_path(CONTROL_STOP_FILE)?, &control_receipt_value)?;
+    import_artifact(root, &control_receipt_value)?;
+    Ok(control_receipt_ref)
+}
+
+// r[impl molten.audit_f01.observed_effects]
+fn execute_shutdown_plan(
+    root: &crate::node_state::NodeStateRoot,
+    request: &crate::node_runtime::ControlRequest,
+    plan: &crate::node_runtime::ShutdownPlan,
+) -> Result<Stop> {
+    let mut shutdown_adapters = Vec::with_capacity(plan.adapter_receipts.len());
+    for adapter in plan.adapter_receipts.iter() {
         let binding = crate::node_runtime::node_adapter_binding(&adapter.name, &adapter.receipt_ref)?;
         let value = crate::node_runtime::node_adapter_lifecycle_receipt_value(
             &crate::node_runtime::AdapterLifecycleReceiptInput {
@@ -149,7 +195,7 @@ fn stop_local_node_with_request(
     let shutdown_value =
         crate::node_runtime::node_shutdown_receipt_value(&crate::node_runtime::ShutdownReceiptValueInput {
             decision: "pass",
-            startup_receipt_ref: &startup.receipt_ref,
+            startup_receipt_ref: &plan.startup_receipt_ref,
             adapter_receipts: &shutdown_adapters,
             drained_job_refs: &[],
             index_receipt_refs: &index_refs,
@@ -161,7 +207,7 @@ fn stop_local_node_with_request(
     let control_receipt_value = control_receipt_for_request(
         root,
         request,
-        &startup.receipt_ref,
+        &plan.startup_receipt_ref,
         std::slice::from_ref(&shutdown_ref),
         &[],
     )?;
