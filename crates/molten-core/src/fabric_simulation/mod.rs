@@ -1,9 +1,11 @@
+mod adapters;
 mod admission;
 mod reference;
 mod replay;
 mod scheduler;
 mod types;
 
+pub use adapters::*;
 pub use admission::*;
 pub use reference::*;
 pub use replay::*;

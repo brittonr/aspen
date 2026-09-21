@@ -42,6 +42,31 @@ impl ReferenceServiceExecutor {
         })
     }
 
+    // r[impl molten.fabric_simulation.stateful_storage]
+    pub fn recovered(
+        kind: crate::fabric::ReferenceSystemKind,
+        operations: std::collections::BTreeMap<String, ReferenceServiceOperation>,
+        port_profiles: &[SimulatedPortProfile],
+        state: ReferenceServiceState,
+    ) -> crate::error::Result<Self> {
+        if state.kind() != kind {
+            return Err(crate::error::MoltenError::invalid_harness(
+                "recovered reference executor state kind does not match its extension service",
+            ));
+        }
+        if operations.values().any(|operation| operation.kind() != kind) {
+            return Err(crate::error::MoltenError::invalid_harness(
+                "recovered reference executor operation kind does not match its extension service",
+            ));
+        }
+        let port_profiles = port_profiles.iter().cloned().map(|profile| (profile.class, profile)).collect();
+        Ok(Self {
+            state,
+            operations,
+            port_profiles,
+            last_transition: None,
+        })
+    }
     pub fn state(&self) -> &ReferenceServiceState {
         &self.state
     }

@@ -3,6 +3,7 @@ use super::*;
 const SHRINK_ATTEMPT_INCREMENT: u64 = 1;
 const SHRINK_REMOVAL_INCREMENT: u64 = 1;
 const SHRINK_DIVISOR: u64 = 2;
+const FINGERPRINT_JOIN: &str = "|";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShrinkIssue {
@@ -12,25 +13,16 @@ pub enum ShrinkIssue {
     Overflow(&'static str),
 }
 
+// r[impl molten.fabric_simulation.causal_exploration]
 pub fn compare_replay(expected: &[SchedulerChoiceRecord], actual: &[SchedulerChoiceRecord]) -> ReplayComparison {
     let shared = expected.len().min(actual.len());
     for index in 0..shared {
         let expected_record = &expected[index];
         let actual_record = &actual[index];
-        let expected_eligible = choice_ids(&expected_record.eligible);
-        let actual_eligible = choice_ids(&actual_record.eligible);
-        if expected_record.position != actual_record.position
-            || expected_record.selected.choice_id != actual_record.selected.choice_id
-            || expected_eligible != actual_eligible
-        {
+        if let Some(divergence) = record_divergence(expected_record, actual_record) {
             return ReplayComparison {
                 matches: false,
-                first_divergence: Some(ReplayDivergence {
-                    position: expected_record.position.min(actual_record.position),
-                    expected_choice_id: expected_record.selected.choice_id.clone(),
-                    eligible_choice_ids: actual_eligible,
-                    diagnostic: "scheduler choice or eligible set diverged".to_string(),
-                }),
+                first_divergence: Some(divergence),
             };
         }
     }
@@ -58,14 +50,79 @@ pub fn compare_replay(expected: &[SchedulerChoiceRecord], actual: &[SchedulerCho
     }
 }
 
+fn record_divergence(expected: &SchedulerChoiceRecord, actual: &SchedulerChoiceRecord) -> Option<ReplayDivergence> {
+    let expected_eligible = choice_ids(&expected.eligible);
+    let actual_eligible = choice_ids(&actual.eligible);
+    let mut mismatched_field = None;
+    if expected.position != actual.position {
+        mismatched_field = Some("position");
+    } else if expected.virtual_tick != actual.virtual_tick {
+        mismatched_field = Some("virtual-tick");
+    } else if expected.selected.generation != actual.selected.generation {
+        mismatched_field = Some("generation");
+    } else if expected.selected.choice_id != actual.selected.choice_id {
+        mismatched_field = Some("choice-id");
+    } else if expected.semantic_output_ref != actual.semantic_output_ref {
+        mismatched_field = Some("semantic-output-ref");
+    } else if expected_eligible != actual_eligible {
+        mismatched_field = Some("eligible-set");
+    }
+    mismatched_field.map(|field| ReplayDivergence {
+        position: expected.position.min(actual.position),
+        expected_choice_id: expected.selected.choice_id.clone(),
+        eligible_choice_ids: actual_eligible,
+        diagnostic: format!("scheduler record diverged at {field}"),
+    })
+}
+
+// r[impl molten.fabric_simulation.causal_exploration]
+pub fn failure_fingerprint(summary: &SimulationRunSummary) -> Option<FailureFingerprint> {
+    if summary.decision == SimulationDecision::Pass {
+        return None;
+    }
+    let mut failed_invariants = summary
+        .invariant_results
+        .iter()
+        .filter(|result| !result.passed)
+        .map(|result| invariant_fingerprint_key(&result.invariant))
+        .collect::<Vec<_>>();
+    failed_invariants.sort();
+    let first_failure_sequence = summary
+        .invariant_results
+        .iter()
+        .filter(|result| !result.passed)
+        .filter_map(|result| result.first_failure_sequence)
+        .min();
+    let material = format!(
+        "{}{FINGERPRINT_JOIN}{}{FINGERPRINT_JOIN}{}",
+        summary.decision.as_str(),
+        failed_invariants.join(FINGERPRINT_JOIN),
+        first_failure_sequence.map_or_else(|| "none".to_string(), |sequence| sequence.to_string()),
+    );
+    Some(FailureFingerprint {
+        decision: summary.decision,
+        failed_invariants,
+        first_failure_sequence,
+        fingerprint_ref: format!("blake3:{}", blake3::hash(material.as_bytes()).to_hex()),
+    })
+}
+
+fn invariant_fingerprint_key(invariant: &SimulationInvariant) -> String {
+    match invariant {
+        SimulationInvariant::Universal(kind) => format!("universal:{}", kind.as_str()),
+        SimulationInvariant::ExtensionSemantic { service, invariant_id } => {
+            format!("extension:{}:{}", service.as_str(), invariant_id)
+        }
+    }
+}
+
+// r[impl molten.fabric_simulation.causal_exploration]
 pub fn shrink_simulation_failure(
     original: &SimulatedWorldManifest,
-    mut preserves_failure: impl FnMut(&AdmittedSimulatedWorld) -> bool,
+    mut rerun_candidate: impl FnMut(&AdmittedSimulatedWorld) -> Option<FailureFingerprint>,
 ) -> Result<ShrinkResult, ShrinkIssue> {
     let admitted = admit_simulated_world(original).map_err(ShrinkIssue::InvalidOriginalWorld)?;
-    if !preserves_failure(&admitted) {
-        return Err(ShrinkIssue::OriginalFailureNotReproduced);
-    }
+    let original_fingerprint = rerun_candidate(&admitted).ok_or(ShrinkIssue::OriginalFailureNotReproduced)?;
     let maximum = original.bounds.max_shrink_attempts.min(MAX_SHRINK_ATTEMPTS);
     let mut current = original.clone();
     let mut attempts = 0_u64;
@@ -76,7 +133,7 @@ pub fn shrink_simulation_failure(
         if current.workload.len() > 1 {
             let mut candidate = current.clone();
             candidate.workload.pop();
-            if try_candidate(&candidate, &mut preserves_failure, &mut attempts, maximum)? {
+            if try_candidate(&candidate, &original_fingerprint, &mut rerun_candidate, &mut attempts, maximum)? {
                 current = candidate;
                 removed_workload_steps = removed_workload_steps
                     .checked_add(SHRINK_REMOVAL_INCREMENT)
@@ -87,7 +144,7 @@ pub fn shrink_simulation_failure(
         if !current.faults.is_empty() {
             let mut candidate = current.clone();
             candidate.faults.pop();
-            if try_candidate(&candidate, &mut preserves_failure, &mut attempts, maximum)? {
+            if try_candidate(&candidate, &original_fingerprint, &mut rerun_candidate, &mut attempts, maximum)? {
                 current = candidate;
                 changed = true;
             }
@@ -99,7 +156,7 @@ pub fn shrink_simulation_failure(
             {
                 let mut candidate = current.clone();
                 candidate.nodes.retain(|node| node.node_id != candidate_node);
-                if try_candidate(&candidate, &mut preserves_failure, &mut attempts, maximum)? {
+                if try_candidate(&candidate, &original_fingerprint, &mut rerun_candidate, &mut attempts, maximum)? {
                     current = candidate;
                     changed = true;
                 }
@@ -111,7 +168,7 @@ pub fn shrink_simulation_failure(
         if reduced_resources < candidate.bounds.max_resource_units || reduced_trace < candidate.bounds.max_trace_bytes {
             candidate.bounds.max_resource_units = reduced_resources;
             candidate.bounds.max_trace_bytes = reduced_trace;
-            if try_candidate(&candidate, &mut preserves_failure, &mut attempts, maximum)? {
+            if try_candidate(&candidate, &original_fingerprint, &mut rerun_candidate, &mut attempts, maximum)? {
                 current = candidate;
                 changed = true;
             }
@@ -122,7 +179,7 @@ pub fn shrink_simulation_failure(
     }
 
     let admitted = admit_simulated_world(&current).map_err(ShrinkIssue::InvalidOriginalWorld)?;
-    let failure_preserved = preserves_failure(&admitted);
+    let failure_preserved = rerun_candidate(&admitted) == Some(original_fingerprint);
     Ok(ShrinkResult {
         world: current,
         attempts,
@@ -133,7 +190,8 @@ pub fn shrink_simulation_failure(
 
 fn try_candidate(
     candidate: &SimulatedWorldManifest,
-    preserves_failure: &mut impl FnMut(&AdmittedSimulatedWorld) -> bool,
+    original_fingerprint: &FailureFingerprint,
+    mut rerun_candidate: impl FnMut(&AdmittedSimulatedWorld) -> Option<FailureFingerprint>,
     attempts: &mut u64,
     maximum: u64,
 ) -> Result<bool, ShrinkIssue> {
@@ -147,7 +205,7 @@ fn try_candidate(
     let Ok(admitted) = admit_simulated_world(candidate) else {
         return Ok(false);
     };
-    Ok(preserves_failure(&admitted))
+    Ok(rerun_candidate(&admitted) == Some(original_fingerprint.clone()))
 }
 
 fn node_is_removable(world: &SimulatedWorldManifest, node_id: &str) -> bool {

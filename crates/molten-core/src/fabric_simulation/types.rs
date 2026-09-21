@@ -25,7 +25,7 @@ pub const UNIT_RESOURCE_COST: u64 = 1;
 pub const REQUIRED_SIMULATION_PORT_CLASS_COUNT: usize = 13;
 pub const REQUIRED_UNIVERSAL_INVARIANT_COUNT: usize = 6;
 pub const REQUIRED_SIMULATION_NON_CLAIM_COUNT: usize = 7;
-
+pub const PENDING_SEMANTIC_OUTPUT_REF: &str = "pending-semantic-output";
 pub const REQUIRED_SIMULATION_PORT_CLASSES: [FabricPortClass; REQUIRED_SIMULATION_PORT_CLASS_COUNT] = [
     FabricPortClass::Authority,
     FabricPortClass::Transport,
@@ -180,6 +180,7 @@ pub struct SchedulerChoiceRecord {
     pub virtual_tick: u64,
     pub eligible: Vec<EligibleChoice>,
     pub selected: EligibleChoice,
+    pub semantic_output_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -424,6 +425,15 @@ pub struct ShrinkResult {
     pub attempts: u64,
     pub removed_workload_steps: u64,
     pub failure_preserved: bool,
+}
+
+// r[impl molten.fabric_simulation.causal_exploration]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FailureFingerprint {
+    pub decision: SimulationDecision,
+    pub failed_invariants: Vec<String>,
+    pub first_failure_sequence: Option<u64>,
+    pub fingerprint_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

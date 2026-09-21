@@ -239,7 +239,8 @@ pub fn canonical_simulation_run(
     validate_count("invariant results", summary.invariant_results.len())?;
     validate_count("observation refs", observation_refs.len())?;
     validate_count("port event refs", port_event_refs.len())?;
-    let choice_values = summary.choice_records.iter().map(choice_record_value).collect();
+    let choice_values =
+        summary.choice_records.iter().map(choice_record_value).collect::<crate::error::Result<Vec<_>>>()?;
     let invariant_values = summary.invariant_results.iter().map(invariant_result_value).collect();
     let value = crate::preserves_rail::record("fabric-simulation-run-v1", vec![
         crate::preserves_rail::string(FABRIC_SIMULATION_RUN_SCHEMA),
@@ -595,8 +596,13 @@ fn bounds_value(bounds: &SimulationBounds) -> preserves::IOValue {
     ])
 }
 
-fn choice_record_value(record_value: &SchedulerChoiceRecord) -> preserves::IOValue {
-    crate::preserves_rail::record("fabric-simulation-choice-v1", vec![
+fn choice_record_value(record_value: &SchedulerChoiceRecord) -> crate::error::Result<preserves::IOValue> {
+    if record_value.semantic_output_ref.is_empty() || record_value.semantic_output_ref == PENDING_SEMANTIC_OUTPUT_REF {
+        return Err(crate::error::MoltenError::invalid_harness(
+            "fabric simulation choice record lacks its executed semantic output ref",
+        ));
+    }
+    Ok(crate::preserves_rail::record("fabric-simulation-choice-v1", vec![
         field("position", crate::preserves_rail::u64_value(record_value.position)),
         field("virtual-tick", crate::preserves_rail::u64_value(record_value.virtual_tick)),
         field(
@@ -604,7 +610,8 @@ fn choice_record_value(record_value: &SchedulerChoiceRecord) -> preserves::IOVal
             crate::preserves_rail::sequence(record_value.eligible.iter().map(eligible_choice_value).collect()),
         ),
         field("selected", eligible_choice_value(&record_value.selected)),
-    ])
+        field("semantic-output-ref", crate::preserves_rail::string(&record_value.semantic_output_ref)),
+    ]))
 }
 
 fn eligible_choice_value(choice: &EligibleChoice) -> preserves::IOValue {

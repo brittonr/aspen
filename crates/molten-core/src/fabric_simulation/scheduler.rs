@@ -4,6 +4,12 @@ use super::*;
 
 const SCHEDULER_EVENT_INCREMENT: u64 = 1;
 const SCHEDULER_CHOICE_INCREMENT: u64 = 1;
+const SEED_MIX_GOLDEN: u64 = 0x9E37_79B9_7F4A_7C15;
+const SEED_MIX_ONE: u64 = 0xBF58_476D_1CE4_E5B9;
+const SEED_MIX_TWO: u64 = 0x94D0_49BB_1331_11EB;
+const SEED_FIRST_SHIFT: u32 = 30;
+const SEED_SECOND_SHIFT: u32 = 27;
+const SEED_FINAL_SHIFT: u32 = 31;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimulationSchedulerIssue {
@@ -31,6 +37,10 @@ pub enum SimulationSchedulerIssue {
     VirtualTimeBoundExceeded {
         next: u64,
         maximum: u64,
+    },
+    TimeWentBackwards {
+        current: u64,
+        requested: u64,
     },
     RecordedChoiceNotEligible(ReplayDivergence),
     Overflow(&'static str),
@@ -116,6 +126,7 @@ pub fn select_simulation_choice(
             virtual_tick,
             eligible: ordered,
             selected,
+            semantic_output_ref: PENDING_SEMANTIC_OUTPUT_REF.to_string(),
         },
     })
 }
@@ -132,6 +143,43 @@ pub fn finish_simulation_scheduler(
     }
     let mut next = state.clone();
     next.terminal = true;
+    Ok(next)
+}
+
+// r[impl molten.fabric_simulation.causal_exploration]
+pub fn seeded_selection_index(seed: u64, position: u64, eligible_count: usize) -> usize {
+    let bound = u64::try_from(eligible_count).unwrap_or(u64::MAX).max(1);
+    let mixed = mix_seed_value(seed ^ mix_seed_value(position));
+    usize::try_from(mixed % bound).unwrap_or_default()
+}
+
+fn mix_seed_value(mut value: u64) -> u64 {
+    value = value.wrapping_add(SEED_MIX_GOLDEN);
+    value = (value ^ (value >> SEED_FIRST_SHIFT)).wrapping_mul(SEED_MIX_ONE);
+    value = (value ^ (value >> SEED_SECOND_SHIFT)).wrapping_mul(SEED_MIX_TWO);
+    value ^ (value >> SEED_FINAL_SHIFT)
+}
+
+// r[impl molten.fabric_simulation.causal_exploration]
+pub fn advance_simulation_time(
+    world: &AdmittedSimulatedWorld,
+    state: &SimulationSchedulerState,
+    to_tick: u64,
+) -> Result<SimulationSchedulerState, SimulationSchedulerIssue> {
+    if to_tick < state.virtual_tick {
+        return Err(SimulationSchedulerIssue::TimeWentBackwards {
+            current: state.virtual_tick,
+            requested: to_tick,
+        });
+    }
+    if to_tick > world.manifest.bounds.max_virtual_ticks {
+        return Err(SimulationSchedulerIssue::VirtualTimeBoundExceeded {
+            next: to_tick,
+            maximum: world.manifest.bounds.max_virtual_ticks,
+        });
+    }
+    let mut next = state.clone();
+    next.virtual_tick = to_tick;
     Ok(next)
 }
 

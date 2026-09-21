@@ -3,7 +3,10 @@ use super::*;
 const EXPECTED_REFERENCE_SERVICES: usize = 3;
 const EXPECTED_WORKLOAD_STEPS: usize = 6;
 const EXPECTED_PORT_EVENTS_PER_STEP: usize = REQUIRED_SIMULATION_PORT_CLASS_COUNT;
-const EXPECTED_PORT_EVENTS: usize = EXPECTED_WORKLOAD_STEPS * EXPECTED_PORT_EVENTS_PER_STEP;
+const EXPECTED_ADAPTER_EVENTS: usize = EXPECTED_WORKLOAD_STEPS * 2;
+const EXPECTED_CHOICE_RECORDS: usize = EXPECTED_WORKLOAD_STEPS + EXPECTED_ADAPTER_EVENTS;
+const EXPECTED_PORT_EVENTS: usize = EXPECTED_WORKLOAD_STEPS * EXPECTED_PORT_EVENTS_PER_STEP + EXPECTED_ADAPTER_EVENTS;
+const EXPECTED_CAUSAL_WORKLOAD_STEPS: usize = 1;
 
 // r[verify molten.fabric_simulation.world_manifest]
 // r[verify molten.fabric_simulation.same_core]
@@ -41,7 +44,7 @@ fn three_reference_services_run_through_host_callbacks_and_named_ports() {
     let fixture = run_reference_simulation_fixture().expect("reference simulation");
 
     assert_eq!(fixture.run.summary.decision, SimulationDecision::Pass);
-    assert_eq!(fixture.run.summary.choice_records.len(), EXPECTED_WORKLOAD_STEPS);
+    assert_eq!(fixture.run.summary.choice_records.len(), EXPECTED_CHOICE_RECORDS);
     assert_eq!(fixture.observations.len(), EXPECTED_WORKLOAD_STEPS);
     assert_eq!(fixture.port_events.len(), EXPECTED_PORT_EVENTS);
     assert_eq!(fixture.run.summary.final_state_refs.len(), EXPECTED_REFERENCE_SERVICES);
@@ -129,7 +132,7 @@ fn run_readback_is_bounded_and_excludes_secret_payloads() {
 
     assert_eq!(readback.decision, "pass");
     assert_eq!(readback.profile, "deterministic-whole-system");
-    assert_eq!(readback.choice_count, EXPECTED_WORKLOAD_STEPS as u64);
+    assert_eq!(readback.choice_count, EXPECTED_CHOICE_RECORDS as u64);
     assert_eq!(readback.event_count, EXPECTED_WORKLOAD_STEPS as u64);
     assert_eq!(readback.final_state_refs.len(), EXPECTED_REFERENCE_SERVICES);
     assert_eq!(readback.run_ref, fixture.run.run_ref);
@@ -157,3 +160,5 @@ fn malformed_run_decision_and_missing_adapter_fail_closed() {
     assert!(readback_error.to_string().contains("unsupported simulation decision"));
     assert!(world_error.to_string().contains("MissingPortClass(DurableState)"));
 }
+
+include!("tests/causal.rs");
