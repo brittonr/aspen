@@ -10,6 +10,7 @@ type Result<T> = crate::error::Result<T>;
 type RuntimeEvent = crate::runtime::RuntimeEvent;
 type RuntimeState = crate::runtime::RuntimeState;
 type RuntimeStep = crate::runtime::RuntimeStep;
+type RuntimeScopeCleanup = crate::runtime::RuntimeScopeCleanup;
 type RuntimeValue = crate::runtime::RuntimeValue;
 
 const ADMISSION_RECEIPT_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_ADMISSION_RECEIPT_SCHEMA;

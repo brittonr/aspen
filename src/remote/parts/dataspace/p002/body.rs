@@ -3,19 +3,7 @@ pub fn apply_delivered_envelope(state: &mut RuntimeState, envelope: &Envelope) -
     validate_envelope_identity(envelope)?;
     let actor = remote_actor_id(envelope);
     let payload = RuntimeValue::new(envelope.payload.clone())?;
-    let step = match envelope.operation {
-        Operation::Assert => RuntimeStep::Assert { actor, value: payload },
-        Operation::Retract => RuntimeStep::Retract { actor, value: payload },
-        Operation::Observe => RuntimeStep::Observe {
-            actor,
-            pattern: payload,
-        },
-        Operation::Message => RuntimeStep::Send {
-            from: actor,
-            to: format!("{}:inbox", envelope.to_peer),
-            body: payload,
-        },
-    };
+    let step = remote_operation_step(envelope, &actor, payload)?;
     Ok(state.apply_step(&step))
 }
 
