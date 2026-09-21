@@ -4,6 +4,7 @@ pub struct ComponentExecutionRequest<'a> {
     pub evidence_scope: super::super::model::EvidenceScope,
     pub source: super::super::evidence::materialization::ComponentArtifactSource<'a>,
     pub facts: &'a super::super::admission::ComponentArtifactFacts,
+    pub import_manifest: &'a super::super::imports::surface::DeclaredManifest,
     pub import_grants: &'a [super::super::admission::ComponentImportGrant],
     pub input: &'a preserves::IOValue,
 }
@@ -43,9 +44,11 @@ fn execute_component_inner(
         request.source.component_bytes(),
         request.facts,
     )?;
+    admit_observed_import_surface(request, &materialization)?;
     let plan = super::super::admission::plan_component_execution(
         request.profile,
         materialization,
+        request.import_manifest,
         request.facts,
         request.import_grants,
     )?;
@@ -213,4 +216,21 @@ fn plan_receipt(
         parent_refs,
         diagnostics: Vec::new(),
     })
+}
+
+fn admit_observed_import_surface(
+    request: &ComponentExecutionRequest<'_>,
+    materialization: &super::super::evidence::materialization::MaterializationAdmission,
+) -> super::super::model::ComponentResult<()> {
+    let world = super::super::imports::surface::declared_world(request.profile);
+    let observation = super::super::imports::observation::observe_artifact_surface(
+        &request.facts.declared_world,
+        &materialization.component_ref,
+        request.source.component_bytes(),
+    )?;
+    let admission = super::super::imports::surface::admit_declared(request.import_manifest, &world, &observation)?;
+    if !admission.is_admitted {
+        return Err(super::super::model::ComponentDenial::from_blockers(admission.blockers));
+    }
+    Ok(())
 }

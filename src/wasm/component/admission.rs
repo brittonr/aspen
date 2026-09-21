@@ -60,10 +60,12 @@ pub struct ComponentExecutionPlan {
 pub fn plan_component_execution(
     profile: &super::model::ComponentRuntimeProfile,
     materialization: super::evidence::materialization::MaterializationAdmission,
+    manifest: &super::imports::surface::DeclaredManifest,
     facts: &ComponentArtifactFacts,
     grants: &[ComponentImportGrant],
 ) -> super::model::ComponentResult<ComponentExecutionPlan> {
     super::profile::validate_component_profile(profile)?;
+    admit_declared_import_surface(profile, &materialization, manifest, facts)?;
     let mut blockers = Vec::new();
     validate_identity(profile, &materialization, facts, &mut blockers);
     features::validate_features(profile, facts, &mut blockers);
@@ -93,6 +95,21 @@ pub fn plan_component_execution(
         recorded_effect_refs: grant_plan.recorded_effect_refs,
         materialization,
     })
+}
+
+fn admit_declared_import_surface(
+    profile: &super::model::ComponentRuntimeProfile,
+    materialization: &super::evidence::materialization::MaterializationAdmission,
+    manifest: &super::imports::surface::DeclaredManifest,
+    facts: &ComponentArtifactFacts,
+) -> super::model::ComponentResult<()> {
+    let world = super::imports::surface::declared_world(profile);
+    let observation = super::imports::surface::facts_observation(&materialization.component_ref, facts);
+    let admission = super::imports::surface::admit_declared(manifest, &world, &observation)?;
+    if !admission.is_admitted {
+        return Err(super::model::ComponentDenial::from_blockers(admission.blockers));
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
