@@ -31,6 +31,8 @@ const PREVIOUS_FENCING_TOKEN: u64 = 7;
 const FAIRNESS_PROBE_CHOICES: usize = 3;
 const SECOND_TIMER_SEQUENCE: u64 = 2;
 const HALF_DIVISOR: u64 = 2;
+const AUDIT_RETRY_BASE: u64 = 2;
+const AUDIT_SATURATION_ATTEMPT: u64 = 63;
 
 fn reference(character: char) -> String {
     format!("blake3:{}", character.to_string().repeat(BLAKE3_HEX_LEN))
@@ -689,6 +691,224 @@ fn retry_plans_are_bounded_and_jitter_explicit() {
         ),
         Err(DeadlineLeaseError::RetryExhausted { .. })
     ));
+}
+
+// r[verify molten.audit_f12.saturation]
+// r[verify molten.audit_f12.bounds]
+#[test]
+fn retry_exponential_delay_saturates_at_arithmetic_boundaries() {
+    const ORDINARY_ATTEMPT: u64 = 3;
+    const ORDINARY_DELAY: u64 = 16;
+    let policy = exponential_retry_policy();
+    let cases = [
+        (0, AUDIT_RETRY_BASE),
+        (ORDINARY_ATTEMPT, ORDINARY_DELAY),
+        (AUDIT_SATURATION_ATTEMPT, PROFILE_LIMIT),
+        (u64::from(u64::BITS), PROFILE_LIMIT),
+        (u64::from(u32::MAX) + 1, PROFILE_LIMIT),
+        (u64::MAX - 1, PROFILE_LIMIT),
+    ];
+    for (attempt, expected) in cases {
+        let plan = plan_retry(
+            &profile(),
+            ACTIVE_GENERATION,
+            "retry.boundary",
+            ACTIVE_GENERATION,
+            &virtual_time(0),
+            attempt,
+            policy,
+            None,
+        )
+        .expect("admitted retry");
+        assert_eq!(plan.delay.ticks, expected, "attempt {attempt}");
+        assert_eq!(plan.deadline.target.ticks(), expected);
+    }
+    assert_eq!(
+        plan_retry(
+            &profile(),
+            ACTIVE_GENERATION,
+            "retry.boundary",
+            ACTIVE_GENERATION,
+            &virtual_time(0),
+            u64::MAX,
+            policy,
+            None
+        ),
+        Err(DeadlineLeaseError::RetryExhausted {
+            attempt: u64::MAX,
+            maximum: u64::MAX
+        }),
+    );
+}
+
+// r[verify molten.audit_f12.saturation]
+// r[verify molten.audit_f12.bounds]
+#[test]
+fn retry_exponential_matches_a_wide_integer_reference() {
+    for base_delay_ticks in 1..=PROFILE_LIMIT {
+        let policy = RetryPolicy {
+            base_delay_ticks,
+            ..exponential_retry_policy()
+        };
+        for attempt in 0..=u64::BITS {
+            let multiplier = 1_u128.checked_shl(attempt).expect("bounded reference shift");
+            let product = u128::from(base_delay_ticks).checked_mul(multiplier).expect("bounded reference product");
+            let capped = product.min(u128::from(policy.maximum_delay_ticks));
+            let expected = u64::try_from(capped).expect("capped reference fits the delay type");
+            let plan = plan_retry(
+                &profile(),
+                ACTIVE_GENERATION,
+                "retry.reference",
+                ACTIVE_GENERATION,
+                &virtual_time(0),
+                u64::from(attempt),
+                policy,
+                None,
+            )
+            .expect("admitted reference retry");
+            assert_eq!(plan.delay.ticks, expected, "base {base_delay_ticks}, attempt {attempt}");
+            assert_eq!(plan.deadline.target.ticks(), expected);
+        }
+    }
+}
+
+// r[verify molten.audit_f12.compatibility]
+#[test]
+fn retry_caps_valid_jitter_after_saturation() {
+    let policy = RetryPolicy {
+        jitter: RetryJitter::Bounded {
+            maximum_ticks: RETRY_JITTER,
+        },
+        ..exponential_retry_policy()
+    };
+    let plan = plan_retry(
+        &profile(),
+        ACTIVE_GENERATION,
+        "retry.jitter",
+        ACTIVE_GENERATION,
+        &virtual_time(DEADLINE_TICKS),
+        AUDIT_SATURATION_ATTEMPT,
+        policy,
+        Some(RETRY_JITTER),
+    )
+    .expect("admitted jitter after saturation");
+    assert_eq!(plan.delay.ticks, PROFILE_LIMIT);
+    assert_eq!(plan.deadline.target.ticks(), DEADLINE_TICKS + PROFILE_LIMIT);
+    assert_eq!(plan.jitter_ticks, RETRY_JITTER);
+}
+
+// r[verify molten.audit_f12.compatibility]
+#[test]
+fn retry_rejects_jitter_addition_overflow_before_the_cap() {
+    let policy = RetryPolicy {
+        jitter: RetryJitter::Bounded {
+            maximum_ticks: u64::MAX,
+        },
+        ..exponential_retry_policy()
+    };
+    let now = virtual_time(DEADLINE_TICKS);
+    assert_eq!(
+        plan_retry(
+            &profile(),
+            ACTIVE_GENERATION,
+            "retry.jitter",
+            ACTIVE_GENERATION,
+            &now,
+            AUDIT_SATURATION_ATTEMPT,
+            policy,
+            Some(u64::MAX),
+        ),
+        Err(DeadlineLeaseError::Overflow)
+    );
+    assert_eq!(now, virtual_time(DEADLINE_TICKS));
+}
+
+// r[verify molten.audit_f12.compatibility]
+#[test]
+fn retry_fixed_delay_and_rejections_remain_exact() {
+    let profile = profile();
+    let policy = RetryPolicy {
+        maximum_attempts: u64::MAX,
+        base_delay_ticks: RETRY_BASE,
+        maximum_delay_ticks: RETRY_MAX,
+        backoff: RetryBackoff::Fixed,
+        jitter: RetryJitter::None,
+    };
+    let now = virtual_time(DEADLINE_TICKS);
+    for attempt in [0, RETRY_ATTEMPT, u64::MAX - 1] {
+        let plan =
+            plan_retry(&profile, ACTIVE_GENERATION, "retry.fixed", ACTIVE_GENERATION, &now, attempt, policy, None)
+                .expect("fixed retry");
+        assert_eq!(plan.delay.ticks, RETRY_BASE);
+        assert_eq!(plan.deadline.target.ticks(), DEADLINE_TICKS + RETRY_BASE);
+    }
+    assert_eq!(
+        plan_retry(&profile, ACTIVE_GENERATION, "retry.fixed", STALE_GENERATION, &now, 0, policy, None),
+        Err(DeadlineLeaseError::StaleGeneration {
+            expected: ACTIVE_GENERATION,
+            actual: STALE_GENERATION,
+        })
+    );
+    assert_eq!(
+        plan_retry(&profile, ACTIVE_GENERATION, "retry.fixed", ACTIVE_GENERATION, &now, 0, policy, Some(0)),
+        Err(DeadlineLeaseError::JitterOutOfBounds { actual: 0, maximum: 0 })
+    );
+    let jitter_policy = RetryPolicy {
+        jitter: RetryJitter::Bounded {
+            maximum_ticks: RETRY_JITTER,
+        },
+        ..policy
+    };
+    assert_eq!(
+        plan_retry(&profile, ACTIVE_GENERATION, "retry.fixed", ACTIVE_GENERATION, &now, 0, jitter_policy, None),
+        Err(DeadlineLeaseError::JitterRequired)
+    );
+    assert_eq!(
+        plan_retry(
+            &profile,
+            ACTIVE_GENERATION,
+            "retry.fixed",
+            ACTIVE_GENERATION,
+            &now,
+            0,
+            jitter_policy,
+            Some(RETRY_JITTER + 1)
+        ),
+        Err(DeadlineLeaseError::JitterOutOfBounds {
+            actual: RETRY_JITTER + 1,
+            maximum: RETRY_JITTER
+        })
+    );
+    assert_eq!(
+        plan_retry(
+            &profile,
+            ACTIVE_GENERATION,
+            "retry.fixed",
+            ACTIVE_GENERATION,
+            &virtual_time(u64::MAX),
+            0,
+            policy,
+            None
+        ),
+        Err(DeadlineLeaseError::Arithmetic(TimeArithmeticError::Overflow))
+    );
+    let mut wrong_profile = profile.clone();
+    wrong_profile.supported_domains = vec![TimeDomain::Logical];
+    assert_eq!(
+        plan_retry(&wrong_profile, ACTIVE_GENERATION, "retry.fixed", ACTIVE_GENERATION, &now, 0, policy, None),
+        Err(DeadlineLeaseError::Arithmetic(TimeArithmeticError::UnsupportedDomain(TimeDomain::Virtual)))
+    );
+    assert_eq!(now, virtual_time(DEADLINE_TICKS));
+}
+
+fn exponential_retry_policy() -> RetryPolicy {
+    RetryPolicy {
+        maximum_attempts: u64::MAX,
+        base_delay_ticks: AUDIT_RETRY_BASE,
+        maximum_delay_ticks: PROFILE_LIMIT,
+        backoff: RetryBackoff::Exponential,
+        jitter: RetryJitter::None,
+    }
 }
 
 #[test]

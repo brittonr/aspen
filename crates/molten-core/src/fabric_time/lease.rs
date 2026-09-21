@@ -182,10 +182,7 @@ pub fn plan_retry(
     }
     let base = match policy.backoff {
         RetryBackoff::Fixed => policy.base_delay_ticks,
-        RetryBackoff::Exponential => {
-            let shift = u32::try_from(attempt).map_err(|_| DeadlineLeaseError::Overflow)?;
-            policy.base_delay_ticks.checked_shl(shift).unwrap_or(u64::MAX).min(policy.maximum_delay_ticks)
-        }
+        RetryBackoff::Exponential => capped_exponential_delay(policy, attempt),
     };
     let jitter_ticks = match policy.jitter {
         RetryJitter::None => {
@@ -344,6 +341,23 @@ fn classify_exclusive_lease(request: &LeaseRequest) -> LeaseDecisionKind {
         return LeaseDecisionKind::DeniedStaleFencingToken;
     }
     LeaseDecisionKind::ExclusiveActionAllowed
+}
+
+// r[impl molten.audit_f12.saturation]
+// r[impl molten.audit_f12.bounds]
+fn capped_exponential_delay(policy: RetryPolicy, attempt: u64) -> u64 {
+    // An admitted policy already bounds the base delay, so the width guard and the
+    // checked multiply are the only loss paths: a shift at or beyond the integer
+    // width saturates, and a product that loses high bits saturates.
+    if attempt >= u64::from(u64::BITS) {
+        return policy.maximum_delay_ticks;
+    }
+    let multiplier = 1_u64 << attempt;
+    policy
+        .base_delay_ticks
+        .checked_mul(multiplier)
+        .unwrap_or(policy.maximum_delay_ticks)
+        .min(policy.maximum_delay_ticks)
 }
 
 fn validate_retry_policy(policy: RetryPolicy) -> Result<(), DeadlineLeaseError> {
