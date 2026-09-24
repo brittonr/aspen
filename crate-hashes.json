@@ -1,8 +1,18 @@
 {
-  "https://github.com/hegeldev/hegel-rust#hegeltest-macros@0.14.12": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
-  "https://github.com/hegeldev/hegel-rust#hegeltest@0.14.12": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
-  "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git#choregraph-history@0.1.0": "0rifkbnc5vsddmlq7slsx7s1jv4blfd0qdk5sgyfjkfwbc21ksll",
-  "ssh://git@github.com/OnixResearch/basalt.git#basalt@0.1.0": "10qb9j64kxnr57qp4fbna3b7s7l70x4kri1knqhxpjsa85q4dw67",
-  "ssh://git@github.com/OnixResearch/cairn.git#cairn-core@0.1.0": "1j0z1rzv6aps6xlmgasrr4l3l41gbpv31np9ijcm32nb4gnr9rbc",
-  "ssh://git@github.com/OnixResearch/octet.git#valence-core@0.1.0": "1d4hzxpv9izqicygrszc5zsn31hc6vmjpk7j3ybmfp16hy40dnjp"
+  "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec@0.1.0": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
+  "https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#chaoscontrol-snapshot-descriptor@0.1.0": "sha256-rFuxBDZY7Z9v1/KDT/C4jZJqXSOxa4XI5AQoC0pgrEU=",
+  "https://github.com/gattaca-com/flux?rev=2a1916465ae6649aebef3758233cfea98e5d33db#flux-communication@0.1.3": "sha256-1ZBLORVsTtOXmOWdcfkQZJ/k3Ss+KJY3BMFBJwiSQDE=",
+  "https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest@0.14.12": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
+  "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": "sha256-AnWxKYQTgvQwzLPMyiGmUroVNVuLos6ThjP0cGRiCcs=",
+  "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#replay-ledger-core@0.1.0": "sha256-++GX+wiKkcBDeXtMJnMgpByEEcuAYRgO20Pzb8TJ6pA=",
+  "https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#bounded-http@0.1.0": "sha256-FlNyGeN9Bo6/Dv/YqisN+5XSNerpUHM2+6jqHvxYlsA=",
+  "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62#transactional-reconciliation-core@0.1.0": "sha256-xkZ79TBbTHfjj8jM1b4+F3k2MdtkQ9TUGBinmNOpdKY=",
+  "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-conformance@0.1.0": "sha256-gRrLAZUz+NE17zrRLSkxKMlwOwltF4yvCK0W++V63u0=",
+  "https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#content-identity-core@0.1.0": "sha256-dwcdRV9LBJEczU9fLN6AYT7cpLcke3auJa7ffPHmoyc=",
+  "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#choregraph-history@0.1.0": "sha256-BO/AlwJBIuW+WXGRQgd2LymvGIYtK0fqd3YYMDtfGBw=",
+  "ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": "sha256-lH3qGZ/MssqWR9cIJeyv8xcSO42IfVkvOHsn+O/ddwg=",
+  "ssh://git@github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#cairn-core@0.1.0": "sha256-F1J1IE0gquK3y0F99MPNQGV9gxwNB8TGNKR9FEgB0nw=",
+  "ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc=",
+  "ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-core@0.1.0": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU=",
+  "ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#valence-core@0.1.0": "sha256-ASWqHCXtUIDerN5vG57TbciTs2q2kHx/dyJI6q0veDk="
 }

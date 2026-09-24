@@ -2880,6 +2880,22 @@
             world-operator-profile = worldOperatorProfileCheck;
             inherited-tracey-debt = inheritedTraceyDebtCheck;
             release-dependency-profile = releaseDependencyProfileCheck;
+            # Generated plans must carry the metadata-free `pkgs.fetchgit` identity for every git source.
+            git-source-hash-binding =
+              pkgs.runCommand "molten-git-source-hash-binding"
+                {
+                  nativeBuildInputs = [
+                    pkgs.bash
+                    pkgs.gawk
+                    pkgs.jq
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  MOLTEN_ROOT="$src" bash "$src/scripts/git-source-hashes.sh" --check
+                  touch "$out"
+                '';
             release-profile-validation = releaseProfileValidationCheck;
             release-candidate-binding = releaseCandidateBindingCheck;
             release-pilot-manifest = releasePilotManifestCheck;
@@ -4775,6 +4791,9 @@
             pkgs.cargo-watch
             pkgs.rust-analyzer
             unit2nix.packages.${system}.unit2nix
+            # scripts/git-source-hashes.sh binds metadata-free git source hashes for unit2nix.
+            pkgs.nix-prefetch-git
+            pkgs.jq
           ]
           ++ pkgs.lib.optional (system == "x86_64-linux") fluxProfilerCli;
 

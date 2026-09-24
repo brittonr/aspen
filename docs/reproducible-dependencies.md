@@ -55,7 +55,15 @@ provides Molten's canonical Valence semantics.
 4. Run Cargo to regenerate `Cargo.lock`.
 5. Run `nix flake lock` or a targeted Nix lock command to regenerate
    `flake.lock`; never edit it manually.
-6. Regenerate `build-plan.json` with the repository's pinned unit2nix tool.
+6. Run `scripts/git-source-hashes.sh --write` to record the metadata-free NAR hash of
+   every Cargo git source in `crate-hashes.json` under revision-qualified keys. Then
+   regenerate both plans with the repository's pinned unit2nix tool:
+   `unit2nix --workspace -o build-plan.json` and
+   `unit2nix -p molten-release-policy --bin molten-release-policy -o release-policy-build-plan.json`.
+   Do not let unit2nix prefetch a git source itself: its prefetch hashes a checkout that
+   still contains `.git`, while `pkgs.fetchgit` removes `.git`, so such a hash fails on
+   any builder that lacks the prefetched store path. `scripts/git-source-hashes.sh --check`
+   and the `git-source-hash-binding` flake check reject unbound or drifted hashes.
 7. Run positive and negative focused checks, then `nix flake check`.
 
 Floating branches, tags without immutable commits, unreviewed SSH-only release
