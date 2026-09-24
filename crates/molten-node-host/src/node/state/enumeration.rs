@@ -12,7 +12,7 @@ pub(super) fn entry_kind(file_type: &cap_std::fs::FileType) -> super::authority:
 
 pub(super) fn list_entries(
     dir: &cap_std::fs::Dir,
-    root: &std::sync::Arc<super::authority::NodeStateInner>,
+    root: &std::sync::Arc<super::authority::RootDirectory>,
     namespace: super::authority::NodeStateNamespaceKind,
     scope: &std::path::Path,
 ) -> crate::error::Result<Vec<super::namespace::NodeStateEntry>> {

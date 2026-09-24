@@ -2,11 +2,17 @@
 
 ## Current findings
 
-Run16 reports 18 path_segment_repetition findings. They follow the lint's current repeated-word rule; this review does not classify them as implementation false positives.
+Historical run16 reports 18 path_segment_repetition findings on its pinned source. They follow the lint's current repeated-word rule; this review does not classify them as implementation false positives.
 
 Fourteen are public identities: MoltenError; LocalStoreKind, LocalStorePath, LocalStoreEntryKind, LocalStoreEntry, LocalStoreRoot; NodeStateNamespaceKind, NodeStateEntryKind, NodeStateFileObservation, NodeStateFile, NodeStateRoot, NodeStatePath, NodeStateNamespace, NodeStateEntry.
-Four are non-public: validate_local_locator, local_store_entry_kind, NodeStateInner, validate_node_state_locator.
-Public compatibility needs a deliberate contract decision, not mechanical renaming or marker-looking prose. No naming change or new compatibility exemption was added to product code.
+Four were non-public: validate_local_locator, local_store_entry_kind, NodeStateInner, validate_node_state_locator.
+Public compatibility needs a deliberate contract decision, not mechanical renaming or marker-looking prose. No public naming change or compatibility exemption was added to product code.
+
+## Private source-only correction
+
+The four private names are now `validate_locator` (in each of the two modules), `entry_kind`, and `RootDirectory`, with every call site updated. The shared private remote/content-locator recognition helper, `crate::locator::is_remote`, was already present; both validators still use it before their boundary-specific checks. This does not authorize startup or reclassify the historical run16 findings as a passing canonical source gate.
+
+Focused verification from the producer worktree: `cargo test --locked --offline -p molten-node-host` passed 25 tests; `cargo clippy --locked --offline -p molten-node-host --all-targets -- -D warnings` and `git diff --check` exited 0. These used installed Rust/Cargo/Clippy 1.97.1, `RUSTC_BOOTSTRAP=1` for the existing `register_tool` feature, disabled Cargo wrappers, and the retained `molten-node97` target directory—not the production pinned nightly or an Octet full-source gate. A separate compiled-client smoke against the built host library accepted a local object path, rejected remote and parent-traversal local-store locators and a remote node-state locator, then wrote/listed/read/removed one entry in its own temporary registry namespace. The throwaway source, binary, and namespace were removed.
 
 ## Reproduced owner defects
 
@@ -35,9 +41,7 @@ Private evidence: `~/.local/state/onix/molten-node-vm/locator-review/naming-prob
 
 ## Other remaining findings
 
-Both compound conditions repeat the same pure remote/content-locator recognition rule.
-A shared private predicate can preserve contains-first and ordered prefix recognition while leaving boundary-specific validation order and errors at their existing call sites.
-The two input validators should not gain panic assertions merely to satisfy assertion density.
+The shared private remote/content-locator predicate is already in use; its focused locator tests passed. Boundary-specific validation order and errors remain at the original call sites. The two input validators should not gain panic assertions merely to satisfy assertion density.
 The other assertion sites and the oversized local-store module still need responsibility/invariant review; no meaningless assertions or whitespace changes are justified.
 
-No naming-lint repair, exception promotion, clean workspace, approved runtime cohort, or startup authority is established here.
+No Octet naming-lint repair, exception promotion, complete source-gate pass, approved runtime cohort, or startup authority is established here.

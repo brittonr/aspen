@@ -50,7 +50,7 @@ pub struct LocalStorePath {
 
 impl LocalStorePath {
     pub fn parse(input: &str) -> Result<Self> {
-        validate_local_locator(input)?;
+        validate_locator(input)?;
         let path = Path::new(input);
         let mut relative = PathBuf::new();
         let mut component_count = 0usize;
@@ -245,7 +245,7 @@ impl LocalStoreRoot {
 
     pub fn entry_kind_optional(&self, path: &LocalStorePath) -> Result<Option<LocalStoreEntryKind>> {
         match self.dir.symlink_metadata(path.as_path()) {
-            Ok(metadata) => Ok(Some(local_store_entry_kind(&metadata.file_type()))),
+            Ok(metadata) => Ok(Some(entry_kind(&metadata.file_type()))),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(MoltenError::from(error)),
         }
@@ -257,7 +257,7 @@ impl LocalStoreRoot {
             let entry = entry_result.map_err(MoltenError::from)?;
             let name = entry.file_name().to_string_lossy().into_owned();
             let entry_path = path.join(&name)?;
-            let kind = local_store_entry_kind(&entry.file_type().map_err(MoltenError::from)?);
+            let kind = entry_kind(&entry.file_type().map_err(MoltenError::from)?);
             push_bounded_entry(&mut entries, LocalStoreEntry {
                 name,
                 path: entry_path,
@@ -282,7 +282,7 @@ impl LocalStoreRoot {
     pub fn open_database_file(&self, path: &LocalStorePath) -> Result<std::fs::File> {
         match self.dir.symlink_metadata(path.as_path()) {
             Ok(metadata) => {
-                let kind = local_store_entry_kind(&metadata.file_type());
+                let kind = entry_kind(&metadata.file_type());
                 if kind != LocalStoreEntryKind::File {
                     return Err(MoltenError::invalid_harness(format!(
                         "database leaf {} must be a regular file, got {kind:?}",
@@ -423,7 +423,7 @@ impl ExchangeStoreRoot {
     }
 }
 
-fn validate_local_locator(input: &str) -> Result<()> {
+fn validate_locator(input: &str) -> Result<()> {
     if input.is_empty() {
         return Err(MoltenError::invalid_harness("local store path cannot be empty"));
     }
@@ -459,7 +459,7 @@ fn checked_component_count(count: usize) -> Result<usize> {
     }
 }
 
-fn local_store_entry_kind(file_type: &cap_std::fs::FileType) -> LocalStoreEntryKind {
+fn entry_kind(file_type: &cap_std::fs::FileType) -> LocalStoreEntryKind {
     if file_type.is_file() {
         LocalStoreEntryKind::File
     } else if file_type.is_dir() {

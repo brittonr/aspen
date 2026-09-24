@@ -106,13 +106,13 @@ impl NodeStateFile {
     }
 }
 
-pub(super) struct NodeStateInner {
+pub(super) struct RootDirectory {
     pub(super) dir: cap_std::fs::Dir,
 }
 
 #[derive(Clone)]
 pub struct NodeStateRoot {
-    inner: std::sync::Arc<NodeStateInner>,
+    inner: std::sync::Arc<RootDirectory>,
 }
 
 impl std::fmt::Debug for NodeStateRoot {
@@ -145,7 +145,7 @@ impl NodeStateRoot {
 
     pub fn from_dir(dir: cap_std::fs::Dir) -> Self {
         Self {
-            inner: std::sync::Arc::new(NodeStateInner { dir }),
+            inner: std::sync::Arc::new(RootDirectory { dir }),
         }
     }
 

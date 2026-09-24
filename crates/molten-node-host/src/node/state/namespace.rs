@@ -1,5 +1,5 @@
 pub struct NodeStateNamespace {
-    pub(super) root: std::sync::Arc<super::authority::NodeStateInner>,
+    pub(super) root: std::sync::Arc<super::authority::RootDirectory>,
     pub(super) kind: super::authority::NodeStateNamespaceKind,
     pub(super) scope: std::path::PathBuf,
     pub(super) dir: cap_std::fs::Dir,
@@ -31,7 +31,7 @@ impl NodeStateNamespace {
     ) -> crate::error::Result<Self> {
         let root_dir = dir.try_clone().map_err(crate::error::MoltenError::from)?;
         Ok(Self {
-            root: std::sync::Arc::new(super::authority::NodeStateInner { dir: root_dir }),
+            root: std::sync::Arc::new(super::authority::RootDirectory { dir: root_dir }),
             kind,
             scope: std::path::PathBuf::new(),
             dir,
@@ -172,7 +172,7 @@ impl NodeStateNamespace {
 }
 
 pub struct NodeStateEntry {
-    pub(super) root: std::sync::Arc<super::authority::NodeStateInner>,
+    pub(super) root: std::sync::Arc<super::authority::RootDirectory>,
     pub(super) namespace: super::authority::NodeStateNamespaceKind,
     pub(super) scope: std::path::PathBuf,
     pub name: String,
