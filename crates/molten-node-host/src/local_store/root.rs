@@ -3,9 +3,8 @@ use std::io::Write;
 
 use cap_fs_ext::OpenOptionsFollowExt;
 
-use super::path::{LocalStoreKind, LocalStorePath};
-use crate::error::{MoltenError, Result};
-
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 type Path = std::path::Path;
 
 const MAX_LOCAL_STORE_ENTRIES: usize = 100_000;
@@ -23,12 +22,12 @@ pub enum LocalStoreEntryKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalStoreEntry {
     pub name: String,
-    pub path: LocalStorePath,
+    pub path: super::path::LocalStorePath,
     pub kind: LocalStoreEntryKind,
 }
 
 pub struct LocalStoreRoot {
-    kind: LocalStoreKind,
+    kind: super::path::LocalStoreKind,
     dir: cap_std::fs::Dir,
 }
 
@@ -39,17 +38,17 @@ impl std::fmt::Debug for LocalStoreRoot {
 }
 
 impl LocalStoreRoot {
-    pub fn open(kind: LocalStoreKind, root: &Path) -> Result<Self> {
+    pub fn open(kind: super::path::LocalStoreKind, root: &Path) -> Result<Self> {
         std::fs::create_dir_all(root).map_err(MoltenError::from)?;
         Self::open_existing(kind, root)
     }
 
-    pub fn open_existing(kind: LocalStoreKind, root: &Path) -> Result<Self> {
+    pub fn open_existing(kind: super::path::LocalStoreKind, root: &Path) -> Result<Self> {
         let dir = cap_std::fs::Dir::open_ambient_dir(root, cap_std::ambient_authority()).map_err(MoltenError::from)?;
         Ok(Self { kind, dir })
     }
 
-    pub fn kind(&self) -> LocalStoreKind {
+    pub fn kind(&self) -> super::path::LocalStoreKind {
         self.kind
     }
 
@@ -58,26 +57,30 @@ impl LocalStoreRoot {
         self.dir.try_clone().map_err(MoltenError::from)
     }
 
-    pub(crate) fn from_dir(kind: LocalStoreKind, dir: cap_std::fs::Dir) -> Self {
+    pub(crate) fn from_dir(kind: super::path::LocalStoreKind, dir: cap_std::fs::Dir) -> Self {
         Self { kind, dir }
     }
 
-    pub(super) fn open_subdir(&self, kind: LocalStoreKind, path: &LocalStorePath) -> Result<Self> {
+    pub(super) fn open_subdir(
+        &self,
+        kind: super::path::LocalStoreKind,
+        path: &super::path::LocalStorePath,
+    ) -> Result<Self> {
         self.create_dir_all(path)?;
         let dir = self.dir.open_dir(path.as_path()).map_err(MoltenError::from)?;
         Ok(Self { kind, dir })
     }
 
-    pub(super) fn share_authority_as(&self, kind: LocalStoreKind) -> Result<Self> {
+    pub(super) fn share_authority_as(&self, kind: super::path::LocalStoreKind) -> Result<Self> {
         let dir = self.dir.try_clone().map_err(MoltenError::from)?;
         Ok(Self { kind, dir })
     }
 
-    pub fn create_dir_all(&self, path: &LocalStorePath) -> Result<()> {
+    pub fn create_dir_all(&self, path: &super::path::LocalStorePath) -> Result<()> {
         self.dir.create_dir_all(path.as_path()).map_err(MoltenError::from)
     }
 
-    pub fn read(&self, path: &LocalStorePath) -> Result<Vec<u8>> {
+    pub fn read(&self, path: &super::path::LocalStorePath) -> Result<Vec<u8>> {
         if self.entry_kind(path)? != LocalStoreEntryKind::File {
             return Err(MoltenError::invalid_harness(format!(
                 "local store read leaf {} must be a regular file",
@@ -98,17 +101,17 @@ impl LocalStoreRoot {
         Ok(bytes)
     }
 
-    pub fn read_to_string(&self, path: &LocalStorePath) -> Result<String> {
+    pub fn read_to_string(&self, path: &super::path::LocalStorePath) -> Result<String> {
         String::from_utf8(self.read(path)?).map_err(|error| {
             MoltenError::invalid_harness(format!("local store file {} is not UTF-8: {error}", path.display()))
         })
     }
 
-    pub fn write(&self, path: &LocalStorePath, contents: &[u8]) -> Result<()> {
+    pub fn write(&self, path: &super::path::LocalStorePath, contents: &[u8]) -> Result<()> {
         if let Some(parent) = path.as_path().parent()
             && !parent.as_os_str().is_empty()
         {
-            let parent_path = LocalStorePath {
+            let parent_path = super::path::LocalStorePath {
                 relative: parent.to_path_buf(),
             };
             self.create_dir_all(&parent_path)?;
@@ -135,24 +138,24 @@ impl LocalStoreRoot {
         file.flush().map_err(MoltenError::from)
     }
 
-    pub fn remove_file(&self, path: &LocalStorePath) -> Result<()> {
+    pub fn remove_file(&self, path: &super::path::LocalStorePath) -> Result<()> {
         self.dir.remove_file(path.as_path()).map_err(MoltenError::from)
     }
 
-    pub fn remove_dir_all(&self, path: &LocalStorePath) -> Result<()> {
+    pub fn remove_dir_all(&self, path: &super::path::LocalStorePath) -> Result<()> {
         self.dir.remove_dir_all(path.as_path()).map_err(MoltenError::from)
     }
 
-    pub fn try_exists(&self, path: &LocalStorePath) -> Result<bool> {
+    pub fn try_exists(&self, path: &super::path::LocalStorePath) -> Result<bool> {
         self.entry_kind_optional(path).map(|kind| kind.is_some())
     }
 
-    pub fn entry_kind(&self, path: &LocalStorePath) -> Result<LocalStoreEntryKind> {
+    pub fn entry_kind(&self, path: &super::path::LocalStorePath) -> Result<LocalStoreEntryKind> {
         self.entry_kind_optional(path)?
             .ok_or_else(|| MoltenError::invalid_harness(format!("local store path {} does not exist", path.display())))
     }
 
-    pub fn entry_kind_optional(&self, path: &LocalStorePath) -> Result<Option<LocalStoreEntryKind>> {
+    pub fn entry_kind_optional(&self, path: &super::path::LocalStorePath) -> Result<Option<LocalStoreEntryKind>> {
         match self.dir.symlink_metadata(path.as_path()) {
             Ok(metadata) => Ok(Some(entry_kind(&metadata.file_type()))),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -160,7 +163,7 @@ impl LocalStoreRoot {
         }
     }
 
-    pub fn list_entries(&self, path: &LocalStorePath) -> Result<Vec<LocalStoreEntry>> {
+    pub fn list_entries(&self, path: &super::path::LocalStorePath) -> Result<Vec<LocalStoreEntry>> {
         let mut entries = Vec::new();
         for entry_result in self.dir.read_dir(path.as_path()).map_err(MoltenError::from)? {
             let entry = entry_result.map_err(MoltenError::from)?;
@@ -180,7 +183,7 @@ impl LocalStoreRoot {
         Ok(entries)
     }
 
-    pub fn list_file_names(&self, path: &LocalStorePath) -> Result<Vec<String>> {
+    pub fn list_file_names(&self, path: &super::path::LocalStorePath) -> Result<Vec<String>> {
         let entries = self.list_entries(path)?;
         let mut names = Vec::new();
         for entry in entries {
@@ -191,7 +194,7 @@ impl LocalStoreRoot {
         Ok(names)
     }
 
-    pub fn open_database_file(&self, path: &LocalStorePath) -> Result<std::fs::File> {
+    pub fn open_database_file(&self, path: &super::path::LocalStorePath) -> Result<std::fs::File> {
         match self.dir.symlink_metadata(path.as_path()) {
             Ok(metadata) => {
                 let kind = entry_kind(&metadata.file_type());
@@ -209,7 +212,7 @@ impl LocalStoreRoot {
         if let Some(parent) = path.as_path().parent()
             && !parent.as_os_str().is_empty()
         {
-            let parent_path = LocalStorePath {
+            let parent_path = super::path::LocalStorePath {
                 relative: parent.to_path_buf(),
             };
             self.create_dir_all(&parent_path)?;

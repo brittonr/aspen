@@ -14,7 +14,7 @@ pub struct NodeStatePath {
 
 impl NodeStatePath {
     pub fn parse(value: &str) -> crate::error::Result<Self> {
-        validate_locator(value)?;
+        validate_input(value)?;
         let mut relative = std::path::PathBuf::new();
         let mut component_count = 0usize;
         for component in std::path::Path::new(value).components() {
@@ -93,7 +93,7 @@ pub(super) fn join_scope(scope: &std::path::Path, suffix: &NodeStatePath) -> cra
     Ok(joined)
 }
 
-fn validate_locator(value: &str) -> crate::error::Result<()> {
+fn validate_input(value: &str) -> crate::error::Result<()> {
     if value.is_empty() {
         return Err(super::invalid("node state path cannot be empty"));
     }

@@ -1,7 +1,5 @@
-use crate::error::{MoltenError, Result};
-
-type Path = std::path::Path;
-type PathBuf = std::path::PathBuf;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 
 const MAX_LOCAL_STORE_COMPONENTS: usize = 32;
 
@@ -38,14 +36,14 @@ impl LocalStoreKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalStorePath {
-    pub(super) relative: PathBuf,
+    pub(super) relative: std::path::PathBuf,
 }
 
 impl LocalStorePath {
     pub fn parse(input: &str) -> Result<Self> {
         validate_locator(input)?;
-        let path = Path::new(input);
-        let mut relative = PathBuf::new();
+        let path = std::path::Path::new(input);
+        let mut relative = std::path::PathBuf::new();
         let mut component_count = 0usize;
         for component in path.components() {
             match component {
@@ -87,7 +85,7 @@ impl LocalStorePath {
         })
     }
 
-    pub fn as_path(&self) -> &Path {
+    pub fn as_path(&self) -> &std::path::Path {
         &self.relative
     }
 
