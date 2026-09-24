@@ -24,12 +24,14 @@ Remaining: naming18, assertion-density3, file-length1.
 The naming findings are unchanged. Root configuration/profile hashes remain unchanged.
 Archive BLAKE3: `ebe7c9051a356b1947ad6023a85323cd6cd7dbdb143a6e90c7a0be426ef6d0a4`.
 
-## Remaining review
+## Remaining review at run17
 
 The three density sites are list_entries, create_dir_components, and observe_file.
 They handle fallible external facts and already return errors; arbitrary input assertions would weaken that contract.
 Any further decomposition must separate genuine responsibilities while preserving bounds, error precedence, no-follow behavior, acquired-handle metadata, and operation order.
 The 496-line local-store module also needs responsibility review, not formatting changes or path-based exclusion.
+
+That review was implemented and remeasured on producer commit `9bb4b648c0ce73a3591d9e42dbbcfd71e436f9bd`; the unchanged pinned gate now reports 14 public naming errors only. See `../naming-review/README.md` and the retained `~/.local/state/onix/molten-node-vm/source-refactor-20260924-86d3694a-linked/artifacts-final/summary.txt`. The run17 result above is historical, not a statement about the final source.
 
 The naming-owner false-negative controls are retained in ../naming-review/. They require an owner repair before trusting future clean coverage.
 No naming exception was adopted, no clean workspace/cohort is claimed, and startup remains denied.
