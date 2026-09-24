@@ -19,27 +19,46 @@ pub(super) fn list_entries(
     let mut entries = Vec::new();
     for entry_result in dir.read_dir(".").map_err(crate::error::MoltenError::from)? {
         let entry = entry_result.map_err(crate::error::MoltenError::from)?;
-        if entries.len() >= super::MAX_NODE_STATE_ENTRIES {
-            return Err(super::invalid(format!(
-                "node state entry count exceeds maximum {}",
-                super::MAX_NODE_STATE_ENTRIES
-            )));
-        }
-        let file_name = entry.file_name();
-        let name = file_name
-            .to_str()
-            .ok_or_else(|| super::invalid("node state entry name must be valid UTF-8"))?
-            .to_string();
-        let path = super::locator::NodeStatePath::parse(&name)?;
-        entries.push(super::namespace::NodeStateEntry {
-            root: std::sync::Arc::clone(root),
-            namespace,
-            scope: scope.to_path_buf(),
-            name,
-            path,
-            kind: entry_kind(&entry.file_type().map_err(crate::error::MoltenError::from)?),
-        });
+        let (name, path) = admit_entry(&entry, entries.len())?;
+        entries.push(bind_entry(&entry, root, namespace, scope, name, path)?);
     }
     entries.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(entries)
+}
+
+fn admit_entry(
+    entry: &cap_std::fs::DirEntry,
+    existing_count: usize,
+) -> crate::error::Result<(String, super::locator::NodeStatePath)> {
+    if existing_count >= super::MAX_NODE_STATE_ENTRIES {
+        return Err(super::invalid(format!(
+            "node state entry count exceeds maximum {}",
+            super::MAX_NODE_STATE_ENTRIES
+        )));
+    }
+    let file_name = entry.file_name();
+    let name = file_name
+        .to_str()
+        .ok_or_else(|| super::invalid("node state entry name must be valid UTF-8"))?
+        .to_string();
+    let path = super::locator::NodeStatePath::parse(&name)?;
+    Ok((name, path))
+}
+
+fn bind_entry(
+    entry: &cap_std::fs::DirEntry,
+    root: &std::sync::Arc<super::authority::RootDirectory>,
+    namespace: super::authority::NodeStateNamespaceKind,
+    scope: &std::path::Path,
+    name: String,
+    path: super::locator::NodeStatePath,
+) -> crate::error::Result<super::namespace::NodeStateEntry> {
+    Ok(super::namespace::NodeStateEntry {
+        root: std::sync::Arc::clone(root),
+        namespace,
+        scope: scope.to_path_buf(),
+        name,
+        path,
+        kind: entry_kind(&entry.file_type().map_err(crate::error::MoltenError::from)?),
+    })
 }

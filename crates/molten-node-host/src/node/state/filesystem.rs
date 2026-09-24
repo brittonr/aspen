@@ -7,6 +7,8 @@ use std::io::Write;
 
 use cap_fs_ext::DirExt;
 use cap_fs_ext::OpenOptionsFollowExt;
+#[cfg(unix)]
+use cap_std::fs::PermissionsExt;
 
 pub(super) fn validate_bootstrap_path(path: &std::path::Path) -> crate::error::Result<()> {
     if path.as_os_str().is_empty() {
@@ -34,23 +36,27 @@ pub(super) fn create_dir_components(dir: &cap_std::fs::Dir, path: &std::path::Pa
         let std::path::Component::Normal(segment) = component else {
             return Err(super::invalid("node state directory path must contain only normal relative components"));
         };
-        match current.symlink_metadata(segment) {
-            Ok(metadata) => {
-                if super::enumeration::entry_kind(&metadata.file_type())
-                    != super::authority::NodeStateEntryKind::Directory
-                {
-                    return Err(super::invalid(format!(
-                        "node state directory component {} must be a directory",
-                        segment.to_string_lossy()
-                    )));
-                }
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                current.create_dir(segment).map_err(crate::error::MoltenError::from)?;
-            }
-            Err(error) => return Err(crate::error::MoltenError::from(error)),
-        }
+        ensure_directory_component(&current, segment)?;
         current = current.open_dir_nofollow(segment).map_err(crate::error::MoltenError::from)?;
+    }
+    Ok(())
+}
+
+fn ensure_directory_component(dir: &cap_std::fs::Dir, segment: &std::ffi::OsStr) -> crate::error::Result<()> {
+    match dir.symlink_metadata(segment) {
+        Ok(metadata) => {
+            if super::enumeration::entry_kind(&metadata.file_type()) != super::authority::NodeStateEntryKind::Directory
+            {
+                return Err(super::invalid(format!(
+                    "node state directory component {} must be a directory",
+                    segment.to_string_lossy()
+                )));
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            dir.create_dir(segment).map_err(crate::error::MoltenError::from)?;
+        }
+        Err(error) => return Err(crate::error::MoltenError::from(error)),
     }
     Ok(())
 }
@@ -119,34 +125,33 @@ pub(super) fn observe_file(
     let Some((parent, leaf)) = open_parent_optional(dir, path)? else {
         return Ok(super::authority::NodeStateFileObservation::Missing);
     };
-    let metadata = match parent.symlink_metadata(leaf) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(super::authority::NodeStateFileObservation::Missing);
+    match leaf_kind_optional(&parent, leaf)? {
+        None => Ok(super::authority::NodeStateFileObservation::Missing),
+        Some(super::authority::NodeStateEntryKind::RegularFile) => {
+            Ok(super::authority::NodeStateFileObservation::Regular(observe_regular_handle(&parent, leaf, path)?))
         }
-        Err(error) => return Err(crate::error::MoltenError::from(error)),
-    };
-    let kind = super::enumeration::entry_kind(&metadata.file_type());
-    if kind != super::authority::NodeStateEntryKind::RegularFile {
-        return Ok(super::authority::NodeStateFileObservation::NonRegular(kind));
+        Some(kind) => Ok(super::authority::NodeStateFileObservation::NonRegular(kind)),
     }
+}
 
+fn observe_regular_handle(
+    parent: &cap_std::fs::Dir,
+    leaf: &std::ffi::OsStr,
+    path: &std::path::Path,
+) -> crate::error::Result<super::authority::NodeStateFile> {
     let mut options = cap_std::fs::OpenOptions::new();
     options.read(true).follow(cap_fs_ext::FollowSymlinks::No);
     let file = parent.open_with(leaf, &options).map_err(crate::error::MoltenError::from)?;
     let metadata = metadata::opened_file(&file, path, "read")?;
     #[cfg(unix)]
-    let unix_mode = {
-        use cap_std::fs::PermissionsExt;
-        Some(metadata.permissions().mode())
-    };
+    let unix_mode = Some(metadata.permissions().mode());
     #[cfg(not(unix))]
     let unix_mode = None;
-    Ok(super::authority::NodeStateFileObservation::Regular(super::authority::NodeStateFile {
+    Ok(super::authority::NodeStateFile {
         file,
         size: metadata.len(),
         unix_mode,
-    }))
+    })
 }
 
 pub(super) fn read_regular_file_bounded(
@@ -181,6 +186,13 @@ pub(super) fn entry_kind_optional(
     let Some((parent, leaf)) = open_parent_optional(dir, path)? else {
         return Ok(None);
     };
+    leaf_kind_optional(&parent, leaf)
+}
+
+fn leaf_kind_optional(
+    parent: &cap_std::fs::Dir,
+    leaf: &std::ffi::OsStr,
+) -> crate::error::Result<Option<super::authority::NodeStateEntryKind>> {
     match parent.symlink_metadata(leaf) {
         Ok(metadata) => Ok(Some(super::enumeration::entry_kind(&metadata.file_type()))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
