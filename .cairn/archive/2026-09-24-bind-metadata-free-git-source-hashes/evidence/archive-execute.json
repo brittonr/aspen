@@ -1,0 +1,221 @@
+{
+  "acceptance_ids": [
+    "bind-metadata-free-git-source-hashes.binding",
+    "bind-metadata-free-git-source-hashes.drift-denied",
+    "bind-metadata-free-git-source-hashes.fetch",
+    "bind-metadata-free-git-source-hashes.procedure",
+    "bind-metadata-free-git-source-hashes.unblocked"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: bind-metadata-free-git-source-hashes",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes"
+    }
+  ],
+  "blocked": false,
+  "change": "bind-metadata-free-git-source-hashes",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "84241870316835bbb1315a2f25118d24c995c7f49396b4294c3c6ce15ae46848",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "d66d653abe5c4aaf22d4ac37c119fe452a0f439d58ad3d36aa99af93765a70d7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/acceptance.md"
+        },
+        {
+          "content_hash": "8dd952b57675edb2276aee145ec4a809e0fb0c5b740fadc74020cf4cbeefb191",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/design.md"
+        },
+        {
+          "content_hash": "13e07736e3fda181546521fdffd8aea72d8f18149cba22845afde9049fae3af1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/evidence/fod-realise-check.txt"
+        },
+        {
+          "content_hash": "cd0d81009f594f6c088bf2963130eaf5892283e87f9a5f6aa425ef577c9d2b3b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "84ab8325e6401c434c2e9a57648dbf2fb9d1d250166822f1a5ccadc155e6eed1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "8db300f1825f2a1718c163b111b19f4939854321fa491c8913b7c5caf6bd38cf",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "bf2f154b4ba7a6c6a26d71582d88aabc7cbd1fe75b31f6c4e35e1692535111df",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/evidence/previously-blocked-checks.txt"
+        },
+        {
+          "content_hash": "a4deb25165c728ea8862348ac5217c064030e3450ea4654a7f441e4cd7cda3a6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "edae8d166b71b6d5093896e78ade3b627471efc5b1b80c58910da32f1622f9db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "31c1eb06972419b64d0e93590b6f1da71e9e233da6751b9d41f70fe3e2470baa",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/evidence/verification.md"
+        },
+        {
+          "content_hash": "6110be0c7e71113ccc2dcbd16b23994c49770d403be61cb347ca04d6966299e2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/metadata.json"
+        },
+        {
+          "content_hash": "441450b4158790d8def076584ac306d29b274f6ec433a398cf74a4011f263f28",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/proposal.md"
+        },
+        {
+          "content_hash": "0d83132b6ff84ff254cd24e7c792f259b187ab3d86cc0b2cff184edecf5618c8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "e169bdc9af10966c4de3705445d840109c89aaeb50e8eb0e0e670194e6931535",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-bind-metadata-free-git-source-hashes/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes"
+        }
+      ],
+      "manifest_hash": "a39b45fc072fd892d5595d7bc682cfe14126fd6b8b3319de1390b59b92250a13"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "d66d653abe5c4aaf22d4ac37c119fe452a0f439d58ad3d36aa99af93765a70d7",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/acceptance.md"
+        },
+        {
+          "content_hash": "8dd952b57675edb2276aee145ec4a809e0fb0c5b740fadc74020cf4cbeefb191",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/design.md"
+        },
+        {
+          "content_hash": "13e07736e3fda181546521fdffd8aea72d8f18149cba22845afde9049fae3af1",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/evidence/fod-realise-check.txt"
+        },
+        {
+          "content_hash": "cd0d81009f594f6c088bf2963130eaf5892283e87f9a5f6aa425ef577c9d2b3b",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "84ab8325e6401c434c2e9a57648dbf2fb9d1d250166822f1a5ccadc155e6eed1",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "8db300f1825f2a1718c163b111b19f4939854321fa491c8913b7c5caf6bd38cf",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "bf2f154b4ba7a6c6a26d71582d88aabc7cbd1fe75b31f6c4e35e1692535111df",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/evidence/previously-blocked-checks.txt"
+        },
+        {
+          "content_hash": "a4deb25165c728ea8862348ac5217c064030e3450ea4654a7f441e4cd7cda3a6",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "edae8d166b71b6d5093896e78ade3b627471efc5b1b80c58910da32f1622f9db",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "31c1eb06972419b64d0e93590b6f1da71e9e233da6751b9d41f70fe3e2470baa",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/evidence/verification.md"
+        },
+        {
+          "content_hash": "6110be0c7e71113ccc2dcbd16b23994c49770d403be61cb347ca04d6966299e2",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/metadata.json"
+        },
+        {
+          "content_hash": "441450b4158790d8def076584ac306d29b274f6ec433a398cf74a4011f263f28",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/proposal.md"
+        },
+        {
+          "content_hash": "0d83132b6ff84ff254cd24e7c792f259b187ab3d86cc0b2cff184edecf5618c8",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "e169bdc9af10966c4de3705445d840109c89aaeb50e8eb0e0e670194e6931535",
+          "exists": true,
+          "path": "./.cairn/changes/bind-metadata-free-git-source-hashes/tasks.md"
+        }
+      ],
+      "manifest_hash": "87520a82ba9df5cfa2cb93e09708cfd082a4febec43e944848983bd7359e151a"
+    },
+    "kind": "archive",
+    "manifest_hash": "5db64896292a3241c618820045e7a6c5fb0eb14a040bb4df1e656a0a79a15244"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "c7daeafd27e26f39fc59e3212b1a18aea8a0a4d3b75ed9e53a1b9ff8ee8a3947",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "d300d68b753786656bb3acd9b8425a20a34f70a629b9d1e65eba2422d230c787",
+  "reasons": [],
+  "receipt_hash": "a642f492b6b5babf22d36dc1d7a82b23a36ce7e12080bba9bc1dadb68ab776ca",
+  "review_receipt_hashes": [
+    "2cebfb3ba30a8cf0922bb0c4b763c3e716a9f6bc6e158619d531f7e87100a0a6"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
